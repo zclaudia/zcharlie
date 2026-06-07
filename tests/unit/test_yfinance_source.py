@@ -92,3 +92,28 @@ async def test_fetch_fundamental_snapshot_handles_missing_fields(monkeypatch):
     snap = await src.fetch_fundamental_snapshot("GHOST", as_of=date(2025, 6, 3))
     assert snap.pe is None
     assert snap.market_cap is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_universe_returns_nasdaq_100(monkeypatch):
+    """Mock yfinance.Tickers / index member fetch."""
+    # NDX index components come from a local YAML or pandas read_html;
+    # for unit test we monkeypatch _fetch_nasdaq_100_tickers.
+    from investment_agent.sources import yfinance_source as ys
+    monkeypatch.setattr(
+        ys, "_fetch_nasdaq_100_tickers",
+        lambda: [("AAPL", "Apple Inc.", "TECH"), ("MSFT", "Microsoft Corporation", "TECH")],
+    )
+    src = YFinanceSource(max_concurrent=2)
+    refs = await src.fetch_universe("NASDAQ_100", as_of=date(2025, 6, 3))
+    assert len(refs) == 2
+    assert refs[0].market_code == "NASDAQ"
+    assert refs[0].ticker == "AAPL"
+    assert refs[0].company_name == "Apple Inc."
+
+
+@pytest.mark.asyncio
+async def test_fetch_universe_unknown_code_raises():
+    src = YFinanceSource(max_concurrent=2)
+    with pytest.raises(ValueError, match="Unsupported universe"):
+        await src.fetch_universe("UNKNOWN_INDEX", as_of=date(2025, 6, 3))

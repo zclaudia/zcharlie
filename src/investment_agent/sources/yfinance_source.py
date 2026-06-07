@@ -46,7 +46,19 @@ class YFinanceSource:
     async def fetch_universe(
         self, universe_code: str, as_of: date
     ) -> list[ListingRef]:
-        raise NotImplementedError("Implemented in Task 17")
+        if universe_code != "NASDAQ_100":
+            raise ValueError(f"Unsupported universe code: {universe_code}")
+        async with self._limiter:
+            tickers = await asyncio.to_thread(_fetch_nasdaq_100_tickers)
+        return [
+            ListingRef(
+                market_code="NASDAQ",
+                ticker=t,
+                company_name=n,
+                sector_code=s,
+            )
+            for (t, n, s) in tickers
+        ]
 
     async def fetch_financial_report(
         self, ticker: str, periods: list[str]
@@ -88,6 +100,60 @@ class YFinanceSource:
         self, ticker: str, days: int
     ) -> list[AnalystRatingRecord]:
         raise NotImplementedError("Implemented in Task 20")
+
+
+def _fetch_nasdaq_100_tickers() -> list[tuple[str, str, str]]:
+    """Fetch NDX components from Wikipedia table.
+
+    Returns list of (ticker, company_name, sector_code).
+    """
+    tables = pd.read_html("https://en.wikipedia.org/wiki/Nasdaq-100")
+    # Wikipedia's NDX page typically has constituents in one of the early tables.
+    for tbl in tables:
+        cols = {c.lower() for c in tbl.columns.astype(str)}
+        if "ticker" in cols and ("company" in cols or "security" in cols):
+            df = tbl
+            ticker_col = next(c for c in df.columns if c.lower() == "ticker")
+            name_col = next(c for c in df.columns if c.lower() in ("company", "security"))
+            sector_col = next(
+                (c for c in df.columns if "sector" in str(c).lower()), None
+            )
+            out: list[tuple[str, str, str]] = []
+            for _, row in df.iterrows():
+                ticker = str(row[ticker_col]).strip()
+                name = str(row[name_col]).strip()
+                sector = str(row[sector_col]).strip() if sector_col else "UNKNOWN"
+                sector_code = _normalize_sector(sector)
+                out.append((ticker, name, sector_code))
+            return out
+    raise RuntimeError("Could not locate NASDAQ-100 components table")
+
+
+def _normalize_sector(raw: str) -> str:
+    s = raw.lower()
+    if "tech" in s or "information" in s:
+        return "TECH"
+    if "communication" in s:
+        return "COMMUNICATION"
+    if "consumer discretionary" in s:
+        return "CONSUMER_DISCRETIONARY"
+    if "consumer staples" in s:
+        return "CONSUMER_STAPLES"
+    if "health" in s:
+        return "HEALTHCARE"
+    if "industrial" in s:
+        return "INDUSTRIALS"
+    if "material" in s:
+        return "MATERIALS"
+    if "energy" in s:
+        return "ENERGY"
+    if "financial" in s:
+        return "FINANCIALS"
+    if "utilities" in s:
+        return "UTILITIES"
+    if "real estate" in s:
+        return "REAL_ESTATE"
+    return "UNKNOWN"
 
 
 def _maybe_decimal(value: object) -> Decimal | None:
