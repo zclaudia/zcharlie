@@ -14,7 +14,6 @@ from investment_agent.storage.models.reference import (
 )
 from investment_agent.storage.repositories.listing import ListingRepository
 
-
 _DEFAULT_SECTORS = [
     ("TECH", "Information Technology"),
     ("COMMUNICATION", "Communication Services"),

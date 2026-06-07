@@ -3,7 +3,6 @@
 import pytest_asyncio
 
 from investment_agent.storage.database import init_engine, session_scope
-from investment_agent.storage.models.base import Base
 from investment_agent.storage.models import (  # noqa: F401
     analysis,
     market_data,
@@ -12,6 +11,7 @@ from investment_agent.storage.models import (  # noqa: F401
     relationship,
     user_domain,
 )
+from investment_agent.storage.models.base import Base
 
 
 @pytest_asyncio.fixture

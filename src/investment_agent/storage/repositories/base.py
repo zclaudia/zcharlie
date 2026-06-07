@@ -1,15 +1,11 @@
 """Generic repository base."""
 
-from typing import Generic, TypeVar
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.storage.models.base import Base
 
-T = TypeVar("T", bound=Base)
 
-
-class Repository(Generic[T]):
+class Repository[T: Base]:
     model: type[T]
 
     def __init__(self, session: AsyncSession) -> None:

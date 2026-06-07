@@ -1,10 +1,15 @@
 import pytest
 
 from investment_agent.storage.database import init_engine
-from investment_agent.storage.models.base import Base
 from investment_agent.storage.models import (  # noqa: F401
-    analysis, market_data, ops, reference, relationship, user_domain,
+    analysis,
+    market_data,
+    ops,
+    reference,
+    relationship,
+    user_domain,
 )
+from investment_agent.storage.models.base import Base
 from investment_agent.storage.seeders.nasdaq_100 import seed_nasdaq_100
 
 
