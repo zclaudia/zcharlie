@@ -9,9 +9,15 @@ import pytest
 from pydantic_ai import Agent
 from sqlalchemy import select
 
+from investment_agent.domain.strategy_types import (
+    ListingSnapshot,
+    ScoringContext,
+    StockScore,
+)
 from investment_agent.pipelines.steps import (
     step1_data_ingestion,
     step2_tier1_screening,
+    step3_tier2_scoring,
 )
 from investment_agent.sources.records import (
     AnalystRatingRecord,
@@ -25,6 +31,7 @@ from investment_agent.storage.models.market_data import DailyPrice, FundamentalS
 from investment_agent.storage.models.reference import Universe, UniverseMembership
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.stock_score import StockScoreRepository
 from investment_agent.strategies.base import BaseStrategyAgent, StrategyConfig
 from investment_agent.strategies.schemas import ValueDeepAnalysis, ValueStockScore
 from investment_agent.strategies.screening_rule import Condition, ScreeningRule
@@ -178,3 +185,49 @@ async def test_step2_screening_filters_by_strategy(db_session, seeded_market):
     )
     assert len(result["test_low_pe"]) == 1
     assert result["test_low_pe"][0].ticker == "AAPL"
+
+
+@pytest.mark.asyncio
+async def test_step3_scoring_persists_scores(db_session, seeded_market):
+    repo = ListingRepository(db_session)
+    aapl = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+    )
+    run = await PipelineRunRepository(db_session).create(kind="discovery")
+
+    snap = ListingSnapshot(
+        listing_id=aapl.id,
+        company_id=aapl.company_id,
+        ticker="AAPL",
+        market_code="NASDAQ",
+        company_name="Apple",
+        as_of=date(2025, 6, 3),
+    )
+
+    class FakeAgent:
+        code = "fake"
+        version = "v1"
+
+        async def score(
+            self, listing: ListingSnapshot, ctx: ScoringContext
+        ) -> StockScore:
+            return StockScore(
+                score=75,
+                confidence=0.85,
+                bull_thesis="bull",
+                bear_thesis="bear",
+                key_metrics_explained={"pe": "fair"},
+            )
+
+    n = await step3_tier2_scoring(
+        db_session,
+        candidates_by_strategy={"fake": [snap]},
+        strategies={"fake": cast(BaseStrategyAgent, FakeAgent())},
+        pipeline_run_id=run.id,
+    )
+    assert n == 1
+    rows = await StockScoreRepository(db_session).by_run(run.id)
+    assert len(rows) == 1
+    assert rows[0].score == 75
+    assert rows[0].strategy_code == "fake"
+    assert rows[0].tier == 2

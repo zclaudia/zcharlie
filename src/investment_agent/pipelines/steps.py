@@ -1,6 +1,7 @@
 """Discovery pipeline step functions. Each step is async and idempotent."""
 
 import asyncio
+from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
@@ -10,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.protocols import DataSource
-from investment_agent.domain.strategy_types import ListingSnapshot
+from investment_agent.domain.strategy_types import ListingSnapshot, ScoringContext
 from investment_agent.sources.records import (
     AnalystRatingRecord,
     DailyPriceRecord,
@@ -31,6 +32,7 @@ from investment_agent.storage.models.reference import (
     UniverseMembership,
 )
 from investment_agent.storage.models.user_domain import AuxiliaryListing
+from investment_agent.storage.repositories.stock_score import StockScoreRepository
 from investment_agent.strategies.base import BaseStrategyAgent
 
 log = structlog.get_logger(__name__)
@@ -351,3 +353,78 @@ async def _build_listing_snapshots(
             )
         )
     return out
+
+
+async def step3_tier2_scoring(
+    session: AsyncSession,
+    *,
+    candidates_by_strategy: dict[str, list[ListingSnapshot]],
+    strategies: dict[str, BaseStrategyAgent],
+    pipeline_run_id: int,
+    max_concurrent: int = 8,
+    timeout_sec: int = 90,
+) -> int:
+    """Run Tier 2 LLM scoring for each (strategy, listing) pair concurrently.
+
+    Each (strategy, listing) task is bounded by `max_concurrent` semaphore and
+    `timeout_sec` per-call timeout. Failures are logged but don't fail the run.
+    Returns total number of scores persisted.
+    """
+    semaphore = asyncio.Semaphore(max_concurrent)
+    score_repo = StockScoreRepository(session)
+    n = 0
+
+    async def _score_one(strategy_code: str, listing: ListingSnapshot) -> None:
+        nonlocal n
+        agent = strategies[strategy_code]
+        ctx = await _build_scoring_context(session, listing)
+
+        async with semaphore:
+            try:
+                score = await asyncio.wait_for(
+                    agent.score(listing, ctx), timeout=timeout_sec
+                )
+                await score_repo.upsert(
+                    pipeline_run_id=pipeline_run_id,
+                    listing_id=listing.listing_id,
+                    strategy_code=strategy_code,
+                    tier=2,
+                    score=score.score,
+                    confidence=score.confidence,
+                    bull_thesis=score.bull_thesis,
+                    bear_thesis=score.bear_thesis,
+                    key_metrics=dict(score.key_metrics_explained),
+                )
+                n += 1
+            except Exception as e:
+                log.warning(
+                    "pipeline.step3.score_failed",
+                    strategy=strategy_code,
+                    ticker=listing.ticker,
+                    error=str(e),
+                )
+
+    tasks: list[Awaitable[None]] = []
+    for code, candidates in candidates_by_strategy.items():
+        for listing in candidates:
+            tasks.append(_score_one(code, listing))
+
+    await asyncio.gather(*tasks)
+    log.info("pipeline.step3.complete", scored=n, run_id=pipeline_run_id)
+    return n
+
+
+async def _build_scoring_context(
+    session: AsyncSession, listing: ListingSnapshot
+) -> ScoringContext:
+    """V1: minimal context (empty peers/news/ratings).
+
+    Future plan can enrich with sector peer comparables, recent news titles,
+    and analyst rating changes.
+    """
+    return ScoringContext(
+        listing=listing,
+        peer_summary=[],
+        recent_news_titles=[],
+        recent_rating_changes=[],
+    )
