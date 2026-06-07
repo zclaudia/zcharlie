@@ -133,6 +133,136 @@ async def test_step1_ingestion_populates_price_and_fundamental(
 
 
 @pytest.mark.asyncio
+async def test_step1_skips_disabled_auxiliary_listing(db_session, seeded_market):
+    """An AuxiliaryListing with enabled=False is not fetched."""
+    from datetime import UTC, date, datetime
+
+    from sqlalchemy import select
+
+    from investment_agent.pipelines.steps import step1_data_ingestion
+    from investment_agent.storage.models.market_data import DailyPrice
+    from investment_agent.storage.models.reference import (
+        Universe,
+        UniverseMembership,
+    )
+    from investment_agent.storage.models.user_domain import AuxiliaryListing
+    from investment_agent.storage.repositories.listing import ListingRepository
+    from investment_agent.storage.repositories.pipeline_run import (
+        PipelineRunRepository,
+    )
+
+    db_session.add(Universe(code="TEST_U", name="Test"))
+    repo = ListingRepository(db_session)
+    universe_l = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+    )
+    aux_disabled = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="MSFT", company_name="Microsoft"
+    )
+    db_session.add(
+        UniverseMembership(
+            universe_code="TEST_U",
+            listing_id=universe_l.id,
+            valid_from=date(2024, 1, 1),
+        )
+    )
+    db_session.add(
+        AuxiliaryListing(
+            listing_id=aux_disabled.id,
+            added_by="test",
+            added_at=datetime.now(UTC),
+            enabled=False,
+        )
+    )
+    await db_session.flush()
+
+    run = await PipelineRunRepository(db_session).create(
+        kind="discovery", universe_code="TEST_U"
+    )
+    universe, aux = await step1_data_ingestion(
+        db_session,
+        universe_code="TEST_U",
+        data_source=FakeDataSource(),
+        as_of=date(2025, 6, 3),
+        pipeline_run_id=run.id,
+    )
+    assert len(universe) == 1
+    assert len(aux) == 0
+    prices = (await db_session.execute(select(DailyPrice))).scalars().all()
+    assert {p.listing_id for p in prices} == {universe_l.id}
+
+
+@pytest.mark.asyncio
+async def test_step1_fetches_enabled_auxiliary_listing(db_session, seeded_market):
+    """An enabled AuxiliaryListing on a different market is fetched (prices + news only, no snapshot)."""
+    from datetime import UTC, date, datetime
+
+    from sqlalchemy import select
+
+    from investment_agent.pipelines.steps import step1_data_ingestion
+    from investment_agent.storage.models.market_data import (
+        DailyPrice,
+        FundamentalSnapshot,
+    )
+    from investment_agent.storage.models.reference import (
+        Market,
+        Universe,
+        UniverseMembership,
+    )
+    from investment_agent.storage.models.user_domain import AuxiliaryListing
+    from investment_agent.storage.repositories.listing import ListingRepository
+    from investment_agent.storage.repositories.pipeline_run import (
+        PipelineRunRepository,
+    )
+
+    db_session.add(
+        Market(code="TPE", name="Taiwan", timezone="Asia/Taipei", currency="TWD")
+    )
+    db_session.add(Universe(code="TEST_U", name="Test"))
+    repo = ListingRepository(db_session)
+    universe_l = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+    )
+    aux_listing = await repo.upsert_listing(
+        market_code="TPE", ticker="2330", company_name="TSMC"
+    )
+    db_session.add(
+        UniverseMembership(
+            universe_code="TEST_U",
+            listing_id=universe_l.id,
+            valid_from=date(2024, 1, 1),
+        )
+    )
+    db_session.add(
+        AuxiliaryListing(
+            listing_id=aux_listing.id,
+            added_by="test",
+            added_at=datetime.now(UTC),
+            enabled=True,
+        )
+    )
+    await db_session.flush()
+
+    run = await PipelineRunRepository(db_session).create(
+        kind="discovery", universe_code="TEST_U"
+    )
+    universe, aux = await step1_data_ingestion(
+        db_session,
+        universe_code="TEST_U",
+        data_source=FakeDataSource(),
+        as_of=date(2025, 6, 3),
+        pipeline_run_id=run.id,
+    )
+    assert len(universe) == 1
+    assert len(aux) == 1
+    prices = (await db_session.execute(select(DailyPrice))).scalars().all()
+    assert {p.listing_id for p in prices} == {universe_l.id, aux_listing.id}
+    snaps = (await db_session.execute(select(FundamentalSnapshot))).scalars().all()
+    # Auxiliary listings have no fundamental snapshot fetched (step1 spec)
+    assert {s.listing_id for s in snaps} == {universe_l.id}
+
+
+@pytest.mark.asyncio
 async def test_step2_screening_filters_by_strategy(db_session, seeded_market):
     repo = ListingRepository(db_session)
     aapl = await repo.upsert_listing(
