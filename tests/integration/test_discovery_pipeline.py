@@ -231,3 +231,186 @@ async def test_step3_scoring_persists_scores(db_session, seeded_market):
     assert rows[0].score == 75
     assert rows[0].strategy_code == "fake"
     assert rows[0].tier == 2
+
+
+@pytest.mark.asyncio
+async def test_step4_cache_hit_skips_llm(db_session, seeded_market):
+    """If cache row is fresh, _check_or_run_deep_analysis returns cached, no LLM call."""
+    from datetime import UTC, date, datetime
+    from investment_agent.domain.strategy_types import ListingSnapshot
+    from investment_agent.pipelines.steps import _check_or_run_deep_analysis
+    from investment_agent.storage.models.market_data import FinancialReport
+    from investment_agent.storage.models.ops import DeepAnalysisCache
+    from investment_agent.storage.repositories.listing import ListingRepository
+
+    repo = ListingRepository(db_session)
+    aapl = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+    )
+    db_session.add(
+        FinancialReport(
+            company_id=aapl.company_id,
+            fiscal_period="2025-Q1",
+            period_end=date(2025, 3, 31),
+        )
+    )
+    db_session.add(
+        DeepAnalysisCache(
+            listing_id=aapl.id,
+            latest_financial_report_period="2025-Q1",
+            strategy_code="value",
+            analysis_json={"business_model": "cached"},
+            generated_at=datetime.now(UTC),
+        )
+    )
+    await db_session.flush()
+
+    snap = ListingSnapshot(
+        listing_id=aapl.id,
+        company_id=aapl.company_id,
+        ticker="AAPL",
+        market_code="NASDAQ",
+        company_name="Apple",
+        as_of=date(2025, 6, 3),
+    )
+
+    class _NeverCalledAgent:
+        async def deep_analyze(self, listing, ctx):
+            raise AssertionError("LLM should not be called on cache hit")
+
+    result = await _check_or_run_deep_analysis(
+        db_session,
+        listing_id=aapl.id,
+        strategy_code="value",
+        agent=cast(BaseStrategyAgent, _NeverCalledAgent()),
+        snapshot=snap,
+        cache_days=90,
+    )
+    assert result == {"business_model": "cached"}
+
+
+@pytest.mark.asyncio
+async def test_step4_cache_miss_calls_llm_and_persists(db_session, seeded_market):
+    """Cache miss → LLM called → result persisted to DeepAnalysisCache."""
+    from datetime import date
+    from sqlalchemy import select
+    from investment_agent.domain.strategy_types import DeepAnalysis, ListingSnapshot
+    from investment_agent.pipelines.steps import _check_or_run_deep_analysis
+    from investment_agent.storage.models.market_data import FinancialReport
+    from investment_agent.storage.models.ops import DeepAnalysisCache
+    from investment_agent.storage.repositories.listing import ListingRepository
+
+    repo = ListingRepository(db_session)
+    msft = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="MSFT", company_name="Microsoft"
+    )
+    db_session.add(
+        FinancialReport(
+            company_id=msft.company_id,
+            fiscal_period="2025-Q1",
+            period_end=date(2025, 3, 31),
+        )
+    )
+    await db_session.flush()
+
+    snap = ListingSnapshot(
+        listing_id=msft.id,
+        company_id=msft.company_id,
+        ticker="MSFT",
+        market_code="NASDAQ",
+        company_name="Microsoft",
+        as_of=date(2025, 6, 3),
+    )
+
+    class _StubAgent:
+        async def deep_analyze(self, listing, ctx):
+            return DeepAnalysis(
+                business_model="cloud + productivity",
+                moat_assessment="dominant",
+                risk_factors=["regulation"],
+                upstream_dependencies=[],
+                downstream_customers=["enterprises"],
+                competitor_overview=["AWS"],
+                valuation_summary="fair",
+            )
+
+    result = await _check_or_run_deep_analysis(
+        db_session,
+        listing_id=msft.id,
+        strategy_code="growth",
+        agent=cast(BaseStrategyAgent, _StubAgent()),
+        snapshot=snap,
+        cache_days=90,
+    )
+    assert result["business_model"] == "cloud + productivity"
+    rows = (await db_session.execute(select(DeepAnalysisCache))).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].strategy_code == "growth"
+
+
+@pytest.mark.asyncio
+async def test_step4_stale_cache_refreshes(db_session, seeded_market):
+    """Cache older than cache_days triggers a fresh LLM call and updates the row."""
+    from datetime import UTC, date, datetime, timedelta
+    from sqlalchemy import select
+    from investment_agent.domain.strategy_types import DeepAnalysis, ListingSnapshot
+    from investment_agent.pipelines.steps import _check_or_run_deep_analysis
+    from investment_agent.storage.models.market_data import FinancialReport
+    from investment_agent.storage.models.ops import DeepAnalysisCache
+    from investment_agent.storage.repositories.listing import ListingRepository
+
+    repo = ListingRepository(db_session)
+    nvda = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="NVDA", company_name="Nvidia"
+    )
+    db_session.add(
+        FinancialReport(
+            company_id=nvda.company_id,
+            fiscal_period="2025-Q1",
+            period_end=date(2025, 3, 31),
+        )
+    )
+    db_session.add(
+        DeepAnalysisCache(
+            listing_id=nvda.id,
+            latest_financial_report_period="2025-Q1",
+            strategy_code="value",
+            analysis_json={"business_model": "stale"},
+            generated_at=datetime.now(UTC) - timedelta(days=200),
+        )
+    )
+    await db_session.flush()
+
+    snap = ListingSnapshot(
+        listing_id=nvda.id,
+        company_id=nvda.company_id,
+        ticker="NVDA",
+        market_code="NASDAQ",
+        company_name="Nvidia",
+        as_of=date(2025, 6, 3),
+    )
+
+    class _FreshAgent:
+        async def deep_analyze(self, listing, ctx):
+            return DeepAnalysis(
+                business_model="GPUs",
+                moat_assessment="strong",
+                risk_factors=[],
+                upstream_dependencies=[],
+                downstream_customers=[],
+                competitor_overview=[],
+                valuation_summary="rich",
+            )
+
+    result = await _check_or_run_deep_analysis(
+        db_session,
+        listing_id=nvda.id,
+        strategy_code="value",
+        agent=cast(BaseStrategyAgent, _FreshAgent()),
+        snapshot=snap,
+        cache_days=90,
+    )
+    assert result["business_model"] == "GPUs"
+    rows = (await db_session.execute(select(DeepAnalysisCache))).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].analysis_json["business_model"] == "GPUs"

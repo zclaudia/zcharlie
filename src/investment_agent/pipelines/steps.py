@@ -1,17 +1,22 @@
 """Discovery pipeline step functions. Each step is async and idempotent."""
 
 import asyncio
+import json
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.protocols import DataSource
-from investment_agent.domain.strategy_types import ListingSnapshot, ScoringContext
+from investment_agent.domain.strategy_types import (
+    DeepAnalysisContext,
+    ListingSnapshot,
+    ScoringContext,
+)
 from investment_agent.sources.records import (
     AnalystRatingRecord,
     DailyPriceRecord,
@@ -19,6 +24,7 @@ from investment_agent.sources.records import (
     NewsRecord,
 )
 from investment_agent.sources.retry import RateLimiter
+from investment_agent.storage.models.analysis import StockScore
 from investment_agent.storage.models.market_data import (
     AnalystRatingChange,
     DailyPrice,
@@ -26,6 +32,7 @@ from investment_agent.storage.models.market_data import (
     FundamentalSnapshot,
     NewsItem,
 )
+from investment_agent.storage.models.ops import DeepAnalysisCache
 from investment_agent.storage.models.reference import (
     Company,
     Listing,
@@ -428,3 +435,184 @@ async def _build_scoring_context(
         recent_news_titles=[],
         recent_rating_changes=[],
     )
+
+
+async def step4_tier3_deep_analysis(
+    session: AsyncSession,
+    *,
+    pipeline_run_id: int,
+    strategies: dict[str, BaseStrategyAgent],
+    top_n: int = 10,
+    cache_days: int = 90,
+    max_concurrent: int = 4,
+    timeout_sec: int = 180,
+) -> list[int]:
+    """Pick Top-N candidates (cross-strategy avg of Tier-2 score), run deep analysis.
+
+    Returns: listing_ids that received deep analysis.
+    """
+    # 1. Compute Top-N listing_ids by cross-strategy average Tier-2 score.
+    stmt = (
+        select(
+            StockScore.listing_id,
+            func.avg(StockScore.score).label("avg_score"),
+        )
+        .where(
+            StockScore.pipeline_run_id == pipeline_run_id,
+            StockScore.tier == 2,
+        )
+        .group_by(StockScore.listing_id)
+        .order_by(func.avg(StockScore.score).desc())
+        .limit(top_n)
+    )
+    rows = list((await session.execute(stmt)).all())
+    top_listing_ids = [int(r[0]) for r in rows]
+
+    if not top_listing_ids:
+        log.info("pipeline.step4.no_candidates", run_id=pipeline_run_id)
+        return []
+
+    # 2. Build snapshots for top listings.
+    list_stmt = select(Listing).where(Listing.id.in_(top_listing_ids))
+    top_listings = list((await session.execute(list_stmt)).scalars().all())
+    as_of = date.today()
+    snapshots = await _build_listing_snapshots(session, top_listings, as_of)
+    snap_by_lid = {s.listing_id: s for s in snapshots}
+
+    semaphore = asyncio.Semaphore(max_concurrent)
+    score_repo = StockScoreRepository(session)
+
+    async def _deep_one(listing_id: int, strategy_code: str) -> None:
+        snap = snap_by_lid.get(listing_id)
+        if snap is None:
+            return
+        agent = strategies[strategy_code]
+        async with semaphore:
+            try:
+                analysis_json = await asyncio.wait_for(
+                    _check_or_run_deep_analysis(
+                        session,
+                        listing_id=listing_id,
+                        strategy_code=strategy_code,
+                        agent=agent,
+                        snapshot=snap,
+                        cache_days=cache_days,
+                    ),
+                    timeout=timeout_sec,
+                )
+                await score_repo.upsert(
+                    pipeline_run_id=pipeline_run_id,
+                    listing_id=listing_id,
+                    strategy_code=strategy_code,
+                    tier=3,
+                    # Tier-3 score is informational; the Tier-2 row already
+                    # carries the strategy's numeric score for this listing.
+                    score=0,
+                    confidence=0.0,
+                    deep_analysis=json.dumps(analysis_json),
+                )
+            except Exception as e:
+                log.warning(
+                    "pipeline.step4.deep_failed",
+                    strategy=strategy_code,
+                    listing_id=listing_id,
+                    error=str(e),
+                )
+
+    tasks: list[Awaitable[None]] = []
+    for lid in top_listing_ids:
+        for code in strategies:
+            tasks.append(_deep_one(lid, code))
+    await asyncio.gather(*tasks)
+
+    log.info(
+        "pipeline.step4.complete",
+        top_n=len(top_listing_ids),
+        run_id=pipeline_run_id,
+    )
+    return top_listing_ids
+
+
+async def _check_or_run_deep_analysis(
+    session: AsyncSession,
+    *,
+    listing_id: int,
+    strategy_code: str,
+    agent: BaseStrategyAgent,
+    snapshot: ListingSnapshot,
+    cache_days: int,
+) -> dict[str, object]:
+    """Return analysis_json from cache or live LLM call.
+
+    Schema limitation: deep_analysis_cache.uq_deep_cache_key excludes
+    strategy_code. Cache is last-writer-wins across strategies until a
+    schema migration adds strategy_code to the unique key.
+    """
+    # 1. Resolve latest financial report period for this listing.
+    period_stmt = (
+        select(FinancialReport.fiscal_period)
+        .where(FinancialReport.company_id == snapshot.company_id)
+        .order_by(FinancialReport.period_end.desc())
+        .limit(1)
+    )
+    period = (await session.execute(period_stmt)).scalar_one_or_none()
+    if period is None:
+        period = "unknown"
+
+    cutoff = datetime.now(UTC) - timedelta(days=cache_days)
+
+    # 2. Strict lookup by (listing, period, strategy_code) — preferred hit.
+    strict_stmt = select(DeepAnalysisCache).where(
+        DeepAnalysisCache.listing_id == listing_id,
+        DeepAnalysisCache.latest_financial_report_period == period,
+        DeepAnalysisCache.strategy_code == strategy_code,
+    )
+    cached = (await session.execute(strict_stmt)).scalar_one_or_none()
+    if cached is not None:
+        # SQLite drops tzinfo on read despite DateTime(timezone=True). Treat
+        # naive datetimes as UTC so comparison with `cutoff` is safe.
+        generated_at = cached.generated_at
+        if generated_at.tzinfo is None:
+            generated_at = generated_at.replace(tzinfo=UTC)
+        if generated_at > cutoff:
+            return cached.analysis_json
+
+    # 3. Cache miss → live LLM call.
+    ctx = await _build_deep_analysis_context(session, snapshot)
+    analysis = await agent.deep_analyze(snapshot, ctx)
+    analysis_json: dict[str, object] = analysis.model_dump()
+
+    # 4. Persist while respecting uq_deep_cache_key (listing, period).
+    loose_stmt = select(DeepAnalysisCache).where(
+        DeepAnalysisCache.listing_id == listing_id,
+        DeepAnalysisCache.latest_financial_report_period == period,
+    )
+    existing = (await session.execute(loose_stmt)).scalar_one_or_none()
+    now = datetime.now(UTC)
+    if existing is None:
+        session.add(
+            DeepAnalysisCache(
+                listing_id=listing_id,
+                latest_financial_report_period=period,
+                strategy_code=strategy_code,
+                analysis_json=analysis_json,
+                generated_at=now,
+            )
+        )
+    else:
+        existing.strategy_code = strategy_code
+        existing.analysis_json = analysis_json
+        existing.generated_at = now
+    await session.flush()
+    return analysis_json
+
+
+async def _build_deep_analysis_context(
+    session: AsyncSession, snapshot: ListingSnapshot
+) -> DeepAnalysisContext:
+    """V1: minimal context. Future plan can add financials_history /
+    peer_comparables / known_relationships / auxiliary_context / recent_news_full.
+    """
+    # TODO: enrich with multi-quarter financials history, peer comparables,
+    # known company relationships, auxiliary listing context, and recent news.
+    return DeepAnalysisContext(listing=snapshot)
