@@ -37,7 +37,7 @@ dependencies = [
 
     # LLM
     "openai>=1.30",
-    "pydantic-ai>=0.0.20",
+    "pydantic-ai>=1.0.0",
 
     # Logging
     "structlog>=24.1",
@@ -74,7 +74,7 @@ markers = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 line-length = 100
 src = ["src", "tests"]
 
@@ -83,7 +83,7 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "ASYNC"]
 ignore = ["E501"]  # line length already enforced by formatter
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 strict = true
 mypy_path = ["src"]
 namespace_packages = true
