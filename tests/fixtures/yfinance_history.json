@@ -1,0 +1,6 @@
+{
+  "AAPL": [
+    {"date": "2025-06-02", "open": 196.5, "high": 198.2, "low": 195.8, "close": 197.4, "volume": 50123400, "adjusted_close": 197.4},
+    {"date": "2025-06-03", "open": 197.5, "high": 199.0, "low": 196.9, "close": 198.7, "volume": 48000000, "adjusted_close": 198.7}
+  ]
+}
