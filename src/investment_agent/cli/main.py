@@ -5,6 +5,7 @@ import typer
 from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import auxiliary as auxiliary_cmd
 from investment_agent.cli.commands import data as data_cmd
+from investment_agent.cli.commands import pipeline as pipeline_cmd
 from investment_agent.cli.commands import strategy as strategy_cmd
 
 app = typer.Typer(help="Investment Agent CLI")
@@ -14,6 +15,7 @@ app.add_typer(strategy_cmd.app, name="strategy", help="Strategy management comma
 app.add_typer(
     auxiliary_cmd.app, name="auxiliary", help="Auxiliary listings management"
 )
+app.add_typer(pipeline_cmd.app, name="pipeline", help="Pipeline commands")
 
 
 @app.callback()
