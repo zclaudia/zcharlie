@@ -140,8 +140,32 @@ class YFinanceSource:
             market_cap=market_cap,
         )
 
+    @retry_async(attempts=3, base_delay=1.0)
     async def fetch_news(self, ticker: str, days: int) -> list[NewsRecord]:
-        raise NotImplementedError("Implemented in Task 19")
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        async with self._limiter:
+            raw = await asyncio.to_thread(lambda: yf.Ticker(ticker).news or [])
+
+        out: list[NewsRecord] = []
+        for item in raw:
+            ts = item.get("providerPublishTime")
+            if ts is None:
+                continue
+            published = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+            if published < cutoff:
+                continue
+            out.append(
+                NewsRecord(
+                    ticker=ticker,
+                    published_at=published,
+                    source=str(item.get("publisher") or "yfinance"),
+                    title=str(item.get("title") or "(no title)"),
+                    url=str(item.get("link") or ""),
+                    summary=item.get("summary"),
+                )
+            )
+        return out
 
     async def fetch_analyst_ratings(
         self, ticker: str, days: int

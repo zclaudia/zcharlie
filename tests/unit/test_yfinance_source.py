@@ -154,3 +154,23 @@ async def test_fetch_financial_report_parses_quarterly(monkeypatch):
     assert float(q1[0].revenue) == 95_360_000_000
     assert float(q1[0].net_income) == 23_636_000_000
     assert float(q1[0].fcf) == 24_400_000_000
+
+
+@pytest.mark.asyncio
+async def test_fetch_news_parses_recent_items(monkeypatch):
+    import yfinance
+    from freezegun import freeze_time
+    fixture = json.loads(
+        (Path(__file__).parent.parent / "fixtures" / "yfinance_news.json").read_text()
+    )
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.news = fixture[ticker]
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+
+    src = YFinanceSource(max_concurrent=2)
+    with freeze_time("2025-06-03 12:00:00"):
+        items = await src.fetch_news("AAPL", days=7)
+    assert len(items) == 2
