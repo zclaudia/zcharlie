@@ -60,10 +60,57 @@ class YFinanceSource:
             for (t, n, s) in tickers
         ]
 
+    @retry_async(attempts=3, base_delay=1.0)
     async def fetch_financial_report(
         self, ticker: str, periods: list[str]
     ) -> list[FinancialReportRecord]:
-        raise NotImplementedError("Implemented in Task 18")
+        """Fetch quarterly financial statements.
+
+        `periods` is a list like ['2025-Q1', '2025-Q2'] used to filter which quarters to return.
+        """
+        async with self._limiter:
+            t = await asyncio.to_thread(yf.Ticker, ticker)
+            income = await asyncio.to_thread(lambda: t.quarterly_income_stmt)
+            cashflow = await asyncio.to_thread(lambda: t.quarterly_cashflow)
+            balance = await asyncio.to_thread(lambda: t.quarterly_balance_sheet)
+
+        out: list[FinancialReportRecord] = []
+        for col in income.columns:
+            period_end = pd.to_datetime(col).date()
+            period_label = f"{period_end.year}-Q{(period_end.month - 1) // 3 + 1}"
+            if periods and period_label not in periods:
+                continue
+            rev = income.at["Total Revenue", col] if "Total Revenue" in income.index else None
+            ni = income.at["Net Income", col] if "Net Income" in income.index else None
+            fcf_val = None
+            if "Free Cash Flow" in cashflow.index and col in cashflow.columns:
+                fcf_val = cashflow.at["Free Cash Flow", col]
+            ta = None
+            te = None
+            if col in balance.columns:
+                if "Total Assets" in balance.index:
+                    ta = balance.at["Total Assets", col]
+                if "Stockholders Equity" in balance.index:
+                    te = balance.at["Stockholders Equity", col]
+
+            out.append(
+                FinancialReportRecord(
+                    ticker=ticker,
+                    fiscal_period=period_label,
+                    period_end=period_end,
+                    revenue=_maybe_decimal(rev),
+                    net_income=_maybe_decimal(ni),
+                    fcf=_maybe_decimal(fcf_val),
+                    total_assets=_maybe_decimal(ta),
+                    total_equity=_maybe_decimal(te),
+                    raw_data={
+                        "income": income[col].dropna().to_dict() if col in income.columns else {},
+                        "cashflow": cashflow[col].dropna().to_dict() if col in cashflow.columns else {},
+                        "balance": balance[col].dropna().to_dict() if col in balance.columns else {},
+                    },
+                )
+            )
+        return out
 
     @retry_async(attempts=3, base_delay=1.0)
     async def fetch_fundamental_snapshot(

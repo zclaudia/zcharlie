@@ -117,3 +117,40 @@ async def test_fetch_universe_unknown_code_raises():
     src = YFinanceSource(max_concurrent=2)
     with pytest.raises(ValueError, match="Unsupported universe"):
         await src.fetch_universe("UNKNOWN_INDEX", as_of=date(2025, 6, 3))
+
+
+@pytest.mark.asyncio
+async def test_fetch_financial_report_parses_quarterly(monkeypatch):
+    import yfinance
+    import pandas as pd
+
+    fixture = json.loads(
+        (Path(__file__).parent.parent / "fixtures" / "yfinance_financials.json").read_text()
+    )
+
+    class FakeTicker:
+        def __init__(self, ticker):
+            self._data = fixture[ticker]
+
+        @property
+        def quarterly_income_stmt(self):
+            return pd.DataFrame(self._data["quarterly_income_stmt"])
+
+        @property
+        def quarterly_cashflow(self):
+            return pd.DataFrame(self._data["quarterly_cashflow"])
+
+        @property
+        def quarterly_balance_sheet(self):
+            return pd.DataFrame(self._data["quarterly_balance_sheet"])
+
+    monkeypatch.setattr(yfinance, "Ticker", FakeTicker)
+
+    src = YFinanceSource(max_concurrent=2)
+    reports = await src.fetch_financial_report("AAPL", periods=["2025-Q1"])
+    # We expect Q1 2025 (period_end 2025-03-31) to match
+    q1 = [r for r in reports if r.fiscal_period == "2025-Q1"]
+    assert q1, f"No Q1 report found in {[r.fiscal_period for r in reports]}"
+    assert float(q1[0].revenue) == 95_360_000_000
+    assert float(q1[0].net_income) == 23_636_000_000
+    assert float(q1[0].fcf) == 24_400_000_000

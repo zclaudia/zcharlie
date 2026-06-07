@@ -1,0 +1,15 @@
+{
+  "AAPL": {
+    "quarterly_income_stmt": {
+      "2025-03-31": {"Total Revenue": 95360000000, "Net Income": 23636000000},
+      "2024-12-31": {"Total Revenue": 124300000000, "Net Income": 36330000000}
+    },
+    "quarterly_cashflow": {
+      "2025-03-31": {"Free Cash Flow": 24400000000},
+      "2024-12-31": {"Free Cash Flow": 39100000000}
+    },
+    "quarterly_balance_sheet": {
+      "2025-03-31": {"Total Assets": 364980000000, "Stockholders Equity": 66050000000}
+    }
+  }
+}
