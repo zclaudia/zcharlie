@@ -1,7 +1,9 @@
 """Core protocols for pluggable extension points."""
 
 from datetime import date
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
+from pydantic import BaseModel
 
 from investment_agent.sources.records import (
     AnalystRatingRecord,
@@ -41,3 +43,29 @@ class DataSource(Protocol):
     async def fetch_analyst_ratings(
         self, ticker: str, days: int
     ) -> list[AnalystRatingRecord]: ...
+
+
+class CompletionResult(BaseModel):
+    text: str
+    output: Any | None = None
+    prompt_tokens: int
+    completion_tokens: int
+    latency_ms: int
+    model: str
+    provider: str
+
+
+@runtime_checkable
+class LLMClient(Protocol):
+    tier_name: str
+
+    async def complete(
+        self,
+        *,
+        system_prompt: str,
+        user_message: str,
+        output_model: type[BaseModel] | None = None,
+        tools: list[Any] | None = None,
+        purpose: str,
+        pipeline_run_id: int | None = None,
+    ) -> CompletionResult: ...
