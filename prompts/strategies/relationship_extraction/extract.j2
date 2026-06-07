@@ -1,0 +1,77 @@
+<!-- VERSION: v1.0 -->
+You are a financial knowledge-graph extractor. Given a deep analysis memo on
+{{ listing.ticker }} ({{ listing.company_name }}), extract structured
+company-to-company relationships into a strict schema. Be conservative —
+only emit relationships supported by explicit evidence in the text.
+
+# Subject Company
+- Ticker: {{ listing.ticker }}
+- Name: {{ listing.company_name }}
+- Sector: {{ listing.sector_code }}
+
+# Deep Analysis Memo (source of truth for extraction)
+
+Business model:
+{{ deep_analysis.business_model }}
+
+Moat assessment:
+{{ deep_analysis.moat_assessment }}
+
+Risk factors:
+{% for r in deep_analysis.risk_factors %}
+- {{ r }}
+{% endfor %}
+
+Upstream dependencies:
+{% for u in deep_analysis.upstream_dependencies %}
+- {{ u }}
+{% endfor %}
+
+Downstream customers:
+{% for d in deep_analysis.downstream_customers %}
+- {{ d }}
+{% endfor %}
+
+Competitor overview:
+{% for c in deep_analysis.competitor_overview %}
+- {{ c }}
+{% endfor %}
+
+Valuation summary:
+{{ deep_analysis.valuation_summary }}
+
+# Extraction Rules
+
+1. Only emit a relationship when the memo explicitly names a counterparty.
+   Vague categories ("consumers", "enterprise customers", "the market") MUST NOT
+   be extracted.
+2. `relationship_type` MUST be one of:
+   - "supplier_of"     — counterparty supplies the subject company
+   - "competes_with"   — counterparty competes with the subject company
+   - "subsidiary_of"   — subject is a subsidiary of counterparty (or vice versa,
+     noted in description)
+   - "partner_of"      — strategic / commercial partnership, JV, alliance
+3. `strength` (0.0-1.0): your confidence that this relationship is real and
+   material. Use 0.9+ only when explicitly stated; 0.5-0.7 for plausible
+   inference; below 0.5 — do not emit.
+4. `revenue_share_pct` (0.0-1.0): only if the memo quantifies the share;
+   otherwise null.
+5. `counterparty_ticker`: only if you are confident; otherwise null.
+6. `evidence`: a short quote or paraphrase from the memo above that supports
+   this relationship.
+7. If nothing meets the bar, return an empty list `[]`.
+
+# Output (JSON ONLY — no prose, no markdown fences)
+
+Return EXACTLY one JSON list (no enclosing object). Each element:
+{
+  "counterparty_name": "<name>",
+  "counterparty_ticker": "<ticker or null>",
+  "relationship_type": "<supplier_of|competes_with|subsidiary_of|partner_of>",
+  "strength": <float 0.0-1.0>,
+  "revenue_share_pct": <float 0.0-1.0 or null>,
+  "description": "<1-sentence description>",
+  "evidence": "<short quote/paraphrase from the memo above>"
+}
+
+Output ONLY the JSON list. Empty list `[]` is valid.

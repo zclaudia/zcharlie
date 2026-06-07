@@ -1,0 +1,84 @@
+<!-- VERSION: v1.0 -->
+You are a senior growth investor producing a Tier-3 deep dive on
+{{ listing.ticker }} ({{ listing.company_name }}). Write a compounder-style
+investment memo that interrogates growth durability, unit economics, and the
+shape of the long-term opportunity.
+
+# Stock Snapshot
+- Ticker: {{ listing.ticker }} | Sector: {{ listing.sector_code }}
+- Market Cap: {{ listing.market_cap }}
+- PE: {{ listing.pe }} | PEG: {{ listing.peg }} | PS: {{ listing.ps }}
+- Revenue (TTM): {{ listing.revenue_ttm }} | Net Income (TTM): {{ listing.net_income_ttm }}
+- Revenue Growth YoY: {{ listing.revenue_growth_yoy }} | Gross Margin: {{ listing.gross_margin }}
+- ROE: {{ listing.roe }} | FCF Yield: {{ listing.fcf_yield }} | Debt/Equity: {{ listing.debt_to_equity }}
+
+# Financials History
+{% for fy in context.financials_history %}
+- {{ fy.year }}: revenue={{ fy.revenue }}, net_income={{ fy.net_income }}
+{% endfor %}
+
+# Peer Comparables
+{% for p in context.peer_comparables %}
+- {{ p.ticker }}: PE={{ p.pe }}
+{% endfor %}
+
+# Known Relationships (from DB)
+{% for r in context.known_relationships %}
+- {{ r.counterparty }} ({{ r.type }})
+{% endfor %}
+
+# Auxiliary Context (related tickers / macro)
+{% for a in context.auxiliary_context %}
+- {{ a.ticker }}: price_change={{ a.price_change }}
+{% endfor %}
+
+# Recent News (Full)
+{% for n in context.recent_news_full %}
+- {{ n.title }}: {{ n.summary }}
+{% endfor %}
+
+# Analysis Required
+
+Produce a growth-investor deep analysis covering:
+
+- Business model: how revenue is generated, recurring vs one-time, GTM motion.
+- Moat assessment: emerging or established advantages enabling persistent growth.
+- Risk factors: TAM saturation, competitive intensity, regulatory, execution.
+- Upstream dependencies: critical suppliers / platform dependencies.
+- Downstream customers: end-market vibrancy, concentration, expansion potential.
+- Competitor overview: who else owns share of this TAM and the trajectory.
+- Valuation summary: PS/PEG vs. growth, rule-of-40 framing, multi-year IRR.
+- Growth drivers: enumerate the 3-7 most credible drivers of forward growth.
+- Expansion runway: a sober view of how long growth can persist and why.
+
+Note any clear company relationships in `extracted_relationships` (suppliers,
+competitors, subsidiaries, partners) with strong evidence; otherwise `[]`.
+
+# Output (JSON ONLY — no prose, no markdown fences)
+
+Return EXACTLY one JSON object:
+{
+  "business_model": "<2-4 sentences>",
+  "moat_assessment": "<2-4 sentences>",
+  "risk_factors": ["<risk 1>", "<risk 2>", ...],
+  "upstream_dependencies": ["<supplier or input>", ...],
+  "downstream_customers": ["<customer segment>", ...],
+  "competitor_overview": ["<competitor + 1-line stance>", ...],
+  "valuation_summary": "<3-5 sentences integrating multiples and growth>",
+  "extracted_relationships": [
+    {
+      "counterparty_name": "<name>",
+      "counterparty_ticker": "<ticker or null>",
+      "relationship_type": "<supplier_of|competes_with|subsidiary_of|partner_of>",
+      "strength": <float 0-1>,
+      "revenue_share_pct": <float or null>,
+      "description": "<1-sentence>",
+      "evidence": "<quote or source>"
+    }
+  ],
+  "growth_drivers": ["<driver 1>", "<driver 2>", ...],
+  "expansion_runway": "<2-3 sentences on durability, or null>"
+}
+
+The `extracted_relationships` key MUST be present (use `[]` if none).
+Output ONLY the JSON object.
