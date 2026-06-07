@@ -44,6 +44,9 @@ dependencies = [
 
     # Retry / Rate
     "tenacity>=8.2",
+
+    # Templating
+    "jinja2>=3.1",
 ]
 
 [project.optional-dependencies]
