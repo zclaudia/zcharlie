@@ -3,6 +3,7 @@
 import typer
 
 from investment_agent.cli.commands import admin as admin_cmd
+from investment_agent.cli.commands import attribute as attribute_cmd
 from investment_agent.cli.commands import auxiliary as auxiliary_cmd
 from investment_agent.cli.commands import data as data_cmd
 from investment_agent.cli.commands import pipeline as pipeline_cmd
@@ -16,6 +17,7 @@ app.add_typer(
     auxiliary_cmd.app, name="auxiliary", help="Auxiliary listings management"
 )
 app.add_typer(pipeline_cmd.app, name="pipeline", help="Pipeline commands")
+app.add_typer(attribute_cmd.app, name="attribute", help="Attribution commands")
 
 
 @app.callback()
