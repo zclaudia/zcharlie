@@ -109,8 +109,121 @@ class DiscoveryPipeline:
                     cache_days=self._app_config.pipeline.deep_analysis_cache_days,
                 )
 
-            # Steps 5-7: stubbed until Tasks 18-21 land.
-            log.info("pipeline.steps_5_6_7.deferred", run_id=run_id)
+            # Step 5: Meta-Agent synthesis
+            async with session_scope() as session:
+                from investment_agent.meta.synthesizer import (
+                    synthesize_discovery_report,
+                )
+
+                report = await synthesize_discovery_report(session, run_id)
+                # Collect picks while session is open
+                consensus = list(report.consensus_picks)
+                divergent = list(report.divergent_picks)
+                overlooked = list(report.overlooked_picks)
+
+            # Step 6: Render + dispatch
+            async with session_scope() as session:
+                from investment_agent.notifiers.file_notifier import FileNotifier
+                from investment_agent.renderers.markdown_renderer import (
+                    MarkdownRenderer,
+                )
+                from investment_agent.storage.models.analysis import (
+                    DiscoveryReport,
+                    StockScore,
+                )
+
+                # Collect listing ids referenced by picks (for ticker enrichment)
+                pick_listing_ids: set[int] = set()
+                for bucket in (consensus, divergent, overlooked):
+                    for p in bucket:
+                        if isinstance(p, dict):
+                            lid_val = p.get("listing_id")
+                            if isinstance(lid_val, int):
+                                pick_listing_ids.add(lid_val)
+
+                score_stmt = select(StockScore).where(
+                    StockScore.pipeline_run_id == run_id
+                )
+                scores = list(
+                    (await session.execute(score_stmt)).scalars().all()
+                )
+                listing_ids = pick_listing_ids | {s.listing_id for s in scores}
+
+                ticker_by_lid: dict[int, str] = {}
+                if listing_ids:
+                    listing_stmt = select(Listing).where(
+                        Listing.id.in_(listing_ids)
+                    )
+                    for listing in (
+                        await session.execute(listing_stmt)
+                    ).scalars().all():
+                        ticker_by_lid[listing.id] = listing.ticker
+
+                def _enrich(
+                    bucket: list[object],
+                ) -> list[dict[str, object]]:
+                    out: list[dict[str, object]] = []
+                    for entry in bucket:
+                        if not isinstance(entry, dict):
+                            continue
+                        lid_val = entry.get("listing_id")
+                        ticker = (
+                            ticker_by_lid.get(lid_val)
+                            if isinstance(lid_val, int)
+                            else None
+                        )
+                        enriched: dict[str, object] = {
+                            **entry,
+                            "ticker": ticker or str(lid_val),
+                        }
+                        out.append(enriched)
+                    return out
+
+                scores_by_listing: dict[int, list[dict[str, object]]] = {}
+                for s in scores:
+                    scores_by_listing.setdefault(s.listing_id, []).append(
+                        {
+                            "strategy_code": s.strategy_code,
+                            "score": s.score,
+                            "confidence": float(s.confidence),
+                            "bull_thesis": s.bull_thesis,
+                            "bear_thesis": s.bear_thesis,
+                            "ticker": ticker_by_lid.get(s.listing_id),
+                        }
+                    )
+
+                rendered = await MarkdownRenderer().render_discovery(
+                    run_id=run_id,
+                    consensus_picks=_enrich(consensus),
+                    divergent_picks=_enrich(divergent),
+                    overlooked_picks=_enrich(overlooked),
+                    scores_by_listing=scores_by_listing,
+                )
+
+                base_dir = self._settings.data_dir / "reports"
+                notif = await FileNotifier(base_dir).send(
+                    rendered,
+                    channel_metadata={
+                        "kind": "discovery",
+                        "run_id": run_id,
+                        "date": as_of.isoformat(),
+                    },
+                )
+
+                # Save markdown path on the DiscoveryReport row
+                dr = await session.get(DiscoveryReport, run_id)
+                if dr is not None:
+                    dr.markdown_path = notif.target
+                    await session.flush()
+
+                log.info(
+                    "pipeline.step6.complete",
+                    run_id=run_id,
+                    markdown_path=notif.target,
+                )
+
+            # Step 7: deferred to Task 21
+            log.info("pipeline.step7.deferred", run_id=run_id)
 
             # Mark success.
             async with session_scope() as session:
