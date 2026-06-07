@@ -113,9 +113,111 @@ class MarkdownRenderer:
     async def render_attribution(
         self, run_id: int, payload: dict[str, object]
     ) -> RenderedContent:
-        """Placeholder for Plan C."""
+        """Render an attribution report. Payload keys:
+          - ticker, company_name, as_of (str)
+          - beta (dict of BetaDecomposition)
+          - result (dict of AttributionResult)
+        """
+        ticker = payload.get("ticker", "?")
+        company = payload.get("company_name", "")
+        as_of = payload.get("as_of", "")
+        raw_beta = payload.get("beta")
+        raw_result = payload.get("result")
+        beta: dict[str, object] = raw_beta if isinstance(raw_beta, dict) else {}
+        result: dict[str, object] = raw_result if isinstance(raw_result, dict) else {}
+
+        def _pct(v: object) -> str:
+            try:
+                return f"{float(v) * 100:.2f}%"  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return "-"
+
+        lines: list[str] = [
+            f"# Attribution: {ticker} — {as_of}",
+            "",
+            f"_Run {run_id} · {company}_",
+            "",
+            "## TL;DR",
+            "",
+            str(result.get("summary", "_no summary_")),
+            "",
+            f"_Confidence: {result.get('confidence', '-')}_",
+            "",
+            "## β Decomposition",
+            "",
+            f"- Stock return: **{_pct(beta.get('stock_return_pct'))}**",
+            f"- Market return: {_pct(beta.get('market_return_pct'))} "
+            f"(β_market = {beta.get('beta_market', '-')})",
+        ]
+        if beta.get("beta_sector") is not None:
+            lines.append(
+                f"- Sector return: {_pct(beta.get('sector_return_pct'))} "
+                f"(β_sector = {beta.get('beta_sector', '-')})"
+            )
+        lines.append(
+            f"- Explained by market: {_pct(beta.get('explained_by_market_pct'))}"
+        )
+        if beta.get("explained_by_sector_pct") is not None:
+            lines.append(
+                f"- Explained by sector: {_pct(beta.get('explained_by_sector_pct'))}"
+            )
+        lines.extend(
+            [
+                f"- **Idiosyncratic: {_pct(beta.get('idiosyncratic_pct'))}**",
+                f"- R² = {beta.get('r_squared', '-')} · "
+                f"window = {beta.get('window_days', '-')} days",
+                "",
+            ]
+        )
+
+        events = result.get("triggering_events") or []
+        if isinstance(events, list) and events:
+            lines.extend(["## Triggering Events", ""])
+            for ev in events:
+                if not isinstance(ev, dict):
+                    continue
+                line = (
+                    f"- **[{ev.get('event_type', 'event')}]** "
+                    f"{ev.get('headline', '')}"
+                )
+                if ev.get("source"):
+                    line += f"  ({ev['source']})"
+                lines.append(line)
+                if ev.get("impact_estimate"):
+                    lines.append(f"  - Impact: {ev['impact_estimate']}")
+                if ev.get("url"):
+                    lines.append(f"  - {ev['url']}")
+            lines.append("")
+        else:
+            lines.extend(
+                [
+                    "## Triggering Events",
+                    "",
+                    "_No specific triggering events identified._",
+                    "",
+                ]
+            )
+
+        if result.get("valuation_delta"):
+            lines.extend(
+                [
+                    "## Valuation Delta",
+                    "",
+                    str(result["valuation_delta"]),
+                    "",
+                ]
+            )
+        if result.get("cross_market_context"):
+            lines.extend(
+                [
+                    "## Cross-Market Context",
+                    "",
+                    str(result["cross_market_context"]),
+                    "",
+                ]
+            )
+
+        body = "\n".join(lines).rstrip() + "\n"
         return RenderedContent(
-            format="markdown",
-            body="# Attribution\n\n_TBD in Plan C_\n",
-            metadata={"run_id": run_id},
+            format="markdown", body=body, metadata={"run_id": run_id}
         )
