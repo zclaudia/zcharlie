@@ -201,3 +201,18 @@ async def test_fetch_analyst_ratings_parses_upgrades_downgrades(monkeypatch):
     assert len(items) == 2
     assert items[0].firm in {"Goldman Sachs", "Morgan Stanley"}
     assert items[0].action in {"up", "down", "main", "init"}
+
+
+@pytest.mark.asyncio
+async def test_cross_market_tickers_accepted(monkeypatch):
+    """Verify .TW / .HK / .SZ / .SS ticker suffixes are accepted."""
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "download", lambda *a, **k: __import__("pandas").DataFrame())
+
+    src = YFinanceSource(max_concurrent=2)
+    for ticker in ["2330.TW", "0700.HK", "002475.SZ", "600519.SS"]:
+        result = await src.fetch_daily_prices(
+            tickers=[ticker], start=date(2025, 6, 1), end=date(2025, 6, 2)
+        )
+        assert result == []  # empty df → empty result, but no exception
