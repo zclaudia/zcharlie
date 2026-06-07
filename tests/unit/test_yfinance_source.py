@@ -56,3 +56,39 @@ async def test_fetch_daily_prices_handles_empty_response(monkeypatch):
         tickers=["GHOST"], start=date(2025, 6, 1), end=date(2025, 6, 2)
     )
     assert out == []
+
+
+def _fake_ticker_info(payload: dict):
+    class FakeTicker:
+        def __init__(self, ticker):
+            self.info = payload.get(ticker, {})
+    return FakeTicker
+
+
+@pytest.mark.asyncio
+async def test_fetch_fundamental_snapshot_parses_info(monkeypatch):
+    import yfinance
+
+    info = json.loads(
+        (Path(__file__).parent.parent / "fixtures" / "yfinance_info.json").read_text()
+    )
+    monkeypatch.setattr(yfinance, "Ticker", _fake_ticker_info(info))
+
+    src = YFinanceSource(max_concurrent=2)
+    snap = await src.fetch_fundamental_snapshot("AAPL", as_of=date(2025, 6, 3))
+    assert snap.ticker == "AAPL"
+    assert float(snap.pe) == 32.5
+    assert float(snap.pb) == 51.2
+    assert float(snap.roe) == pytest.approx(1.5612, rel=1e-4)
+    assert float(snap.market_cap) == 3_000_000_000_000
+
+
+@pytest.mark.asyncio
+async def test_fetch_fundamental_snapshot_handles_missing_fields(monkeypatch):
+    import yfinance
+
+    monkeypatch.setattr(yfinance, "Ticker", _fake_ticker_info({"GHOST": {}}))
+    src = YFinanceSource(max_concurrent=2)
+    snap = await src.fetch_fundamental_snapshot("GHOST", as_of=date(2025, 6, 3))
+    assert snap.pe is None
+    assert snap.market_cap is None

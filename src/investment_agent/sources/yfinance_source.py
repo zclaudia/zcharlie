@@ -53,10 +53,33 @@ class YFinanceSource:
     ) -> list[FinancialReportRecord]:
         raise NotImplementedError("Implemented in Task 18")
 
+    @retry_async(attempts=3, base_delay=1.0)
     async def fetch_fundamental_snapshot(
         self, ticker: str, as_of: date
     ) -> FundamentalSnapshotRecord:
-        raise NotImplementedError("Implemented in Task 16")
+        async with self._limiter:
+            info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info)
+        info = info or {}
+
+        market_cap = _maybe_decimal(info.get("marketCap"))
+        fcf = _maybe_decimal(info.get("freeCashflow"))
+        fcf_yield = None
+        if fcf is not None and market_cap not in (None, Decimal(0)):
+            fcf_yield = fcf / market_cap
+
+        return FundamentalSnapshotRecord(
+            ticker=ticker,
+            date=as_of,
+            pe=_maybe_decimal(info.get("trailingPE")),
+            pb=_maybe_decimal(info.get("priceToBook")),
+            peg=_maybe_decimal(info.get("trailingPegRatio")),
+            ps=_maybe_decimal(info.get("priceToSalesTrailing12Months")),
+            roe=_maybe_decimal(info.get("returnOnEquity")),
+            roa=_maybe_decimal(info.get("returnOnAssets")),
+            fcf_yield=fcf_yield,
+            debt_to_equity=_maybe_decimal(info.get("debtToEquity")),
+            market_cap=market_cap,
+        )
 
     async def fetch_news(self, ticker: str, days: int) -> list[NewsRecord]:
         raise NotImplementedError("Implemented in Task 19")
@@ -65,6 +88,15 @@ class YFinanceSource:
         self, ticker: str, days: int
     ) -> list[AnalystRatingRecord]:
         raise NotImplementedError("Implemented in Task 20")
+
+
+def _maybe_decimal(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (ValueError, ArithmeticError):
+        return None
 
 
 def _df_to_price_records(

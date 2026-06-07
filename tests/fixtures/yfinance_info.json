@@ -1,0 +1,14 @@
+{
+  "AAPL": {
+    "trailingPE": 32.5,
+    "priceToBook": 51.2,
+    "trailingPegRatio": 2.45,
+    "priceToSalesTrailing12Months": 8.7,
+    "returnOnEquity": 1.5612,
+    "returnOnAssets": 0.2814,
+    "freeCashflow": 99584000000,
+    "marketCap": 3000000000000,
+    "debtToEquity": 1.85,
+    "totalRevenue": 391035000000
+  }
+}
