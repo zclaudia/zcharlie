@@ -98,3 +98,55 @@ class ExtractedRelationship(_DTOBase):
 
 # Re-export for typing
 DeepAnalysis.model_rebuild()
+
+
+# === Attribution (Plan C) ===
+
+
+class BetaDecomposition(_DTOBase):
+    """Result of Step 2 algorithmic regression decomposition (one stock vs market+sector)."""
+
+    stock_return_pct: float
+    market_return_pct: float
+    sector_return_pct: float | None = None
+    beta_market: float
+    beta_sector: float | None = None
+    explained_by_market_pct: float
+    explained_by_sector_pct: float | None = None
+    idiosyncratic_pct: float
+    r_squared: float
+    window_days: int
+
+
+class TriggeringEvent(_DTOBase):
+    """One concrete event Step 3 LLM agent attributes the move to."""
+
+    event_type: str
+    headline: str
+    published_at: str | None = None
+    source: str | None = None
+    url: str | None = None
+    related_ticker: str | None = None
+    impact_estimate: str | None = None
+    confidence: float = 0.5
+
+
+class AttributionResult(_DTOBase):
+    """Tier 3 LLM output — full why-did-it-move analysis."""
+
+    summary: str
+    triggering_events: list[TriggeringEvent] = Field(default_factory=list)
+    valuation_delta: str | None = None
+    cross_market_context: str | None = None
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class AttributionContext(_DTOBase):
+    """Step 1 output — context bundle handed to the LLM Agent loop."""
+
+    listing: ListingSnapshot
+    beta: BetaDecomposition
+    recent_news: list[dict[str, object]] = Field(default_factory=list)
+    recent_ratings: list[dict[str, object]] = Field(default_factory=list)
+    recent_earnings: list[dict[str, object]] = Field(default_factory=list)
+    related_companies: list[dict[str, object]] = Field(default_factory=list)
