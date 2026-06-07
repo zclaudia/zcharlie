@@ -8,7 +8,6 @@ from sqlalchemy import select
 
 from investment_agent.sources.records import DailyPriceRecord
 from investment_agent.storage.models.market_data import DailyPrice
-from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.repositories.listing import ListingRepository
 
 

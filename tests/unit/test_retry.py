@@ -1,7 +1,8 @@
 import asyncio
+
 import pytest
 
-from investment_agent.sources.retry import retry_async, RateLimiter
+from investment_agent.sources.retry import RateLimiter, retry_async
 
 
 @pytest.mark.asyncio

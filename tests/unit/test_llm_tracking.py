@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -17,7 +17,7 @@ async def test_record_llm_call_writes_row(db_session):
         provider="openai",
         prompt_tokens=1000,
         completion_tokens=200,
-        started_at=datetime(2025, 6, 3, tzinfo=timezone.utc),
+        started_at=datetime(2025, 6, 3, tzinfo=UTC),
         latency_ms=1234,
         success=True,
         error_message=None,
@@ -38,7 +38,7 @@ async def test_record_llm_call_failure(db_session):
         provider="openai",
         prompt_tokens=0,
         completion_tokens=0,
-        started_at=datetime(2025, 6, 3, tzinfo=timezone.utc),
+        started_at=datetime(2025, 6, 3, tzinfo=UTC),
         latency_ms=50,
         success=False,
         error_message="rate limited",

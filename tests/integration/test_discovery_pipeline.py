@@ -315,6 +315,7 @@ async def test_step2_screening_filters_by_strategy(db_session, seeded_market):
 async def test_step4_cache_hit_skips_llm(db_session, seeded_market):
     """If cache row is fresh, _check_or_run_deep_analysis returns cached, no LLM call."""
     from datetime import UTC, date, datetime
+
     from investment_agent.domain.strategy_types import ListingSnapshot
     from investment_agent.pipelines.steps import _check_or_run_deep_analysis
     from investment_agent.storage.models.market_data import FinancialReport
@@ -371,7 +372,9 @@ async def test_step4_cache_hit_skips_llm(db_session, seeded_market):
 async def test_step4_cache_miss_calls_llm_and_persists(db_session, seeded_market):
     """Cache miss → LLM called → result persisted to DeepAnalysisCache."""
     from datetime import date
+
     from sqlalchemy import select
+
     from investment_agent.domain.strategy_types import DeepAnalysis, ListingSnapshot
     from investment_agent.pipelines.steps import _check_or_run_deep_analysis
     from investment_agent.storage.models.market_data import FinancialReport
@@ -430,7 +433,9 @@ async def test_step4_cache_miss_calls_llm_and_persists(db_session, seeded_market
 async def test_step4_stale_cache_refreshes(db_session, seeded_market):
     """Cache older than cache_days triggers a fresh LLM call and updates the row."""
     from datetime import UTC, date, datetime, timedelta
+
     from sqlalchemy import select
+
     from investment_agent.domain.strategy_types import DeepAnalysis, ListingSnapshot
     from investment_agent.pipelines.steps import _check_or_run_deep_analysis
     from investment_agent.storage.models.market_data import FinancialReport

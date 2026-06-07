@@ -20,7 +20,7 @@ def test_decompose_with_sector():
     """stock = 0.5 × market + 0.7 × sector → β values recovered."""
     market = [0.01, -0.02, 0.015, -0.005, 0.008, 0.02, -0.012]
     sector = [-0.005, 0.01, 0.012, 0.001, -0.003, 0.015, -0.004]
-    stock = [0.5 * m + 0.7 * s for m, s in zip(market, sector)]
+    stock = [0.5 * m + 0.7 * s for m, s in zip(market, sector, strict=True)]
     result = decompose(stock_returns=stock, market_returns=market, sector_returns=sector)
     assert abs(result.beta_market - 0.5) < 1e-3
     assert result.beta_sector is not None

@@ -7,7 +7,6 @@ import pytest
 
 from investment_agent.sources.yfinance_source import YFinanceSource
 
-
 _FIXTURE = json.loads(
     (Path(__file__).parent.parent / "fixtures" / "yfinance_history.json").read_text()
 )
@@ -121,8 +120,8 @@ async def test_fetch_universe_unknown_code_raises():
 
 @pytest.mark.asyncio
 async def test_fetch_financial_report_parses_quarterly(monkeypatch):
-    import yfinance
     import pandas as pd
+    import yfinance
 
     fixture = json.loads(
         (Path(__file__).parent.parent / "fixtures" / "yfinance_financials.json").read_text()
@@ -178,8 +177,8 @@ async def test_fetch_news_parses_recent_items(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_fetch_analyst_ratings_parses_upgrades_downgrades(monkeypatch):
-    import yfinance
     import pandas as pd
+    import yfinance
     from freezegun import freeze_time
 
     class FakeTicker:
