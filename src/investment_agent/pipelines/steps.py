@@ -6,6 +6,7 @@ from collections.abc import Awaitable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from typing import TypedDict
 
 import structlog
 from sqlalchemy import func, select
@@ -616,3 +617,191 @@ async def _build_deep_analysis_context(
     # TODO: enrich with multi-quarter financials history, peer comparables,
     # known company relationships, auxiliary listing context, and recent news.
     return DeepAnalysisContext(listing=snapshot)
+
+
+class HitRateReview(TypedDict):
+    hit_rate: float | None
+    n_picks: int
+    n_outperformed: int
+    benchmark_return: float | None
+    picks: list[dict[str, object]]
+    note: str | None
+
+
+async def step7_hit_rate_review(
+    session: AsyncSession,
+    *,
+    pipeline_run_id: int,
+    universe_code: str,
+    as_of: date,
+    benchmark_ticker: str = "SPY",
+) -> HitRateReview:
+    """Compare prior Discovery run's top picks' returns vs benchmark return.
+
+    Returns a HitRateReview summary; also writes it to pipeline_run.metadata_json.
+    """
+    from investment_agent.storage.models.analysis import (
+        DiscoveryReport,
+        PipelineRun,
+    )
+    from investment_agent.storage.models.market_data import DailyPrice
+    from investment_agent.storage.models.reference import Listing
+
+    # 1. Find the immediately-preceding Discovery run for same universe.
+    prev_stmt = (
+        select(PipelineRun)
+        .where(
+            PipelineRun.kind == "discovery",
+            PipelineRun.universe_code == universe_code,
+            PipelineRun.id != pipeline_run_id,
+            PipelineRun.status == "success",
+        )
+        .order_by(PipelineRun.started_at.desc())
+        .limit(1)
+    )
+    prev_run = (await session.execute(prev_stmt)).scalar_one_or_none()
+    if prev_run is None:
+        review: HitRateReview = {
+            "hit_rate": None,
+            "n_picks": 0,
+            "n_outperformed": 0,
+            "benchmark_return": None,
+            "picks": [],
+            "note": (
+                "No prior Discovery run for this universe — "
+                "skipping hit-rate review."
+            ),
+        }
+        await _attach_hit_rate(session, pipeline_run_id, review)
+        return review
+
+    prev_report = await session.get(DiscoveryReport, prev_run.id)
+    if prev_report is None or not prev_report.consensus_picks:
+        review = {
+            "hit_rate": None,
+            "n_picks": 0,
+            "n_outperformed": 0,
+            "benchmark_return": None,
+            "picks": [],
+            "note": "Prior run had no consensus picks.",
+        }
+        await _attach_hit_rate(session, pipeline_run_id, review)
+        return review
+
+    pick_listing_ids: list[int] = []
+    for entry in prev_report.consensus_picks:
+        if isinstance(entry, dict) and isinstance(entry.get("listing_id"), int):
+            pick_listing_ids.append(int(entry["listing_id"]))
+    if not pick_listing_ids:
+        review = {
+            "hit_rate": None,
+            "n_picks": 0,
+            "n_outperformed": 0,
+            "benchmark_return": None,
+            "picks": [],
+            "note": "Prior consensus picks had no listing_id entries.",
+        }
+        await _attach_hit_rate(session, pipeline_run_id, review)
+        return review
+
+    # 2. Compute single-day return for a listing using the two most recent
+    #    price rows on/before as_of.
+    async def _return_for(listing_id: int) -> float | None:
+        price_stmt = (
+            select(DailyPrice)
+            .where(
+                DailyPrice.listing_id == listing_id,
+                DailyPrice.date <= as_of,
+            )
+            .order_by(DailyPrice.date.desc())
+            .limit(2)
+        )
+        prices = list((await session.execute(price_stmt)).scalars().all())
+        if len(prices) < 2:
+            return None
+        today_close = float(prices[0].adjusted_close)
+        prev_close = float(prices[1].adjusted_close)
+        if prev_close == 0:
+            return None
+        return (today_close - prev_close) / prev_close
+
+    # 3. Benchmark: prefer SPY, fall back to universe-wide average return.
+    bench_stmt = select(Listing).where(Listing.ticker == benchmark_ticker).limit(1)
+    bench_listing = (await session.execute(bench_stmt)).scalar_one_or_none()
+    benchmark_return: float | None = (
+        await _return_for(bench_listing.id) if bench_listing else None
+    )
+
+    if benchmark_return is None:
+        from investment_agent.storage.models.reference import UniverseMembership
+
+        uni_stmt = select(UniverseMembership.listing_id).where(
+            UniverseMembership.universe_code == universe_code,
+        )
+        uni_ids = [
+            int(row[0]) for row in (await session.execute(uni_stmt)).all()
+        ]
+        uni_returns: list[float] = []
+        for lid in uni_ids:
+            r = await _return_for(lid)
+            if r is not None:
+                uni_returns.append(r)
+        benchmark_return = (
+            sum(uni_returns) / len(uni_returns) if uni_returns else None
+        )
+
+    picks_payload: list[dict[str, object]] = []
+    n_out = 0
+    n_eval = 0
+    for lid in pick_listing_ids:
+        ret = await _return_for(lid)
+        if ret is None or benchmark_return is None:
+            picks_payload.append(
+                {"listing_id": lid, "return": ret, "outperformed": None}
+            )
+            continue
+        outperformed = ret > benchmark_return
+        picks_payload.append(
+            {
+                "listing_id": lid,
+                "return": round(ret, 4),
+                "outperformed": outperformed,
+            }
+        )
+        n_eval += 1
+        if outperformed:
+            n_out += 1
+
+    hit_rate = (n_out / n_eval) if n_eval > 0 else None
+    review = {
+        "hit_rate": hit_rate,
+        "n_picks": len(pick_listing_ids),
+        "n_outperformed": n_out,
+        "benchmark_return": (
+            round(benchmark_return, 4) if benchmark_return is not None else None
+        ),
+        "picks": picks_payload,
+        "note": None if n_eval > 0 else "Insufficient price history to evaluate.",
+    }
+    await _attach_hit_rate(session, pipeline_run_id, review)
+    log.info(
+        "pipeline.step7.complete",
+        run_id=pipeline_run_id,
+        hit_rate=hit_rate,
+        n_picks=len(pick_listing_ids),
+    )
+    return review
+
+
+async def _attach_hit_rate(
+    session: AsyncSession,
+    pipeline_run_id: int,
+    review: HitRateReview,
+) -> None:
+    from investment_agent.storage.models.analysis import PipelineRun
+
+    run = await session.get(PipelineRun, pipeline_run_id)
+    if run is None:
+        return
+    run.metadata_json = {**run.metadata_json, "hit_rate_review": dict(review)}
+    await session.flush()

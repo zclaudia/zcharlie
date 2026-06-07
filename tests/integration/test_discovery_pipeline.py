@@ -547,6 +547,109 @@ async def test_step4_stale_cache_refreshes(db_session, seeded_market):
     assert rows[0].analysis_json["business_model"] == "GPUs"
 
 
+@pytest.mark.asyncio
+async def test_step7_no_prior_run_yields_skip_note(db_session, seeded_market):
+    from datetime import date
+
+    from investment_agent.pipelines.steps import step7_hit_rate_review
+    from investment_agent.storage.repositories.pipeline_run import (
+        PipelineRunRepository,
+    )
+
+    run = await PipelineRunRepository(db_session).create(
+        kind="discovery", universe_code="NASDAQ_100",
+    )
+    review = await step7_hit_rate_review(
+        db_session,
+        pipeline_run_id=run.id,
+        universe_code="NASDAQ_100",
+        as_of=date(2025, 6, 3),
+    )
+    assert review["note"] is not None
+    assert review["hit_rate"] is None
+
+
+@pytest.mark.asyncio
+async def test_step7_computes_hit_rate_vs_benchmark(db_session, seeded_market):
+    from datetime import date
+    from decimal import Decimal
+
+    from investment_agent.pipelines.steps import step7_hit_rate_review
+    from investment_agent.storage.models.analysis import DiscoveryReport
+    from investment_agent.storage.models.market_data import DailyPrice
+    from investment_agent.storage.repositories.listing import ListingRepository
+    from investment_agent.storage.repositories.pipeline_run import (
+        PipelineRunRepository,
+    )
+
+    repo = ListingRepository(db_session)
+    aapl = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+    )
+    msft = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="MSFT", company_name="Microsoft"
+    )
+    spy = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="SPY", company_name="SPDR S&P 500"
+    )
+
+    # Prior run with two consensus picks.
+    prior = await PipelineRunRepository(db_session).create(
+        kind="discovery", universe_code="NASDAQ_100",
+    )
+    await PipelineRunRepository(db_session).mark_success(prior.id)
+    db_session.add(
+        DiscoveryReport(
+            pipeline_run_id=prior.id,
+            consensus_picks=[
+                {"listing_id": aapl.id, "avg_score": 75, "supporting": ["value"]},
+                {"listing_id": msft.id, "avg_score": 80, "supporting": ["growth"]},
+            ],
+            divergent_picks=[],
+            overlooked_picks=[],
+        )
+    )
+
+    # Prices: AAPL +5%, MSFT +1%, SPY +2% → AAPL outperforms, MSFT does not.
+    def _seed_price(lid: int, d: date, close: float) -> None:
+        db_session.add(
+            DailyPrice(
+                listing_id=lid,
+                date=d,
+                open=Decimal(str(close)),
+                high=Decimal(str(close)),
+                low=Decimal(str(close)),
+                close=Decimal(str(close)),
+                volume=1_000_000,
+                adjusted_close=Decimal(str(close)),
+            )
+        )
+
+    yesterday = date(2025, 6, 2)
+    today = date(2025, 6, 3)
+    _seed_price(aapl.id, yesterday, 100)
+    _seed_price(aapl.id, today, 105)
+    _seed_price(msft.id, yesterday, 100)
+    _seed_price(msft.id, today, 101)
+    _seed_price(spy.id, yesterday, 100)
+    _seed_price(spy.id, today, 102)
+    await db_session.flush()
+
+    current = await PipelineRunRepository(db_session).create(
+        kind="discovery", universe_code="NASDAQ_100",
+    )
+    review = await step7_hit_rate_review(
+        db_session,
+        pipeline_run_id=current.id,
+        universe_code="NASDAQ_100",
+        as_of=today,
+    )
+    assert review["hit_rate"] == 0.5
+    assert review["n_picks"] == 2
+    assert review["n_outperformed"] == 1
+    assert review["benchmark_return"] == 0.02
+
+
 def test_discovery_pipeline_constructs(monkeypatch):
     """DiscoveryPipeline can be instantiated with fakes — full e2e in Task 22."""
     from investment_agent.config import (

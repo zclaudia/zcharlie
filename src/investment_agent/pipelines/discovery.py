@@ -1,7 +1,8 @@
 """DiscoveryPipeline: orchestrates 7 steps end-to-end.
 
-Steps 5 (Meta-Agent synthesis), 6 (render+notify), 7 (hit-rate review) are
-stubbed until Tasks 18-21 land. Steps 1-4 are fully wired.
+Steps 1-4 ingest, screen, score (Tier 2), and run deep analysis (Tier 3).
+Step 5 synthesizes the DiscoveryReport via the Meta-Agent. Step 6 renders +
+dispatches the Markdown report. Step 7 reviews the prior run's hit-rate.
 """
 
 from datetime import date
@@ -222,8 +223,14 @@ class DiscoveryPipeline:
                     markdown_path=notif.target,
                 )
 
-            # Step 7: deferred to Task 21
-            log.info("pipeline.step7.deferred", run_id=run_id)
+            # Step 7: Hit-rate review (compare prior run's picks vs benchmark)
+            async with session_scope() as session:
+                await steps.step7_hit_rate_review(
+                    session,
+                    pipeline_run_id=run_id,
+                    universe_code=universe_code,
+                    as_of=as_of,
+                )
 
             # Mark success.
             async with session_scope() as session:
