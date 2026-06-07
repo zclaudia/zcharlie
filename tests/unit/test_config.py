@@ -7,9 +7,10 @@ def test_settings_loads_env_with_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
     monkeypatch.setenv("LLM_TIER2_API_KEY", "sk-1")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "sk-2")
+    monkeypatch.setenv("LLM_TIER2_MODEL", "deepseek-chat")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
 
-    s = Settings()
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.app_env == "dev"
     assert s.api_key == "test-key"
     assert s.llm_tier2.model == "deepseek-chat"
