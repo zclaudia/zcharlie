@@ -134,6 +134,7 @@
 
 ```
 market, sector, company, listing, universe, universe_membership
+auxiliary_listing  (跨市场关联公司的轻量追踪清单)
 daily_price, financial_report, fundamental_snapshot, news_item, analyst_rating_change
 company_relationship
 watchlist_item, holding_item
@@ -145,6 +146,51 @@ deep_analysis_cache  (Tier 3 缓存)
 ### 2.5 为未来回测的预留
 
 Schema 已经支持未来加严谨回测：所有 EOD 数据全量持久化、`universe_membership` 带历史有效期、`pipeline_run` + `stock_score` 全量保留、`strategy.version` 可追溯。**V1 仅做简化对账（"昨日推荐 vs 今日表现"hit-rate），严谨回测引擎留 V2。**
+
+### 2.6 Auxiliary Tracking（辅助追踪清单）
+
+为了让跨市场关系分析**真正可用**（而不是仅 LLM 凭记忆作答），引入与 Universe 平级但更轻量的概念：**Auxiliary Listing** —— 系统会主动拉取**关系图中关联到 universe 公司、但本身不在 universe 内**的 Listing 的基础数据。
+
+**与 Universe 的对比**：
+
+| 维度 | Universe（如 NASDAQ-100） | Auxiliary Tracking |
+|---|---|---|
+| 来源 | 显式定义（成份股） | **自动**从 `company_relationship` 中 `strength ≥ 0.5` 的非 universe 公司派生 |
+| 数据深度 | Tier 1 + 2 + 3（含 LLM 评分/深度分析） | **仅基础**：DailyPrice + NewsItem + AnalystRatingChange + FinancialReport（轻量） |
+| 是否参与策略评分 | 是 | **否**（不进 stock_score，不出现在 discovery 日报排名） |
+| 用途 | 主分析对象 | 作为 universe 公司的"上下文数据" |
+| 增量成本 | 不变 | 仅多几个 yfinance 调用（无 LLM） |
+
+**关键约束**：
+- 阈值：`strength ≥ 0.5` 才纳入（避免噪音）
+- 单 Company 被引用次数 cap：避免大公司（如 MSFT）被所有 SaaS 公司关联导致重复拉取
+- 总规模 cap：辅助清单 ≤ universe 大小 × 2（NASDAQ-100 场景下最多 200 只）
+- 用户可手动 add/remove：CLI `auxiliary add/remove`，手动加入的优先级最高
+
+**yfinance ticker 后缀**：`2330.TW`（TWSE）、`0700.HK`（HKEX）、`002475.SZ`（深交所）、`600519.SS`（上交所）—— yfinance 原生支持，**V1 不需要新数据源**。
+
+**新增表**：
+
+```sql
+auxiliary_listing (
+    id                      INT PK
+    listing_id              FK → listing
+    added_via_relationship_id  FK → company_relationship NULLABLE
+                            -- NULL 代表用户手动添加
+    added_by                VARCHAR  -- 'auto_from_relationship' | 'manual'
+    added_at                TIMESTAMP
+    enabled                 BOOLEAN  -- 用户可禁用某条记录而不删除
+    UNIQUE (listing_id)
+)
+```
+
+**派生 Job**：每周扫描 `company_relationship`，按阈值 + cap 规则更新 `auxiliary_listing` 表（增量加入、不活跃的标 enabled=false）。
+
+**使用场景**：
+1. **Discovery Tier 3 深度分析**：分析 AAPL 时，prompt 注入"AAPL 的关键供应商 TSMC 近 30 日股价走势 + 最近新闻摘要"作为事实证据
+2. **Attribution 归因**：分析 AAPL 波动时，新增 tool `get_related_company_recent_events(ticker)` 返回关联公司真实数据
+3. **Meta-Agent 单点风险检测**：识别"AAPL 与 NVDA 同时依赖 TSMC，且 TSMC 近期出现负面事件" → 标记在 discovery 日报中
+4. **Discovery 数据准备**：Step 1 拉取 universe 数据后，同步拉取 enabled 的 auxiliary listings 的基础数据
 
 ---
 
@@ -226,7 +272,10 @@ class Notifier(Protocol):
 ```
 market_data.py    | news.py          | financials.py
 relationships.py  | valuation.py     | beta_attribution.py
+auxiliary.py      ← 跨市场关联公司数据查询（基于 Auxiliary Tracking）
 ```
+
+`auxiliary.py` 提供 `get_related_company_recent_events(ticker, days)`、`get_related_companies_price_summary(ticker)` 等函数，让归因 Agent 能从 `auxiliary_listing` 表查到关联公司真实数据，**不依赖 LLM 训练记忆**。
 
 要求：完整类型注解 + docstring（Pydantic-AI 用这两个生成 tool schema）；先查 DB、缓存优先；不做副作用（DB 写入由 pipeline 层负责）。
 
@@ -257,7 +306,7 @@ storage 层 (SQLAlchemy models + repository)
 | Step | 内容 | 典型耗时 |
 |---|---|---|
 | 0 | 创建 PipelineRun 记录（status='running'） | < 1s |
-| 1 | 数据准备：并发拉取 universe 所有 listing 当日 EOD / 基本面 / 新闻 / 评级 / 财报 | 1-3 分钟 |
+| 1 | 数据准备：并发拉取 universe 所有 listing 当日 EOD / 基本面 / 新闻 / 评级 / 财报；**额外拉取所有 enabled 的 auxiliary listings 的轻量数据**（仅 EOD + 新闻 + 评级 + 财报变动，不计算 fundamental_snapshot） | 1-3 分钟 |
 | 2 | Tier 1 算法粗筛：每个策略并行，零 LLM 成本 | < 5s |
 | 3 | Tier 2 LLM 评分：策略 × 候选笛卡尔积，asyncio.Semaphore(8) 控制并发 | 3-6 分钟 |
 | 4 | Tier 3 深度分析：综合 Top 10 → 商业模式 + 风险 + 上下游 + 估值；同步触发 RelationshipExtractor | 3-7 分钟 |
@@ -337,7 +386,7 @@ GET    /healthz
 
 ### 5.2 CLI（Typer）
 
-命令分组：`pipeline`、`attribute`、`report`、`watchlist`、`strategy`、`relationship`、`data`、`admin`。详细列表见 `src/investment_agent/cli/`。
+命令分组：`pipeline`、`attribute`、`report`、`watchlist`、`strategy`、`relationship`、`auxiliary`、`data`、`admin`。详细列表见 `src/investment_agent/cli/`。`auxiliary` 命令组用于查看、手动添加 / 移除、强制刷新辅助追踪清单。
 
 ### 5.3 配置分层
 
@@ -388,9 +437,10 @@ investment-agent/
 **做**：
 
 - NASDAQ-100 单一 universe
+- **Auxiliary Tracking**：自动 + 手动维护的"跨市场关联公司轻量数据池"（仅价格 / 新闻 / 财报变动 / 评级，不进策略评分）
 - 3 个策略：value, growth, risk_aggressive
-- Discovery pipeline（Tier 1+2+3+ Meta）
-- Attribution pipeline（按需）
+- Discovery pipeline（Tier 1+2+3+ Meta，含跨市场关联事实注入）
+- Attribution pipeline（按需，含跨市场关联公司事件查询）
 - Markdown 报告 + 文件归档
 - FastAPI + CLI 双入口
 - APScheduler 内嵌调度
@@ -419,18 +469,18 @@ investment-agent/
 
 ### 5.9 实施 Phase 与工作量估计
 
-总 80-120 小时，10 个 Phase：
+总 83-125 小时，10 个 Phase：
 
 | Phase | 内容 | 工作量 |
 |---|---|---|
-| 0 | 项目脚手架 + Docker + DB schema + alembic + 配置层 | 4-6h |
-| 1 | DataSource Protocol + YFinanceSource + 数据回填 CLI | 10-15h |
+| 0 | 项目脚手架 + Docker + DB schema（含 `auxiliary_listing`）+ alembic + 配置层 | 4-6h |
+| 1 | DataSource Protocol + YFinanceSource（含 TWSE/HKEX/A股 ticker 后缀支持）+ 数据回填 CLI | 11-17h |
 | 2 | LLMClient + Pydantic-AI 集成 + LLMCall 审计 | 8-12h |
 | 3 | 策略框架 + 3 个策略实现（含 prompt 调试） | 15-20h |
-| 4 | Discovery pipeline 完整流程 | 10-15h |
-| 5 | Attribution pipeline + tools + 归因 Agent | 10-15h |
-| 6 | Meta-Agent + Renderer + Notifier | 5-8h |
-| 7 | FastAPI + CLI 包装 | 5-8h |
+| 4 | Discovery pipeline 完整流程 + Auxiliary Tracking 派生 Job | 11-16h |
+| 5 | Attribution pipeline + tools（含 `auxiliary.py`）+ 归因 Agent | 11-16h |
+| 6 | Meta-Agent（含单点风险检测）+ Renderer + Notifier | 5-8h |
+| 7 | FastAPI + CLI（含 `auxiliary` 命令组）包装 | 5-8h |
 | 8 | APScheduler 集成 + Docker 部署 | 5-8h |
 | 9 | 测试覆盖 + 文档 + 首日调试 | 10-15h |
 
@@ -458,6 +508,7 @@ investment-agent/
 | 回测 V1 | 简化对账（hit-rate） | 严谨回测留 V2，schema 已铺路 |
 | Agent 框架 | Pydantic-AI | 轻量、类型安全、覆盖三类场景 |
 | 公司关系存储 | 单表 + relationship_type + LLM 提取 + 手动复核 | YAGNI；FMP 接入留 V2 |
+| 跨市场关联公司数据 | Auxiliary Tracking（轻量数据池，自动 + 手动维护） | 让关系图真正可用，避免 LLM 凭记忆作答；yfinance 原生支持跨市场后缀，零额外数据源 |
 | 策略配置 | YAML 真相源 + DB 镜像 | git review + 运行期审计兼得 |
 | Meta-Agent 类型 | 纯算法不用 LLM | 可解释、可单测、零成本 |
 | 工具暴露形式 | Python 函数（不走 MCP） | YAGNI |
