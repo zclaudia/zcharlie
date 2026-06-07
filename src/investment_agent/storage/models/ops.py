@@ -61,7 +61,10 @@ class DeepAnalysisCache(Base, TimestampMixin):
     __tablename__ = "deep_analysis_cache"
     __table_args__ = (
         UniqueConstraint(
-            "listing_id", "latest_financial_report_period", name="uq_deep_cache_key"
+            "listing_id",
+            "latest_financial_report_period",
+            "strategy_code",
+            name="uq_deep_cache_key",
         ),
     )
 

@@ -10,7 +10,6 @@ from typing import TypedDict
 
 import structlog
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.protocols import DataSource
@@ -497,8 +496,8 @@ async def step4_tier3_deep_analysis(
         async with semaphore:
             try:
                 # Each task opens its own session_scope() so concurrent
-                # IntegrityError rollbacks in _check_or_run_deep_analysis
-                # don't nuke sibling tasks' pending writes.
+                # writes in _check_or_run_deep_analysis don't nuke
+                # sibling tasks' pending writes.
                 async with session_scope() as inner:
                     analysis_json = await asyncio.wait_for(
                         _check_or_run_deep_analysis(
@@ -572,9 +571,8 @@ async def _check_or_run_deep_analysis(
 ) -> dict[str, object]:
     """Return analysis_json from cache or live LLM call.
 
-    Schema limitation: deep_analysis_cache.uq_deep_cache_key excludes
-    strategy_code. Cache is last-writer-wins across strategies until a
-    schema migration adds strategy_code to the unique key.
+    Cache is keyed on (listing_id, latest_financial_report_period,
+    strategy_code) so different strategies get separate rows.
     """
     # 1. Resolve latest financial report period for this listing.
     period_stmt = (
@@ -589,13 +587,13 @@ async def _check_or_run_deep_analysis(
 
     cutoff = datetime.now(UTC) - timedelta(days=cache_days)
 
-    # 2. Strict lookup by (listing, period, strategy_code) — preferred hit.
-    strict_stmt = select(DeepAnalysisCache).where(
+    # 2. Lookup by full 3-key unique constraint.
+    cache_stmt = select(DeepAnalysisCache).where(
         DeepAnalysisCache.listing_id == listing_id,
         DeepAnalysisCache.latest_financial_report_period == period,
         DeepAnalysisCache.strategy_code == strategy_code,
     )
-    cached = (await session.execute(strict_stmt)).scalar_one_or_none()
+    cached = (await session.execute(cache_stmt)).scalar_one_or_none()
     if cached is not None:
         # SQLite drops tzinfo on read despite DateTime(timezone=True). Treat
         # naive datetimes as UTC so comparison with `cutoff` is safe.
@@ -605,19 +603,14 @@ async def _check_or_run_deep_analysis(
         if generated_at > cutoff:
             return cached.analysis_json
 
-    # 3. Cache miss → live LLM call.
+    # 3. Cache miss (or stale) → live LLM call.
     ctx = await _build_deep_analysis_context(session, snapshot)
     analysis = await agent.deep_analyze(snapshot, ctx)
     analysis_json: dict[str, object] = analysis.model_dump()
 
-    # 4. Persist while respecting uq_deep_cache_key (listing, period).
-    loose_stmt = select(DeepAnalysisCache).where(
-        DeepAnalysisCache.listing_id == listing_id,
-        DeepAnalysisCache.latest_financial_report_period == period,
-    )
-    existing = (await session.execute(loose_stmt)).scalar_one_or_none()
+    # 4. Insert new row or refresh stale row.
     now = datetime.now(UTC)
-    if existing is None:
+    if cached is None:
         session.add(
             DeepAnalysisCache(
                 listing_id=listing_id,
@@ -627,24 +620,10 @@ async def _check_or_run_deep_analysis(
                 generated_at=now,
             )
         )
-        try:
-            await session.flush()
-        except IntegrityError:
-            # Concurrent task won the INSERT race against
-            # uq_deep_cache_key=(listing_id, latest_financial_report_period).
-            # Rollback this session, reselect the now-existing row, and
-            # last-writer-wins overwrite with our payload.
-            await session.rollback()
-            existing = (await session.execute(loose_stmt)).scalar_one()
-            existing.strategy_code = strategy_code
-            existing.analysis_json = analysis_json
-            existing.generated_at = now
-            await session.flush()
     else:
-        existing.strategy_code = strategy_code
-        existing.analysis_json = analysis_json
-        existing.generated_at = now
-        await session.flush()
+        cached.analysis_json = analysis_json
+        cached.generated_at = now
+    await session.flush()
     return analysis_json
 
 

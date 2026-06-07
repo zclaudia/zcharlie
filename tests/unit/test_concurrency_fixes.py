@@ -22,7 +22,11 @@ async def disk_engine(tmp_path):
 
 @pytest.mark.asyncio
 async def test_check_or_run_deep_analysis_handles_concurrent_inserts(disk_engine):
-    """Concurrent cache misses for same (listing, period) must not raise IntegrityError."""
+    """Concurrent cache misses across distinct strategies must each insert a row.
+
+    After Plan D Task 1, uq_deep_cache_key includes strategy_code, so concurrent
+    inserts with distinct strategy_code values do not collide on the unique index.
+    """
     from investment_agent.domain.strategy_types import DeepAnalysis, ListingSnapshot
     from investment_agent.pipelines.steps import _check_or_run_deep_analysis
     from investment_agent.storage.models.market_data import FinancialReport
@@ -91,7 +95,22 @@ async def test_check_or_run_deep_analysis_handles_concurrent_inserts(disk_engine
         _run("value", "value-bm"),
         _run("growth", "growth-bm"),
         _run("risk_aggressive", "risk-bm"),
-        _run("value", "value-bm-2"),
+        _run("momentum", "momentum-bm"),
     )
     assert all(isinstance(r, dict) for r in results)
     assert all("business_model" in r for r in results)
+
+    # Each distinct strategy_code should have its own cache row.
+    from sqlalchemy import select
+
+    from investment_agent.storage.models.ops import DeepAnalysisCache
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(DeepAnalysisCache))).scalars().all()
+    assert len(rows) == 4
+    assert {r.strategy_code for r in rows} == {
+        "value",
+        "growth",
+        "risk_aggressive",
+        "momentum",
+    }
