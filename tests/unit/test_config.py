@@ -1,4 +1,3 @@
-from pathlib import Path
 
 from investment_agent.config import Settings, load_app_yaml
 
