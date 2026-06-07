@@ -3,8 +3,15 @@
 from datetime import date
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from investment_agent.domain.strategy_types import (
+    DeepAnalysis,
+    DeepAnalysisContext,
+    ListingSnapshot,
+    ScoringContext,
+    StockScore,
+)
 from investment_agent.sources.records import (
     AnalystRatingRecord,
     DailyPriceRecord,
@@ -69,3 +76,62 @@ class LLMClient(Protocol):
         purpose: str,
         pipeline_run_id: int | None = None,
     ) -> CompletionResult: ...
+
+
+# === Strategy / Renderer / Notifier (Plan B) ===
+
+
+@runtime_checkable
+class StrategyAgent(Protocol):
+    code: str
+    version: str
+
+    async def screen(
+        self, candidates: list[ListingSnapshot]
+    ) -> list[ListingSnapshot]: ...
+
+    async def score(
+        self, listing: ListingSnapshot, context: ScoringContext
+    ) -> StockScore: ...
+
+    async def deep_analyze(
+        self, listing: ListingSnapshot, context: DeepAnalysisContext
+    ) -> DeepAnalysis: ...
+
+
+class RenderedContent(BaseModel):
+    format: str  # 'markdown' | 'html' | 'json'
+    body: str
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+@runtime_checkable
+class Renderer(Protocol):
+    async def render_discovery(
+        self,
+        run_id: int,
+        consensus_picks: list[dict[str, object]],
+        divergent_picks: list[dict[str, object]],
+        overlooked_picks: list[dict[str, object]],
+        scores_by_listing: dict[int, list[dict[str, object]]],
+    ) -> RenderedContent: ...
+
+    async def render_attribution(
+        self, run_id: int, payload: dict[str, object]
+    ) -> RenderedContent: ...
+
+
+class NotificationResult(BaseModel):
+    notifier_name: str
+    success: bool
+    target: str = ""
+    error: str | None = None
+
+
+@runtime_checkable
+class Notifier(Protocol):
+    name: str
+
+    async def send(
+        self, content: RenderedContent, channel_metadata: dict[str, object]
+    ) -> NotificationResult: ...
