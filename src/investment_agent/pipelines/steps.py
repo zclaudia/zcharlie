@@ -501,17 +501,33 @@ async def step4_tier3_deep_analysis(
                     ),
                     timeout=timeout_sec,
                 )
-                await score_repo.upsert(
-                    pipeline_run_id=pipeline_run_id,
-                    listing_id=listing_id,
-                    strategy_code=strategy_code,
-                    tier=3,
-                    # Tier-3 score is informational; the Tier-2 row already
-                    # carries the strategy's numeric score for this listing.
-                    score=0,
-                    confidence=0.0,
-                    deep_analysis=json.dumps(analysis_json),
-                )
+                # Attach deep_analysis to the existing Tier-2 row (preserves
+                # the strategy's numeric score, bumps tier to 3). If no Tier-2
+                # row exists (no score for this strategy/listing yet), insert
+                # a new row carrying just the deep_analysis payload.
+                existing = (
+                    await session.execute(
+                        select(StockScore).where(
+                            StockScore.pipeline_run_id == pipeline_run_id,
+                            StockScore.listing_id == listing_id,
+                            StockScore.strategy_code == strategy_code,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing is not None:
+                    existing.tier = 3
+                    existing.deep_analysis = json.dumps(analysis_json)
+                    await session.flush()
+                else:
+                    await score_repo.upsert(
+                        pipeline_run_id=pipeline_run_id,
+                        listing_id=listing_id,
+                        strategy_code=strategy_code,
+                        tier=3,
+                        score=0,
+                        confidence=0.0,
+                        deep_analysis=json.dumps(analysis_json),
+                    )
             except Exception as e:
                 log.warning(
                     "pipeline.step4.deep_failed",
