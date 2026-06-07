@@ -10,7 +10,7 @@ import structlog
 P = ParamSpec("P")
 R = TypeVar("R")
 
-_log = structlog.get_logger(__name__)  # type: ignore[no-any-return]
+_log = structlog.get_logger(__name__)
 
 
 def retry_async(

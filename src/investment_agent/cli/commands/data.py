@@ -10,10 +10,13 @@ from rich import print as rprint
 app = typer.Typer(help="Market data commands")
 
 
+_DEFAULT_UNIVERSE_YAML = Path("config/universes/nasdaq_100.yaml")
+
+
 @app.command("seed")
 def seed_universe(
-    universe_yaml: Path = typer.Argument(
-        Path("config/universes/nasdaq_100.yaml"),
+    universe_yaml: Path = typer.Argument(  # noqa: B008
+        default=_DEFAULT_UNIVERSE_YAML,
         help="Path to universe YAML file",
     ),
 ) -> None:

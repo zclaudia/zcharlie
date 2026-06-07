@@ -15,7 +15,7 @@ def _bootstrap() -> None:
         from investment_agent.logging import configure_logging
         from investment_agent.storage.database import init_engine
 
-        settings = Settings()
+        settings = Settings()  # type: ignore[call-arg]
         configure_logging(settings.log_level)
         init_engine(settings.database_url)
     except Exception:

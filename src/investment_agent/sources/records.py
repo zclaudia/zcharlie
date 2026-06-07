@@ -37,7 +37,7 @@ class FinancialReportRecord(_RecordBase):
     fcf: Decimal | None
     total_assets: Decimal | None
     total_equity: Decimal | None
-    raw_data: dict
+    raw_data: dict[str, object]
 
 
 class FundamentalSnapshotRecord(_RecordBase):

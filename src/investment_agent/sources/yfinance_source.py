@@ -1,7 +1,7 @@
 """yfinance-based DataSource implementation."""
 
 import asyncio
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pandas as pd
@@ -123,7 +123,7 @@ class YFinanceSource:
         market_cap = _maybe_decimal(info.get("marketCap"))
         fcf = _maybe_decimal(info.get("freeCashflow"))
         fcf_yield = None
-        if fcf is not None and market_cap not in (None, Decimal(0)):
+        if fcf is not None and market_cap is not None and market_cap != Decimal(0):
             fcf_yield = fcf / market_cap
 
         return FundamentalSnapshotRecord(
@@ -142,7 +142,7 @@ class YFinanceSource:
 
     @retry_async(attempts=3, base_delay=1.0)
     async def fetch_news(self, ticker: str, days: int) -> list[NewsRecord]:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
 
         async with self._limiter:
             raw = await asyncio.to_thread(lambda: yf.Ticker(ticker).news or [])
@@ -152,7 +152,7 @@ class YFinanceSource:
             ts = item.get("providerPublishTime")
             if ts is None:
                 continue
-            published = datetime.fromtimestamp(int(ts), tz=timezone.utc)
+            published = datetime.fromtimestamp(int(ts), tz=UTC)
             if published < cutoff:
                 continue
             out.append(
@@ -268,10 +268,7 @@ def _df_to_price_records(
     out: list[DailyPriceRecord] = []
     df = df.reset_index()
 
-    if "ticker" in df.columns:
-        ticker_col = "ticker"
-    else:
-        ticker_col = None
+    ticker_col = "ticker" if "ticker" in df.columns else None
 
     for _, row in df.iterrows():
         ticker = row[ticker_col] if ticker_col else tickers[0]
