@@ -1,15 +1,45 @@
 services:
-  app:
+  api:
     build: .
     image: investment-agent:dev
-    container_name: investment-agent
+    container_name: investment-agent-api
     env_file:
       - .env
     volumes:
       - ./data:/app/data
       - ./config:/app/config
+      - ./strategies:/app/strategies
+      - ./prompts:/app/prompts
       - ./src:/app/src
       - ./alembic:/app/alembic
       - ./alembic.ini:/app/alembic.ini
     working_dir: /app
-    command: tail -f /dev/null
+    ports:
+      - "8000:8000"
+    command: ["ia", "api", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  scheduler:
+    build: .
+    image: investment-agent:dev
+    container_name: investment-agent-scheduler
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./strategies:/app/strategies
+      - ./prompts:/app/prompts
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    working_dir: /app
+    command: ["ia", "scheduler", "start"]
+    depends_on:
+      - api
+    restart: unless-stopped
