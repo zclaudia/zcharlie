@@ -38,12 +38,14 @@ def create_app() -> FastAPI:
 def _register_protected_routes(app: FastAPI) -> None:
     """Register routes that require X-API-Key auth."""
     from investment_agent.api.routes import (
+        admin,
         attribution,
         listings,
         pipelines,
         reports,
         strategies,
         universes,
+        watchlist,
     )
 
     app.include_router(pipelines.router)
@@ -52,3 +54,5 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(listings.router)
     app.include_router(strategies.router)
     app.include_router(universes.router)
+    app.include_router(watchlist.router)
+    app.include_router(admin.router)
