@@ -4,10 +4,12 @@ import typer
 
 from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import data as data_cmd
+from investment_agent.cli.commands import strategy as strategy_cmd
 
 app = typer.Typer(help="Investment Agent CLI")
 app.add_typer(data_cmd.app, name="data", help="Market data ingestion commands")
 app.add_typer(admin_cmd.app, name="admin", help="Admin and ops commands")
+app.add_typer(strategy_cmd.app, name="strategy", help="Strategy management commands")
 
 
 @app.callback()
