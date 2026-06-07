@@ -9,6 +9,7 @@ import pytest
 from pydantic_ai import Agent
 from sqlalchemy import select
 
+from investment_agent.domain.protocols import DataSource
 from investment_agent.domain.strategy_types import (
     ListingSnapshot,
     ScoringContext,
@@ -544,3 +545,36 @@ async def test_step4_stale_cache_refreshes(db_session, seeded_market):
     rows = (await db_session.execute(select(DeepAnalysisCache))).scalars().all()
     assert len(rows) == 1
     assert rows[0].analysis_json["business_model"] == "GPUs"
+
+
+def test_discovery_pipeline_constructs(monkeypatch):
+    """DiscoveryPipeline can be instantiated with fakes — full e2e in Task 22."""
+    from investment_agent.config import (
+        AppYamlConfig,
+        AuxiliaryTrackingConfig,
+        PipelineConfig,
+        SchedulerConfig,
+        Settings,
+        UniverseEntry,
+    )
+    from investment_agent.pipelines.discovery import DiscoveryPipeline
+
+    cfg = AppYamlConfig(
+        universes=[UniverseEntry(code="NASDAQ_100")],
+        pipeline=PipelineConfig(),
+        scheduler=SchedulerConfig(
+            discovery_cron="0 0 * * *", discovery_timezone="UTC"
+        ),
+        auxiliary_tracking=AuxiliaryTrackingConfig(),
+    )
+    monkeypatch.setenv("API_KEY", "test")
+    monkeypatch.setenv("LLM_TIER2_API_KEY", "test")
+    monkeypatch.setenv("LLM_TIER3_API_KEY", "test")
+    settings = Settings()  # type: ignore[call-arg]
+    pipeline = DiscoveryPipeline(
+        data_source=cast("DataSource", FakeDataSource()),
+        strategies={},
+        settings=settings,
+        app_config=cfg,
+    )
+    assert pipeline._app_config.pipeline.tier3_top_n == 10
