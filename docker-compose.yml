@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    image: investment-agent:dev
+    container_name: investment-agent
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    working_dir: /app
+    command: tail -f /dev/null
