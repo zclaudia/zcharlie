@@ -1,0 +1,17 @@
+code: growth
+version: v1.0
+name: Growth Investor
+description: |
+  Aggressive growth: high revenue/earnings growth, expanding gross margins, large TAM.
+  PE tolerance up to 60 because the future cash flows are heavily back-loaded.
+screening_rule:
+  required:
+    - { metric: revenue_growth_yoy, op: ">", value: 0.25 }
+    - { metric: gross_margin, op: ">", value: 0.40 }
+    - { metric: pe, op: between, value: [0, 60] }
+  excluded:
+    - { metric: net_income_ttm, op: "<", value: -500000000 }
+  preferred:
+    - { metric: roe, op: ">", value: 0.20 }
+scoring_prompt: strategies/growth/scoring
+deep_prompt: strategies/growth/deep

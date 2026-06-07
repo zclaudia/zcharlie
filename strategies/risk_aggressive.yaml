@@ -1,0 +1,15 @@
+code: risk_aggressive
+version: v1.0
+name: Risk-Aggressive / Catalyst-Driven
+description: |
+  Small/mid-cap with high beta, catalyst-driven, sentiment-sensitive. Looks for
+  asymmetric upside via short squeezes, earnings surprises, product launches.
+screening_rule:
+  required:
+    - { metric: market_cap, op: "<", value: 50000000000 }
+    - { metric: beta, op: ">", value: 1.3 }
+  excluded: []
+  preferred:
+    - { metric: volatility_30d, op: ">", value: 0.04 }
+scoring_prompt: strategies/risk_aggressive/scoring
+deep_prompt: strategies/risk_aggressive/deep

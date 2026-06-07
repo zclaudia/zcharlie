@@ -1,0 +1,18 @@
+code: value
+version: v1.0
+name: Value Investor
+description: |
+  Classic Graham/Buffett value investing: low PE/PB, healthy ROE, positive FCF,
+  manageable leverage. Targets undervalued large/mid-caps with proven cash generation.
+screening_rule:
+  required:
+    - { metric: pe, op: between, value: [0, 25] }
+    - { metric: pb, op: "<", value: 4.0 }
+    - { metric: roe, op: ">", value: 0.10 }
+    - { metric: debt_to_equity, op: "<", value: 2.0 }
+  excluded:
+    - { metric: net_income_ttm, op: "<", value: 0 }
+  preferred:
+    - { metric: fcf_yield, op: ">", value: 0.05 }
+scoring_prompt: strategies/value/scoring
+deep_prompt: strategies/value/deep
