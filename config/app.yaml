@@ -1,0 +1,15 @@
+universes:
+  - code: NASDAQ_100
+    refresh_membership_freq: weekly
+enabled_strategies: [value, growth, risk_aggressive]
+pipeline:
+  tier2_score_threshold: 40
+  tier3_top_n: 10
+  deep_analysis_cache_days: 90
+scheduler:
+  discovery_cron: "30 16 * * 1-5"
+  discovery_timezone: America/New_York
+auxiliary_tracking:
+  strength_threshold: 0.5
+  max_per_company: 5
+  total_cap_multiplier: 2
