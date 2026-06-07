@@ -93,5 +93,5 @@ namespace_packages = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["yfinance.*", "pandas.*", "numpy.*"]
+module = ["yfinance.*", "pandas.*", "numpy.*", "apscheduler.*"]
 ignore_missing_imports = true
