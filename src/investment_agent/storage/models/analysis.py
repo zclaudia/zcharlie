@@ -26,7 +26,7 @@ class Strategy(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     version: Mapped[str] = mapped_column(String(16), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    config_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
 
@@ -50,7 +50,7 @@ class PipelineRun(Base, TimestampMixin):
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class StockScore(Base, TimestampMixin):
@@ -76,7 +76,7 @@ class StockScore(Base, TimestampMixin):
     confidence: Mapped[Decimal] = mapped_column(Numeric(4, 3), nullable=False)
     bull_thesis: Mapped[str | None] = mapped_column(Text, nullable=True)
     bear_thesis: Mapped[str | None] = mapped_column(Text, nullable=True)
-    key_metrics: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    key_metrics: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
     deep_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
@@ -86,9 +86,9 @@ class DiscoveryReport(Base, TimestampMixin):
     pipeline_run_id: Mapped[int] = mapped_column(
         ForeignKey("pipeline_run.id"), primary_key=True
     )
-    consensus_picks: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-    divergent_picks: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-    overlooked_picks: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    consensus_picks: Mapped[list[object]] = mapped_column(JSON, nullable=False, default=list)
+    divergent_picks: Mapped[list[object]] = mapped_column(JSON, nullable=False, default=list)
+    overlooked_picks: Mapped[list[object]] = mapped_column(JSON, nullable=False, default=list)
     markdown_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
 
@@ -103,8 +103,8 @@ class AttributionReport(Base, TimestampMixin):
     )
     analysis_date: Mapped[date] = mapped_column(Date, nullable=False)
     price_change_pct: Mapped[Decimal] = mapped_column(Numeric(8, 4), nullable=False)
-    beta_attribution: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    triggering_events: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    beta_attribution: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    triggering_events: Mapped[list[object]] = mapped_column(JSON, nullable=False, default=list)
     narrative: Mapped[str] = mapped_column(Text, nullable=False)
     valuation_delta: Mapped[str | None] = mapped_column(Text, nullable=True)
     markdown_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)

@@ -39,7 +39,7 @@ class FinancialReport(Base, TimestampMixin):
     total_assets: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
     total_equity: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
 
-    raw_data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    raw_data: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class FundamentalSnapshot(Base, TimestampMixin):

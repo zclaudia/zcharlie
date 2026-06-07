@@ -54,7 +54,7 @@ class DataFetchJob(Base, TimestampMixin):
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     records_fetched: Mapped[int] = mapped_column(nullable=False, default=0)
-    errors: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    errors: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class DeepAnalysisCache(Base, TimestampMixin):
@@ -75,7 +75,7 @@ class DeepAnalysisCache(Base, TimestampMixin):
     strategy_code: Mapped[str] = mapped_column(
         ForeignKey("strategy.code"), nullable=False
     )
-    analysis_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    analysis_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     generated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
