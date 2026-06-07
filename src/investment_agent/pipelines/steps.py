@@ -3,12 +3,14 @@
 import asyncio
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.protocols import DataSource
+from investment_agent.domain.strategy_types import ListingSnapshot
 from investment_agent.sources.records import (
     AnalystRatingRecord,
     DailyPriceRecord,
@@ -19,11 +21,17 @@ from investment_agent.sources.retry import RateLimiter
 from investment_agent.storage.models.market_data import (
     AnalystRatingChange,
     DailyPrice,
+    FinancialReport,
     FundamentalSnapshot,
     NewsItem,
 )
-from investment_agent.storage.models.reference import Listing, UniverseMembership
+from investment_agent.storage.models.reference import (
+    Company,
+    Listing,
+    UniverseMembership,
+)
 from investment_agent.storage.models.user_domain import AuxiliaryListing
+from investment_agent.strategies.base import BaseStrategyAgent
 
 log = structlog.get_logger(__name__)
 
@@ -256,3 +264,90 @@ async def _insert_rating_if_new(
             price_target=record.price_target,
         )
     )
+
+
+async def step2_tier1_screening(
+    session: AsyncSession,
+    *,
+    listings: list[Listing],
+    strategies: dict[str, BaseStrategyAgent],
+    as_of: date,
+) -> dict[str, list[ListingSnapshot]]:
+    """For each strategy, run its `screen()` against universe snapshots.
+
+    Returns: {strategy_code: [passing snapshots]}.
+    """
+    snapshots = await _build_listing_snapshots(session, listings, as_of)
+
+    out: dict[str, list[ListingSnapshot]] = {}
+    for code, agent in strategies.items():
+        passed = await agent.screen(snapshots)
+        out[code] = passed
+        log.info(
+            "pipeline.step2.screened",
+            strategy=code,
+            total_candidates=len(snapshots),
+            passed=len(passed),
+        )
+    return out
+
+
+async def _build_listing_snapshots(
+    session: AsyncSession,
+    listings: list[Listing],
+    as_of: date,
+) -> list[ListingSnapshot]:
+    """Build ListingSnapshot DTOs from current DB state for each listing.
+
+    Avoids ORM lazy-load by explicitly fetching Company; eager-loads recent
+    financial reports for TTM revenue / net income aggregation.
+    """
+    out: list[ListingSnapshot] = []
+    for listing in listings:
+        snap_row = await session.get(FundamentalSnapshot, (listing.id, as_of))
+
+        stmt = (
+            select(FinancialReport)
+            .where(FinancialReport.company_id == listing.company_id)
+            .order_by(FinancialReport.period_end.desc())
+            .limit(4)
+        )
+        recent_4q = list((await session.execute(stmt)).scalars().all())
+
+        revenues = [q.revenue for q in recent_4q if q.revenue is not None]
+        revenue_ttm: Decimal | None = (
+            sum(revenues, Decimal("0")) if revenues else None
+        )
+        nets = [q.net_income for q in recent_4q if q.net_income is not None]
+        net_income_ttm: Decimal | None = (
+            sum(nets, Decimal("0")) if nets else None
+        )
+
+        # Explicit fetch to avoid async lazy-load on listing.company.
+        company = await session.get(Company, listing.company_id)
+        company_name = company.canonical_name if company else ""
+        sector_code = company.sector_code if company else None
+
+        out.append(
+            ListingSnapshot(
+                listing_id=listing.id,
+                company_id=listing.company_id,
+                ticker=listing.ticker,
+                market_code=listing.market_code,
+                company_name=company_name,
+                sector_code=sector_code,
+                as_of=as_of,
+                pe=snap_row.pe if snap_row else None,
+                pb=snap_row.pb if snap_row else None,
+                peg=snap_row.peg if snap_row else None,
+                ps=snap_row.ps if snap_row else None,
+                roe=snap_row.roe if snap_row else None,
+                roa=snap_row.roa if snap_row else None,
+                fcf_yield=snap_row.fcf_yield if snap_row else None,
+                debt_to_equity=snap_row.debt_to_equity if snap_row else None,
+                market_cap=snap_row.market_cap if snap_row else None,
+                revenue_ttm=revenue_ttm,
+                net_income_ttm=net_income_ttm,
+            )
+        )
+    return out

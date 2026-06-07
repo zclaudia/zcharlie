@@ -2,11 +2,17 @@
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from typing import cast
 
 import pytest
+from pydantic_ai import Agent
 from sqlalchemy import select
 
-from investment_agent.pipelines.steps import step1_data_ingestion
+from investment_agent.pipelines.steps import (
+    step1_data_ingestion,
+    step2_tier1_screening,
+)
 from investment_agent.sources.records import (
     AnalystRatingRecord,
     DailyPriceRecord,
@@ -19,6 +25,9 @@ from investment_agent.storage.models.market_data import DailyPrice, FundamentalS
 from investment_agent.storage.models.reference import Universe, UniverseMembership
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.strategies.base import BaseStrategyAgent, StrategyConfig
+from investment_agent.strategies.schemas import ValueDeepAnalysis, ValueStockScore
+from investment_agent.strategies.screening_rule import Condition, ScreeningRule
 
 
 class FakeDataSource:
@@ -114,3 +123,58 @@ async def test_step1_ingestion_populates_price_and_fundamental(
     assert len(prices) == 1
     snaps = (await db_session.execute(select(FundamentalSnapshot))).scalars().all()
     assert len(snaps) == 1
+
+
+@pytest.mark.asyncio
+async def test_step2_screening_filters_by_strategy(db_session, seeded_market):
+    repo = ListingRepository(db_session)
+    aapl = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+    )
+    msft = await repo.upsert_listing(
+        market_code="NASDAQ", ticker="MSFT", company_name="Microsoft"
+    )
+    as_of = date(2025, 6, 3)
+    db_session.add(
+        FundamentalSnapshot(listing_id=aapl.id, date=as_of, pe=Decimal("20"))
+    )
+    db_session.add(
+        FundamentalSnapshot(listing_id=msft.id, date=as_of, pe=Decimal("40"))
+    )
+    await db_session.flush()
+
+    cfg = StrategyConfig(
+        code="test_low_pe",
+        version="v1",
+        name="t",
+        description="",
+        screening_rule=ScreeningRule(
+            required=[Condition(metric="pe", op="<", value=30)]
+        ),
+        scoring_prompt_template="x",
+        deep_prompt_template="y",
+        scoring_schema=ValueStockScore,
+        deep_schema=ValueDeepAnalysis,
+    )
+
+    class _StubAgent:
+        pass
+
+    class _Strategy(BaseStrategyAgent):
+        pass
+
+    _Strategy.config = cfg
+    strategy = _Strategy(
+        prompts_dir=Path("."),
+        tier2_agent=cast(Agent, _StubAgent()),
+        tier3_agent=cast(Agent, _StubAgent()),
+    )
+
+    result = await step2_tier1_screening(
+        db_session,
+        listings=[aapl, msft],
+        strategies={"test_low_pe": strategy},
+        as_of=as_of,
+    )
+    assert len(result["test_low_pe"]) == 1
+    assert result["test_low_pe"][0].ticker == "AAPL"
