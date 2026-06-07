@@ -1,10 +1,11 @@
 """LLMClient implementation backed by openai SDK (OpenAI-compatible)."""
 
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from openai import AsyncOpenAI
+from openai import NOT_GIVEN, AsyncOpenAI
+from openai.types.shared_params import ResponseFormatJSONObject
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -38,7 +39,7 @@ class OpenAICompatibleClient:
         purpose: str,
         pipeline_run_id: int | None = None,
     ) -> CompletionResult:
-        started = datetime.now(timezone.utc)
+        started = datetime.now(UTC)
         t0 = time.perf_counter()
         success = False
         error_msg: str | None = None
@@ -53,7 +54,7 @@ class OpenAICompatibleClient:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message},
                 ],
-                response_format={"type": "json_object"} if output_model else None,
+                response_format=ResponseFormatJSONObject(type="json_object") if output_model else NOT_GIVEN,  # type: ignore[arg-type]
             )
             text = resp.choices[0].message.content or ""
             prompt_tokens = resp.usage.prompt_tokens if resp.usage else 0

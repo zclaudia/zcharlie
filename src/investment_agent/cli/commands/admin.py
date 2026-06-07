@@ -1,7 +1,7 @@
 """admin sub-commands: cost summary, db migrate."""
 
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import typer
@@ -25,11 +25,11 @@ def cost_summary(
 ) -> None:
     """Print monthly LLM cost grouped by model/provider/purpose."""
     year, mo = month.split("-")
-    start = datetime(int(year), int(mo), 1, tzinfo=timezone.utc)
+    start = datetime(int(year), int(mo), 1, tzinfo=UTC)
     if int(mo) == 12:
-        end = datetime(int(year) + 1, 1, 1, tzinfo=timezone.utc)
+        end = datetime(int(year) + 1, 1, 1, tzinfo=UTC)
     else:
-        end = datetime(int(year), int(mo) + 1, 1, tzinfo=timezone.utc)
+        end = datetime(int(year), int(mo) + 1, 1, tzinfo=UTC)
 
     async def _run() -> list[tuple[str, str, str, int, int, Decimal, int]]:
         async with session_scope() as session:
@@ -47,7 +47,7 @@ def cost_summary(
                 .group_by(LLMCall.provider, LLMCall.model, LLMCall.purpose)
                 .order_by(func.sum(LLMCall.cost_usd).desc())
             )
-            return list((await session.execute(stmt)).all())
+            return list((await session.execute(stmt)).all())  # type: ignore[arg-type]
 
     rows = asyncio.run(_run())
     table = Table(title=f"LLM Cost Summary — {month}")
