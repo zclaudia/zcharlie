@@ -10,6 +10,7 @@ from typing import TypedDict
 
 import structlog
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.protocols import DataSource
@@ -487,7 +488,6 @@ async def step4_tier3_deep_analysis(
     snap_by_lid = {s.listing_id: s for s in snapshots}
 
     semaphore = asyncio.Semaphore(max_concurrent)
-    score_repo = StockScoreRepository(session)
 
     async def _deep_one(listing_id: int, strategy_code: str) -> None:
         snap = snap_by_lid.get(listing_id)
@@ -496,44 +496,49 @@ async def step4_tier3_deep_analysis(
         agent = strategies[strategy_code]
         async with semaphore:
             try:
-                analysis_json = await asyncio.wait_for(
-                    _check_or_run_deep_analysis(
-                        session,
-                        listing_id=listing_id,
-                        strategy_code=strategy_code,
-                        agent=agent,
-                        snapshot=snap,
-                        cache_days=cache_days,
-                    ),
-                    timeout=timeout_sec,
-                )
-                # Attach deep_analysis to the existing Tier-2 row (preserves
-                # the strategy's numeric score, bumps tier to 3). If no Tier-2
-                # row exists (no score for this strategy/listing yet), insert
-                # a new row carrying just the deep_analysis payload.
-                existing = (
-                    await session.execute(
-                        select(StockScore).where(
-                            StockScore.pipeline_run_id == pipeline_run_id,
-                            StockScore.listing_id == listing_id,
-                            StockScore.strategy_code == strategy_code,
+                # Each task opens its own session_scope() so concurrent
+                # IntegrityError rollbacks in _check_or_run_deep_analysis
+                # don't nuke sibling tasks' pending writes.
+                async with session_scope() as inner:
+                    analysis_json = await asyncio.wait_for(
+                        _check_or_run_deep_analysis(
+                            inner,
+                            listing_id=listing_id,
+                            strategy_code=strategy_code,
+                            agent=agent,
+                            snapshot=snap,
+                            cache_days=cache_days,
+                        ),
+                        timeout=timeout_sec,
+                    )
+                    # Attach deep_analysis to the existing Tier-2 row
+                    # (preserves the strategy's numeric score, bumps tier to
+                    # 3). If no Tier-2 row exists, insert a new row carrying
+                    # just the deep_analysis payload.
+                    existing = (
+                        await inner.execute(
+                            select(StockScore).where(
+                                StockScore.pipeline_run_id == pipeline_run_id,
+                                StockScore.listing_id == listing_id,
+                                StockScore.strategy_code == strategy_code,
+                            )
                         )
-                    )
-                ).scalar_one_or_none()
-                if existing is not None:
-                    existing.tier = 3
-                    existing.deep_analysis = json.dumps(analysis_json)
-                    await session.flush()
-                else:
-                    await score_repo.upsert(
-                        pipeline_run_id=pipeline_run_id,
-                        listing_id=listing_id,
-                        strategy_code=strategy_code,
-                        tier=3,
-                        score=0,
-                        confidence=0.0,
-                        deep_analysis=json.dumps(analysis_json),
-                    )
+                    ).scalar_one_or_none()
+                    if existing is not None:
+                        existing.tier = 3
+                        existing.deep_analysis = json.dumps(analysis_json)
+                        await inner.flush()
+                    else:
+                        inner_repo = StockScoreRepository(inner)
+                        await inner_repo.upsert(
+                            pipeline_run_id=pipeline_run_id,
+                            listing_id=listing_id,
+                            strategy_code=strategy_code,
+                            tier=3,
+                            score=0,
+                            confidence=0.0,
+                            deep_analysis=json.dumps(analysis_json),
+                        )
             except Exception as e:
                 log.warning(
                     "pipeline.step4.deep_failed",
@@ -622,11 +627,24 @@ async def _check_or_run_deep_analysis(
                 generated_at=now,
             )
         )
+        try:
+            await session.flush()
+        except IntegrityError:
+            # Concurrent task won the INSERT race against
+            # uq_deep_cache_key=(listing_id, latest_financial_report_period).
+            # Rollback this session, reselect the now-existing row, and
+            # last-writer-wins overwrite with our payload.
+            await session.rollback()
+            existing = (await session.execute(loose_stmt)).scalar_one()
+            existing.strategy_code = strategy_code
+            existing.analysis_json = analysis_json
+            existing.generated_at = now
+            await session.flush()
     else:
         existing.strategy_code = strategy_code
         existing.analysis_json = analysis_json
         existing.generated_at = now
-    await session.flush()
+        await session.flush()
     return analysis_json
 
 

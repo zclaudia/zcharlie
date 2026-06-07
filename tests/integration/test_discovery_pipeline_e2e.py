@@ -161,24 +161,6 @@ async def test_full_discovery_pipeline_e2e(e2e_engine, tmp_path, monkeypatch):
     monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
 
-    # Tier 3 (step4) still shares a single AsyncSession across concurrent
-    # tasks (deep_analysis_cache uq_deep_cache_key race + concurrent flushes).
-    # That structural fix is a later Plan C task; pin step4 to max_concurrent=1
-    # here so the smoke test stays deterministic. Step 3 now opens per-task
-    # session_scope() and runs at default concurrency.
-    from investment_agent.pipelines import discovery as discovery_mod
-    from investment_agent.pipelines import steps as steps_mod
-
-    _orig_step4 = steps_mod.step4_tier3_deep_analysis
-
-    async def _serial_step4(session, **kwargs):
-        kwargs["max_concurrent"] = 1
-        return await _orig_step4(session, **kwargs)
-
-    monkeypatch.setattr(
-        discovery_mod.steps, "step4_tier3_deep_analysis", _serial_step4
-    )
-
     # 1. Seed market + universe + 3 listings.
     as_of = date(2025, 6, 3)
     async with session_scope() as session:
