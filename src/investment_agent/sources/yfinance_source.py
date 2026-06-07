@@ -167,10 +167,36 @@ class YFinanceSource:
             )
         return out
 
+    @retry_async(attempts=3, base_delay=1.0)
     async def fetch_analyst_ratings(
         self, ticker: str, days: int
     ) -> list[AnalystRatingRecord]:
-        raise NotImplementedError("Implemented in Task 20")
+        async with self._limiter:
+            df = await asyncio.to_thread(lambda: yf.Ticker(ticker).upgrades_downgrades)
+        if df is None or df.empty:
+            return []
+
+        cutoff = date.today() - timedelta(days=days)
+        out: list[AnalystRatingRecord] = []
+        df = df.reset_index().rename(columns={"index": "date"})
+        if "date" not in df.columns and "Date" in df.columns:
+            df = df.rename(columns={"Date": "date"})
+        for _, row in df.iterrows():
+            d = pd.to_datetime(row["date"]).date()
+            if d < cutoff:
+                continue
+            out.append(
+                AnalystRatingRecord(
+                    ticker=ticker,
+                    date=d,
+                    firm=str(row.get("Firm") or "Unknown"),
+                    action=str(row.get("Action") or "main"),
+                    from_rating=row.get("FromGrade"),
+                    to_rating=row.get("ToGrade"),
+                    price_target=None,
+                )
+            )
+        return out
 
 
 def _fetch_nasdaq_100_tickers() -> list[tuple[str, str, str]]:

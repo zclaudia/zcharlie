@@ -174,3 +174,30 @@ async def test_fetch_news_parses_recent_items(monkeypatch):
     with freeze_time("2025-06-03 12:00:00"):
         items = await src.fetch_news("AAPL", days=7)
     assert len(items) == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_analyst_ratings_parses_upgrades_downgrades(monkeypatch):
+    import yfinance
+    import pandas as pd
+    from freezegun import freeze_time
+
+    class FakeTicker:
+        upgrades_downgrades = pd.DataFrame(
+            {
+                "Firm": ["Goldman Sachs", "Morgan Stanley"],
+                "ToGrade": ["Buy", "Overweight"],
+                "FromGrade": ["Neutral", "Equal-Weight"],
+                "Action": ["up", "up"],
+            },
+            index=pd.to_datetime(["2025-06-02", "2025-05-29"]),
+        )
+
+    monkeypatch.setattr(yfinance, "Ticker", lambda t: FakeTicker())
+
+    src = YFinanceSource(max_concurrent=2)
+    with freeze_time("2025-06-03 12:00:00"):
+        items = await src.fetch_analyst_ratings("AAPL", days=7)
+    assert len(items) == 2
+    assert items[0].firm in {"Goldman Sachs", "Morgan Stanley"}
+    assert items[0].action in {"up", "down", "main", "init"}
