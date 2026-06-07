@@ -90,15 +90,13 @@ class DiscoveryPipeline:
                     as_of=as_of,
                 )
 
-            # Step 3: Tier 2 LLM scoring.
-            async with session_scope() as session:
-                await steps.step3_tier2_scoring(
-                    session,
-                    candidates_by_strategy=candidates_by_strategy,
-                    strategies=self._strategies,
-                    pipeline_run_id=run_id,
-                    max_concurrent=self._settings.llm_max_concurrent,
-                )
+            # Step 3: Tier 2 LLM scoring (manages its own per-task sessions).
+            await steps.step3_tier2_scoring(
+                candidates_by_strategy=candidates_by_strategy,
+                strategies=self._strategies,
+                pipeline_run_id=run_id,
+                max_concurrent=self._settings.llm_max_concurrent,
+            )
 
             # Step 4: Tier 3 deep analysis.
             async with session_scope() as session:

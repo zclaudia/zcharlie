@@ -25,6 +25,7 @@ from investment_agent.sources.records import (
     NewsRecord,
 )
 from investment_agent.sources.retry import RateLimiter
+from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import StockScore
 from investment_agent.storage.models.market_data import (
     AnalystRatingChange,
@@ -364,7 +365,6 @@ async def _build_listing_snapshots(
 
 
 async def step3_tier2_scoring(
-    session: AsyncSession,
     *,
     candidates_by_strategy: dict[str, list[ListingSnapshot]],
     strategies: dict[str, BaseStrategyAgent],
@@ -374,36 +374,40 @@ async def step3_tier2_scoring(
 ) -> int:
     """Run Tier 2 LLM scoring for each (strategy, listing) pair concurrently.
 
-    Each (strategy, listing) task is bounded by `max_concurrent` semaphore and
-    `timeout_sec` per-call timeout. Failures are logged but don't fail the run.
+    Each task opens its own `session_scope()` to avoid sharing an AsyncSession
+    across concurrent flushes (SQLAlchemy async sessions are not concurrency
+    safe). Tasks are bounded by `max_concurrent` semaphore and `timeout_sec`
+    per-call timeout. Failures are logged but don't fail the run.
     Returns total number of scores persisted.
     """
     semaphore = asyncio.Semaphore(max_concurrent)
-    score_repo = StockScoreRepository(session)
-    n = 0
+    counter = {"n": 0}
+    lock = asyncio.Lock()
 
     async def _score_one(strategy_code: str, listing: ListingSnapshot) -> None:
-        nonlocal n
         agent = strategies[strategy_code]
-        ctx = await _build_scoring_context(session, listing)
-
         async with semaphore:
             try:
-                score = await asyncio.wait_for(
-                    agent.score(listing, ctx), timeout=timeout_sec
-                )
-                await score_repo.upsert(
-                    pipeline_run_id=pipeline_run_id,
-                    listing_id=listing.listing_id,
-                    strategy_code=strategy_code,
-                    tier=2,
-                    score=score.score,
-                    confidence=score.confidence,
-                    bull_thesis=score.bull_thesis,
-                    bear_thesis=score.bear_thesis,
-                    key_metrics=dict(score.key_metrics_explained),
-                )
-                n += 1
+                async with session_scope() as session:
+                    ctx = await _build_scoring_context(session, listing)
+                    score = await asyncio.wait_for(
+                        agent.score(listing, ctx),
+                        timeout=timeout_sec,
+                    )
+                    repo = StockScoreRepository(session)
+                    await repo.upsert(
+                        pipeline_run_id=pipeline_run_id,
+                        listing_id=listing.listing_id,
+                        strategy_code=strategy_code,
+                        tier=2,
+                        score=score.score,
+                        confidence=score.confidence,
+                        bull_thesis=score.bull_thesis,
+                        bear_thesis=score.bear_thesis,
+                        key_metrics=dict(score.key_metrics_explained),
+                    )
+                async with lock:
+                    counter["n"] += 1
             except Exception as e:
                 log.warning(
                     "pipeline.step3.score_failed",
@@ -418,8 +422,10 @@ async def step3_tier2_scoring(
             tasks.append(_score_one(code, listing))
 
     await asyncio.gather(*tasks)
-    log.info("pipeline.step3.complete", scored=n, run_id=pipeline_run_id)
-    return n
+    log.info(
+        "pipeline.step3.complete", scored=counter["n"], run_id=pipeline_run_id
+    )
+    return counter["n"]
 
 
 async def _build_scoring_context(
