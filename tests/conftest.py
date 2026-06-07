@@ -35,3 +35,28 @@ async def seeded_market(db_session):
     db_session.add(market)
     await db_session.flush()
     return market
+
+
+@pytest_asyncio.fixture
+async def api_client(tmp_path, monkeypatch):
+    """Shared FastAPI TestClient against a fresh disk-backed SQLite per test.
+
+    Sets:
+      API_KEY=secret, LLM_TIER2_API_KEY=x, LLM_TIER3_API_KEY=x,
+      DATA_DIR=<tmp_path>, DATABASE_URL=sqlite+aiosqlite:///<tmp_path>/api.db
+    """
+    from fastapi.testclient import TestClient
+
+    from investment_agent.api.app import create_app
+
+    monkeypatch.setenv("API_KEY", "secret")
+    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
+    monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    db_path = tmp_path / "api.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
+    engine = init_engine(f"sqlite+aiosqlite:///{db_path}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield TestClient(create_app())
+    await engine.dispose()

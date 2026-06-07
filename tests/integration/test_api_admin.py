@@ -4,28 +4,9 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
-import pytest_asyncio
-from fastapi.testclient import TestClient
 
-from investment_agent.api.app import create_app
-from investment_agent.storage.database import init_engine, session_scope
-from investment_agent.storage.models.base import Base
+from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.ops import LLMCall
-
-
-@pytest_asyncio.fixture
-async def api_client(tmp_path, monkeypatch):
-    monkeypatch.setenv("API_KEY", "secret")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
-    monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    db_path = tmp_path / "api.db"
-    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
-    engine = init_engine(f"sqlite+aiosqlite:///{db_path}")
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield TestClient(create_app())
-    await engine.dispose()
 
 
 def test_admin_requires_auth(api_client):
