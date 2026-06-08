@@ -33,3 +33,6 @@ data/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Local planning docs (not for remote)
+docs/superpowers/
