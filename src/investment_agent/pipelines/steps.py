@@ -21,6 +21,7 @@ from investment_agent.domain.strategy_types import (
 from investment_agent.sources.records import (
     AnalystRatingRecord,
     DailyPriceRecord,
+    FinancialReportRecord,
     FundamentalSnapshotRecord,
     NewsRecord,
 )
@@ -56,6 +57,7 @@ class _FetchResult:
     snapshot: FundamentalSnapshotRecord | None = None
     news: list[NewsRecord] = field(default_factory=list)
     ratings: list[AnalystRatingRecord] = field(default_factory=list)
+    financials: list[FinancialReportRecord] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
 
@@ -130,6 +132,16 @@ async def step1_data_ingestion(
                 )
             except Exception as e:
                 result.errors.append(f"ratings: {e}")
+            try:
+                financials = await data_source.fetch_financial_report(
+                    listing.ticker, periods=[],
+                )
+                # Keep the 8 most-recent fiscal periods (covers 2 fiscal years
+                # for YoY).
+                financials.sort(key=lambda f: f.period_end, reverse=True)
+                result.financials = financials[:8]
+            except Exception as e:
+                result.errors.append(f"financials: {e}")
         return result
 
     async def _fetch_aux_one(listing: Listing) -> _FetchResult:
@@ -168,7 +180,7 @@ async def step1_data_ingestion(
         item.ticker: item for item in universe_listings + aux_listings
     }
     total_errors = 0
-    for batch in (universe_results, aux_results):
+    for batch, is_universe in ((universe_results, True), (aux_results, False)):
         for r in batch:
             listing = listings_by_ticker[r.ticker]
             for price in r.prices:
@@ -179,6 +191,11 @@ async def step1_data_ingestion(
                 await _insert_news_if_new(session, listing.company_id, news)
             for rating in r.ratings:
                 await _insert_rating_if_new(session, listing.company_id, rating)
+            if is_universe:
+                for record in r.financials:
+                    await _upsert_financial_report(
+                        session, listing.company_id, record
+                    )
             total_errors += len(r.errors)
 
     await session.flush()
@@ -279,6 +296,40 @@ async def _insert_rating_if_new(
             price_target=record.price_target,
         )
     )
+
+
+async def _upsert_financial_report(
+    session: AsyncSession,
+    company_id: int,
+    record: FinancialReportRecord,
+) -> None:
+    existing = await session.get(
+        FinancialReport, (company_id, record.fiscal_period),
+    )
+    if existing is None:
+        session.add(
+            FinancialReport(
+                company_id=company_id,
+                fiscal_period=record.fiscal_period,
+                period_end=record.period_end,
+                revenue=record.revenue,
+                gross_profit=record.gross_profit,
+                net_income=record.net_income,
+                fcf=record.fcf,
+                total_assets=record.total_assets,
+                total_equity=record.total_equity,
+                raw_data=record.raw_data or {},
+            )
+        )
+    else:
+        existing.period_end = record.period_end
+        existing.revenue = record.revenue
+        existing.gross_profit = record.gross_profit
+        existing.net_income = record.net_income
+        existing.fcf = record.fcf
+        existing.total_assets = record.total_assets
+        existing.total_equity = record.total_equity
+        existing.raw_data = record.raw_data or {}
 
 
 async def step2_tier1_screening(
