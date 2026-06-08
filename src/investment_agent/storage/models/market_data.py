@@ -36,6 +36,7 @@ class FinancialReport(Base, TimestampMixin):
     revenue: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
     net_income: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
     fcf: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
+    gross_profit: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
     total_assets: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
     total_equity: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
 
@@ -59,6 +60,8 @@ class FundamentalSnapshot(Base, TimestampMixin):
     fcf_yield: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     debt_to_equity: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True)
     market_cap: Mapped[Decimal | None] = mapped_column(Numeric(20, 2), nullable=True)
+    beta: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
+    volatility_30d: Mapped[Decimal | None] = mapped_column(Numeric(8, 6), nullable=True)
 
 
 class NewsItem(Base, TimestampMixin):
