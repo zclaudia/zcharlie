@@ -8,6 +8,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import TypedDict
 
+import numpy as np
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -365,29 +366,84 @@ async def _build_listing_snapshots(
 ) -> list[ListingSnapshot]:
     """Build ListingSnapshot DTOs from current DB state for each listing.
 
-    Avoids ORM lazy-load by explicitly fetching Company; eager-loads recent
-    financial reports for TTM revenue / net income aggregation.
+    Computes derived fields:
+      - revenue_ttm / net_income_ttm: sum of latest 4 quarters
+      - revenue_growth_yoy: (TTM_now - TTM_prior) / TTM_prior using 8 quarters
+      - gross_margin: latest quarter gross_profit / revenue
+      - beta: from FundamentalSnapshot.beta
+      - volatility_30d: sample stdev of last 30 daily returns
     """
     out: list[ListingSnapshot] = []
     for listing in listings:
         snap_row = await session.get(FundamentalSnapshot, (listing.id, as_of))
 
+        # Pull 8 quarters: first 4 = current TTM, next 4 = prior-year TTM
         stmt = (
             select(FinancialReport)
             .where(FinancialReport.company_id == listing.company_id)
             .order_by(FinancialReport.period_end.desc())
-            .limit(4)
+            .limit(8)
         )
-        recent_4q = list((await session.execute(stmt)).scalars().all())
+        recent_8q = list((await session.execute(stmt)).scalars().all())
+        recent_4q = recent_8q[:4]
+        prior_4q = recent_8q[4:8]
 
-        revenues = [q.revenue for q in recent_4q if q.revenue is not None]
+        # TTM aggregates (current year)
+        revenues_now = [q.revenue for q in recent_4q if q.revenue is not None]
         revenue_ttm: Decimal | None = (
-            sum(revenues, Decimal("0")) if revenues else None
+            sum(revenues_now, Decimal("0")) if revenues_now else None
         )
         nets = [q.net_income for q in recent_4q if q.net_income is not None]
         net_income_ttm: Decimal | None = (
             sum(nets, Decimal("0")) if nets else None
         )
+
+        # YoY revenue growth (TTM vs prior TTM)
+        revenues_prior = [
+            q.revenue for q in prior_4q if q.revenue is not None
+        ]
+        revenue_ttm_prior: Decimal | None = (
+            sum(revenues_prior, Decimal("0")) if revenues_prior else None
+        )
+        revenue_growth_yoy: Decimal | None = None
+        if (
+            revenue_ttm is not None
+            and revenue_ttm_prior is not None
+            and revenue_ttm_prior > 0
+        ):
+            revenue_growth_yoy = (
+                (revenue_ttm - revenue_ttm_prior) / revenue_ttm_prior
+            )
+
+        # Gross margin from most-recent quarter
+        gross_margin: Decimal | None = None
+        if recent_4q:
+            latest = recent_4q[0]
+            if (
+                latest.gross_profit is not None
+                and latest.revenue is not None
+                and latest.revenue > 0
+            ):
+                gross_margin = latest.gross_profit / latest.revenue
+
+        # 30-day realized volatility (sample stdev of daily simple returns)
+        price_stmt = (
+            select(DailyPrice)
+            .where(DailyPrice.listing_id == listing.id)
+            .where(DailyPrice.date <= as_of)
+            .order_by(DailyPrice.date.desc())
+            .limit(31)  # need 31 prices for 30 returns
+        )
+        prices = list((await session.execute(price_stmt)).scalars().all())
+        prices.reverse()  # oldest first
+        volatility_30d: Decimal | None = None
+        if len(prices) >= 3:
+            closes = np.array(
+                [float(p.adjusted_close) for p in prices], dtype=float,
+            )
+            rets = (closes[1:] - closes[:-1]) / closes[:-1]
+            if rets.size >= 2:
+                volatility_30d = Decimal(str(float(np.std(rets, ddof=1))))
 
         # Explicit fetch to avoid async lazy-load on listing.company.
         company = await session.get(Company, listing.company_id)
@@ -414,6 +470,10 @@ async def _build_listing_snapshots(
                 market_cap=snap_row.market_cap if snap_row else None,
                 revenue_ttm=revenue_ttm,
                 net_income_ttm=net_income_ttm,
+                revenue_growth_yoy=revenue_growth_yoy,
+                gross_margin=gross_margin,
+                beta=snap_row.beta if snap_row else None,
+                volatility_30d=volatility_30d,
             )
         )
     return out
