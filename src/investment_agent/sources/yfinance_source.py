@@ -1,8 +1,11 @@
 """yfinance-based DataSource implementation."""
 
 import asyncio
+import os
+import tempfile
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
@@ -16,6 +19,14 @@ from investment_agent.sources.records import (
     NewsRecord,
 )
 from investment_agent.sources.retry import RateLimiter, retry_async
+
+# yfinance defaults to ~/Library/Caches/py-yfinance/tkr-tz.db which is a shared
+# SQLite DB; multiple concurrent workers contending on it raise
+# OperationalError("database is locked"). Point each process at its own tempdir
+# to eliminate the race.
+_YF_CACHE_DIR = Path(tempfile.gettempdir()) / f"py-yfinance-{os.getpid()}"
+_YF_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+yf.set_tz_cache_location(str(_YF_CACHE_DIR))
 
 
 class YFinanceSource:
