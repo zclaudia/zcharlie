@@ -178,8 +178,15 @@ class YFinanceSource:
 
         cutoff = date.today() - timedelta(days=days)
         out: list[AnalystRatingRecord] = []
-        df = df.reset_index().rename(columns={"index": "date"})
-        if "date" not in df.columns and "Date" in df.columns:
+        # yfinance's upgrades_downgrades uses an index named "GradeDate" (or
+        # sometimes "Date"); normalize whatever the index name is to "date".
+        index_name = df.index.name
+        df = df.reset_index()
+        if index_name and index_name in df.columns:
+            df = df.rename(columns={index_name: "date"})
+        elif "index" in df.columns:
+            df = df.rename(columns={"index": "date"})
+        elif "Date" in df.columns:
             df = df.rename(columns={"Date": "date"})
         for _, row in df.iterrows():
             d = pd.to_datetime(row["date"]).date()
@@ -266,6 +273,11 @@ def _df_to_price_records(
     df: pd.DataFrame, tickers: list[str]
 ) -> list[DailyPriceRecord]:
     out: list[DailyPriceRecord] = []
+    # yfinance returns MultiIndex columns like ('Open', 'SPY') when downloading
+    # one or many tickers; flatten to the first level so dict-style lookups work.
+    if isinstance(df.columns, pd.MultiIndex):
+        df = df.copy()
+        df.columns = [c[0] if isinstance(c, tuple) else c for c in df.columns]
     df = df.reset_index()
 
     ticker_col = "ticker" if "ticker" in df.columns else None
