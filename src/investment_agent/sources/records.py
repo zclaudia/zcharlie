@@ -35,6 +35,7 @@ class FinancialReportRecord(_RecordBase):
     revenue: Decimal | None
     net_income: Decimal | None
     fcf: Decimal | None
+    gross_profit: Decimal | None = None
     total_assets: Decimal | None
     total_equity: Decimal | None
     raw_data: dict[str, object]
@@ -52,6 +53,7 @@ class FundamentalSnapshotRecord(_RecordBase):
     fcf_yield: Decimal | None
     debt_to_equity: Decimal | None
     market_cap: Decimal | None
+    beta: Decimal | None = None
 
 
 class NewsRecord(_RecordBase):

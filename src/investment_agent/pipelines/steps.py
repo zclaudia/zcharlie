@@ -229,6 +229,10 @@ async def _upsert_fundamental_snapshot(
                 fcf_yield=record.fcf_yield,
                 debt_to_equity=record.debt_to_equity,
                 market_cap=record.market_cap,
+                beta=record.beta,
+                # volatility_30d intentionally left None at fetch time — Task 5
+                # backfills it from DailyPrice history during snapshot construction.
+                volatility_30d=None,
             )
         )
 

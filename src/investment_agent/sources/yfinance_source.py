@@ -93,6 +93,7 @@ class YFinanceSource:
                 continue
             rev = income.at["Total Revenue", col] if "Total Revenue" in income.index else None
             ni = income.at["Net Income", col] if "Net Income" in income.index else None
+            gp = income.at["Gross Profit", col] if "Gross Profit" in income.index else None
             fcf_val = None
             if "Free Cash Flow" in cashflow.index and col in cashflow.columns:
                 fcf_val = cashflow.at["Free Cash Flow", col]
@@ -112,6 +113,7 @@ class YFinanceSource:
                     revenue=_maybe_decimal(rev),
                     net_income=_maybe_decimal(ni),
                     fcf=_maybe_decimal(fcf_val),
+                    gross_profit=_maybe_decimal(gp),
                     total_assets=_maybe_decimal(ta),
                     total_equity=_maybe_decimal(te),
                     raw_data={
@@ -149,6 +151,7 @@ class YFinanceSource:
             fcf_yield=fcf_yield,
             debt_to_equity=_maybe_decimal(info.get("debtToEquity")),
             market_cap=market_cap,
+            beta=_maybe_decimal(info.get("beta")),
         )
 
     @retry_async(attempts=3, base_delay=1.0)
