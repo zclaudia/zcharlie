@@ -21,6 +21,9 @@ def build_agent[OutputT: BaseModel](
         model_name=config.model,
         provider=OpenAIProvider(base_url=config.base_url, api_key=config.api_key),
     )
+    kwargs: dict[str, Any] = {"model": model}
+    if system_prompt:
+        kwargs["system_prompt"] = system_prompt
     if output_type is not None:
-        return Agent(model=model, system_prompt=system_prompt, output_type=output_type)
-    return Agent(model=model, system_prompt=system_prompt)
+        kwargs["output_type"] = output_type
+    return Agent(**kwargs)
