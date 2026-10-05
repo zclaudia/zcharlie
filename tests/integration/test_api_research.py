@@ -96,6 +96,8 @@ def test_get_research_run_returns_result_and_safe_artifacts(api_client, tmp_path
     assert body["ticker"] == "600406.SH"
     assert body["business_score"] == 55.22
     assert body["workflow_label"] == "needs_review"
+    assert body["has_meaningful_changes"] is False
+    assert body["meaningful_change_count"] == 0
     assert body["result"]["score"]["business_score"] == 55.22
     assert body["result"]["scoring_version"] == "v1.2"
     assert body["result"]["artifacts"] == [
@@ -108,6 +110,16 @@ def test_get_research_run_returns_result_and_safe_artifacts(api_client, tmp_path
             "download_url": f"/research/runs/{run_id}/artifacts/scores",
         },
     ]
+    assert body["change"]["baseline"] is True
+    assert body["change"]["current_run_id"] == run_id
+    assert body["change"]["changes"] == []
+
+    changes = api_client.get(
+        f"/research/runs/{run_id}/changes",
+        headers={"X-API-Key": "secret"},
+    )
+    assert changes.status_code == 200
+    assert changes.json() == body["change"]
 
     artifacts = api_client.get(
         f"/research/runs/{run_id}/artifacts",
@@ -173,6 +185,101 @@ def test_get_partial_research_run_returns_deterministic_result(api_client):
     assert body["needs_agent_review"] is True
     assert body["result"]["explanation"] is None
     assert body["result"]["artifacts"] == []
+
+
+def test_research_run_exposes_diff_from_previous_snapshot(api_client):
+    async def seed() -> tuple[int, int]:
+        async with session_scope() as session:
+            runs = PipelineRunRepository(session)
+            snapshots = ResearchSnapshotRepository(session)
+            first = await runs.create(kind="ifind_research")
+            await snapshots.create(
+                pipeline_run_id=first.id,
+                symbol="600406",
+                market="SH",
+                company_name="国电南瑞",
+                industry="电力设备",
+                as_of=date(2026, 10, 4),
+                report_year=2025,
+                canonical_schema_version="ifind-canonical.v1",
+                scoring_version="v1.2",
+                score_schema_version="v2.0",
+                score_json={
+                    "business_score": 50.0,
+                    "suggestion": "needs_review",
+                    "primary_strategy": "quality_growth",
+                    "key_metrics": {"roe": 0.10},
+                    "data_quality_score": 0.90,
+                    "missing_fields": ["dividend_yield"],
+                },
+                explanation_json=None,
+                artifact_manifest={},
+            )
+            await runs.mark_success(first.id)
+            second = await runs.create(kind="ifind_research")
+            await snapshots.create(
+                pipeline_run_id=second.id,
+                symbol="600406",
+                market="SH",
+                company_name="国电南瑞",
+                industry="电力设备",
+                as_of=date(2026, 10, 5),
+                report_year=2025,
+                canonical_schema_version="ifind-canonical.v1",
+                scoring_version="v1.2",
+                score_schema_version="v2.0",
+                score_json={
+                    "business_score": 54.0,
+                    "suggestion": "watch",
+                    "primary_strategy": "steady_quality_growth",
+                    "key_metrics": {"roe": 0.11},
+                    "data_quality_score": 0.95,
+                    "missing_fields": [],
+                },
+                explanation_json=None,
+                artifact_manifest={},
+            )
+            await runs.mark_success(second.id)
+            return first.id, second.id
+
+    first_run_id, second_run_id = asyncio.run(seed())
+    response = api_client.get(
+        f"/research/runs/{second_run_id}",
+        headers={"X-API-Key": "secret"},
+    )
+
+    assert response.status_code == 200
+    change = response.json()["change"]
+    assert change["baseline"] is False
+    assert change["previous_run_id"] == first_run_id
+    assert change["current_run_id"] == second_run_id
+    assert change["has_meaningful_changes"] is True
+    assert change["category_counts"] == {
+        "score": 1,
+        "strategy": 2,
+        "financial_metric": 1,
+        "quality": 2,
+    }
+    fields = {item["field"] for item in change["changes"]}
+    assert fields == {
+        "business_score",
+        "primary_strategy",
+        "suggestion",
+        "key_metrics.roe",
+        "data_quality_score",
+        "missing_fields",
+    }
+
+    listed = api_client.get(
+        "/research/runs",
+        headers={"X-API-Key": "secret"},
+    )
+    assert listed.status_code == 200
+    summaries = {item["run_id"]: item for item in listed.json()}
+    assert summaries[first_run_id]["has_meaningful_changes"] is False
+    assert summaries[first_run_id]["meaningful_change_count"] == 0
+    assert summaries[second_run_id]["has_meaningful_changes"] is True
+    assert summaries[second_run_id]["meaningful_change_count"] == 6
 
 
 def test_research_enqueues_auditable_run(api_client, monkeypatch):

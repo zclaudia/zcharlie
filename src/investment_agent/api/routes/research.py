@@ -11,6 +11,7 @@ from sqlalchemy import select
 from investment_agent.api.auth import get_settings, verify_api_key
 from investment_agent.api.schemas.research import (
     ResearchArtifactOut,
+    ResearchChangeSetOut,
     ResearchRunAccepted,
     ResearchRunDetail,
     ResearchRunResult,
@@ -19,10 +20,17 @@ from investment_agent.api.schemas.research import (
 )
 from investment_agent.config import Settings
 from investment_agent.storage.database import session_scope
-from investment_agent.storage.models.analysis import PipelineRun, ResearchSnapshot
+from investment_agent.storage.models.analysis import (
+    PipelineRun,
+    ResearchChangeSet,
+    ResearchSnapshot,
+)
 from investment_agent.storage.repositories.pipeline_run import (
     IdempotencyPayloadMismatchError,
     PipelineRunRepository,
+)
+from investment_agent.storage.repositories.research_change import (
+    ResearchChangeRepository,
 )
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
@@ -43,10 +51,14 @@ async def list_research_runs(
 ) -> list[ResearchRunSummary]:
     async with session_scope() as session:
         statement = (
-            select(PipelineRun, ResearchSnapshot)
+            select(PipelineRun, ResearchSnapshot, ResearchChangeSet)
             .outerjoin(
                 ResearchSnapshot,
                 ResearchSnapshot.pipeline_run_id == PipelineRun.id,
+            )
+            .outerjoin(
+                ResearchChangeSet,
+                ResearchChangeSet.current_snapshot_id == ResearchSnapshot.id,
             )
             .where(PipelineRun.kind == "ifind_research")
             .order_by(PipelineRun.id.desc())
@@ -56,7 +68,7 @@ async def list_research_runs(
         if run_status is not None:
             statement = statement.where(PipelineRun.status == run_status)
         rows = (await session.execute(statement)).all()
-        return [_to_summary(row[0], row[1]) for row in rows]
+        return [_to_summary(row[0], row[1], row[2]) for row in rows]
 
 
 @router.get("/runs/{run_id}", response_model=ResearchRunDetail)
@@ -69,13 +81,34 @@ async def get_research_run(run_id: int) -> ResearchRunDetail:
                 detail=f"Research run {run_id} not found",
             )
         snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
-        summary = _to_summary(run, snapshot)
+        change_set = await ResearchChangeRepository(session).by_run(run_id)
+        summary = _to_summary(run, snapshot, change_set)
         result = _to_result(snapshot) if snapshot is not None else None
         return ResearchRunDetail(
             **summary.model_dump(),
             request=run.request_json,
             result=result,
+            change=(
+                ResearchChangeSetOut.model_validate(change_set.diff_json)
+                if change_set is not None
+                else None
+            ),
         )
+
+
+@router.get(
+    "/runs/{run_id}/changes",
+    response_model=ResearchChangeSetOut,
+)
+async def get_research_changes(run_id: int) -> ResearchChangeSetOut:
+    async with session_scope() as session:
+        change_set = await ResearchChangeRepository(session).by_run(run_id)
+        if change_set is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Research changes for run {run_id} not found",
+            )
+        return ResearchChangeSetOut.model_validate(change_set.diff_json)
 
 
 @router.get(
@@ -169,6 +202,7 @@ async def research_single_stock(
 def _to_summary(
     run: PipelineRun,
     snapshot: ResearchSnapshot | None,
+    change_set: ResearchChangeSet | None,
 ) -> ResearchRunSummary:
     request = run.request_json
     ticker = _optional_str(request.get("ticker"))
@@ -201,6 +235,12 @@ def _to_summary(
         business_score=business_score,
         workflow_label=workflow_label,
         needs_agent_review=needs_agent_review,
+        has_meaningful_changes=(
+            change_set.has_meaningful_changes if change_set is not None else None
+        ),
+        meaningful_change_count=(
+            change_set.meaningful_change_count if change_set is not None else None
+        ),
         attempt_count=run.attempt_count,
         max_attempts=run.max_attempts,
         worker_id=run.worker_id,

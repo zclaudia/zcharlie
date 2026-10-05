@@ -43,6 +43,8 @@ class ResearchRunSummary(BaseModel):
     business_score: float | None
     workflow_label: str | None
     needs_agent_review: bool | None
+    has_meaningful_changes: bool | None
+    meaningful_change_count: int | None
     attempt_count: int
     max_attempts: int
     worker_id: str | None
@@ -65,6 +67,19 @@ class ResearchRunResult(BaseModel):
     artifacts: list[ResearchArtifactOut]
 
 
+class ResearchChangeSetOut(BaseModel):
+    schema_version: str
+    baseline: bool
+    previous_run_id: int | None
+    current_run_id: int
+    has_meaningful_changes: bool
+    change_count: int
+    meaningful_change_count: int
+    category_counts: dict[str, int]
+    changes: list[dict[str, object]]
+
+
 class ResearchRunDetail(ResearchRunSummary):
     request: dict[str, object]
     result: ResearchRunResult | None
+    change: ResearchChangeSetOut | None

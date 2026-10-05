@@ -107,7 +107,8 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/watchlist` | GET, POST, POST `/refresh`, DELETE `/{listing_id}` | Durable A-share watchlist and isolated batch refresh |
 | `/research/single-stock` | POST | Queue an A-share research run and return HTTP 202 + `run_id` |
 | `/research/runs` | GET | Paginated research-run list with optional status filter |
-| `/research/runs/{id}` | GET | Lifecycle detail plus optional versioned result |
+| `/research/runs/{id}` | GET | Lifecycle detail, versioned result, and structured change set |
+| `/research/runs/{id}/changes` | GET | Score, strategy, financial-metric, and quality diff from the prior snapshot |
 | `/research/runs/{id}/artifacts` | GET | List and download audited run artifacts |
 | `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
 

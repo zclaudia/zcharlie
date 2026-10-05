@@ -4,7 +4,8 @@ from datetime import date
 
 from sqlalchemy import select
 
-from investment_agent.storage.models.analysis import ResearchSnapshot
+from investment_agent.research.change_tracking import build_research_diff
+from investment_agent.storage.models.analysis import ResearchChangeSet, ResearchSnapshot
 from investment_agent.storage.repositories.base import Repository
 
 
@@ -28,6 +29,17 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
         explanation_json: dict[str, object] | None,
         artifact_manifest: dict[str, object],
     ) -> ResearchSnapshot:
+        previous = (
+            await self.session.execute(
+                select(ResearchSnapshot)
+                .where(
+                    ResearchSnapshot.symbol == symbol,
+                    ResearchSnapshot.market == market,
+                )
+                .order_by(ResearchSnapshot.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
         snapshot = ResearchSnapshot(
             pipeline_run_id=pipeline_run_id,
             symbol=symbol,
@@ -44,6 +56,25 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
             artifact_manifest=artifact_manifest,
         )
         self.session.add(snapshot)
+        await self.session.flush()
+        diff = build_research_diff(
+            current_run_id=pipeline_run_id,
+            current_score=score_json,
+            previous_run_id=(previous.pipeline_run_id if previous is not None else None),
+            previous_score=(previous.score_json if previous is not None else None),
+        )
+        self.session.add(
+            ResearchChangeSet(
+                current_snapshot_id=snapshot.id,
+                previous_snapshot_id=(previous.id if previous is not None else None),
+                schema_version=diff.schema_version,
+                baseline=diff.baseline,
+                has_meaningful_changes=diff.has_meaningful_changes,
+                change_count=diff.change_count,
+                meaningful_change_count=diff.meaningful_change_count,
+                diff_json=diff.as_dict(),
+            )
+        )
         await self.session.flush()
         return snapshot
 

@@ -1,6 +1,7 @@
 from datetime import date
 
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.research_change import ResearchChangeRepository
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
 )
@@ -31,6 +32,11 @@ async def test_research_snapshot_persists_versions_and_artifact_manifest(db_sess
     assert loaded.id == created.id
     assert loaded.score_json["business_score"] == 55.22
     assert loaded.artifact_manifest["scores"] == "/tmp/scores.json"
+    change_set = await ResearchChangeRepository(db_session).by_run(run.id)
+    assert change_set is not None
+    assert change_set.baseline is True
+    assert change_set.change_count == 0
+    assert change_set.diff_json["current_run_id"] == run.id
 
 
 async def test_research_snapshot_history_is_newest_first(db_session):

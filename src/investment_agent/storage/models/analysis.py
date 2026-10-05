@@ -142,6 +142,26 @@ class ResearchSnapshot(Base, TimestampMixin):
     )
 
 
+class ResearchChangeSet(Base, TimestampMixin):
+    """Deterministic diff between one snapshot and the prior observed snapshot."""
+
+    __tablename__ = "research_change_set"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    current_snapshot_id: Mapped[int] = mapped_column(
+        ForeignKey("research_snapshot.id"), nullable=False, unique=True
+    )
+    previous_snapshot_id: Mapped[int | None] = mapped_column(
+        ForeignKey("research_snapshot.id"), nullable=True
+    )
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    baseline: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    has_meaningful_changes: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    change_count: Mapped[int] = mapped_column(nullable=False)
+    meaningful_change_count: Mapped[int] = mapped_column(nullable=False)
+    diff_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+
+
 class AttributionReport(Base, TimestampMixin):
     __tablename__ = "attribution_report"
 
