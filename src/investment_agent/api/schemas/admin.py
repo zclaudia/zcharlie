@@ -1,6 +1,6 @@
 """/watchlist + /admin endpoint schemas."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -30,6 +30,7 @@ class WatchlistAdd(BaseModel):
     industry: str | None = Field(None, min_length=1, max_length=128)
     provider: str | None = Field(None, min_length=1, max_length=32)
     report_year: int | None = Field(None, ge=1990, le=2100)
+    enabled: bool | None = None
     note: str | None = None
 
     @field_validator("ticker", "market_code", mode="before")
@@ -37,10 +38,37 @@ class WatchlistAdd(BaseModel):
     def normalize_code(cls, value: object) -> object:
         return value.strip().upper() if isinstance(value, str) else value
 
-    @field_validator("name", "industry", "provider", "note", mode="before")
+    @field_validator("name", "industry", "note", mode="before")
     @classmethod
     def normalize_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def normalize_provider(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
+
+
+class WatchlistRefreshRequest(BaseModel):
+    as_of: date | None = None
+
+
+class WatchlistRefreshItemOut(BaseModel):
+    listing_id: int
+    ticker: str | None
+    run_id: int | None
+    status: str
+    created: bool
+    error: str | None
+
+
+class WatchlistRefreshOut(BaseModel):
+    as_of: date
+    total: int
+    created_runs: int
+    reused_runs: int
+    failed: int
+    items: list[WatchlistRefreshItemOut]
 
 
 class LLMCallOut(BaseModel):

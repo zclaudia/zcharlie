@@ -6,6 +6,7 @@ from sqlalchemy import select
 from investment_agent.storage.models.reference import Market
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.listing import ListingRepository
+from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
 
@@ -78,6 +79,42 @@ async def test_add_existing_updates_research_config_without_resetting_state(db_s
     assert second.provider == "ifind"
     assert second.report_year == 2025
     assert second.last_refresh_status == "success"
+
+
+@pytest.mark.asyncio
+async def test_older_run_cannot_overwrite_newer_refresh_state(db_session):
+    aapl, _ = await _seed_listings(db_session)
+    watchlist = WatchlistRepository(db_session)
+    await watchlist.add(aapl.id)
+    runs = PipelineRunRepository(db_session)
+    older = await runs.create(kind="ifind_research", listing_id=aapl.id)
+    newer = await runs.create(kind="ifind_research", listing_id=aapl.id)
+
+    assert await watchlist.mark_refresh_queued(aapl.id, run_id=newer.id) is True
+    assert (
+        await watchlist.mark_refresh_queued(
+            aapl.id,
+            run_id=older.id,
+            status="running",
+        )
+        is False
+    )
+    assert (
+        await watchlist.mark_refresh_finished(
+            aapl.id,
+            run_id=older.id,
+            status="failed",
+            refreshed_at=older.started_at,
+            error="stale failure",
+        )
+        is False
+    )
+
+    item = await watchlist.get_by_listing(aapl.id)
+    assert item is not None
+    assert item.last_research_run_id == newer.id
+    assert item.last_refresh_status == "queued"
+    assert item.last_refresh_error is None
 
 
 @pytest.mark.asyncio

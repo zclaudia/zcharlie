@@ -21,6 +21,14 @@ class WatchlistRepository(Repository[WatchlistItem]):
         stmt = select(WatchlistItem).order_by(WatchlistItem.added_at.desc())
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def list_enabled(self) -> list[WatchlistItem]:
+        stmt = (
+            select(WatchlistItem)
+            .where(WatchlistItem.enabled.is_(True))
+            .order_by(WatchlistItem.added_at.asc())
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def add(
         self,
         listing_id: int,
@@ -59,6 +67,68 @@ class WatchlistRepository(Repository[WatchlistItem]):
         self.session.add(item)
         await self.session.flush()
         return item
+
+    async def mark_refresh_queued(
+        self,
+        listing_id: int,
+        *,
+        run_id: int,
+        status: str = "queued",
+    ) -> bool:
+        if status not in {"queued", "running"}:
+            raise ValueError(f"Unsupported active refresh status: {status}")
+        item = await self.get_by_listing(listing_id)
+        if item is None:
+            return False
+        if (
+            item.last_research_run_id is not None
+            and item.last_research_run_id > run_id
+        ):
+            return False
+        item.last_refresh_status = status
+        item.last_refresh_error = None
+        item.last_research_run_id = run_id
+        await self.session.flush()
+        return True
+
+    async def mark_refresh_finished(
+        self,
+        listing_id: int,
+        *,
+        run_id: int,
+        status: str,
+        refreshed_at: datetime,
+        error: str | None,
+    ) -> bool:
+        if status not in {"success", "partial", "failed"}:
+            raise ValueError(f"Unsupported terminal refresh status: {status}")
+        item = await self.get_by_listing(listing_id)
+        if item is None:
+            return False
+        if item.last_research_run_id not in {None, run_id}:
+            return False
+        item.last_refresh_status = status
+        item.last_refreshed_at = refreshed_at
+        item.last_refresh_error = error
+        item.last_research_run_id = run_id
+        await self.session.flush()
+        return True
+
+    async def mark_refresh_enqueue_failed(
+        self,
+        listing_id: int,
+        *,
+        error: str,
+        failed_at: datetime | None = None,
+    ) -> bool:
+        item = await self.get_by_listing(listing_id)
+        if item is None:
+            return False
+        item.last_refresh_status = "failed"
+        item.last_refreshed_at = failed_at or datetime.now(UTC)
+        item.last_refresh_error = error
+        await self.session.flush()
+        return True
 
     async def remove(self, listing_id: int) -> bool:
         stmt = select(WatchlistItem).where(WatchlistItem.listing_id == listing_id)

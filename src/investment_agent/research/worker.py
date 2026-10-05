@@ -17,6 +17,7 @@ from investment_agent.research.ifind_chain import (
 )
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
 log = structlog.get_logger(__name__)
 
@@ -49,11 +50,31 @@ class ResearchWorker:
     async def recover_stale(self, *, stale_after_seconds: float) -> tuple[list[int], list[int]]:
         now = datetime.now(UTC)
         async with session_scope() as session:
-            return await PipelineRunRepository(session).recover_stale(
+            repository = PipelineRunRepository(session)
+            requeued, failed = await repository.recover_stale(
                 kind="ifind_research",
                 stale_before=now - timedelta(seconds=stale_after_seconds),
                 now=now,
             )
+            watchlist_repository = WatchlistRepository(session)
+            for run_id in requeued:
+                run = await repository.get(run_id)
+                if run is not None and run.listing_id is not None:
+                    await watchlist_repository.mark_refresh_queued(
+                        run.listing_id,
+                        run_id=run.id,
+                    )
+            for run_id in failed:
+                run = await repository.get(run_id)
+                if run is not None and run.listing_id is not None:
+                    await watchlist_repository.mark_refresh_finished(
+                        run.listing_id,
+                        run_id=run.id,
+                        status="failed",
+                        refreshed_at=run.finished_at or now,
+                        error=run.error_summary,
+                    )
+            return requeued, failed
 
     async def run_once(self) -> int | None:
         async with session_scope() as session:
@@ -64,7 +85,14 @@ class ResearchWorker:
             if run is None:
                 return None
             run_id = run.id
+            listing_id = run.listing_id
             request_json = run.request_json
+            if listing_id is not None:
+                await WatchlistRepository(session).mark_refresh_queued(
+                    listing_id,
+                    run_id=run_id,
+                    status="running",
+                )
 
         try:
             payload = ResearchJobPayload.model_validate(request_json)
@@ -99,7 +127,24 @@ class ResearchWorker:
                 run_id=run_id,
                 worker_id=self.worker_id,
             )
+        finally:
+            if listing_id is not None:
+                await _sync_watchlist_refresh(run_id=run_id, listing_id=listing_id)
         return run_id
+
+
+async def _sync_watchlist_refresh(*, run_id: int, listing_id: int) -> None:
+    async with session_scope() as session:
+        run = await PipelineRunRepository(session).get(run_id)
+        if run is None or run.status not in {"success", "partial", "failed"}:
+            return
+        await WatchlistRepository(session).mark_refresh_finished(
+            listing_id,
+            run_id=run_id,
+            status=run.status,
+            refreshed_at=run.finished_at or datetime.now(UTC),
+            error=run.error_summary,
+        )
 
 
 async def run_worker(

@@ -1,14 +1,23 @@
 """/watchlist endpoints."""
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.api.auth import verify_api_key
-from investment_agent.api.schemas.admin import WatchlistAdd, WatchlistItemOut
+from investment_agent.api.auth import get_settings, verify_api_key
+from investment_agent.api.schemas.admin import (
+    WatchlistAdd,
+    WatchlistItemOut,
+    WatchlistRefreshItemOut,
+    WatchlistRefreshOut,
+    WatchlistRefreshRequest,
+)
+from investment_agent.config import Settings
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
+from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Company, Listing, Market
 from investment_agent.storage.models.user_domain import WatchlistItem
@@ -134,8 +143,53 @@ async def add_watchlist(body: WatchlistAdd) -> WatchlistItemOut:
             industry=industry,
             provider=provider,
             report_year=report_year,
+            enabled=body.enabled,
         )
         return await _to_out(session, item)
+
+
+@router.post(
+    "/refresh",
+    response_model=WatchlistRefreshOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def refresh_watchlist(
+    body: WatchlistRefreshRequest,
+    settings: Annotated[Settings, Depends(get_settings)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            alias="Idempotency-Key",
+            min_length=1,
+            max_length=128,
+            pattern=r".*\S.*",
+        ),
+    ] = None,
+) -> WatchlistRefreshOut:
+    """Queue independent research jobs for every enabled watchlist item."""
+
+    if not settings.ifind_proxy_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="IFIND_PROXY_API_KEY is not configured",
+        )
+    refresh_date = body.as_of or date.today()
+    async with session_scope() as session:
+        outcomes = await enqueue_watchlist_refresh(
+            session,
+            as_of=refresh_date,
+            triggered_by="watchlist_api",
+            idempotency_key=idempotency_key,
+        )
+    items = [WatchlistRefreshItemOut(**outcome.__dict__) for outcome in outcomes]
+    return WatchlistRefreshOut(
+        as_of=refresh_date,
+        total=len(items),
+        created_runs=sum(item.created for item in items),
+        reused_runs=sum(item.run_id is not None and not item.created for item in items),
+        failed=sum(item.status == "failed" for item in items),
+        items=items,
+    )
 
 
 async def _to_out(session: AsyncSession, item: WatchlistItem) -> WatchlistItemOut:

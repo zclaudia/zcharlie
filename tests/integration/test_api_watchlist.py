@@ -3,14 +3,17 @@
 from datetime import date
 
 import pytest
+from sqlalchemy import select
 
 from investment_agent.storage.database import session_scope
+from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.reference import Market
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
 )
+from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
 
 def test_watchlist_requires_auth(api_client):
@@ -191,3 +194,122 @@ def test_a_share_requires_metadata_and_rejects_market_conflict(api_client):
     )
     assert conflict.status_code == 422
     assert "conflicts with ticker suffix SH" in conflict.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_batch_refresh_queues_valid_items_and_isolates_invalid_ones(
+    api_client,
+    monkeypatch,
+):
+    monkeypatch.setenv("IFIND_PROXY_API_KEY", "ifind-test-key")
+    added = api_client.post(
+        "/watchlist",
+        json={
+            "ticker": "600406.SH",
+            "name": "国电南瑞",
+            "industry": "电力设备",
+            "report_year": 2025,
+        },
+        headers={"X-API-Key": "secret"},
+    )
+    assert added.status_code == 201
+    a_share_listing_id = added.json()["listing_id"]
+
+    async with session_scope() as session:
+        session.add(
+            Market(
+                code="NASDAQ",
+                name="NASDAQ",
+                timezone="America/New_York",
+                currency="USD",
+            ),
+        )
+        legacy_listing = await ListingRepository(session).upsert_listing(
+            market_code="NASDAQ",
+            ticker="AAPL",
+            company_name="Apple",
+        )
+        await WatchlistRepository(session).add(legacy_listing.id)
+
+    response = api_client.post(
+        "/watchlist/refresh",
+        json={"as_of": "2026-10-05"},
+        headers={
+            "X-API-Key": "secret",
+            "Idempotency-Key": "daily-refresh-2026-10-05",
+        },
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["as_of"] == "2026-10-05"
+    assert body["total"] == 2
+    assert body["created_runs"] == 1
+    assert body["reused_runs"] == 0
+    assert body["failed"] == 1
+    outcomes = {item["ticker"]: item for item in body["items"]}
+    assert outcomes["600406.SH"]["status"] == "queued"
+    assert outcomes["600406.SH"]["created"] is True
+    assert outcomes["600406.SH"]["run_id"] is not None
+    assert outcomes["AAPL"]["status"] == "failed"
+    assert outcomes["AAPL"]["run_id"] is None
+    assert "only canonical A-share" in outcomes["AAPL"]["error"]
+
+    repeated = api_client.post(
+        "/watchlist/refresh",
+        json={"as_of": "2026-10-05"},
+        headers={
+            "X-API-Key": "secret",
+            "Idempotency-Key": "daily-refresh-2026-10-05",
+        },
+    )
+    assert repeated.status_code == 202
+    repeated_body = repeated.json()
+    assert repeated_body["created_runs"] == 0
+    assert repeated_body["reused_runs"] == 1
+
+    async with session_scope() as session:
+        runs = list(
+            (
+                await session.execute(
+                    select(PipelineRun).where(PipelineRun.kind == "ifind_research")
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(runs) == 1
+        assert runs[0].listing_id == a_share_listing_id
+        assert runs[0].request_json["ticker"] == "600406.SH"
+
+
+def test_batch_refresh_skips_disabled_items(api_client, monkeypatch):
+    monkeypatch.setenv("IFIND_PROXY_API_KEY", "ifind-test-key")
+    added = api_client.post(
+        "/watchlist",
+        json={
+            "ticker": "600406.SH",
+            "name": "国电南瑞",
+            "industry": "电力设备",
+            "report_year": 2025,
+            "enabled": False,
+        },
+        headers={"X-API-Key": "secret"},
+    )
+    assert added.status_code == 201
+    assert added.json()["enabled"] is False
+
+    response = api_client.post(
+        "/watchlist/refresh",
+        json={"as_of": "2026-10-05"},
+        headers={"X-API-Key": "secret"},
+    )
+    assert response.status_code == 202
+    assert response.json() == {
+        "as_of": "2026-10-05",
+        "total": 0,
+        "created_runs": 0,
+        "reused_runs": 0,
+        "failed": 0,
+        "items": [],
+    }

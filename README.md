@@ -104,7 +104,7 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/listings/{ticker}` | GET, GET `/scores`, GET/POST `/relationships` | Listing inspection |
 | `/strategies` | GET `/`, GET `/{code}` | Strategy catalog |
 | `/universes` | GET `/` | Universe catalog |
-| `/watchlist` | GET, POST, DELETE `/{listing_id}` | Durable watchlist with A-share research metadata |
+| `/watchlist` | GET, POST, POST `/refresh`, DELETE `/{listing_id}` | Durable A-share watchlist and isolated batch refresh |
 | `/research/single-stock` | POST | Queue an A-share research run and return HTTP 202 + `run_id` |
 | `/research/runs` | GET | Paginated research-run list with optional status filter |
 | `/research/runs/{id}` | GET | Lifecycle detail plus optional versioned result |
@@ -120,6 +120,20 @@ curl -X POST http://localhost:8000/watchlist \
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"ticker":"600406.SH","name":"国电南瑞","industry":"电力设备","provider":"ifind","report_year":2025}'
+```
+
+Queue every enabled watchlist item as its own durable research run. Reusing an
+`Idempotency-Key` replays the same per-item runs instead of creating duplicates;
+invalid items are reported and marked failed without blocking valid symbols.
+
+```bash
+curl -X POST http://localhost:8000/watchlist/refresh \
+  -H "X-API-Key: $API_KEY" \
+  -H "Idempotency-Key: daily-$(date +%F)" \
+  -H "Content-Type: application/json" \
+  -d '{"as_of":"2026-10-05"}'
+
+ia worker start
 ```
 
 ## Configuration
