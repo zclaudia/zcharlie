@@ -5,12 +5,15 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import httpx
 import structlog
 from pydantic import BaseModel, Field
 
 from investment_agent.config import Settings
+from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.research.change_notification import render_change_notification
 from investment_agent.research.ifind_chain import (
     ResearchChainResult,
     ResearchPartialError,
@@ -18,6 +21,10 @@ from investment_agent.research.ifind_chain import (
 )
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.research_change import ResearchChangeRepository
+from investment_agent.storage.repositories.research_snapshot import (
+    ResearchSnapshotRepository,
+)
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
 log = structlog.get_logger(__name__)
@@ -159,6 +166,17 @@ class ResearchWorker:
         finally:
             if listing_id is not None:
                 await _sync_watchlist_refresh(run_id=run_id, listing_id=listing_id)
+                try:
+                    await _notify_meaningful_change(
+                        settings=self.settings,
+                        run_id=run_id,
+                    )
+                except Exception:
+                    log.exception(
+                        "research.worker.notification_failed",
+                        run_id=run_id,
+                        worker_id=self.worker_id,
+                    )
         return run_id
 
 
@@ -189,6 +207,57 @@ def _is_transient_error(exc: Exception) -> bool:
             OSError,
         ),
     )
+
+
+async def _notify_meaningful_change(*, settings: Settings, run_id: int) -> str | None:
+    async with session_scope() as session:
+        change_set = await ResearchChangeRepository(session).by_run(run_id)
+        snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
+        if (
+            change_set is None
+            or snapshot is None
+            or not change_set.has_meaningful_changes
+        ):
+            return None
+        if change_set.notification_path is not None:
+            existing = _existing_notification(change_set.notification_path)
+            if existing is not None:
+                return str(existing)
+        diff = change_set.diff_json
+        previous_run_id = diff.get("previous_run_id")
+        previous_id = previous_run_id if isinstance(previous_run_id, int) else None
+        ticker = f"{snapshot.symbol}.{snapshot.market}"
+        company_name = snapshot.company_name
+        notification_date = snapshot.as_of.isoformat()
+
+    content = render_change_notification(
+        ticker=ticker,
+        company_name=company_name,
+        current_run_id=run_id,
+        previous_run_id=previous_id,
+        diff=diff,
+    )
+    result = await FileNotifier(settings.data_dir / "notifications").send(
+        content,
+        channel_metadata={
+            "kind": "research_change",
+            "run_id": run_id,
+            "date": notification_date,
+        },
+    )
+    if not result.success or result.target is None:
+        raise RuntimeError(result.error or "research change notification failed")
+    async with session_scope() as session:
+        await ResearchChangeRepository(session).mark_notified(
+            run_id,
+            path=result.target,
+        )
+    return result.target
+
+
+def _existing_notification(raw_path: str) -> Path | None:
+    path = Path(raw_path)
+    return path if path.is_file() else None
 
 
 async def run_worker(

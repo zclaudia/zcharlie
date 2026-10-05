@@ -89,7 +89,7 @@ async def get_research_run(run_id: int) -> ResearchRunDetail:
             request=run.request_json,
             result=result,
             change=(
-                ResearchChangeSetOut.model_validate(change_set.diff_json)
+                _to_change_out(change_set, run_id=run_id)
                 if change_set is not None
                 else None
             ),
@@ -108,7 +108,27 @@ async def get_research_changes(run_id: int) -> ResearchChangeSetOut:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Research changes for run {run_id} not found",
             )
-        return ResearchChangeSetOut.model_validate(change_set.diff_json)
+        return _to_change_out(change_set, run_id=run_id)
+
+
+@router.get("/runs/{run_id}/change-notification")
+async def download_change_notification(
+    run_id: int,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> FileResponse:
+    async with session_scope() as session:
+        change_set = await ResearchChangeRepository(session).by_run(run_id)
+        if change_set is None or change_set.notification_path is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Research change notification for run {run_id} not found",
+            )
+        path = _resolve_notification_path(
+            settings=settings,
+            run_id=run_id,
+            raw_path=change_set.notification_path,
+        )
+        return FileResponse(path, filename=path.name)
 
 
 @router.get(
@@ -264,6 +284,37 @@ def _to_result(snapshot: ResearchSnapshot) -> ResearchRunResult:
         explanation=snapshot.explanation_json,
         artifacts=_artifact_outputs(snapshot.pipeline_run_id, snapshot.artifact_manifest),
     )
+
+
+def _to_change_out(
+    change_set: ResearchChangeSet,
+    *,
+    run_id: int,
+) -> ResearchChangeSetOut:
+    value = ResearchChangeSetOut.model_validate(change_set.diff_json)
+    if change_set.notification_path is None:
+        return value
+    return value.model_copy(
+        update={
+            "notification_url": f"/research/runs/{run_id}/change-notification"
+        }
+    )
+
+
+def _resolve_notification_path(
+    *,
+    settings: Settings,
+    run_id: int,
+    raw_path: str,
+) -> Path:
+    allowed_root = (settings.data_dir / "notifications").resolve()
+    path = Path(raw_path).resolve()
+    if not path.is_relative_to(allowed_root) or not path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Research change notification for run {run_id} is unavailable",
+        )
+    return path
 
 
 def _artifact_outputs(

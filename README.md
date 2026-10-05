@@ -109,6 +109,7 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/research/runs` | GET | Paginated research-run list with optional status filter |
 | `/research/runs/{id}` | GET | Lifecycle detail, versioned result, and structured change set |
 | `/research/runs/{id}/changes` | GET | Score, strategy, financial-metric, and quality diff from the prior snapshot |
+| `/research/runs/{id}/change-notification` | GET | Download a meaningful-change notification when one was emitted |
 | `/research/runs/{id}/artifacts` | GET | List and download audited run artifacts |
 | `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
 
@@ -143,6 +144,10 @@ fails closed when a year has not been reviewed. Its 2026 exceptions come from th
 [Shanghai Stock Exchange holiday notice](https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml).
 Transient proxy/network failures are retried with bounded exponential backoff;
 invalid inputs and partial deterministic results are not retried.
+When a watchlist refresh produces a meaningful structured change, the worker writes
+one idempotent Markdown notification under `data/notifications/YYYY-MM-DD/` and
+exposes its download URL in the run's `change` object. Baselines, unchanged runs,
+and sub-threshold numeric noise remain silent.
 
 ## Configuration
 

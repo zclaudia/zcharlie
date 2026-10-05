@@ -1,6 +1,8 @@
 import asyncio
 from datetime import date
 
+from investment_agent.config import Settings
+from investment_agent.research.worker import _notify_meaningful_change
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from investment_agent.storage.repositories.research_snapshot import (
@@ -187,7 +189,7 @@ def test_get_partial_research_run_returns_deterministic_result(api_client):
     assert body["result"]["artifacts"] == []
 
 
-def test_research_run_exposes_diff_from_previous_snapshot(api_client):
+def test_research_run_exposes_diff_from_previous_snapshot(api_client, tmp_path):
     async def seed() -> tuple[int, int]:
         async with session_scope() as session:
             runs = PipelineRunRepository(session)
@@ -243,6 +245,26 @@ def test_research_run_exposes_diff_from_previous_snapshot(api_client):
             return first.id, second.id
 
     first_run_id, second_run_id = asyncio.run(seed())
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="secret",
+        llm_tier2_api_key="x",
+        llm_tier3_api_key="x",
+        data_dir=tmp_path,
+    )
+    assert (
+        asyncio.run(
+            _notify_meaningful_change(settings=settings, run_id=first_run_id)
+        )
+        is None
+    )
+    notification_path = asyncio.run(
+        _notify_meaningful_change(settings=settings, run_id=second_run_id)
+    )
+    assert notification_path is not None
+    assert asyncio.run(
+        _notify_meaningful_change(settings=settings, run_id=second_run_id)
+    ) == notification_path
     response = api_client.get(
         f"/research/runs/{second_run_id}",
         headers={"X-API-Key": "secret"},
@@ -254,6 +276,9 @@ def test_research_run_exposes_diff_from_previous_snapshot(api_client):
     assert change["previous_run_id"] == first_run_id
     assert change["current_run_id"] == second_run_id
     assert change["has_meaningful_changes"] is True
+    assert change["notification_url"] == (
+        f"/research/runs/{second_run_id}/change-notification"
+    )
     assert change["category_counts"] == {
         "score": 1,
         "strategy": 2,
@@ -280,6 +305,15 @@ def test_research_run_exposes_diff_from_previous_snapshot(api_client):
     assert summaries[first_run_id]["meaningful_change_count"] == 0
     assert summaries[second_run_id]["has_meaningful_changes"] is True
     assert summaries[second_run_id]["meaningful_change_count"] == 6
+
+    notification = api_client.get(
+        change["notification_url"],
+        headers={"X-API-Key": "secret"},
+    )
+    assert notification.status_code == 200
+    assert "研究变化提醒：600406.SH 国电南瑞" in notification.text
+    assert "重要变化：6 项" in notification.text
+    assert "不构成投资建议或交易信号" in notification.text
 
 
 def test_research_enqueues_auditable_run(api_client, monkeypatch):

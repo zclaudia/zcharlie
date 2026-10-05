@@ -160,6 +160,10 @@ class ResearchChangeSet(Base, TimestampMixin):
     change_count: Mapped[int] = mapped_column(nullable=False)
     meaningful_change_count: Mapped[int] = mapped_column(nullable=False)
     diff_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    notification_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    notified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class AttributionReport(Base, TimestampMixin):

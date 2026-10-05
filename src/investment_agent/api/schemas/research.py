@@ -77,6 +77,7 @@ class ResearchChangeSetOut(BaseModel):
     meaningful_change_count: int
     category_counts: dict[str, int]
     changes: list[dict[str, object]]
+    notification_url: str | None = None
 
 
 class ResearchRunDetail(ResearchRunSummary):
