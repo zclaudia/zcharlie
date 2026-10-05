@@ -294,22 +294,15 @@ def _quote_timestamp(history_rows: list[dict[str, str]], fallback: str) -> str:
     return local_close.astimezone(UTC).isoformat()
 
 
-async def fetch_canonical_bundle(
-    client: IfindProxyClient,
+def plan_ifind_requests(
     *,
     ticker: str,
-    industry: str,
     report_year: int,
     as_of: date,
-) -> CanonicalBundle:
-    """Fetch one stock and normalize it to the canonical provider contract."""
+) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Plan the proxy requests required for one canonical research bundle."""
 
-    match = _TICKER_PATTERN.fullmatch(ticker.upper())
-    if match is None:
-        raise ValueError("ticker must look like 600406.SH, 000001.SZ, or 430047.BJ")
-    ticker = ticker.upper()
-    symbol = match.group("symbol")
-    market_code = match.group("market")
+    ticker = _validate_ticker(ticker)
     latest_report = f"{report_year}1231"
     base_report = f"{report_year - 3}1231"
     history_start = as_of - timedelta(days=400)
@@ -351,11 +344,35 @@ async def fetch_canonical_bundle(
             "/financial/index",
             {"ticker": ticker, "report_date": f"{year}1231", "category": "profitability"},
         )
+    return requests
 
-    names = list(requests)
-    results_list = await asyncio.gather(*(client.post_rows(*requests[name]) for name in names))
-    results = dict(zip(names, results_list, strict=True))
-    retrieved_at = datetime.now(UTC).isoformat()
+
+def _validate_ticker(ticker: str) -> str:
+    if _TICKER_PATTERN.fullmatch(ticker.upper()) is None:
+        raise ValueError("ticker must look like 600406.SH, 000001.SZ, or 430047.BJ")
+    return ticker.upper()
+
+
+def canonicalize_ifind_results(
+    *,
+    ticker: str,
+    industry: str,
+    report_year: int,
+    results: dict[str, IfindProxyResult],
+    retrieved_at: str,
+) -> CanonicalBundle:
+    """Normalize one ticker's decoded proxy responses to the canonical contract.
+
+    Pure and offline: the caller supplies already-decoded ``IfindProxyResult``
+    objects plus the retrieval timestamp, so saved provider fixtures can be
+    replayed to byte-identical canonical data without network access.
+    """
+
+    ticker = _validate_ticker(ticker)
+    match = _TICKER_PATTERN.fullmatch(ticker)
+    assert match is not None
+    symbol = match.group("symbol")
+    market_code = match.group("market")
 
     info = _first_row(results["info"], "stock info")
     history_rows = results["history"].rows
@@ -662,6 +679,29 @@ async def fetch_canonical_bundle(
     )
 
 
+async def fetch_canonical_bundle(
+    client: IfindProxyClient,
+    *,
+    ticker: str,
+    industry: str,
+    report_year: int,
+    as_of: date,
+) -> CanonicalBundle:
+    """Fetch one stock through the proxy and normalize it to canonical data."""
+
+    requests = plan_ifind_requests(ticker=ticker, report_year=report_year, as_of=as_of)
+    names = list(requests)
+    results_list = await asyncio.gather(*(client.post_rows(*requests[name]) for name in names))
+    results = dict(zip(names, results_list, strict=True))
+    return canonicalize_ifind_results(
+        ticker=ticker,
+        industry=industry,
+        report_year=report_year,
+        results=results,
+        retrieved_at=datetime.now(UTC).isoformat(),
+    )
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -703,6 +743,30 @@ def validate_explanation_fields(
         raise ValueError(f"Agent cited unknown canonical fields: {', '.join(invalid)}")
 
 
+def validate_explanation_policy(
+    explanation: ResearchExplanation,
+    score_item: dict[str, Any],
+) -> None:
+    """Enforce the explanation contract: citations resolve and labels hold.
+
+    The explanation agent may only cite canonical score fields that exist,
+    and when the deterministic kernel flagged ``needs_agent_review`` the
+    workflow conclusion must keep the ``needs_review`` label. Trading
+    instructions are impossible by schema: ``ResearchExplanation`` has no
+    order, position or return-promise fields.
+    """
+
+    validate_explanation_fields(explanation, score_item)
+    if score_item.get("needs_agent_review") and "needs_review" not in explanation.workflow_conclusion:
+        raise ValueError("Explanation did not preserve the required needs_review workflow label")
+
+
+EXPLANATION_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的解释 Agent。只解释输入 JSON 中已经生成的事实与分数，不能补充外部事实，不能给出买入、卖出、仓位或收益承诺。
+每条 classification_rationale、positive_evidence、negative_evidence、risk_factors、data_quality_notes 都必须给出 supporting_fields，并使用输入 JSON 中真实存在的点路径，例如 business_score、key_metrics.roe、factor_scores.growth_durability、missing_fields。
+如果 needs_agent_review 为 true，workflow_conclusion 必须是包含“needs_review”的字符串，并优先解释 missing_fields、quality_flags、freshness 和 warnings。输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要省略字段：
+{output_schema}"""
+
+
 async def _explain_score(
     *,
     settings: Settings,
@@ -714,10 +778,7 @@ async def _explain_score(
         ensure_ascii=False,
         sort_keys=True,
     )
-    system_prompt = f"""你是个人投研系统中的解释 Agent。只解释输入 JSON 中已经生成的事实与分数，不能补充外部事实，不能给出买入、卖出、仓位或收益承诺。
-每条 classification_rationale、positive_evidence、negative_evidence、risk_factors、data_quality_notes 都必须给出 supporting_fields，并使用输入 JSON 中真实存在的点路径，例如 business_score、key_metrics.roe、factor_scores.growth_durability、missing_fields。
-如果 needs_agent_review 为 true，workflow_conclusion 必须是包含“needs_review”的字符串，并优先解释 missing_fields、quality_flags、freshness 和 warnings。输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要省略字段：
-{output_schema}"""
+    system_prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE.format(output_schema=output_schema)
     async with session_scope() as session:
         client = OpenAICompatibleClient(
             tier_name="tier3",
@@ -734,12 +795,7 @@ async def _explain_score(
     explanation = result.output
     if not isinstance(explanation, ResearchExplanation):
         raise ValueError("Explanation agent did not return ResearchExplanation")
-    validate_explanation_fields(explanation, score_item)
-    if (
-        score_item.get("needs_agent_review")
-        and "needs_review" not in explanation.workflow_conclusion
-    ):
-        raise ValueError("Explanation did not preserve the required needs_review workflow label")
+    validate_explanation_policy(explanation, score_item)
     return explanation
 
 
