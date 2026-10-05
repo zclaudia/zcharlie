@@ -1,232 +1,126 @@
-# Investment Agent
+# zcharlie — 个人 A 股研究台
 
-Personal multi-strategy stock analysis system: daily Discovery (NASDAQ-100 multi-strategy screening) + on-demand Attribution (why did X move?). Phase A — analysis only, no trading.
+单用户、研究辅助型的个人投资研究系统：持续收集自选 A 股的证据、计算可复现的
+确定性评分、发现"上次以来的变化"，并把 Agent 解释严格限制在已审计字段上。
 
-## Features
+**研究辅助，非投资建议。** 没有下单、模拟盘、自动调仓或任何券商连接路径。
 
-- **3 strategies** out of the box (`value`, `growth`, `risk_aggressive`) — YAML-defined screening rules + Jinja2 prompts, versioned per strategy.
-- **Discovery pipeline** — two-tier LLM scoring (Tier 2 score-all → Tier 3 deep-analyze top N) over a universe, with per-strategy thresholds.
-- **Attribution pipeline** — explains a single ticker's recent move via β-adjusted excess return + structured LLM reasoning over fundamentals, news, and tracked auxiliary assets.
-- **Auxiliary tracking** — automatic discovery + manual curation of related tickers/indices/commodities used to enrich Attribution context.
-- **Markdown reports** — every Discovery and Attribution run archives a human-readable `.md` to `data/reports/YYYY-MM-DD/`.
-- **Dual entry points** — full-featured Typer CLI (`ia ...`) and FastAPI HTTP service (Swagger at `/docs`), backed by APScheduler for unattended daily Discovery.
-- **One-command Docker deploy** — `docker compose up -d` brings up API + scheduler; SQLite + alembic-managed schema.
+- 数据链路：`ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.2) → Agent 解释 → 持久化`
+- 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
+- 持久化：SQLite + Alembic（迁移 `012`）；制品目录 `data/research-runs/<run_id>/`
+- 界面：同源 Web UI（`/app`，会话 Cookie 登录）+ CLI + HTTP API
 
-## Quick start (Mac dev)
+## 快速开始（空环境到第一次研究）
 
 ```bash
-# 1. Clone + install
-git clone <repo> && cd zcharlie
+# 1. 安装（Python 3.13）
 python3.13 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-# 2. Configure
+# 2. 配置
 cp .env.example .env
-# Edit .env: set API_KEY (any random string) + real LLM_TIER2_API_KEY + LLM_TIER3_API_KEY
+# 编辑 .env：API_KEY、IFIND_PROXY_URL/IFIND_PROXY_API_KEY（数据网关）、
+# LLM_TIER3_*（解释模型，任何 OpenAI 兼容端点均可）
 
-# 3. Initialize DB + data
+# 3. 建库（alembic 迁移，尊重 DATABASE_URL）
 ia migrate up
-ia data seed                            # seed markets + universe
-ia data backfill --universe NASDAQ_100  # pull 30d prices + fundamentals
-ia data backfill --tickers SPY,QQQ      # benchmark for Attribution
-ia strategy sync                        # load 3 strategies from strategies/*.yaml
 
-# 4. Run a Discovery
-ia pipeline discover --universe NASDAQ_100
-cat data/reports/$(date +%Y-%m-%d)/discovery_*.md
+# 4. 三个进程：API、worker、scheduler
+ia api serve          # 默认 127.0.0.1:8000；远程/Docker 需显式 --host 0.0.0.0
+ia worker start       # 研究执行器；调试可用 ia worker start --once
+ia scheduler start    # A 股日终自选股刷新（Asia/Shanghai，版本化交易日历）
 
-# 5. Run an Attribution
-ia attribute run AAPL
-cat data/reports/$(date +%Y-%m-%d)/attribution_AAPL_*.md
+# 5. 打开 Web UI 登录
+open http://127.0.0.1:8000/app
+# 用 .env 里的 API_KEY 登录；密钥只用于服务端验证，不写入 Cookie。
 ```
 
-## Daily workflow
+Web 内即可完成日常闭环：添加自选股（代码 + 行业 + 报告年度）→ 刷新全部 →
+在 `/app/stocks/<ticker>` 阅读确定性评分、因子、指标、数据质量、缺失字段、
+freshness、Agent 解释（引用可点击定位证据）与"自上次以来的变化"。
+运行中心 `/app/runs` 展示 queued/running/success/partial/failed、阶段、
+重试、错误摘要与受控制品下载。
 
-The APScheduler container triggers Discovery on the configured cron (default `30 16 * * 1-5` America/New_York — 30 min after US close). Each run produces a Markdown report archived under `data/reports/YYYY-MM-DD/` for operator review. Attribution is on-demand: invoke via `ia attribute run <TICKER>` or `POST /attribute/{ticker}` whenever a name needs explaining.
+## CLI
 
-## CLI reference
-
-All CLI verbs live under the `ia` entry point, grouped by domain:
-
-| Group | Commands | Purpose |
+| 组 | 命令 | 用途 |
 |---|---|---|
-| `ia data` | `seed`, `backfill` | yfinance ingestion |
-| `ia strategy` | `list`, `show`, `sync` | Strategy YAML management |
-| `ia pipeline` | `discover`, `list`, `show` | Discovery pipeline |
-| `ia attribute` | `run`, `show` | Attribution pipeline |
-| `ia research` | `ifind` | iFinD → canonical data → deterministic score → cited Agent report |
-| `ia auxiliary` | `list`, `add`, `remove`, `refresh` | Auxiliary tracking |
-| `ia admin` | `cost` | LLM monthly cost |
-| `ia api` | `serve` | FastAPI server |
-| `ia scheduler` | `start` | APScheduler |
-| `ia migrate` | `up`, `down`, `current`, `history` | alembic wrapper |
+| `ia migrate` | `up/down/current/history` | alembic 迁移（尊重 `DATABASE_URL`） |
+| `ia api` | `serve` | FastAPI 服务 |
+| `ia worker` | `start [--once]` | 研究队列 worker |
+| `ia scheduler` | `start` | 日终刷新调度 |
+| `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
+| `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
 
-Use `ia <group> --help` to see options.
+## HTTP API（`X-API-Key` 或 Web 会话）
 
-### iFinD vertical-slice validation
-
-The `research ifind` command validates the evidence-first A-share path against a
-running `ifind-proxy`. It persists raw and canonical inputs, invokes the
-repository-owned deterministic research kernel, records the run and LLM call in the
-application database, and writes an Agent explanation whose claims cite canonical
-score fields.
-
-```bash
-export IFIND_PROXY_API_KEY=replace_with_proxy_key
-ia research ifind 600406.SH \
-  --industry 电力设备 \
-  --report-year 2025 \
-  --explanation-model deepseek-flash
-```
-
-Artifacts are written under `data/research-runs/<run_id>/`. This validation path
-does not place trades and does not turn LLM output into numeric scores.
-
-The accepted product and engineering boundaries are documented in
-[`docs/product/engineering-baseline.md`](docs/product/engineering-baseline.md), with
-the MVP-to-final delivery sequence in
-[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md) and the
-session-ready MVP closeout plan in
-[`docs/product/mvp-completion-plan.md`](docs/product/mvp-completion-plan.md).
-
-## HTTP API
-
-The API exposes the same operations as the CLI, plus read-only access for future Web/Mobile clients. All endpoints require header `X-API-Key: <your-api-key>` except `/healthz`.
-
-Launch: `ia api serve` (default port 8000). Then visit:
-- http://localhost:8000/docs — Swagger UI (auto-generated OpenAPI)
-- http://localhost:8000/redoc — ReDoc UI
-
-| Endpoint Group | Methods | Purpose |
-|---|---|---|
-| `/healthz` | GET | Liveness probe (no auth) |
-| `/pipelines` | POST `/discovery/run`, GET `/`, GET `/{id}`, GET `/{id}/scores` | Discovery |
-| `/attribute/{ticker}` | POST, GET `/latest`, GET `/runs/{id}` | Attribution |
-| `/reports` | GET `/discovery`, GET `/discovery/{date}`, GET `/attribution` | Archived reports |
-| `/listings/{ticker}` | GET, GET `/scores`, GET/POST `/relationships` | Listing inspection |
-| `/strategies` | GET `/`, GET `/{code}` | Strategy catalog |
-| `/universes` | GET `/` | Universe catalog |
-| `/watchlist` | GET, POST, POST `/refresh`, DELETE `/{listing_id}` | Durable A-share watchlist and isolated batch refresh |
-| `/research/single-stock` | POST | Queue an A-share research run and return HTTP 202 + `run_id` |
-| `/research/runs` | GET | Paginated research-run list with optional status filter |
-| `/research/runs/{id}` | GET | Lifecycle detail, versioned result, and structured change set |
-| `/research/runs/{id}/changes` | GET | Score, strategy, financial-metric, and quality diff from the prior snapshot |
-| `/research/runs/{id}/change-notification` | GET | Download a meaningful-change notification when one was emitted |
-| `/research/runs/{id}/artifacts` | GET | List and download audited run artifacts |
-| `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
-
-Add an A-share directly with its exchange suffix. If a prior research snapshot
-exists, `name`, `industry`, and `report_year` are inferred from the latest snapshot.
-Otherwise, `name` and `industry` are required when the listing is first created.
-
-```bash
-curl -X POST http://localhost:8000/watchlist \
-  -H "X-API-Key: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"ticker":"600406.SH","name":"国电南瑞","industry":"电力设备","provider":"ifind","report_year":2025}'
-```
-
-Queue every enabled watchlist item as its own durable research run. Reusing an
-`Idempotency-Key` replays the same per-item runs instead of creating duplicates;
-invalid items are reported and marked failed without blocking valid symbols.
-
-```bash
-curl -X POST http://localhost:8000/watchlist/refresh \
-  -H "X-API-Key: $API_KEY" \
-  -H "Idempotency-Key: daily-$(date +%F)" \
-  -H "Content-Type: application/json" \
-  -d '{"as_of":"2026-10-05"}'
-
-ia worker start
-```
-
-The scheduler queues this batch at 15:30 Asia/Shanghai on reviewed A-share
-trading days. The versioned calendar lives in `config/calendars/a_share.yaml` and
-fails closed when a year has not been reviewed. Its 2026 exceptions come from the
-[Shanghai Stock Exchange holiday notice](https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml).
-Transient proxy/network failures are retried with bounded exponential backoff;
-invalid inputs and partial deterministic results are not retried.
-When a watchlist refresh produces a meaningful structured change, the worker writes
-one idempotent Markdown notification under `data/notifications/YYYY-MM-DD/` and
-exposes its download URL in the run's `change` object. Baselines, unchanged runs,
-and sub-threshold numeric noise remain silent.
-
-## Configuration
-
-### `.env` — secrets and runtime
-
-| Variable | Purpose |
+| 端点 | 用途 |
 |---|---|
-| `API_KEY` | Shared secret for HTTP `X-API-Key` header |
-| `DATABASE_URL` | SQLAlchemy async URL, default `sqlite+aiosqlite:///./data/app.db` |
-| `LLM_TIER2_BASE_URL` / `LLM_TIER2_API_KEY` / `LLM_TIER2_MODEL` | Mid-tier model for scoring (e.g. DeepSeek) |
-| `LLM_TIER3_BASE_URL` / `LLM_TIER3_API_KEY` / `LLM_TIER3_MODEL` | Top-tier model for deep analysis (e.g. GPT-5) |
-| `YFINANCE_MAX_CONCURRENT` | Cap on concurrent yfinance fetches |
-| `LLM_MAX_CONCURRENT` | Cap on concurrent LLM calls |
-| `DATA_DIR` | Root for `app.db` and `data/reports/` |
-| `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` |
-| `IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY` | Standalone iFinD data gateway |
+| `GET /healthz` | 存活探针（无鉴权） |
+| `POST /research/single-stock` | 入队单股研究（HTTP 202 + `run_id`，幂等键） |
+| `GET /research/runs`、`/research/runs/{id}` | 运行列表 / 生命周期详情 + 版本化结果 |
+| `GET /research/runs/{id}/changes`、`/change-notification` | 结构化 diff / 重要变化通知下载 |
+| `GET /research/runs/{id}/artifacts[/{name}]` | 受控制品下载（限本 run 目录内） |
+| `GET /research/stocks/{ticker}/history` | 分页快照历史 |
+| `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化） |
+| `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
+| 其余 `/pipelines`、`/attribute` 等 | legacy（见下节） |
 
-Run the durable research worker separately with `ia worker start`. For local smoke
-tests, `ia worker start --once` recovers stale work and processes at most one job.
-If deterministic scoring succeeds but the explanation model fails, the run is
-`partial`: `/research/runs/{id}` still returns the score and deterministic artifacts
-with `explanation: null` for explicit review.
+批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
+只有 meaningful change 才生成一次 Markdown 通知，baseline 与噪声保持静默。
 
-### `config/app.yaml` — universes, strategies, pipeline, scheduler
+## 配置
 
-```yaml
-universes:
-  - code: NASDAQ_100
-    refresh_membership_freq: weekly
-enabled_strategies: [value, growth, risk_aggressive]
-pipeline:
-  tier2_score_threshold: 40
-  tier3_top_n: 10
-  deep_analysis_cache_days: 90
-scheduler:
-  discovery_cron: "30 16 * * 1-5"
-  discovery_timezone: America/New_York
-auxiliary_tracking:
-  strength_threshold: 0.5
-  max_per_company: 5
-  total_cap_multiplier: 2
-```
+`.env`：`API_KEY`、`DATABASE_URL`（默认 `sqlite+aiosqlite:///./data/app.db`）、
+`DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
+`LLM_TIER2_*` / `LLM_TIER3_*`、`WEB_SESSION_TTL_MINUTES`（默认 720）、
+`LOG_LEVEL`。调度与 pipeline 见 `config/app.yaml`；交易日历见
+`config/calendars/a_share.yaml`（未知年份 fail-closed）。
 
-### `strategies/*.yaml` — per-strategy config
+评分成功但解释失败时运行以 `partial` 收尾：确定性分数与制品保留，
+`explanation` 为 `null` 并注明原因，不重试非瞬时错误。
 
-One file per strategy: ScreeningRule + prompt path + version. See existing `value.yaml`, `growth.yaml`, `risk_aggressive.yaml`. Run `ia strategy sync` after editing to upsert into the DB.
+## 备份与恢复
 
-### `prompts/` — Jinja2 templates
+见 [`docs/product/backup-and-recovery.md`](docs/product/backup-and-recovery.md)：
+`tools/backup_research.py` 生成一致备份与 SHA-256 manifest，
+`tools/verify_backup.py` 校验，恢复演练已自动化为集成测试。
 
-- `prompts/strategies/<code>/scoring.j2` — Tier 2 scoring prompt
-- `prompts/strategies/<code>/deep.j2` — Tier 3 deep analysis prompt
-- `prompts/attribution/attribution.j2` — Attribution reasoning prompt
-
-## Docker deployment
+## 测试与门禁
 
 ```bash
-docker compose build
-docker compose up -d
-# API at http://localhost:8000 ; healthcheck via /healthz
-# Scheduler runs in its own container; logs:
-docker compose logs -f scheduler
+pytest -q                  # 388 个测试（离线，fixture 全部脱敏）
+ruff check .
+mypy src/investment_agent  # strict
 ```
 
-Data persists in `./data` (mounted volume) — SQLite DB plus `data/reports/` archive.
+CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认测试不访问
+网络、不使用真实 secrets。golden corpus（13 只不同特征 A 股）离线重放，
+任何算法变化必须升级 scoring version 并附差异说明，不允许静默改 golden。
 
-## Testing & linting
+## 已知限制
 
-```bash
-pytest -q                          # 171+ tests
-ruff check .                       # lint
-mypy src/investment_agent          # strict type-check
-```
+- 严格单用户；无组织、权限组或订阅体系。
+- SQLite 单机存储；并发写入成为瓶颈时才评估 PostgreSQL。
+- 数据源仅有 iFinD（经 ifind-proxy）；无第二数据源容灾。
+- 交易日历仅审核到 2026 年；未审核年份 fail-closed。
+- 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
+  以沪深小盘替代并记录在
+  [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。
+- 无任何交易执行路径；未来若考虑自动交易必须作为独立项目重新评审。
 
-## Architecture
+## Legacy：NASDAQ Discovery / Attribution（冻结维护）
 
-Layered: ingestion (yfinance) → SQLAlchemy/alembic schema → Pydantic-AI agents (Tier 2 scoring, Tier 3 deep, Attribution) → pipeline orchestrators → Typer CLI + FastAPI + APScheduler. Async-first with bounded concurrency. See `docs/superpowers/specs/2026-06-07-investment-agent-design.md` for the design doc and `docs/superpowers/plans/` for the per-phase implementation plans (A: foundation, B: Discovery, C: Attribution, D: API/Scheduler/Docker).
+系统早期面向 NASDAQ-100 的多策略 Discovery（Tier2 全量打分 → Tier3 深度分析）
+与单票 Attribution（β 分解 + LLM 叙述）保留为 legacy：`ia pipeline discover`、
+`ia attribute run <TICKER>`、`ia auxiliary ...` 及对应 HTTP 端点仍可用，
+但不扩展、不阻塞 A 股 MVP。相关文档见
+`docs/superpowers/specs/2026-06-07-investment-agent-design.md`。
 
-## Status
+## 文档
 
-V1 (2026-06-08): analysis-only Phase A. No trading execution. NASDAQ-100 single universe; future V1.5+ adds HSI, Telegram notifier, Web UI.
+- 产品与工程基线：[`docs/product/engineering-baseline.md`](docs/product/engineering-baseline.md)
+- 交付路线：[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md)
+- MVP 收口计划：[`docs/product/mvp-completion-plan.md`](docs/product/mvp-completion-plan.md)
+- 发布清单：[`docs/product/mvp-release-checklist.md`](docs/product/mvp-release-checklist.md)
+- 备份恢复：[`docs/product/backup-and-recovery.md`](docs/product/backup-and-recovery.md)
