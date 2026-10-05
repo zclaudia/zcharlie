@@ -1,9 +1,18 @@
+from datetime import date
+
+from investment_agent.config import Settings
 from investment_agent.research.ifind_chain import (
     EvidenceClaim,
     ResearchExplanation,
     _return_stats,
     parse_proxy_rows,
+    run_ifind_research_chain,
     validate_explanation_fields,
+)
+from investment_agent.storage.database import session_scope
+from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.research_snapshot import (
+    ResearchSnapshotRepository,
 )
 
 
@@ -50,3 +59,72 @@ def test_explanation_rejects_unknown_canonical_field():
         assert "key_metrics.not_real" in str(exc)
     else:
         raise AssertionError("unknown field should fail validation")
+
+
+async def test_successful_idempotent_run_replays_persisted_snapshot(
+    db_session,
+    tmp_path,
+):
+    del db_session  # initializes the shared in-memory engine and schema
+    explanation = ResearchExplanation(
+        summary="persisted",
+        classification_rationale=[],
+        positive_evidence=[],
+        negative_evidence=[],
+        risk_factors=[],
+        data_quality_notes=[],
+        open_questions=[],
+        workflow_conclusion="needs_review",
+    )
+    report_path = tmp_path / "existing" / "agent_report.md"
+    report_path.parent.mkdir()
+    report_path.write_text("fixture", encoding="utf-8")
+    async with session_scope() as session:
+        run_repository = PipelineRunRepository(session)
+        run, _ = await run_repository.enqueue(
+            kind="ifind_research",
+            idempotency_key="existing-success",
+            triggered_by="api",
+        )
+        await run_repository.mark_running(run.id, stage="fetching")
+        await ResearchSnapshotRepository(session).create(
+            pipeline_run_id=run.id,
+            symbol="600406",
+            market="SH",
+            company_name="国电南瑞",
+            industry="电力设备",
+            as_of=date(2026, 10, 5),
+            report_year=2025,
+            canonical_schema_version="ifind-canonical.v1",
+            scoring_version="v1.2",
+            score_schema_version="v2.0",
+            score_json={"business_score": 55.22},
+            explanation_json=explanation.model_dump(mode="json"),
+            artifact_manifest={"agent_report": str(report_path)},
+        )
+        await run_repository.mark_success(run.id)
+        run_id = run.id
+
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="test",
+        llm_tier2_api_key="test",
+        llm_tier3_api_key="test",
+    )
+    result = await run_ifind_research_chain(
+        settings=settings,
+        proxy_url="http://should-not-be-called.invalid",
+        proxy_api_key="unused",
+        ticker="600406.SH",
+        industry="电力设备",
+        report_year=2025,
+        as_of=date(2026, 10, 5),
+        output_root=tmp_path / "new-runs",
+        triggered_by="api",
+        idempotency_key="existing-success",
+    )
+
+    assert result.run_id == run_id
+    assert result.score["business_score"] == 55.22
+    assert result.explanation.summary == "persisted"
+    assert not (tmp_path / "new-runs").exists()

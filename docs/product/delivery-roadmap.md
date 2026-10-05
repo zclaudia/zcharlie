@@ -54,10 +54,10 @@
 
 任务：
 
-- `[in progress] MVP-201` 已复用 `pipeline_run` 并建立 `research_snapshot`、artifact manifest 和按 run 查询 API；待加入任务队列字段。
-- `MVP-202` 将数据、评分、解释拆成明确阶段并记录状态。
+- `[done] MVP-201` 已复用 `pipeline_run` 并建立 `research_snapshot`、artifact manifest、队列生命周期字段和按 run 查询 API。
+- `[done] MVP-202` 已将数据、评分、解释、持久化拆成明确阶段，并记录 attempt 与 heartbeat。
 - `MVP-203` 实现数据库任务队列和独立 worker。
-- `MVP-204` 增加幂等键，防止同一请求重复运行。
+- `[done] MVP-204` 已在 API 与 CLI 接入幂等键；成功任务直接重放，其他同键状态返回冲突，数据库唯一约束阻止重复运行。
 - `MVP-205` 允许评分成功、解释失败的 `partial` 状态。
 - `MVP-206` 提供 run/list/detail/artifact API。
 

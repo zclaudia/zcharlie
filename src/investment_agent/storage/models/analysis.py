@@ -32,6 +32,9 @@ class Strategy(Base, TimestampMixin):
 
 class PipelineRun(Base, TimestampMixin):
     __tablename__ = "pipeline_run"
+    __table_args__ = (
+        UniqueConstraint("kind", "idempotency_key", name="uq_pipeline_run_idempotency"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     kind: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -49,6 +52,12 @@ class PipelineRun(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 

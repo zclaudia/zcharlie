@@ -4,7 +4,7 @@ from datetime import date
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from investment_agent.api.auth import get_settings, verify_api_key
 from investment_agent.api.schemas.research import (
@@ -13,7 +13,10 @@ from investment_agent.api.schemas.research import (
     SingleStockResearchResponse,
 )
 from investment_agent.config import Settings
-from investment_agent.research.ifind_chain import run_ifind_research_chain
+from investment_agent.research.ifind_chain import (
+    ResearchRunConflictError,
+    run_ifind_research_chain,
+)
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
@@ -59,6 +62,10 @@ async def get_research_snapshot(run_id: int) -> ResearchSnapshotResponse:
 async def research_single_stock(
     body: SingleStockResearchRequest,
     settings: Annotated[Settings, Depends(get_settings)],
+    idempotency_key: Annotated[
+        str | None,
+        Header(alias="Idempotency-Key", max_length=128),
+    ] = None,
 ) -> SingleStockResearchResponse:
     """Run the complete deterministic-score plus cited-explanation vertical slice.
 
@@ -82,7 +89,18 @@ async def research_single_stock(
             report_year=body.report_year,
             as_of=body.as_of or date.today(),
             output_root=settings.data_dir / "research-runs",
+            triggered_by="api",
+            idempotency_key=idempotency_key,
         )
+    except ResearchRunConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "idempotent research run is not replayable",
+                "run_id": exc.run_id,
+                "status": exc.status,
+            },
+        ) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,

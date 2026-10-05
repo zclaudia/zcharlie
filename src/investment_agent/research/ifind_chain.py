@@ -89,6 +89,15 @@ class ResearchChainResult:
     explanation: ResearchExplanation
 
 
+class ResearchRunConflictError(RuntimeError):
+    """Raised when an idempotency key belongs to a non-replayable run."""
+
+    def __init__(self, *, run_id: int, status: str):
+        self.run_id = run_id
+        self.status = status
+        super().__init__(f"research run {run_id} already exists with status={status}")
+
+
 class IfindProxyClient:
     """Small async client that unwraps the proxy's nested ``data_preview`` CSV."""
 
@@ -779,19 +788,51 @@ async def run_ifind_research_chain(
     as_of: date,
     output_root: Path,
     kernel: DeterministicResearchKernel | None = None,
+    triggered_by: str = "cli",
+    idempotency_key: str | None = None,
 ) -> ResearchChainResult:
     """Run and persist the complete iFinD -> score -> explanation vertical slice."""
 
     async with session_scope() as session:
-        run = await PipelineRunRepository(session).create(
-            kind="ifind_research",
-            triggered_by="cli",
-        )
+        run_repository = PipelineRunRepository(session)
+        snapshot_repository = ResearchSnapshotRepository(session)
+        if idempotency_key:
+            run, created = await run_repository.enqueue(
+                kind="ifind_research",
+                idempotency_key=idempotency_key,
+                triggered_by=triggered_by,
+            )
+            if not created:
+                snapshot = await snapshot_repository.by_run(run.id)
+                if run.status == "success" and snapshot is not None:
+                    explanation = ResearchExplanation.model_validate(
+                        snapshot.explanation_json
+                    )
+                    agent_report = snapshot.artifact_manifest.get("agent_report")
+                    if not isinstance(agent_report, str):
+                        raise ValueError(
+                            f"research snapshot {snapshot.id} has no agent_report artifact"
+                        )
+                    return ResearchChainResult(
+                        run_id=run.id,
+                        artifact_dir=Path(agent_report).parent,
+                        score=snapshot.score_json,
+                        explanation=explanation,
+                    )
+                raise ResearchRunConflictError(run_id=run.id, status=run.status)
+        else:
+            run = await run_repository.create(
+                kind="ifind_research",
+                triggered_by=triggered_by,
+                status="queued",
+                stage="queued",
+            )
+        await run_repository.mark_running(run.id, stage="fetching")
         run_id = run.id
 
     artifact_dir = output_root / str(run_id)
-    artifact_dir.mkdir(parents=True, exist_ok=False)
     try:
+        artifact_dir.mkdir(parents=True, exist_ok=False)
         async with IfindProxyClient(base_url=proxy_url, api_key=proxy_api_key) as client:
             bundle = await fetch_canonical_bundle(
                 client,
@@ -800,6 +841,9 @@ async def run_ifind_research_chain(
                 report_year=report_year,
                 as_of=as_of,
             )
+
+        async with session_scope() as session:
+            await PipelineRunRepository(session).set_stage(run_id, "scoring")
 
         pool_path = artifact_dir / "pool.json"
         market_path = artifact_dir / "market.json"
@@ -822,6 +866,8 @@ async def run_ifind_research_chain(
         )
         scores = json.loads(kernel_artifacts.scores_json.read_text(encoding="utf-8"))
         score_item = scores["items"][0]
+        async with session_scope() as session:
+            await PipelineRunRepository(session).set_stage(run_id, "explaining")
         explanation = await _explain_score(
             settings=settings,
             run_id=run_id,
@@ -863,6 +909,7 @@ async def run_ifind_research_chain(
             "agent_report": str(report_path.resolve()),
         }
         async with session_scope() as session:
+            await PipelineRunRepository(session).set_stage(run_id, "persisting")
             await ResearchSnapshotRepository(session).create(
                 pipeline_run_id=run_id,
                 symbol=str(score_item["symbol"]),

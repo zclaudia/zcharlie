@@ -35,6 +35,11 @@ def run_ifind_research(
         help="Optional tier-3 model override for the explanation Agent",
         show_default=False,
     ),
+    idempotency_key: str | None = typer.Option(
+        None,
+        help="Optional retry-safe key; a completed run is replayed without new calls",
+        show_default=False,
+    ),
     output_root: Path = typer.Option(  # noqa: B008
         _DEFAULT_OUTPUT_ROOT,
         help="Persistent research artifact root",
@@ -52,6 +57,13 @@ def run_ifind_research(
             "set IFIND_PROXY_API_KEY or pass --proxy-api-key",
             param_hint="--proxy-api-key",
         )
+    if idempotency_key is not None and (
+        not idempotency_key.strip() or len(idempotency_key) > 128
+    ):
+        raise typer.BadParameter(
+            "must contain 1 to 128 characters",
+            param_hint="--idempotency-key",
+        )
     settings = Settings()  # type: ignore[call-arg]
     if explanation_model:
         settings = settings.model_copy(update={"llm_tier3_model": explanation_model})
@@ -66,6 +78,7 @@ def run_ifind_research(
             report_year=report_year,
             as_of=date.fromisoformat(as_of),
             output_root=output_root,
+            idempotency_key=idempotency_key,
         )
     )
     rprint(f"[green]ResearchRun {result.run_id} complete[/green]")

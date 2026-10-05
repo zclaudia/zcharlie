@@ -4,6 +4,7 @@ from datetime import date
 from investment_agent.research.ifind_chain import (
     ResearchChainResult,
     ResearchExplanation,
+    ResearchRunConflictError,
 )
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
@@ -92,7 +93,10 @@ def test_research_returns_auditable_result(api_client, tmp_path, monkeypatch):
     artifact_dir = tmp_path / "research-runs" / "42"
     artifact_dir.mkdir(parents=True)
 
-    async def fake_run_ifind_research_chain(**_kwargs: object) -> ResearchChainResult:
+    captured: dict[str, object] = {}
+
+    async def fake_run_ifind_research_chain(**kwargs: object) -> ResearchChainResult:
+        captured.update(kwargs)
         return ResearchChainResult(
             run_id=42,
             artifact_dir=artifact_dir,
@@ -141,3 +145,98 @@ def test_research_returns_auditable_result(api_client, tmp_path, monkeypatch):
     assert body["workflow_label"] == "needs_review"
     assert body["needs_agent_review"] is True
     assert body["report_path"].endswith("/42/agent_report.md")
+    assert captured["triggered_by"] == "api"
+    assert captured["idempotency_key"] is None
+
+
+def test_research_forwards_idempotency_key(api_client, tmp_path, monkeypatch):
+    from investment_agent.api.routes import research
+
+    monkeypatch.setenv("IFIND_PROXY_API_KEY", "ifind-test-key")
+    artifact_dir = tmp_path / "research-runs" / "43"
+    artifact_dir.mkdir(parents=True)
+    captured: dict[str, object] = {}
+
+    async def fake_run_ifind_research_chain(**kwargs: object) -> ResearchChainResult:
+        captured.update(kwargs)
+        return ResearchChainResult(
+            run_id=43,
+            artifact_dir=artifact_dir,
+            score={
+                "symbol": "600406",
+                "market": "SH",
+                "name": "国电南瑞",
+                "business_score": 55.22,
+                "research_confidence_score": 92,
+                "suggestion": "needs_review",
+                "needs_agent_review": True,
+            },
+            explanation=ResearchExplanation(
+                summary="fixture",
+                classification_rationale=[],
+                positive_evidence=[],
+                negative_evidence=[],
+                risk_factors=[],
+                data_quality_notes=[],
+                open_questions=[],
+                workflow_conclusion="needs_review",
+            ),
+        )
+
+    monkeypatch.setattr(
+        research,
+        "run_ifind_research_chain",
+        fake_run_ifind_research_chain,
+    )
+
+    response = api_client.post(
+        "/research/single-stock",
+        headers={
+            "X-API-Key": "secret",
+            "Idempotency-Key": "single-stock:600406:2026-10-05",
+        },
+        json={
+            "ticker": "600406.SH",
+            "industry": "电力设备",
+            "report_year": 2025,
+            "as_of": "2026-10-05",
+        },
+    )
+
+    assert response.status_code == 201
+    assert captured["idempotency_key"] == "single-stock:600406:2026-10-05"
+
+
+def test_research_returns_conflict_for_non_replayable_run(api_client, monkeypatch):
+    from investment_agent.api.routes import research
+
+    monkeypatch.setenv("IFIND_PROXY_API_KEY", "ifind-test-key")
+
+    async def fake_run_ifind_research_chain(**_kwargs: object) -> ResearchChainResult:
+        raise ResearchRunConflictError(run_id=44, status="running")
+
+    monkeypatch.setattr(
+        research,
+        "run_ifind_research_chain",
+        fake_run_ifind_research_chain,
+    )
+
+    response = api_client.post(
+        "/research/single-stock",
+        headers={
+            "X-API-Key": "secret",
+            "Idempotency-Key": "single-stock:600406:running",
+        },
+        json={
+            "ticker": "600406.SH",
+            "industry": "电力设备",
+            "report_year": 2025,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "message": "idempotent research run is not replayable",
+        "run_id": 44,
+        "status": "running",
+    }

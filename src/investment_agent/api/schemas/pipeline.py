@@ -22,6 +22,9 @@ class PipelineRunOut(BaseModel):
     universe_code: str | None
     listing_id: int | None
     status: str
+    stage: str
+    attempt_count: int
+    heartbeat_at: datetime | None
     started_at: datetime
     finished_at: datetime | None
     error_summary: str | None
