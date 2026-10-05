@@ -102,6 +102,8 @@ X-API-Key: ...
 
 当前实现将耗时研究写入可恢复的数据库任务队列，API 返回 HTTP 202 与 `run_id`，独立 worker 原子认领并执行，客户端通过运行接口查询状态和结果。CLI 保留同步入口用于诊断；生产 API 不使用进程内 `BackgroundTasks` 执行研究。
 
+查询面由 `GET /research/runs`、`GET /research/runs/{id}` 和受控 artifact 端点组成。统一详情对未完成任务返回生命周期与 `result: null`；成功或部分成功任务返回版本化评分，`partial` 结果的解释允许为 `null`。artifact 只能通过数据库 manifest 中的名称访问，且实际文件必须位于对应 run 的制品目录内。
+
 ## 5. 数据与存储基线
 
 每次研究运行至少保存：

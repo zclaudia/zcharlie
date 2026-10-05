@@ -1,6 +1,6 @@
 """Pydantic models for evidence-first research endpoints."""
 
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,8 +26,32 @@ class ResearchRunAccepted(BaseModel):
     result_url: str
 
 
-class ResearchSnapshotResponse(BaseModel):
+class ResearchArtifactOut(BaseModel):
+    name: str
+    download_url: str
+
+
+class ResearchRunSummary(BaseModel):
     run_id: int
+    status: str
+    stage: str
+    ticker: str | None
+    company_name: str | None
+    industry: str | None
+    as_of: date | None
+    report_year: int | None
+    business_score: float | None
+    workflow_label: str | None
+    needs_agent_review: bool | None
+    attempt_count: int
+    max_attempts: int
+    worker_id: str | None
+    started_at: datetime
+    finished_at: datetime | None
+    error_summary: str | None
+
+
+class ResearchRunResult(BaseModel):
     ticker: str
     company_name: str
     industry: str
@@ -38,4 +62,9 @@ class ResearchSnapshotResponse(BaseModel):
     score_schema_version: str
     score: dict[str, object]
     explanation: dict[str, object] | None
-    artifacts: dict[str, object]
+    artifacts: list[ResearchArtifactOut]
+
+
+class ResearchRunDetail(ResearchRunSummary):
+    request: dict[str, object]
+    result: ResearchRunResult | None

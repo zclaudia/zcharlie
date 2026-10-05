@@ -106,7 +106,9 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/universes` | GET `/` | Universe catalog |
 | `/watchlist` | GET, POST, DELETE `/{listing_id}` | Manual watchlist |
 | `/research/single-stock` | POST | Queue an A-share research run and return HTTP 202 + `run_id` |
-| `/research/runs/{id}` | GET | Versioned score, explanation, and artifact manifest |
+| `/research/runs` | GET | Paginated research-run list with optional status filter |
+| `/research/runs/{id}` | GET | Lifecycle detail plus optional versioned result |
+| `/research/runs/{id}/artifacts` | GET | List and download audited run artifacts |
 | `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
 
 ## Configuration

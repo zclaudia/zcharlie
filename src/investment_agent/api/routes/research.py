@@ -1,18 +1,25 @@
 """Durable queue API for evidence-first A-share research runs."""
 
 from datetime import date
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import FileResponse
+from sqlalchemy import select
 
 from investment_agent.api.auth import get_settings, verify_api_key
 from investment_agent.api.schemas.research import (
+    ResearchArtifactOut,
     ResearchRunAccepted,
-    ResearchSnapshotResponse,
+    ResearchRunDetail,
+    ResearchRunResult,
+    ResearchRunSummary,
     SingleStockResearchRequest,
 )
 from investment_agent.config import Settings
 from investment_agent.storage.database import session_scope
+from investment_agent.storage.models.analysis import PipelineRun, ResearchSnapshot
 from investment_agent.storage.repositories.pipeline_run import (
     IdempotencyPayloadMismatchError,
     PipelineRunRepository,
@@ -28,29 +35,84 @@ router = APIRouter(
 )
 
 
-@router.get("/runs/{run_id}", response_model=ResearchSnapshotResponse)
-async def get_research_snapshot(run_id: int) -> ResearchSnapshotResponse:
+@router.get("/runs", response_model=list[ResearchRunSummary])
+async def list_research_runs(
+    run_status: str | None = Query(None, alias="status", max_length=16),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[ResearchRunSummary]:
+    async with session_scope() as session:
+        statement = (
+            select(PipelineRun, ResearchSnapshot)
+            .outerjoin(
+                ResearchSnapshot,
+                ResearchSnapshot.pipeline_run_id == PipelineRun.id,
+            )
+            .where(PipelineRun.kind == "ifind_research")
+            .order_by(PipelineRun.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        if run_status is not None:
+            statement = statement.where(PipelineRun.status == run_status)
+        rows = (await session.execute(statement)).all()
+        return [_to_summary(row[0], row[1]) for row in rows]
+
+
+@router.get("/runs/{run_id}", response_model=ResearchRunDetail)
+async def get_research_run(run_id: int) -> ResearchRunDetail:
+    async with session_scope() as session:
+        run = await session.get(PipelineRun, run_id)
+        if run is None or run.kind != "ifind_research":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Research run {run_id} not found",
+            )
+        snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
+        summary = _to_summary(run, snapshot)
+        result = _to_result(snapshot) if snapshot is not None else None
+        return ResearchRunDetail(
+            **summary.model_dump(),
+            request=run.request_json,
+            result=result,
+        )
+
+
+@router.get(
+    "/runs/{run_id}/artifacts",
+    response_model=list[ResearchArtifactOut],
+)
+async def list_research_artifacts(run_id: int) -> list[ResearchArtifactOut]:
     async with session_scope() as session:
         snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
         if snapshot is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Research snapshot for run {run_id} not found",
+                detail=f"Research artifacts for run {run_id} not found",
             )
-        return ResearchSnapshotResponse(
-            run_id=snapshot.pipeline_run_id,
-            ticker=f"{snapshot.symbol}.{snapshot.market}",
-            company_name=snapshot.company_name,
-            industry=snapshot.industry,
-            as_of=snapshot.as_of,
-            report_year=snapshot.report_year,
-            canonical_schema_version=snapshot.canonical_schema_version,
-            scoring_version=snapshot.scoring_version,
-            score_schema_version=snapshot.score_schema_version,
-            score=snapshot.score_json,
-            explanation=snapshot.explanation_json,
-            artifacts=snapshot.artifact_manifest,
+        return _artifact_outputs(run_id, snapshot.artifact_manifest)
+
+
+@router.get("/runs/{run_id}/artifacts/{artifact_name}")
+async def download_research_artifact(
+    run_id: int,
+    artifact_name: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> FileResponse:
+    async with session_scope() as session:
+        snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
+        if snapshot is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Research artifacts for run {run_id} not found",
+            )
+        path = _resolve_artifact_path(
+            settings=settings,
+            run_id=run_id,
+            artifact_name=artifact_name,
+            manifest=snapshot.artifact_manifest,
         )
+        return FileResponse(path, filename=path.name)
 
 
 @router.post(
@@ -102,3 +164,123 @@ async def research_single_stock(
         status_url=f"/pipelines/{run.id}",
         result_url=f"/research/runs/{run.id}",
     )
+
+
+def _to_summary(
+    run: PipelineRun,
+    snapshot: ResearchSnapshot | None,
+) -> ResearchRunSummary:
+    request = run.request_json
+    ticker = _optional_str(request.get("ticker"))
+    industry = _optional_str(request.get("industry"))
+    report_year = _optional_int(request.get("report_year"))
+    as_of = _optional_date(request.get("as_of"))
+    company_name: str | None = None
+    business_score: float | None = None
+    workflow_label: str | None = None
+    needs_agent_review: bool | None = None
+    if snapshot is not None:
+        ticker = f"{snapshot.symbol}.{snapshot.market}"
+        company_name = snapshot.company_name
+        industry = snapshot.industry
+        report_year = snapshot.report_year
+        as_of = snapshot.as_of
+        business_score = _optional_float(snapshot.score_json.get("business_score"))
+        workflow_label = _optional_str(snapshot.score_json.get("suggestion"))
+        review_value = snapshot.score_json.get("needs_agent_review")
+        needs_agent_review = review_value if isinstance(review_value, bool) else None
+    return ResearchRunSummary(
+        run_id=run.id,
+        status=run.status,
+        stage=run.stage,
+        ticker=ticker,
+        company_name=company_name,
+        industry=industry,
+        as_of=as_of,
+        report_year=report_year,
+        business_score=business_score,
+        workflow_label=workflow_label,
+        needs_agent_review=needs_agent_review,
+        attempt_count=run.attempt_count,
+        max_attempts=run.max_attempts,
+        worker_id=run.worker_id,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        error_summary=run.error_summary,
+    )
+
+
+def _to_result(snapshot: ResearchSnapshot) -> ResearchRunResult:
+    return ResearchRunResult(
+        ticker=f"{snapshot.symbol}.{snapshot.market}",
+        company_name=snapshot.company_name,
+        industry=snapshot.industry,
+        as_of=snapshot.as_of,
+        report_year=snapshot.report_year,
+        canonical_schema_version=snapshot.canonical_schema_version,
+        scoring_version=snapshot.scoring_version,
+        score_schema_version=snapshot.score_schema_version,
+        score=snapshot.score_json,
+        explanation=snapshot.explanation_json,
+        artifacts=_artifact_outputs(snapshot.pipeline_run_id, snapshot.artifact_manifest),
+    )
+
+
+def _artifact_outputs(
+    run_id: int,
+    manifest: dict[str, object],
+) -> list[ResearchArtifactOut]:
+    return [
+        ResearchArtifactOut(
+            name=name,
+            download_url=f"/research/runs/{run_id}/artifacts/{name}",
+        )
+        for name, value in sorted(manifest.items())
+        if isinstance(value, str)
+    ]
+
+
+def _resolve_artifact_path(
+    *,
+    settings: Settings,
+    run_id: int,
+    artifact_name: str,
+    manifest: dict[str, object],
+) -> Path:
+    raw_path = manifest.get(artifact_name)
+    if not isinstance(raw_path, str):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact {artifact_name!r} not found for run {run_id}",
+        )
+    allowed_root = (settings.data_dir / "research-runs" / str(run_id)).resolve()
+    path = Path(raw_path).resolve()
+    if not path.is_relative_to(allowed_root) or not path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Artifact {artifact_name!r} is unavailable for run {run_id}",
+        )
+    return path
+
+
+def _optional_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _optional_int(value: object) -> int | None:
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _optional_float(value: object) -> float | None:
+    return float(value) if isinstance(value, int | float) else None
+
+
+def _optional_date(value: object) -> date | None:
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
