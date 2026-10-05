@@ -24,6 +24,10 @@ class PipelineRunOut(BaseModel):
     status: str
     stage: str
     attempt_count: int
+    max_attempts: int
+    available_at: datetime | None
+    claimed_at: datetime | None
+    worker_id: str | None
     heartbeat_at: datetime | None
     started_at: datetime
     finished_at: datetime | None

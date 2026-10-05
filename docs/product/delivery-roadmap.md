@@ -21,7 +21,7 @@
 - 将分类、评分、数据质量和报告上下文迁入仓库内 `DeterministicResearchKernel`。
 - 用真实国电南瑞输入验证新旧内核 score 与 report context 逐字段等价。
 - 从 CLI、API 和配置中移除外部 Skill 路径及 subprocess 依赖。
-- 提供 `POST /research/single-stock` 的同步 MVP 入口。
+- 提供 `POST /research/single-stock` 的持久化任务入口与独立 worker。
 - 保留 CLI 入口和完整审计制品。
 
 ### 本阶段剩余
@@ -56,8 +56,8 @@
 
 - `[done] MVP-201` 已复用 `pipeline_run` 并建立 `research_snapshot`、artifact manifest、队列生命周期字段和按 run 查询 API。
 - `[done] MVP-202` 已将数据、评分、解释、持久化拆成明确阶段，并记录 attempt 与 heartbeat。
-- `MVP-203` 实现数据库任务队列和独立 worker。
-- `[done] MVP-204` 已在 API 与 CLI 接入幂等键；成功任务直接重放，其他同键状态返回冲突，数据库唯一约束阻止重复运行。
+- `[done] MVP-203` 已实现数据库队列、原子认领、独立 worker、孤儿任务恢复和有限重试。
+- `[done] MVP-204` 已在 API 与 CLI 接入幂等键；API 返回已有任务状态并拒绝同键异参，数据库唯一约束阻止重复运行。
 - `MVP-205` 允许评分成功、解释失败的 `partial` 状态。
 - `MVP-206` 提供 run/list/detail/artifact API。
 

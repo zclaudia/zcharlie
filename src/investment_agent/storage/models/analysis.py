@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Numeric,
     String,
     Text,
@@ -34,6 +35,7 @@ class PipelineRun(Base, TimestampMixin):
     __tablename__ = "pipeline_run"
     __table_args__ = (
         UniqueConstraint("kind", "idempotency_key", name="uq_pipeline_run_idempotency"),
+        Index("ix_pipeline_run_queue", "status", "available_at", "id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -55,6 +57,17 @@ class PipelineRun(Base, TimestampMixin):
     stage: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     attempt_count: Mapped[int] = mapped_column(nullable=False, default=0)
+    max_attempts: Mapped[int] = mapped_column(nullable=False, default=3)
+    request_json: Mapped[dict[str, object]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    available_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    worker_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     heartbeat_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

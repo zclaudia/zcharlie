@@ -1,23 +1,22 @@
-"""Synchronous MVP API for one evidence-first A-share research run."""
+"""Durable queue API for evidence-first A-share research runs."""
 
 from datetime import date
 from typing import Annotated
 
-import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 
 from investment_agent.api.auth import get_settings, verify_api_key
 from investment_agent.api.schemas.research import (
+    ResearchRunAccepted,
     ResearchSnapshotResponse,
     SingleStockResearchRequest,
-    SingleStockResearchResponse,
 )
 from investment_agent.config import Settings
-from investment_agent.research.ifind_chain import (
-    ResearchRunConflictError,
-    run_ifind_research_chain,
-)
 from investment_agent.storage.database import session_scope
+from investment_agent.storage.repositories.pipeline_run import (
+    IdempotencyPayloadMismatchError,
+    PipelineRunRepository,
+)
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
 )
@@ -56,22 +55,23 @@ async def get_research_snapshot(run_id: int) -> ResearchSnapshotResponse:
 
 @router.post(
     "/single-stock",
-    response_model=SingleStockResearchResponse,
-    status_code=status.HTTP_201_CREATED,
+    response_model=ResearchRunAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def research_single_stock(
     body: SingleStockResearchRequest,
     settings: Annotated[Settings, Depends(get_settings)],
     idempotency_key: Annotated[
         str | None,
-        Header(alias="Idempotency-Key", max_length=128),
+        Header(
+            alias="Idempotency-Key",
+            min_length=1,
+            max_length=128,
+            pattern=r".*\S.*",
+        ),
     ] = None,
-) -> SingleStockResearchResponse:
-    """Run the complete deterministic-score plus cited-explanation vertical slice.
-
-    The MVP intentionally keeps this request synchronous.  A durable worker queue is
-    an MVP exit criterion and will replace the request-bound execution model.
-    """
+) -> ResearchRunAccepted:
+    """Persist a single-stock research request for an independent worker."""
 
     if not settings.ifind_proxy_api_key:
         raise HTTPException(
@@ -79,44 +79,26 @@ async def research_single_stock(
             detail="IFIND_PROXY_API_KEY is not configured",
         )
 
+    request_json: dict[str, object] = body.model_dump(mode="json")
+    request_json["as_of"] = (body.as_of or date.today()).isoformat()
     try:
-        result = await run_ifind_research_chain(
-            settings=settings,
-            proxy_url=settings.ifind_proxy_url,
-            proxy_api_key=settings.ifind_proxy_api_key,
-            ticker=body.ticker,
-            industry=body.industry,
-            report_year=body.report_year,
-            as_of=body.as_of or date.today(),
-            output_root=settings.data_dir / "research-runs",
-            triggered_by="api",
-            idempotency_key=idempotency_key,
-        )
-    except ResearchRunConflictError as exc:
+        async with session_scope() as session:
+            run, created = await PipelineRunRepository(session).enqueue(
+                kind="ifind_research",
+                idempotency_key=idempotency_key,
+                triggered_by="api",
+                request_json=request_json,
+            )
+    except IdempotencyPayloadMismatchError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": "idempotent research run is not replayable",
-                "run_id": exc.run_id,
-                "status": exc.status,
-            },
+            detail=str(exc),
         ) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="iFinD data gateway request failed",
-        ) from exc
-
-    report_path = result.artifact_dir / "agent_report.md"
-    return SingleStockResearchResponse(
-        run_id=result.run_id,
-        status="success",
-        ticker=f"{result.score['symbol']}.{result.score['market']}",
-        company_name=str(result.score["name"]),
-        business_score=float(result.score["business_score"]),
-        research_confidence_score=float(result.score["research_confidence_score"]),
-        workflow_label=str(result.score["suggestion"]),
-        needs_agent_review=bool(result.score["needs_agent_review"]),
-        artifact_dir=str(result.artifact_dir.resolve()),
-        report_path=str(report_path.resolve()),
+    return ResearchRunAccepted(
+        run_id=run.id,
+        status=run.status,
+        stage=run.stage,
+        created=created,
+        status_url=f"/pipelines/{run.id}",
+        result_url=f"/research/runs/{run.id}",
     )

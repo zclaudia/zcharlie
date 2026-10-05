@@ -105,7 +105,7 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/strategies` | GET `/`, GET `/{code}` | Strategy catalog |
 | `/universes` | GET `/` | Universe catalog |
 | `/watchlist` | GET, POST, DELETE `/{listing_id}` | Manual watchlist |
-| `/research/single-stock` | POST | Synchronous A-share research MVP vertical slice |
+| `/research/single-stock` | POST | Queue an A-share research run and return HTTP 202 + `run_id` |
 | `/research/runs/{id}` | GET | Versioned score, explanation, and artifact manifest |
 | `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
 
@@ -124,6 +124,9 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `DATA_DIR` | Root for `app.db` and `data/reports/` |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` |
 | `IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY` | Standalone iFinD data gateway |
+
+Run the durable research worker separately with `ia worker start`. For local smoke
+tests, `ia worker start --once` recovers stale work and processes at most one job.
 
 ### `config/app.yaml` — universes, strategies, pipeline, scheduler
 

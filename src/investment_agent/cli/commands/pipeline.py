@@ -64,6 +64,8 @@ def list_runs(limit: int = typer.Option(20, help="Max rows to show")) -> None:
     table.add_column("Kind")
     table.add_column("Universe")
     table.add_column("Status")
+    table.add_column("Stage")
+    table.add_column("Attempt")
     table.add_column("Started")
     table.add_column("Finished")
     for r in rows:
@@ -72,6 +74,8 @@ def list_runs(limit: int = typer.Option(20, help="Max rows to show")) -> None:
             r.kind,
             r.universe_code or "-",
             r.status,
+            r.stage,
+            f"{r.attempt_count}/{r.max_attempts}",
             r.started_at.isoformat(timespec="seconds"),
             r.finished_at.isoformat(timespec="seconds") if r.finished_at else "-",
         )
@@ -96,6 +100,10 @@ def show_run(run_id: int) -> None:
         rprint(f"[red]PipelineRun {run_id} not found[/red]")
         raise typer.Exit(1)
     rprint(f"[bold]Run {run.id}[/bold] kind={run.kind} status={run.status}")
+    rprint(
+        f"Stage: {run.stage} | Attempt: {run.attempt_count}/{run.max_attempts} "
+        f"| Worker: {run.worker_id or '-'}"
+    )
     rprint(f"Universe: {run.universe_code}")
     rprint(f"Started: {run.started_at} | Finished: {run.finished_at}")
     rprint(f"Scores recorded: {n_scores}")

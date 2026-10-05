@@ -17,17 +17,13 @@ class SingleStockResearchRequest(BaseModel):
         return value.upper() if isinstance(value, str) else value
 
 
-class SingleStockResearchResponse(BaseModel):
+class ResearchRunAccepted(BaseModel):
     run_id: int
     status: str
-    ticker: str
-    company_name: str
-    business_score: float
-    research_confidence_score: float
-    workflow_label: str
-    needs_agent_review: bool
-    artifact_dir: str
-    report_path: str
+    stage: str
+    created: bool
+    status_url: str
+    result_url: str
 
 
 class ResearchSnapshotResponse(BaseModel):

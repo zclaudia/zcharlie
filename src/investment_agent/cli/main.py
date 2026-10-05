@@ -12,6 +12,7 @@ from investment_agent.cli.commands import pipeline as pipeline_cmd
 from investment_agent.cli.commands import research as research_cmd
 from investment_agent.cli.commands import scheduler as scheduler_cmd
 from investment_agent.cli.commands import strategy as strategy_cmd
+from investment_agent.cli.commands import worker as worker_cmd
 
 app = typer.Typer(help="Investment Agent CLI")
 app.add_typer(data_cmd.app, name="data", help="Market data ingestion commands")
@@ -24,6 +25,7 @@ app.add_typer(research_cmd.app, name="research", help="Evidence-first research c
 app.add_typer(api_cmd.app, name="api", help="API server commands")
 app.add_typer(scheduler_cmd.app, name="scheduler", help="Scheduler commands")
 app.add_typer(migrate_cmd.app, name="migrate", help="Database migration commands")
+app.add_typer(worker_cmd.app, name="worker", help="Persistent worker commands")
 
 
 @app.callback()

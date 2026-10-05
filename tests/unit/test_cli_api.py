@@ -18,6 +18,14 @@ def test_cli_scheduler_help():
     assert "start" in r.output
 
 
+def test_cli_worker_help():
+    from investment_agent.cli.main import app
+
+    r = CliRunner().invoke(app, ["worker", "start", "--help"])
+    assert r.exit_code == 0
+    assert "--once" in r.output
+
+
 def test_cli_migrate_help():
     from investment_agent.cli.main import app
     r = CliRunner().invoke(app, ["migrate", "--help"])

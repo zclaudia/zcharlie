@@ -4,6 +4,7 @@ from investment_agent.config import Settings
 from investment_agent.research.ifind_chain import (
     EvidenceClaim,
     ResearchExplanation,
+    _artifact_dir_for_attempt,
     _return_stats,
     parse_proxy_rows,
     run_ifind_research_chain,
@@ -59,6 +60,19 @@ def test_explanation_rejects_unknown_canonical_field():
         assert "key_metrics.not_real" in str(exc)
     else:
         raise AssertionError("unknown field should fail validation")
+
+
+def test_retry_attempt_uses_isolated_artifact_directory(tmp_path):
+    assert _artifact_dir_for_attempt(
+        output_root=tmp_path,
+        run_id=42,
+        attempt_count=1,
+    ) == tmp_path / "42"
+    assert _artifact_dir_for_attempt(
+        output_root=tmp_path,
+        run_id=42,
+        attempt_count=2,
+    ) == tmp_path / "42" / "attempt-2"
 
 
 async def test_successful_idempotent_run_replays_persisted_snapshot(

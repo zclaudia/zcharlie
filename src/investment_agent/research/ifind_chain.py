@@ -777,6 +777,13 @@ def render_agent_report(
     return "\n".join(lines)
 
 
+def _artifact_dir_for_attempt(
+    *, output_root: Path, run_id: int, attempt_count: int
+) -> Path:
+    run_dir = output_root / str(run_id)
+    return run_dir if attempt_count <= 1 else run_dir / f"attempt-{attempt_count}"
+
+
 async def run_ifind_research_chain(
     *,
     settings: Settings,
@@ -790,13 +797,22 @@ async def run_ifind_research_chain(
     kernel: DeterministicResearchKernel | None = None,
     triggered_by: str = "cli",
     idempotency_key: str | None = None,
+    claimed_run_id: int | None = None,
 ) -> ResearchChainResult:
     """Run and persist the complete iFinD -> score -> explanation vertical slice."""
 
     async with session_scope() as session:
         run_repository = PipelineRunRepository(session)
         snapshot_repository = ResearchSnapshotRepository(session)
-        if idempotency_key:
+        if claimed_run_id is not None:
+            run = await run_repository.get(claimed_run_id)
+            if run is None:
+                raise ValueError(f"PipelineRun {claimed_run_id} not found")
+            if run.kind != "ifind_research" or run.status != "running":
+                raise ValueError(
+                    f"PipelineRun {claimed_run_id} is not a claimed research run"
+                )
+        elif idempotency_key:
             run, created = await run_repository.enqueue(
                 kind="ifind_research",
                 idempotency_key=idempotency_key,
@@ -827,10 +843,18 @@ async def run_ifind_research_chain(
                 status="queued",
                 stage="queued",
             )
-        await run_repository.mark_running(run.id, stage="fetching")
+        if claimed_run_id is None:
+            await run_repository.mark_running(run.id, stage="fetching")
+        else:
+            await run_repository.set_stage(run.id, "fetching")
         run_id = run.id
+        attempt_count = run.attempt_count
 
-    artifact_dir = output_root / str(run_id)
+    artifact_dir = _artifact_dir_for_attempt(
+        output_root=output_root,
+        run_id=run_id,
+        attempt_count=attempt_count,
+    )
     try:
         artifact_dir.mkdir(parents=True, exist_ok=False)
         async with IfindProxyClient(base_url=proxy_url, api_key=proxy_api_key) as client:
