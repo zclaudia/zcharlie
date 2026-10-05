@@ -1,3 +1,6 @@
+import sys
+from types import SimpleNamespace
+
 from typer.testing import CliRunner
 
 
@@ -23,3 +26,20 @@ def test_cli_migrate_help():
     assert "down" in r.output
     assert "current" in r.output
     assert "history" in r.output
+
+
+def test_migrate_uses_active_python_environment(monkeypatch):
+    from investment_agent.cli.commands import migrate
+
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *, check: bool) -> SimpleNamespace:
+        assert check is False
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(migrate.subprocess, "run", fake_run)
+
+    migrate._run(["current"])
+
+    assert commands == [[sys.executable, "-m", "alembic", "current"]]

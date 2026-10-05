@@ -1,6 +1,7 @@
 """ia migrate — thin alembic wrapper."""
 
 import subprocess
+import sys
 
 import typer
 from rich import print as rprint
@@ -10,7 +11,10 @@ app = typer.Typer(help="Database migration commands (alembic wrapper)")
 
 def _run(args: list[str]) -> None:
     rprint(f"[bold]Running:[/bold] alembic {' '.join(args)}")
-    result = subprocess.run(["alembic", *args], check=False)  # noqa: S603, S607
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "alembic", *args],
+        check=False,
+    )
     if result.returncode != 0:
         raise typer.Exit(result.returncode)
 

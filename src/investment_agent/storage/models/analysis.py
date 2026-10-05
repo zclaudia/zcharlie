@@ -92,6 +92,34 @@ class DiscoveryReport(Base, TimestampMixin):
     markdown_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
 
 
+class ResearchSnapshot(Base, TimestampMixin):
+    """Immutable result of one evidence-first single-stock research run."""
+
+    __tablename__ = "research_snapshot"
+    __table_args__ = (
+        UniqueConstraint("pipeline_run_id", name="uq_research_snapshot_run"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    pipeline_run_id: Mapped[int] = mapped_column(
+        ForeignKey("pipeline_run.id"), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    market: Mapped[str] = mapped_column(String(8), nullable=False)
+    company_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    industry: Mapped[str] = mapped_column(String(128), nullable=False)
+    as_of: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    report_year: Mapped[int] = mapped_column(nullable=False)
+    canonical_schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    scoring_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    score_schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    score_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    explanation_json: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    artifact_manifest: Mapped[dict[str, object]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+
+
 class AttributionReport(Base, TimestampMixin):
     __tablename__ = "attribution_report"
 

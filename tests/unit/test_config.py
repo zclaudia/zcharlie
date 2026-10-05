@@ -1,4 +1,3 @@
-
 from investment_agent.config import Settings, load_app_yaml
 
 
@@ -15,6 +14,7 @@ def test_settings_loads_env_with_defaults(monkeypatch, tmp_path):
     assert s.api_key == "test-key"
     assert s.llm_tier2.model == "deepseek-chat"
     assert s.yfinance_max_concurrent == 10
+    assert s.ifind_proxy_url == "http://127.0.0.1:7100"
 
 
 def test_app_yaml_loads(tmp_path):

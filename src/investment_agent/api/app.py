@@ -43,6 +43,7 @@ def _register_protected_routes(app: FastAPI) -> None:
         listings,
         pipelines,
         reports,
+        research,
         strategies,
         universes,
         watchlist,
@@ -51,6 +52,7 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(pipelines.router)
     app.include_router(attribution.router)
     app.include_router(reports.router)
+    app.include_router(research.router)
     app.include_router(listings.router)
     app.include_router(strategies.router)
     app.include_router(universes.router)

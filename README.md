@@ -54,6 +54,7 @@ All CLI verbs live under the `ia` entry point, grouped by domain:
 | `ia strategy` | `list`, `show`, `sync` | Strategy YAML management |
 | `ia pipeline` | `discover`, `list`, `show` | Discovery pipeline |
 | `ia attribute` | `run`, `show` | Attribution pipeline |
+| `ia research` | `ifind` | iFinD → canonical data → deterministic score → cited Agent report |
 | `ia auxiliary` | `list`, `add`, `remove`, `refresh` | Auxiliary tracking |
 | `ia admin` | `cost` | LLM monthly cost |
 | `ia api` | `serve` | FastAPI server |
@@ -61,6 +62,30 @@ All CLI verbs live under the `ia` entry point, grouped by domain:
 | `ia migrate` | `up`, `down`, `current`, `history` | alembic wrapper |
 
 Use `ia <group> --help` to see options.
+
+### iFinD vertical-slice validation
+
+The `research ifind` command validates the evidence-first A-share path against a
+running `ifind-proxy`. It persists raw and canonical inputs, invokes the
+repository-owned deterministic research kernel, records the run and LLM call in the
+application database, and writes an Agent explanation whose claims cite canonical
+score fields.
+
+```bash
+export IFIND_PROXY_API_KEY=replace_with_proxy_key
+ia research ifind 600406.SH \
+  --industry 电力设备 \
+  --report-year 2025 \
+  --explanation-model deepseek-flash
+```
+
+Artifacts are written under `data/research-runs/<run_id>/`. This validation path
+does not place trades and does not turn LLM output into numeric scores.
+
+The accepted product and engineering boundaries are documented in
+[`docs/product/engineering-baseline.md`](docs/product/engineering-baseline.md), with
+the MVP-to-final delivery sequence in
+[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md).
 
 ## HTTP API
 
@@ -80,6 +105,8 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/strategies` | GET `/`, GET `/{code}` | Strategy catalog |
 | `/universes` | GET `/` | Universe catalog |
 | `/watchlist` | GET, POST, DELETE `/{listing_id}` | Manual watchlist |
+| `/research/single-stock` | POST | Synchronous A-share research MVP vertical slice |
+| `/research/runs/{id}` | GET | Versioned score, explanation, and artifact manifest |
 | `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
 
 ## Configuration
@@ -96,6 +123,7 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `LLM_MAX_CONCURRENT` | Cap on concurrent LLM calls |
 | `DATA_DIR` | Root for `app.db` and `data/reports/` |
 | `LOG_LEVEL` | `DEBUG` / `INFO` / `WARNING` |
+| `IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY` | Standalone iFinD data gateway |
 
 ### `config/app.yaml` — universes, strategies, pipeline, scheduler
 

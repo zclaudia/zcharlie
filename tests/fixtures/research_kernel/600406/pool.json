@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "field_sources": {
+        "industry": {
+          "field": "industry",
+          "note": "iFinD stock-info response did not include a normalized industry",
+          "provider": "manual",
+          "quality": "direct",
+          "source": "command_input",
+          "updated_at": "2026-10-05T09:46:19.977797Z"
+        },
+        "market_cap": {
+          "field": "market_cap",
+          "note": "latest close multiplied by total shares",
+          "provider": "ifind",
+          "quality": "derived",
+          "source": "/stock/info + /stock/history",
+          "updated_at": "2026-09-30T07:00:00Z"
+        },
+        "name": {
+          "field": "name",
+          "note": "",
+          "provider": "ifind",
+          "quality": "direct",
+          "source": "/stock/info",
+          "updated_at": "2026-10-05T09:46:19.977797Z"
+        }
+      },
+      "industry": "电力设备",
+      "market": "SH",
+      "market_cap": 180875148633.12,
+      "missing_fields": [],
+      "name": "国电南瑞",
+      "needs_agent_review": false,
+      "provider_conflicts": {},
+      "quality_flags": [
+        {
+          "field": "market_cap",
+          "flag": "derived_field",
+          "message": "market_cap was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        }
+      ],
+      "source": "ifind-proxy:stock-info+history",
+      "symbol": "600406",
+      "updated_at": "2026-10-05T09:46:19.977797Z",
+      "warnings": [
+        "market_cap was derived from iFinD source fields"
+      ]
+    }
+  ],
+  "metadata": {
+    "payload_type": "stock_pool",
+    "provider": "ifind",
+    "report_year": null,
+    "schema_version": "ifind-canonical.v1",
+    "source": "ifind-proxy",
+    "updated_at": "2026-10-05T09:46:19.977797Z"
+  }
+}

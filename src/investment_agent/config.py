@@ -15,9 +15,7 @@ class LLMTierConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env", env_nested_delimiter="__", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_nested_delimiter="__", extra="ignore")
 
     app_env: Literal["dev", "prod"] = "dev"
     log_level: str = "INFO"
@@ -39,6 +37,10 @@ class Settings(BaseSettings):
 
     yfinance_max_concurrent: int = 10
     llm_max_concurrent: int = 8
+
+    # A-share research MVP data gateway.
+    ifind_proxy_url: str = "http://127.0.0.1:7100"
+    ifind_proxy_api_key: str = ""
 
     @property
     def llm_tier2(self) -> LLMTierConfig:

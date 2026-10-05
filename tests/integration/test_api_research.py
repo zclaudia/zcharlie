@@ -1,0 +1,143 @@
+import asyncio
+from datetime import date
+
+from investment_agent.research.ifind_chain import (
+    ResearchChainResult,
+    ResearchExplanation,
+)
+from investment_agent.storage.database import session_scope
+from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.research_snapshot import (
+    ResearchSnapshotRepository,
+)
+
+
+def test_research_requires_auth(api_client):
+    response = api_client.post(
+        "/research/single-stock",
+        json={
+            "ticker": "600406.SH",
+            "industry": "电力设备",
+            "report_year": 2025,
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_research_requires_ifind_configuration(api_client, monkeypatch):
+    monkeypatch.setenv("IFIND_PROXY_API_KEY", "")
+
+    response = api_client.post(
+        "/research/single-stock",
+        headers={"X-API-Key": "secret"},
+        json={
+            "ticker": "600406.SH",
+            "industry": "电力设备",
+            "report_year": 2025,
+        },
+    )
+
+    assert response.status_code == 503
+
+
+def test_get_unknown_research_snapshot_returns_404(api_client):
+    response = api_client.get(
+        "/research/runs/999",
+        headers={"X-API-Key": "secret"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_get_research_snapshot_returns_versioned_result(api_client):
+    async def seed() -> int:
+        async with session_scope() as session:
+            run = await PipelineRunRepository(session).create(kind="ifind_research")
+            await ResearchSnapshotRepository(session).create(
+                pipeline_run_id=run.id,
+                symbol="600406",
+                market="SH",
+                company_name="国电南瑞",
+                industry="电力设备",
+                as_of=date(2026, 10, 5),
+                report_year=2025,
+                canonical_schema_version="ifind-canonical.v1",
+                scoring_version="v1.2",
+                score_schema_version="v2.0",
+                score_json={"business_score": 55.22},
+                explanation_json={"summary": "fixture"},
+                artifact_manifest={"scores": "/tmp/scores.json"},
+            )
+            return run.id
+
+    run_id = asyncio.run(seed())
+    response = api_client.get(
+        f"/research/runs/{run_id}",
+        headers={"X-API-Key": "secret"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ticker"] == "600406.SH"
+    assert body["score"]["business_score"] == 55.22
+    assert body["scoring_version"] == "v1.2"
+    assert body["artifacts"]["scores"] == "/tmp/scores.json"
+
+
+def test_research_returns_auditable_result(api_client, tmp_path, monkeypatch):
+    from investment_agent.api.routes import research
+
+    monkeypatch.setenv("IFIND_PROXY_API_KEY", "ifind-test-key")
+    artifact_dir = tmp_path / "research-runs" / "42"
+    artifact_dir.mkdir(parents=True)
+
+    async def fake_run_ifind_research_chain(**_kwargs: object) -> ResearchChainResult:
+        return ResearchChainResult(
+            run_id=42,
+            artifact_dir=artifact_dir,
+            score={
+                "symbol": "600406",
+                "market": "SH",
+                "name": "国电南瑞",
+                "business_score": 55.22,
+                "research_confidence_score": 92,
+                "suggestion": "needs_review",
+                "needs_agent_review": True,
+            },
+            explanation=ResearchExplanation(
+                summary="仅解释确定性结果",
+                classification_rationale=[],
+                positive_evidence=[],
+                negative_evidence=[],
+                risk_factors=[],
+                data_quality_notes=[],
+                open_questions=[],
+                workflow_conclusion="needs_review",
+            ),
+        )
+
+    monkeypatch.setattr(
+        research,
+        "run_ifind_research_chain",
+        fake_run_ifind_research_chain,
+    )
+
+    response = api_client.post(
+        "/research/single-stock",
+        headers={"X-API-Key": "secret"},
+        json={
+            "ticker": "600406.sh",
+            "industry": "电力设备",
+            "report_year": 2025,
+            "as_of": "2026-10-05",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["run_id"] == 42
+    assert body["ticker"] == "600406.SH"
+    assert body["workflow_label"] == "needs_review"
+    assert body["needs_agent_review"] is True
+    assert body["report_path"].endswith("/42/agent_report.md")
