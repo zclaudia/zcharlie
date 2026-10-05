@@ -85,7 +85,9 @@ does not place trades and does not turn LLM output into numeric scores.
 The accepted product and engineering boundaries are documented in
 [`docs/product/engineering-baseline.md`](docs/product/engineering-baseline.md), with
 the MVP-to-final delivery sequence in
-[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md).
+[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md) and the
+session-ready MVP closeout plan in
+[`docs/product/mvp-completion-plan.md`](docs/product/mvp-completion-plan.md).
 
 ## HTTP API
 
