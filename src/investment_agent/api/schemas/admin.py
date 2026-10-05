@@ -2,21 +2,45 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class WatchlistItemOut(BaseModel):
     listing_id: int
-    ticker: str | None = None
-    market_code: str | None = None
+    ticker: str
+    market_code: str
+    name: str
+    industry: str | None
+    provider: str
+    report_year: int | None
+    enabled: bool
     added_at: datetime
+    updated_at: datetime
     note: str | None
+    last_refresh_status: str
+    last_refreshed_at: datetime | None
+    last_refresh_error: str | None
+    last_research_run_id: int | None
 
 
 class WatchlistAdd(BaseModel):
-    ticker: str
-    market_code: str = "NASDAQ"
+    ticker: str = Field(min_length=1, max_length=32)
+    market_code: str | None = Field(None, min_length=1, max_length=16)
+    name: str | None = Field(None, min_length=1, max_length=256)
+    industry: str | None = Field(None, min_length=1, max_length=128)
+    provider: str | None = Field(None, min_length=1, max_length=32)
+    report_year: int | None = Field(None, ge=1990, le=2100)
     note: str | None = None
+
+    @field_validator("ticker", "market_code", mode="before")
+    @classmethod
+    def normalize_code(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
+
+    @field_validator("name", "industry", "provider", "note", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 class LLMCallOut(BaseModel):

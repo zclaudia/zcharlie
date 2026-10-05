@@ -11,24 +11,50 @@ from investment_agent.storage.repositories.base import Repository
 class WatchlistRepository(Repository[WatchlistItem]):
     model = WatchlistItem
 
+    async def get_by_listing(self, listing_id: int) -> WatchlistItem | None:
+        stmt = select(WatchlistItem).where(
+            WatchlistItem.listing_id == listing_id,
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def list_all(self) -> list[WatchlistItem]:
         stmt = select(WatchlistItem).order_by(WatchlistItem.added_at.desc())
         return list((await self.session.execute(stmt)).scalars().all())
 
-    async def add(self, listing_id: int, note: str | None = None) -> WatchlistItem:
-        existing_stmt = select(WatchlistItem).where(
-            WatchlistItem.listing_id == listing_id,
-        )
-        existing = (await self.session.execute(existing_stmt)).scalar_one_or_none()
+    async def add(
+        self,
+        listing_id: int,
+        note: str | None = None,
+        *,
+        industry: str | None = None,
+        provider: str | None = None,
+        report_year: int | None = None,
+        enabled: bool | None = None,
+    ) -> WatchlistItem:
+        existing = await self.get_by_listing(listing_id)
         if existing is not None:
             if note is not None:
                 existing.note = note
+            if industry is not None:
+                existing.industry = industry
+            if provider is not None:
+                existing.provider = provider
+            if report_year is not None:
+                existing.report_year = report_year
+            if enabled is not None:
+                existing.enabled = enabled
             await self.session.flush()
+            await self.session.refresh(existing, attribute_names=["updated_at"])
             return existing
         item = WatchlistItem(
             listing_id=listing_id,
             added_at=datetime.now(UTC),
             note=note,
+            industry=industry,
+            provider=provider or "auto",
+            report_year=report_year,
+            enabled=True if enabled is None else enabled,
+            last_refresh_status="never",
         )
         self.session.add(item)
         await self.session.flush()

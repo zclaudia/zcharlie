@@ -104,12 +104,23 @@ Launch: `ia api serve` (default port 8000). Then visit:
 | `/listings/{ticker}` | GET, GET `/scores`, GET/POST `/relationships` | Listing inspection |
 | `/strategies` | GET `/`, GET `/{code}` | Strategy catalog |
 | `/universes` | GET `/` | Universe catalog |
-| `/watchlist` | GET, POST, DELETE `/{listing_id}` | Manual watchlist |
+| `/watchlist` | GET, POST, DELETE `/{listing_id}` | Durable watchlist with A-share research metadata |
 | `/research/single-stock` | POST | Queue an A-share research run and return HTTP 202 + `run_id` |
 | `/research/runs` | GET | Paginated research-run list with optional status filter |
 | `/research/runs/{id}` | GET | Lifecycle detail plus optional versioned result |
 | `/research/runs/{id}/artifacts` | GET | List and download audited run artifacts |
 | `/admin/llm-calls` | GET, GET `/cost` | LLM audit |
+
+Add an A-share directly with its exchange suffix. If a prior research snapshot
+exists, `name`, `industry`, and `report_year` are inferred from the latest snapshot.
+Otherwise, `name` and `industry` are required when the listing is first created.
+
+```bash
+curl -X POST http://localhost:8000/watchlist \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"ticker":"600406.SH","name":"国电南瑞","industry":"电力设备","provider":"ifind","report_year":2025}'
+```
 
 ## Configuration
 

@@ -51,6 +51,36 @@ async def test_add_existing_updates_note(db_session):
 
 
 @pytest.mark.asyncio
+async def test_add_existing_updates_research_config_without_resetting_state(db_session):
+    aapl, _ = await _seed_listings(db_session)
+    repo = WatchlistRepository(db_session)
+    first = await repo.add(
+        aapl.id,
+        industry="Technology",
+        provider="auto",
+        report_year=2024,
+    )
+    added_at = first.added_at
+    first.last_refresh_status = "success"
+    first.last_refresh_error = None
+    await db_session.flush()
+
+    second = await repo.add(
+        aapl.id,
+        industry="Information Technology",
+        provider="ifind",
+        report_year=2025,
+    )
+
+    assert second.id == first.id
+    assert second.added_at == added_at
+    assert second.industry == "Information Technology"
+    assert second.provider == "ifind"
+    assert second.report_year == 2025
+    assert second.last_refresh_status == "success"
+
+
+@pytest.mark.asyncio
 async def test_remove_returns_true_when_present(db_session):
     aapl, _ = await _seed_listings(db_session)
     repo = WatchlistRepository(db_session)

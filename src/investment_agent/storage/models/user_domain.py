@@ -29,6 +29,20 @@ class WatchlistItem(Base, TimestampMixin):
         DateTime(timezone=True), nullable=False
     )
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    industry: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="auto")
+    report_year: Mapped[int | None] = mapped_column(nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_refresh_status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="never"
+    )
+    last_refreshed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_refresh_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_research_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pipeline_run.id"), nullable=True
+    )
 
 
 class HoldingItem(Base, TimestampMixin):
