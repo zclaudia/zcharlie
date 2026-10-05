@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
-from investment_agent.api.auth import get_settings, verify_api_key
+from investment_agent.api.auth import get_settings, verify_api_key_or_session
+from investment_agent.api.schemas.dashboard import StockSnapshotSummary
 from investment_agent.api.schemas.research import (
     ResearchArtifactOut,
     ResearchChangeSetOut,
@@ -19,6 +20,7 @@ from investment_agent.api.schemas.research import (
     SingleStockResearchRequest,
 )
 from investment_agent.config import Settings
+from investment_agent.domain.a_share import parse_a_share_ticker
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import (
     PipelineRun,
@@ -39,7 +41,7 @@ from investment_agent.storage.repositories.research_snapshot import (
 router = APIRouter(
     prefix="/research",
     tags=["research"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_api_key_or_session)],
 )
 
 
@@ -69,6 +71,65 @@ async def list_research_runs(
             statement = statement.where(PipelineRun.status == run_status)
         rows = (await session.execute(statement)).all()
         return [_to_summary(row[0], row[1], row[2]) for row in rows]
+
+
+@router.get("/stocks/{ticker}/history", response_model=list[StockSnapshotSummary])
+async def stock_snapshot_history(
+    ticker: str,
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> list[StockSnapshotSummary]:
+    """Bounded, paginated snapshot history for one A-share ticker."""
+
+    parsed = parse_a_share_ticker(ticker)
+    if parsed is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid A-share ticker: {ticker}",
+        )
+    symbol, market = parsed
+    async with session_scope() as session:
+        snapshots = await ResearchSnapshotRepository(session).history(
+            symbol=symbol,
+            market=market.suffix,
+            limit=limit,
+            offset=offset,
+        )
+        summaries: list[StockSnapshotSummary] = []
+        for snapshot in snapshots:
+            change_set = await ResearchChangeRepository(session).by_snapshot(snapshot.id)
+            score = snapshot.score_json
+            items = score.get("items")
+            item = items[0] if isinstance(items, list) and items and isinstance(items[0], dict) else {}
+            summaries.append(
+                StockSnapshotSummary(
+                    run_id=snapshot.pipeline_run_id,
+                    as_of=snapshot.as_of,
+                    report_year=snapshot.report_year,
+                    strategy_label=_optional_str(item.get("strategy_label")),
+                    investment_score=_optional_float(item.get("investment_score")),
+                    business_score=_optional_float(item.get("business_score")),
+                    research_confidence_score=_optional_float(
+                        item.get("research_confidence_score")
+                    ),
+                    needs_agent_review=(
+                        item["needs_agent_review"]
+                        if isinstance(item.get("needs_agent_review"), bool)
+                        else None
+                    ),
+                    canonical_schema_version=snapshot.canonical_schema_version,
+                    scoring_version=snapshot.scoring_version,
+                    score_schema_version=snapshot.score_schema_version,
+                    has_meaningful_changes=(
+                        change_set.has_meaningful_changes if change_set is not None else None
+                    ),
+                    meaningful_change_count=(
+                        change_set.meaningful_change_count if change_set is not None else None
+                    ),
+                    created_at=snapshot.created_at,
+                )
+            )
+        return summaries
 
 
 @router.get("/runs/{run_id}", response_model=ResearchRunDetail)

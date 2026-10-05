@@ -7,10 +7,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.api.auth import get_settings, verify_api_key
+from investment_agent.api.auth import get_settings, verify_api_key_or_session
 from investment_agent.api.schemas.admin import (
     WatchlistAdd,
     WatchlistItemOut,
+    WatchlistLatestResearch,
     WatchlistRefreshItemOut,
     WatchlistRefreshOut,
     WatchlistRefreshRequest,
@@ -22,6 +23,9 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Company, Listing, Market
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.listing import ListingRepository
+from investment_agent.storage.repositories.research_change import (
+    ResearchChangeRepository,
+)
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
 )
@@ -30,7 +34,7 @@ from investment_agent.storage.repositories.watchlist import WatchlistRepository
 router = APIRouter(
     prefix="/watchlist",
     tags=["watchlist"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(verify_api_key_or_session)],
 )
 
 
@@ -199,6 +203,11 @@ async def _to_out(session: AsyncSession, item: WatchlistItem) -> WatchlistItemOu
     company = await session.get(Company, listing.company_id)
     if company is None:
         raise ValueError(f"Company {listing.company_id} not found")
+    latest = await _latest_research(
+        session,
+        symbol=listing.ticker,
+        market_code=listing.market_code,
+    )
     return WatchlistItemOut(
         listing_id=item.listing_id,
         ticker=format_listing_ticker(
@@ -222,7 +231,77 @@ async def _to_out(session: AsyncSession, item: WatchlistItem) -> WatchlistItemOu
         ),
         last_refresh_error=item.last_refresh_error,
         last_research_run_id=item.last_research_run_id,
+        latest_research=latest,
     )
+
+
+async def _latest_research(
+    session: AsyncSession,
+    *,
+    symbol: str,
+    market_code: str,
+) -> WatchlistLatestResearch | None:
+    """Summarize the newest snapshot and its change set for one listing."""
+
+    parsed = parse_a_share_ticker(
+        format_listing_ticker(ticker=symbol, market_code=market_code)
+    )
+    if parsed is None:
+        return None
+    suffix = parsed[1].suffix
+    history = await ResearchSnapshotRepository(session).history(
+        symbol=symbol,
+        market=suffix,
+        limit=1,
+    )
+    if not history:
+        return None
+    snapshot = history[0]
+    change_set = await ResearchChangeRepository(session).by_snapshot(snapshot.id)
+    items = snapshot.score_json.get("items")
+    score = items[0] if isinstance(items, list) and items and isinstance(items[0], dict) else {}
+    freshness = score.get("freshness")
+    freshness_ok: bool | None = None
+    if isinstance(freshness, dict) and freshness:
+        freshness_ok = all(
+            block.get("is_stale") is False
+            for block in freshness.values()
+            if isinstance(block, dict)
+        )
+    return WatchlistLatestResearch(
+        run_id=snapshot.pipeline_run_id,
+        as_of=snapshot.as_of,
+        strategy_label=_optional_str(score.get("strategy_label")),
+        investment_score=_optional_float(score.get("investment_score")),
+        research_confidence_score=_optional_float(score.get("research_confidence_score")),
+        freshness_ok=freshness_ok,
+        needs_agent_review=(
+            score["needs_agent_review"]
+            if isinstance(score.get("needs_agent_review"), bool)
+            else None
+        ),
+        scoring_version=snapshot.scoring_version,
+        changed_at=(
+            _as_utc(change_set.notified_at if change_set.notified_at is not None else change_set.created_at)
+            if change_set is not None
+            else None
+        ),
+        meaningful_change_count=(
+            change_set.meaningful_change_count if change_set is not None else None
+        ),
+    )
+
+
+def _optional_str(value: object) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _optional_float(value: object) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
 
 
 def _as_utc(value: datetime) -> datetime:

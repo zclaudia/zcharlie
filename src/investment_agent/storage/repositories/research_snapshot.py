@@ -93,6 +93,7 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
         symbol: str,
         market: str,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[ResearchSnapshot]:
         result = await self.session.execute(
             select(ResearchSnapshot)
@@ -101,6 +102,7 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
                 ResearchSnapshot.market == market,
             )
             .order_by(ResearchSnapshot.as_of.desc(), ResearchSnapshot.id.desc())
+            .offset(offset)
             .limit(limit)
         )
         return list(result.scalars().all())

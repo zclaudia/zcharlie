@@ -49,6 +49,7 @@ def _register_protected_routes(app: FastAPI) -> None:
     from investment_agent.api.routes import (
         admin,
         attribution,
+        dashboard,
         listings,
         pipelines,
         reports,
@@ -62,6 +63,7 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(attribution.router)
     app.include_router(reports.router)
     app.include_router(research.router)
+    app.include_router(dashboard.router)
     app.include_router(listings.router)
     app.include_router(strategies.router)
     app.include_router(universes.router)

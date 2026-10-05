@@ -5,6 +5,21 @@ from datetime import date, datetime
 from pydantic import BaseModel, Field, field_validator
 
 
+class WatchlistLatestResearch(BaseModel):
+    """Summary of the newest research snapshot for one watchlist entry."""
+
+    run_id: int
+    as_of: date
+    strategy_label: str | None = None
+    investment_score: float | None = None
+    research_confidence_score: float | None = None
+    freshness_ok: bool | None = None
+    needs_agent_review: bool | None = None
+    scoring_version: str | None = None
+    changed_at: datetime | None = None
+    meaningful_change_count: int | None = None
+
+
 class WatchlistItemOut(BaseModel):
     listing_id: int
     ticker: str
@@ -21,6 +36,7 @@ class WatchlistItemOut(BaseModel):
     last_refreshed_at: datetime | None
     last_refresh_error: str | None
     last_research_run_id: int | None
+    latest_research: WatchlistLatestResearch | None = None
 
 
 class WatchlistAdd(BaseModel):

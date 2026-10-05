@@ -23,6 +23,15 @@ class ResearchChangeRepository(Repository[ResearchChangeSet]):
             )
         ).scalar_one_or_none()
 
+    async def by_snapshot(self, snapshot_id: int) -> ResearchChangeSet | None:
+        return (
+            await self.session.execute(
+                select(ResearchChangeSet).where(
+                    ResearchChangeSet.current_snapshot_id == snapshot_id
+                )
+            )
+        ).scalar_one_or_none()
+
     async def mark_notified(
         self,
         pipeline_run_id: int,

@@ -18,9 +18,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from starlette.datastructures import URL
 
-from investment_agent.api.auth import get_settings
+from investment_agent.api.auth import get_settings, is_same_origin
 from investment_agent.config import Settings
 from investment_agent.web.session import (
     SESSION_COOKIE_NAME,
@@ -48,27 +47,10 @@ def register_web(app: Any) -> None:
     )
 
 
-def _is_same_origin(request: Request) -> bool:
-    origin = request.headers.get("origin")
-    if origin is None:
-        referer = request.headers.get("referer")
-        if referer is None:
-            return True
-        origin = referer
-    try:
-        origin_url = URL(origin)
-        origin_host = origin_url.netloc
-    except Exception:
-        return False
-    if not origin_host:
-        return True
-    return bool(origin_host == request.headers.get("host"))
-
-
 async def require_same_origin(request: Request) -> None:
     """Reject cross-origin state-changing UI requests (CSRF defence in depth)."""
 
-    if not _is_same_origin(request):
+    if not is_same_origin(request):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="cross-origin request")
 
 
