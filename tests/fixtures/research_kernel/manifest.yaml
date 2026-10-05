@@ -1,0 +1,217 @@
+# Golden corpus manifest for the deterministic research kernel.
+#
+# Selection policy (docs/product/mvp-completion-plan.md, work package A1):
+# samples are chosen by coverage characteristics first, then each ticker is
+# confirmed against real iFinD availability while collecting fixtures in
+# work package A2. Fixture inputs are captured through ifind-proxy, sanitized
+# of credentials, request headers and user paths, then frozen for offline
+# parity tests. The legacy my-stocks 0.3.0 output stays a read-only golden
+# oracle; production and tests never depend on the user directory.
+#
+# Sample directory convention: tests/fixtures/research_kernel/<6-digit symbol>.
+
+manifest_schema_version: 1
+created_at: "2026-10-05"
+canonical_schema_version: "ifind-canonical.v1"
+scoring_version: "v1.2"
+score_schema_version: "v2.0"
+report_year: 2025
+fixture_policy:
+  provider: ifind-proxy
+  sanitized: true
+  offline: true
+
+coverage_requirements:
+  min_samples: 12
+  max_samples: 20
+  min_per_exchange:
+    SSE: 4
+    SZSE: 4
+    BSE: 2
+  business_categories:
+    - bank_finance
+    - consumer
+    - high_end_manufacturing
+    - cyclical_resource
+    - software_asset_light
+    - high_growth
+  min_per_boundary_trait:
+    key_missing_fields: 2
+    low_or_negative_profitability: 1
+    borderline_freshness: 1
+    low_model_fit: 1
+  scales:
+    - large_cap
+    - mid_cap
+    - small_cap
+
+samples:
+  - ticker: 600406.SH
+    name: 国电南瑞
+    exchange: SSE
+    industry: 电力设备
+    business_category: high_end_manufacturing
+    scale: mid_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: 首个已验证 golden 样本，内核输出与 my-stocks 0.3.0 逐字段等价。
+
+  - ticker: 601398.SH
+    name: 工商银行
+    exchange: SSE
+    industry: 银行
+    business_category: bank_finance
+    scale: large_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 银行资产负债表结构，检验金融字段映射与高杠杆假设。
+
+  - ticker: 600519.SH
+    name: 贵州茅台
+    exchange: SSE
+    industry: 白酒
+    business_category: consumer
+    scale: large_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 高毛利消费龙头，检验高盈利路径的分类与评分。
+
+  - ticker: 600028.SH
+    name: 中国石化
+    exchange: SSE
+    industry: 石油化工
+    business_category: cyclical_resource
+    scale: large_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 上游资源与炼化周期，检验周期行业低毛利评分。
+
+  - ticker: 601111.SH
+    name: 中国国航
+    exchange: SSE
+    industry: 航空运输
+    business_category: cyclical_resource
+    scale: mid_cap
+    traits:
+      - low_or_negative_profitability
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 高负债、盈利波动大的周期运输样本，覆盖低或负盈利边界。
+
+  - ticker: 688111.SH
+    name: 金山办公
+    exchange: SSE
+    industry: 软件办公
+    business_category: software_asset_light
+    scale: mid_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 科创板订阅制软件，检验轻资产高研发投入画像。
+
+  - ticker: 300750.SZ
+    name: 宁德时代
+    exchange: SZSE
+    industry: 动力电池
+    business_category: high_growth
+    scale: large_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 高成长制造龙头，检验成长路径与大盘样本。
+
+  - ticker: 000858.SZ
+    name: 五粮液
+    exchange: SZSE
+    industry: 白酒
+    business_category: consumer
+    scale: large_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 深交所消费龙头，与茅台形成同行业跨所对照。
+
+  - ticker: 002415.SZ
+    name: 海康威视
+    exchange: SZSE
+    industry: 安防设备
+    business_category: high_end_manufacturing
+    scale: large_cap
+    traits:
+      - baseline
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 硬件制造与软件混合业务，检验中性行业分类稳定性。
+
+  - ticker: 002230.SZ
+    name: 科大讯飞
+    exchange: SZSE
+    industry: 人工智能软件
+    business_category: software_asset_light
+    scale: mid_cap
+    traits:
+      - key_missing_fields
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 研发资本化与分部数据披露有限，预期出现关键缺失字段并触发复核。
+
+  - ticker: 000039.SZ
+    name: 中集集团
+    exchange: SZSE
+    industry: 多元工业
+    business_category: cyclical_resource
+    scale: mid_cap
+    traits:
+      - low_model_fit
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 多元化业务组合与既有策略模板匹配度低，检验模型适配度降级路径。
+
+  - ticker: 835185.BJ
+    name: 贝特瑞
+    exchange: BSE
+    industry: 锂电材料
+    business_category: high_growth
+    scale: small_cap
+    traits:
+      - borderline_freshness
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 北交所小盘高成长材料股，披露节奏较慢，覆盖 freshness 临界样本。
+
+  - ticker: 836077.BJ
+    name: 吉林碳谷
+    exchange: BSE
+    industry: 碳纤维材料
+    business_category: cyclical_resource
+    scale: small_cap
+    traits:
+      - key_missing_fields
+      - low_or_negative_profitability
+    report_year: 2025
+    collected_at: null
+    fixture_status: pending
+    notes: 碳纤维价格下行期的小盘材料股，覆盖缺失字段与低盈利叠加边界。
