@@ -127,6 +127,9 @@ Launch: `ia api serve` (default port 8000). Then visit:
 
 Run the durable research worker separately with `ia worker start`. For local smoke
 tests, `ia worker start --once` recovers stale work and processes at most one job.
+If deterministic scoring succeeds but the explanation model fails, the run is
+`partial`: `/research/runs/{id}` still returns the score and deterministic artifacts
+with `explanation: null` for explicit review.
 
 ### `config/app.yaml` — universes, strategies, pipeline, scheduler
 

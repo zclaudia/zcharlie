@@ -1,9 +1,16 @@
+import json
 from datetime import date
+from pathlib import Path
+
+import pytest
 
 from investment_agent.config import Settings
+from investment_agent.research import ifind_chain
 from investment_agent.research.ifind_chain import (
+    CanonicalBundle,
     EvidenceClaim,
     ResearchExplanation,
+    ResearchPartialError,
     _artifact_dir_for_attempt,
     _return_stats,
     parse_proxy_rows,
@@ -142,3 +149,65 @@ async def test_successful_idempotent_run_replays_persisted_snapshot(
     assert result.score["business_score"] == 55.22
     assert result.explanation.summary == "persisted"
     assert not (tmp_path / "new-runs").exists()
+
+
+async def test_explanation_failure_persists_partial_deterministic_result(
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    del db_session  # initializes the shared in-memory engine and schema
+    fixture_root = (
+        Path(__file__).parents[1] / "fixtures" / "research_kernel" / "600406"
+    )
+    bundle = CanonicalBundle(
+        pool=json.loads((fixture_root / "pool.json").read_text(encoding="utf-8")),
+        market=json.loads((fixture_root / "market.json").read_text(encoding="utf-8")),
+        financial=json.loads(
+            (fixture_root / "financial.json").read_text(encoding="utf-8")
+        ),
+        raw={},
+    )
+
+    async def fake_fetch(*_args, **_kwargs) -> CanonicalBundle:
+        return bundle
+
+    async def fail_explanation(**_kwargs) -> ResearchExplanation:
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(ifind_chain, "fetch_canonical_bundle", fake_fetch)
+    monkeypatch.setattr(ifind_chain, "_explain_score", fail_explanation)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="test",
+        llm_tier2_api_key="test",
+        llm_tier3_api_key="test",
+    )
+
+    with pytest.raises(ResearchPartialError) as exc_info:
+        await run_ifind_research_chain(
+            settings=settings,
+            proxy_url="http://unused.invalid",
+            proxy_api_key="unused",
+            ticker="600406.SH",
+            industry="电力设备",
+            report_year=2025,
+            as_of=date(2026, 10, 5),
+            output_root=tmp_path / "research-runs",
+        )
+
+    run_id = exc_info.value.run_id
+    async with session_scope() as session:
+        run = await PipelineRunRepository(session).get(run_id)
+        snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
+
+    assert run is not None
+    assert run.status == "partial"
+    assert run.stage == "partial"
+    assert run.metadata_json["partial_reason"] == "explanation_failed"
+    assert "model unavailable" in (run.error_summary or "")
+    assert snapshot is not None
+    assert snapshot.score_json["business_score"] == 55.22
+    assert snapshot.explanation_json is None
+    assert "agent_report" not in snapshot.artifact_manifest
+    assert str(snapshot.artifact_manifest["scores"]).endswith("/scores.json")

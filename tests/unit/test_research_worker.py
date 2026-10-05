@@ -4,6 +4,7 @@ from investment_agent.config import Settings
 from investment_agent.research.ifind_chain import (
     ResearchChainResult,
     ResearchExplanation,
+    ResearchPartialError,
 )
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.storage.database import session_scope
@@ -102,3 +103,46 @@ async def test_worker_marks_corrupt_payload_failed(db_session, tmp_path):
         assert persisted.status == "failed"
         assert persisted.stage == "failed"
         assert "validation errors" in (persisted.error_summary or "")
+
+
+async def test_worker_preserves_partial_status_from_runner(db_session, tmp_path):
+    del db_session  # initializes the shared in-memory engine and schema
+    async with session_scope() as session:
+        run, _ = await PipelineRunRepository(session).enqueue(
+            kind="ifind_research",
+            idempotency_key="worker-partial",
+            triggered_by="api",
+            request_json={
+                "ticker": "600406.SH",
+                "industry": "电力设备",
+                "report_year": 2025,
+                "as_of": "2026-10-05",
+            },
+        )
+        run_id = run.id
+
+    async def partial_runner(**_kwargs: object) -> ResearchChainResult:
+        async with session_scope() as session:
+            await PipelineRunRepository(session).mark_partial(
+                run_id,
+                "explanation unavailable",
+                {"partial_reason": "explanation_failed"},
+            )
+        raise ResearchPartialError(
+            run_id=run_id,
+            reason="explanation unavailable",
+        )
+
+    worker = ResearchWorker(
+        settings=_settings(tmp_path),
+        worker_id="test-worker",
+        runner=partial_runner,
+    )
+    processed = await worker.run_once()
+
+    assert processed == run_id
+    async with session_scope() as session:
+        persisted = await PipelineRunRepository(session).get(run_id)
+        assert persisted is not None
+        assert persisted.status == "partial"
+        assert persisted.metadata_json["partial_reason"] == "explanation_failed"

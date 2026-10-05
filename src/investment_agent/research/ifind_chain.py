@@ -98,6 +98,15 @@ class ResearchRunConflictError(RuntimeError):
         super().__init__(f"research run {run_id} already exists with status={status}")
 
 
+class ResearchPartialError(RuntimeError):
+    """Raised after deterministic results were persisted without an explanation."""
+
+    def __init__(self, *, run_id: int, reason: str):
+        self.run_id = run_id
+        self.reason = reason
+        super().__init__(f"research run {run_id} completed partially: {reason}")
+
+
 class IfindProxyClient:
     """Small async client that unwraps the proxy's nested ``data_preview`` CSV."""
 
@@ -890,21 +899,6 @@ async def run_ifind_research_chain(
         )
         scores = json.loads(kernel_artifacts.scores_json.read_text(encoding="utf-8"))
         score_item = scores["items"][0]
-        async with session_scope() as session:
-            await PipelineRunRepository(session).set_stage(run_id, "explaining")
-        explanation = await _explain_score(
-            settings=settings,
-            run_id=run_id,
-            score_item=score_item,
-        )
-        explanation_path = artifact_dir / "agent_explanation.json"
-        report_path = artifact_dir / "agent_report.md"
-        _write_json(explanation_path, explanation.model_dump())
-        report_path.write_text(
-            render_agent_report(score_item=score_item, explanation=explanation),
-            encoding="utf-8",
-        )
-
         artifact_manifest: dict[str, object] = {
             "pool": str(pool_path.resolve()),
             "market": str(market_path.resolve()),
@@ -914,10 +908,7 @@ async def run_ifind_research_chain(
             "scores_csv": str(kernel_artifacts.scores_csv.resolve()),
             "report_context": str(kernel_artifacts.report_context_json.resolve()),
             "deterministic_report": str(kernel_artifacts.report_markdown.resolve()),
-            "agent_explanation": str(explanation_path.resolve()),
-            "agent_report": str(report_path.resolve()),
         }
-
         metadata: dict[str, object] = {
             "symbol": score_item["symbol"],
             "market": score_item["market"],
@@ -930,8 +921,52 @@ async def run_ifind_research_chain(
             "suggestion": score_item["suggestion"],
             "needs_agent_review": score_item["needs_agent_review"],
             "artifact_dir": str(artifact_dir.resolve()),
-            "agent_report": str(report_path.resolve()),
         }
+        async with session_scope() as session:
+            await PipelineRunRepository(session).set_stage(run_id, "explaining")
+        try:
+            explanation = await _explain_score(
+                settings=settings,
+                run_id=run_id,
+                score_item=score_item,
+            )
+        except Exception as exc:
+            reason = f"explanation failed: {type(exc).__name__}: {exc}"
+            metadata["partial_reason"] = "explanation_failed"
+            async with session_scope() as session:
+                await PipelineRunRepository(session).set_stage(run_id, "persisting")
+                await ResearchSnapshotRepository(session).create(
+                    pipeline_run_id=run_id,
+                    symbol=str(score_item["symbol"]),
+                    market=str(score_item["market"]),
+                    company_name=str(score_item["name"]),
+                    industry=str(score_item["industry"]),
+                    as_of=as_of,
+                    report_year=report_year,
+                    canonical_schema_version=CANONICAL_SCHEMA_VERSION,
+                    scoring_version=str(score_item["scoring_version"]),
+                    score_schema_version=str(score_item["schema_version"]),
+                    score_json=score_item,
+                    explanation_json=None,
+                    artifact_manifest=artifact_manifest,
+                )
+                await PipelineRunRepository(session).mark_partial(
+                    run_id,
+                    reason,
+                    metadata,
+                )
+            raise ResearchPartialError(run_id=run_id, reason=reason) from exc
+        explanation_path = artifact_dir / "agent_explanation.json"
+        report_path = artifact_dir / "agent_report.md"
+        _write_json(explanation_path, explanation.model_dump())
+        report_path.write_text(
+            render_agent_report(score_item=score_item, explanation=explanation),
+            encoding="utf-8",
+        )
+
+        artifact_manifest["agent_explanation"] = str(explanation_path.resolve())
+        artifact_manifest["agent_report"] = str(report_path.resolve())
+        metadata["agent_report"] = str(report_path.resolve())
         async with session_scope() as session:
             await PipelineRunRepository(session).set_stage(run_id, "persisting")
             await ResearchSnapshotRepository(session).create(
@@ -956,6 +991,8 @@ async def run_ifind_research_chain(
             score=score_item,
             explanation=explanation,
         )
+    except ResearchPartialError:
+        raise
     except Exception as exc:
         async with session_scope() as session:
             await PipelineRunRepository(session).mark_failed(run_id, str(exc))

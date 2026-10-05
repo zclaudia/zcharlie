@@ -48,7 +48,10 @@ def run_ifind_research(
     """Validate iFinD -> canonical data -> deterministic score -> agent report."""
 
     from investment_agent.config import Settings
-    from investment_agent.research.ifind_chain import run_ifind_research_chain
+    from investment_agent.research.ifind_chain import (
+        ResearchPartialError,
+        run_ifind_research_chain,
+    )
     from investment_agent.storage.database import init_engine
 
     key = proxy_api_key or os.getenv("PROXY_API_KEY", "")
@@ -68,19 +71,23 @@ def run_ifind_research(
     if explanation_model:
         settings = settings.model_copy(update={"llm_tier3_model": explanation_model})
     init_engine(settings.database_url)
-    result = asyncio.run(
-        run_ifind_research_chain(
-            settings=settings,
-            proxy_url=proxy_url,
-            proxy_api_key=key,
-            ticker=ticker,
-            industry=industry,
-            report_year=report_year,
-            as_of=date.fromisoformat(as_of),
-            output_root=output_root,
-            idempotency_key=idempotency_key,
+    try:
+        result = asyncio.run(
+            run_ifind_research_chain(
+                settings=settings,
+                proxy_url=proxy_url,
+                proxy_api_key=key,
+                ticker=ticker,
+                industry=industry,
+                report_year=report_year,
+                as_of=date.fromisoformat(as_of),
+                output_root=output_root,
+                idempotency_key=idempotency_key,
+            )
         )
-    )
+    except ResearchPartialError as exc:
+        rprint(f"[yellow]ResearchRun {exc.run_id} partial[/yellow]: {exc.reason}")
+        raise typer.Exit(code=2) from exc
     rprint(f"[green]ResearchRun {result.run_id} complete[/green]")
     rprint(f"Score: {result.score['business_score']}")
     rprint(f"Workflow: {result.score['suggestion']}")

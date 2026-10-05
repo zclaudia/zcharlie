@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from investment_agent.config import Settings
 from investment_agent.research.ifind_chain import (
     ResearchChainResult,
+    ResearchPartialError,
     run_ifind_research_chain,
 )
 from investment_agent.storage.database import session_scope
@@ -80,6 +81,13 @@ class ResearchWorker:
                 claimed_run_id=run_id,
             )
             log.info("research.worker.completed", run_id=run_id, worker_id=self.worker_id)
+        except ResearchPartialError as exc:
+            log.warning(
+                "research.worker.partial",
+                run_id=run_id,
+                worker_id=self.worker_id,
+                reason=exc.reason,
+            )
         except Exception as exc:
             async with session_scope() as session:
                 repository = PipelineRunRepository(session)
