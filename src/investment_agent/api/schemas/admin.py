@@ -39,6 +39,10 @@ class WatchlistItemOut(BaseModel):
     latest_research: WatchlistLatestResearch | None = None
 
 
+class WatchlistUpdate(BaseModel):
+    enabled: bool
+
+
 class WatchlistAdd(BaseModel):
     ticker: str = Field(min_length=1, max_length=32)
     market_code: str | None = Field(None, min_length=1, max_length=16)

@@ -15,6 +15,7 @@ from investment_agent.api.schemas.admin import (
     WatchlistRefreshItemOut,
     WatchlistRefreshOut,
     WatchlistRefreshRequest,
+    WatchlistUpdate,
 )
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
@@ -308,6 +309,20 @@ def _as_utc(value: datetime) -> datetime:
     """Normalize SQLite's timezone-naive timestamps at the API boundary."""
 
     return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
+
+
+@router.patch("/{listing_id}", response_model=WatchlistItemOut)
+async def update_watchlist_item(listing_id: int, body: WatchlistUpdate) -> WatchlistItemOut:
+    async with session_scope() as session:
+        item = await WatchlistRepository(session).set_enabled(
+            listing_id, enabled=body.enabled
+        )
+        if item is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No watchlist entry for listing_id={listing_id}",
+            )
+        return await _to_out(session, item)
 
 
 @router.delete("/{listing_id}", status_code=204)

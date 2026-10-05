@@ -154,3 +154,13 @@ class WatchlistRepository(Repository[WatchlistItem]):
         await self.session.delete(existing)
         await self.session.flush()
         return True
+
+    async def set_enabled(self, listing_id: int, *, enabled: bool) -> WatchlistItem | None:
+        stmt = select(WatchlistItem).where(WatchlistItem.listing_id == listing_id)
+        existing = (await self.session.execute(stmt)).scalar_one_or_none()
+        if existing is None:
+            return None
+        existing.enabled = enabled
+        await self.session.flush()
+        await self.session.refresh(existing)
+        return existing

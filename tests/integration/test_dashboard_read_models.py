@@ -204,3 +204,43 @@ def test_cookie_authenticated_state_change_requires_same_origin(api_client):
         headers={"Origin": "http://testserver"},
     )
     assert same_origin.status_code == 201
+
+
+def test_watchlist_enable_toggle_roundtrip(api_client):
+    _add_watchlist_item(api_client)
+    listing_id = api_client.get("/watchlist", headers=_headers()).json()[0]["listing_id"]
+
+    disabled = api_client.patch(
+        f"/watchlist/{listing_id}",
+        headers=_headers(),
+        json={"enabled": False},
+    )
+    assert disabled.status_code == 200
+    assert disabled.json()["enabled"] is False
+
+    re_enabled = api_client.patch(
+        f"/watchlist/{listing_id}",
+        headers=_headers(),
+        json={"enabled": True},
+    )
+    assert re_enabled.status_code == 200
+    assert re_enabled.json()["enabled"] is True
+
+
+def test_watchlist_toggle_unknown_listing_returns_404(api_client):
+    response = api_client.patch(
+        "/watchlist/999",
+        headers=_headers(),
+        json={"enabled": False},
+    )
+    assert response.status_code == 404
+
+
+def test_stock_page_carries_run_form_and_detail_regions(api_client):
+    login = api_client.post("/app/login", data={"api_key": "secret", "next": "/app"})
+    assert login.status_code == 200
+    html = api_client.get("/app/stocks/600406.SH").text
+    assert 'id="stock-run-form"' in html
+    assert 'data-endpoint="/research/stocks/600406.SH/history"' in html
+    assert 'id="stock-detail"' in html
+    assert 'id="stock-changes"' in html

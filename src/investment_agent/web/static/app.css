@@ -128,7 +128,29 @@ button.link-button:hover { color: var(--error); }
 .login-card form { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
 .login-card button { justify-self: start; }
 
+button.danger { border-color: var(--error); color: var(--error); }
+
+.explanation-card { border-left: 4px solid var(--partial); background: color-mix(in srgb, var(--partial) 4%, var(--surface)); }
+.field-chips { margin-left: 0.5rem; }
+.field-chips code {
+  display: inline-block;
+  margin: 0 0.25rem 0.25rem 0;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  background: var(--bg);
+}
+code[data-field-path] { cursor: pointer; }
+code[data-field-path]:hover { border-color: var(--accent); color: var(--accent); }
+.run-detail { padding: 0.5rem 0.25rem; }
+.run-detail a { margin-right: 0.5rem; }
+.row-actions { white-space: nowrap; }
+.row-actions button { margin-right: 0.35rem; padding: 0.15rem 0.5rem; font-size: 0.85rem; }
+
 @media (min-width: 48rem) {
   h1 { font-size: 1.4rem; }
   .app-main { padding: 1.5rem; }
 }
+
+.kv-key { color: var(--ink-muted); width: 30%; }

@@ -1,80 +1,122 @@
-// 页面数据装配：按 data-region 声明加载数据并渲染基础表格/卡片。
-// 页面逻辑只消费版本化 API，不在前端解释 score 语义。
+// 页面数据装配：按 data-region 声明加载数据并渲染。
+// 页面只消费版本化 API 结构，不在前端解释 score 语义或复算分数。
 
-import { download, get, loadRegion, lockWhileBusy, post, renderRegion } from "./api.js";
+import {
+  ApiError,
+  download,
+  get,
+  loadRegion,
+  lockWhileBusy,
+  post,
+  renderRegion,
+} from "./api.js";
 
 function el(tag, attributes = {}, text) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attributes)) {
-    if (value !== undefined && value !== null) node.setAttribute(key, value);
+    if (value !== undefined && value !== null) node.setAttribute(key, String(value));
   }
   if (text !== undefined) node.textContent = text;
   return node;
 }
 
-function cell(row, key) {
-  return el("td", {}, row[key] === null || row[key] === undefined ? "—" : String(row[key]));
+function fmt(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  return String(value);
+}
+
+function fmtNumber(value, digits = 2) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: digits });
+}
+
+function stockLink(ticker) {
+  if (!ticker) return null;
+  return el("a", { href: `/app/stocks/${ticker}` }, ticker);
 }
 
 function table(headers, rows) {
-  if (!rows.length) return null;
-  const tableNode = el("table");
-  const head = el("tr");
-  for (const header of headers) head.appendChild(el("th", {}, header));
-  tableNode.appendChild(el("thead")).appendChild(head);
+  const node = el("table");
+  const headRow = el("tr");
+  for (const header of headers) headRow.appendChild(el("th", {}, header.label));
+  node.appendChild(el("thead")).appendChild(headRow);
   const body = el("tbody");
-  for (const row of rows) {
-    const tr = el("tr");
-    for (const header of headers) tr.appendChild(cell(row, header.key || header));
-    body.appendChild(tr);
-  }
-  tableNode.appendChild(body);
-  return tableNode;
+  for (const row of rows) body.appendChild(row);
+  node.appendChild(body);
+  return node;
 }
 
-function statusText(value) {
-  const span = el("span", { class: `status status-${value}` }, value);
-  return span;
+function kvTable(pairs) {
+  const node = el("table");
+  const body = el("tbody");
+  for (const [key, value] of pairs) {
+    const tr = el("tr");
+    tr.appendChild(el("td", { class: "kv-key" }, key));
+    tr.appendChild(el("td", {}, fmt(value)));
+    body.appendChild(tr);
+  }
+  node.appendChild(body);
+  return node;
+}
+
+function statusBadge(value) {
+  if (!value) return el("span", {}, "—");
+  return el("span", { class: `status status-${value}` }, value);
 }
 
 // ---- 今日概览 ---------------------------------------------------------
 
+function dashboardSection(title, entries) {
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h2", {}, `${title}（${entries.length}）`));
+  const rows = entries.map((entry) => {
+    const tr = el("tr");
+    const tickerCell = el("td");
+    if (entry.ticker) {
+      tickerCell.appendChild(stockLink(entry.ticker));
+    } else {
+      tickerCell.textContent = "—";
+    }
+    tr.appendChild(tickerCell);
+    tr.appendChild(el("td", {}, fmt(entry.name)));
+    tr.appendChild(el("td", {}, fmt(entry.stage || entry.status)));
+    tr.appendChild(el("td", {}, fmt(entry.summary)));
+    return tr;
+  });
+  card.appendChild(
+    table(
+      [
+        { key: "ticker", label: "代码" },
+        { key: "name", label: "名称" },
+        { key: "stage", label: "阶段" },
+        { key: "summary", label: "摘要" },
+      ],
+      rows
+    )
+  );
+  return card;
+}
+
 async function loadDashboard(region, data) {
-  if (!data || (!data.running && !data.failed && !data.partial && !data.needs_review && !data.meaningful_changes)) {
-    renderRegion(region, "empty");
-    return;
-  }
-  const container = el("div");
   const sections = [
     ["运行中", data.running],
     ["失败", data.failed],
     ["部分成功", data.partial],
     ["待复核", data.needs_review],
     ["重要变化", data.meaningful_changes],
-  ];
-  for (const [title, entries] of sections) {
-    if (!entries || !entries.length) continue;
-    const card = el("div", { class: "card" });
-    card.appendChild(el("h2", {}, `${title}（${entries.length}）`));
-    const rows = entries.map((entry) => ({
-      ticker: entry.ticker || entry.symbol || "—",
-      name: entry.name || "",
-      run_id: entry.run_id,
-      status: entry.status || "",
-    }));
-    const tableNode = table(
-      [
-        { key: "ticker", label: "代码" },
-        { key: "name", label: "名称" },
-        { key: "run_id", label: "运行" },
-        { key: "status", label: "状态" },
-      ],
-      rows
-    );
-    if (tableNode) card.appendChild(tableNode);
-    container.appendChild(card);
+  ].filter(([, bucket]) => bucket && bucket.count > 0);
+
+  if (!sections.length) {
+    renderRegion(region, "empty", "今日无待处理项。");
+    return;
   }
-  renderRegion(region, container.children.length ? "ready" : "empty", container.children.length ? container : undefined);
+  const container = el("div");
+  for (const [title, bucket] of sections) {
+    container.appendChild(
+      dashboardSection(title, bucket.entries)
+    );
+  }
+  renderRegion(region, "ready", container);
 }
 
 // ---- 自选股 ----------------------------------------------------------
@@ -84,30 +126,92 @@ async function loadWatchlist(region, items) {
     renderRegion(region, "empty");
     return;
   }
-  const rows = items.map((item) => ({
-    ticker: item.ticker,
-    name: item.name,
-    industry: item.industry,
-    investment_score: item.latest_score ? item.latest_score.investment_score : null,
-    research_confidence_score: item.latest_score ? item.latest_score.research_confidence_score : null,
-    freshness: item.latest_score ? (item.latest_score.freshness_ok === false ? "stale" : "ok") : null,
-    changed_at: item.changed_at,
-    last_refresh_status: item.last_refresh_status,
-  }));
-  const tableNode = table(
+  const node = table(
     [
-      { key: "ticker", label: "代码" },
-      { key: "name", label: "名称" },
-      { key: "industry", label: "行业" },
-      { key: "investment_score", label: "投资分" },
-      { key: "research_confidence_score", label: "置信度" },
-      { key: "freshness", label: "freshness" },
-      { key: "changed_at", label: "变化时间" },
-      { key: "last_refresh_status", label: "刷新状态" },
+      { label: "代码" },
+      { label: "名称" },
+      { label: "行业" },
+      { label: "投资分" },
+      { label: "置信度" },
+      { label: "freshness" },
+      { label: "变化时间" },
+      { label: "刷新状态" },
+      { label: "操作" },
     ],
-    rows
+    items.map((item) => watchlistRow(region, item))
   );
-  renderRegion(region, tableNode ? "ready" : "empty", tableNode || undefined);
+  renderRegion(region, "ready", node);
+}
+
+function watchlistRow(region, item) {
+  const tr = el("tr");
+  const tickerCell = el("td");
+  const latest = item.latest_research;
+  if (latest && latest.run_id) {
+    tickerCell.appendChild(stockLink(item.ticker));
+  } else {
+    tickerCell.appendChild(el("a", { href: `/app/stocks/${item.ticker}` }, item.ticker));
+  }
+  tr.appendChild(tickerCell);
+  tr.appendChild(el("td", {}, fmt(item.name)));
+  tr.appendChild(el("td", {}, fmt(item.industry)));
+  tr.appendChild(el("td", {}, fmtNumber(latest && latest.investment_score, 1)));
+  tr.appendChild(el("td", {}, fmtNumber(latest && latest.research_confidence_score, 1)));
+  const freshnessCell = el("td");
+  if (latest) {
+    freshnessCell.appendChild(
+      statusBadge(latest.freshness_ok === null || latest.freshness_ok === undefined ? "unknown" : latest.freshness_ok ? "ok" : "stale")
+    );
+  } else {
+    freshnessCell.textContent = "—";
+  }
+  tr.appendChild(freshnessCell);
+  tr.appendChild(el("td", {}, fmt(latest && latest.changed_at ? latest.changed_at.slice(0, 16).replace("T", " ") : "—")));
+  const statusCell = el("td");
+  statusCell.appendChild(statusBadge(item.last_refresh_status));
+  tr.appendChild(statusCell);
+
+  const actions = el("td", { class: "row-actions" });
+  const toggle = el("button", { type: "button" }, item.enabled ? "停用" : "启用");
+  toggle.addEventListener("click", () => {
+    const promise = fetch(`/watchlist/${item.listing_id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ enabled: !item.enabled }),
+    }).then((response) => {
+      if (response.ok) {
+        loadRegion(region, { render: loadWatchlist });
+      } else {
+        renderRegion(region, "error", `更新失败（HTTP ${response.status}）。`);
+      }
+    });
+    lockWhileBusy(toggle, promise);
+  });
+  actions.appendChild(toggle);
+  const remove = el("button", { type: "button", class: "danger" }, "删除");
+  remove.addEventListener("click", () => {
+    if (!globalThis.confirm(`删除自选股 ${item.ticker}？`)) return;
+    removeWatchlistItem(region, item, remove);
+  });
+  actions.appendChild(remove);
+  tr.appendChild(actions);
+  return tr;
+}
+
+async function removeWatchlistItem(region, item, button) {
+  const promise = fetch(`/watchlist/${item.listing_id}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  }).then((response) => {
+    if (response.status === 204) {
+      loadRegion(region, { render: loadWatchlist });
+    } else {
+      renderRegion(region, "error", `删除失败（HTTP ${response.status}）。`);
+    }
+  });
+  lockWhileBusy(button, promise);
+  await promise;
 }
 
 function wireWatchlistForm(form) {
@@ -140,17 +244,22 @@ function wireRefreshAll(button) {
     const promise = post("/watchlist/refresh", {}, { idempotency: true })
       .then((data) => {
         const results = document.querySelector("#watchlist-refresh-results");
-        if (!results) return;
-        const container = el("div");
-        container.appendChild(
-          el("p", {}, `已排队 ${data.created}，复用 ${data.reused_runs}，失败 ${data.failed}。`)
-        );
-        for (const item of data.items || []) {
+        if (results) {
+          const container = el("div");
           container.appendChild(
-            el("p", { class: `status status-${item.status}` }, `${item.ticker}: ${item.status}`)
+            el(
+              "p",
+              {},
+              `共 ${data.total} 只：新排队 ${data.created}，复用运行 ${data.reused_runs}，失败 ${data.failed}。逐项状态：`
+            )
           );
+          for (const item of data.items || []) {
+            container.appendChild(
+              el("p", { class: `status status-${item.status}` }, `${item.ticker}: ${item.status}`)
+            );
+          }
+          renderRegion(results, "ready", container);
         }
-        renderRegion(results, "ready", container);
         const list = document.querySelector("#watchlist-list");
         if (list) loadRegion(list, { render: loadWatchlist });
       })
@@ -164,76 +273,449 @@ function wireRefreshAll(button) {
 
 // ---- 运行中心 ---------------------------------------------------------
 
-async function loadRuns(region, runs) {
-  if (!Array.isArray(runs) || !runs.length) {
-    renderRegion(region, "empty");
+const RUNS_PAGE_SIZE = 20;
+
+function runsQuery(offset, status) {
+  const params = new URLSearchParams({ limit: String(RUNS_PAGE_SIZE), offset: String(offset) });
+  if (status) params.set("status", status);
+  return `/research/runs?${params.toString()}`;
+}
+
+function renderRunsTable(region, runs) {
+  const node = table(
+    [
+      { label: "ID" },
+      { label: "状态" },
+      { label: "阶段" },
+      { label: "尝试" },
+      { label: "开始时间" },
+      { label: "错误摘要" },
+      { label: "详情" },
+    ],
+    runs.map((run) => runRow(run))
+  );
+  const container = el("div");
+  container.appendChild(node);
+  const loadMore = el("button", { type: "button", class: "secondary load-more" }, "加载更多");
+  loadMore.addEventListener("click", () => {
+    const current = region.querySelectorAll("tbody tr").length;
+    const filter = document.querySelector("#runs-status-filter");
+    loadRunsPage(region, current, { append: true, status: filter && filter.value });
+  });
+  container.appendChild(loadMore);
+  return container;
+}
+
+async function loadRuns(region, runs, { append = false } = {}) {
+  if (!append) {
+    if (!Array.isArray(runs) || !runs.length) {
+      renderRegion(region, "empty");
+      return;
+    }
+    renderRegion(region, "ready", renderRunsTable(region, runs));
     return;
   }
-  const rows = runs.map((run) => ({
-    id: run.id,
-    kind: run.kind,
-    status: run.status,
-    stage: run.stage,
-    attempt_count: run.attempt_count,
-    worker_id: run.worker_id,
-    started_at: run.started_at,
-    error_summary: run.error_summary,
-  }));
-  const tableNode = table(
-    [
-      { key: "id", label: "ID" },
-      { key: "kind", label: "类型" },
-      { key: "status", label: "状态" },
-      { key: "stage", label: "阶段" },
-      { key: "attempt_count", label: "尝试" },
-      { key: "worker_id", label: "Worker" },
-      { key: "started_at", label: "开始" },
-      { key: "error_summary", label: "错误" },
-    ],
-    rows
+  if (!Array.isArray(runs) || !runs.length) {
+    region.querySelector(".load-more")?.remove();
+    return;
+  }
+  const existingTable = region.querySelector("table");
+  const body = existingTable && existingTable.querySelector("tbody");
+  if (!body) {
+    renderRegion(region, "ready", renderRunsTable(region, runs));
+    return;
+  }
+  const loadMore = region.querySelector(".load-more");
+  for (const row of runs.map((run) => runRow(run))) body.appendChild(row);
+  if (loadMore) {
+    const fresh = el("button", { type: "button", class: "secondary load-more" }, "加载更多");
+    fresh.addEventListener("click", () => {
+      const current = region.querySelectorAll("tbody tr").length;
+      const filter = document.querySelector("#runs-status-filter");
+      loadRunsPage(region, current, { append: true, status: filter && filter.value });
+    });
+    loadMore.replaceWith(fresh);
+  }
+}
+
+function runRow(run) {
+  const tr = el("tr");
+  tr.appendChild(el("td", {}, String(run.run_id)));
+  const statusCell = el("td");
+  statusCell.appendChild(statusBadge(run.status));
+  tr.appendChild(statusCell);
+  tr.appendChild(el("td", {}, fmt(run.stage)));
+  tr.appendChild(el("td", {}, `${run.attempt_count}/${run.max_attempts}`));
+  tr.appendChild(
+    el("td", {}, run.started_at ? run.started_at.slice(0, 19).replace("T", " ") : "—")
   );
-  renderRegion(region, tableNode ? "ready" : "empty", tableNode || undefined);
+  const errorCell = el("td");
+  errorCell.textContent = fmt(run.error_summary);
+  tr.appendChild(errorCell);
+
+  const detailCell = el("td");
+  const details = el("details");
+  details.appendChild(el("summary", {}, "详情"));
+  const detailBody = el("div", { class: "run-detail" });
+  detailBody.appendChild(el("p", { class: "muted" }, "加载详情…"));
+  details.addEventListener("toggle", () => {
+    if (details.open && !detailBody.dataset.loaded) loadRunDetail(detailBody, run.run_id);
+  });
+  details.appendChild(detailBody);
+  detailCell.appendChild(details);
+  tr.appendChild(detailCell);
+  return tr;
+}
+
+async function loadRunDetail(container, runId) {
+  try {
+    const detail = await get(`/research/runs/${runId}`);
+    container.innerHTML = "";
+    container.appendChild(
+      kvTable([
+        ["ticker", detail.ticker],
+        ["worker", detail.worker_id],
+        ["started_at", detail.started_at],
+        ["finished_at", detail.finished_at],
+        ["error", detail.error_summary],
+        ["工作流标签", detail.workflow_label],
+      ])
+    );
+    const artifacts =
+      detail.result && Array.isArray(detail.result.artifacts) ? detail.result.artifacts : [];
+    if (artifacts.length) {
+      container.appendChild(el("h3", {}, "制品"));
+      for (const artifact of artifacts) {
+        const link = el("a", { href: artifact.download_url }, artifact.name);
+        link.addEventListener("click", (event) => {
+          event.preventDefault();
+          download(artifact.download_url);
+        });
+        container.appendChild(link);
+        container.appendChild(document.createTextNode(" "));
+      }
+    }
+    container.dataset.loaded = "true";
+  } catch (error) {
+    container.innerHTML = "";
+    container.appendChild(
+      el(
+        "p",
+        { class: "notice notice-error" },
+        error instanceof ApiError ? error.message : "详情加载失败。"
+      )
+    );
+  }
+}
+
+function loadRunsPage(region, offset, { append = false, status } = {}) {
+  const promise = get(runsQuery(offset, status || ""))
+    .then((runs) => loadRuns(region, runs, { append }))
+    .catch((error) => renderRegion(region, "error", error.message));
+  return promise;
 }
 
 // ---- 单股详情 ---------------------------------------------------------
 
+function scoreCard(item, scoreMeta) {
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h2", {}, "确定性评分"));
+  card.appendChild(
+    kvTable([
+      ["策略分类", item.strategy_label],
+      ["投资分", fmtNumber(item.investment_score, 2)],
+      ["业务分", fmtNumber(item.business_score, 2)],
+      ["研究置信度", fmtNumber(item.research_confidence_score, 1)],
+      ["风险等级", item.risk_level],
+      ["估值水平", item.valuation_level],
+      ["工作流标签", item.suggestion_label || item.suggestion],
+      ["数据质量分", fmtNumber(item.data_quality_score, 2)],
+      ["评分版本", (scoreMeta && scoreMeta.scoring_version) || item.scoring_version],
+    ])
+  );
+  return card;
+}
+
+function factorCard(item) {
+  const factors = item.factor_scores || {};
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h2", {}, "因子"));
+  const keys = Object.keys(factors);
+  if (!keys.length) {
+    card.appendChild(el("p", { class: "muted" }, "无因子数据。"));
+    return card;
+  }
+  card.appendChild(
+    table(
+      [{ label: "因子" }, { label: "分值" }],
+      keys.map((key) => {
+        const tr = el("tr");
+        tr.appendChild(el("td", {}, key));
+        tr.appendChild(el("td", {}, fmtNumber(factors[key], 2)));
+        return tr;
+      })
+    )
+  );
+  return card;
+}
+
+function metricsCard(item) {
+  const metrics = item.key_metrics || {};
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h2", {}, "关键指标"));
+  const rows = Object.entries(metrics).map(([key, value]) => {
+    const tr = el("tr");
+    tr.appendChild(el("td", {}, key));
+    const display =
+      typeof value === "number" && /ratio|margin|roe|yield|growth|drawdown/.test(key)
+        ? `${fmtNumber(value * 100, 2)}%`
+        : fmtNumber(typeof value === "number" ? value : NaN, 4);
+    tr.appendChild(el("td", {}, display === "—" ? fmt(value) : display));
+    return tr;
+  });
+  card.appendChild(table([{ label: "指标" }, { label: "数值" }], rows));
+  return card;
+}
+
+function qualityCard(item) {
+  const card = el("div", { class: "card" });
+  card.appendChild(el("h2", {}, "数据质量"));
+  const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
+  if (item.needs_agent_review) {
+    card.appendChild(el("p", { class: "notice notice-warn" }, "needs_agent_review：该标的已标记需要人工复核。"));
+  }
+  card.appendChild(kvTable([["缺失字段", missing.length ? missing.join(", ") : "无"]]));
+  const reviewFlags = (item.quality_flags || []).filter(
+    (flag) => flag.severity === "review" || flag.flag === "model_not_applicable"
+  );
+  if (reviewFlags.length) {
+    const list = el("ul");
+    for (const flag of reviewFlags) {
+      list.appendChild(el("li", {}, `${flag.field}: ${flag.message}`));
+    }
+    card.appendChild(list);
+  }
+  const freshness = item.freshness || {};
+  const freshnessPairs = Object.entries(freshness).map(([name, block]) => [
+    name,
+    block && typeof block === "object"
+      ? `${block.is_stale ? "stale" : "ok"}（age ${fmtNumber(block.age_hours, 1)}h / 上限 ${block.max_age_days}d）`
+      : fmt(block),
+  ]);
+  if (freshnessPairs.length) {
+    card.appendChild(el("h3", {}, "freshness"));
+    card.appendChild(kvTable(freshnessPairs));
+  }
+  return card;
+}
+
+function explanationCard(detail) {
+  const card = el("div", { class: "card explanation-card" });
+  card.appendChild(el("h2", {}, "Agent 解释（引用以确定性字段为准）"));
+  const explanation = detail.result && detail.result.explanation;
+  if (!explanation) {
+    card.appendChild(
+      el(
+        "p",
+        { class: "notice notice-warn" },
+        detail.status === "partial"
+          ? "解释不可用：评分成功但解释生成失败（partial）。以上确定性结果仍然有效。"
+          : "解释不可用。"
+      )
+    );
+    return card;
+  }
+  card.appendChild(el("p", {}, explanation.summary || ""));
+  const groups = [
+    ["分类依据", explanation.classification_rationale],
+    ["正面证据", explanation.positive_evidence],
+    ["负面证据", explanation.negative_evidence],
+    ["风险因素", explanation.risk_factors],
+    ["数据质量说明", explanation.data_quality_notes],
+  ];
+  for (const [title, claims] of groups) {
+    if (!Array.isArray(claims) || !claims.length) continue;
+    card.appendChild(el("h3", {}, title));
+    const list = el("ul");
+    for (const claim of claims) {
+      const li = el("li", {}, claim.text);
+      const chips = el("span", { class: "field-chips" });
+      for (const field of claim.supporting_fields || []) {
+        chips.appendChild(el("code", { "data-field-path": field }, field));
+      }
+      li.appendChild(chips);
+      list.appendChild(li);
+    }
+    card.appendChild(list);
+  }
+  if (Array.isArray(explanation.open_questions) && explanation.open_questions.length) {
+    card.appendChild(el("h3", {}, "待核查问题"));
+    const list = el("ul");
+    for (const question of explanation.open_questions) list.appendChild(el("li", {}, question));
+    card.appendChild(list);
+  }
+  if (explanation.workflow_conclusion) {
+    card.appendChild(el("p", {}, `工作流结论：${explanation.workflow_conclusion}`));
+  }
+  return card;
+}
+
 async function loadStockHistory(region, snapshots) {
   if (!Array.isArray(snapshots) || !snapshots.length) {
     renderRegion(region, "empty");
-    return;
+    return null;
   }
-  const rows = snapshots.map((snapshot) => ({
-    run_id: snapshot.run_id,
-    as_of: snapshot.as_of,
-    strategy_label: snapshot.strategy_label,
-    investment_score: snapshot.investment_score,
-    research_confidence_score: snapshot.research_confidence_score,
-    needs_review: snapshot.needs_review ? "needs_review" : "ok",
-  }));
-  const tableNode = table(
+  const rows = snapshots.map((snapshot) => {
+    const tr = el("tr");
+    const runCell = el("td");
+    runCell.appendChild(el("a", { href: `/app/runs` }, String(snapshot.run_id)));
+    tr.appendChild(runCell);
+    tr.appendChild(el("td", {}, fmt(snapshot.as_of)));
+    tr.appendChild(el("td", {}, fmt(snapshot.strategy_label)));
+    tr.appendChild(el("td", {}, fmtNumber(snapshot.investment_score, 2)));
+    tr.appendChild(el("td", {}, fmtNumber(snapshot.research_confidence_score, 1)));
+    const reviewCell = el("td");
+    reviewCell.appendChild(statusBadge(snapshot.needs_agent_review ? "needs_review" : "ok"));
+    tr.appendChild(reviewCell);
+    return tr;
+  });
+  renderRegion(region, "ready", table(
     [
-      { key: "run_id", label: "运行" },
-      { key: "as_of", label: "as_of" },
-      { key: "strategy_label", label: "策略" },
-      { key: "investment_score", label: "投资分" },
-      { key: "research_confidence_score", label: "置信度" },
-      { key: "needs_review", label: "复核" },
+      { label: "运行" },
+      { label: "as_of" },
+      { label: "策略" },
+      { label: "投资分" },
+      { label: "置信度" },
+      { label: "复核" },
     ],
     rows
-  );
-  renderRegion(region, tableNode ? "ready" : "empty", tableNode || undefined);
+  ));
+  return snapshots[0];
+}
+
+async function loadStockDetail(detailRegion, latestSnapshot) {
+  if (!latestSnapshot) {
+    detailRegion.hidden = true;
+    return;
+  }
+  try {
+    const detail = await get(`/research/runs/${latestSnapshot.run_id}`);
+    detailRegion.hidden = false;
+    detailRegion.innerHTML = "";
+    detailRegion.appendChild(el("h2", {}, `最新运行 #${detail.run_id}（${detail.status}）`));
+    const scoreItem =
+      detail.result && detail.result.score && Array.isArray(detail.result.score.items)
+        ? detail.result.score.items[0]
+        : null;
+    if (!scoreItem) {
+      detailRegion.appendChild(
+        el("p", { class: "notice notice-warn" }, "运行尚未产生确定性评分。")
+      );
+      return;
+    }
+    detailRegion.appendChild(
+      scoreCard(scoreItem, detail.result.score.metadata)
+    );
+    detailRegion.appendChild(factorCard(scoreItem));
+    detailRegion.appendChild(metricsCard(scoreItem));
+    detailRegion.appendChild(qualityCard(scoreItem));
+    detailRegion.appendChild(explanationCard(detail));
+    const changesRegion = document.querySelector("#stock-changes");
+    if (changesRegion) await loadStockChanges(changesRegion, detail.run_id);
+  } catch (error) {
+    detailRegion.hidden = false;
+    detailRegion.innerHTML = "";
+    detailRegion.appendChild(
+      el("p", { class: "notice notice-error" }, error instanceof ApiError ? error.message : "详情加载失败。")
+    );
+  }
+}
+
+async function loadStockChanges(region, runId) {
+  try {
+    const changes = await get(`/research/runs/${runId}/changes`);
+    if (!changes || (!changes.changes || !changes.changes.length)) {
+      renderRegion(region, "empty", changes && changes.baseline ? "这是首次研究（baseline），暂无对比。" : "与上次快照无重要变化。");
+      return;
+    }
+    const container = el("div");
+    container.appendChild(
+      el(
+        "p",
+        {},
+        `对比运行 #${changes.previous_run_id ?? "—"} → #${changes.current_run_id}；重要变化 ${changes.meaningful_change_count}/${changes.change_count}。`
+      )
+    );
+    const list = el("ul");
+    for (const change of changes.changes) {
+      list.appendChild(
+        el(
+          "li",
+          {},
+          `${change.field || change.path || "字段"}: ${fmt(change.before)} → ${fmt(change.after)}${change.delta !== undefined && change.delta !== null ? `（Δ ${fmtNumber(change.delta, 4)}）` : ""}${change.meaningful ? "（重要）" : ""}`
+        )
+      );
+    }
+    container.appendChild(list);
+    renderRegion(region, "ready", container);
+  } catch (error) {
+    renderRegion(region, "error", error instanceof ApiError ? error.message : "变化加载失败。");
+  }
+}
+
+function wireStockRunForm(form) {
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const submit = form.querySelector('button[type="submit"]');
+    const formData = new FormData(form);
+    const ticker = String(formData.get("ticker") || "");
+    const industry = String(formData.get("industry") || "").trim();
+    if (!industry) {
+      const result = document.querySelector("#stock-run-result");
+      if (result) renderRegion(result, "error", "行业为必填项。");
+      return;
+    }
+    const promise = post(
+      "/research/single-stock",
+      { ticker, industry, report_year: new Date().getFullYear() - 1 },
+      { idempotency: true }
+    )
+      .then((accepted) => {
+        const result = document.querySelector("#stock-run-result");
+        if (result) {
+          const container = el("div");
+          container.appendChild(
+            el(
+              "p",
+              { class: "notice" },
+              `已提交研究运行 #${accepted.run_id}（${accepted.status}）；页面将在运行完成后展示结果。`
+            )
+          );
+          renderRegion(result, "ready", container);
+        }
+      })
+      .catch((error) => {
+        const result = document.querySelector("#stock-run-result");
+        if (result) renderRegion(result, "error", error.message);
+      });
+    if (submit) lockWhileBusy(submit, promise);
+    await promise;
+  });
 }
 
 // ---- 启动 -------------------------------------------------------------
 
 function boot() {
-  for (const region of document.querySelectorAll("[data-region][data-endpoint]")) {
+  for (const region of document.querySelectorAll(".data-region[data-endpoint]")) {
     const id = region.id;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
     else if (id === "watchlist-list") loadRegion(region, { render: loadWatchlist });
-    else if (id === "runs-list") loadRegion(region, { render: loadRuns });
-    else if (id === "stock-history") loadRegion(region, { render: loadStockHistory });
-    else if (id === "stock-latest") loadRegion(region, { render: loadStockHistory });
+    else if (id === "runs-list") loadRunsPage(region, 0);
+    else if (id === "stock-history")
+      loadRegion(region, { render: (node, data) => loadStockHistory(node, data).then((latest) => {
+        const detailRegion = document.querySelector("#stock-detail");
+        if (detailRegion && latest) loadStockDetail(detailRegion, latest);
+      }) });
     else loadRegion(region);
   }
 
@@ -241,16 +723,12 @@ function boot() {
   if (addForm) wireWatchlistForm(addForm);
   const refreshAll = document.querySelector("#watchlist-refresh-all");
   if (refreshAll) wireRefreshAll(refreshAll);
+  const stockRunForm = document.querySelector("#stock-run-form");
+  if (stockRunForm) wireStockRunForm(stockRunForm);
 
   const filter = document.querySelector("#runs-status-filter");
   if (filter) {
-    filter.addEventListener("change", () => {
-      const region = document.querySelector("#runs-list");
-      if (!region) return;
-      const status = filter.value;
-      region.dataset.endpoint = status ? `/research/runs?status=${encodeURIComponent(status)}` : "/research/runs";
-      loadRegion(region, { render: loadRuns });
-    });
+    filter.addEventListener("change", () => loadRunsPage(document.querySelector("#runs-list"), 0));
   }
 }
 
@@ -260,4 +738,4 @@ if (document.readyState === "loading") {
   boot();
 }
 
-export { loadDashboard, loadRuns, loadStockHistory, loadWatchlist, table };
+export { loadDashboard, loadRuns, loadStockChanges, loadStockDetail, loadStockHistory, loadWatchlist, table };
