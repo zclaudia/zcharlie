@@ -114,6 +114,22 @@ class WatchlistRepository(Repository[WatchlistItem]):
         await self.session.flush()
         return True
 
+    async def mark_refresh_retrying(
+        self,
+        listing_id: int,
+        *,
+        run_id: int,
+        error: str,
+    ) -> bool:
+        item = await self.get_by_listing(listing_id)
+        if item is None or item.last_research_run_id not in {None, run_id}:
+            return False
+        item.last_refresh_status = "queued"
+        item.last_refresh_error = error
+        item.last_research_run_id = run_id
+        await self.session.flush()
+        return True
+
     async def mark_refresh_enqueue_failed(
         self,
         listing_id: int,

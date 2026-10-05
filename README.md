@@ -137,6 +137,13 @@ curl -X POST http://localhost:8000/watchlist/refresh \
 ia worker start
 ```
 
+The scheduler queues this batch at 15:30 Asia/Shanghai on reviewed A-share
+trading days. The versioned calendar lives in `config/calendars/a_share.yaml` and
+fails closed when a year has not been reviewed. Its 2026 exceptions come from the
+[Shanghai Stock Exchange holiday notice](https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml).
+Transient proxy/network failures are retried with bounded exponential backoff;
+invalid inputs and partial deterministic results are not retried.
+
 ## Configuration
 
 ### `.env` — secrets and runtime

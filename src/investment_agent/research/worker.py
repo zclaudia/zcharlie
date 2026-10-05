@@ -6,6 +6,7 @@ import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime, timedelta
 
+import httpx
 import structlog
 from pydantic import BaseModel, Field
 
@@ -42,10 +43,12 @@ class ResearchWorker:
         settings: Settings,
         worker_id: str,
         runner: ResearchRunner = run_ifind_research_chain,
+        retry_base_delay_seconds: float = 5.0,
     ) -> None:
         self.settings = settings
         self.worker_id = worker_id
         self.runner = runner
+        self.retry_base_delay_seconds = retry_base_delay_seconds
 
     async def recover_stale(self, *, stale_after_seconds: float) -> tuple[list[int], list[int]]:
         now = datetime.now(UTC)
@@ -117,16 +120,42 @@ class ResearchWorker:
                 reason=exc.reason,
             )
         except Exception as exc:
+            retry_scheduled = False
             async with session_scope() as session:
                 repository = PipelineRunRepository(session)
                 current = await repository.get(run_id)
-                if current is not None and current.status == "running":
-                    await repository.mark_failed(run_id, str(exc))
-            log.exception(
-                "research.worker.failed",
-                run_id=run_id,
-                worker_id=self.worker_id,
-            )
+                if current is not None:
+                    if _is_transient_error(exc):
+                        retry_at = datetime.now(UTC) + timedelta(
+                            seconds=self.retry_base_delay_seconds
+                            * (2 ** max(current.attempt_count - 1, 0))
+                        )
+                        retry_scheduled = await repository.schedule_retry(
+                            run_id,
+                            error_summary=f"retry scheduled: {type(exc).__name__}: {exc}",
+                            available_at=retry_at,
+                        )
+                        if retry_scheduled and listing_id is not None:
+                            await WatchlistRepository(session).mark_refresh_retrying(
+                                listing_id,
+                                run_id=run_id,
+                                error=f"retry scheduled: {type(exc).__name__}: {exc}",
+                            )
+                    if not retry_scheduled and current.status == "running":
+                        await repository.mark_failed(run_id, str(exc))
+            if retry_scheduled:
+                log.warning(
+                    "research.worker.retry_scheduled",
+                    run_id=run_id,
+                    worker_id=self.worker_id,
+                    error=str(exc),
+                )
+            else:
+                log.exception(
+                    "research.worker.failed",
+                    run_id=run_id,
+                    worker_id=self.worker_id,
+                )
         finally:
             if listing_id is not None:
                 await _sync_watchlist_refresh(run_id=run_id, listing_id=listing_id)
@@ -145,6 +174,21 @@ async def _sync_watchlist_refresh(*, run_id: int, listing_id: int) -> None:
             refreshed_at=run.finished_at or datetime.now(UTC),
             error=run.error_summary,
         )
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code == 429 or exc.response.status_code >= 500
+    return isinstance(
+        exc,
+        (
+            httpx.TimeoutException,
+            httpx.TransportError,
+            ConnectionError,
+            TimeoutError,
+            OSError,
+        ),
+    )
 
 
 async def run_worker(

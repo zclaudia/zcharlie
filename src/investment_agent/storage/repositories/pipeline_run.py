@@ -247,6 +247,27 @@ class PipelineRunRepository(Repository[PipelineRun]):
         run.finished_at = datetime.now(UTC)
         await self.session.flush()
 
+    async def schedule_retry(
+        self,
+        run_id: int,
+        *,
+        error_summary: str,
+        available_at: datetime,
+    ) -> bool:
+        run = await self._required(run_id)
+        if run.attempt_count >= run.max_attempts:
+            return False
+        run.status = "queued"
+        run.stage = "queued"
+        run.available_at = available_at
+        run.claimed_at = None
+        run.worker_id = None
+        run.heartbeat_at = None
+        run.finished_at = None
+        run.error_summary = error_summary
+        await self.session.flush()
+        return True
+
     async def mark_partial(
         self,
         run_id: int,

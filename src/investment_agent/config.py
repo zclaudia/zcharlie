@@ -73,6 +73,9 @@ class PipelineConfig(BaseModel):
 class SchedulerConfig(BaseModel):
     discovery_cron: str
     discovery_timezone: str
+    watchlist_refresh_cron: str | None = None
+    watchlist_refresh_timezone: str = "Asia/Shanghai"
+    a_share_calendar_path: str = "config/calendars/a_share.yaml"
 
 
 class AuxiliaryTrackingConfig(BaseModel):

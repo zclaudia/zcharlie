@@ -39,4 +39,6 @@ def test_app_yaml_loads(tmp_path):
     cfg = load_app_yaml(p)
     assert cfg.pipeline.tier2_score_threshold == 40
     assert cfg.scheduler.discovery_timezone == "America/New_York"
+    assert cfg.scheduler.watchlist_refresh_cron is None
+    assert cfg.scheduler.watchlist_refresh_timezone == "Asia/Shanghai"
     assert cfg.auxiliary_tracking.strength_threshold == 0.5
