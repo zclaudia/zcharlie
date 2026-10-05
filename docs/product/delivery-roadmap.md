@@ -3,8 +3,9 @@
 本路线以一名主要开发者配合编码 Agent 为估算单位。时间是容量规划，不是发布日期承诺；每个阶段以退出条件而不是日历宣告完成。
 
 > 当前进度快照与逐任务收口计划见
-> [`mvp-completion-plan.md`](mvp-completion-plan.md)。截至 2026-10-05，Sprint 2、
-> Sprint 3 已完成；MVP 剩余关键路径为 `MVP-103 → MVP-401～405`。
+> [`mvp-completion-plan.md`](mvp-completion-plan.md)。截至 2026-10-06，
+> Sprint 1～4 全部完成；MVP 关键路径（MVP-103、MVP-401～405）已收口，
+> 逐项签字式验收见 [`mvp-release-checklist.md`](mvp-release-checklist.md)。
 
 ## 总体里程碑
 
@@ -45,7 +46,7 @@
 
 - `[done] MVP-101` 迁移策略分类、评分模型、质量/freshness 逻辑。
 - `[done] MVP-102` 迁移报告上下文生成，保持 score schema v2.0。
-- `[in progress] MVP-103` 建立新旧内核 golden 等价测试；首个真实样本已通过，待扩充到 10～20 只。
+- `[done] MVP-103` 13 只不同特征 A 股的 golden corpus、脱敏 provider fixture 与参数化等价测试（含北交所阻塞记录）。
 - `[done] MVP-104` 完成 iFinD endpoint → canonical 字段注册表、映射文档和真实 fixture。
 - `[done] MVP-105` 调查股息率；现有网关无可靠字段，按契约保持 `null + needs_review`，等待网关增加正式分红接口。
 - `[done] MVP-106` 从运行配置中移除外部 Skill 路径。
@@ -94,11 +95,11 @@
 
 任务：
 
-- `MVP-401` 响应式 Web shell 与 API client。
-- `MVP-402` 四个最小页面及 loading/error/empty 状态。
-- `MVP-403` Agent 解释引用跳转到具体字段和来源。
-- `MVP-404` 从空环境安装、迁移、启动的 smoke test。
-- `MVP-405` 完成安全检查、备份说明和 MVP 发布清单。
+- `[done] MVP-401` 同源 Web shell、签名会话与聚合读模型（dashboard/watchlist/history）。
+- `[done] MVP-402` 四个最小页面及 loading/error/empty/partial 状态，浏览器截图验收通过。
+- `[done] MVP-403` Agent 解释引用点击定位确定性字段、来源与 provenance；失效引用显式可见。
+- `[done] MVP-404` 空环境 smoke（迁移 → API → 自选 → 刷新 → worker → 重启）离线自动化。
+- `[done] MVP-405` 安全检查、备份恢复 runbook 与演练、pip-audit 扫描、发布清单。
 
 验收：从浏览器添加标的、运行研究、阅读证据和查看变化；所有错误均可理解且不泄漏秘钥。
 
@@ -142,11 +143,9 @@ V2 退出条件：所有组合指标由持仓快照和市场数据确定性计�
 
 ## 当前开工顺序
 
-下一批严格按以下顺序推进：
+MVP 关键路径已于 2026-10-06 收口（见
+[`mvp-release-checklist.md`](mvp-release-checklist.md)）。遗留事项：
 
-1. 完成 `MVP-103`：将 golden corpus 扩充到 10～20 只不同类型 A 股，并接入 CI。
-2. 完成 `MVP-401`：Web shell、浏览器会话和 UI 所需聚合读 API。
-3. 完成 `MVP-402`～`MVP-403`：四个页面与证据跳转。
-4. 完成 `MVP-404`～`MVP-405`：空环境 smoke、安全、备份和发布验收。
-
-在 MVP 发布前，不扩展新的 LLM 角色，不做 UI 视觉精修，也不新增供应商，以避免偏离当前收口关键路径。
+1. 待 ifind-proxy/agent_gw 恢复北交所行情后，为 golden corpus 补回不少于 2 只北交所样本。
+2. 推送至 GitHub 后确认 CI 首次真实 runner 运行。
+3. 进入 V1 前先复盘发布清单中的"遗留事项"，不新增 LLM 角色、不做 UI 视觉精修、不新增供应商。
