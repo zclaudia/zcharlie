@@ -29,6 +29,7 @@ from investment_agent.storage.repositories.research_change import (
 )
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
+    score_item_from_payload,
 )
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
@@ -259,8 +260,7 @@ async def _latest_research(
         return None
     snapshot = history[0]
     change_set = await ResearchChangeRepository(session).by_snapshot(snapshot.id)
-    items = snapshot.score_json.get("items")
-    score = items[0] if isinstance(items, list) and items and isinstance(items[0], dict) else {}
+    score = score_item_from_payload(snapshot.score_json)
     freshness = score.get("freshness")
     freshness_ok: bool | None = None
     if isinstance(freshness, dict) and freshness:

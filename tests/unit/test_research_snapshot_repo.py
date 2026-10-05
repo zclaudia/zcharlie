@@ -62,3 +62,17 @@ async def test_research_snapshot_history_is_newest_first(db_session):
     history = await repository.history(symbol="600406", market="SH")
 
     assert [snapshot.as_of.day for snapshot in history] == [5, 4]
+
+
+def test_score_item_from_payload_handles_both_shapes():
+    from investment_agent.storage.repositories.research_snapshot import (
+        score_item_from_payload,
+    )
+
+    bare = {"investment_score": 66.0, "strategy_label": "稳健质量成长"}
+    wrapped = {"items": [bare], "metadata": {"scoring_version": "v1.2"}}
+    empty = {"metadata": {}}
+
+    assert score_item_from_payload(bare) is bare
+    assert score_item_from_payload(wrapped) is bare
+    assert score_item_from_payload(empty) == {}

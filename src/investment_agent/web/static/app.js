@@ -220,9 +220,9 @@ function wireWatchlistForm(form) {
     const submit = form.querySelector('button[type="submit"]');
     const formData = new FormData(form);
     const payload = {};
-    for (const key of ["ticker", "industry", "name"]) {
+    for (const key of ["ticker", "industry", "name", "report_year"]) {
       const value = String(formData.get(key) || "").trim();
-      if (value) payload[key] = value;
+      if (value) payload[key] = key === "report_year" ? Number(value) : value;
     }
     const promise = post("/watchlist", payload, { idempotency: false })
       .then(() => {
@@ -693,10 +693,13 @@ async function loadStockDetail(detailRegion, latestSnapshot) {
     detailRegion.hidden = false;
     detailRegion.innerHTML = "";
     detailRegion.appendChild(el("h2", {}, `最新运行 #${detail.run_id}（${detail.status}）`));
+    const score = detail.result && detail.result.score;
     const scoreItem =
-      detail.result && detail.result.score && Array.isArray(detail.result.score.items)
-        ? detail.result.score.items[0]
-        : null;
+      score && Array.isArray(score.items) && score.items.length
+        ? score.items[0]
+        : score && ("investment_score" in score || "strategy_label" in score)
+          ? score
+          : null;
     if (!scoreItem) {
       detailRegion.appendChild(
         el("p", { class: "notice notice-warn" }, "运行尚未产生确定性评分。")

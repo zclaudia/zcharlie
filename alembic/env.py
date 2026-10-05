@@ -1,6 +1,7 @@
 """Alembic environment configured for async + project models."""
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -22,6 +23,11 @@ from investment_agent.storage.models.base import Base
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# A clean-environment deployment configures the database through DATABASE_URL;
+# the ini value stays the fallback for local defaults.
+if os.getenv("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 target_metadata = Base.metadata
 

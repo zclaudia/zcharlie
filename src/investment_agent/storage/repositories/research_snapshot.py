@@ -1,12 +1,28 @@
 """Repository for immutable evidence-first research snapshots."""
 
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 
 from investment_agent.research.change_tracking import build_research_diff
 from investment_agent.storage.models.analysis import ResearchChangeSet, ResearchSnapshot
 from investment_agent.storage.repositories.base import Repository
+
+
+def score_item_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the single score item whether stored wrapped or bare.
+
+    The research chain persists the score item itself, while tests and older
+    fixtures may wrap it in ``{"items": [...]}``. Consumers must handle both.
+    """
+
+    items = payload.get("items")
+    if isinstance(items, list) and items and isinstance(items[0], dict):
+        return items[0]
+    if "investment_score" in payload or "strategy_label" in payload:
+        return payload
+    return {}
 
 
 class ResearchSnapshotRepository(Repository[ResearchSnapshot]):

@@ -36,6 +36,7 @@ from investment_agent.storage.repositories.research_change import (
 )
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
+    score_item_from_payload,
 )
 
 router = APIRouter(
@@ -98,9 +99,7 @@ async def stock_snapshot_history(
         summaries: list[StockSnapshotSummary] = []
         for snapshot in snapshots:
             change_set = await ResearchChangeRepository(session).by_snapshot(snapshot.id)
-            score = snapshot.score_json
-            items = score.get("items")
-            item = items[0] if isinstance(items, list) and items and isinstance(items[0], dict) else {}
+            item = score_item_from_payload(snapshot.score_json)
             summaries.append(
                 StockSnapshotSummary(
                     run_id=snapshot.pipeline_run_id,
