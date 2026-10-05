@@ -1,0 +1,51 @@
+# MVP quality gates (docs/product/mvp-completion-plan.md, work package A5).
+#
+# The default test suite must stay offline and secret-free: fixtures are
+# sanitized, provider responses are mocked, and no real iFinD/LLM access is
+# required. Network-marked tests are explicitly deselected as a guard even
+# though none exist yet.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: dev
+      LOG_LEVEL: INFO
+      DATA_DIR: ${{ runner.temp }}/zcharlie-data
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install project with dev dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Types (strict mypy)
+        run: mypy src
+
+      - name: Tests (offline, secret-free)
+        run: pytest -q -m "not network"
+        env:
+          # Inert placeholders so required Settings fields parse; nothing
+          # in the suite reads real credentials or calls real providers.
+          API_KEY: ci-inert-api-key
+          LLM_TIER2_API_KEY: ci-inert-tier2
+          LLM_TIER3_API_KEY: ci-inert-tier3
