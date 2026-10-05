@@ -418,7 +418,7 @@ function loadRunsPage(region, offset, { append = false, status } = {}) {
 // ---- 单股详情 ---------------------------------------------------------
 
 function scoreCard(item, scoreMeta) {
-  const card = el("div", { class: "card" });
+  const card = el("div", { class: "card", "data-evidence-section": "evidence-score" });
   card.appendChild(el("h2", {}, "确定性评分"));
   card.appendChild(
     kvTable([
@@ -438,7 +438,7 @@ function scoreCard(item, scoreMeta) {
 
 function factorCard(item) {
   const factors = item.factor_scores || {};
-  const card = el("div", { class: "card" });
+  const card = el("div", { class: "card", "data-evidence-section": "evidence-factors" });
   card.appendChild(el("h2", {}, "因子"));
   const keys = Object.keys(factors);
   if (!keys.length) {
@@ -461,7 +461,7 @@ function factorCard(item) {
 
 function metricsCard(item) {
   const metrics = item.key_metrics || {};
-  const card = el("div", { class: "card" });
+  const card = el("div", { class: "card", "data-evidence-section": "evidence-metrics" });
   card.appendChild(el("h2", {}, "关键指标"));
   const rows = Object.entries(metrics).map(([key, value]) => {
     const tr = el("tr");
@@ -478,7 +478,7 @@ function metricsCard(item) {
 }
 
 function qualityCard(item) {
-  const card = el("div", { class: "card" });
+  const card = el("div", { class: "card", "data-evidence-section": "evidence-quality" });
   card.appendChild(el("h2", {}, "数据质量"));
   const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
   if (item.needs_agent_review) {
@@ -509,9 +509,85 @@ function qualityCard(item) {
   return card;
 }
 
-function explanationCard(detail) {
-  const card = el("div", { class: "card explanation-card" });
-  card.appendChild(el("h2", {}, "Agent 解释（引用以确定性字段为准）"));
+// ---- 证据导航（MVP-403） -----------------------------------------------
+
+// 把 supporting_fields 的点路径解析到确定性 score item 中的值与 provenance。
+// 路径不存在时返回 null，由调用方显式显示"引用失效"，绝不静默隐藏。
+function resolveEvidence(scoreItem, path) {
+  if (typeof path !== "string" || !path.length) return null;
+  let node = scoreItem;
+  for (const part of path.split(".")) {
+    if (node && typeof node === "object" && part in node) {
+      node = node[part];
+    } else {
+      return null;
+    }
+  }
+  const leaf = path.split(".").pop();
+  const sources = scoreItem.field_sources && typeof scoreItem.field_sources === "object" ? scoreItem.field_sources : {};
+  const provenance = sources[leaf] || sources[path] || null;
+  return { path, value: node, provenance };
+}
+
+function evidenceSectionFor(path) {
+  if (path.startsWith("factor_scores")) return "evidence-factors";
+  if (path.startsWith("key_metrics")) return "evidence-metrics";
+  if (/^(missing_fields|quality_flags|freshness|warnings|provider_conflicts|needs_agent_review|data_quality_score)/.test(path)) {
+    return "evidence-quality";
+  }
+  return "evidence-score";
+}
+
+function formatEvidenceValue(value) {
+  if (value === null || value === undefined) return "null（未知，不参与猜测）";
+  if (typeof value === "number") return fmtNumber(value, 6);
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function showEvidence(detailRegion, scoreItem, path) {
+  const resolved = resolveEvidence(scoreItem, path);
+  const inspector = detailRegion.querySelector("#evidence-inspector");
+  if (!inspector) return;
+  inspector.innerHTML = "";
+  if (!resolved) {
+    inspector.appendChild(
+      el("p", { class: "notice notice-error" }, `引用失效：确定性结果中不存在字段 ${path}。`)
+    );
+    inspector.hidden = false;
+    return;
+  }
+  inspector.appendChild(el("h3", {}, `证据：${resolved.path}`));
+  const provenance = resolved.provenance || {};
+  inspector.appendChild(
+    kvTable([
+      ["字段值", formatEvidenceValue(resolved.value)],
+      ["provider", provenance.provider],
+      ["来源 endpoint", provenance.source],
+      ["更新时间", provenance.updated_at],
+      ["quality", provenance.quality],
+      ["note", provenance.note],
+    ])
+  );
+  inspector.hidden = false;
+
+  const targetId = evidenceSectionFor(resolved.path);
+  for (const section of detailRegion.querySelectorAll("[data-evidence-section]")) {
+    section.classList.remove("evidence-flash");
+  }
+  const target = detailRegion.querySelector(`[data-evidence-section="${targetId}"]`);
+  if (target) {
+    target.classList.add("evidence-flash");
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function explanationCard(detail, scoreItem, detailRegion) {
+  const card = el("div", {
+    class: "card explanation-card",
+    "data-evidence-section": "evidence-explanation",
+  });
+  card.appendChild(el("h2", {}, "Agent 解释（点击字段引用可定位证据）"));
   const explanation = detail.result && detail.result.explanation;
   if (!explanation) {
     card.appendChild(
@@ -526,6 +602,7 @@ function explanationCard(detail) {
     return card;
   }
   card.appendChild(el("p", {}, explanation.summary || ""));
+  const broken = new Set();
   const groups = [
     ["分类依据", explanation.classification_rationale],
     ["正面证据", explanation.positive_evidence],
@@ -541,12 +618,25 @@ function explanationCard(detail) {
       const li = el("li", {}, claim.text);
       const chips = el("span", { class: "field-chips" });
       for (const field of claim.supporting_fields || []) {
-        chips.appendChild(el("code", { "data-field-path": field }, field));
+        if (!resolveEvidence(scoreItem, field)) broken.add(field);
+        const chip = el("code", { "data-field-path": field }, field);
+        chip.addEventListener("click", () => showEvidence(detailRegion, scoreItem, field));
+        chips.appendChild(chip);
       }
       li.appendChild(chips);
       list.appendChild(li);
     }
     card.appendChild(list);
+  }
+  if (broken.size) {
+    // 引用必须能定位到唯一字段；失效引用必须显式可见，不允许静默隐藏。
+    card.appendChild(
+      el(
+        "p",
+        { class: "notice notice-error", "data-evidence-broken": [...broken].join(",") },
+        `引用失效：${[...broken].join(", ")}`
+      )
+    );
   }
   if (Array.isArray(explanation.open_questions) && explanation.open_questions.length) {
     card.appendChild(el("h3", {}, "待核查问题"));
@@ -619,7 +709,13 @@ async function loadStockDetail(detailRegion, latestSnapshot) {
     detailRegion.appendChild(factorCard(scoreItem));
     detailRegion.appendChild(metricsCard(scoreItem));
     detailRegion.appendChild(qualityCard(scoreItem));
-    detailRegion.appendChild(explanationCard(detail));
+    const inspector = el("aside", {
+      id: "evidence-inspector",
+      class: "card evidence-inspector",
+      hidden: "",
+    });
+    detailRegion.appendChild(inspector);
+    detailRegion.appendChild(explanationCard(detail, scoreItem, detailRegion));
     const changesRegion = document.querySelector("#stock-changes");
     if (changesRegion) await loadStockChanges(changesRegion, detail.run_id);
   } catch (error) {
