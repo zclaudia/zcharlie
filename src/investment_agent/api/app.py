@@ -26,13 +26,22 @@ def create_app() -> FastAPI:
         description=(
             "Multi-strategy stock analysis system. Daily Discovery pipeline +"
             " on-demand Attribution. All endpoints require X-API-Key header"
-            " except /healthz."
+            " except /healthz. Same-origin web UI lives under /app."
         ),
         lifespan=_lifespan,
     )
     app.include_router(health.router)
     _register_protected_routes(app)
+    _register_web(app)
     return app
+
+
+def _register_web(app: FastAPI) -> None:
+    """Register the same-origin browser UI (session-cookie auth)."""
+
+    from investment_agent.web.routes import register_web
+
+    register_web(app)
 
 
 def _register_protected_routes(app: FastAPI) -> None:

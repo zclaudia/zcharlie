@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>{{ page_title or "出错了" }}</h1>
+  <p class="notice notice-error" role="alert">{{ message }}</p>
+  <p><a href="/app">返回今日概览</a></p>
+</section>
+{% endblock %}

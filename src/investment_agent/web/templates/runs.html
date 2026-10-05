@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>运行中心</h1>
+  <p class="muted">研究任务的状态、阶段、重试与制品。</p>
+  <div class="toolbar">
+    <label for="runs-status-filter">状态筛选</label>
+    <select id="runs-status-filter">
+      <option value="">全部</option>
+      <option value="queued">queued</option>
+      <option value="running">running</option>
+      <option value="success">success</option>
+      <option value="partial">partial</option>
+      <option value="failed">failed</option>
+    </select>
+  </div>
+  <div id="runs-list" class="data-region"
+       data-endpoint="/research/runs"
+       data-empty-text="没有研究运行记录。">
+    <p class="notice notice-loading" data-state="loading">正在加载…</p>
+  </div>
+</section>
+{% endblock %}

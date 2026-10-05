@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     ifind_proxy_url: str = "http://127.0.0.1:7100"
     ifind_proxy_api_key: str = ""
 
+    # Browser web session for the same-origin /app UI.
+    web_session_ttl_minutes: int = 720
+
     @property
     def llm_tier2(self) -> LLMTierConfig:
         return LLMTierConfig(

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ page_title or "个人投资研究台" }}{% endblock %} · zcharlie</title>
+  <link rel="stylesheet" href="/app/static/app.css">
+</head>
+<body>
+  <header class="app-header">
+    <a class="brand" href="/app">zcharlie 研究台</a>
+    <nav class="app-nav" aria-label="主导航">
+      <a href="/app" {% if active_nav == "overview" %}class="active" aria-current="page"{% endif %}>今日概览</a>
+      <a href="/app/watchlist" {% if active_nav == "watchlist" %}class="active" aria-current="page"{% endif %}>自选股</a>
+      <a href="/app/runs" {% if active_nav == "runs" %}class="active" aria-current="page"{% endif %}>运行中心</a>
+      <form method="post" action="/app/logout" class="logout-form">
+        <button type="submit" class="link-button">退出</button>
+      </form>
+    </nav>
+  </header>
+  <main class="app-main">
+    {% block content %}{% endblock %}
+    <noscript>
+      <p class="notice notice-warn">
+        此页面的动态数据需要 JavaScript；当前未启用。页面框架与错误提示仍可阅读，
+        完整数据请启用 JavaScript 或使用 CLI / HTTP API。
+      </p>
+    </noscript>
+  </main>
+  <footer class="app-footer">
+    <p>{{ disclaimer }}；所有结论以数据库中的确定性结果为准。</p>
+  </footer>
+  <script type="module" src="/app/static/app.js"></script>
+</body>
+</html>

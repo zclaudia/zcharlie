@@ -1,0 +1,134 @@
+/* zcharlie 研究台基础样式：移动优先、无外部依赖。 */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #1c2330;
+  --ink-muted: #5b6572;
+  --line: #d9dee5;
+  --accent: #1f5eff;
+  --ok: #1d7a4f;
+  --warn: #9a6700;
+  --error: #b3261e;
+  --partial: #7a4fb3;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161d;
+    --surface: #1b212b;
+    --ink: #e6eaf0;
+    --ink-muted: #9aa4b1;
+    --line: #2c3442;
+    --accent: #6b9bff;
+    --ok: #4cc38a;
+    --warn: #e0a526;
+    --error: #ff7a70;
+    --partial: #b99cf0;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { font-weight: 700; color: var(--ink); text-decoration: none; }
+
+.app-nav { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.app-nav a { color: var(--ink-muted); text-decoration: none; padding: 0.25rem 0.1rem; }
+.app-nav a.active, .app-nav a:hover { color: var(--accent); border-bottom: 2px solid var(--accent); }
+
+.app-main { padding: 1rem; max-width: 72rem; margin: 0 auto; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+h2 { font-size: 1.05rem; margin: 0.5rem 0; }
+
+.muted { color: var(--ink-muted); }
+.small { font-size: 0.85rem; }
+
+.app-footer {
+  padding: 1rem;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.notice { padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px solid var(--line); }
+.notice-error { color: var(--error); border-color: var(--error); background: color-mix(in srgb, var(--error) 8%, transparent); }
+.notice-warn { color: var(--warn); border-color: var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.notice-loading { color: var(--ink-muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+th, td { text-align: left; padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--ink-muted); font-weight: 600; white-space: nowrap; }
+
+.status { font-weight: 600; }
+.status-success, .status-ok { color: var(--ok); }
+.status-partial { color: var(--partial); }
+.status-failed, .status-error { color: var(--error); }
+.status-running, .status-queued { color: var(--warn); }
+.status-needs_review { color: var(--warn); }
+
+.toolbar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
+.inline-form { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+input, select {
+  font: inherit;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+button {
+  font: inherit;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.secondary { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+button.link-button {
+  border: none; background: none; color: var(--ink-muted); padding: 0.25rem 0.1rem; cursor: pointer;
+}
+button.link-button:hover { color: var(--error); }
+
+.login-card { max-width: 24rem; margin: 3rem auto; }
+.login-card form { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
+.login-card button { justify-self: start; }
+
+@media (min-width: 48rem) {
+  h1 { font-size: 1.4rem; }
+  .app-main { padding: 1.5rem; }
+}

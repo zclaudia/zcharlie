@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>单股研究 {{ ticker }}</h1>
+  <p class="muted">分数、因子、证据、缺失项与历史变化。</p>
+  <div id="stock-latest" class="data-region"
+       data-endpoint="/research/stocks/{{ ticker }}/history?limit=1"
+       data-empty-text="尚无研究快照；请先运行一次研究。">
+    <p class="notice notice-loading" data-state="loading">正在加载…</p>
+  </div>
+  <section id="stock-detail" class="data-region" hidden></section>
+  <section class="card">
+    <h2>自上次以来的变化</h2>
+    <div id="stock-changes" class="data-region"
+         data-empty-text="暂无与上一次快照的对比。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+  <section class="card">
+    <h2>历史快照</h2>
+    <div id="stock-history" class="data-region"
+         data-endpoint="/research/stocks/{{ ticker }}/history"
+         data-empty-text="暂无历史快照。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+</section>
+{% endblock %}
