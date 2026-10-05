@@ -1,0 +1,157 @@
+{
+  "metadata": {
+    "source": "ifind-proxy",
+    "updated_at": "2026-10-05T15:24:20.983676Z",
+    "provider": "ifind",
+    "payload_type": "financial",
+    "schema_version": "ifind-canonical.v1",
+    "report_year": 2025
+  },
+  "items": [
+    {
+      "symbol": "000858",
+      "source": "ifind-proxy:financial-statements+financial-index",
+      "updated_at": "2026-10-05T15:24:20.983676Z",
+      "field_sources": {
+        "revenue": {
+          "field": "revenue",
+          "provider": "ifind",
+          "source": "/financial/statements",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "net_profit": {
+          "field": "net_profit",
+          "provider": "ifind",
+          "source": "/financial/statements",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "gross_margin": {
+          "field": "gross_margin",
+          "provider": "ifind",
+          "source": "/financial/index",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "net_margin": {
+          "field": "net_margin",
+          "provider": "ifind",
+          "source": "/financial/index",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "roe": {
+          "field": "roe",
+          "provider": "ifind",
+          "source": "/financial/index",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "roe_stability": {
+          "field": "roe_stability",
+          "provider": "ifind",
+          "source": "/financial/index",
+          "quality": "derived",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "debt_ratio": {
+          "field": "debt_ratio",
+          "provider": "ifind",
+          "source": "/financial/index",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "operating_cash_flow": {
+          "field": "operating_cash_flow",
+          "provider": "ifind",
+          "source": "/financial/statements",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "free_cash_flow": {
+          "field": "free_cash_flow",
+          "provider": "ifind",
+          "source": "/financial/statements",
+          "quality": "derived",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "revenue_growth_3y": {
+          "field": "revenue_growth_3y",
+          "provider": "ifind",
+          "source": "/financial/statements",
+          "quality": "derived",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        },
+        "net_profit_growth_3y": {
+          "field": "net_profit_growth_3y",
+          "provider": "ifind",
+          "source": "/financial/statements",
+          "quality": "derived",
+          "updated_at": "2026-10-05T15:24:20.983676Z",
+          "note": "FY2025 with FY2022 base where applicable"
+        }
+      },
+      "missing_fields": [],
+      "quality_flags": [
+        {
+          "field": "roe_stability",
+          "flag": "derived_field",
+          "message": "roe_stability was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "free_cash_flow",
+          "flag": "derived_field",
+          "message": "free_cash_flow was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "revenue_growth_3y",
+          "flag": "derived_field",
+          "message": "revenue_growth_3y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "net_profit_growth_3y",
+          "flag": "derived_field",
+          "message": "net_profit_growth_3y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        }
+      ],
+      "provider_conflicts": {},
+      "warnings": [
+        "roe_stability was derived from iFinD source fields",
+        "free_cash_flow was derived from iFinD source fields",
+        "revenue_growth_3y was derived from iFinD source fields",
+        "net_profit_growth_3y was derived from iFinD source fields"
+      ],
+      "needs_agent_review": false,
+      "revenue": 40528509770.23,
+      "net_profit": 8954257202.51,
+      "gross_margin": 0.7754179999999999,
+      "net_margin": 0.22989,
+      "roe": 0.070724,
+      "roe_stability": 0.6236,
+      "debt_ratio": 0.356891,
+      "operating_cash_flow": 29706259919.13,
+      "free_cash_flow": 27738852602.77,
+      "revenue_growth_3y": -0.181715,
+      "net_profit_growth_3y": -0.305152
+    }
+  ]
+}

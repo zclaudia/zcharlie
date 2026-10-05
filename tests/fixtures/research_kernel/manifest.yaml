@@ -9,6 +9,9 @@
 # oracle; production and tests never depend on the user directory.
 #
 # Sample directory convention: tests/fixtures/research_kernel/<6-digit symbol>.
+# Boundary traits are selection hypotheses that are confirmed against the
+# captured data; when the data disagrees the notes below record what was
+# actually observed. Trait labels are never removed silently.
 
 manifest_schema_version: 1
 created_at: "2026-10-05"
@@ -27,7 +30,17 @@ coverage_requirements:
   min_per_exchange:
     SSE: 4
     SZSE: 4
-    BSE: 2
+    BSE: 0
+  blocked_exchanges:
+    BSE:
+      required_when_available: 2
+      reason: >-
+        agent_gw/iFinD 网关在 2026-10-05 采集时对全部北交所代码（835185.BJ、836077.BJ、
+        430047.BJ 实测）的行情接口持续返回上游错误：/stock/history（日/周线均失败）与
+        /stock/realtime 均不可用，而 /stock/info 与 /financial/* 正常。按 completion plan
+        A1 的选样规则（"先按特征选样，再以 iFinD 实际可用性确定代码"），两只北交所样本
+        暂由沪/深小盘样本替代并保留原特征标签；待网关恢复北交所行情后必须补回不少于
+        2 只北交所样本。
   business_categories:
     - bank_finance
     - consumer
@@ -66,11 +79,13 @@ samples:
     business_category: bank_finance
     scale: large_cap
     traits:
-      - baseline
+      - key_missing_fields
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 银行资产负债表结构，检验金融字段映射与高杠杆假设。
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: >-
+      银行资产负债表结构。采集实测：银行利润表无毛利率，gross_margin 缺失并触发
+      model_not_applicable 复核标记，叠加全样本共有的 dividend_yield 缺失。
 
   - ticker: 600519.SH
     name: 贵州茅台
@@ -81,8 +96,8 @@ samples:
     traits:
       - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
     notes: 高毛利消费龙头，检验高盈利路径的分类与评分。
 
   - ticker: 600028.SH
@@ -94,9 +109,9 @@ samples:
     traits:
       - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 上游资源与炼化周期，检验周期行业低毛利评分。
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: 上游资源与炼化周期，实测分类为周期反转，检验周期行业低毛利评分。
 
   - ticker: 601111.SH
     name: 中国国航
@@ -106,10 +121,14 @@ samples:
     scale: mid_cap
     traits:
       - low_or_negative_profitability
+      - key_missing_fields
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 高负债、盈利波动大的周期运输样本，覆盖低或负盈利边界。
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: >-
+      高负债、盈利波动大的周期运输样本。采集实测：历史盈利基期为负导致
+      net_profit_growth_3y 无法计算并标记缺失，置信度降至 84，覆盖低或负盈利
+      与关键缺失字段两条边界。
 
   - ticker: 688111.SH
     name: 金山办公
@@ -120,9 +139,25 @@ samples:
     traits:
       - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
     notes: 科创板订阅制软件，检验轻资产高研发投入画像。
+
+  - ticker: 688019.SH
+    name: 安集科技
+    exchange: SSE
+    industry: 半导体材料
+    business_category: high_growth
+    scale: small_cap
+    traits:
+      - borderline_freshness
+    report_year: 2025
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: >-
+      科创板小盘半导体材料高成长股，替代暂不可采集的北交所样本 835185.BJ。
+      采集窗口处于 2026 国庆休市期，实测 market_data age 128.6 小时（7 天上限的
+      76%），重放时覆盖 freshness 临界但未过期路径。
 
   - ticker: 300750.SZ
     name: 宁德时代
@@ -133,8 +168,8 @@ samples:
     traits:
       - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
     notes: 高成长制造龙头，检验成长路径与大盘样本。
 
   - ticker: 000858.SZ
@@ -146,8 +181,8 @@ samples:
     traits:
       - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
     notes: 深交所消费龙头，与茅台形成同行业跨所对照。
 
   - ticker: 002415.SZ
@@ -159,8 +194,8 @@ samples:
     traits:
       - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
     notes: 硬件制造与软件混合业务，检验中性行业分类稳定性。
 
   - ticker: 002230.SZ
@@ -170,11 +205,14 @@ samples:
     business_category: software_asset_light
     scale: mid_cap
     traits:
-      - key_missing_fields
+      - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 研发资本化与分部数据披露有限，预期出现关键缺失字段并触发复核。
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: >-
+      原假设其研发资本化与分部披露会产生独有缺失字段；采集实测仅有全样本共有的
+      dividend_yield 缺失，故按实况回落为 baseline 并保留说明。该样本继续承担
+      软件轻资产与中盘覆盖。
 
   - ticker: 000039.SZ
     name: 中集集团
@@ -185,33 +223,24 @@ samples:
     traits:
       - low_model_fit
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 多元化业务组合与既有策略模板匹配度低，检验模型适配度降级路径。
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: >-
+      多元化业务组合与既有策略模板匹配度低；采集实测得全 corpus 最低投资分
+      （41.02），佐证模型适配度降级路径的检验价值。
 
-  - ticker: 835185.BJ
-    name: 贝特瑞
-    exchange: BSE
-    industry: 锂电材料
-    business_category: high_growth
-    scale: small_cap
-    traits:
-      - borderline_freshness
-    report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 北交所小盘高成长材料股，披露节奏较慢，覆盖 freshness 临界样本。
-
-  - ticker: 836077.BJ
-    name: 吉林碳谷
-    exchange: BSE
-    industry: 碳纤维材料
+  - ticker: 300346.SZ
+    name: 南大光电
+    exchange: SZSE
+    industry: 电子特气与光刻材料
     business_category: cyclical_resource
     scale: small_cap
     traits:
-      - key_missing_fields
-      - low_or_negative_profitability
+      - baseline
     report_year: 2025
-    collected_at: null
-    fixture_status: pending
-    notes: 碳纤维价格下行期的小盘材料股，覆盖缺失字段与低盈利叠加边界。
+    collected_at: "2026-10-05"
+    fixture_status: sanitized
+    notes: >-
+      创业板小盘电子材料周期股，替代暂不可采集的北交所样本 836077.BJ。原假设
+      先进光刻胶披露会产生独有缺失字段；采集实测仅有全样本共有的 dividend_yield
+      缺失，故按实况回落为 baseline 并保留说明。该样本继续承担小盘周期材料覆盖。

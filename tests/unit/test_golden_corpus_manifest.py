@@ -117,6 +117,21 @@ def test_exchange_coverage_meets_minimums():
         )
 
 
+def test_blocked_exchanges_are_documented_and_empty():
+    requirements = _load_manifest()["coverage_requirements"]
+    blocked = requirements.get("blocked_exchanges", {})
+    for exchange, record in blocked.items():
+        assert record.get("required_when_available", 0) >= 1, (
+            f"blocked exchange {exchange} must state how many samples to restore"
+        )
+        assert record.get("reason"), f"blocked exchange {exchange} must document why"
+        assert requirements["min_per_exchange"].get(exchange, 0) == 0, (
+            f"blocked exchange {exchange} must not also carry a live minimum"
+        )
+        carrying = [sample["ticker"] for sample in _samples() if sample["exchange"] == exchange]
+        assert not carrying, f"exchange {exchange} is blocked but still has samples: {carrying}"
+
+
 def test_business_category_coverage_complete():
     categories = {sample["business_category"] for sample in _samples()}
     missing = VALID_BUSINESS_CATEGORIES - categories
@@ -149,9 +164,16 @@ def test_sanitized_samples_have_frozen_fixture_files():
         for filename in REQUIRED_FIXTURE_FILES:
             path = fixture_dir / filename
             assert path.is_file(), f"{sample['ticker']} fixture missing {filename}"
-        legacy_scores = fixture_dir / "legacy_scores.json"
-        assert legacy_scores.is_file(), (
-            f"{sample['ticker']} needs the legacy golden oracle output"
+        has_legacy_oracle = all(
+            (fixture_dir / name).is_file()
+            for name in ("legacy_scores.json", "legacy_report_context.json")
+        )
+        has_frozen_golden = all(
+            (fixture_dir / name).is_file()
+            for name in ("golden_scores.json", "golden_report_context.json")
+        )
+        assert has_legacy_oracle or has_frozen_golden, (
+            f"{sample['ticker']} needs a legacy oracle or frozen golden kernel output"
         )
 
 

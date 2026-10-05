@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "source": "ifind-proxy",
+    "updated_at": "2026-10-05T15:34:37.318806Z",
+    "provider": "ifind",
+    "payload_type": "stock_pool",
+    "schema_version": "ifind-canonical.v1",
+    "report_year": null
+  },
+  "items": [
+    {
+      "symbol": "688019",
+      "source": "ifind-proxy:stock-info+history",
+      "updated_at": "2026-10-05T15:34:37.318806Z",
+      "field_sources": {
+        "name": {
+          "field": "name",
+          "provider": "ifind",
+          "source": "/stock/info",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:34:37.318806Z",
+          "note": ""
+        },
+        "market_cap": {
+          "field": "market_cap",
+          "provider": "ifind",
+          "source": "/stock/info + /stock/history",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": "latest close multiplied by total shares"
+        },
+        "industry": {
+          "field": "industry",
+          "provider": "manual",
+          "source": "command_input",
+          "quality": "direct",
+          "updated_at": "2026-10-05T15:34:37.318806Z",
+          "note": "iFinD stock-info response did not include a normalized industry"
+        }
+      },
+      "missing_fields": [],
+      "quality_flags": [
+        {
+          "field": "market_cap",
+          "flag": "derived_field",
+          "message": "market_cap was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        }
+      ],
+      "provider_conflicts": {},
+      "warnings": [
+        "market_cap was derived from iFinD source fields"
+      ],
+      "needs_agent_review": false,
+      "name": "安集科技",
+      "market": "SH",
+      "industry": "半导体材料",
+      "market_cap": 48183230573.0
+    }
+  ]
+}

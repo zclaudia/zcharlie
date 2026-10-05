@@ -1,0 +1,173 @@
+{
+  "metadata": {
+    "source": "ifind-proxy",
+    "updated_at": "2026-09-30T07:00:00Z",
+    "provider": "ifind",
+    "payload_type": "market",
+    "schema_version": "ifind-canonical.v1",
+    "report_year": null
+  },
+  "items": [
+    {
+      "symbol": "600519",
+      "source": "ifind-proxy:history+financial-index",
+      "updated_at": "2026-09-30T07:00:00Z",
+      "field_sources": {
+        "latest_price": {
+          "field": "latest_price",
+          "provider": "ifind",
+          "source": "/stock/history",
+          "quality": "direct",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": ""
+        },
+        "return_1y": {
+          "field": "return_1y",
+          "provider": "ifind",
+          "source": "/stock/history",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": ""
+        },
+        "volatility_1y": {
+          "field": "volatility_1y",
+          "provider": "ifind",
+          "source": "/stock/history",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": ""
+        },
+        "max_drawdown_1y": {
+          "field": "max_drawdown_1y",
+          "provider": "ifind",
+          "source": "/stock/history",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": ""
+        },
+        "market_cap": {
+          "field": "market_cap",
+          "provider": "ifind",
+          "source": "/stock/info + /stock/history",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": ""
+        },
+        "pe": {
+          "field": "pe",
+          "provider": "ifind",
+          "source": "/stock/history + /financial/index",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": "latest close divided by FY2025 basic EPS"
+        },
+        "pb": {
+          "field": "pb",
+          "provider": "ifind",
+          "source": "/stock/history + /financial/index",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": "latest close divided by FY2025 net assets per share"
+        },
+        "ps": {
+          "field": "ps",
+          "provider": "ifind",
+          "source": "/stock/history + /financial/index",
+          "quality": "derived",
+          "updated_at": "2026-09-30T07:00:00Z",
+          "note": "latest close divided by FY2025 revenue per share"
+        },
+        "dividend_yield": {
+          "field": "dividend_yield",
+          "provider": "ifind",
+          "source": "unavailable",
+          "quality": "missing",
+          "updated_at": "2026-10-05T15:22:50.891048Z",
+          "note": "the validated iFinD endpoint set did not expose cash dividends"
+        }
+      },
+      "missing_fields": [
+        "dividend_yield"
+      ],
+      "quality_flags": [
+        {
+          "field": "dividend_yield",
+          "flag": "missing_field",
+          "message": "iFinD normalization could not produce dividend_yield",
+          "provider": "ifind",
+          "severity": "review"
+        },
+        {
+          "field": "pe",
+          "flag": "derived_field",
+          "message": "pe was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "pb",
+          "flag": "derived_field",
+          "message": "pb was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "ps",
+          "flag": "derived_field",
+          "message": "ps was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "return_1y",
+          "flag": "derived_field",
+          "message": "return_1y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "volatility_1y",
+          "flag": "derived_field",
+          "message": "volatility_1y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "max_drawdown_1y",
+          "flag": "derived_field",
+          "message": "max_drawdown_1y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "market_cap",
+          "flag": "derived_field",
+          "message": "market_cap was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        }
+      ],
+      "provider_conflicts": {},
+      "warnings": [
+        "iFinD normalization could not produce dividend_yield",
+        "pe was derived from iFinD source fields",
+        "pb was derived from iFinD source fields",
+        "ps was derived from iFinD source fields",
+        "return_1y was derived from iFinD source fields",
+        "volatility_1y was derived from iFinD source fields",
+        "max_drawdown_1y was derived from iFinD source fields",
+        "market_cap was derived from iFinD source fields"
+      ],
+      "needs_agent_review": true,
+      "latest_price": 1258.62,
+      "pe": 19.1687,
+      "pb": 6.4427,
+      "ps": 9.1607,
+      "dividend_yield": null,
+      "return_1y": -0.112291,
+      "volatility_1y": 0.21776,
+      "max_drawdown_1y": 0.230684,
+      "market_cap": 1573377704650.6199
+    }
+  ]
+}
