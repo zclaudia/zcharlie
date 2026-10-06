@@ -13,6 +13,7 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from investment_agent.clock import today_in
 from investment_agent.config import AppYamlConfig, Settings, load_app_yaml
 from investment_agent.logging import configure_logging
 from investment_agent.pipelines.discovery import DiscoveryPipeline
@@ -45,8 +46,12 @@ def _parse_cron(cron_expr: str, *, timezone: str | None = None) -> CronTrigger:
     )
 
 
-async def _run_discovery_job(universe_code: str) -> None:
-    """One scheduled tick: run discovery for the given universe."""
+async def _run_discovery_job(universe_code: str, timezone: str = "Asia/Shanghai") -> None:
+    """One scheduled tick: run discovery for the given universe.
+
+    The business date is taken in the scheduler's configured discovery timezone
+    (the server itself may run in UTC), never from ``date.today()``.
+    """
     log.info("scheduler.tick.start", universe=universe_code)
     settings = Settings()  # type: ignore[call-arg]
     strategies = load_all_strategies(
@@ -59,7 +64,7 @@ async def _run_discovery_job(universe_code: str) -> None:
         strategies=strategies, settings=settings,
     )
     try:
-        run_id = await pipeline.run(universe_code, date.today())
+        run_id = await pipeline.run(universe_code, today_in(timezone))
         log.info("scheduler.tick.complete", universe=universe_code, run_id=run_id)
     except Exception:
         log.exception("scheduler.tick.failed", universe=universe_code)
@@ -137,7 +142,8 @@ def build_scheduler(
     for ue in app_config.universes:
         sched.add_job(
             _run_discovery_job, trigger=trigger,
-            args=[ue.code], id=f"discovery_{ue.code}", replace_existing=True,
+            args=[ue.code, app_config.scheduler.discovery_timezone],
+            id=f"discovery_{ue.code}", replace_existing=True,
         )
     watchlist_cron = app_config.scheduler.watchlist_refresh_cron
     if watchlist_cron is not None:

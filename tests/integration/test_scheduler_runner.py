@@ -157,3 +157,41 @@ async def test_scheduled_watchlist_refresh_skips_holiday_and_is_idempotent(
         )
         assert len(runs) == 1
         assert runs[0].request_json["as_of"] == "2026-10-08"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("timezone", "expected"),
+    [("Asia/Shanghai", date(2026, 10, 9)), ("America/New_York", date(2026, 10, 8))],
+)
+async def test_discovery_job_uses_configured_business_timezone(
+    monkeypatch: pytest.MonkeyPatch, timezone: str, expected: date
+) -> None:
+    from freezegun import freeze_time
+
+    from investment_agent.scheduler import runner
+
+    seen: list[date] = []
+
+    class _FakePipeline:
+        def __init__(self, **_: object) -> None:
+            pass
+
+        async def run(self, universe_code: str, as_of: date) -> int:
+            seen.append(as_of)
+            return 1
+
+    class _FakeSettings:
+        llm_tier2 = None
+        llm_tier3 = None
+        yfinance_max_concurrent = 1
+
+    monkeypatch.setattr(runner, "Settings", _FakeSettings)
+    monkeypatch.setattr(runner, "load_all_strategies", lambda **_: [])
+    monkeypatch.setattr(runner, "YFinanceSource", lambda **_: object())
+    monkeypatch.setattr(runner, "DiscoveryPipeline", _FakePipeline)
+
+    with freeze_time("2026-10-08T20:00:00Z"):
+        await runner._run_discovery_job("TEST_U", timezone)
+
+    assert seen == [expected]

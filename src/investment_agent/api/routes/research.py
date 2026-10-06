@@ -19,6 +19,7 @@ from investment_agent.api.schemas.research import (
     ResearchRunSummary,
     SingleStockResearchRequest,
 )
+from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import parse_a_share_ticker
 from investment_agent.storage.database import session_scope
@@ -255,7 +256,7 @@ async def research_single_stock(
         )
 
     request_json: dict[str, object] = body.model_dump(mode="json")
-    request_json["as_of"] = (body.as_of or date.today()).isoformat()
+    request_json["as_of"] = (body.as_of or shanghai_today()).isoformat()
     try:
         async with session_scope() as session:
             run, created = await PipelineRunRepository(session).enqueue(
