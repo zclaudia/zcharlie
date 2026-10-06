@@ -18,16 +18,27 @@ def render_change_notification(
         for item in changes
         if isinstance(item, dict) and item.get("meaningful") is True
     ]
+    version_change = next(
+        (
+            item
+            for item in changes
+            if isinstance(item, dict) and item.get("kind") == "scoring_version_changed"
+        ),
+        None,
+    )
     lines = [
         f"# 研究变化提醒：{ticker} {company_name}",
         "",
         f"当前运行：{current_run_id}",
         f"上一运行：{previous_run_id if previous_run_id is not None else '-'}",
         f"重要变化：{len(meaningful)} 项",
-        "",
-        "## 变化明细",
-        "",
     ]
+    if version_change is not None:
+        lines.append(
+            f"评分版本变更：{version_change.get('before')!s} → "
+            f"{version_change.get('after')!s}（评分与策略差异源于算法调整，未计入重要变化）"
+        )
+    lines.extend(["", "## 变化明细", ""])
     for item in meaningful:
         field = item.get("field", "unknown")
         before = item.get("before")

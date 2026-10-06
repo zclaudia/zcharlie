@@ -3,7 +3,59 @@
 from dataclasses import dataclass
 from typing import TypeGuard
 
-CHANGE_SCHEMA_VERSION = "research-change.v1"
+CHANGE_SCHEMA_VERSION = "research-change.v2"
+SCORING_VERSION_CHANGED = "scoring_version_changed"
+
+
+@dataclass(frozen=True)
+class MetricThreshold:
+    """When a ``key_metrics`` delta counts as meaningful.
+
+    ``absolute`` is compared against ``after - before`` in the metric's native
+    unit (ratios are fractions, e.g. 0.01 == 1 percentage point);
+    ``relative_pct`` against ``|delta| / |before| * 100``.
+    """
+
+    absolute: float | None = None
+    relative_pct: float | None = None
+
+
+# Single source of truth for financial-metric noise thresholds. Price-derived
+# multiples move with the share price every session, so they need a wide
+# relative band; fundamentals are fractions and use percentage-point bands.
+METRIC_THRESHOLDS: dict[str, MetricThreshold] = {
+    # Price-derived valuation: a normal +/-1-3% daily move is not news.
+    "market_cap": MetricThreshold(relative_pct=10.0),
+    "pe": MetricThreshold(relative_pct=10.0),
+    "pb": MetricThreshold(relative_pct=10.0),
+    "ps": MetricThreshold(relative_pct=10.0),
+    "pcf": MetricThreshold(relative_pct=10.0),
+    # Yield moves inversely with price; 50bp is a real change in payout.
+    "dividend_yield": MetricThreshold(absolute=0.005),
+    # Market-risk statistics (fractions).
+    "max_drawdown_1y": MetricThreshold(absolute=0.05),
+    "volatility_1y": MetricThreshold(absolute=0.05),
+    "return_1y": MetricThreshold(absolute=0.05),
+    "return_6m": MetricThreshold(absolute=0.05),
+    "return_3m": MetricThreshold(absolute=0.05),
+    # Reported fundamentals (fractions); change on filings, not on price.
+    "roe": MetricThreshold(absolute=0.01),
+    "roe_stability": MetricThreshold(absolute=0.05),
+    "debt_ratio": MetricThreshold(absolute=0.02),
+    "gross_margin": MetricThreshold(absolute=0.01),
+    "net_margin": MetricThreshold(absolute=0.01),
+    "revenue_growth_3y": MetricThreshold(absolute=0.02),
+    "net_profit_growth_3y": MetricThreshold(absolute=0.03),
+}
+# Metrics not listed above (new fields from a newer scoring version) default to
+# the conservative price-multiple band rather than flagging every wiggle.
+DEFAULT_METRIC_THRESHOLD = MetricThreshold(relative_pct=10.0)
+
+# Outputs of the scoring algorithm itself. When the scoring version changes
+# their deltas reflect methodology, not the company, so they are recorded but
+# not counted as meaningful.
+_ALGORITHM_DERIVED_CATEGORIES = frozenset({"score", "strategy"})
+_ALGORITHM_DERIVED_FIELDS = frozenset({"data_quality_score", "warnings"})
 
 _SCORE_FIELDS: dict[str, float] = {
     "business_score": 1.0,
@@ -61,8 +113,16 @@ def build_research_diff(
     current_score: dict[str, object],
     previous_run_id: int | None,
     previous_score: dict[str, object] | None,
+    current_scoring_version: str | None = None,
+    previous_scoring_version: str | None = None,
 ) -> ResearchDiff:
-    """Compare stable research fields while ignoring timestamps and display text."""
+    """Compare stable research fields while ignoring timestamps and display text.
+
+    Scoring versions default to ``score["scoring_version"]`` when not passed.
+    When both are known and differ, a single ``methodology`` change is
+    recorded and algorithm-derived deltas are marked non-meaningful with
+    ``suppressed_reason="scoring_version_changed"``.
+    """
 
     if previous_score is None:
         return ResearchDiff(
@@ -78,6 +138,26 @@ def build_research_diff(
         )
 
     changes: list[dict[str, object]] = []
+    before_version = previous_scoring_version or _version_value(previous_score)
+    after_version = current_scoring_version or _version_value(current_score)
+    version_changed = (
+        before_version is not None
+        and after_version is not None
+        and before_version != after_version
+    )
+    if version_changed:
+        changes.append(
+            {
+                "category": "methodology",
+                "field": "scoring_version",
+                "kind": SCORING_VERSION_CHANGED,
+                "before": before_version,
+                "after": after_version,
+                "delta": None,
+                "relative_change_pct": None,
+                "meaningful": False,
+            }
+        )
     for field, threshold in _SCORE_FIELDS.items():
         _append_change(
             changes,
@@ -127,7 +207,7 @@ def build_research_diff(
             field=field,
             before=_path_value(previous_score, field),
             after=_path_value(current_score, field),
-            relative_threshold_pct=1.0,
+            threshold=METRIC_THRESHOLDS.get(key, DEFAULT_METRIC_THRESHOLD),
         )
 
     _append_change(
@@ -157,6 +237,15 @@ def build_research_diff(
             after=_path_value(current_score, field),
         )
 
+    if version_changed:
+        for change in changes:
+            if change["meaningful"] is True and (
+                change["category"] in _ALGORITHM_DERIVED_CATEGORIES
+                or change["field"] in _ALGORITHM_DERIVED_FIELDS
+            ):
+                change["meaningful"] = False
+                change["suppressed_reason"] = SCORING_VERSION_CHANGED
+
     category_counts: dict[str, int] = {}
     for change in changes:
         category = str(change["category"])
@@ -184,7 +273,11 @@ def _append_change(
     after: object,
     absolute_threshold: float | None = None,
     relative_threshold_pct: float | None = None,
+    threshold: MetricThreshold | None = None,
 ) -> None:
+    if threshold is not None:
+        absolute_threshold = threshold.absolute
+        relative_threshold_pct = threshold.relative_pct
     if before == after:
         return
     delta: float | None = None
@@ -226,6 +319,15 @@ def _path_value(payload: dict[str, object], path: str) -> object:
             return None
         value = value.get(part)
     return value
+
+
+def _version_value(payload: dict[str, object]) -> str | None:
+    value = payload.get("scoring_version")
+    if value is None:
+        metadata = payload.get("metadata")
+        if isinstance(metadata, dict):
+            value = metadata.get("scoring_version")
+    return str(value) if value not in (None, "", "unknown") else None
 
 
 def _mapping_keys(
