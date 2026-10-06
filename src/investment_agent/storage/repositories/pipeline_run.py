@@ -1,6 +1,6 @@
 """Persistent pipeline-run queue and lifecycle helpers."""
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -70,6 +70,15 @@ def lease_scope(lease: RunLease) -> Iterator[RunLease]:
 def current_lease(run_id: int) -> RunLease | None:
     lease = _active_lease.get()
     return lease if lease is not None and lease.run_id == run_id else None
+
+
+def _kind_criteria(kind: str | None, kinds: Sequence[str] | None) -> list[Any]:
+    criteria: list[Any] = []
+    if kind is not None:
+        criteria.append(PipelineRun.kind == kind)
+    if kinds is not None:
+        criteria.append(PipelineRun.kind.in_(list(kinds)))
+    return criteria
 
 
 class PipelineRunRepository(Repository[PipelineRun]):
@@ -183,9 +192,16 @@ class PipelineRunRepository(Repository[PipelineRun]):
         *,
         worker_id: str,
         kind: str | None = None,
+        kinds: Sequence[str] | None = None,
+        run_id: int | None = None,
         now: datetime | None = None,
     ) -> PipelineRun | None:
-        """Atomically claim the oldest available run for one worker."""
+        """Atomically claim the oldest available run for one worker.
+
+        ``kind`` / ``kinds`` restrict the claim to the job kinds this worker
+        can execute; ``run_id`` claims one specific queued run (inline CLI
+        execution) instead of the oldest one.
+        """
 
         claimed_at = now or datetime.now(UTC)
         candidate = (
@@ -201,8 +217,9 @@ class PipelineRunRepository(Repository[PipelineRun]):
             .order_by(PipelineRun.available_at.asc(), PipelineRun.id.asc())
             .limit(1)
         )
-        if kind is not None:
-            candidate = candidate.where(PipelineRun.kind == kind)
+        candidate = candidate.where(*_kind_criteria(kind, kinds))
+        if run_id is not None:
+            candidate = candidate.where(PipelineRun.id == run_id)
 
         statement = (
             update(PipelineRun)
@@ -228,6 +245,7 @@ class PipelineRunRepository(Repository[PipelineRun]):
         *,
         stale_before: datetime,
         kind: str | None = None,
+        kinds: Sequence[str] | None = None,
         now: datetime | None = None,
     ) -> tuple[list[int], list[int]]:
         """Requeue abandoned worker claims, or fail them once retries are spent.
@@ -254,8 +272,7 @@ class PipelineRunRepository(Repository[PipelineRun]):
             PipelineRun.worker_id.is_not(None),
             last_seen < stale_before,
         )
-        if kind is not None:
-            query = query.where(PipelineRun.kind == kind)
+        query = query.where(*_kind_criteria(kind, kinds))
         candidates = list((await self.session.execute(query)).tuples().all())
         requeued: list[int] = []
         failed: list[int] = []
@@ -414,6 +431,21 @@ class PipelineRunRepository(Repository[PipelineRun]):
         # Distinguish "budget exhausted" from "we no longer own this run".
         await self._update_running(run_id, {}, lease=lease, check_only=True)
         return False
+
+    async def record_metadata(
+        self,
+        run_id: int,
+        metadata: dict[str, object],
+        *,
+        lease: RunLease | None = None,
+    ) -> None:
+        """Merge progress metadata into a running (leased) run."""
+
+        values: dict[str, Any] = {
+            "metadata_json": await self._merged_metadata(run_id, metadata),
+            "heartbeat_at": datetime.now(UTC),
+        }
+        await self._update_running(run_id, values, lease=lease)
 
     async def mark_partial(
         self,

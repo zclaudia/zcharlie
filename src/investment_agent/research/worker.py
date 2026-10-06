@@ -1,18 +1,34 @@
-"""Persistent database worker for queued single-stock research runs."""
+"""Persistent database worker for queued jobs.
+
+The worker claims runs of every registered job kind (``ifind_research`` plus
+the snapshot collectors), keeps each claim's heartbeat fresh, fences all
+lifecycle updates with the claim's lease, and settles failures through the
+shared retry policy. Kind-specific behaviour lives in
+:class:`~investment_agent.jobs.base.JobHandler` implementations.
+"""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import structlog
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.config import Settings
+from investment_agent.jobs.base import (
+    BaseJobHandler,
+    ClaimedJob,
+    JobContext,
+    JobHandler,
+    JobOutcome,
+)
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.research.change_notification import render_change_notification
 from investment_agent.research.ifind_chain import (
@@ -22,6 +38,7 @@ from investment_agent.research.ifind_chain import (
 )
 from investment_agent.research.retry_policy import is_transient_error
 from investment_agent.storage.database import session_scope
+from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.repositories.pipeline_run import (
     LeaseLostError,
     PipelineRunRepository,
@@ -38,6 +55,7 @@ log = structlog.get_logger(__name__)
 
 ResearchRunner = Callable[..., Awaitable[ResearchChainResult]]
 
+IFIND_RESEARCH_KIND = "ifind_research"
 MAX_LOOP_BACKOFF_SECONDS = 60.0
 
 
@@ -50,133 +68,30 @@ class ResearchJobPayload(BaseModel):
     as_of: date
 
 
-class ResearchWorker:
-    """Claim and execute one research job at a time."""
+class IfindResearchHandler(BaseJobHandler):
+    """``ifind_research``: one single-stock research chain run.
 
-    def __init__(
-        self,
-        *,
-        settings: Settings,
-        worker_id: str,
-        runner: ResearchRunner = run_ifind_research_chain,
-        retry_base_delay_seconds: float = 5.0,
-        heartbeat_interval_seconds: float = 30.0,
-    ) -> None:
+    The chain persists the run's terminal status itself (it is passed the
+    claimed run id); this handler keeps the watchlist row in step with the
+    run and writes the meaningful-change notification afterwards.
+    """
+
+    kind = IFIND_RESEARCH_KIND
+
+    def __init__(self, *, settings: Settings, runner: ResearchRunner) -> None:
         self.settings = settings
-        self.worker_id = worker_id
         self.runner = runner
-        self.retry_base_delay_seconds = retry_base_delay_seconds
-        self.heartbeat_interval_seconds = heartbeat_interval_seconds
 
-    async def recover_stale(self, *, stale_after_seconds: float) -> tuple[list[int], list[int]]:
-        now = datetime.now(UTC)
-        async with session_scope() as session:
-            repository = PipelineRunRepository(session)
-            requeued, failed = await repository.recover_stale(
-                kind="ifind_research",
-                stale_before=now - timedelta(seconds=stale_after_seconds),
-                now=now,
+    async def on_claimed(self, session: AsyncSession, job: ClaimedJob) -> None:
+        if job.listing_id is not None:
+            await WatchlistRepository(session).mark_refresh_queued(
+                job.listing_id,
+                run_id=job.run_id,
+                status="running",
             )
-            watchlist_repository = WatchlistRepository(session)
-            for run_id in requeued:
-                run = await repository.get(run_id)
-                if run is not None and run.listing_id is not None:
-                    await watchlist_repository.mark_refresh_queued(
-                        run.listing_id,
-                        run_id=run.id,
-                    )
-            for run_id in failed:
-                run = await repository.get(run_id)
-                if run is not None and run.listing_id is not None:
-                    await watchlist_repository.mark_refresh_finished(
-                        run.listing_id,
-                        run_id=run.id,
-                        status="failed",
-                        refreshed_at=run.finished_at or now,
-                        error=run.error_summary,
-                    )
-            return requeued, failed
 
-    async def run_once(self) -> int | None:
-        async with session_scope() as session:
-            run = await PipelineRunRepository(session).claim_next(
-                worker_id=self.worker_id,
-                kind="ifind_research",
-            )
-            if run is None:
-                return None
-            run_id = run.id
-            listing_id = run.listing_id
-            request_json = run.request_json
-            lease = RunLease(
-                run_id=run_id,
-                worker_id=self.worker_id,
-                attempt=run.attempt_count,
-            )
-            if listing_id is not None:
-                await WatchlistRepository(session).mark_refresh_queued(
-                    listing_id,
-                    run_id=run_id,
-                    status="running",
-                )
-
-        try:
-            payload = ResearchJobPayload.model_validate(request_json)
-            # Every lifecycle update made by the runner for this run is fenced
-            # by the lease, so a worker that lost its claim cannot clobber a
-            # newer attempt.
-            with lease_scope(lease):
-                await self._run_with_heartbeat(lease, payload)
-            log.info("research.worker.completed", run_id=run_id, worker_id=self.worker_id)
-        except ResearchPartialError as exc:
-            log.warning(
-                "research.worker.partial",
-                run_id=run_id,
-                worker_id=self.worker_id,
-                reason=exc.reason,
-            )
-        except LeaseLostError as exc:
-            log.warning(
-                "research.worker.lease_lost",
-                run_id=run_id,
-                worker_id=self.worker_id,
-                attempt=lease.attempt,
-                detail=exc.detail,
-            )
-        except Exception as exc:
-            await self._settle_failure(exc, lease=lease, listing_id=listing_id)
-        finally:
-            if listing_id is not None:
-                try:
-                    await _sync_watchlist_refresh(run_id=run_id, listing_id=listing_id)
-                except Exception:
-                    log.exception(
-                        "research.worker.watchlist_sync_failed",
-                        run_id=run_id,
-                        worker_id=self.worker_id,
-                    )
-                try:
-                    await _notify_meaningful_change(
-                        settings=self.settings,
-                        run_id=run_id,
-                    )
-                except Exception:
-                    log.exception(
-                        "research.worker.notification_failed",
-                        run_id=run_id,
-                        worker_id=self.worker_id,
-                    )
-        return run_id
-
-    async def _run_with_heartbeat(
-        self, lease: RunLease, payload: ResearchJobPayload
-    ) -> ResearchChainResult:
-        """Run the chain while a background task keeps the claim's heartbeat fresh.
-
-        If the heartbeat discovers the lease was lost (stale recovery handed the
-        run to another worker), the runner is cancelled and LeaseLostError is
-        raised so this worker stops without touching the run.
-        """
+    async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
+        payload = ResearchJobPayload.model_validate(job.request_json)
 
         async def invoke_runner() -> ResearchChainResult:
             return await self.runner(
@@ -189,19 +104,213 @@ class ResearchWorker:
                 as_of=payload.as_of,
                 output_root=self.settings.data_dir / "research-runs",
                 triggered_by="worker",
-                claimed_run_id=lease.run_id,
+                claimed_run_id=job.run_id,
             )
 
-        runner_task: asyncio.Task[ResearchChainResult] = asyncio.create_task(
-            invoke_runner()
-        )
-        heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease, runner_task))
         try:
-            return await runner_task
+            await ctx.run_with_heartbeat(job.lease, invoke_runner)
+        except ResearchPartialError as exc:
+            log.warning(
+                "research.worker.partial",
+                run_id=job.run_id,
+                worker_id=ctx.worker_id,
+                reason=exc.reason,
+            )
+            return "partial"
+        return "completed"
+
+    async def on_retry_scheduled(
+        self, session: AsyncSession, job: ClaimedJob, error: str
+    ) -> None:
+        if job.listing_id is not None:
+            await WatchlistRepository(session).mark_refresh_retrying(
+                job.listing_id,
+                run_id=job.run_id,
+                error=error,
+            )
+
+    async def on_recovered(
+        self,
+        session: AsyncSession,
+        run: PipelineRun,
+        *,
+        requeued: bool,
+        now: datetime,
+    ) -> None:
+        if run.listing_id is None:
+            return
+        watchlist_repository = WatchlistRepository(session)
+        if requeued:
+            await watchlist_repository.mark_refresh_queued(run.listing_id, run_id=run.id)
+        else:
+            await watchlist_repository.mark_refresh_finished(
+                run.listing_id,
+                run_id=run.id,
+                status="failed",
+                refreshed_at=run.finished_at or now,
+                error=run.error_summary,
+            )
+
+    async def finalize(self, job: ClaimedJob) -> None:
+        if job.listing_id is None:
+            return
+        try:
+            await _sync_watchlist_refresh(run_id=job.run_id, listing_id=job.listing_id)
+        except Exception:
+            log.exception(
+                "research.worker.watchlist_sync_failed",
+                run_id=job.run_id,
+                worker_id=job.lease.worker_id,
+            )
+        try:
+            await _notify_meaningful_change(settings=self.settings, run_id=job.run_id)
+        except Exception:
+            log.exception(
+                "research.worker.notification_failed",
+                run_id=job.run_id,
+                worker_id=job.lease.worker_id,
+            )
+
+
+def default_job_handlers(
+    settings: Settings, *, runner: ResearchRunner = run_ifind_research_chain
+) -> list[JobHandler]:
+    """Every job kind a worker serves unless restricted with ``kinds``."""
+
+    return [IfindResearchHandler(settings=settings, runner=runner)]
+
+
+class ResearchWorker:
+    """Claim and execute one queued job at a time, dispatching by ``kind``."""
+
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        worker_id: str,
+        runner: ResearchRunner = run_ifind_research_chain,
+        retry_base_delay_seconds: float = 5.0,
+        heartbeat_interval_seconds: float = 30.0,
+        handlers: Sequence[JobHandler] | None = None,
+        kinds: Collection[str] | None = None,
+    ) -> None:
+        self.settings = settings
+        self.worker_id = worker_id
+        self.runner = runner
+        self.retry_base_delay_seconds = retry_base_delay_seconds
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds
+        registry = {
+            handler.kind: handler
+            for handler in (
+                handlers
+                if handlers is not None
+                else default_job_handlers(settings, runner=runner)
+            )
+        }
+        if kinds is not None:
+            unknown = sorted(set(kinds) - registry.keys())
+            if unknown:
+                raise ValueError(f"no handler registered for job kinds: {unknown}")
+            registry = {kind: handler for kind, handler in registry.items() if kind in kinds}
+        if not registry:
+            raise ValueError("a worker needs at least one job handler")
+        self.handlers: dict[str, JobHandler] = registry
+
+    @property
+    def kinds(self) -> list[str]:
+        return list(self.handlers)
+
+    async def recover_stale(self, *, stale_after_seconds: float) -> tuple[list[int], list[int]]:
+        now = datetime.now(UTC)
+        async with session_scope() as session:
+            repository = PipelineRunRepository(session)
+            requeued, failed = await repository.recover_stale(
+                kinds=self.kinds,
+                stale_before=now - timedelta(seconds=stale_after_seconds),
+                now=now,
+            )
+            outcomes = [(run_id, True) for run_id in requeued] + [
+                (run_id, False) for run_id in failed
+            ]
+            for run_id, was_requeued in outcomes:
+                run = await repository.get(run_id)
+                if run is None:
+                    continue
+                handler = self.handlers.get(run.kind)
+                if handler is not None:
+                    await handler.on_recovered(session, run, requeued=was_requeued, now=now)
+            return requeued, failed
+
+    async def run_once(self, *, run_id: int | None = None) -> int | None:
+        """Claim and run one job; ``run_id`` claims that specific queued run."""
+
+        async with session_scope() as session:
+            run = await PipelineRunRepository(session).claim_next(
+                worker_id=self.worker_id,
+                kinds=self.kinds,
+                run_id=run_id,
+            )
+            if run is None:
+                return None
+            job = ClaimedJob(
+                run_id=run.id,
+                kind=run.kind,
+                lease=RunLease(
+                    run_id=run.id,
+                    worker_id=self.worker_id,
+                    attempt=run.attempt_count,
+                ),
+                listing_id=run.listing_id,
+                universe_code=run.universe_code,
+                request_json=dict(run.request_json or {}),
+            )
+            handler = self.handlers[job.kind]
+            await handler.on_claimed(session, job)
+
+        try:
+            # Every lifecycle update made for this run is fenced by the lease,
+            # so a worker that lost its claim cannot clobber a newer attempt.
+            with lease_scope(job.lease):
+                outcome = await handler.execute(job, self)
+            if outcome == "completed":
+                log.info(
+                    "research.worker.completed",
+                    run_id=job.run_id,
+                    worker_id=self.worker_id,
+                    kind=job.kind,
+                )
+        except LeaseLostError as exc:
+            log.warning(
+                "research.worker.lease_lost",
+                run_id=job.run_id,
+                worker_id=self.worker_id,
+                attempt=job.lease.attempt,
+                detail=exc.detail,
+            )
+        except Exception as exc:
+            await self._settle_failure(exc, job=job, handler=handler)
+        finally:
+            await handler.finalize(job)
+        return job.run_id
+
+    async def run_with_heartbeat[T](
+        self, lease: RunLease, work: Callable[[], Awaitable[T]]
+    ) -> T:
+        """Run ``work`` while a background task keeps the claim's heartbeat fresh.
+
+        If the heartbeat discovers the lease was lost (stale recovery handed the
+        run to another worker), ``work`` is cancelled and LeaseLostError is
+        raised so this worker stops without touching the run.
+        """
+
+        work_task: asyncio.Task[T] = asyncio.create_task(_as_coroutine(work))
+        heartbeat_task = asyncio.create_task(self._heartbeat_loop(lease, work_task))
+        try:
+            return await work_task
         except asyncio.CancelledError:
             lost = heartbeat_task.done() and not heartbeat_task.cancelled()
             lost_error = heartbeat_task.result() if lost else None
-            if lost_error is not None and runner_task.cancelled():
+            if lost_error is not None and work_task.cancelled():
                 current = asyncio.current_task()
                 if current is None or not current.cancelling():
                     raise lost_error from None
@@ -212,17 +321,17 @@ class ResearchWorker:
                 await heartbeat_task
 
     async def _heartbeat_loop(
-        self, lease: RunLease, runner_task: asyncio.Task[ResearchChainResult]
+        self, lease: RunLease, work_task: asyncio.Task[Any]
     ) -> LeaseLostError | None:
-        while not runner_task.done():
+        while not work_task.done():
             await asyncio.sleep(self.heartbeat_interval_seconds)
-            if runner_task.done():
+            if work_task.done():
                 return None
             try:
                 async with session_scope() as session:
                     await PipelineRunRepository(session).heartbeat(lease.run_id, lease=lease)
             except LeaseLostError as exc:
-                if runner_task.done():
+                if work_task.done():
                     return None
                 log.warning(
                     "research.worker.heartbeat_lease_lost",
@@ -231,7 +340,7 @@ class ResearchWorker:
                     attempt=lease.attempt,
                     detail=exc.detail,
                 )
-                runner_task.cancel()
+                work_task.cancel()
                 return exc
             except Exception:
                 # A transient DB error must not kill the run; the next beat
@@ -247,11 +356,12 @@ class ResearchWorker:
         self,
         exc: Exception,
         *,
-        lease: RunLease,
-        listing_id: int | None,
+        job: ClaimedJob,
+        handler: JobHandler,
     ) -> None:
         """Decide retry-or-terminal for a failed attempt in one transaction."""
 
+        lease = job.lease
         run_id = lease.run_id
         retry_scheduled = False
         try:
@@ -269,12 +379,8 @@ class ResearchWorker:
                         available_at=retry_at,
                         lease=lease,
                     )
-                    if retry_scheduled and listing_id is not None:
-                        await WatchlistRepository(session).mark_refresh_retrying(
-                            listing_id,
-                            run_id=run_id,
-                            error=error,
-                        )
+                    if retry_scheduled:
+                        await handler.on_retry_scheduled(session, job, error)
                 if not retry_scheduled:
                     await repository.mark_failed(run_id, str(exc), lease=lease)
         except LeaseLostError as lost:
@@ -301,6 +407,10 @@ class ResearchWorker:
                 worker_id=self.worker_id,
                 exc_info=exc,
             )
+
+
+async def _as_coroutine[T](work: Callable[[], Awaitable[T]]) -> T:
+    return await work()
 
 
 async def _sync_watchlist_refresh(*, run_id: int, listing_id: int) -> None:
@@ -387,6 +497,7 @@ async def run_worker(
     recovery_interval_seconds: float | None = None,
     heartbeat_interval_seconds: float | None = None,
     worker: ResearchWorker | None = None,
+    kinds: Collection[str] | None = None,
 ) -> None:
     """Poll for work until cancelled (or one iteration with ``once``).
 
@@ -406,6 +517,7 @@ async def run_worker(
                 if heartbeat_interval_seconds is not None
                 else max(stale_after_seconds / 4, 1.0)
             ),
+            kinds=kinds,
         )
     recovery_interval = (
         recovery_interval_seconds
@@ -414,7 +526,11 @@ async def run_worker(
     )
     last_recovery: float | None = None
     consecutive_errors = 0
-    log.info("research.worker.started", worker_id=worker_id)
+    log.info(
+        "research.worker.started",
+        worker_id=worker_id,
+        kinds=getattr(worker, "kinds", None),
+    )
     while True:
         try:
             now = time.monotonic()
