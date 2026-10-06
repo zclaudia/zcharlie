@@ -11,9 +11,7 @@ import asyncio
 import csv
 import io
 import json
-import math
 import re
-import statistics
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -24,6 +22,27 @@ import httpx
 from pydantic import BaseModel, Field
 
 from investment_agent.config import Settings
+from investment_agent.factors.metrics import (
+    MIN_ONE_YEAR_SESSIONS,
+    ONE_YEAR_WINDOW_DAYS,
+    return_stats,
+    trim_to_window,
+)
+from investment_agent.factors.metrics import (
+    annualized_growth as _annualized_growth,
+)
+from investment_agent.factors.metrics import (
+    parse_number as _number,
+)
+from investment_agent.factors.metrics import (
+    percent_to_fraction as _fraction,
+)
+from investment_agent.factors.metrics import (
+    positive_multiple as _positive_multiple,
+)
+from investment_agent.factors.metrics import (
+    roe_stability as _roe_stability,
+)
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.providers.errors import QuotaExhaustedError
 from investment_agent.research.contracts import (
@@ -226,24 +245,6 @@ def parse_proxy_rows(body: dict[str, Any]) -> list[dict[str, str]]:
     )
 
 
-def _number(value: Any) -> float | None:
-    if value is None:
-        return None
-    text = str(value).strip().replace(",", "")
-    if not text or text in {"--", "None", "null", "nan"}:
-        return None
-    try:
-        result = float(text)
-    except ValueError:
-        return None
-    return result if math.isfinite(result) else None
-
-
-def _fraction(value: Any) -> float | None:
-    number = _number(value)
-    return None if number is None else number / 100.0
-
-
 def _first_row(result: IfindProxyResult, name: str) -> dict[str, str]:
     """Return the first row of a latest-period endpoint; fail hard when empty."""
 
@@ -265,21 +266,6 @@ def _optional_first_row(result: IfindProxyResult | None) -> dict[str, str] | Non
     return result.rows[0]
 
 
-def _annualized_growth(latest: float | None, base: float | None, years: int) -> float | None:
-    if latest is None or base is None or latest < 0 or base <= 0 or years <= 0:
-        return None
-    return round(float((latest / base) ** (1 / years) - 1), 6)
-
-
-# Trailing window for the "1y" market statistics. The provider request asks for
-# ~400 calendar days so the window survives holidays; statistics are computed
-# only over sessions within 365 calendar days of the anchor date.
-ONE_YEAR_WINDOW_DAYS = 365
-# Fewer sessions than this inside the window means the "1y" statistics cover
-# materially less than a year (new listing, long suspension) and are flagged.
-MIN_ONE_YEAR_SESSIONS = 200
-
-
 def _row_date(row: dict[str, str]) -> date | None:
     try:
         return datetime.strptime(str(row.get("time", "")), "%Y%m%d").date()
@@ -296,37 +282,14 @@ def _trim_to_one_year(
     parsed are dropped from the window.
     """
 
-    dated = [(row_date, row) for row in rows if (row_date := _row_date(row)) is not None]
-    if not dated:
-        return []
-    end = anchor or max(row_date for row_date, _ in dated)
-    start = end - timedelta(days=ONE_YEAR_WINDOW_DAYS)
-    return [row for row_date, row in dated if start < row_date <= end]
+    return trim_to_window(
+        ((row_date, row) for row in rows if (row_date := _row_date(row)) is not None),
+        anchor,
+    )
 
 
 def _return_stats(rows: list[dict[str, str]]) -> tuple[float | None, float | None, float | None]:
-    series = [
-        (str(row.get("time", "")), close)
-        for row in rows
-        if (close := _number(row.get("close"))) is not None and close > 0
-    ]
-    series.sort(key=lambda item: item[0])
-    prices = [value for _, value in series]
-    if len(prices) < 2:
-        return None, None, None
-
-    total_return = prices[-1] / prices[0] - 1
-    daily_returns = [
-        current / previous - 1 for previous, current in zip(prices, prices[1:], strict=False)
-    ]
-    volatility = statistics.pstdev(daily_returns) * math.sqrt(252)
-
-    peak = prices[0]
-    max_drawdown = 0.0
-    for price in prices:
-        peak = max(peak, price)
-        max_drawdown = max(max_drawdown, (peak - price) / peak)
-    return round(total_return, 6), round(volatility, 6), round(max_drawdown, 6)
+    return return_stats((str(row.get("time", "")), _number(row.get("close"))) for row in rows)
 
 
 def _source(
@@ -345,31 +308,6 @@ def _source(
         "updated_at": updated_at,
         "note": note,
     }
-
-
-def _positive_multiple(price: float | None, per_share: float | None) -> float | None:
-    """``price / per_share`` only when both exist and the denominator is positive."""
-
-    if price is None or per_share is None or per_share <= 0:
-        return None
-    return price / per_share
-
-
-def _roe_stability(roe_values: list[float | None]) -> float | None:
-    """``1 - pstdev/mean`` over the full expected ROE history, clamped to [0, 1].
-
-    Every expected year must be present and the mean must be positive;
-    otherwise stability is undefined (a partial history or a loss-making
-    average would make the ratio meaningless) and the field stays missing.
-    """
-
-    if not roe_values or any(value is None for value in roe_values):
-        return None
-    values = [float(value) for value in roe_values if value is not None]
-    roe_mean = statistics.mean(values)
-    if roe_mean <= 0:
-        return None
-    return round(max(0.0, min(1.0, 1 - statistics.pstdev(values) / roe_mean)), 6)
 
 
 def _with_quality(
