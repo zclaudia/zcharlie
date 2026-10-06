@@ -71,6 +71,43 @@ async def test_backward_series_uses_adjustflag_1_and_never_forward() -> None:
         )
 
 
+def _backward_row(day: str, close: str, flag: str) -> dict[str, str]:
+    return {"date": day, "code": "sh.600519", "open": close, "high": close, "low": close,
+            "close": close, "volume": "1", "adjustflag": flag, "tradestatus": "1", "isST": "0"}
+
+
+async def test_backward_series_accepts_unadjusted_rows_before_first_corporate_action() -> None:
+    # Live 688223.SH / 302132.SZ: bars before the first dividend have factor 1
+    # and baostock labels them "3" inside an adjustflag=1 answer.
+    backend = FakeBaostockData(
+        extra_rows={("sh.600519", "1"): [_backward_row("2026-09-29", "9600.0", "3")]}
+    )
+    series = await _client(backend).fetch_daily_bars(
+        "600519.SH", date(2026, 9, 29), date(2026, 9, 30), "backward"
+    )
+    assert [bar.trade_date for bar in series.bars] == [date(2026, 9, 29), date(2026, 9, 30)]
+
+
+async def test_backward_series_rejects_forward_adjusted_rows() -> None:
+    backend = FakeBaostockData(
+        extra_rows={("sh.600519", "1"): [_backward_row("2026-09-29", "1250.0", "2")]}
+    )
+    with pytest.raises(ProviderDataError, match="adjustflag"):
+        await _client(backend).fetch_daily_bars(
+            "600519.SH", date(2026, 9, 29), date(2026, 9, 30), "backward"
+        )
+
+
+async def test_raw_series_rejects_backward_rows() -> None:
+    backend = FakeBaostockData(
+        extra_rows={("sh.600519", "3"): [_backward_row("2026-09-29", "9600.0", "1")]}
+    )
+    with pytest.raises(ProviderDataError, match="adjustflag"):
+        await _client(backend).fetch_daily_bars(
+            "600519.SH", date(2026, 9, 29), date(2026, 9, 30), "none"
+        )
+
+
 async def test_suspended_rows_are_kept_and_flagged() -> None:
     series = await _client(FakeBaostockData()).fetch_daily_bars(
         "601059.SH", date(2026, 9, 1), date(2026, 9, 30), "none"

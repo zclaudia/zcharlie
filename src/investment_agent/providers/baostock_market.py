@@ -48,6 +48,14 @@ log = structlog.get_logger(__name__)
 
 AdjustKind = Literal["none", "backward"]
 ADJUST_FLAGS: dict[AdjustKind, str] = {"none": "3", "backward": "1"}
+# Flags baostock may label rows with for each requested adjustment. A backward
+# (后复权) series is anchored at the listing date, so bars before the first
+# corporate action carry factor 1 and come back labelled "3" (unadjusted) --
+# they are numerically identical to the raw bars. Forward ("2") never is valid.
+ACCEPTED_ROW_FLAGS: dict[AdjustKind, frozenset[str]] = {
+    "none": frozenset({"3"}),
+    "backward": frozenset({"1", "3"}),
+}
 
 KDATA_FIELDS: tuple[str, ...] = (
     "date",
@@ -336,7 +344,7 @@ class BaostockMarketClient(BaostockReferenceClient):
                     f"baostock {KDATA_OPERATION} answered {row.get('code')!r} for {symbol}",
                     provider=PROVIDER,
                 )
-            if row.get("adjustflag", flag) != flag:
+            if row.get("adjustflag", flag) not in ACCEPTED_ROW_FLAGS[adjust]:
                 raise ProviderDataError(
                     f"baostock {KDATA_OPERATION} answered adjustflag {row.get('adjustflag')!r} "
                     f"for requested {flag}",
