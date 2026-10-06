@@ -23,5 +23,5 @@
 ## Docker
 
 - 镜像以非 root 用户（uid/gid 10001，可用 `--build-arg APP_UID/APP_GID` 修改）运行，仅 `/app/data` 可写；Linux 上宿主机 `./data` 需对该 uid 可写。
-- 代码（`src/`、`alembic/`）打包在镜像内，不再挂载；`config/`、`strategies/`、`prompts/` 以只读方式挂载。改代码后需 `docker compose build`。
+- 代码（`src/`、`alembic/`）打包在镜像内，不再挂载；`config/` 以只读方式挂载。改代码后需 `docker compose build`。
 - 端口只发布到 `127.0.0.1:8000`；远程访问请在前面加 TLS 反向代理，并设置 `WEB_COOKIE_SECURE=true`、`WEB_PUBLIC_ORIGIN`。

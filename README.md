@@ -64,7 +64,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | `GET /research/stocks/{ticker}/history` | 分页快照历史 |
 | `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化） |
 | `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
-| 其余 `/pipelines`、`/attribute` 等 | legacy（见下节） |
+| `GET /admin/llm-calls`、`/admin/llm-calls/cost` | LLM 调用审计 / 月度成本 |
 
 批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
 只有 meaningful change 才生成一次 Markdown 通知，baseline 与噪声保持静默。
@@ -73,10 +73,10 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 
 `.env`：`API_KEY`、`DATABASE_URL`（默认 `sqlite+aiosqlite:///./data/app.db`）、
 `DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
-`LLM_TIER2_*` / `LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
+`LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
 `WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
 `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
-`LOG_LEVEL`。调度与 pipeline 见 `config/app.yaml`；交易日历见
+`LOG_LEVEL`。调度见 `config/app.yaml`；交易日历见
 `config/calendars/a_share.yaml`（未知年份 fail-closed）。
 
 评分成功但解释失败时运行以 `partial` 收尾：确定性分数与制品保留，
@@ -91,7 +91,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 ## 测试与门禁
 
 ```bash
-pytest -q                  # 578 个测试（离线，fixture 全部脱敏）
+pytest -q                  # 427 个测试（离线，fixture 全部脱敏）
 ruff check .
 mypy src/investment_agent  # strict
 ```
@@ -112,13 +112,10 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。
 - 无任何交易执行路径；未来若考虑自动交易必须作为独立项目重新评审。
 
-## Legacy：NASDAQ Discovery / Attribution（冻结维护）
+## Legacy
 
-系统早期面向 NASDAQ-100 的多策略 Discovery（Tier2 全量打分 → Tier3 深度分析）
-与单票 Attribution（β 分解 + LLM 叙述）保留为 legacy：`ia pipeline discover`、
-`ia attribute run <TICKER>`、`ia auxiliary ...` 及对应 HTTP 端点仍可用，
-但不扩展、不阻塞 A 股 MVP。相关文档见
-`docs/superpowers/specs/2026-06-07-investment-agent-design.md`。
+早期 NASDAQ-100 Discovery / Attribution 产品已从主干移除，代码保留在 tag
+`legacy-nasdaq-final`（设计文档 `docs/superpowers/specs/2026-06-07-investment-agent-design.md`）。
 
 ## 文档
 
