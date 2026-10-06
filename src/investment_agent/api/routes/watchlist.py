@@ -22,7 +22,7 @@ from investment_agent.config import Settings
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
 from investment_agent.storage.database import session_scope
-from investment_agent.storage.models.reference import Company, Listing, Market
+from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.research_change import (
@@ -107,20 +107,8 @@ async def add_watchlist(body: WatchlistAdd) -> WatchlistItemOut:
                         status_code=422,
                         detail="name is required when no prior research snapshot exists",
                     )
-                existing_market = await session.get(Market, market.market_code)
-                if existing_market is None:
-                    session.add(
-                        Market(
-                            code=market.market_code,
-                            name=market.name,
-                            timezone=market.timezone,
-                            currency=market.currency,
-                        )
-                    )
-                    await session.flush()
-                listing = await ListingRepository(session).upsert_listing(
-                    market_code=market.market_code,
-                    ticker=symbol,
+                listing = await ListingRepository(session).ensure_a_share_listing(
+                    f"{symbol}.{market.suffix}",
                     company_name=name,
                 )
         else:

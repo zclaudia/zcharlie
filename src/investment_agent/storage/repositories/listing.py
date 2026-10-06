@@ -2,6 +2,7 @@
 
 from sqlalchemy import select
 
+from investment_agent.domain.a_share import AShareMarket, parse_a_share_ticker
 from investment_agent.storage.models.reference import Company, Listing, Market
 from investment_agent.storage.repositories.base import Repository
 
@@ -45,3 +46,50 @@ class ListingRepository(Repository[Listing]):
             self.session.add(listing)
             await self.session.flush()
         return listing
+
+    async def ensure_a_share_market(self, market: AShareMarket) -> Market:
+        existing = await self.session.get(Market, market.market_code)
+        if existing is not None:
+            return existing
+        created = Market(
+            code=market.market_code,
+            name=market.name,
+            timezone=market.timezone,
+            currency=market.currency,
+        )
+        self.session.add(created)
+        await self.session.flush()
+        return created
+
+    async def get_a_share_listing(self, ticker: str) -> Listing | None:
+        """Look up a listing by canonical A-share ticker (``600519.SH``)."""
+
+        parsed = parse_a_share_ticker(ticker)
+        if parsed is None:
+            raise ValueError(f"not a canonical A-share ticker: {ticker!r}")
+        symbol, market = parsed
+        return await self.get_by_ticker(market.market_code, symbol)
+
+    async def ensure_a_share_listing(
+        self, ticker: str, *, company_name: str | None = None
+    ) -> Listing:
+        """Return the listing for a canonical A-share ticker, creating it if absent.
+
+        Creates the exchange ``market`` row and the company on first sight; an
+        existing listing is returned unchanged. Without a ``company_name`` the
+        ticker itself names the new company.
+        """
+
+        parsed = parse_a_share_ticker(ticker)
+        if parsed is None:
+            raise ValueError(f"not a canonical A-share ticker: {ticker!r}")
+        symbol, market = parsed
+        existing = await self.get_by_ticker(market.market_code, symbol)
+        if existing is not None:
+            return existing
+        await self.ensure_a_share_market(market)
+        return await self.upsert_listing(
+            market_code=market.market_code,
+            ticker=symbol,
+            company_name=company_name or f"{symbol}.{market.suffix}",
+        )
