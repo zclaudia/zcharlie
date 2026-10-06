@@ -17,6 +17,7 @@ from investment_agent.storage.models import (  # noqa: F401
     pit_snapshot,
     reference,
     relationship,
+    rules,
     user_domain,
 )
 from investment_agent.storage.models.base import Base

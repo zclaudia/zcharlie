@@ -1,0 +1,94 @@
+# 周期反转 (cycle reversal) - template v1 DRAFT for user review (P1-F2).
+#
+# Source archetype: research_kernel classify_stock "cycle_reversal" (cycle
+# industries 有色/煤炭/石油/化工/钢铁/航运/能源/矿, 1y max drawdown >= 30%,
+# revenue growth >= 10% as a bonus) and its scoring weights (cycle position
+# 30 = drawdown, cost advantage 25 = ROE, resource reserve 20 = profit
+# growth, balance sheet 15, valuation 10).
+#
+# The screen looks for cyclicals that have been sold off and are cheap
+# against their own 5-year PB history while still earning a positive ROE
+# (cost leaders survive the trough). debt_ratio (balance sheet) is missing
+# for ~half of the cyclicals until the Eastmoney fallback lands, so it is
+# used only in drop / exit_review, where a missing value never triggers.
+id: cycle_reversal
+name: 周期反转
+description: >-
+  Cyclicals after a deep drawdown, cheap versus their own 5-year PB range,
+  still profitable (cost-advantaged survivors of the trough).
+calibration_status: uncalibrated
+applicable_groups: [cyclical]
+
+screen:
+  all:
+    # Cycle position: a deep sell-off in the last year (archetype: >= 30%).
+    - {factor: max_drawdown_1y, op: ">=", value: "$drawdown_min"}
+    # Cheap vs own cycle history; PB rather than PE (trough earnings
+    # distort PE).
+    - {factor: pb_percentile_5y, op: "<=", value: "$pb_pct_max"}
+    # Cost advantage: still profitable at the trough.
+    - {factor: roe, op: ">=", value: "$roe_min"}
+    # Survivors only: avoid the smallest, most fragile names.
+    - {factor: market_cap, op: ">=", value: "$market_cap_min"}
+
+candidate_zones:
+  buy_zone:
+    all:
+      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max"}
+  drop:
+    any:
+      # The re-rating happened (or the stock left the trough).
+      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min"}
+      # Losses: no longer a cost-advantaged survivor.
+      - {factor: roe, op: "<", value: 0.0}
+      # Balance sheet stress (missing never triggers).
+      - {factor: debt_ratio, op: ">", value: "$drop_debt_ratio_min"}
+
+holding_zones:
+  add:
+    all:
+      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max"}
+      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+  trim:
+    any:
+      # Cyclicals are trimmed into strength: valuation back at the top.
+      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min"}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min"}      # P2 factor
+      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
+  exit_review:
+    any:
+      - {factor: roe, op: "<", value: "$exit_roe_max"}
+      - {factor: debt_ratio, op: ">", value: 0.85}
+      - {factor: holding_days, op: ">", value: "$exit_holding_days_min"}  # P2: thesis time-box
+
+params:
+  drawdown_min: 0.30
+  pb_pct_max: 0.30
+  roe_min: 0.05
+  market_cap_min: 5.0e+10
+  buy_pb_pct_max: 0.15
+  drop_pb_pct_min: 0.60
+  drop_debt_ratio_min: 0.80
+  add_pb_pct_max: 0.10
+  add_weight_max: 0.06
+  trim_pb_pct_min: 0.80
+  trim_gain_min: 0.60
+  trim_weight_min: 0.10
+  exit_roe_max: -0.02
+  exit_holding_days_min: 730
+
+param_ranges:
+  drawdown_min: {min: 0.20, max: 0.60}
+  pb_pct_max: {min: 0.10, max: 0.50}
+  roe_min: {min: 0.0, max: 0.12}
+  market_cap_min: {min: 2.0e+10, max: 2.0e+11}
+  buy_pb_pct_max: {min: 0.05, max: 0.30}
+  drop_pb_pct_min: {min: 0.40, max: 0.90}
+  drop_debt_ratio_min: {min: 0.65, max: 0.95}
+  add_pb_pct_max: {min: 0.02, max: 0.25}
+  add_weight_max: {min: 0.02, max: 0.15}
+  trim_pb_pct_min: {min: 0.60, max: 0.98}
+  trim_gain_min: {min: 0.20, max: 2.00}
+  trim_weight_min: {min: 0.05, max: 0.25}
+  exit_roe_max: {min: -0.10, max: 0.05}
+  exit_holding_days_min: {min: 180, max: 1460}

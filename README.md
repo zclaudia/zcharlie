@@ -50,6 +50,8 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | `ia worker` | `start [--once] [--kinds ...]` | 队列 worker（研究 + 快照采集，按 kind 分派） |
 | `ia scheduler` | `start` | 日终刷新与快照采集调度 |
 | `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`backfill`、`status` | 时点快照采集（见下节） |
+| `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>` | 规则模板 / 实例校验与版本库（见“规则与筛选”） |
+| `ia screen` | `run [--universe] [--as-of] [--now] [--rerun]`、`show <run_id> [--reasons]` | 周频模板筛选 |
 | `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
 
@@ -150,6 +152,17 @@ ia snapshot backfill --universe CSI300 --status                                 
 - **可续跑**：每个任务按股票幂等（跳过已存数据），单只失败只影响该只，连续 5 次瞬时错误停止本任务。
   中断或失败后重新执行同一命令即续跑：已完成部分不动，`partial` / `failed` 的任务只以剩余标的重新入队
   （幂等键加 `:r<n>`）。`--now` 在当前进程依次执行所有排队的回补任务（无 worker 时使用）。
+
+## 规则与筛选
+
+- 模板文件 `config/rule_templates/*.yaml`（P1-C2，五个策略原型，`uncalibrated`）；`ia rules validate <file>`
+  离线校验（未知因子、op/值类型、自由文本、参数越界、区间名、行业组，错误一次性汇总），
+  `ia rules sync` 按内容哈希入库（`rule_template`，内容变化即升版本，旧版本不改）。
+- 规则实例（`rule_instance`）：`draft → active → retired`，每次修改生成新版本，批准时退役上一 active 版本。
+- 周筛选任务 `screen_run`（每周日 20:00，`config/app.yaml` 的 `screen:` 段）：先同步模板，再对目标池按时点计算因子、
+  运行全部模板的 `screen` 条件，结果写入 `screen_result`（命中 / 截断 / 未命中 / 跳过 / 剔除，附结构化理由）。
+  ST 与逾期未披露标的全局剔除；每模板默认最多 20 个命中，按"阈值内距离"强度排序。
+  `ia screen run --as-of 2026-09-30 --now` 当场执行，`ia screen show <run_id> --reasons` 查看理由。
 
 ## HTTP API（`X-API-Key` 或 Web 会话）
 

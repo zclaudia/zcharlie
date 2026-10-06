@@ -1,7 +1,8 @@
 """APScheduler-based runner: A-share watchlist refresh + PIT snapshot collection.
 
 Runs in its own process (`ia scheduler start` or Docker service).
-Reads cron + timezone from config/app.yaml (``scheduler`` and ``snapshot``).
+Reads cron + timezone from config/app.yaml (``scheduler``, ``snapshot`` and
+``screen``).
 The scheduler only enqueues; the worker executes the jobs.
 """
 
@@ -16,6 +17,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from investment_agent.config import (
     AppYamlConfig,
+    ScreenScheduleConfig,
     Settings,
     SnapshotScheduleConfig,
     load_app_yaml,
@@ -196,6 +198,47 @@ async def run_snapshot_schedule_job(
     return created
 
 
+async def run_screen_schedule_job(
+    screen_cfg: ScreenScheduleConfig, *, today: date | None = None
+) -> int | None:
+    """One fire of the weekly screen: enqueue one ``screen_run`` per universe.
+
+    ``as_of`` is the local fire date. Idempotent per (universe, as_of).
+    Returns the number of newly created runs, ``None`` on an enqueue error.
+    """
+
+    from investment_agent.rules.screen_job import ScreenRunPayload, enqueue_screen_run
+
+    local_today = today or datetime.now(ZoneInfo(screen_cfg.timezone)).date()
+    created = 0
+    try:
+        for code in dict.fromkeys(screen_cfg.universes):
+            payload = ScreenRunPayload.model_validate(
+                {"universe_code": code, "as_of": local_today, "hit_cap": screen_cfg.hit_cap}
+            )
+            async with session_scope() as session:
+                run, was_created = await enqueue_screen_run(
+                    session, payload, triggered_by="scheduler"
+                )
+                created += was_created
+                log.info(
+                    "scheduler.screen.queued",
+                    run_id=run.id,
+                    key=run.idempotency_key,
+                    created=was_created,
+                )
+    except Exception:
+        log.exception("scheduler.screen.failed", today=local_today.isoformat())
+        return None
+    return created
+
+
+def _screen_trigger(cfg: ScreenScheduleConfig | None) -> CronTrigger | None:
+    if cfg is None or cfg.cron is None:
+        return None
+    return _parse_cron(cfg.cron, timezone=cfg.timezone)
+
+
 def _snapshot_triggers(cfg: SnapshotScheduleConfig) -> dict[SnapshotScheduleJob, CronTrigger]:
     crons = cfg.crons()
     return {
@@ -323,7 +366,31 @@ def build_scheduler(
                 replace_existing=True,
                 **_JOB_DEFAULTS,
             )
+    screen_trigger = _screen_trigger(app_config.screen)
+    if screen_trigger is not None:
+        sched.add_job(
+            run_screen_schedule_job,
+            trigger=screen_trigger,
+            args=[app_config.screen],
+            id="screen_run",
+            replace_existing=True,
+            **_JOB_DEFAULTS,
+        )
     return sched
+
+
+async def _startup_screen_check(app_config: AppYamlConfig, now: datetime) -> bool:
+    """Catch up the weekly screen if its fire time already passed today (idempotent)."""
+
+    trigger = _screen_trigger(app_config.screen)
+    if trigger is None or app_config.screen is None:
+        return False
+    today = fired_today(now=now, trigger=trigger)
+    if today is None:
+        return False
+    log.info("scheduler.screen.catch_up", today=today.isoformat())
+    await run_screen_schedule_job(app_config.screen, today=today)
+    return True
 
 
 async def run_forever(app_config_path: str = "config/app.yaml") -> None:
@@ -343,6 +410,7 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
     started_at = datetime.now(ZoneInfo("UTC"))
     await _startup_watchlist_check(cfg, started_at)
     await _startup_snapshot_check(cfg, started_at)
+    await _startup_screen_check(cfg, started_at)
     stop_event = asyncio.Event()
     try:
         await stop_event.wait()

@@ -140,9 +140,32 @@ class SnapshotScheduleConfig(BaseModel):
         }
 
 
+class ScreenScheduleConfig(BaseModel):
+    """Weekly template screen (P1-C3): one ``screen_run`` per universe.
+
+    ``as_of`` is the local date the job fires on; a ``None`` cron disables it.
+    """
+
+    universes: list[str] = Field(default_factory=lambda: ["CSI300"], min_length=1)
+    timezone: str = "Asia/Shanghai"
+    # Day-of-week by name: APScheduler 3 numbers weekdays from Monday = 0.
+    cron: str | None = "0 20 * * sun"
+    hit_cap: int = Field(default=20, ge=1, le=500)
+
+    @model_validator(mode="after")
+    def _known_universes(self) -> Self:
+        from investment_agent.providers.baostock_reference import INDEX_CODES
+
+        unknown = sorted(set(self.universes) - set(INDEX_CODES))
+        if unknown:
+            raise ValueError(f"unsupported screen universes {unknown}; use {INDEX_CODES}")
+        return self
+
+
 class AppYamlConfig(BaseModel):
     scheduler: SchedulerConfig
     snapshot: SnapshotScheduleConfig | None = None
+    screen: ScreenScheduleConfig | None = None
 
 
 def load_app_yaml(path: Path) -> AppYamlConfig:
