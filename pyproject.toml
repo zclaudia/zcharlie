@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "investment-agent"
 version = "0.1.0"
-description = "Personal investment analysis agent"
+description = "Personal A-share research desk"
 requires-python = ">=3.13"
 dependencies = [
     # Web / API
@@ -27,13 +27,8 @@ dependencies = [
     "aiosqlite>=0.20",
     "alembic>=1.13",
 
-    # Scheduler (used in Plan D; included now to avoid env churn)
+    # Scheduler
     "apscheduler>=3.10",
-
-    # Data / Finance
-    "yfinance>=0.2.40",
-    "pandas>=2.2",
-    "numpy>=1.26",
 
     # LLM
     "openai>=1.30",
@@ -42,10 +37,7 @@ dependencies = [
     # Logging
     "structlog>=24.1",
 
-    # Retry / Rate
-    "tenacity>=8.2",
-
-    # Templating
+    # Templating (web UI via fastapi.templating)
     "jinja2>=3.1",
 ]
 
@@ -93,5 +85,5 @@ namespace_packages = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["yfinance.*", "pandas.*", "numpy.*", "apscheduler.*"]
+module = ["apscheduler.*"]
 ignore_missing_imports = true
