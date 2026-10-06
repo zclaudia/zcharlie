@@ -22,6 +22,7 @@ from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
 
+from investment_agent.factors.field_sources import default_field_sources
 from investment_agent.factors.industry_groups import FINANCIAL_GROUPS
 from investment_agent.factors.metrics import (
     MIN_ONE_YEAR_SESSIONS,
@@ -57,6 +58,7 @@ FLAG_NON_POSITIVE_BASE = "non_positive_base"
 FLAG_MAIN_BUSINESS_REVENUE = "main_business_revenue"
 FLAG_MAIN_BUSINESS_REVENUE_UNAVAILABLE = "main_business_revenue_unavailable"
 FLAG_SUSPECT_PROVIDER_VALUE = "suspect_provider_value"
+FLAG_PROVIDER_FALLBACK = "provider_fallback"
 FLAG_NO_SHARES = "no_total_shares"
 
 NOT_FINANCIAL = Applicability(excluded=FINANCIAL_GROUPS)
@@ -66,8 +68,12 @@ STALE_PRICE_DAYS = 14
 TURNOVER_WINDOW_SESSIONS = 20
 # baostock ``liabilityToAsset`` occasionally arrives scaled by 1/100 (seen on
 # FY2024/FY2025 annual rows, e.g. 600519 FY2024 0.0019 vs ~0.17 in adjacent
-# quarters). A debt ratio below this is treated as a provider defect.
-MIN_PLAUSIBLE_DEBT_RATIO = 0.02
+# quarters). The rule lives in the field source registry (P1-A12,
+# ``debt_ratio.sanity.baostock.min``); the view rejects such values and falls
+# through to the fallback source (Eastmoney ``stock_zcfz_em``).
+_DEBT_RATIO_SANITY = default_field_sources().require("debt_ratio").sanity["baostock"]
+assert _DEBT_RATIO_SANITY.minimum is not None
+MIN_PLAUSIBLE_DEBT_RATIO: float = _DEBT_RATIO_SANITY.minimum
 
 _FIN = "financial_snapshot.fields"
 
@@ -81,8 +87,18 @@ def _both(
     )
 
 
-def _ref(*periods: FinancialPeriod | None, **extra: Any) -> dict[str, Any]:
-    ref: dict[str, Any] = {"financial": [period.describe() for period in periods if period]}
+def _ref(
+    *periods: FinancialPeriod | None, source_fields: tuple[str, ...] = (), **extra: Any
+) -> dict[str, Any]:
+    """Financial periods used (with each field's provider / verification, P1-A12)."""
+
+    names = [
+        *(value for key in ("field", "basis") if isinstance(value := extra.get(key), str)),
+        *source_fields,
+    ]
+    ref: dict[str, Any] = {
+        "financial": [period.describe(names) for period in periods if period]
+    }
     ref.update(extra)
     return ref
 
@@ -112,10 +128,15 @@ def _debt_ratio(view: SnapshotView) -> Partial:
         return Partial(None, flags=(FLAG_NO_ANNUAL_REPORT,))
     value = period.value("debt_ratio")
     ref = _ref(period, field="debt_ratio")
-    if view.provider == "baostock" and value is not None and value < MIN_PLAUSIBLE_DEBT_RATIO:
-        return Partial(
-            None, flags=(FLAG_SUSPECT_PROVIDER_VALUE,), inputs_ref={**ref, "provider_value": value}
-        )
+    # The view applied the registry sanity rule (baostock < MIN_PLAUSIBLE_DEBT_RATIO
+    # is a provider defect) and fell through to the fallback source.
+    resolution = period.source("debt_ratio")
+    rejected = resolution.rejected if resolution is not None else ()
+    if rejected:
+        ref = {**ref, "provider_value": rejected[0].value}
+        if value is None:
+            return Partial(None, flags=(FLAG_SUSPECT_PROVIDER_VALUE,), inputs_ref=ref)
+        return Partial(value, flags=(FLAG_PROVIDER_FALLBACK,), inputs_ref=ref)
     return Partial(value, inputs_ref=ref)
 
 
@@ -213,10 +234,22 @@ def _free_cash_flow(view: SnapshotView) -> Partial:
     capex = period.value("capital_expenditure")
     if operating is not None and capex is not None:
         value: float | None = operating - capex
+        used: tuple[str, ...] = ("operating_cash_flow", "capital_expenditure")
     else:
         value = period.value("free_cash_flow")
+        used = ("free_cash_flow",)
     formula = "operating_cash_flow - capital_expenditure"
-    return Partial(value, inputs_ref=_ref(period, formula=formula))
+    ref = _ref(
+        period,
+        formula=formula,
+        source_fields=("operating_cash_flow", "capital_expenditure", "free_cash_flow"),
+    )
+    approx = any(
+        (resolution := period.source(name)) is not None and resolution.approx for name in used
+    )
+    if value is not None and approx:
+        return Partial(value, quality="approx", inputs_ref=ref)
+    return Partial(value, inputs_ref=ref)
 
 
 # --------------------------------------------------------------------------- #
@@ -407,7 +440,8 @@ CORE_FACTORS: tuple[Factor, ...] = (
         "1",
         "fraction",
         "Liabilities / assets of the latest annual report; baostock values below "
-        f"{MIN_PLAUSIBLE_DEBT_RATIO} are treated as provider defects (missing).",
+        f"{MIN_PLAUSIBLE_DEBT_RATIO} are provider defects: the view falls back to "
+        "Eastmoney (field source registry), else missing (suspect_provider_value).",
         _both("debt_ratio"),
         _debt_ratio,
         applicability=NOT_FINANCIAL,
@@ -439,8 +473,11 @@ CORE_FACTORS: tuple[Factor, ...] = (
         "1",
         "CNY",
         "Operating cash flow - cash paid for long-term assets, latest annual report "
-        "(iFinD only; baostock has no absolute cash flows).",
+        "(target pool: Eastmoney cash-flow statements via the field source registry; "
+        "observation: iFinD).",
         (
+            FactorInput("baostock", "operating_cash_flow", _FIN),
+            FactorInput("baostock", "capital_expenditure", _FIN),
             FactorInput("ifind", "operating_cash_flow", _FIN),
             FactorInput("ifind", "capital_expenditure", _FIN),
         ),
