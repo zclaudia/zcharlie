@@ -19,11 +19,13 @@ from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings, SnapshotScheduleConfig, load_app_yaml
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.snapshots.jobs import (
+    AKSHARE_FINANCIAL_PARTS,
     INDUSTRY_SYSTEMS,
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     SNAPSHOT_PROVIDERS,
     SNAPSHOT_SCOPES,
+    AkshareFinancialPart,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     IndustrySystem,
@@ -47,8 +49,12 @@ app = typer.Typer(help="Point-in-time snapshot collection (universe, industry, m
 
 _UNIVERSE_HELP = f"Universe code: {', '.join(INDEX_CODES)}"
 _PROVIDER_HELP = (
-    "Data source: baostock (target pool breadth, default) or ifind (watchlist only; "
-    "spends the iFinD gateway quota)"
+    "Data source: baostock (target pool breadth, default), ifind (watchlist only; "
+    "spends the iFinD gateway quota) or akshare (Eastmoney financials only)"
+)
+_PART_HELP = (
+    "akshare only: summary (whole-market period summaries, default) or cash_flow "
+    "(per-stock cash-flow statements, ~20 s per stock)"
 )
 _SCOPE_HELP = (
     "universe (members of --universe) or watchlist (enabled watchlist items); "
@@ -96,6 +102,18 @@ def _routing(
         )
     code = _universe(universe) if scope == "universe" else None
     return chosen, scope, code
+
+
+def _part(value: str | None, provider: SnapshotProvider) -> AkshareFinancialPart | None:
+    if value is None:
+        return None
+    if provider != "akshare":
+        raise typer.BadParameter("--part only applies to --provider akshare", param_hint="--part")
+    part = value.strip().lower()
+    for item in AKSHARE_FINANCIAL_PARTS:
+        if item == part:
+            return item
+    raise typer.BadParameter(" or ".join(AKSHARE_FINANCIAL_PARTS), param_hint="--part")
 
 
 def _systems(values: list[str] | None) -> tuple[IndustrySystem, ...]:
@@ -243,15 +261,16 @@ def collect_market(
     """Enqueue incremental daily bars (raw + backward) for the scope's listings."""
 
     chosen, chosen_scope, code = _routing(provider, scope, universe)
-    _run(
-        MarketSnapshotPayload(
+    try:
+        payload = MarketSnapshotPayload(
             provider=chosen,
             scope=chosen_scope,
             universe_code=code,
             trade_date=_date(trade_date, "--date"),
-        ),
-        now,
-    )
+        )
+    except ValidationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--provider") from exc
+    _run(payload, now)
 
 
 @app.command("collect-financial")
@@ -261,11 +280,14 @@ def collect_financial(
     provider: str = typer.Option("baostock", help=_PROVIDER_HELP),
     scope: str | None = typer.Option(None, help=_SCOPE_HELP),
     as_of: str | None = typer.Option(None, help="Membership date (YYYY-MM-DD, default today)"),
+    part: str | None = typer.Option(None, help=_PART_HELP),
     now: bool = typer.Option(False, "--now", help=_NOW_HELP),
 ) -> None:
-    """Enqueue one report period for listings that do not have it yet."""
+    """Enqueue one report period for listings that do not have it yet
+    (akshare: store every changed Eastmoney capture as a new version)."""
 
     chosen, chosen_scope, code = _routing(provider, scope, universe)
+    chosen_part = _part(part, chosen)
     try:
         payload = FinancialSnapshotPayload(
             provider=chosen,
@@ -273,6 +295,7 @@ def collect_financial(
             universe_code=code,
             report_period=_date(period, "--period"),
             as_of=_date(as_of, "--as-of"),
+            part=chosen_part,
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc), param_hint="--period") from exc
@@ -473,6 +496,105 @@ async def _backfill(
     _print_backfill_status(as_of, statuses, payload.universe_code)
 
 
+async def _akshare_backfill(
+    settings: Settings,
+    universe_code: IndexCode,
+    as_of: date,
+    *,
+    annual: int,
+    quarters: int,
+    with_cash_flow: bool,
+    dry_run: bool,
+    show_status: bool,
+    now: bool,
+) -> None:
+    from investment_agent.snapshots.eastmoney import (
+        akshare_backfill_payloads,
+        estimate_akshare_backfill,
+        plan_akshare_backfill,
+    )
+    from investment_agent.storage.database import init_engine, session_scope
+    from investment_agent.storage.repositories.universe import UniverseRepository
+
+    payloads = akshare_backfill_payloads(
+        universe_code,
+        as_of,
+        annual_years=annual,
+        quarters=quarters,
+        with_cash_flow=with_cash_flow,
+    )
+    periods = sorted({payload.report_period for payload in payloads if payload.part == "summary"})
+    rprint(
+        f"[bold]AkShare (Eastmoney) backfill[/bold] {universe_code} as of {as_of.isoformat()}: "
+        f"{len(periods)} period(s) " + ", ".join(period.isoformat() for period in periods)
+    )
+    init_engine(settings.database_url)
+    if dry_run:
+        async with session_scope() as session:
+            members = await UniverseRepository(session).members_between(
+                universe_code, periods[0] if periods else as_of, as_of
+            )
+        listings = len({member.ticker for member in members})
+        calls, seconds = estimate_akshare_backfill(payloads, listings=listings)
+        rprint(
+            f"Survivorship set: {listings} listing(s); estimated {calls} AkShare call(s), "
+            f"~{_duration(seconds)} (cash-flow statements: "
+            f"{'yes' if with_cash_flow else 'no, add --with-cash-flow'})"
+        )
+        return
+    if show_status:
+        from sqlalchemy import select
+
+        from investment_agent.snapshots.jobs import idempotency_key
+        from investment_agent.storage.models.analysis import PipelineRun
+
+        table = Table(title=f"AkShare backfill {universe_code} as of {as_of.isoformat()}")
+        for column in ("part", "period", "run", "status", "completeness"):
+            table.add_column(column)
+        async with session_scope() as session:
+            for payload in payloads:
+                key = idempotency_key(payload)
+                run = (
+                    await session.execute(
+                        select(PipelineRun)
+                        .where(PipelineRun.idempotency_key.like(f"{key}%"))
+                        .order_by(PipelineRun.id.desc())
+                        .limit(1)
+                    )
+                ).scalar_one_or_none()
+                completeness = (run.metadata_json or {}).get("completeness") if run else None
+                ratio = completeness.get("ratio") if isinstance(completeness, dict) else None
+                table.add_row(
+                    str(payload.part),
+                    payload.report_period.isoformat(),
+                    f"#{run.id}" if run else "-",
+                    run.status if run else "not queued",
+                    "-" if ratio is None else str(ratio),
+                )
+        rprint(table)
+        return
+    async with session_scope() as session:
+        actions = await plan_akshare_backfill(session, payloads, triggered_by="cli")
+    for action in actions:
+        verb = "queued" if action.created else action.status
+        rprint(f"{action.part} {action.report_period.isoformat()}: {verb} (run #{action.run_id})")
+    if not now:
+        rprint("Jobs run on the worker; re-run this command to resume, --status for progress.")
+        return
+    from investment_agent.research.worker import ResearchWorker
+    from investment_agent.snapshots.handlers import snapshot_job_handlers
+
+    worker = ResearchWorker(
+        settings=settings,
+        worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
+        handlers=snapshot_job_handlers(settings),
+    )
+    for action in actions:
+        if action.status == "queued":
+            await worker.run_once(run_id=action.run_id)
+            rprint(f"ran {action.part} {action.report_period.isoformat()} (run #{action.run_id})")
+
+
 @app.command("backfill")
 def backfill(
     universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
@@ -485,13 +607,46 @@ def backfill(
     ),
     show_status: bool = typer.Option(False, "--status", help="Show progress per part"),
     now: bool = typer.Option(False, "--now", help="Also run the queued backfill jobs inline"),
+    provider: str = typer.Option(
+        "baostock",
+        help="baostock (membership, industry, prices, financials; default) or akshare "
+        "(Eastmoney period summaries of the same report periods)",
+    ),
+    with_cash_flow: bool = typer.Option(
+        False,
+        "--with-cash-flow",
+        help="akshare only: also backfill per-stock cash-flow statements (~20 s per stock)",
+    ),
 ) -> None:
-    """Plan / resume the baostock history backfill (membership, industry, prices,
-    financials). Re-running the command resumes unfinished parts."""
+    """Plan / resume the history backfill. baostock: membership, industry, prices,
+    financials; akshare: Eastmoney period summaries (+ cash-flow statements).
+    Re-running the command resumes unfinished parts."""
 
     day = _date(as_of, "--as-of")
     if day > shanghai_today():
         raise typer.BadParameter("--as-of cannot be in the future", param_hint="--as-of")
+    chosen = provider.strip().lower()
+    if chosen not in {"baostock", "akshare"}:
+        raise typer.BadParameter("baostock or akshare", param_hint="--provider")
+    if with_cash_flow and chosen != "akshare":
+        raise typer.BadParameter(
+            "--with-cash-flow only applies to --provider akshare", param_hint="--with-cash-flow"
+        )
+    if chosen == "akshare":
+        asyncio.run(
+            _akshare_backfill(
+                Settings(),  # type: ignore[call-arg]
+                _universe(universe),
+                day,
+                annual=annual,
+                quarters=quarters,
+                with_cash_flow=with_cash_flow,
+                dry_run=dry_run,
+                show_status=show_status,
+                now=now,
+            )
+        )
+        return
     payload = SnapshotBackfillPayload(
         universe_code=_universe(universe),
         as_of=day,

@@ -18,6 +18,13 @@ target pool from baostock (``provider="baostock"``, ``scope="universe"``,
 decision D6); no iFinD job is scheduled for breadth data. The financial jobs collect the most
 recent report period(s) whose statutory disclosure deadline has passed plus
 any period still inside its disclosure season.
+
+Eastmoney via AkShare (P1-A11): both financial jobs also enqueue the period
+summaries (``provider="akshare"``, ``part="summary"``) after the baostock
+jobs, so the summaries find the baostock pubDates; ``financial_weekly``
+additionally enqueues one per-stock cash-flow statement job
+(``part="cash_flow"``, all due periods from one call per stock) inside the
+disclosure-season windows :data:`CASH_FLOW_WINDOWS` only (~1.4 h for CSI 300).
 """
 
 from __future__ import annotations
@@ -66,6 +73,13 @@ CALENDAR_FREE_JOBS = frozenset({"universe_sync", "financial_weekly"})
 # day triggers an extra financial collection.
 FINANCIAL_DEADLINES: tuple[tuple[int, int], ...] = ((4, 30), (8, 31), (10, 31))
 _QUARTER_ENDS: tuple[tuple[int, int], ...] = ((3, 31), (6, 30), (9, 30), (12, 31))
+# Disclosure-season windows ((month, day) inclusive) in which the weekly
+# financial job also refreshes Eastmoney per-stock cash-flow statements.
+CASH_FLOW_WINDOWS: tuple[tuple[tuple[int, int], tuple[int, int]], ...] = (
+    ((4, 15), (5, 15)),
+    ((8, 15), (9, 15)),
+    ((10, 15), (11, 15)),
+)
 
 
 def _recent_periods(today: date, count: int = 8) -> list[date]:
@@ -154,7 +168,7 @@ def snapshot_payloads(
     if job == "universe_sync":
         return [UniverseSyncPayload(universe_code=code, as_of=today) for code in codes]
     if job == "financial_weekly":
-        return _financial(codes, today)
+        return [*_financial(codes, today), *_akshare_cash_flow(codes, today)]
     if calendar is None:
         raise ValueError(f"{job} needs the trading calendar")
     if job == "industry_sync":
@@ -180,7 +194,10 @@ def snapshot_payloads(
 
 
 def _financial(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]:
-    return [
+    """baostock first, then the Eastmoney period summaries of the same periods."""
+
+    periods = financial_periods_due(today)
+    baostock: list[SnapshotPayload] = [
         FinancialSnapshotPayload(
             provider="baostock",
             scope="universe",
@@ -189,7 +206,47 @@ def _financial(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]
             as_of=today,
         )
         for code in codes
-        for period in financial_periods_due(today)
+        for period in periods
+    ]
+    summaries: list[SnapshotPayload] = [
+        FinancialSnapshotPayload(
+            provider="akshare",
+            part="summary",
+            scope="universe",
+            universe_code=code,
+            report_period=period,
+            as_of=today,
+        )
+        for code in codes
+        for period in periods
+    ]
+    return [*baostock, *summaries]
+
+
+def in_cash_flow_window(day: date) -> bool:
+    """Whether ``day`` is inside a disclosure-season window (:data:`CASH_FLOW_WINDOWS`)."""
+
+    key = (day.month, day.day)
+    return any(start <= key <= end for start, end in CASH_FLOW_WINDOWS)
+
+
+def _akshare_cash_flow(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]:
+    if not in_cash_flow_window(today):
+        return []
+    periods = sorted(financial_periods_due(today), reverse=True)
+    if not periods:
+        return []
+    return [
+        FinancialSnapshotPayload(
+            provider="akshare",
+            part="cash_flow",
+            scope="universe",
+            universe_code=code,
+            report_period=periods[0],
+            extra_periods=tuple(periods[1:]),
+            as_of=today,
+        )
+        for code in codes
     ]
 
 

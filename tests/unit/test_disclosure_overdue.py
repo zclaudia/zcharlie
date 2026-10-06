@@ -202,6 +202,7 @@ def test_deadline_trigger_schedules_the_scan():
         "financial_deadline", today=date(2026, 9, 1), calendar=calendar, universes=["CSI300"]
     )
     assert [(p.provider, p.scope, p.report_period, p.as_of) for p in payloads] == [  # type: ignore[union-attr]
-        ("baostock", "universe", H1, date(2026, 9, 1))
+        ("baostock", "universe", H1, date(2026, 9, 1)),
+        ("akshare", "universe", H1, date(2026, 9, 1)),
     ]
     assert is_past_deadline(H1, date(2026, 9, 1))

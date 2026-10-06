@@ -142,8 +142,12 @@ def error_reason(exc: BaseException) -> str:
 #   completeness denominator;
 # * ``quota``   - not attempted (or interrupted) because the iFinD quota ran
 #   out; the run finishes ``partial`` and the next run resumes them.
-MissingKind = Literal["failed", "no_data", "pending", "quota"]
+# * ``stopped`` - not attempted because the provider failed repeatedly
+#   (AkShare: 3 consecutive failures); the run finishes ``partial`` with
+#   ``stop_reason="provider_unavailable"`` and the next run resumes them.
+MissingKind = Literal["failed", "no_data", "pending", "quota", "stopped"]
 QUOTA_STOP_REASON = "quota"
+PROVIDER_STOP_REASON = "provider_unavailable"
 
 
 @dataclass
@@ -189,9 +193,14 @@ class Completeness:
     def quota(self) -> list[str]:
         return self.tickers("quota")
 
+    @property
+    def stopped(self) -> list[str]:
+        return self.tickers("stopped")
+
     def status(self) -> Literal["success", "partial", "failed"]:
-        if self.quota:
-            # Quota exhaustion keeps what was stored and never fails the run.
+        if self.quota or self.stopped:
+            # Quota exhaustion / a provider stop keeps what was stored and
+            # never fails the run.
             return "partial"
         if self.failed and not self.collected:
             return "failed"
@@ -205,6 +214,7 @@ class Completeness:
             "failed_count": len(self.failed),
             "pending_count": len(self.pending),
             "quota_count": len(self.quota),
+            "stopped_count": len(self.stopped),
             "ratio": self.ratio,
             "missing": {
                 ticker: {"kind": kind, "reason": reason}
@@ -244,6 +254,25 @@ class CollectionReport:
             error=self.stop_error,
         )
 
+    def stop_for_provider(self, exc: BaseException, tickers: Sequence[str], *, failures: int) -> None:
+        """Stop after ``failures`` consecutive provider failures; tag the rest ``stopped``."""
+
+        self.stop_reason = PROVIDER_STOP_REASON
+        self.stop_error = error_reason(exc)
+        for ticker in tickers:
+            self.completeness.mark_missing(
+                ticker,
+                "stopped",
+                f"not collected: {self.provider} unavailable after {failures} consecutive "
+                f"failures ({self.stop_error})",
+            )
+        log.warning(
+            "snapshot.provider_unavailable",
+            provider=self.provider,
+            remaining=len(tickers),
+            error=self.stop_error,
+        )
+
     def stop_for_quota_ticker(self, ticker: str) -> None:
         """Tag one more ticker as not collected because of the recorded quota stop."""
 
@@ -274,6 +303,8 @@ class CollectionReport:
         )
         if self.stop_reason == QUOTA_STOP_REASON:
             text += f"; stopped: iFinD quota exhausted, {len(c.quota)} not collected"
+        if self.stop_reason == PROVIDER_STOP_REASON:
+            text += f"; stopped: {self.provider} unavailable, {len(c.stopped)} not collected"
         return text
 
     def failure(self) -> ProviderError:

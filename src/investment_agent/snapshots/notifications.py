@@ -3,8 +3,9 @@
 * ``info`` - a universe sync changed index membership;
 * ``action_required`` - a snapshot run failed, a market / financial run
   finished below the completeness threshold, or it stopped because the iFinD
-  quota ran out (``stop_reason="quota"``), or a financial run detected new
-  overdue reports (``report_overdue.detected``).
+  quota ran out (``stop_reason="quota"``), or it stopped because AkShare
+  failed repeatedly (``stop_reason="provider_unavailable"``), or a financial
+  run detected new overdue reports (``report_overdue.detected``).
 
 Each run notifies at most once: the target path is deterministic per run and
 an existing file is never rewritten.
@@ -16,7 +17,7 @@ from typing import Any, Literal
 
 from investment_agent.domain.protocols import Notifier, RenderedContent
 from investment_agent.notifiers.file_notifier import FileNotifier
-from investment_agent.snapshots.collect import QUOTA_STOP_REASON
+from investment_agent.snapshots.collect import PROVIDER_STOP_REASON, QUOTA_STOP_REASON
 from investment_agent.snapshots.jobs import (
     FINANCIAL_SNAPSHOT,
     MARKET_SNAPSHOT,
@@ -52,7 +53,10 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
     if run.status == "failed":
         return "action_required"
     if run.kind in {MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT}:
-        if (run.metadata_json or {}).get("stop_reason") == QUOTA_STOP_REASON:
+        if (run.metadata_json or {}).get("stop_reason") in {
+            QUOTA_STOP_REASON,
+            PROVIDER_STOP_REASON,
+        }:
             return "action_required"
         if _overdue_detected(run):
             return "action_required"
@@ -114,6 +118,14 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         )
         if metadata.get("stop_error"):
             lines.append(f"- 上游信息：{metadata.get('stop_error')}")
+    provider_stop = metadata.get("stop_reason") == PROVIDER_STOP_REASON
+    if provider_stop:
+        lines.append(
+            f"- **数据源不可用**：{request.get('provider')} 连续失败，本次任务已停止剩余标的，"
+            "已采数据保留；下次调度自动续采。"
+        )
+        if metadata.get("stop_error"):
+            lines.append(f"- 最后错误：{metadata.get('stop_error')}")
     if run.kind == UNIVERSE_SYNC:
         added = _tickers(metadata.get("added"))
         removed = _tickers(metadata.get("removed"))
@@ -140,7 +152,8 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
             f"- 完整率：{completeness.get('ratio')}（阈值 {threshold}）；"
             f"应采 {completeness.get('expected')}，实采 {completeness.get('collected')}，"
             f"失败 {completeness.get('failed_count')}，待披露 {completeness.get('pending_count')}，"
-            f"额度未采 {completeness.get('quota_count', 0)}"
+            f"额度未采 {completeness.get('quota_count', 0)}，"
+            f"停止未采 {completeness.get('stopped_count', 0)}"
         )
         missing = completeness.get("missing") or {}
         if isinstance(missing, dict) and missing:
@@ -154,6 +167,12 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         lines += [
             "",
             "处理：无需立即重试；如需提前补采，等额度恢复后用 `ia snapshot` 重新入队。",
+        ]
+    elif provider_stop:
+        lines += [
+            "",
+            "处理：检查东方财富 / AkShare 接口可用性（网络、限流、改版）；"
+            "恢复后可用 `ia snapshot collect-financial --provider akshare` 重新入队。",
         ]
     elif detected and run.status == "success":
         lines += ["", "处理：核实逾期公司公告（停牌、延期披露、退市风险）；筛选将排除这些标的。"]
