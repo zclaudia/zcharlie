@@ -47,10 +47,34 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 |---|---|---|
 | `ia migrate` | `up/down/current/history` | alembic 迁移（尊重 `DATABASE_URL`） |
 | `ia api` | `serve` | FastAPI 服务 |
-| `ia worker` | `start [--once]` | 研究队列 worker |
-| `ia scheduler` | `start` | 日终刷新调度 |
+| `ia worker` | `start [--once] [--kinds ...]` | 队列 worker（研究 + 快照采集，按 kind 分派） |
+| `ia scheduler` | `start` | 日终刷新与快照采集调度 |
+| `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`status` | 时点快照采集（见下节） |
 | `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
+
+## 快照采集
+
+时点（PIT）快照由 worker 执行、scheduler 入队，任务幂等键为 `kind:universe:date(:period)`：
+
+| 任务 kind | CLI | 调度（Asia/Shanghai） | 内容 |
+|---|---|---|---|
+| `universe_sync` | `ia snapshot sync-universe --universe CSI300 [--as-of]` | 每周一 08:00 | baostock 成分 → `universe_membership`；有进出发 `info` 通知 |
+| `industry_sync` | `ia snapshot sync-industry [--universe CSI300] [--as-of]` | 每月首个交易日 08:00 | baostock 证监会行业 → `industry_classification` |
+| `market_snapshot` | `ia snapshot collect-market --universe CSI300 [--date]` | 交易日 16:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权 |
+| `financial_snapshot` | `ia snapshot collect-financial --universe CSI300 --period 2026-06-30` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 09:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采尚无该期的成分股 |
+
+- 每次 proxy 调用最多 3 只标的；全部调用经共享令牌桶节流（`IFIND_COLLECT_RATE_PER_MINUTE`，默认 40/分钟），
+  瞬时错误按批重试（`IFIND_COLLECT_BATCH_RETRIES`，默认 2）。单批失败只影响该批。
+- 运行元数据记录完整率：应采 / 实采 / 缺失清单（`failed` 错误、`no_data` 无数据如停牌、`pending` 财报未披露）。
+  有 `failed` 为 `partial`，全部失败为 `failed`；完整率低于 `SNAPSHOT_COMPLETENESS_THRESHOLD`（默认 0.95）
+  或失败时发 `action_required` 通知。
+- 总股本：距上次获取超过 7 天才调用 `/stock/info`，当日不复权行写入新值，其余行沿用最近值；
+  来源文件与获取日期记录在 `raw_ref` 的 `#total_shares=<ref>@<date>` 后缀。
+- 财报行 `availability=approx`、`available_from`=采集日（保守上界，待披露日采集细化）。
+- 原始响应落盘到 `DATA_DIR/snapshot-runs/<run>/attempt-<n>/`，`raw_ref` 指向该文件。
+- `--now` 在当前进程立即执行（调试用）；`ia snapshot status` 查看各类任务最近运行与完整率。
+  调度配置见 `config/app.yaml` 的 `snapshot:` 段。
 
 ## HTTP API（`X-API-Key` 或 Web 会话）
 
@@ -73,6 +97,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 
 `.env`：`API_KEY`、`DATABASE_URL`（默认 `sqlite+aiosqlite:///./data/app.db`）、
 `DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
+`IFIND_COLLECT_RATE_PER_MINUTE`、`IFIND_COLLECT_BATCH_RETRIES`、`SNAPSHOT_COMPLETENESS_THRESHOLD`、
 `LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
 `WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
 `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、

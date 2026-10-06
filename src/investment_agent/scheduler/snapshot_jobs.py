@@ -1,0 +1,218 @@
+"""Snapshot collection schedule (P1-A5): pure trigger decisions + enqueueing.
+
+| job                  | cron (Asia/Shanghai) | gate                                         |
+|----------------------|----------------------|----------------------------------------------|
+| universe_sync        | Mon 08:00            | none (trading-day agnostic)                  |
+| industry_sync        | daily 08:00          | first trading day of the month               |
+| market_snapshot      | Mon-Fri 16:30        | trading day                                  |
+| financial_weekly     | Sat 09:00            | none                                         |
+| financial_deadline   | daily 09:00          | first trading day after 04-30 / 08-31 / 10-31 |
+
+Each fire enqueues one job per configured universe (industry: one job for
+the union) with the default per-date idempotency key, so a misfire catch-up
+or a restart never duplicates work. The financial jobs collect the most
+recent report period(s) whose statutory disclosure deadline has passed plus
+any period still inside its disclosure season.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from datetime import date, timedelta
+from typing import Literal, cast
+
+import structlog
+
+from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
+from investment_agent.scheduler.trading_calendar import TradingCalendar
+from investment_agent.snapshots.jobs import (
+    FinancialSnapshotPayload,
+    IndustrySyncPayload,
+    MarketSnapshotPayload,
+    SnapshotPayload,
+    UniverseSyncPayload,
+    enqueue_snapshot_job,
+)
+from investment_agent.storage.database import session_scope
+
+log = structlog.get_logger(__name__)
+
+SnapshotScheduleJob = Literal[
+    "universe_sync",
+    "industry_sync",
+    "market_snapshot",
+    "financial_weekly",
+    "financial_deadline",
+]
+SNAPSHOT_SCHEDULE_JOBS: tuple[SnapshotScheduleJob, ...] = (
+    "universe_sync",
+    "industry_sync",
+    "market_snapshot",
+    "financial_weekly",
+    "financial_deadline",
+)
+# Jobs whose gate does not consult the trading calendar.
+CALENDAR_FREE_JOBS = frozenset({"universe_sync", "financial_weekly"})
+
+# Statutory disclosure deadlines (month, day) after which the next trading
+# day triggers an extra financial collection.
+FINANCIAL_DEADLINES: tuple[tuple[int, int], ...] = ((4, 30), (8, 31), (10, 31))
+_QUARTER_ENDS: tuple[tuple[int, int], ...] = ((3, 31), (6, 30), (9, 30), (12, 31))
+
+
+def statutory_deadline(report_period: date) -> date:
+    """Last day a periodic report for ``report_period`` may be published."""
+
+    month_day = (report_period.month, report_period.day)
+    if month_day == (3, 31):
+        return date(report_period.year, 4, 30)
+    if month_day == (6, 30):
+        return date(report_period.year, 8, 31)
+    if month_day == (9, 30):
+        return date(report_period.year, 10, 31)
+    if month_day == (12, 31):
+        return date(report_period.year + 1, 4, 30)
+    raise ValueError(f"not a report period: {report_period.isoformat()}")
+
+
+def _recent_periods(today: date, count: int = 8) -> list[date]:
+    periods = [
+        date(year, month, day)
+        for year in range(today.year - 2, today.year + 1)
+        for month, day in _QUARTER_ENDS
+    ]
+    return sorted((p for p in periods if p < today), reverse=True)[:count]
+
+
+def financial_periods_due(today: date) -> list[date]:
+    """Report periods worth collecting on ``today``, oldest first.
+
+    * every period whose deadline is the most recent deadline already passed
+      (on 2026-05-02 that is both 2026-03-31 and 2025-12-31);
+    * every period that has ended but whose deadline has not passed yet
+      (disclosure season in progress).
+    """
+
+    periods = _recent_periods(today)
+    passed = [p for p in periods if statutory_deadline(p) < today]
+    due: set[date] = set()
+    if passed:
+        latest_deadline = max(statutory_deadline(p) for p in passed)
+        due.update(p for p in passed if statutory_deadline(p) == latest_deadline)
+    due.update(p for p in periods if statutory_deadline(p) >= today)
+    return sorted(due)
+
+
+def is_first_trading_day_of_month(calendar: TradingCalendar, day: date) -> bool:
+    if not calendar.is_trading_day(day):
+        return False
+    cursor = day.replace(day=1)
+    while cursor < day:
+        if calendar.is_trading_day(cursor):
+            return False
+        cursor += timedelta(days=1)
+    return True
+
+
+def is_first_trading_day_after(calendar: TradingCalendar, day: date, anchor: date) -> bool:
+    if day <= anchor or not calendar.is_trading_day(day):
+        return False
+    cursor = anchor + timedelta(days=1)
+    while cursor < day:
+        if calendar.is_trading_day(cursor):
+            return False
+        cursor += timedelta(days=1)
+    return True
+
+
+def is_financial_deadline_trigger(calendar: TradingCalendar, day: date) -> bool:
+    """First trading day after 04-30, 08-31 or 10-31 (same or previous year)."""
+
+    for year in (day.year, day.year - 1):
+        for month, month_day in FINANCIAL_DEADLINES:
+            anchor = date(year, month, month_day)
+            if anchor < day <= anchor + timedelta(days=31) and is_first_trading_day_after(
+                calendar, day, anchor
+            ):
+                return True
+    return False
+
+
+def _universes(codes: Sequence[str]) -> list[IndexCode]:
+    unknown = sorted(set(codes) - set(INDEX_CODES))
+    if unknown:
+        raise ValueError(f"unsupported snapshot universes: {unknown}")
+    return [cast(IndexCode, code) for code in dict.fromkeys(codes)]
+
+
+def snapshot_payloads(
+    job: SnapshotScheduleJob,
+    *,
+    today: date,
+    calendar: TradingCalendar | None,
+    universes: Sequence[str],
+) -> list[SnapshotPayload]:
+    """What one fire of ``job`` on ``today`` should enqueue (pure).
+
+    ``calendar`` may be ``None`` only for :data:`CALENDAR_FREE_JOBS`.
+    """
+
+    codes = _universes(universes)
+    if job == "universe_sync":
+        return [UniverseSyncPayload(universe_code=code, as_of=today) for code in codes]
+    if job == "financial_weekly":
+        return _financial(codes, today)
+    if calendar is None:
+        raise ValueError(f"{job} needs the trading calendar")
+    if job == "industry_sync":
+        if not is_first_trading_day_of_month(calendar, today):
+            return []
+        return [IndustrySyncPayload(as_of=today, universe_codes=tuple(sorted(codes)))]
+    if job == "market_snapshot":
+        if not calendar.is_trading_day(today):
+            return []
+        return [MarketSnapshotPayload(universe_code=code, trade_date=today) for code in codes]
+    if job == "financial_deadline":
+        return _financial(codes, today) if is_financial_deadline_trigger(calendar, today) else []
+    raise ValueError(f"unknown snapshot schedule job: {job!r}")
+
+
+def _financial(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]:
+    return [
+        FinancialSnapshotPayload(universe_code=code, report_period=period, as_of=today)
+        for code in codes
+        for period in financial_periods_due(today)
+    ]
+
+
+@dataclass(frozen=True)
+class EnqueueOutcome:
+    kind: str
+    key: str | None
+    run_id: int | None
+    created: bool
+    error: str | None = None
+
+
+async def enqueue_snapshot_payloads(
+    payloads: Sequence[SnapshotPayload], *, triggered_by: str = "scheduler"
+) -> list[EnqueueOutcome]:
+    """Enqueue each payload in its own transaction; one failure skips only itself."""
+
+    outcomes: list[EnqueueOutcome] = []
+    for payload in payloads:
+        try:
+            async with session_scope() as session:
+                run, created = await enqueue_snapshot_job(
+                    session, payload, triggered_by=triggered_by
+                )
+                outcomes.append(
+                    EnqueueOutcome(run.kind, run.idempotency_key, run.id, created)
+                )
+        except Exception as exc:
+            log.exception("scheduler.snapshot.enqueue_failed", payload=payload.model_dump())
+            outcomes.append(
+                EnqueueOutcome(type(payload).__name__, None, None, False, f"{exc}")
+            )
+    return outcomes

@@ -101,8 +101,44 @@ class SchedulerConfig(BaseModel):
     a_share_calendar_path: str = "config/calendars/a_share.yaml"
 
 
+class SnapshotScheduleConfig(BaseModel):
+    """PIT snapshot collection schedule (cron fields in ``timezone``).
+
+    A ``None`` cron disables that job. Gates (trading day, first trading day
+    of the month, first trading day after a disclosure deadline) are applied
+    when a job fires, using the scheduler's trading calendar.
+    """
+
+    universes: list[str] = Field(default_factory=lambda: ["CSI300"], min_length=1)
+    timezone: str = "Asia/Shanghai"
+    universe_sync_cron: str | None = "0 8 * * 1"
+    industry_sync_cron: str | None = "0 8 * * *"
+    market_snapshot_cron: str | None = "30 16 * * 1-5"
+    financial_weekly_cron: str | None = "0 9 * * 6"
+    financial_deadline_cron: str | None = "0 9 * * *"
+
+    @model_validator(mode="after")
+    def _known_universes(self) -> Self:
+        from investment_agent.providers.baostock_reference import INDEX_CODES
+
+        unknown = sorted(set(self.universes) - set(INDEX_CODES))
+        if unknown:
+            raise ValueError(f"unsupported snapshot universes {unknown}; use {INDEX_CODES}")
+        return self
+
+    def crons(self) -> dict[str, str | None]:
+        return {
+            "universe_sync": self.universe_sync_cron,
+            "industry_sync": self.industry_sync_cron,
+            "market_snapshot": self.market_snapshot_cron,
+            "financial_weekly": self.financial_weekly_cron,
+            "financial_deadline": self.financial_deadline_cron,
+        }
+
+
 class AppYamlConfig(BaseModel):
     scheduler: SchedulerConfig
+    snapshot: SnapshotScheduleConfig | None = None
 
 
 def load_app_yaml(path: Path) -> AppYamlConfig:

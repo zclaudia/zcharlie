@@ -2,3 +2,15 @@ scheduler:
   watchlist_refresh_cron: "30 15 * * 1-5"
   watchlist_refresh_timezone: Asia/Shanghai
   a_share_calendar_path: config/calendars/a_share.yaml
+
+# PIT snapshot collection (P1-A5). The scheduler only enqueues; the worker
+# executes and throttles proxy calls (IFIND_COLLECT_RATE_PER_MINUTE in .env,
+# default 40/min). Cron fields are in `timezone`; a null cron disables a job.
+snapshot:
+  universes: [CSI300]
+  timezone: Asia/Shanghai
+  universe_sync_cron: "0 8 * * 1"        # Monday 08:00
+  industry_sync_cron: "0 8 * * *"        # gated: first trading day of the month
+  market_snapshot_cron: "30 16 * * 1-5"  # gated: trading day
+  financial_weekly_cron: "0 9 * * 6"     # Saturday 09:00
+  financial_deadline_cron: "0 9 * * *"   # gated: first trading day after 04-30/08-31/10-31

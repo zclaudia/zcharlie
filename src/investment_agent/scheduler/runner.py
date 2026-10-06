@@ -1,7 +1,8 @@
-"""APScheduler-based A-share watchlist refresh runner.
+"""APScheduler-based runner: A-share watchlist refresh + PIT snapshot collection.
 
 Runs in its own process (`ia scheduler start` or Docker service).
-Reads cron + timezone from config/app.yaml.scheduler.
+Reads cron + timezone from config/app.yaml (``scheduler`` and ``snapshot``).
+The scheduler only enqueues; the worker executes the jobs.
 """
 
 import asyncio
@@ -13,9 +14,21 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from investment_agent.config import AppYamlConfig, Settings, load_app_yaml
+from investment_agent.config import (
+    AppYamlConfig,
+    Settings,
+    SnapshotScheduleConfig,
+    load_app_yaml,
+)
 from investment_agent.logging import configure_logging
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
+from investment_agent.scheduler.snapshot_jobs import (
+    CALENDAR_FREE_JOBS,
+    SNAPSHOT_SCHEDULE_JOBS,
+    SnapshotScheduleJob,
+    enqueue_snapshot_payloads,
+    snapshot_payloads,
+)
 from investment_agent.scheduler.trading_calendar import (
     CalendarCoverage,
     TradingCalendar,
@@ -115,6 +128,18 @@ def watchlist_catch_up_date(
     date (``scheduled-watchlist:<date>``), so a duplicate catch-up is harmless.
     """
 
+    today = fired_today(now=now, trigger=trigger)
+    if today is None:
+        return None
+    try:
+        return today if calendar.is_trading_day(today) else None
+    except UnknownTradingCalendarYearError:
+        return None
+
+
+def fired_today(*, now: datetime, trigger: CronTrigger) -> date | None:
+    """Today's local date if ``trigger`` already had a fire time today before ``now``."""
+
     zone = trigger.timezone
     local_now = now.astimezone(zone)
     today = local_now.date()
@@ -122,10 +147,84 @@ def watchlist_catch_up_date(
     first_fire = trigger.get_next_fire_time(None, day_start)
     if first_fire is None or first_fire.date() != today or local_now < first_fire:
         return None
+    return today
+
+
+async def run_snapshot_schedule_job(
+    job: SnapshotScheduleJob,
+    *,
+    calendar_path: str,
+    snapshot_cfg: SnapshotScheduleConfig,
+    today: date | None = None,
+) -> int | None:
+    """One fire of a snapshot job: apply its gate and enqueue idempotently.
+
+    Returns the number of newly created runs, or ``None`` when the job could
+    not decide (unreviewed calendar year, enqueue error).
+    """
+
+    local_today = today or datetime.now(ZoneInfo(snapshot_cfg.timezone)).date()
+    calendar: TradingCalendar | None = None
     try:
-        return today if calendar.is_trading_day(today) else None
+        if job not in CALENDAR_FREE_JOBS:
+            calendar = load_trading_calendar(Path(calendar_path))
+            log_calendar_coverage(calendar, local_today)
+        payloads = snapshot_payloads(
+            job, today=local_today, calendar=calendar, universes=snapshot_cfg.universes
+        )
     except UnknownTradingCalendarYearError:
+        log.exception(
+            "scheduler.snapshot.calendar_unknown", job=job, calendar_path=calendar_path
+        )
         return None
+    except Exception:
+        log.exception("scheduler.snapshot.failed", job=job)
+        return None
+    if not payloads:
+        log.info("scheduler.snapshot.skipped", job=job, today=local_today.isoformat())
+        return 0
+    outcomes = await enqueue_snapshot_payloads(payloads)
+    created = sum(outcome.created for outcome in outcomes)
+    log.info(
+        "scheduler.snapshot.queued",
+        job=job,
+        today=local_today.isoformat(),
+        created_runs=created,
+        keys=[outcome.key for outcome in outcomes],
+        errors=[outcome.error for outcome in outcomes if outcome.error],
+    )
+    return created
+
+
+def _snapshot_triggers(cfg: SnapshotScheduleConfig) -> dict[SnapshotScheduleJob, CronTrigger]:
+    crons = cfg.crons()
+    return {
+        job: _parse_cron(cron, timezone=cfg.timezone)
+        for job in SNAPSHOT_SCHEDULE_JOBS
+        if (cron := crons.get(job)) is not None
+    }
+
+
+async def _startup_snapshot_check(app_config: AppYamlConfig, now: datetime) -> list[str]:
+    """Catch up snapshot jobs whose fire time already passed today (idempotent)."""
+
+    snapshot_cfg = app_config.snapshot
+    if snapshot_cfg is None:
+        return []
+    caught_up: list[str] = []
+    for job, trigger in _snapshot_triggers(snapshot_cfg).items():
+        today = fired_today(now=now, trigger=trigger)
+        if today is None:
+            continue
+        log.info("scheduler.snapshot.catch_up", job=job, today=today.isoformat())
+        await run_snapshot_schedule_job(
+            job,
+            calendar_path=app_config.scheduler.a_share_calendar_path,
+            snapshot_cfg=snapshot_cfg,
+            today=today,
+        )
+        caught_up.append(job)
+    return caught_up
 
 
 async def _startup_watchlist_check(app_config: AppYamlConfig, now: datetime) -> None:
@@ -186,7 +285,9 @@ async def _run_watchlist_refresh_job(calendar_path: str) -> None:
 def build_scheduler(
     *, settings: Settings, app_config: AppYamlConfig,
 ) -> AsyncIOScheduler:
-    """Construct the A-share watchlist refresh job (when a cron is configured).
+    """Construct the watchlist refresh job and the snapshot collection jobs.
+
+    Each job is only registered when its cron is configured.
 
     The Settings instance is accepted for future expansion; scheduled jobs rebuild
     settings inside their own process-local execution context.
@@ -207,6 +308,21 @@ def build_scheduler(
             replace_existing=True,
             **_JOB_DEFAULTS,
         )
+    snapshot_cfg = app_config.snapshot
+    if snapshot_cfg is not None:
+        for job, trigger in _snapshot_triggers(snapshot_cfg).items():
+            sched.add_job(
+                run_snapshot_schedule_job,
+                trigger=trigger,
+                args=[job],
+                kwargs={
+                    "calendar_path": scheduler_cfg.a_share_calendar_path,
+                    "snapshot_cfg": snapshot_cfg,
+                },
+                id=f"snapshot_{job}",
+                replace_existing=True,
+                **_JOB_DEFAULTS,
+            )
     return sched
 
 
@@ -222,8 +338,11 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
         "scheduler.started",
         watchlist_cron=cfg.scheduler.watchlist_refresh_cron,
         watchlist_tz=cfg.scheduler.watchlist_refresh_timezone,
+        snapshot_jobs=[job.id for job in sched.get_jobs() if job.id.startswith("snapshot_")],
     )
-    await _startup_watchlist_check(cfg, datetime.now(ZoneInfo("UTC")))
+    started_at = datetime.now(ZoneInfo("UTC"))
+    await _startup_watchlist_check(cfg, started_at)
+    await _startup_snapshot_check(cfg, started_at)
     stop_event = asyncio.Event()
     try:
         await stop_event.wait()
