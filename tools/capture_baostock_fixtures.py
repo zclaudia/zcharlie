@@ -1,4 +1,4 @@
-"""Capture baostock reference-data fixtures for offline adapter tests (P1-A1).
+"""Capture baostock fixtures for offline adapter tests (P1-A1, P1-A7).
 
 Runs the real :class:`BaostockReferenceClient` against the live baostock
 service through a recording backend and writes the raw query answers to
@@ -6,9 +6,14 @@ service through a recording backend and writes the raw query answers to
 backend, so the adapter's parsing, ticker mapping and look-ahead guard are
 exercised against genuine payloads without network access.
 
+Files: ``constituents.json`` and ``industry.json`` (reference data),
+``daily.json`` (raw + backward daily bars incl. suspended stocks, a suspended
+*ST stock and a 2026 IPO) and ``financial.json`` (profit / balance /
+cash-flow / growth answers incl. an undisclosed period and a bank).
+
 Usage::
 
-    .venv/bin/python tools/capture_baostock_fixtures.py
+    .venv/bin/python tools/capture_baostock_fixtures.py [reference] [daily] [financial]
 
 baostock logs in anonymously; no credentials exist. Only query answers
 (``error_code``, ``error_msg``, ``fields``, ``rows`` and the paging counters)
@@ -27,8 +32,11 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from investment_agent.providers.baostock_market import (  # noqa: E402
+    BaostockDataBackend,
+    BaostockMarketClient,
+)
 from investment_agent.providers.baostock_reference import (  # noqa: E402
-    BaostockBackend,
     BaostockReferenceClient,
     BaostockResultSet,
     BaostockStatus,
@@ -73,6 +81,34 @@ INDUSTRY_SYMBOLS: tuple[str, ...] = (
 # Pre-2012 rows use the code-less hierarchical CSRC label.
 LEGACY_INDUSTRY_REQUESTS: tuple[tuple[str, date], ...] = (("600519.SH", date(2010, 1, 4)),)
 
+DAILY_SYMBOLS: tuple[str, ...] = (
+    "600519.SH",  # 贵州茅台
+    "000001.SZ",  # 平安银行
+    "601398.SH",  # 工商银行
+    "300750.SZ",  # 宁德时代
+    "601059.SH",  # 信达证券: suspended through 2026-09 (tradestatus=0)
+    "000016.SZ",  # *ST康佳A: suspended and ST
+    "002813.SZ",  # 路畅科技: trading, then suspended on 2026-09-30
+)
+DAILY_WINDOW = (date(2026, 9, 1), date(2026, 9, 30))
+DAILY_EXTRA: tuple[tuple[str, date, date, str], ...] = (
+    ("001248.SZ", date(2026, 6, 20), date(2026, 7, 10), "none"),  # 华润新能源, IPO 2026-07-02
+    ("001248.SZ", date(2026, 6, 20), date(2026, 7, 10), "backward"),
+    ("600519.SH", date(2026, 9, 30), date(2026, 10, 9), "none"),  # holiday: ends 09-30
+)
+FINANCIAL_REQUESTS: tuple[tuple[str, int, int], ...] = (
+    ("600519.SH", 2026, 2),
+    ("600519.SH", 2025, 4),
+    ("600519.SH", 2026, 3),  # not yet disclosed -> empty
+    ("000001.SZ", 2026, 2),
+    ("601398.SH", 2026, 1),  # bank: no gross margin / MBRevenue
+    ("601398.SH", 2025, 4),
+    ("300750.SZ", 2026, 2),
+    ("001248.SZ", 2026, 2),  # recent IPO
+    ("001248.SZ", 2025, 4),
+    ("000016.SZ", 2026, 2),
+)
+
 
 class _Replay:
     """Drained copy of a baostock result set, returned to the adapter."""
@@ -96,7 +132,7 @@ class _Replay:
 
 
 class RecordingBackend:
-    def __init__(self, real: BaostockBackend) -> None:
+    def __init__(self, real: BaostockDataBackend) -> None:
         self._real = real
         self.records: list[dict[str, Any]] = []
 
@@ -139,6 +175,60 @@ class RecordingBackend:
             self._real.query_stock_industry(code=code, date=date),
         )
 
+    def query_history_k_data_plus(
+        self,
+        code: str,
+        fields: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        frequency: str = "d",
+        adjustflag: str = "3",
+    ) -> BaostockResultSet:
+        params = {
+            "code": code,
+            "fields": fields,
+            "start_date": start_date or "",
+            "end_date": end_date or "",
+            "frequency": frequency,
+            "adjustflag": adjustflag,
+        }
+        result = self._real.query_history_k_data_plus(
+            code,
+            fields,
+            start_date=start_date,
+            end_date=end_date,
+            frequency=frequency,
+            adjustflag=adjustflag,
+        )
+        return self._record("query_history_k_data_plus", params, result)
+
+    def _quarterly(
+        self, method: str, code: str, year: int | None, quarter: int | None
+    ) -> BaostockResultSet:
+        params = {"code": code, "year": str(year), "quarter": str(quarter)}
+        result = getattr(self._real, method)(code=code, year=year, quarter=quarter)
+        return self._record(method, params, result)
+
+    def query_profit_data(
+        self, code: str, year: int | None = None, quarter: int | None = None
+    ) -> BaostockResultSet:
+        return self._quarterly("query_profit_data", code, year, quarter)
+
+    def query_balance_data(
+        self, code: str, year: int | None = None, quarter: int | None = None
+    ) -> BaostockResultSet:
+        return self._quarterly("query_balance_data", code, year, quarter)
+
+    def query_cash_flow_data(
+        self, code: str, year: int | None = None, quarter: int | None = None
+    ) -> BaostockResultSet:
+        return self._quarterly("query_cash_flow_data", code, year, quarter)
+
+    def query_growth_data(
+        self, code: str, year: int | None = None, quarter: int | None = None
+    ) -> BaostockResultSet:
+        return self._quarterly("query_growth_data", code, year, quarter)
+
 
 def _opt_str(value: object) -> str | None:
     return None if value is None else str(value)
@@ -157,9 +247,21 @@ def _write(name: str, records: list[dict[str, Any]], captured_at: datetime) -> P
     return path
 
 
-async def main() -> None:
+GROUPS = ("reference", "daily", "financial")
+
+
+async def main(groups: tuple[str, ...] = GROUPS) -> None:
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
     captured_at = datetime.now(UTC).replace(microsecond=0)
+    if "reference" in groups:
+        await capture_reference(captured_at)
+    if "daily" in groups:
+        await capture_daily(captured_at)
+    if "financial" in groups:
+        await capture_financial(captured_at)
+
+
+async def capture_reference(captured_at: datetime) -> None:
 
     constituents = RecordingBackend(load_default_backend())
     client = BaostockReferenceClient(constituents)
@@ -179,5 +281,30 @@ async def main() -> None:
     print(_write("industry.json", industry.records, captured_at))
 
 
+async def capture_daily(captured_at: datetime) -> None:
+    daily = RecordingBackend(load_default_backend())  # type: ignore[arg-type]
+    market = BaostockMarketClient(daily)
+    async with market.session():
+        for symbol in DAILY_SYMBOLS:
+            for adjust in ("none", "backward"):
+                series = await market.fetch_daily_bars(symbol, *DAILY_WINDOW, adjust)  # type: ignore[arg-type]
+                print(f"{symbol} {adjust}: {len(series.bars)} bars, skipped {series.skipped}")
+        for symbol, start, end, adjust in DAILY_EXTRA:
+            series = await market.fetch_daily_bars(symbol, start, end, adjust)  # type: ignore[arg-type]
+            print(f"{symbol} {adjust} {start}..{end}: {len(series.bars)} bars")
+    print(_write("daily.json", daily.records, captured_at))
+
+
+async def capture_financial(captured_at: datetime) -> None:
+    financial = RecordingBackend(load_default_backend())  # type: ignore[arg-type]
+    market = BaostockMarketClient(financial)
+    async with market.session():
+        for symbol, year, quarter in FINANCIAL_REQUESTS:
+            record = await market.fetch_quarterly_financials(symbol, year, quarter)
+            print(f"{symbol} {year}Q{quarter}: {record.pub_date if record else 'undisclosed'}")
+    print(_write("financial.json", financial.records, captured_at))
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    selected = tuple(arg for arg in sys.argv[1:] if arg in GROUPS) or GROUPS
+    asyncio.run(main(selected))

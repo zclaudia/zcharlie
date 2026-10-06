@@ -1,0 +1,1364 @@
+{
+ "captured_at": "2026-10-06T12:01:02+00:00",
+ "baostock_version": "00.9.40",
+ "requests": [
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-08-15",
+     "2026-06-30",
+     "0.179543",
+     "0.507516",
+     "0.895552",
+     "46033330566.780000",
+     "65.142936",
+     "92278072083.210000",
+     "1250081601.00",
+     "1250081601.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-08-15",
+     "2026-06-30",
+     "5.589543",
+     "4.274995",
+     "1.147362",
+     "0.088869",
+     "0.151931",
+     "1.179150"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-08-15",
+     "2026-06-30",
+     "0.843631",
+     "0.156370",
+     "0.763540",
+     "",
+     "0.779363",
+     "1.535643",
+     "0.766062"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-08-15",
+     "2026-06-30",
+     "0.052827",
+     "0.057460",
+     "-0.020290",
+     "-0.016860",
+     "-0.019516"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-04-17",
+     "2025-12-31",
+     "0.344620",
+     "0.505279",
+     "0.911796",
+     "85310324833.670000",
+     "65.736665",
+     "172054171890.910000",
+     "1252270215.00",
+     "1252270215.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-04-17",
+     "2025-12-31",
+     "5.090027",
+     "3.851832",
+     "1.041929",
+     "-0.123964",
+     "0.164154",
+     "1.196392"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-04-17",
+     "2025-12-31",
+     "0.831105",
+     "0.168895",
+     "0.754019",
+     "",
+     "0.364386",
+     "0.721158",
+     "0.357575"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "2026-04-17",
+     "2025-12-31",
+     "0.049470",
+     "0.016358",
+     "-0.045049",
+     "-0.043415",
+     "-0.045323"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2026",
+    "quarter": "3"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": []
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sz.000001",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000001",
+     "2026-08-15",
+     "2026-06-30",
+     "0.046746",
+     "0.363878",
+     "",
+     "25696000000.000000",
+     "2.239471",
+     "70617000000.000000",
+     "19405918198.00",
+     "19405684991.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sz.000001",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000001",
+     "2026-08-15",
+     "2026-06-30",
+     "",
+     "",
+     "",
+     "0.021561",
+     "0.909067",
+     "10.997138"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sz.000001",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000001",
+     "2026-08-15",
+     "2026-06-30",
+     "",
+     "",
+     "",
+     "",
+     "3.044763",
+     "8.367528",
+     "3.044763"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sz.000001",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000001",
+     "2026-08-15",
+     "2026-06-30",
+     "0.074799",
+     "0.026183",
+     "0.033213",
+     "0.050847",
+     "0.033213"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2026",
+    "quarter": "1"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-04-30",
+     "2026-03-31",
+     "0.020286",
+     "0.382051",
+     "",
+     "88013000000.000000",
+     "1.041921",
+     "",
+     "356406257089.00",
+     "269612212539.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2026",
+    "quarter": "1"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-04-30",
+     "2026-03-31",
+     "",
+     "",
+     "",
+     "0.082774",
+     "0.921901",
+     "12.804332"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2026",
+    "quarter": "1"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-04-30",
+     "2026-03-31",
+     "",
+     "",
+     "",
+     "",
+     "6.147832",
+     "16.091668",
+     "6.147832"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2026",
+    "quarter": "1"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-04-30",
+     "2026-03-31",
+     "0.072138",
+     "0.081974",
+     "0.039004",
+     "0.043478",
+     "0.033093"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-03-28",
+     "2025-12-31",
+     "0.089739",
+     "0.442299",
+     "",
+     "370766000000.000000",
+     "1.034106",
+     "838270000000.000000",
+     "356406257089.00",
+     "269612212539.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-03-28",
+     "2025-12-31",
+     "",
+     "",
+     "",
+     "0.097498",
+     "0.009201",
+     "12.518135"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-03-28",
+     "2025-12-31",
+     "",
+     "",
+     "",
+     "",
+     "2.255276",
+     "5.098984",
+     "2.255276"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "2026-03-28",
+     "2025-12-31",
+     "0.069126",
+     "0.095368",
+     "0.010410",
+     "0.020408",
+     "0.007377"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sz.300750",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.300750",
+     "2026-07-25",
+     "2026-06-30",
+     "0.120827",
+     "0.169837",
+     "0.239284",
+     "47030638000.000000",
+     "18.371852",
+     "276916580000.000000",
+     "4626650861.00",
+     "4260076961.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sz.300750",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.300750",
+     "2026-07-25",
+     "2026-06-30",
+     "1.559533",
+     "1.290693",
+     "0.904655",
+     "0.335549",
+     "0.636525",
+     "2.751217"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sz.300750",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.300750",
+     "2026-07-25",
+     "2026-06-30",
+     "0.666338",
+     "0.333662",
+     "0.287925",
+     "",
+     "0.217455",
+     "1.280375",
+     "0.217455"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sz.300750",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.300750",
+     "2026-07-25",
+     "2026-06-30",
+     "0.286280",
+     "0.313313",
+     "0.453113",
+     "0.374277",
+     "0.419839"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-08-26",
+     "2026-06-30",
+     "0.032092",
+     "0.273457",
+     "0.473889",
+     "3454313146.770000",
+     "0.362357",
+     "12631997492.950000",
+     "13005524860.00",
+     "1062403791.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-08-26",
+     "2026-06-30",
+     "1.058275",
+     "1.054200",
+     "0.525079",
+     "0.119453",
+     "0.548809",
+     "2.216356"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-08-26",
+     "2026-06-30",
+     "0.206114",
+     "0.793886",
+     "0.402101",
+     "4.266740",
+     "0.664167",
+     "2.428778",
+     "0.664167"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-08-26",
+     "2026-06-30",
+     "0.289002",
+     "0.188268",
+     "-0.288856",
+     "-0.302326",
+     "-0.295470"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-04-02",
+     "2025-12-31",
+     "0.069434",
+     "0.276179",
+     "0.488399",
+     "6326991779.010000",
+     "0.559888",
+     "22909052050.200000",
+     "10898269860.00",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-04-02",
+     "2025-12-31",
+     "0.609665",
+     "0.606411",
+     "0.097188",
+     "0.194379",
+     "0.599803",
+     "2.498766"
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-04-02",
+     "2025-12-31",
+     "0.129417",
+     "0.870583",
+     "0.346194",
+     "4.106126",
+     "0.873275",
+     "3.161994",
+     "0.873275"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sz.001248",
+    "year": "2025",
+    "quarter": "4"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.001248",
+     "2026-04-02",
+     "2025-12-31",
+     "0.072654",
+     "0.144933",
+     "-0.222930",
+     "-0.232877",
+     "-0.232795"
+    ]
+   ]
+  },
+  {
+   "method": "query_profit_data",
+   "params": {
+    "code": "sz.000016",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "roeAvg",
+    "npMargin",
+    "gpMargin",
+    "netProfit",
+    "epsTTM",
+    "MBRevenue",
+    "totalShare",
+    "liqaShare"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000016",
+     "2026-08-28",
+     "2026-06-30",
+     "",
+     "-0.068513",
+     "0.064064",
+     "-263881802.890000",
+     "-5.137929",
+     "3851571370.340000",
+     "2407945408.00",
+     "1596593800.00"
+    ]
+   ]
+  },
+  {
+   "method": "query_balance_data",
+   "params": {
+    "code": "sz.000016",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "currentRatio",
+    "quickRatio",
+    "cashRatio",
+    "YOYLiability",
+    "liabilityToAsset",
+    "assetToEquity"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000016",
+     "2026-08-28",
+     "2026-06-30",
+     "0.610877",
+     "0.487446",
+     "0.236570",
+     "-0.188598",
+     "1.330078",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_cash_flow_data",
+   "params": {
+    "code": "sz.000016",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "CAToAsset",
+    "NCAToAsset",
+    "tangibleAssetToAsset",
+    "ebitToInterest",
+    "CFOToOR",
+    "CFOToNP",
+    "CFOToGr"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000016",
+     "2026-08-28",
+     "2026-06-30",
+     "0.396293",
+     "0.603707",
+     "-0.407684",
+     "-0.313188",
+     "-0.139204",
+     "",
+     "-0.139204"
+    ]
+   ]
+  },
+  {
+   "method": "query_growth_data",
+   "params": {
+    "code": "sz.000016",
+    "year": "2026",
+    "quarter": "2"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "pubDate",
+    "statDate",
+    "YOYEquity",
+    "YOYAsset",
+    "YOYNI",
+    "YOYEPSBasic",
+    "YOYPNI"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.000016",
+     "2026-08-28",
+     "2026-06-30",
+     "-7.019188",
+     "-0.405518",
+     "0.469178",
+     "0.548995",
+     "0.549263"
+    ]
+   ]
+  }
+ ]
+}

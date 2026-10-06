@@ -6,6 +6,13 @@ process-global session (``login`` / ``logout``). Every public call here runs
 while holding a process-wide lock, so concurrent coroutines never interleave
 on the shared socket.
 
+A login costs about one second, so collectors issuing hundreds of queries
+open one :meth:`BaostockReferenceClient.session` instead: it holds the
+process-wide lock and a single login for the whole block, every query inside
+it skips its own login/logout, and a transient failure re-logs in before the
+retry. The market / financial queries live in the sibling module
+:mod:`investment_agent.providers.baostock_market`, which reuses this client.
+
 Point-in-time rules (see ``docs/product/funnel-design.md`` 15.1):
 
 * the effective date of a snapshot is baostock's ``updateDate``, never the
@@ -24,7 +31,8 @@ from __future__ import annotations
 import asyncio
 import re
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Literal, Protocol, cast
@@ -64,7 +72,12 @@ _CSRC_INDUSTRY = re.compile(r"^(?P<code>[A-Z]\d{2})(?P<name>\S.*)$")
 
 # One baostock session per process: the library keeps its socket and user id
 # in module globals, so every login/query/logout sequence must be serialized.
+# ``_SESSION_LOCK`` owns a whole login..logout span (one call, or one
+# ``session()`` block); ``_IO_LOCK`` serializes the individual socket
+# operations, so a thread still running after an asyncio timeout can never
+# interleave with the retry that follows it.
 _SESSION_LOCK = threading.Lock()
+_IO_LOCK = threading.Lock()
 
 
 # --------------------------------------------------------------------------- #
@@ -253,6 +266,41 @@ class BaostockReferenceClient:
         self._timeout_seconds = timeout_seconds
         self._max_attempts = max_attempts
         self._retry_backoff_seconds = retry_backoff_seconds
+        self._session_depth = 0
+
+    # -- session ----------------------------------------------------------- #
+
+    @asynccontextmanager
+    async def session(self) -> AsyncIterator[None]:
+        """Keep one baostock login open for every query issued inside the block.
+
+        Re-entrant per client. The process-wide session lock is held for the
+        whole block, so other clients (e.g. a reference sync) wait for it.
+        """
+
+        if self._session_depth:
+            self._session_depth += 1
+            try:
+                yield
+            finally:
+                self._session_depth -= 1
+            return
+        backend = self._resolve_backend()
+        await _acquire_session_lock()
+        try:
+            await self._with_retries("login", lambda: _login(backend), relogin=None)
+            self._session_depth = 1
+            try:
+                yield
+            finally:
+                self._session_depth = 0
+                await asyncio.to_thread(_logout_quietly, backend)
+        finally:
+            _SESSION_LOCK.release()
+
+    @property
+    def in_session(self) -> bool:
+        return self._session_depth > 0
 
     # -- public API -------------------------------------------------------- #
 
@@ -381,13 +429,31 @@ class BaostockReferenceClient:
         query: Callable[[BaostockBackend], BaostockResultSet],
     ) -> _RawResult:
         backend = self._resolve_backend()
+        if self._session_depth:
+            return await self._with_retries(
+                operation,
+                lambda: _locked_query(backend, operation, query),
+                relogin=lambda: _relogin(backend),
+            )
+        return await self._with_retries(
+            operation, lambda: _session_query(backend, operation, query), relogin=None
+        )
+
+    async def _with_retries[T](
+        self,
+        operation: str,
+        call: Callable[[], T],
+        *,
+        relogin: Callable[[], None] | None,
+    ) -> T:
+        """Run blocking ``call`` in a thread with a timeout and transient retries."""
+
         attempt = 0
         while True:
             attempt += 1
             try:
                 return await asyncio.wait_for(
-                    asyncio.to_thread(_session_query, backend, operation, query),
-                    timeout=self._timeout_seconds,
+                    asyncio.to_thread(call), timeout=self._timeout_seconds
                 )
             except TimeoutError as exc:
                 error: BaostockTransientError = BaostockTransientError(
@@ -406,6 +472,75 @@ class BaostockReferenceClient:
                 error=str(error),
             )
             await asyncio.sleep(self._retry_backoff_seconds * attempt)
+            if relogin is not None:
+                # The session may be gone (10001001 / dropped socket): log in
+                # again before retrying; a failed re-login uses up an attempt.
+                try:
+                    await asyncio.wait_for(
+                        asyncio.to_thread(relogin), timeout=self._timeout_seconds
+                    )
+                except (TimeoutError, BaostockTransientError) as exc:
+                    log.warning("baostock_relogin_failed", operation=operation, error=str(exc))
+
+
+async def _acquire_session_lock() -> None:
+    """Take the process-wide session lock without blocking the event loop.
+
+    If the waiting coroutine is cancelled, the lock is released as soon as the
+    helper thread obtains it, so cancellation can never leak the lock.
+    """
+
+    waiter = asyncio.ensure_future(asyncio.to_thread(_SESSION_LOCK.acquire))
+    try:
+        await asyncio.shield(waiter)
+    except asyncio.CancelledError:
+
+        def release(future: asyncio.Future[bool]) -> None:
+            if not future.cancelled() and future.exception() is None and future.result():
+                _SESSION_LOCK.release()
+
+        waiter.add_done_callback(release)
+        raise
+
+
+def _login(backend: BaostockBackend) -> None:
+    with _IO_LOCK:
+        try:
+            status = backend.login()
+        except OSError as exc:
+            raise BaostockTransientError(
+                f"baostock login failed: {exc}", provider=PROVIDER
+            ) from exc
+        _raise_for_code(status.error_code, status.error_msg, operation="login")
+
+
+def _logout_quietly(backend: BaostockBackend) -> None:
+    with _IO_LOCK:
+        try:
+            backend.logout()
+        except Exception as exc:  # logout failure must not mask the result
+            log.warning("baostock_logout_failed", error=str(exc))
+
+
+def _relogin(backend: BaostockBackend) -> None:
+    _logout_quietly(backend)
+    _login(backend)
+
+
+def _locked_query(
+    backend: BaostockBackend,
+    operation: str,
+    query: Callable[[BaostockBackend], BaostockResultSet],
+) -> _RawResult:
+    """One query inside an already open session (sync)."""
+
+    with _IO_LOCK:
+        try:
+            return _collect(query(backend), operation=operation)
+        except OSError as exc:
+            raise BaostockTransientError(
+                f"baostock {operation} failed: {exc}", provider=PROVIDER
+            ) from exc
 
 
 def _session_query(
@@ -416,24 +551,11 @@ def _session_query(
     """login -> query -> logout under the process-wide session lock (sync)."""
 
     with _SESSION_LOCK:
+        _login(backend)
         try:
-            status = backend.login()
-        except OSError as exc:
-            raise BaostockTransientError(
-                f"baostock login failed: {exc}", provider=PROVIDER
-            ) from exc
-        _raise_for_code(status.error_code, status.error_msg, operation="login")
-        try:
-            return _collect(query(backend), operation=operation)
-        except OSError as exc:
-            raise BaostockTransientError(
-                f"baostock {operation} failed: {exc}", provider=PROVIDER
-            ) from exc
+            return _locked_query(backend, operation, query)
         finally:
-            try:
-                backend.logout()
-            except Exception as exc:  # logout failure must not mask the result
-                log.warning("baostock_logout_failed", error=str(exc))
+            _logout_quietly(backend)
 
 
 def _collect(result: BaostockResultSet, *, operation: str) -> _RawResult:
