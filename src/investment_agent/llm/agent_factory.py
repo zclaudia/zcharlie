@@ -2,9 +2,10 @@
 
 from typing import Any
 
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 from pydantic_ai import Agent
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.output import PromptedOutput
 from pydantic_ai.providers.openai import OpenAIProvider
 
@@ -35,14 +36,19 @@ def build_agent[OutputT: BaseModel](
     position 0; we only pass system_prompt when non-empty so pydantic-ai
     omits the role='system' message entirely otherwise.
     """
-    model = OpenAIModel(
+    openai_client = AsyncOpenAI(
+        base_url=config.base_url,
+        api_key=config.api_key,
+        timeout=config.timeout_seconds,
+    )
+    model = OpenAIChatModel(
         model_name=config.model,
-        provider=OpenAIProvider(base_url=config.base_url, api_key=config.api_key),
+        provider=OpenAIProvider(openai_client=openai_client),
     )
     kwargs: dict[str, Any] = {"model": model}
     if system_prompt:
         kwargs["system_prompt"] = system_prompt
     if output_type is not None:
         kwargs["output_type"] = PromptedOutput(output_type)
-        kwargs["output_retries"] = output_retries
+        kwargs["retries"] = {"output": output_retries}
     return Agent(**kwargs)

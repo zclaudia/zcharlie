@@ -12,6 +12,7 @@ class LLMTierConfig(BaseModel):
     base_url: str
     api_key: str
     model: str
+    timeout_seconds: float = 120.0
 
 
 class Settings(BaseSettings):
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
 
     yfinance_max_concurrent: int = 10
     llm_max_concurrent: int = 8
+    llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
 
     # A-share research MVP data gateway.
     ifind_proxy_url: str = "http://127.0.0.1:7100"
@@ -51,6 +53,7 @@ class Settings(BaseSettings):
             base_url=self.llm_tier2_base_url,
             api_key=self.llm_tier2_api_key,
             model=self.llm_tier2_model,
+            timeout_seconds=self.llm_request_timeout_seconds,
         )
 
     @property
@@ -59,6 +62,7 @@ class Settings(BaseSettings):
             base_url=self.llm_tier3_base_url,
             api_key=self.llm_tier3_api_key,
             model=self.llm_tier3_model,
+            timeout_seconds=self.llm_request_timeout_seconds,
         )
 
 

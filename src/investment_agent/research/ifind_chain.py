@@ -1169,7 +1169,21 @@ async def run_ifind_research_chain(
                 score_item=score_item,
             )
         except Exception as exc:
+            from investment_agent.research.retry_policy import (
+                ResearchRetryableError,
+                is_transient_error,
+            )
+
             reason = f"explanation failed: {type(exc).__name__}: {exc}"
+            if claimed_run_id is not None and is_transient_error(exc):
+                # LLM timeout / rate limit / connection failure under a worker
+                # claim: let the worker retry while budget remains. On the last
+                # attempt fall through to `partial`, keeping the deterministic
+                # score instead of losing the run.
+                async with session_scope() as session:
+                    current = await PipelineRunRepository(session).get(run_id)
+                if current is not None and current.attempt_count < current.max_attempts:
+                    raise ResearchRetryableError(run_id=run_id, reason=reason) from exc
             metadata["partial_reason"] = "explanation_failed"
             async with session_scope() as session:
                 await PipelineRunRepository(session).set_stage(run_id, "persisting")
@@ -1232,6 +1246,10 @@ async def run_ifind_research_chain(
     except ResearchPartialError:
         raise
     except Exception as exc:
-        async with session_scope() as session:
-            await PipelineRunRepository(session).mark_failed(run_id, str(exc))
+        # Under a worker claim the worker owns the single retry-or-terminal
+        # decision (atomically, fenced by its lease); persisting `failed` here
+        # first would let a later retry flip a terminal status back to queued.
+        if claimed_run_id is None:
+            async with session_scope() as session:
+                await PipelineRunRepository(session).mark_failed(run_id, str(exc))
         raise
