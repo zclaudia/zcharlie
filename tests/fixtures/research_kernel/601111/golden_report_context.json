@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:22:52+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "601111",
       "name": "中国国航",
       "strategy_type": "quality_growth",
@@ -39,13 +39,6 @@
           "message": "iFinD normalization could not produce dividend_yield",
           "provider": "ifind",
           "severity": "review"
-        },
-        {
-          "field": "pe",
-          "flag": "derived_field",
-          "message": "pe was derived from iFinD source fields",
-          "provider": "ifind",
-          "severity": "info"
         },
         {
           "field": "pb",
@@ -90,18 +83,25 @@
           "severity": "info"
         },
         {
-          "field": "net_profit_growth_3y",
-          "flag": "missing_field",
-          "message": "iFinD normalization could not produce net_profit_growth_3y",
+          "field": "pe",
+          "flag": "negative_earnings",
+          "message": "PE not meaningful: FY2025 basic EPS -0.11 <= 0 (loss-making)",
           "provider": "ifind",
           "severity": "review"
         },
         {
           "field": "roe_stability",
-          "flag": "derived_field",
-          "message": "roe_stability was derived from iFinD source fields",
+          "flag": "missing_field",
+          "message": "iFinD normalization could not produce roe_stability",
           "provider": "ifind",
-          "severity": "info"
+          "severity": "review"
+        },
+        {
+          "field": "net_profit_growth_3y",
+          "flag": "missing_field",
+          "message": "iFinD normalization could not produce net_profit_growth_3y",
+          "provider": "ifind",
+          "severity": "review"
         },
         {
           "field": "free_cash_flow",
@@ -160,7 +160,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -313,7 +313,9 @@
       "provider_conflicts": {},
       "evidence_summary": {
         "positive": [],
-        "negative": [],
+        "negative": [
+          "估值水平偏贵"
+        ],
         "risk": [
           "风险等级为 medium_high",
           "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
@@ -326,7 +328,7 @@
         "peer_group": [],
         "metric_comparison": {
           "pe": {
-            "target": -53.7273,
+            "target": null,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -390,7 +392,7 @@
             "relative_position": "insufficient_peer_data"
           },
           "investment_score": {
-            "target": 57.25,
+            "target": 55.25,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -408,12 +410,12 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "中国国航 当前评分 57.25，研究工作流标签为 需要复核，风险等级 medium_high，估值水平 fair。",
-          "investment_score": 57.25,
+          "text": "中国国航 当前评分 55.25，研究工作流标签为 需要复核，风险等级 medium_high，估值水平 expensive。",
+          "investment_score": 55.25,
           "suggestion": "needs_review",
           "suggestion_label": "需要复核",
           "risk_level": "medium_high",
-          "valuation_level": "fair",
+          "valuation_level": "expensive",
           "needs_agent_review": true
         },
         "positive_thesis": [
@@ -425,6 +427,17 @@
           }
         ],
         "negative_thesis": [
+          {
+            "source": "evidence_summary.negative",
+            "text": "估值水平偏贵",
+            "field": "negative"
+          },
+          {
+            "source": "score",
+            "text": "估值水平偏贵",
+            "field": "valuation_level",
+            "value": "expensive"
+          },
           {
             "source": "key_metrics",
             "text": "资产负债率为 88.56%，财务杠杆需要跟踪",
@@ -439,24 +452,28 @@
           }
         ],
         "valuation_view": {
-          "valuation_level": "fair",
+          "valuation_level": "expensive",
           "metrics": {
-            "pe": -53.7273,
+            "pe": null,
             "pb": 2.4234,
             "dividend_yield": null
           },
           "notes": [
             {
+              "source": "evidence_summary.negative",
+              "text": "估值水平偏贵",
+              "field": "valuation"
+            },
+            {
               "source": "score",
-              "text": "估值水平为 fair",
+              "text": "估值水平为 expensive",
               "field": "valuation_level",
-              "value": "fair"
+              "value": "expensive"
             },
             {
               "source": "key_metrics",
-              "text": "pe 为 -53.7273",
-              "field": "pe",
-              "value": -53.7273
+              "text": "pe 为 None",
+              "field": "pe"
             },
             {
               "source": "key_metrics",
@@ -499,11 +516,12 @@
           },
           {
             "source": "data_quality",
-            "text": "存在缺失字段：dividend_yield、net_profit_growth_3y",
+            "text": "存在缺失字段：dividend_yield、net_profit_growth_3y、roe_stability",
             "field": "missing_fields",
             "value": [
               "dividend_yield",
-              "net_profit_growth_3y"
+              "net_profit_growth_3y",
+              "roe_stability"
             ]
           },
           {
@@ -537,7 +555,7 @@
           },
           {
             "indicator": "pe",
-            "current_value": -53.7273,
+            "current_value": null,
             "reason": "跟踪估值消化情况"
           },
           {
@@ -557,7 +575,7 @@
           },
           {
             "indicator": "data_quality_score",
-            "current_value": 0.84,
+            "current_value": 0.76,
             "reason": "确认数据完整性是否足以支撑结论"
           }
         ]
@@ -572,6 +590,17 @@
           }
         ],
         "bear_case": [
+          {
+            "source": "evidence_summary.negative",
+            "text": "估值水平偏贵",
+            "field": "negative"
+          },
+          {
+            "source": "score",
+            "text": "估值水平偏贵",
+            "field": "valuation_level",
+            "value": "expensive"
+          },
           {
             "source": "key_metrics",
             "text": "资产负债率为 88.56%，财务杠杆需要跟踪",
@@ -602,11 +631,12 @@
           },
           {
             "source": "data_quality",
-            "text": "存在缺失字段：dividend_yield、net_profit_growth_3y",
+            "text": "存在缺失字段：dividend_yield、net_profit_growth_3y、roe_stability",
             "field": "missing_fields",
             "value": [
               "dividend_yield",
-              "net_profit_growth_3y"
+              "net_profit_growth_3y",
+              "roe_stability"
             ]
           },
           {
@@ -627,13 +657,13 @@
           "stance_label": "需复核",
           "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为需复核。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 1,
-          "opposition_count": 8,
+          "opposition_count": 10,
           "review_required": true
         }
       },
-      "investment_score": 57.25,
-      "business_score": 57.25,
-      "research_confidence_score": 84.0,
+      "investment_score": 55.25,
+      "business_score": 55.25,
+      "research_confidence_score": 76.0,
       "research_confidence_label": "中",
       "freshness": {
         "stock": {
@@ -645,18 +675,25 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.38,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:22:52.481193Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.38,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
       "risk_level": "medium_high",
-      "valuation_level": "fair",
+      "valuation_level": "expensive",
       "suggestion": "needs_review",
       "suggestion_label": "需要复核",
       "company_profile": {
@@ -671,7 +708,7 @@
         ],
         "peer_group_hints": []
       },
-      "data_quality_score": 0.84,
+      "data_quality_score": 0.76,
       "needs_agent_review": true,
       "source": {
         "stock": "ifind-proxy:stock-info+history",
@@ -688,12 +725,14 @@
         "competitive_advantage": 0.0,
         "revenue_growth": 100.0,
         "roe_level": 0.0,
-        "cash_flow_quality": 85,
-        "valuation_level": 75
+        "cash_flow_quality": 85.0,
+        "valuation_level": 35.0
       },
+      "factor_coverage": 1.0,
+      "missing_factors": [],
       "key_metrics": {
         "market_cap": 121111035687.3,
-        "pe": -53.7273,
+        "pe": null,
         "pb": 2.4234,
         "dividend_yield": null,
         "roe": -0.040374,
@@ -704,20 +743,21 @@
       },
       "missing_fields": [
         "dividend_yield",
-        "net_profit_growth_3y"
+        "net_profit_growth_3y",
+        "roe_stability"
       ],
       "warnings": [
         "market_cap was derived from iFinD source fields",
         "iFinD normalization could not produce dividend_yield",
-        "pe was derived from iFinD source fields",
         "pb was derived from iFinD source fields",
         "ps was derived from iFinD source fields",
         "return_1y was derived from iFinD source fields",
         "volatility_1y was derived from iFinD source fields",
         "max_drawdown_1y was derived from iFinD source fields",
         "market_cap was derived from iFinD source fields",
+        "PE not meaningful: FY2025 basic EPS -0.11 <= 0 (loss-making)",
+        "iFinD normalization could not produce roe_stability",
         "iFinD normalization could not produce net_profit_growth_3y",
-        "roe_stability was derived from iFinD source fields",
         "free_cash_flow was derived from iFinD source fields",
         "revenue_growth_3y was derived from iFinD source fields",
         "数据质量较低，需要复核"

@@ -1,25 +1,26 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:22:50+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "freshness_policy": {
       "as_of": "2026-10-05T15:22:50.237459+00:00",
-      "max_market_age_days": 7,
+      "max_market_age_trading_days": 1,
       "max_financial_age_days": 180,
-      "max_stock_age_days": 30
+      "max_stock_age_days": 30,
+      "financial_rule": "report_year must be >= the latest annual report due by Apr 30 (falls back to updated_at age when report_year is unknown)"
     }
   },
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "601398",
       "name": "工商银行",
       "market": "SH",
@@ -151,6 +152,12 @@
         {
           "field": "gross_margin",
           "flag": "model_not_applicable"
+        },
+        {
+          "field": "shareholder_return",
+          "flag": "factor_missing",
+          "message": "factor shareholder_return has no input data and was excluded from the score",
+          "severity": "info"
         }
       ],
       "field_sources": {
@@ -195,7 +202,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -370,10 +377,10 @@
           "农业银行"
         ]
       },
-      "investment_score": 56.0,
-      "business_score": 56.0,
-      "research_confidence_score": 92.0,
-      "research_confidence_label": "高",
+      "investment_score": 58.0,
+      "business_score": 58.0,
+      "research_confidence_score": 80.5,
+      "research_confidence_label": "中",
       "freshness": {
         "stock": {
           "updated_at": "2026-10-05T15:22:50.237459Z",
@@ -384,22 +391,29 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.38,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:22:50.237459Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.38,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
       "risk_level": "medium",
       "valuation_level": "cheap",
-      "suggestion": "needs_review",
-      "suggestion_label": "需要复核",
+      "suggestion": "low_priority",
+      "suggestion_label": "低优先级",
       "data_quality_score": 0.92,
-      "needs_agent_review": true,
+      "needs_agent_review": false,
       "source": {
         "stock": "ifind-proxy:stock-info+history",
         "market_data": "ifind-proxy:history+financial-index",
@@ -412,12 +426,19 @@
       },
       "factor_scores": {
         "valuation_level": 100.0,
-        "shareholder_return": 50.0,
+        "shareholder_return": null,
         "roe_quality": 24.78,
         "profit_growth": 28.71,
         "drawdown_control": 82.37,
         "capital_structure_review": 60.0
       },
+      "factor_coverage": 0.75,
+      "missing_factors": [
+        "shareholder_return"
+      ],
+      "provider_unavailable_fields": [
+        "dividend_yield"
+      ],
       "key_metrics": {
         "market_cap": 2951043808696.92,
         "pe": 8.28,
@@ -456,7 +477,8 @@
         "risk": [
           "风险等级为 medium",
           "存在模型不适用字段，已从数据质量扣分中剔除",
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）"
         ]
       }
     }

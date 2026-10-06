@@ -18,9 +18,17 @@ def metric(row: dict[str, Any], key: str) -> float | None:
         return None
 
 
-def score_ratio(value: float | None, low: float, high: float, *, inverse: bool = False) -> float:
+# A factor value of ``None`` means "no data": it is excluded from the weighted
+# score (remaining weights are renormalised) and reported in
+# ``missing_factors``; it is never imputed as a neutral 50 (scoring v1.3).
+FactorScores = dict[str, float | None]
+
+
+def score_ratio(
+    value: float | None, low: float, high: float, *, inverse: bool = False
+) -> float | None:
     if value is None:
-        return 50.0
+        return None
     if high == low:
         return 50.0
     normalized = (value - low) / (high - low)
@@ -29,7 +37,22 @@ def score_ratio(value: float | None, low: float, high: float, *, inverse: bool =
     return clamp(normalized * 100)
 
 
+def _positive_or_none(value: float | None) -> float | None:
+    """Valuation multiples are only meaningful when positive."""
+
+    return value if value is not None and value > 0 else None
+
+
 def valuation_level(pe: float | None, pb: float | None) -> str:
+    """Bucket valuation from PE/PB; non-positive multiples never count as cheap.
+
+    A non-positive PE (loss-making) or PB (negative equity) is treated as
+    unavailable, so it falls back to the conservative placeholder instead of
+    passing the ``<= 15`` / ``<= 2`` cheap thresholds.
+    """
+
+    pe = _positive_or_none(pe)
+    pb = _positive_or_none(pb)
     if pe is None and pb is None:
         return "unknown"
     pe_value = pe if pe is not None else 100.0
@@ -39,6 +62,46 @@ def valuation_level(pe: float | None, pb: float | None) -> str:
     if pe_value <= 30 and pb_value <= 5.0:
         return "fair"
     return "expensive"
+
+
+VALUATION_LEVEL_SCORES = {"cheap": 100.0, "fair": 75.0, "expensive": 35.0}
+
+
+def valuation_factor_score(pe: float | None, pb: float | None) -> float | None:
+    """Factor score for the valuation bucket; ``None`` when valuation is unknown."""
+
+    return VALUATION_LEVEL_SCORES.get(valuation_level(pe, pb))
+
+
+def weighted_score(factor_scores: FactorScores, weights: dict[str, int]) -> float | None:
+    """Weighted mean over the factors that have data, weights renormalised.
+
+    Returns ``None`` when no weighted factor has data.
+    """
+
+    present = {
+        key: weight
+        for key, weight in weights.items()
+        if weight > 0 and factor_scores.get(key) is not None
+    }
+    total_weight = sum(present.values())
+    if total_weight <= 0:
+        return None
+    total = sum(float(factor_scores[key] or 0.0) * weight for key, weight in present.items())
+    return round(total / total_weight, 2)
+
+
+def factor_coverage(
+    factor_scores: FactorScores, weights: dict[str, int]
+) -> tuple[float, list[str]]:
+    """Share of model weight backed by data, plus the factors that had none."""
+
+    total_weight = sum(weights.values())
+    missing = sorted(key for key in weights if factor_scores.get(key) is None)
+    if total_weight <= 0:
+        return 0.0, missing
+    covered = sum(weight for key, weight in weights.items() if key not in missing)
+    return round(covered / total_weight, 4), missing
 
 
 def ranked_strategies(classification_fit_scores: dict[str, float]) -> list[tuple[str, float]]:
@@ -89,30 +152,25 @@ def model_fit_score(
     }
 
 
-def _valuation_score(market: dict[str, Any]) -> float:
-    level = valuation_level(metric(market, "pe"), metric(market, "pb"))
-    if level == "cheap":
-        return 100.0
-    if level == "fair":
-        return 75.0
-    if level == "expensive":
-        return 35.0
-    return 50.0
+def _valuation_score(market: dict[str, Any]) -> float | None:
+    return valuation_factor_score(metric(market, "pe"), metric(market, "pb"))
 
 
-def _cash_flow_score(financial: dict[str, Any]) -> float:
+def _cash_flow_score(financial: dict[str, Any]) -> float | None:
     free_cash_flow = metric(financial, "free_cash_flow")
     operating_cash_flow = metric(financial, "operating_cash_flow")
     if free_cash_flow is not None and free_cash_flow > 0:
         return 85.0
     if operating_cash_flow is not None and operating_cash_flow > 0:
         return 65.0
+    if free_cash_flow is None and operating_cash_flow is None:
+        return None
     return 45.0
 
 
 def _insurance_scores(
     market: dict[str, Any], financial: dict[str, Any]
-) -> tuple[dict[str, float], dict[str, int]]:
+) -> tuple[FactorScores, dict[str, int]]:
     weights = {
         "valuation_level": 20,
         "shareholder_return": 25,
@@ -121,7 +179,7 @@ def _insurance_scores(
         "drawdown_control": 10,
         "financial_leverage_review": 10,
     }
-    factors = {
+    factors: FactorScores = {
         "valuation_level": _valuation_score(market),
         "shareholder_return": score_ratio(metric(market, "dividend_yield"), 0.0, 0.06),
         "roe_quality": score_ratio(metric(financial, "roe"), 0.06, 0.18),
@@ -136,7 +194,7 @@ def _insurance_scores(
 
 def _banking_scores(
     market: dict[str, Any], financial: dict[str, Any]
-) -> tuple[dict[str, float], dict[str, int]]:
+) -> tuple[FactorScores, dict[str, int]]:
     weights = {
         "valuation_level": 20,
         "shareholder_return": 25,
@@ -145,7 +203,7 @@ def _banking_scores(
         "drawdown_control": 10,
         "capital_structure_review": 10,
     }
-    factors = {
+    factors: FactorScores = {
         "valuation_level": _valuation_score(market),
         "shareholder_return": score_ratio(metric(market, "dividend_yield"), 0.0, 0.06),
         "roe_quality": score_ratio(metric(financial, "roe"), 0.06, 0.18),
@@ -160,7 +218,7 @@ def _banking_scores(
 
 def _public_utility_scores(
     market: dict[str, Any], financial: dict[str, Any]
-) -> tuple[dict[str, float], dict[str, int]]:
+) -> tuple[FactorScores, dict[str, int]]:
     weights = {
         "cash_flow_quality": 25,
         "shareholder_return": 20,
@@ -169,7 +227,7 @@ def _public_utility_scores(
         "valuation_level": 15,
         "growth_quality": 10,
     }
-    factors = {
+    factors: FactorScores = {
         "cash_flow_quality": _cash_flow_score(financial),
         "shareholder_return": score_ratio(metric(market, "dividend_yield"), 0.0, 0.05),
         "roe_stability": score_ratio(metric(financial, "roe_stability"), 0.4, 0.95),
@@ -182,7 +240,7 @@ def _public_utility_scores(
 
 def _manufacturing_growth_scores(
     market: dict[str, Any], financial: dict[str, Any]
-) -> tuple[dict[str, float], dict[str, int]]:
+) -> tuple[FactorScores, dict[str, int]]:
     weights = {
         "profitability_quality": 20,
         "growth_durability": 20,
@@ -191,7 +249,7 @@ def _manufacturing_growth_scores(
         "balance_sheet_quality": 10,
         "valuation_level": 15,
     }
-    factors = {
+    factors: FactorScores = {
         "profitability_quality": score_ratio(metric(financial, "roe"), 0.08, 0.22),
         "growth_durability": score_ratio(metric(financial, "revenue_growth_3y"), 0.04, 0.22),
         "profit_growth": score_ratio(metric(financial, "net_profit_growth_3y"), 0.04, 0.24),
@@ -208,7 +266,7 @@ def factor_scores_for_model(
     model_key: str,
     market: dict[str, Any],
     financial: dict[str, Any],
-) -> tuple[dict[str, float], dict[str, int]]:
+) -> tuple[FactorScores, dict[str, int]]:
     if model_key == "insurance":
         return _insurance_scores(market, financial)
     if model_key == "banking":

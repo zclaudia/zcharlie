@@ -1,25 +1,26 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:24:20+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "freshness_policy": {
       "as_of": "2026-10-05T15:24:20.983676+00:00",
-      "max_market_age_days": 7,
+      "max_market_age_trading_days": 1,
       "max_financial_age_days": 180,
-      "max_stock_age_days": 30
+      "max_stock_age_days": 30,
+      "financial_rule": "report_year must be >= the latest annual report due by Apr 30 (falls back to updated_at age when report_year is unknown)"
     }
   },
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "000858",
       "name": "五粮液",
       "market": "SZ",
@@ -138,6 +139,12 @@
           "message": "net_profit_growth_3y was derived from iFinD source fields",
           "provider": "ifind",
           "severity": "info"
+        },
+        {
+          "field": "dividend_yield",
+          "flag": "factor_missing",
+          "message": "factor dividend_yield has no input data and was excluded from the score",
+          "severity": "info"
         }
       ],
       "field_sources": {
@@ -182,7 +189,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -345,10 +352,10 @@
         ],
         "peer_group_hints": []
       },
-      "investment_score": 56.42,
-      "business_score": 56.42,
-      "research_confidence_score": 92.0,
-      "research_confidence_label": "高",
+      "investment_score": 58.03,
+      "business_score": 58.03,
+      "research_confidence_score": 82.8,
+      "research_confidence_label": "中",
       "freshness": {
         "stock": {
           "updated_at": "2026-10-05T15:24:20.983676Z",
@@ -359,13 +366,20 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.41,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:24:20.983676Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.41,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
@@ -386,13 +400,20 @@
         "financial_data": "2026-10-05T15:24:20.983676Z"
       },
       "factor_scores": {
-        "free_cash_flow_quality": 85,
-        "dividend_yield": 50.0,
+        "free_cash_flow_quality": 85.0,
+        "dividend_yield": null,
         "roe_stability": 40.65,
         "debt_level": 78.62,
-        "valuation_level": 35,
+        "valuation_level": 35.0,
         "growth_quality": 0.0
       },
+      "factor_coverage": 0.8,
+      "missing_factors": [
+        "dividend_yield"
+      ],
+      "provider_unavailable_fields": [
+        "dividend_yield"
+      ],
       "key_metrics": {
         "market_cap": 271945456830.30002,
         "pe": 30.3711,
@@ -402,7 +423,7 @@
         "debt_ratio": 0.356891,
         "revenue_growth_3y": -0.181715,
         "net_profit_growth_3y": -0.305152,
-        "max_drawdown_1y": 0.437936
+        "max_drawdown_1y": 0.408887
       },
       "missing_fields": [
         "dividend_yield"
@@ -429,7 +450,8 @@
         ],
         "risk": [
           "风险等级为 medium",
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 80%）"
         ]
       }
     }

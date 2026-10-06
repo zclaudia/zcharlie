@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:22:51+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "600028",
       "name": "中国石化",
       "strategy_type": "cycle_reversal",
@@ -160,7 +160,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -408,13 +408,13 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "中国石化 当前评分 39.43，研究工作流标签为 需要复核，风险等级 medium，估值水平 fair。",
+          "text": "中国石化 当前评分 39.43，研究工作流标签为 低优先级，风险等级 medium，估值水平 fair。",
           "investment_score": 39.43,
-          "suggestion": "needs_review",
-          "suggestion_label": "需要复核",
+          "suggestion": "low_priority",
+          "suggestion_label": "低优先级",
           "risk_level": "medium",
           "valuation_level": "fair",
-          "needs_agent_review": true
+          "needs_agent_review": false
         },
         "positive_thesis": [],
         "negative_thesis": [
@@ -491,12 +491,6 @@
             "value": [
               "dividend_yield"
             ]
-          },
-          {
-            "source": "data_quality",
-            "text": "当前结果需要 Agent 复核",
-            "field": "needs_agent_review",
-            "value": true
           },
           {
             "source": "peer_comparison",
@@ -582,12 +576,6 @@
             ]
           },
           {
-            "source": "data_quality",
-            "text": "当前结果需要 Agent 复核",
-            "field": "needs_agent_review",
-            "value": true
-          },
-          {
             "source": "peer_comparison",
             "text": "同行样本不足或同行数据不足，需要复核",
             "field": "needs_peer_review",
@@ -595,11 +583,11 @@
           }
         ],
         "judge_view": {
-          "stance": "needs_review",
-          "stance_label": "需复核",
-          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为需复核。该结论用于研究优先级排序，不构成交易建议。",
+          "stance": "cautious",
+          "stance_label": "偏谨慎",
+          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为偏谨慎。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 0,
-          "opposition_count": 7,
+          "opposition_count": 6,
           "review_required": true
         }
       },
@@ -617,20 +605,27 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.38,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:22:51.860358Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.38,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
       "risk_level": "medium",
       "valuation_level": "fair",
-      "suggestion": "needs_review",
-      "suggestion_label": "需要复核",
+      "suggestion": "low_priority",
+      "suggestion_label": "低优先级",
       "company_profile": {
         "sector_type": "general",
         "sector_label": "通用",
@@ -644,7 +639,7 @@
         "peer_group_hints": []
       },
       "data_quality_score": 0.92,
-      "needs_agent_review": true,
+      "needs_agent_review": false,
       "source": {
         "stock": "ifind-proxy:stock-info+history",
         "market_data": "ifind-proxy:history+financial-index",
@@ -660,8 +655,10 @@
         "cost_advantage": 0.0,
         "resource_reserve": 0.0,
         "balance_sheet_quality": 46.48,
-        "valuation_level": 75
+        "valuation_level": 75.0
       },
+      "factor_coverage": 1.0,
+      "missing_factors": [],
       "key_metrics": {
         "market_cap": 637372450028.16,
         "pe": 20.1527,

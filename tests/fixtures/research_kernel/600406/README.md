@@ -6,3 +6,8 @@ scoring version v1.2, schema version v2.0. The provider inputs are canonical,
 contain no credentials, and are frozen for offline parity tests.
 
 The exact freshness reference timestamp is stored in the legacy score metadata.
+
+Since scoring v1.3 the parity test compares against `golden_scores.json` /
+`golden_report_context.json`, regenerated offline from the same canonical
+inputs by `tools/regenerate_golden_fixtures.py`. The `legacy_*` files are kept
+untouched as the historical v1.2 oracle (see docs/product/scoring-v1.3-changes.md).

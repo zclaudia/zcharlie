@@ -27,7 +27,7 @@
           "source": "/stock/history",
           "quality": "derived",
           "updated_at": "2026-09-30T07:00:00Z",
-          "note": ""
+          "note": "trailing 365 days, 241 sessions"
         },
         "volatility_1y": {
           "field": "volatility_1y",
@@ -98,13 +98,6 @@
           "severity": "review"
         },
         {
-          "field": "pe",
-          "flag": "derived_field",
-          "message": "pe was derived from iFinD source fields",
-          "provider": "ifind",
-          "severity": "info"
-        },
-        {
           "field": "pb",
           "flag": "derived_field",
           "message": "pb was derived from iFinD source fields",
@@ -145,27 +138,34 @@
           "message": "market_cap was derived from iFinD source fields",
           "provider": "ifind",
           "severity": "info"
+        },
+        {
+          "field": "pe",
+          "flag": "negative_earnings",
+          "message": "PE not meaningful: FY2025 basic EPS -0.11 <= 0 (loss-making)",
+          "provider": "ifind",
+          "severity": "review"
         }
       ],
       "provider_conflicts": {},
       "warnings": [
         "iFinD normalization could not produce dividend_yield",
-        "pe was derived from iFinD source fields",
         "pb was derived from iFinD source fields",
         "ps was derived from iFinD source fields",
         "return_1y was derived from iFinD source fields",
         "volatility_1y was derived from iFinD source fields",
         "max_drawdown_1y was derived from iFinD source fields",
-        "market_cap was derived from iFinD source fields"
+        "market_cap was derived from iFinD source fields",
+        "PE not meaningful: FY2025 basic EPS -0.11 <= 0 (loss-making)"
       ],
       "needs_agent_review": true,
       "latest_price": 5.91,
-      "pe": -53.7273,
+      "pe": null,
       "pb": 2.4234,
       "ps": 0.6013,
       "dividend_yield": null,
-      "return_1y": -0.209893,
-      "volatility_1y": 0.32685,
+      "return_1y": -0.257538,
+      "volatility_1y": 0.333813,
       "max_drawdown_1y": 0.388474,
       "market_cap": 121111035687.3
     }

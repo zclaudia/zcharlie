@@ -27,7 +27,7 @@
           "source": "/stock/history",
           "quality": "derived",
           "updated_at": "2026-09-30T07:00:00Z",
-          "note": ""
+          "note": "trailing 365 days, 241 sessions"
         },
         "volatility_1y": {
           "field": "volatility_1y",
@@ -164,8 +164,8 @@
       "pb": 3.5693,
       "ps": 3.2159,
       "dividend_yield": null,
-      "return_1y": 0.095881,
-      "volatility_1y": 0.280604,
+      "return_1y": -0.001231,
+      "volatility_1y": 0.272222,
       "max_drawdown_1y": 0.155667,
       "market_cap": 297491730513.0
     }

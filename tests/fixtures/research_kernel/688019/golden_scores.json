@@ -1,25 +1,26 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:34:37+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "freshness_policy": {
       "as_of": "2026-10-05T15:34:37.318806+00:00",
-      "max_market_age_days": 7,
+      "max_market_age_trading_days": 1,
       "max_financial_age_days": 180,
-      "max_stock_age_days": 30
+      "max_stock_age_days": 30,
+      "financial_rule": "report_year must be >= the latest annual report due by Apr 30 (falls back to updated_at age when report_year is unknown)"
     }
   },
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "688019",
       "name": "安集科技",
       "market": "SH",
@@ -182,7 +183,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -359,13 +360,20 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.58,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:34:37.318806Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.58,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
@@ -392,6 +400,11 @@
         "commercialization_path": 95.84,
         "cash_reserve": 83.47
       },
+      "factor_coverage": 1.0,
+      "missing_factors": [],
+      "provider_unavailable_fields": [
+        "dividend_yield"
+      ],
       "key_metrics": {
         "market_cap": 48183230573.0,
         "pe": 45.279,

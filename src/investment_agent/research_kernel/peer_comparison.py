@@ -45,10 +45,18 @@ def _number(value: Any) -> float | None:
         return None
 
 
+# Valuation multiples are only comparable when positive: a negative PE (loss)
+# or PB (negative equity) would otherwise rank as the "cheapest" peer.
+POSITIVE_ONLY_METRICS = frozenset({"pe", "pb"})
+
+
 def _metric(item: dict[str, Any], metric: str) -> float | None:
     if metric == "investment_score":
         return _number(item.get("investment_score"))
-    return _number(item.get("key_metrics", {}).get(metric))
+    value = _number(item.get("key_metrics", {}).get(metric))
+    if metric in POSITIVE_ONLY_METRICS and value is not None and value <= 0:
+        return None
+    return value
 
 
 def _identity(item: dict[str, Any]) -> tuple[str, str]:

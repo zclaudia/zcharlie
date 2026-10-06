@@ -130,6 +130,8 @@ def _build_report_item(
         "source": item["source"],
         "updated_at": item["updated_at"],
         "factor_scores": item["factor_scores"],
+        "factor_coverage": item.get("factor_coverage", 1.0),
+        "missing_factors": item.get("missing_factors", []),
         "key_metrics": item["key_metrics"],
         "missing_fields": item["missing_fields"],
         "warnings": item["warnings"],
@@ -366,7 +368,9 @@ def render_report_markdown(context_payload: dict[str, Any]) -> str:
 
         lines.extend(["", "### 子项评分", ""])
         for key, value in item["factor_scores"].items():
-            lines.append(f"- {key}: {value}")
+            lines.append(f"- {key}: {'缺失（未计入加权）' if value is None else value}")
+        if item.get("missing_factors"):
+            lines.append(f"- 因子覆盖率：{float(item.get('factor_coverage', 0.0)):.0%}")
 
         research_evidence = item.get("research_evidence")
         if isinstance(research_evidence, dict):

@@ -16,8 +16,8 @@
 manifest_schema_version: 1
 created_at: "2026-10-05"
 canonical_schema_version: "ifind-canonical.v1"
-scoring_version: "v1.2"
-score_schema_version: "v2.0"
+scoring_version: "v1.3"
+score_schema_version: "v2.1"
 report_year: 2025
 fixture_policy:
   provider: ifind-proxy
@@ -70,7 +70,10 @@ samples:
     report_year: 2025
     collected_at: "2026-10-05"
     fixture_status: sanitized
-    notes: 首个已验证 golden 样本，内核输出与 my-stocks 0.3.0 逐字段等价。
+    notes: >-
+      首个已验证 golden 样本，scoring v1.2 下内核输出与 my-stocks 0.3.0 逐字段等价
+      （legacy_* 文件保留为历史 oracle）；v1.3 起以 golden_* 为准。该样本未保留
+      provider_raw，canonical 输入维持采集时形态。
 
   - ticker: 601398.SH
     name: 工商银行
@@ -127,8 +130,9 @@ samples:
     fixture_status: sanitized
     notes: >-
       高负债、盈利波动大的周期运输样本。采集实测：历史盈利基期为负导致
-      net_profit_growth_3y 无法计算并标记缺失，置信度降至 84，覆盖低或负盈利
-      与关键缺失字段两条边界。
+      net_profit_growth_3y 无法计算并标记缺失；FY2025 EPS 为负，v1.3 起 PE 置空并
+      标记 negative_earnings，四年 ROE 均为负使 roe_stability 不再被钳制为 1.0
+      而是缺失。覆盖低或负盈利与关键缺失字段两条边界。
 
   - ticker: 688111.SH
     name: 金山办公
@@ -156,8 +160,9 @@ samples:
     fixture_status: sanitized
     notes: >-
       科创板小盘半导体材料高成长股，替代暂不可采集的北交所样本 835185.BJ。
-      采集窗口处于 2026 国庆休市期，实测 market_data age 128.6 小时（7 天上限的
-      76%），重放时覆盖 freshness 临界但未过期路径。
+      采集窗口处于 2026 国庆休市期，实测 market_data age 128.6 小时；v1.3 起行情
+      时效按交易日计量，休市期内为 0 个交易日，重放时覆盖"日历日很旧但按交易日
+      仍新鲜"的临界路径。
 
   - ticker: 300750.SZ
     name: 宁德时代

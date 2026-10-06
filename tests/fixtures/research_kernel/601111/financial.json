@@ -103,22 +103,23 @@
         }
       },
       "missing_fields": [
+        "roe_stability",
         "net_profit_growth_3y"
       ],
       "quality_flags": [
+        {
+          "field": "roe_stability",
+          "flag": "missing_field",
+          "message": "iFinD normalization could not produce roe_stability",
+          "provider": "ifind",
+          "severity": "review"
+        },
         {
           "field": "net_profit_growth_3y",
           "flag": "missing_field",
           "message": "iFinD normalization could not produce net_profit_growth_3y",
           "provider": "ifind",
           "severity": "review"
-        },
-        {
-          "field": "roe_stability",
-          "flag": "derived_field",
-          "message": "roe_stability was derived from iFinD source fields",
-          "provider": "ifind",
-          "severity": "info"
         },
         {
           "field": "free_cash_flow",
@@ -137,8 +138,8 @@
       ],
       "provider_conflicts": {},
       "warnings": [
+        "iFinD normalization could not produce roe_stability",
         "iFinD normalization could not produce net_profit_growth_3y",
-        "roe_stability was derived from iFinD source fields",
         "free_cash_flow was derived from iFinD source fields",
         "revenue_growth_3y was derived from iFinD source fields"
       ],
@@ -148,7 +149,7 @@
       "gross_margin": 0.051534,
       "net_margin": -0.020555,
       "roe": -0.040374,
-      "roe_stability": 1.0,
+      "roe_stability": null,
       "debt_ratio": 0.885638,
       "operating_cash_flow": 42045213000.0,
       "free_cash_flow": 24483937000.0,

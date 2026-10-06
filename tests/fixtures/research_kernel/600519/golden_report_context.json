@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:22:50+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "600519",
       "name": "贵州茅台",
       "strategy_type": "steady_quality_growth",
@@ -116,6 +116,12 @@
           "message": "net_profit_growth_3y was derived from iFinD source fields",
           "provider": "ifind",
           "severity": "info"
+        },
+        {
+          "field": "shareholder_return",
+          "flag": "factor_missing",
+          "message": "factor shareholder_return has no input data and was excluded from the score",
+          "severity": "info"
         }
       ],
       "field_sources": {
@@ -160,7 +166,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -317,7 +323,8 @@
           "估值水平偏贵"
         ],
         "risk": [
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 90%）"
         ]
       },
       "peer_comparison": {
@@ -391,7 +398,7 @@
             "relative_position": "insufficient_peer_data"
           },
           "investment_score": {
-            "target": 74.19,
+            "target": 76.88,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -409,13 +416,13 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "贵州茅台 当前评分 74.19，研究工作流标签为 需要复核，风险等级 medium_low，估值水平 expensive。",
-          "investment_score": 74.19,
-          "suggestion": "needs_review",
-          "suggestion_label": "需要复核",
+          "text": "贵州茅台 当前评分 76.88，研究工作流标签为 暂缓研究，风险等级 medium_low，估值水平 expensive。",
+          "investment_score": 76.88,
+          "suggestion": "defer",
+          "suggestion_label": "暂缓研究",
           "risk_level": "medium_low",
           "valuation_level": "expensive",
-          "needs_agent_review": true
+          "needs_agent_review": false
         },
         "positive_thesis": [
           {
@@ -498,6 +505,11 @@
             "field": "risk"
           },
           {
+            "source": "evidence_summary.risk",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 90%）",
+            "field": "risk"
+          },
+          {
             "source": "score",
             "text": "风险等级为 medium_low",
             "field": "risk_level",
@@ -510,12 +522,6 @@
             "value": [
               "dividend_yield"
             ]
-          },
-          {
-            "source": "data_quality",
-            "text": "当前结果需要 Agent 复核",
-            "field": "needs_agent_review",
-            "value": true
           },
           {
             "source": "peer_comparison",
@@ -600,6 +606,11 @@
             "field": "risk"
           },
           {
+            "source": "evidence_summary.risk",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 90%）",
+            "field": "risk"
+          },
+          {
             "source": "score",
             "text": "风险等级为 medium_low",
             "field": "risk_level",
@@ -614,12 +625,6 @@
             ]
           },
           {
-            "source": "data_quality",
-            "text": "当前结果需要 Agent 复核",
-            "field": "needs_agent_review",
-            "value": true
-          },
-          {
             "source": "peer_comparison",
             "text": "同行样本不足或同行数据不足，需要复核",
             "field": "needs_peer_review",
@@ -627,17 +632,17 @@
           }
         ],
         "judge_view": {
-          "stance": "needs_review",
-          "stance_label": "需复核",
-          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为需复核。该结论用于研究优先级排序，不构成交易建议。",
+          "stance": "cautious",
+          "stance_label": "偏谨慎",
+          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为偏谨慎。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 2,
           "opposition_count": 7,
           "review_required": true
         }
       },
-      "investment_score": 74.19,
-      "business_score": 74.19,
-      "research_confidence_score": 92.0,
+      "investment_score": 76.88,
+      "business_score": 76.88,
+      "research_confidence_score": 87.4,
       "research_confidence_label": "高",
       "freshness": {
         "stock": {
@@ -649,20 +654,27 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.38,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:22:50.891048Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.38,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
       "risk_level": "medium_low",
       "valuation_level": "expensive",
-      "suggestion": "needs_review",
-      "suggestion_label": "需要复核",
+      "suggestion": "defer",
+      "suggestion_label": "暂缓研究",
       "company_profile": {
         "sector_type": "general",
         "sector_label": "通用",
@@ -676,7 +688,7 @@
         "peer_group_hints": []
       },
       "data_quality_score": 0.92,
-      "needs_agent_review": true,
+      "needs_agent_review": false,
       "source": {
         "stock": "ifind-proxy:stock-info+history",
         "market_data": "ifind-proxy:history+financial-index",
@@ -691,11 +703,15 @@
         "profitability_quality": 100.0,
         "growth_durability": 46.36,
         "roe_stability": 91.13,
-        "cash_flow_quality": 85,
+        "cash_flow_quality": 85.0,
         "balance_sheet_quality": 100.0,
-        "shareholder_return": 50.0,
-        "valuation_level": 35
+        "shareholder_return": null,
+        "valuation_level": 35.0
       },
+      "factor_coverage": 0.9,
+      "missing_factors": [
+        "shareholder_return"
+      ],
       "key_metrics": {
         "market_cap": 1573377704650.6199,
         "pe": 19.1687,

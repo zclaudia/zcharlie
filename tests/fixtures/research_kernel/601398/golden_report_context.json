@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-05T15:22:50+00:00",
+    "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.2",
-    "schema_version": "v2.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.2",
-      "schema_version": "v2.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
       "symbol": "601398",
       "name": "工商银行",
       "strategy_type": "dividend_blue_chip",
@@ -127,6 +127,12 @@
         {
           "field": "gross_margin",
           "flag": "model_not_applicable"
+        },
+        {
+          "field": "shareholder_return",
+          "flag": "factor_missing",
+          "message": "factor shareholder_return has no input data and was excluded from the score",
+          "severity": "info"
         }
       ],
       "field_sources": {
@@ -171,7 +177,7 @@
             "source": "/stock/history",
             "quality": "derived",
             "updated_at": "2026-09-30T07:00:00Z",
-            "note": ""
+            "note": "trailing 365 days, 241 sessions"
           },
           "volatility_1y": {
             "field": "volatility_1y",
@@ -330,7 +336,8 @@
         "risk": [
           "风险等级为 medium",
           "存在模型不适用字段，已从数据质量扣分中剔除",
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）"
         ]
       },
       "peer_comparison": {
@@ -404,7 +411,7 @@
             "relative_position": "insufficient_peer_data"
           },
           "investment_score": {
-            "target": 56.0,
+            "target": 58.0,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -422,13 +429,13 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "工商银行 当前评分 56.0，研究工作流标签为 需要复核，风险等级 medium，估值水平 cheap。",
-          "investment_score": 56.0,
-          "suggestion": "needs_review",
-          "suggestion_label": "需要复核",
+          "text": "工商银行 当前评分 58.0，研究工作流标签为 低优先级，风险等级 medium，估值水平 cheap。",
+          "investment_score": 58.0,
+          "suggestion": "low_priority",
+          "suggestion_label": "低优先级",
           "risk_level": "medium",
           "valuation_level": "cheap",
-          "needs_agent_review": true
+          "needs_agent_review": false
         },
         "positive_thesis": [
           {
@@ -510,6 +517,11 @@
             "field": "risk"
           },
           {
+            "source": "evidence_summary.risk",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）",
+            "field": "risk"
+          },
+          {
             "source": "score",
             "text": "风险等级为 medium",
             "field": "risk_level",
@@ -522,12 +534,6 @@
             "value": [
               "dividend_yield"
             ]
-          },
-          {
-            "source": "data_quality",
-            "text": "当前结果需要 Agent 复核",
-            "field": "needs_agent_review",
-            "value": true
           },
           {
             "source": "peer_comparison",
@@ -616,6 +622,11 @@
             "field": "risk"
           },
           {
+            "source": "evidence_summary.risk",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）",
+            "field": "risk"
+          },
+          {
             "source": "score",
             "text": "风险等级为 medium",
             "field": "risk_level",
@@ -630,12 +641,6 @@
             ]
           },
           {
-            "source": "data_quality",
-            "text": "当前结果需要 Agent 复核",
-            "field": "needs_agent_review",
-            "value": true
-          },
-          {
             "source": "peer_comparison",
             "text": "同行样本不足或同行数据不足，需要复核",
             "field": "needs_peer_review",
@@ -643,18 +648,18 @@
           }
         ],
         "judge_view": {
-          "stance": "needs_review",
-          "stance_label": "需复核",
-          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为需复核。该结论用于研究优先级排序，不构成交易建议。",
+          "stance": "cautious",
+          "stance_label": "偏谨慎",
+          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为偏谨慎。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 2,
           "opposition_count": 8,
           "review_required": true
         }
       },
-      "investment_score": 56.0,
-      "business_score": 56.0,
-      "research_confidence_score": 92.0,
-      "research_confidence_label": "高",
+      "investment_score": 58.0,
+      "business_score": 58.0,
+      "research_confidence_score": 80.5,
+      "research_confidence_label": "中",
       "freshness": {
         "stock": {
           "updated_at": "2026-10-05T15:22:50.237459Z",
@@ -665,20 +670,27 @@
         "market_data": {
           "updated_at": "2026-09-30T07:00:00Z",
           "age_hours": 128.38,
-          "max_age_days": 7,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
           "is_stale": false
         },
         "financial_data": {
           "updated_at": "2026-10-05T15:22:50.237459Z",
-          "age_hours": 0.0,
+          "age_hours": 6671.38,
           "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
           "is_stale": false
         }
       },
       "risk_level": "medium",
       "valuation_level": "cheap",
-      "suggestion": "needs_review",
-      "suggestion_label": "需要复核",
+      "suggestion": "low_priority",
+      "suggestion_label": "低优先级",
       "company_profile": {
         "sector_type": "banking",
         "sector_label": "银行",
@@ -704,7 +716,7 @@
         ]
       },
       "data_quality_score": 0.92,
-      "needs_agent_review": true,
+      "needs_agent_review": false,
       "source": {
         "stock": "ifind-proxy:stock-info+history",
         "market_data": "ifind-proxy:history+financial-index",
@@ -717,12 +729,16 @@
       },
       "factor_scores": {
         "valuation_level": 100.0,
-        "shareholder_return": 50.0,
+        "shareholder_return": null,
         "roe_quality": 24.78,
         "profit_growth": 28.71,
         "drawdown_control": 82.37,
         "capital_structure_review": 60.0
       },
+      "factor_coverage": 0.75,
+      "missing_factors": [
+        "shareholder_return"
+      ],
       "key_metrics": {
         "market_cap": 2951043808696.92,
         "pe": 8.28,

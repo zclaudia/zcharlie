@@ -4,11 +4,14 @@ Every sanitized corpus sample in ``tests/fixtures/research_kernel/manifest.yaml`
 must replay offline, in any checkout, with byte-semantically identical kernel
 output:
 
-- 600406.SH is compared against the read-only ``my-stocks`` 0.3.0 legacy
-  oracle (``legacy_scores.json`` / ``legacy_report_context.json``).
-- Every later sample is compared against its own frozen golden output
-  (``golden_scores.json`` / ``golden_report_context.json``) captured in work
-  package A2.
+- Every sample is compared against its own frozen golden output
+  (``golden_scores.json`` / ``golden_report_context.json``) for the current
+  scoring version (regenerated offline by
+  ``tools/regenerate_golden_fixtures.py`` on a version bump).
+- 600406.SH additionally keeps the read-only ``my-stocks`` 0.3.0 legacy
+  oracle (``legacy_scores.json`` / ``legacy_report_context.json``) as the
+  historical scoring v1.2 parity record; it is only used when no golden
+  output exists.
 
 Comparison rules (work package A3): classification, labels, missing items,
 quality flags and versions must match exactly; numeric fields compare with an
@@ -93,10 +96,10 @@ def _collect_diffs(
 
 
 def _golden_files(fixture_dir: Path) -> tuple[Path, Path]:
-    legacy_scores = fixture_dir / "legacy_scores.json"
-    if legacy_scores.is_file():
-        return legacy_scores, fixture_dir / "legacy_report_context.json"
-    return fixture_dir / "golden_scores.json", fixture_dir / "golden_report_context.json"
+    golden_scores = fixture_dir / "golden_scores.json"
+    if golden_scores.is_file():
+        return golden_scores, fixture_dir / "golden_report_context.json"
+    return fixture_dir / "legacy_scores.json", fixture_dir / "legacy_report_context.json"
 
 
 @pytest.mark.parametrize("sample", _manifest_samples(), ids=lambda sample: sample["ticker"])

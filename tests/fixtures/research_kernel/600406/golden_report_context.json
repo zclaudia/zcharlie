@@ -1,0 +1,722 @@
+{
+  "metadata": {
+    "pool": "ifind-single-stock",
+    "generated_at": "2026-10-06T04:23:24+00:00",
+    "skill_version": "0.3.0",
+    "scoring_version": "v1.3",
+    "schema_version": "v2.1",
+    "top": 1
+  },
+  "items": [
+    {
+      "rank": 1,
+      "skill_version": "0.3.0",
+      "scoring_version": "v1.3",
+      "schema_version": "v2.1",
+      "symbol": "600406",
+      "name": "国电南瑞",
+      "strategy_type": "steady_quality_growth",
+      "strategy_label": "稳健质量成长",
+      "primary_strategy": "steady_quality_growth",
+      "primary_strategy_label": "稳健质量成长",
+      "secondary_strategy": "quality_growth",
+      "secondary_strategy_label": "质量成长",
+      "selected_model": "manufacturing_growth",
+      "selected_model_label": "制造成长模型",
+      "model_fit_score": 1.0,
+      "model_fit_label": "高",
+      "quality_flags": [
+        {
+          "field": "market_cap",
+          "flag": "derived_field",
+          "message": "market_cap was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "dividend_yield",
+          "flag": "missing_field",
+          "message": "iFinD normalization could not produce dividend_yield",
+          "provider": "ifind",
+          "severity": "review"
+        },
+        {
+          "field": "pe",
+          "flag": "derived_field",
+          "message": "pe was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "pb",
+          "flag": "derived_field",
+          "message": "pb was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "ps",
+          "flag": "derived_field",
+          "message": "ps was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "return_1y",
+          "flag": "derived_field",
+          "message": "return_1y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "volatility_1y",
+          "flag": "derived_field",
+          "message": "volatility_1y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "max_drawdown_1y",
+          "flag": "derived_field",
+          "message": "max_drawdown_1y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "market_cap",
+          "flag": "derived_field",
+          "message": "market_cap was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "roe_stability",
+          "flag": "derived_field",
+          "message": "roe_stability was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "free_cash_flow",
+          "flag": "derived_field",
+          "message": "free_cash_flow was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "revenue_growth_3y",
+          "flag": "derived_field",
+          "message": "revenue_growth_3y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "net_profit_growth_3y",
+          "flag": "derived_field",
+          "message": "net_profit_growth_3y was derived from iFinD source fields",
+          "provider": "ifind",
+          "severity": "info"
+        }
+      ],
+      "field_sources": {
+        "stock": {
+          "industry": {
+            "field": "industry",
+            "note": "iFinD stock-info response did not include a normalized industry",
+            "provider": "manual",
+            "quality": "direct",
+            "source": "command_input",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "market_cap": {
+            "field": "market_cap",
+            "note": "latest close multiplied by total shares",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/info + /stock/history",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "name": {
+            "field": "name",
+            "note": "",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/stock/info",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          }
+        },
+        "market_data": {
+          "dividend_yield": {
+            "field": "dividend_yield",
+            "note": "the validated iFinD endpoint set did not expose cash dividends",
+            "provider": "ifind",
+            "quality": "missing",
+            "source": "unavailable",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "latest_price": {
+            "field": "latest_price",
+            "note": "",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/stock/history",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "market_cap": {
+            "field": "market_cap",
+            "note": "",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/info + /stock/history",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "max_drawdown_1y": {
+            "field": "max_drawdown_1y",
+            "note": "",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/history",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "pb": {
+            "field": "pb",
+            "note": "latest close divided by FY2025 net assets per share",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/history + /financial/index",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "pe": {
+            "field": "pe",
+            "note": "latest close divided by FY2025 basic EPS",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/history + /financial/index",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "ps": {
+            "field": "ps",
+            "note": "latest close divided by FY2025 revenue per share",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/history + /financial/index",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "return_1y": {
+            "field": "return_1y",
+            "note": "",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/history",
+            "updated_at": "2026-09-30T07:00:00Z"
+          },
+          "volatility_1y": {
+            "field": "volatility_1y",
+            "note": "",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/stock/history",
+            "updated_at": "2026-09-30T07:00:00Z"
+          }
+        },
+        "financial_data": {
+          "debt_ratio": {
+            "field": "debt_ratio",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/index",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "free_cash_flow": {
+            "field": "free_cash_flow",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/financial/statements",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "gross_margin": {
+            "field": "gross_margin",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/index",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "net_margin": {
+            "field": "net_margin",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/index",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "net_profit": {
+            "field": "net_profit",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/statements",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "net_profit_growth_3y": {
+            "field": "net_profit_growth_3y",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/financial/statements",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "operating_cash_flow": {
+            "field": "operating_cash_flow",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/statements",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "revenue": {
+            "field": "revenue",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/statements",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "revenue_growth_3y": {
+            "field": "revenue_growth_3y",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/financial/statements",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "roe": {
+            "field": "roe",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "direct",
+            "source": "/financial/index",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          },
+          "roe_stability": {
+            "field": "roe_stability",
+            "note": "FY2025 with FY2022 base where applicable",
+            "provider": "ifind",
+            "quality": "derived",
+            "source": "/financial/index",
+            "updated_at": "2026-10-05T09:46:19.977797Z"
+          }
+        }
+      },
+      "provider_conflicts": {},
+      "evidence_summary": {
+        "positive": [],
+        "negative": [],
+        "risk": [
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+        ]
+      },
+      "peer_comparison": {
+        "peer_selection_mode": "automatic",
+        "manual_peer_symbols": [],
+        "manual_peer_missing_symbols": [],
+        "peer_group": [],
+        "metric_comparison": {
+          "pe": {
+            "target": 21.6538,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "pb": {
+            "target": 3.4357,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "dividend_yield": {
+            "target": null,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "roe": {
+            "target": 0.16253900000000002,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "revenue_growth_3y": {
+            "target": 0.122478,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "net_profit_growth_3y": {
+            "target": 0.086988,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "debt_ratio": {
+            "target": 0.427306,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "max_drawdown_1y": {
+            "target": 0.297914,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          },
+          "investment_score": {
+            "target": 55.22,
+            "peer_median": null,
+            "peer_min": null,
+            "peer_max": null,
+            "peer_count": 0,
+            "relative_position": "insufficient_peer_data"
+          }
+        },
+        "peer_summary": {
+          "peer_count": 0,
+          "metrics_with_peer_data": 0,
+          "stronger_than_peers": [],
+          "weaker_than_peers": []
+        },
+        "needs_peer_review": true
+      },
+      "structured_views": {
+        "summary_conclusion": {
+          "text": "国电南瑞 当前评分 55.22，研究工作流标签为 低优先级，风险等级 medium_low，估值水平 fair。",
+          "investment_score": 55.22,
+          "suggestion": "low_priority",
+          "suggestion_label": "低优先级",
+          "risk_level": "medium_low",
+          "valuation_level": "fair",
+          "needs_agent_review": false
+        },
+        "positive_thesis": [
+          {
+            "source": "model_fit",
+            "text": "模型适配度为 高",
+            "field": "model_fit_score",
+            "value": 1.0
+          },
+          {
+            "source": "key_metrics",
+            "text": "ROE 为 16.25%，盈利质量具备支撑",
+            "field": "roe",
+            "value": 0.16253900000000002
+          },
+          {
+            "source": "key_metrics",
+            "text": "三年收入复合增速为 12.25%",
+            "field": "revenue_growth_3y",
+            "value": 0.122478
+          }
+        ],
+        "negative_thesis": [],
+        "valuation_view": {
+          "valuation_level": "fair",
+          "metrics": {
+            "pe": 21.6538,
+            "pb": 3.4357,
+            "dividend_yield": null
+          },
+          "notes": [
+            {
+              "source": "score",
+              "text": "估值水平为 fair",
+              "field": "valuation_level",
+              "value": "fair"
+            },
+            {
+              "source": "key_metrics",
+              "text": "pe 为 21.6538",
+              "field": "pe",
+              "value": 21.6538
+            },
+            {
+              "source": "key_metrics",
+              "text": "pb 为 3.4357",
+              "field": "pb",
+              "value": 3.4357
+            },
+            {
+              "source": "key_metrics",
+              "text": "dividend_yield 为 None",
+              "field": "dividend_yield"
+            }
+          ]
+        },
+        "peer_position": {
+          "peer_count": 0,
+          "metrics_with_peer_data": 0,
+          "stronger_than_peers": [],
+          "weaker_than_peers": [],
+          "needs_peer_review": true,
+          "peer_selection_mode": "automatic",
+          "manual_peer_missing_symbols": []
+        },
+        "risk_review": [
+          {
+            "source": "evidence_summary.risk",
+            "text": "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+            "field": "risk"
+          },
+          {
+            "source": "score",
+            "text": "风险等级为 medium_low",
+            "field": "risk_level",
+            "value": "medium_low"
+          },
+          {
+            "source": "data_quality",
+            "text": "存在缺失字段：dividend_yield",
+            "field": "missing_fields",
+            "value": [
+              "dividend_yield"
+            ]
+          },
+          {
+            "source": "peer_comparison",
+            "text": "同行样本不足或同行数据不足，需要复核",
+            "field": "needs_peer_review",
+            "value": true
+          }
+        ],
+        "follow_up_tracking_indicators": [
+          {
+            "indicator": "roe",
+            "current_value": 0.16253900000000002,
+            "reason": "验证盈利质量是否延续"
+          },
+          {
+            "indicator": "revenue_growth_3y",
+            "current_value": 0.122478,
+            "reason": "验证成长性是否延续"
+          },
+          {
+            "indicator": "net_profit_growth_3y",
+            "current_value": 0.086988,
+            "reason": "验证利润增长是否延续"
+          },
+          {
+            "indicator": "pe",
+            "current_value": 21.6538,
+            "reason": "跟踪估值消化情况"
+          },
+          {
+            "indicator": "pb",
+            "current_value": 3.4357,
+            "reason": "跟踪资产估值水平"
+          },
+          {
+            "indicator": "debt_ratio",
+            "current_value": 0.427306,
+            "reason": "跟踪财务杠杆风险"
+          },
+          {
+            "indicator": "max_drawdown_1y",
+            "current_value": 0.297914,
+            "reason": "跟踪波动与回撤风险"
+          },
+          {
+            "indicator": "data_quality_score",
+            "current_value": 0.92,
+            "reason": "确认数据完整性是否足以支撑结论"
+          }
+        ]
+      },
+      "evidence_synthesis": {
+        "bull_case": [
+          {
+            "source": "model_fit",
+            "text": "模型适配度为 高",
+            "field": "model_fit_score",
+            "value": 1.0
+          },
+          {
+            "source": "key_metrics",
+            "text": "ROE 为 16.25%，盈利质量具备支撑",
+            "field": "roe",
+            "value": 0.16253900000000002
+          },
+          {
+            "source": "key_metrics",
+            "text": "三年收入复合增速为 12.25%",
+            "field": "revenue_growth_3y",
+            "value": 0.122478
+          }
+        ],
+        "bear_case": [
+          {
+            "source": "evidence_summary.risk",
+            "text": "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+            "field": "risk"
+          },
+          {
+            "source": "score",
+            "text": "风险等级为 medium_low",
+            "field": "risk_level",
+            "value": "medium_low"
+          },
+          {
+            "source": "data_quality",
+            "text": "存在缺失字段：dividend_yield",
+            "field": "missing_fields",
+            "value": [
+              "dividend_yield"
+            ]
+          },
+          {
+            "source": "peer_comparison",
+            "text": "同行样本不足或同行数据不足，需要复核",
+            "field": "needs_peer_review",
+            "value": true
+          }
+        ],
+        "judge_view": {
+          "stance": "cautious",
+          "stance_label": "偏谨慎",
+          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为偏谨慎。该结论用于研究优先级排序，不构成交易建议。",
+          "support_count": 3,
+          "opposition_count": 4,
+          "review_required": true
+        }
+      },
+      "investment_score": 55.22,
+      "business_score": 55.22,
+      "research_confidence_score": 92.0,
+      "research_confidence_label": "高",
+      "freshness": {
+        "stock": {
+          "updated_at": "2026-10-05T09:46:19.977797Z",
+          "age_hours": 0.0,
+          "max_age_days": 30,
+          "is_stale": false
+        },
+        "market_data": {
+          "updated_at": "2026-09-30T07:00:00Z",
+          "age_hours": 122.77,
+          "age_trading_days": 0,
+          "max_age_days": 1,
+          "max_age_trading_days": 1,
+          "calendar_basis": "exchange_calendar",
+          "is_stale": false
+        },
+        "financial_data": {
+          "updated_at": "2026-10-05T09:46:19.977797Z",
+          "age_hours": 6665.77,
+          "max_age_days": 180,
+          "basis": "report_period",
+          "report_year": 2025,
+          "report_period_end": "2025-12-31",
+          "expected_report_year": 2025,
+          "is_stale": false
+        }
+      },
+      "risk_level": "medium_low",
+      "valuation_level": "fair",
+      "suggestion": "low_priority",
+      "suggestion_label": "低优先级",
+      "company_profile": {
+        "sector_type": "manufacturing_growth",
+        "sector_label": "制造成长",
+        "business_model_tags": [
+          "manufacturing",
+          "quality_growth"
+        ],
+        "non_applicable_fields": [],
+        "preferred_models": [
+          "manufacturing_growth",
+          "quality_growth",
+          "steady_quality_growth"
+        ],
+        "peer_group_hints": [
+          "三花智控",
+          "拓普集团",
+          "银轮股份",
+          "汇川技术"
+        ]
+      },
+      "data_quality_score": 0.92,
+      "needs_agent_review": false,
+      "source": {
+        "stock": "ifind-proxy:stock-info+history",
+        "market_data": "ifind-proxy:history+financial-index",
+        "financial_data": "ifind-proxy:financial-statements+financial-index"
+      },
+      "updated_at": {
+        "stock": "2026-10-05T09:46:19.977797Z",
+        "market_data": "2026-09-30T07:00:00Z",
+        "financial_data": "2026-10-05T09:46:19.977797Z"
+      },
+      "factor_scores": {
+        "profitability_quality": 58.96,
+        "growth_durability": 45.82,
+        "profit_growth": 23.49,
+        "cash_flow_quality": 85.0,
+        "balance_sheet_quality": 55.67,
+        "valuation_level": 75.0
+      },
+      "factor_coverage": 1.0,
+      "missing_factors": [],
+      "key_metrics": {
+        "market_cap": 180875148633.12,
+        "pe": 21.6538,
+        "pb": 3.4357,
+        "dividend_yield": null,
+        "roe": 0.16253900000000002,
+        "debt_ratio": 0.427306,
+        "revenue_growth_3y": 0.122478,
+        "net_profit_growth_3y": 0.086988,
+        "max_drawdown_1y": 0.297914
+      },
+      "missing_fields": [
+        "dividend_yield"
+      ],
+      "warnings": [
+        "market_cap was derived from iFinD source fields",
+        "iFinD normalization could not produce dividend_yield",
+        "pe was derived from iFinD source fields",
+        "pb was derived from iFinD source fields",
+        "ps was derived from iFinD source fields",
+        "return_1y was derived from iFinD source fields",
+        "volatility_1y was derived from iFinD source fields",
+        "max_drawdown_1y was derived from iFinD source fields",
+        "market_cap was derived from iFinD source fields",
+        "roe_stability was derived from iFinD source fields",
+        "free_cash_flow was derived from iFinD source fields",
+        "revenue_growth_3y was derived from iFinD source fields",
+        "net_profit_growth_3y was derived from iFinD source fields"
+      ],
+      "report_questions": [
+        "国电南瑞 的主营业务和收入结构是否支持 稳健质量成长 逻辑？",
+        "当前估值与行业和历史区间相比是否合理？",
+        "最大风险来自财务质量、行业周期、竞争格局还是估值？",
+        "哪些缺失字段需要在进一步研究前补齐？"
+      ]
+    }
+  ]
+}
