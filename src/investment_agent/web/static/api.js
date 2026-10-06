@@ -4,6 +4,9 @@
 
 const TIMEOUT_MS = 15000;
 
+// CSRF 标记：服务端要求 cookie 认证的写请求携带同源 Origin 或此请求头。
+export const FETCH_MARKER_HEADERS = Object.freeze({ "X-Requested-With": "fetch" });
+
 export class ApiError extends Error {
   constructor(status, message, { retryable = false } = {}) {
     super(message);
@@ -30,7 +33,7 @@ async function parseBody(response) {
 }
 
 async function request(path, { method = "GET", body, idempotency = false, signal } = {}) {
-  const headers = {};
+  const headers = { ...FETCH_MARKER_HEADERS };
   let payload;
   if (body !== undefined) {
     if (body instanceof FormData) {
@@ -98,7 +101,11 @@ export async function download(path) {
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   let response;
   try {
-    response = await fetch(path, { credentials: "same-origin", signal: controller.signal });
+    response = await fetch(path, {
+      headers: { ...FETCH_MARKER_HEADERS },
+      credentials: "same-origin",
+      signal: controller.signal,
+    });
   } catch {
     throw new ApiError(0, "下载失败或超时，请重试。", { retryable: true });
   } finally {

@@ -2,6 +2,7 @@
 
 from datetime import date, datetime
 from typing import Annotated, cast
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -36,7 +37,7 @@ def _to_call_out(r: LLMCall) -> LLMCallOut:
 
 @router.get("/llm-calls", response_model=list[LLMCallOut])
 async def list_llm_calls(
-    limit: int = 100,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     since: Annotated[
         datetime | None,
         Query(description="ISO datetime; only returns calls at/after"),
@@ -58,7 +59,7 @@ async def llm_cost_summary(
     ] = None,
 ) -> LLMCostSummary:
     if month is None:
-        month_start = date.today().replace(day=1)
+        month_start = datetime.now(ZoneInfo("Asia/Shanghai")).date().replace(day=1)
     else:
         try:
             month_start = date.fromisoformat(f"{month}-01")

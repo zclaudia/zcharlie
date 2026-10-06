@@ -39,16 +39,26 @@ class DiscoveryPipeline:
         self._settings = settings
         self._app_config = app_config or load_app_yaml(Path(app_config_path))
 
-    async def run(self, universe_code: str, as_of: date) -> int:
-        """Run full Discovery pipeline. Returns pipeline_run_id."""
-        # Create the run row up-front.
-        async with session_scope() as session:
-            run = await PipelineRunRepository(session).create(
-                kind="discovery",
-                universe_code=universe_code,
-                triggered_by="api",
-            )
-            run_id = run.id
+    async def run(
+        self,
+        universe_code: str,
+        as_of: date,
+        *,
+        run_id: int | None = None,
+    ) -> int:
+        """Run full Discovery pipeline. Returns pipeline_run_id.
+
+        ``run_id`` adopts a PipelineRun the caller already created (e.g. the
+        API returns it before scheduling the work); otherwise one is created.
+        """
+        if run_id is None:
+            async with session_scope() as session:
+                run = await PipelineRunRepository(session).create(
+                    kind="discovery",
+                    universe_code=universe_code,
+                    triggered_by="api",
+                )
+                run_id = run.id
         log.info(
             "pipeline.run.started",
             run_id=run_id,

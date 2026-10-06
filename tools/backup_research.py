@@ -12,6 +12,10 @@ verification (see docs/product/backup-and-recovery.md).
 The SQLite online-backup API yields a consistent snapshot even while
 writers are active, but the runbook asks you to stop API/worker/scheduler
 first so the copied artifact directories match the database exactly.
+
+Symbolic links inside the artifact directories are skipped (never followed),
+so a stray link cannot pull files from outside ``DATA_DIR`` into the backup.
+The output directory is created ``0700`` because it holds the full database.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 import sys
@@ -48,6 +53,10 @@ def backup_sqlite(source: Path, target: Path) -> None:
         source_conn.close()
 
 
+def _ignore_symlinks(directory: str, names: list[str]) -> set[str]:
+    return {name for name in names if os.path.islink(os.path.join(directory, name))}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path("./data"))
@@ -61,18 +70,28 @@ def main() -> int:
         print(f"database not found: {db_source}", file=sys.stderr)
         return 2
 
-    output.mkdir(parents=True, exist_ok=True)
+    output.mkdir(mode=0o700, parents=True, exist_ok=True)
+    output.chmod(0o700)
     backup_sqlite(db_source, output / "app.db")
+    (output / "app.db").chmod(0o600)
 
     entries: list[dict[str, object]] = []
     for relative in ("research-runs", "notifications"):
         source_dir = data_dir / relative
-        if not source_dir.is_dir():
+        if source_dir.is_symlink() or not source_dir.is_dir():
             continue
         target_dir = output / relative
-        shutil.copytree(source_dir, target_dir, dirs_exist_ok=True)
+        shutil.copytree(
+            source_dir,
+            target_dir,
+            symlinks=True,
+            ignore=_ignore_symlinks,
+            dirs_exist_ok=True,
+        )
 
     for path in sorted(output.rglob("*")):
+        if path.is_symlink():
+            continue
         if path.is_file() and path.name != "manifest.json":
             entries.append(
                 {

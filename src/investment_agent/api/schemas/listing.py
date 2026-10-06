@@ -4,6 +4,10 @@ from datetime import date
 
 from pydantic import BaseModel
 
+# Legacy ticker shape: US symbols (AAPL, BRK.B, BRK-B) and A-share codes
+# (600519.SH). Also used by the watchlist add body after upper-casing.
+TICKER_PATTERN = r"^[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,4})?$"
+
 
 class ListingOut(BaseModel):
     listing_id: int

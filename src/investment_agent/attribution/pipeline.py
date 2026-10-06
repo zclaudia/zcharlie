@@ -37,8 +37,14 @@ class AttributionPipeline:
         ticker: str,
         as_of: date,
         market_code: str = "NASDAQ",
+        *,
+        run_id: int | None = None,
     ) -> int:
-        """Run Attribution end-to-end for one ticker. Returns pipeline_run_id."""
+        """Run Attribution end-to-end for one ticker. Returns pipeline_run_id.
+
+        ``run_id`` adopts a PipelineRun the caller already created; otherwise
+        one is created here.
+        """
         # 0. Resolve listing + create PipelineRun
         async with session_scope() as session:
             stmt = select(Listing).where(
@@ -49,12 +55,13 @@ class AttributionPipeline:
             if listing is None:
                 raise ValueError(f"Listing not found: {market_code}/{ticker}")
             listing_id = listing.id
-            run = await PipelineRunRepository(session).create(
-                kind="attribution",
-                listing_id=listing.id,
-                triggered_by="api",
-            )
-            run_id = run.id
+            if run_id is None:
+                run = await PipelineRunRepository(session).create(
+                    kind="attribution",
+                    listing_id=listing.id,
+                    triggered_by="api",
+                )
+                run_id = run.id
 
         log.info(
             "attribution.run.started",

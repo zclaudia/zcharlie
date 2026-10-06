@@ -4,13 +4,13 @@ The web UI authenticates with a short-lived signed session cookie issued at
 ``/app/login`` (the submitted API key is verified server-side and never
 stored in the cookie or rendered back). JSON APIs keep ``X-API-Key`` support;
 only the same-origin UI uses the cookie. State-changing UI requests validate
-the ``Origin`` header when present.
+the ``Origin`` header when present (``Origin: null`` is rejected). Failed
+logins are throttled per client IP; logout revokes sessions server-side.
 """
 
 from __future__ import annotations
 
 import re
-import secrets
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -19,12 +19,20 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from investment_agent.api.auth import get_settings, is_same_origin
+from investment_agent.api.auth import (
+    api_key_matches,
+    client_key,
+    get_auth_throttle,
+    get_settings,
+    is_same_origin,
+)
 from investment_agent.config import Settings
 from investment_agent.web.session import (
     SESSION_COOKIE_NAME,
     create_session_token,
-    verify_session_token,
+    revoke_sessions,
+    session_is_valid,
+    signing_material,
 )
 
 WEB_DIR = Path(__file__).resolve().parent
@@ -47,10 +55,12 @@ def register_web(app: Any) -> None:
     )
 
 
-async def require_same_origin(request: Request) -> None:
+async def require_same_origin(
+    request: Request, settings: Annotated[Settings, Depends(get_settings)]
+) -> None:
     """Reject cross-origin state-changing UI requests (CSRF defence in depth)."""
 
-    if not is_same_origin(request):
+    if not is_same_origin(request, settings):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="cross-origin request")
 
 
@@ -81,7 +91,7 @@ class WebSessionMiddleware:
         if needs_auth:
             settings = get_settings()
             token = request.cookies.get(SESSION_COOKIE_NAME, "")
-            if not verify_session_token(token, api_key=settings.api_key):
+            if not session_is_valid(token, settings):
                 response = _redirect_to_login()
                 await response(scope, receive, send)
                 return
@@ -122,31 +132,69 @@ async def login(
     api_key: Annotated[str, Form(alias="api_key")],
     next_url: Annotated[str, Form(alias="next")] = "/app",
 ) -> Any:
-    if not secrets.compare_digest(api_key, settings.api_key):
+    throttle = get_auth_throttle(request)
+    client = client_key(request)
+    retry_after = throttle.retry_after(client)
+    if retry_after is not None:
+        throttled = _render(
+            "login.html",
+            request,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            error="失败次数过多，请稍后再试",
+        )
+        throttled.headers["Retry-After"] = str(retry_after)
+        return throttled
+    if not api_key_matches(api_key, settings.api_key):
+        throttle.record_failure(client)
         return _render(
             "login.html",
             request,
             status_code=status.HTTP_401_UNAUTHORIZED,
             error="API Key 不正确",
         )
-    target = next_url if next_url.startswith("/app") else "/app"
+    throttle.reset(client)
+    target = next_url if _is_safe_next(next_url) else "/app"
     response = RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         SESSION_COOKIE_NAME,
-        create_session_token(api_key=settings.api_key, ttl_minutes=settings.web_session_ttl_minutes),
+        create_session_token(
+            api_key=signing_material(settings),
+            ttl_minutes=settings.web_session_ttl_minutes,
+        ),
         max_age=settings.web_session_ttl_minutes * 60,
         httponly=True,
+        secure=settings.web_cookie_secure,
         samesite="strict",
         path="/",
     )
     return response
 
 
+def _is_safe_next(next_url: str) -> bool:
+    return next_url == "/app" or next_url.startswith("/app/")
+
+
 @router.post("/logout", dependencies=[Depends(require_same_origin)])
-@router.get("/logout", dependencies=[Depends(require_same_origin)])
-async def logout() -> RedirectResponse:
+async def logout(
+    request: Request, settings: Annotated[Settings, Depends(get_settings)]
+) -> RedirectResponse:
+    """POST-only logout; revokes every outstanding session server-side.
+
+    Only a request carrying a currently valid session can trigger revocation,
+    so an anonymous POST cannot sign the user out.
+    """
+
+    token = request.cookies.get(SESSION_COOKIE_NAME, "")
+    if session_is_valid(token, settings):
+        revoke_sessions(settings.data_dir)
     response = RedirectResponse(url="/app/login", status_code=status.HTTP_303_SEE_OTHER)
-    response.delete_cookie(SESSION_COOKIE_NAME, path="/")
+    response.delete_cookie(
+        SESSION_COOKIE_NAME,
+        path="/",
+        secure=settings.web_cookie_secure,
+        httponly=True,
+        samesite="strict",
+    )
     return response
 
 
