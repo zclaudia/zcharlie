@@ -1,15 +1,15 @@
 """Reference entities: Market, Sector, Company, Listing, Universe, UniverseMembership.
 
-Legacy tables (from the retired NASDAQ Discovery/Attribution product, preserved
-at tag ``legacy-nasdaq-final``) keep their ORM classes so ``Base.metadata``
-keeps matching the alembic-migrated schema; nothing at runtime uses them.
-Legacy here: Universe, UniverseMembership (PipelineRun.universe_code still
-has a foreign key to ``universe``).
+``Universe`` / ``UniverseMembership`` came from the retired NASDAQ product
+(tag ``legacy-nasdaq-final``) and are reused (P1 decision D4) as the
+point-in-time index-constituent store: one row per membership interval
+(``valid_from`` inclusive, ``valid_to`` exclusive), stamped with the
+reference ``source`` and ``captured_at`` since migration 013.
 """
 
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from investment_agent.storage.models.base import Base, TimestampMixin
@@ -81,3 +81,7 @@ class UniverseMembership(Base, TimestampMixin):
     )
     valid_from: Mapped[date] = mapped_column(Date, primary_key=True)
     valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

@@ -34,6 +34,7 @@ from investment_agent.storage.models import (  # noqa: F401
     analysis,
     market_data,
     ops,
+    pit_snapshot,
     reference,
     relationship,
     user_domain,
