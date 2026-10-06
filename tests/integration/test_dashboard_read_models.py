@@ -244,3 +244,37 @@ def test_stock_page_carries_run_form_and_detail_regions(api_client):
     assert 'data-endpoint="/research/stocks/600406.SH/history"' in html
     assert 'id="stock-detail"' in html
     assert 'id="stock-changes"' in html
+
+
+def test_dashboard_has_no_calendar_warning_when_coverage_is_ample(api_client):
+    from freezegun import freeze_time
+
+    with freeze_time("2026-06-01T02:00:00Z", tick=True):
+        body = api_client.get("/dashboard/today", headers=_headers()).json()
+
+    assert body["warnings"] == []
+
+
+def test_dashboard_warns_when_calendar_coverage_ends_soon(api_client):
+    from freezegun import freeze_time
+
+    with freeze_time("2026-11-15T02:00:00Z", tick=True):
+        body = api_client.get("/dashboard/today", headers=_headers()).json()
+
+    assert len(body["warnings"]) == 1
+    warning = body["warnings"][0]
+    assert warning["code"] == "calendar"
+    assert warning["level"] == "warn"
+    assert warning["coverage_end"] == "2026-12-31"
+    assert warning["days_remaining"] == 46
+    assert "2026-12-31" in warning["message"]
+
+
+def test_dashboard_reports_expired_calendar_as_error(api_client):
+    from freezegun import freeze_time
+
+    with freeze_time("2027-01-04T02:00:00Z", tick=True):
+        body = api_client.get("/dashboard/today", headers=_headers()).json()
+
+    assert body["warnings"][0]["level"] == "error"
+    assert body["warnings"][0]["coverage_end"] is None

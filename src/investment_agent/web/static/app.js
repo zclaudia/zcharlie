@@ -105,12 +105,19 @@ async function loadDashboard(region, data) {
     ["待复核", data.needs_review],
     ["重要变化", data.meaningful_changes],
   ].filter(([, bucket]) => bucket && bucket.count > 0);
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
 
-  if (!sections.length) {
+  if (!sections.length && !warnings.length) {
     renderRegion(region, "empty", "今日无待处理项。");
     return;
   }
   const container = el("div");
+  for (const warning of warnings) {
+    const level = warning.level === "error" ? "error" : "warn";
+    container.appendChild(
+      el("p", { class: `notice notice-${level}`, role: "alert" }, fmt(warning.message))
+    );
+  }
   for (const [title, bucket] of sections) {
     container.appendChild(
       dashboardSection(title, bucket.entries)
