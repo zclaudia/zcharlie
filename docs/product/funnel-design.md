@@ -413,7 +413,7 @@ notify: { add: info, trim: info, exit_review: action_required }
   采集时一律以返回的 `updateDate` 作为生效日期，并拒绝 `updateDate` 晚于采集日的数据。
 - 只覆盖三个指数；扩展到其他指数时再评估 Tushare Pro。
 - 无成分权重；本设计不依赖权重（AkShare 可取中证月度权重，见 p1-plan 2.2）。
-- 证监会分类比申万粗；AkShare 已实测可取申万时点行业历史，是否替换待定（p1-plan 2.2 Q1）。
+- 证监会分类比申万粗；已决定行业组改按申万 2021（经 AkShare，带时点历史），证监会分类保留作兜底（p1-plan D7）。
 
 **补充实测与分工（2026-10-06 修订）**：首次真实采集时 iFinD 约 350 次调用后触发 Kimi 网关 5 小时额度（403），
 额度大小未知且可能与用户日常 Kimi 使用共用。baostock 另经实测可免费提供日线（不复权 / 后复权，含 PE TTM、PB MRQ、

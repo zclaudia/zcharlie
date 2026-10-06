@@ -27,7 +27,7 @@ P1 分两道门：
 | **iFinD 经 Kimi 网关有 5 小时滚动额度**，本机实测约 350 次调用后返回 403（额度大小未知，可能与用户日常 Kimi 使用共用） | iFinD 不能承担目标池全量采集与回补；见 D6 |
 | baostock 免费提供日线（不复权 / 后复权，含 PE TTM、PB MRQ、PS TTM、停牌、ST）与季度财务（含实际披露日 `pubDate`） | 广度数据改由 baostock 承担；披露日不再需要逐只查公告 |
 | 因子计算分散在 `research/ifind_chain.py`（canonicalize）与 `research_kernel/scoring.py` | 需抽出统一因子库，否则会出现第二套定义 |
-| 分类依赖行业**关键词**匹配用户手填的行业（如"电力设备"） | baostock 返回证监会分类（如"C38电气机械和器材制造业"），关键词匹配会失效，需要显式映射表 |
+| 分类依赖行业**关键词**匹配用户手填的行业（如"电力设备"） | baostock 返回证监会分类（如"C38电气机械和器材制造业"），关键词匹配会失效，需要显式映射表；按 D7 映射改基于申万 |
 | 已有 `universe` / `universe_membership`（`valid_from` / `valid_to`）表，原为 legacy 保留 | 结构正好适合时点成分，可直接复用，不必新建 |
 | 已有 `holding_item` 表（预留未用） | P1 不使用，P2 再评估是否沿用 |
 | 队列、租约、心跳、幂等、调度、交易日历都已就绪 | 新增批处理任务全部复用现有 worker 与 `pipeline_run` |
@@ -43,6 +43,7 @@ P1 分两道门：
 | D4 | 成分表 | 复用 `universe` / `universe_membership` |
 | D5 | 回补深度 | 价格 5 年、年报 6 年、最近 4 个季报（全部经 baostock） |
 | D6 | 数据源分工 | **baostock 负责广度**（目标池全量日线、估值、季度财务、披露日、回补）；**iFinD 负责深度**（观察池 / 候选 / 持仓的单股研究、自由现金流、完整报表、公告）；两源重叠字段做交叉校验 |
+| D7 | 行业口径 | **申万 2021**（经 AkShare，带时点历史）作为行业组映射与模板适用行业的依据；证监会分类继续同步，仅作参考与兜底（见 2.2） |
 
 ### 2.1 数据源分工与实测（2026-10-06）
 
@@ -96,8 +97,8 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 - 每项能力一个独立 adapter，锁定 akshare 版本，测试用 fixture 回放；接口失败只影响它负责的那一类快照。
 - 数据仅供个人研究使用。
 
-**待确认（Q1）：** P1-B3 的行业组映射是基于证监会分类（现方案），还是改为基于申万（P1-A9 第 1 项）。
-申万更细，而且自带时点历史；代价是多一个外部依赖，同时要处理证书问题。确认前 B3 按现方案推进，映射表要能切换数据源。
+**已确认（D7，2026-10-06）：** P1-B3 的行业组映射改为基于申万（P1-A9）。申万更细且自带时点历史；
+代价是 AkShare 成为必需依赖，并需处理 `swsresearch.com` 的证书问题。
 
 ## 3. 工作流 A：数据层
 
@@ -177,23 +178,31 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 遗留修正：`ia snapshot sync-industry` 未指定 `--universe` 时默认同步全市场并为约 5000 只股票建档，
 应改为默认使用配置中的目标池，与调度器一致。
 
-### P1-A9 AkShare 补缺采集（候选，M）· 未排入里程碑
+### P1-A9 申万行业同步（S）· 按 D7，属 M2
+
+- `akshare` 加入主依赖并锁定小版本。
+- `stock_industry_clf_hist_sw` 按 `start_date` 写入 `industry_classification`（`system = sw2021`，与 `csrc` 并存）；
+  同一股票多条历史转为区间行，`valid_to` 取下一条的 `start_date`。
+- 代码 → 名称与一 / 二 / 三级层级：每月由 `sw_index_first_info` / `sw_index_third_info` / `sw_index_third_cons`
+  按当前成分反推，写入 `config/` 下的版本化对照表；反推不到名称的历史代码保留代码并记日志。
+- SSL：只为 `swsresearch.com` 补全中间证书（随仓库附带证书文件），不全局关闭校验。
+- 调度：并入每月行业同步任务；`ia snapshot sync-industry` 增加 `--system sw2021|csrc`，默认两者都同步。
+- 测试：fixture 回放；区间生成；时点查询（2021-07-30 前后的贵州茅台行业不同）；对照表缺失时降级。
+
+### P1-A10 AkShare 补缺采集（候选，M）· 未排入里程碑
 
 依据 2.2 的实测结论。按价值排序，每一项可以单独落地：
 
-1. **申万行业**（S，取决于 Q1）：`stock_industry_clf_hist_sw` 按 `start_date` 写入 `industry_classification`
-   （`scheme = sw2021`，与证监会分类并存）；代码到名称的对照表每月由三级行业成分反推一次；
-   SSL 只为该域名补中间证书。行业同步任务每月顺带执行。
-2. **目标池 FCF 近似**（S）：`stock_cash_flow_sheet_by_report_em` 只在披露季窗口刷新；
+1. **目标池 FCF 近似**（S）：`stock_cash_flow_sheet_by_report_em` 只在披露季窗口刷新；
    `fcf = NETCASH_OPERATE - CONSTRUCT_LONG_ASSET`，`available_from` 取 baostock `pubDate`（缺失时取 `NOTICE_DATE`
    并标记 `approx`），`provider = akshare`；`UPDATE_DATE` 晚于 `NOTICE_DATE` 的行标记 `restated`。
    观察池仍以 iFinD FCF 为准；两者重叠时做交叉校验。
-3. **财务交叉校验**（S）：每期披露窗口结束后用 `stock_lrb_em` / `stock_xjll_em` / `stock_zcfz_em` 各调用一次，
+2. **财务交叉校验**（S）：每期披露窗口结束后用 `stock_lrb_em` / `stock_xjll_em` / `stock_zcfz_em` 各调用一次，
    与 baostock 的净利润、营收、经营现金流、资产负债率对比，不一致写入 `provider_conflict`，数据健康页展示。
-4. **巨潮公告**（P4 范围，P1 只留接口）：`stock_zh_a_disclosure_report_cninfo` 按日全市场拉取，
+3. **巨潮公告**（P4 范围，P1 只留接口）：`stock_zh_a_disclosure_report_cninfo` 按日全市场拉取，
    P1 只用来抽查 `pubDate`。
 
-- 依赖：`akshare` 锁定小版本，作为可选依赖（`[project.optional-dependencies] akshare`），未安装时对应任务跳过并记日志。
+- 依赖：复用 P1-A9 引入的 `akshare`；每项能力可在配置中单独关闭。
 - 节流：东财接口单线程，默认每次调用间隔至少 1 秒；连续失败 3 次，本次任务置为 `partial` 并发通知。
 - 测试：每个接口一份 fixture，固定列名，列名变化时测试失败；`restated` 标记；`approx` 回退。
 
@@ -224,10 +233,14 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 ### P1-B3 行业适用性映射（S）
 
-- `config/industry_groups.yaml`：证监会大类 → 行业组（`banking`、`insurance`、`utility`、`cyclical`、
-  `growth_manufacturing`、`venture`、`consumer`、`other`），版本化。
+- `config/industry_groups.yaml`：申万 2021 行业 → 行业组（`banking`、`insurance`、`utility`、`cyclical`、
+  `growth_manufacturing`、`venture`、`consumer`、`other`），版本化。默认按申万一级映射；一级内部口径不一致时
+  可按二级覆盖（如非银金融拆为 `insurance` 与证券；电力设备里的光伏、风电归 `growth_manufacturing`）。
+- 读取时按 `as_of` 取当时的申万分类；该股票无申万记录时退回证监会映射（另有一张证监会大类 → 行业组的兜底表），
+  并带 `industry_fallback` 标记。
 - 因子 `applicability` 与模板适用行业都引用行业组，不再使用关键词。
-- 覆盖校验：沪深 300 当前成分所属的每个证监会大类都必须有映射，否则测试失败。
+- 覆盖校验：沪深 300 当前成分的申万一级行业（及配置了二级覆盖的二级行业）都必须有映射，否则测试失败。
+- 依赖 P1-A9。
 
 ### P1-B4 观察端改读因子库（M）
 
@@ -291,7 +304,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 ### P1-D3 晋级流程与 API（M）
 
 - `POST /candidates/{id}/promote`：要求批准（可编辑参数后批准）草稿规则 → 规则 `active` → 写入现有 `watchlist_item`
-  （行业取证监会分类、报告年度取最近完整财年）→ 触发一次单股研究。
+  （行业取申万一级名称、报告年度取最近完整财年）→ 触发一次单股研究。
 - `POST /candidates/{id}/dismiss`、`POST /candidates`（手动提名）、`GET /candidates`、`GET /screen-runs/{id}`、
   `GET /rules/{id}`、`PATCH /rules/{id}`。
 - 全部在一个事务内写决策日志；复用现有鉴权、CSRF 与限流。
@@ -313,7 +326,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 ### P1-F1 离线端到端 smoke（M）
 
-- fixture：baostock 成分与行业 + 10 只股票的 iFinD 快照（覆盖银行、周期、成长、亏损、次新）。
+- fixture：baostock 成分与证监会行业、申万行业历史 + 10 只股票的 iFinD 快照（覆盖银行、周期、成长、亏损、次新）。
 - 流程：成分同步 → 快照采集 → 因子 → 筛选 → 候选 → 起草（stub LLM）→ 批准晋级 → 观察池单股研究。
 - 断言：每条理由可回溯到快照；重复运行结果一致；决策日志完整。
 
@@ -323,7 +336,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 ### P1-F3 文档（S）
 
-- README、`engineering-baseline.md` 技术决策表（新增 baostock）、运维说明（回补、调度、数据健康）。
+- README、`engineering-baseline.md` 技术决策表（新增 baostock、AkShare）、运维说明（回补、调度、数据健康）。
 
 ## 9. 依赖与里程碑
 
@@ -331,7 +344,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 M1 数据地基          A1 ─┬─ A2 ─┬─ A3 ─┬─ A5     ← 代码已合并
 M1' 分工调整              │      ├─ A8   └─ A7 ─┬─ A6   ← 广度切到 baostock 后开始积累快照
                          │      │             └─ A4
-M2 因子库                └─ B3  └─ B1 ─── B2
+M2 因子库        A9 ────┴─ B3  └─ B1 ─── B2
 M3 规则与筛选                          C1 ─ C2 ─ C3 ─ C4
 M4 候选闭环                                 D1 ─ D2 ─ D3 ─ C5 ─ E1
 M5 收口                                     B4 · E2 · F1 · F2 · F3
@@ -341,7 +354,7 @@ M5 收口                                     B4 · E2 · F1 · F2 · F3
 |---|---|---|
 | M1 数据地基 | A1、A2、A3、A5 | 代码已合并（`d245847`～`d05930f`）；本机真实链路验证：成分、行业、不复权日线与总股本入库正常，后复权因 iFinD 额度耗尽中断 |
 | M1' 分工调整 | A7、A8、A6 | 目标池日线、估值、财务经 baostock 每日入库；iFinD 额度错误不再重试（**8 周计时起点**）。代码已合并（`c7c2d71`～`8fd183f`）；本机实测 2026-09-30 日线与 2026H1 财务均 300/300，299 只与 iFinD 收盘价逐只一致 |
-| M2 因子库 | A4、B1、B2、B3 | 回补完成；13 只 golden 样本因子一致；分位因子可算 |
+| M2 因子库 | A4、A9、B1、B2、B3 | 回补完成；13 只 golden 样本因子一致；分位因子可算 |
 | M3 规则与筛选 | C1、C2、C3、C4、F2 | 周筛选稳定产出带理由的命中列表 |
 | M4 候选闭环 | D1、D2、D3、C5、E1 | 浏览器内完成"候选 → 审阅草稿 → 晋级"全流程 |
 | M5 收口 | B4、E2、F1、F3 | 代码完成门禁通过；观察端只剩一套因子定义 |
