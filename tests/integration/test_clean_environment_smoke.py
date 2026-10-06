@@ -7,8 +7,8 @@ deployment flow end to end, fully offline:
 2. API process starts and answers /healthz;
 3. watchlist item is added through the API and a batch refresh is queued;
 4. a one-shot worker completes a run against a controlled stub ifind-proxy
-   serving sanitized golden fixtures (LLM is intentionally unreachable, so
-   the run finishes ``partial`` with the deterministic result preserved);
+   serving sanitized golden fixtures (the stub rejects LLM calls with a
+   terminal 400, so the run finishes ``partial`` with the deterministic result preserved);
 5. result, baseline diff, artifacts and the web page are all readable;
 6. after restarting the API the run state is still queryable.
 
@@ -69,6 +69,16 @@ class StubIfindProxy:
             def do_POST(self) -> None:  # noqa: N802
                 length = int(self.headers.get("content-length", "0"))
                 payload = json.loads(self.rfile.read(length) or b"{}")
+                if self.path.startswith("/v1/"):
+                    error = json.dumps(
+                        {"error": {"message": "stub LLM rejects requests", "type": "invalid_request_error"}}
+                    ).encode("utf-8")
+                    self.send_response(400)
+                    self.send_header("content-type", "application/json")
+                    self.send_header("content-length", str(len(error)))
+                    self.end_headers()
+                    self.wfile.write(error)
+                    return
                 name = proxy._resolve(self.path, payload)
                 body = json.dumps(proxy.bodies[name]).encode("utf-8")
                 self.send_response(200)
@@ -111,10 +121,11 @@ def _smoke_env(tmp_path: Path, db_path: Path, stub: StubIfindProxy, api_port: in
             "API_KEY": "smoke-secret",
             "LLM_TIER2_API_KEY": "stub",
             "LLM_TIER3_API_KEY": "stub",
-            # Deliberately unreachable LLM endpoint: deterministic scoring must
-            # survive with a partial outcome.
-            "LLM_TIER3_BASE_URL": "http://127.0.0.1:1/v1",
-            "LLM_TIER2_BASE_URL": "http://127.0.0.1:1/v1",
+            # The stub rejects every LLM request with a terminal 400, so the
+            # deterministic scoring must survive with a partial outcome.
+            # (An unreachable LLM would be a transient error and be retried.)
+            "LLM_TIER3_BASE_URL": f"http://127.0.0.1:{stub.port}/v1",
+            "LLM_TIER2_BASE_URL": f"http://127.0.0.1:{stub.port}/v1",
             "IFIND_PROXY_URL": f"http://127.0.0.1:{stub.port}",
             "IFIND_PROXY_API_KEY": "stub-proxy-key",
         }
