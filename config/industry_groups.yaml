@@ -24,14 +24,14 @@
 # of the directory. `other` is a valid explicit mapping (mixed industries).
 #
 # Changing a mapping changes factor applicability: bump `version`.
-version: "2026-10-06.2"
+version: "2026-10-07.1"
 system: csrc
 
 groups:
   banking: Commercial banks. Balance-sheet business; gross margin and debt ratio not meaningful.
   insurance: Insurers. Float-funded balance sheet; gross margin and debt ratio not meaningful.
   broker: Securities / futures / asset managers (capital-market services); gross margin and debt ratio not meaningful.
-  utility: Regulated or quasi-regulated infrastructure (power, gas, water, toll roads, railways, telecom carriers).
+  utility: Regulated or quasi-regulated infrastructure (power, gas, water, toll roads, railways, airports, ports, telecom carriers).
   cyclical: Commodities, materials, heavy construction and transport whose earnings follow the macro cycle.
   growth_manufacturing: Equipment, autos, electrical machinery, electronics and instruments.
   venture: Internet and software; asset-light, often early-profit growth.
@@ -220,7 +220,7 @@ shenwan:
     "360000": consumer              # 轻工制造 (household / leisure goods; paper and packaging overridden)
     "370000": healthcare            # 医药生物
     "410000": utility               # 公用事业 (power, gas)
-    "420000": cyclical              # 交通运输 (shipping, ports, airlines; rail/road and express overridden)
+    "420000": cyclical              # 交通运输 (shipping, airlines; rail/road, airports, ports and express overridden)
     "430000": real_estate           # 房地产
     "450000": consumer              # 商贸零售 (trading overridden)
     "460000": consumer              # 社会服务
@@ -247,6 +247,13 @@ shenwan:
     "360200": cyclical              # 轻工制造 > 包装印刷
     "420900": utility               # 交通运输 > 铁路公路 (railways, toll roads)
     "420804": consumer              # 交通运输 > 物流 > 快递 (express delivery, like CSRC G60)
+    # Transport infrastructure (F2 / Q7, 2026-10-07): airports and ports own
+    # long-lived concession assets with regulated or government-guided tariffs
+    # and traffic-driven volumes, like toll roads (420900). Carriers stay
+    # cyclical: 航空运输 421001 (fuel / fares) and 航运 421101 (freight rates).
+    # The CSRC fallback is unchanged (G55 / G56 mix carriers and infrastructure).
+    "421002": utility               # 交通运输 > 航空机场 > 机场
+    "421102": utility               # 交通运输 > 航运港口 > 港口
     "450200": other                 # 商贸零售 > 贸易Ⅱ (commodity trading, like CSRC F51)
     "490200": insurance             # 非银金融 > 保险Ⅱ
     "490300": broker                # 非银金融 > 多元金融 (futures, trusts, leasing, holdings)

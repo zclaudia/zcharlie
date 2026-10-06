@@ -94,7 +94,10 @@ def test_every_2021_level1_is_mapped_and_versioned():
         ("002558.SZ", "venture", "sw_l2"),  # 巨人网络: 传媒 > 游戏Ⅱ
         ("002027.SZ", "consumer", "sw_l1"),  # 分众传媒: 传媒 > 广告营销
         ("601006.SH", "utility", "sw_l2"),  # 大秦铁路: 交通运输 > 铁路公路
-        ("601919.SH", "cyclical", "sw_l1"),  # 中远海控: 交通运输 > 航运港口
+        ("601919.SH", "cyclical", "sw_l1"),  # 中远海控: 交通运输 > 航运港口 > 航运
+        ("600009.SH", "utility", "sw_l3"),  # 上海机场: 航空机场 > 机场 (F2 / Q7)
+        ("601018.SH", "utility", "sw_l3"),  # 宁波港: 航运港口 > 港口 (F2 / Q7)
+        ("600029.SH", "cyclical", "sw_l1"),  # 南方航空: 航空机场 > 航空运输
         ("002352.SZ", "consumer", "sw_l3"),  # 顺丰控股: 交通运输 > 物流 > 快递
         ("001979.SZ", "real_estate", "sw_l1"),  # 招商蛇口
         ("603259.SH", "healthcare", "sw_l1"),  # 药明康德
