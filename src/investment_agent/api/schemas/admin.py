@@ -4,6 +4,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from investment_agent.api.schemas.listing import TICKER_PATTERN
+
 
 class WatchlistLatestResearch(BaseModel):
     """Summary of the newest research snapshot for one watchlist entry."""
@@ -44,14 +46,14 @@ class WatchlistUpdate(BaseModel):
 
 
 class WatchlistAdd(BaseModel):
-    ticker: str = Field(min_length=1, max_length=32)
+    ticker: str = Field(min_length=1, max_length=32, pattern=TICKER_PATTERN)
     market_code: str | None = Field(None, min_length=1, max_length=16)
     name: str | None = Field(None, min_length=1, max_length=256)
     industry: str | None = Field(None, min_length=1, max_length=128)
     provider: str | None = Field(None, min_length=1, max_length=32)
     report_year: int | None = Field(None, ge=1990, le=2100)
     enabled: bool | None = None
-    note: str | None = None
+    note: str | None = Field(None, max_length=500)
 
     @field_validator("ticker", "market_code", mode="before")
     @classmethod

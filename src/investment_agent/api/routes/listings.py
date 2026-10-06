@@ -1,13 +1,16 @@
 """/listings endpoints."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Annotated
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import select
 
 from investment_agent.api.auth import verify_api_key
 from investment_agent.api.schemas.listing import (
+    TICKER_PATTERN,
     ListingOut,
     ListingScoreOut,
     RelationshipCreate,
@@ -25,9 +28,11 @@ router = APIRouter(
     dependencies=[Depends(verify_api_key)],
 )
 
+TickerPath = Annotated[str, Path(pattern=TICKER_PATTERN)]
+
 
 @router.get("/{ticker}", response_model=ListingOut)
-async def get_listing(ticker: str, market: str = "NASDAQ") -> ListingOut:
+async def get_listing(ticker: TickerPath, market: str = "NASDAQ") -> ListingOut:
     async with session_scope() as session:
         listing = (
             await session.execute(
@@ -55,9 +60,9 @@ async def get_listing(ticker: str, market: str = "NASDAQ") -> ListingOut:
 
 @router.get("/{ticker}/scores", response_model=list[ListingScoreOut])
 async def get_listing_scores(
-    ticker: str,
+    ticker: TickerPath,
     market: str = "NASDAQ",
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=200),
 ) -> list[ListingScoreOut]:
     async with session_scope() as session:
         listing = (
@@ -93,7 +98,7 @@ async def get_listing_scores(
 
 @router.get("/{ticker}/relationships", response_model=list[RelationshipOut])
 async def list_relationships(
-    ticker: str,
+    ticker: TickerPath,
     market: str = "NASDAQ",
 ) -> list[RelationshipOut]:
     async with session_scope() as session:
@@ -151,7 +156,7 @@ async def list_relationships(
     status_code=201,
 )
 async def add_relationship(
-    ticker: str,
+    ticker: TickerPath,
     body: RelationshipCreate,
     market: str = "NASDAQ",
 ) -> RelationshipOut:
@@ -185,7 +190,7 @@ async def add_relationship(
             description=body.description,
             source="manual",
             confidence=Decimal("0.9"),
-            valid_from=date.today(),
+            valid_from=datetime.now(ZoneInfo("Asia/Shanghai")).date(),
             discovered_at=now,
             last_verified_at=now,
         )

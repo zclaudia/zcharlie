@@ -1,17 +1,20 @@
 """/attribute endpoints — Attribution pipeline trigger + read."""
 
-from datetime import date
-from typing import cast
+from datetime import date, datetime
+from typing import Annotated, cast
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
 from sqlalchemy import select
 
 from investment_agent.api.auth import verify_api_key
+from investment_agent.api.routes.pipelines import fail_if_unfinished
 from investment_agent.api.schemas.attribution import (
     AttributionReportOut,
     AttributionRunCreated,
     AttributionRunRequest,
 )
+from investment_agent.api.schemas.listing import TICKER_PATTERN
 from investment_agent.attribution.attribution_agent import AttributionAgent
 from investment_agent.attribution.pipeline import AttributionPipeline
 from investment_agent.config import Settings
@@ -23,6 +26,8 @@ from investment_agent.storage.repositories.attribution_report import (
     AttributionReportRepository,
 )
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+
+TickerPath = Annotated[str, Path(pattern=TICKER_PATTERN)]
 
 router = APIRouter(
     prefix="/attribute",
@@ -36,18 +41,25 @@ async def _run_attribution(
     as_of: date,
     market: str,
     benchmark: str,
+    run_id: int,
 ) -> None:
-    settings = Settings()  # type: ignore[call-arg]
-    agent = AttributionAgent(tier3_config=settings.llm_tier3)
-    pipeline = AttributionPipeline(
-        data_source=YFinanceSource(
-            max_concurrent=settings.yfinance_max_concurrent,
-        ),  # type: ignore[arg-type]
-        agent=agent,
-        settings=settings,
-        benchmark_ticker=benchmark,
-    )
-    await pipeline.run(ticker, as_of, market_code=market)
+    """Run Attribution against the PipelineRun the route already returned."""
+
+    try:
+        settings = Settings()  # type: ignore[call-arg]
+        agent = AttributionAgent(tier3_config=settings.llm_tier3)
+        pipeline = AttributionPipeline(
+            data_source=YFinanceSource(
+                max_concurrent=settings.yfinance_max_concurrent,
+            ),  # type: ignore[arg-type]
+            agent=agent,
+            settings=settings,
+            benchmark_ticker=benchmark,
+        )
+        await pipeline.run(ticker, as_of, market_code=market, run_id=run_id)
+    except Exception as exc:
+        await fail_if_unfinished(run_id, exc)
+        raise
 
 
 @router.post(
@@ -56,7 +68,7 @@ async def _run_attribution(
     status_code=202,
 )
 async def trigger_attribution(
-    ticker: str,
+    ticker: TickerPath,
     req: AttributionRunRequest,
     background: BackgroundTasks,
     is_async: bool = Query(True, alias="async"),
@@ -66,7 +78,7 @@ async def trigger_attribution(
     `?async=true` (default): pre-creates run, schedules work, returns HTTP 202.
     `?async=false`: blocks until pipeline finishes.
     """
-    as_of = req.as_of or date.today()
+    as_of = req.as_of or datetime.now(ZoneInfo("Asia/Shanghai")).date()
 
     async with session_scope() as session:
         listing = (
@@ -100,6 +112,7 @@ async def trigger_attribution(
             as_of,
             req.market_code,
             req.benchmark_ticker,
+            created.run_id,
         )
         return created
 
@@ -108,6 +121,7 @@ async def trigger_attribution(
         as_of,
         req.market_code,
         req.benchmark_ticker,
+        created.run_id,
     )
     async with session_scope() as session:
         run = (
@@ -124,7 +138,7 @@ async def trigger_attribution(
 
 @router.get("/{ticker}/latest", response_model=AttributionReportOut)
 async def latest_attribution(
-    ticker: str,
+    ticker: TickerPath,
     market: str = "NASDAQ",
 ) -> AttributionReportOut:
     async with session_scope() as session:

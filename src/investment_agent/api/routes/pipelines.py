@@ -1,7 +1,9 @@
 """/pipelines endpoints — Discovery run + read."""
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
 
@@ -21,6 +23,8 @@ from investment_agent.storage.repositories.pipeline_run import PipelineRunReposi
 from investment_agent.storage.repositories.stock_score import StockScoreRepository
 from investment_agent.strategies.registry import load_all_strategies
 
+log = structlog.get_logger(__name__)
+
 router = APIRouter(
     prefix="/pipelines",
     tags=["pipelines"],
@@ -28,20 +32,36 @@ router = APIRouter(
 )
 
 
-async def _run_discovery(universe: str, as_of: date) -> None:
-    settings = Settings()  # type: ignore[call-arg]
-    strategies = load_all_strategies(
-        tier2_config=settings.llm_tier2,
-        tier3_config=settings.llm_tier3,
-    )
-    pipeline = DiscoveryPipeline(
-        data_source=YFinanceSource(
-            max_concurrent=settings.yfinance_max_concurrent,
-        ),  # type: ignore[arg-type]
-        strategies=strategies,
-        settings=settings,
-    )
-    await pipeline.run(universe, as_of)
+async def _run_discovery(universe: str, as_of: date, run_id: int) -> None:
+    """Run Discovery against the PipelineRun the route already returned."""
+
+    try:
+        settings = Settings()  # type: ignore[call-arg]
+        strategies = load_all_strategies(
+            tier2_config=settings.llm_tier2,
+            tier3_config=settings.llm_tier3,
+        )
+        pipeline = DiscoveryPipeline(
+            data_source=YFinanceSource(
+                max_concurrent=settings.yfinance_max_concurrent,
+            ),  # type: ignore[arg-type]
+            strategies=strategies,
+            settings=settings,
+        )
+        await pipeline.run(universe, as_of, run_id=run_id)
+    except Exception as exc:
+        await fail_if_unfinished(run_id, exc)
+        raise
+
+
+async def fail_if_unfinished(run_id: int, exc: BaseException) -> None:
+    """Mark a pre-created run failed unless the pipeline already closed it."""
+
+    async with session_scope() as session:
+        run = await session.get(PipelineRun, run_id)
+        if run is not None and run.status == "running":
+            log.error("pipeline.run.aborted", run_id=run_id, error=str(exc))
+            await PipelineRunRepository(session).mark_failed(run_id, str(exc))
 
 
 @router.post("/discovery/run", response_model=PipelineRunCreated, status_code=202)
@@ -57,7 +77,7 @@ async def run_discovery(
 
     `?async=false`: blocks until the pipeline finishes (or raises).
     """
-    as_of = req.as_of or date.today()
+    as_of = req.as_of or datetime.now(ZoneInfo("Asia/Shanghai")).date()
 
     async with session_scope() as session:
         run = await PipelineRunRepository(session).create(
@@ -72,10 +92,10 @@ async def run_discovery(
         )
 
     if is_async:
-        background.add_task(_run_discovery, req.universe_code, as_of)
+        background.add_task(_run_discovery, req.universe_code, as_of, created.run_id)
         return created
 
-    await _run_discovery(req.universe_code, as_of)
+    await _run_discovery(req.universe_code, as_of, created.run_id)
     async with session_scope() as session:
         run = (
             await session.execute(
@@ -91,7 +111,7 @@ async def run_discovery(
 
 @router.get("", response_model=list[PipelineRunOut])
 async def list_runs(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=200),
     kind: str | None = None,
 ) -> list[PipelineRunOut]:
     async with session_scope() as session:

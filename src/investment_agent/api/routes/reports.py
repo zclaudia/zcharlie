@@ -3,7 +3,7 @@
 from datetime import date
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from investment_agent.api.auth import verify_api_key
 from investment_agent.api.schemas.report import ReportContent, ReportSummary
@@ -42,17 +42,41 @@ def _parse(p: Path) -> ReportSummary | None:
         return None
 
 
-@router.get("/discovery", response_model=list[ReportSummary])
-async def list_discovery_reports(limit: int = 30) -> list[ReportSummary]:
+def _list_reports(pattern: str, limit: int) -> list[ReportSummary]:
+    """Newest-first reports, scanning one day directory at a time.
+
+    Reports live at ``reports/<YYYY-MM-DD>/<kind>_*.md``; walking day
+    directories newest-first and stopping at ``limit`` avoids a full recursive
+    scan of the archive on every request.
+    """
+
     base = _reports_dir()
-    if not base.exists():
+    if not base.is_dir():
         return []
+    day_dirs: list[Path] = []
+    for entry in base.iterdir():
+        try:
+            date.fromisoformat(entry.name)
+        except ValueError:
+            continue
+        if entry.is_dir():
+            day_dirs.append(entry)
     out: list[ReportSummary] = []
-    for p in sorted(base.rglob("discovery_*.md"), reverse=True)[:limit]:
-        s = _parse(p)
-        if s is not None:
-            out.append(s)
+    for day_dir in sorted(day_dirs, reverse=True):
+        for p in sorted(day_dir.glob(pattern), reverse=True):
+            s = _parse(p)
+            if s is not None:
+                out.append(s)
+                if len(out) >= limit:
+                    return out
     return out
+
+
+@router.get("/discovery", response_model=list[ReportSummary])
+async def list_discovery_reports(
+    limit: int = Query(30, ge=1, le=200),
+) -> list[ReportSummary]:
+    return _list_reports("discovery_*.md", limit)
 
 
 @router.get("/discovery/{day}", response_model=ReportContent)
@@ -73,13 +97,7 @@ async def get_discovery_report(day: date) -> ReportContent:
 
 
 @router.get("/attribution", response_model=list[ReportSummary])
-async def list_attribution_reports(limit: int = 30) -> list[ReportSummary]:
-    base = _reports_dir()
-    if not base.exists():
-        return []
-    out: list[ReportSummary] = []
-    for p in sorted(base.rglob("attribution_*.md"), reverse=True)[:limit]:
-        s = _parse(p)
-        if s is not None:
-            out.append(s)
-    return out
+async def list_attribution_reports(
+    limit: int = Query(30, ge=1, le=200),
+) -> list[ReportSummary]:
+    return _list_reports("attribution_*.md", limit)
