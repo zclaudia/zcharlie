@@ -1,7 +1,7 @@
 # 选股—观察—持仓漏斗：系统设计
 
-状态：Proposed（候选方案，待评审后替代 [`delivery-roadmap.md`](delivery-roadmap.md) 中的 V1/V2，
-并同步修订 [`engineering-baseline.md`](engineering-baseline.md)，见第 14 节）
+状态：Accepted（2026-10-06；替代 [`delivery-roadmap.md`](delivery-roadmap.md) 中的 V1/V2；
+[`engineering-baseline.md`](engineering-baseline.md) 已按第 14 节修订）
 
 日期：2026-10-06（第 2 版，按产品愿景修订）
 
@@ -364,8 +364,8 @@ notify: { add: info, trim: info, exit_review: action_required }
 
 ## 14. 对工程基线的修订
 
-本设计与 [`engineering-baseline.md`](engineering-baseline.md) 有两处明确冲突，采纳本设计时须同步修订，
-不允许实现悄悄越过：
+本设计与 [`engineering-baseline.md`](engineering-baseline.md) 原有两处明确冲突，已于 2026-10-06 按下表修订，
+后续实现以修订后的基线为准，不允许悄悄越过：
 
 | 基线原文 | 修订为 |
 |---|---|

@@ -1,10 +1,13 @@
 # 个人投资 Agent 工程基线
 
-状态：Accepted for MVP
+状态：Accepted for MVP；2026-10-06 修订（采纳 [`funnel-design.md`](funnel-design.md)）
 
 基线日期：2026-10-05
 
-适用范围：`zcharlie` 与 `ifind-proxy` 组成的 A 股个人投研系统
+适用范围：`zcharlie`、`ifind-proxy` 与 baostock 参考数据组成的 A 股个人投研系统
+
+> 2026-10-06 修订：产品方向扩展为"目标池筛选 → 候选 → 观察 → 持仓"漏斗（见 [`funnel-design.md`](funnel-design.md)）。
+> 本次只改写第 1 节与第 3 节各一条，以允许"用户批准的规则触发"形式的操作提示；其余红线不变。
 
 ## 1. 产品契约
 
@@ -23,7 +26,7 @@ MVP 必须完成的用户闭环：
 明确不属于 MVP：
 
 - 下单、模拟下单、自动调仓或券商账户控制。
-- 根据用户资产给出买卖、仓位或收益承诺。
+- 系统自行产生买卖或仓位意见，或承诺收益。系统只报告用户批准的规则在其候选或持仓上的触发（见 [`funnel-design.md`](funnel-design.md) 第 5 节）。
 - 多用户、订阅收费、公开荐股和社交功能。
 - 全市场高频扫描和盘中交易信号。
 - 用 LLM 生成或修正财务数字、因子分和排名。
@@ -72,7 +75,7 @@ MVP 采用模块化单体。除现有 `ifind-proxy` 外，不拆微服务。单�
 - `business_score` 与 `research_confidence_score` 始终分离。
 - 缺字段、过期、供应商冲突或模型不适配必须触发复核。
 - `needs_agent_review=true` 时工作流标签必须是 `needs_review`。
-- 工作流标签只描述研究优先级，不能使用交易指令语言。
+- 研究工作流标签只描述研究优先级，不能使用交易指令语言。区间事件使用固定枚举（`buy_zone` / `drop` / `add` / `trim` / `exit_review`），每个事件必须引用用户批准的规则版本；不存在 `sell` 区间，证伪条件触发复核而非清仓建议。
 - 每次运行固定 canonical schema、scoring version、as-of 时间和原始响应。
 - LLM 失败不得改变已经计算出的确定性结果。MVP 退出前应支持“评分成功、解释失败”的 partial 状态。
 - 历史回放只能使用当时已经可获得的数据，不能引入未来数据。
