@@ -135,3 +135,67 @@ async def test_list_all_orders_by_added_at_desc(db_session):
     await repo.add(aapl.id, note="aapl")
     rows = await repo.list_all()
     assert [r.listing_id for r in rows] == [aapl.id, msft.id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("live_status", ["queued", "running"])
+async def test_enqueue_failure_does_not_clobber_live_run_state(db_session, live_status):
+    aapl, _ = await _seed_listings(db_session)
+    watchlist = WatchlistRepository(db_session)
+    await watchlist.add(aapl.id)
+    run = await PipelineRunRepository(db_session).create(
+        kind="ifind_research", listing_id=aapl.id, status=live_status
+    )
+    assert await watchlist.mark_refresh_queued(
+        aapl.id, run_id=run.id, status=live_status
+    )
+
+    updated = await watchlist.mark_refresh_enqueue_failed(
+        aapl.id, error="enqueue failed: OperationalError: locked"
+    )
+
+    item = await watchlist.get_by_listing(aapl.id)
+    assert updated is False
+    assert item is not None
+    assert item.last_refresh_status == live_status
+    assert item.last_research_run_id == run.id
+    assert item.last_refreshed_at is None
+    assert item.last_refresh_error == "enqueue failed: OperationalError: locked"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_failure_overwrites_terminal_run_state(db_session):
+    aapl, _ = await _seed_listings(db_session)
+    watchlist = WatchlistRepository(db_session)
+    await watchlist.add(aapl.id)
+    runs = PipelineRunRepository(db_session)
+    run = await runs.create(kind="ifind_research", listing_id=aapl.id)
+    await runs.mark_success(run.id)
+    await watchlist.mark_refresh_finished(
+        aapl.id,
+        run_id=run.id,
+        status="success",
+        refreshed_at=run.started_at,
+        error=None,
+    )
+
+    assert await watchlist.mark_refresh_enqueue_failed(aapl.id, error="boom") is True
+
+    item = await watchlist.get_by_listing(aapl.id)
+    assert item is not None
+    assert item.last_refresh_status == "failed"
+    assert item.last_refresh_error == "boom"
+
+
+@pytest.mark.asyncio
+async def test_enqueue_failure_without_previous_run_marks_failed(db_session):
+    aapl, _ = await _seed_listings(db_session)
+    watchlist = WatchlistRepository(db_session)
+    await watchlist.add(aapl.id)
+
+    assert await watchlist.mark_refresh_enqueue_failed(aapl.id, error="bad") is True
+
+    item = await watchlist.get_by_listing(aapl.id)
+    assert item is not None
+    assert item.last_refresh_status == "failed"
+    assert item.last_refreshed_at is not None

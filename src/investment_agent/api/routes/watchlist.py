@@ -1,6 +1,6 @@
 """/watchlist endpoints."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
@@ -17,6 +17,7 @@ from investment_agent.api.schemas.admin import (
     WatchlistRefreshRequest,
     WatchlistUpdate,
 )
+from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
@@ -179,7 +180,7 @@ async def refresh_watchlist(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="IFIND_PROXY_API_KEY is not configured",
         )
-    refresh_date = body.as_of or date.today()
+    refresh_date = body.as_of or shanghai_today()
     async with session_scope() as session:
         outcomes = await enqueue_watchlist_refresh(
             session,

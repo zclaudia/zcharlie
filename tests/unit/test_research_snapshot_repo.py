@@ -76,3 +76,35 @@ def test_score_item_from_payload_handles_both_shapes():
     assert score_item_from_payload(bare) is bare
     assert score_item_from_payload(wrapped) is bare
     assert score_item_from_payload(empty) == {}
+
+
+async def test_snapshot_scoring_version_column_drives_change_guard(db_session):
+    repository = ResearchSnapshotRepository(db_session)
+    run_ids: list[int] = []
+    for day, version, score in ((4, "v1.2", 50.0), (5, "v1.3", 60.0)):
+        run = await PipelineRunRepository(db_session).create(kind="ifind_research")
+        run_ids.append(run.id)
+        await repository.create(
+            pipeline_run_id=run.id,
+            symbol="600406",
+            market="SH",
+            company_name="国电南瑞",
+            industry="电力设备",
+            as_of=date(2026, 10, day),
+            report_year=2025,
+            canonical_schema_version="ifind-canonical.v1",
+            scoring_version=version,
+            score_schema_version="v2.0",
+            # score_json deliberately omits scoring_version.
+            score_json={"business_score": score},
+            explanation_json=None,
+            artifact_manifest={},
+        )
+
+    change_set = await ResearchChangeRepository(db_session).by_run(run_ids[1])
+
+    assert change_set is not None
+    assert change_set.has_meaningful_changes is False
+    assert change_set.change_count == 2
+    kinds = [item.get("kind") for item in change_set.diff_json["changes"]]
+    assert kinds.count("scoring_version_changed") == 1

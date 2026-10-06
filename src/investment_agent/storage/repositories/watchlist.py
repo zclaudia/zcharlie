@@ -2,10 +2,16 @@
 
 from datetime import UTC, datetime
 
+import structlog
 from sqlalchemy import select
 
+from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.base import Repository
+
+log = structlog.get_logger(__name__)
+
+_LIVE_RUN_STATUSES = frozenset({"queued", "running"})
 
 
 class WatchlistRepository(Repository[WatchlistItem]):
@@ -137,9 +143,29 @@ class WatchlistRepository(Repository[WatchlistItem]):
         error: str,
         failed_at: datetime | None = None,
     ) -> bool:
+        """Record a failed enqueue attempt.
+
+        If the item already tracks a live (queued/running) research run, its
+        state belongs to that run: keep status/run id/refreshed_at untouched and
+        only surface the enqueue error in ``last_refresh_error``. Returns True
+        only when the refresh status was switched to ``failed``.
+        """
         item = await self.get_by_listing(listing_id)
         if item is None:
             return False
+        if item.last_research_run_id is not None:
+            live_run = await self.session.get(PipelineRun, item.last_research_run_id)
+            if live_run is not None and live_run.status in _LIVE_RUN_STATUSES:
+                log.warning(
+                    "watchlist.enqueue_failed_with_live_run",
+                    listing_id=listing_id,
+                    live_run_id=live_run.id,
+                    live_run_status=live_run.status,
+                    error=error,
+                )
+                item.last_refresh_error = error
+                await self.session.flush()
+                return False
         item.last_refresh_status = "failed"
         item.last_refreshed_at = failed_at or datetime.now(UTC)
         item.last_refresh_error = error

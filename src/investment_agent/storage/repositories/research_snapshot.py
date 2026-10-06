@@ -78,6 +78,10 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
             current_score=score_json,
             previous_run_id=(previous.pipeline_run_id if previous is not None else None),
             previous_score=(previous.score_json if previous is not None else None),
+            current_scoring_version=scoring_version,
+            previous_scoring_version=(
+                previous.scoring_version if previous is not None else None
+            ),
         )
         self.session.add(
             ResearchChangeSet(

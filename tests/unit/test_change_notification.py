@@ -33,3 +33,34 @@ def test_notification_renders_only_meaningful_changes():
     assert "key_metrics.pe" not in content.body
     assert "重要变化：1 项" in content.body
     assert content.metadata == {"run_id": 2, "ticker": "600406.SH"}
+
+
+def test_notification_mentions_scoring_version_change():
+    content = render_change_notification(
+        ticker="600406.SH",
+        company_name="国电南瑞",
+        current_run_id=2,
+        previous_run_id=1,
+        diff={
+            "changes": [
+                {
+                    "category": "methodology",
+                    "field": "scoring_version",
+                    "kind": "scoring_version_changed",
+                    "before": "v1.2",
+                    "after": "v1.3",
+                    "meaningful": False,
+                },
+                {
+                    "category": "financial_metric",
+                    "field": "key_metrics.roe",
+                    "before": 0.10,
+                    "after": 0.13,
+                    "meaningful": True,
+                },
+            ]
+        },
+    )
+
+    assert "评分版本变更：v1.2 → v1.3" in content.body
+    assert "重要变化：1 项" in content.body
