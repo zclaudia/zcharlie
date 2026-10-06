@@ -1,0 +1,623 @@
+{
+ "captured_at": "2026-10-06T23:37:50+00:00",
+ "baostock_version": "00.9.40",
+ "requests": [
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2025",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "",
+     "",
+     "2024-08-31",
+     "",
+     "2025-01-06",
+     "2025-01-07",
+     "2025-01-07",
+     "",
+     "0.1434",
+     "",
+     "0.000000",
+     "10派1.434元",
+     ""
+    ],
+    [
+     "sh.601398",
+     "",
+     "2024-12-03",
+     "2024-08-31",
+     "2024-12-31",
+     "2025-01-06",
+     "2025-01-07",
+     "2025-01-07",
+     "",
+     "0.1434",
+     "0.12906或0.1434",
+     "0.000000",
+     "10派1.434元（含税，扣税后1.2906或1.434元）",
+     ""
+    ],
+    [
+     "sh.601398",
+     "",
+     "2025-06-28",
+     "2025-03-29",
+     "2025-07-08",
+     "2025-07-11",
+     "2025-07-14",
+     "2025-07-14",
+     "",
+     "0.1646",
+     "0.14814或0.1646",
+     "0.000000",
+     "10派1.646元（含税，扣税后1.4814或1.646元）",
+     ""
+    ],
+    [
+     "sh.601398",
+     "",
+     "2025-11-29",
+     "2025-08-30",
+     "2025-12-09",
+     "2025-12-12",
+     "2025-12-15",
+     "2025-12-15",
+     "",
+     "0.1414",
+     "0.12726或0.1414",
+     "0.000000",
+     "10派1.414元（含税，扣税后1.2726或1.414元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.601398",
+    "year": "2026",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.601398",
+     "",
+     "2026-04-24",
+     "2026-03-28",
+     "2026-05-07",
+     "2026-05-12",
+     "2026-05-13",
+     "2026-05-13",
+     "",
+     "0.1689",
+     "0.15201或0.1689",
+     "0.000000",
+     "10派1.689元（含税，扣税后1.5201或1.689元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.600900",
+    "year": "2025",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600900",
+     "",
+     "2024-12-31",
+     "2024-12-14",
+     "2025-01-16",
+     "2025-01-23",
+     "2025-01-24",
+     "2025-01-24",
+     "",
+     "0.21",
+     "0.189或0.21",
+     "0.000000",
+     "10派2.1元（含税，扣税后1.89或2.1元）",
+     ""
+    ],
+    [
+     "sh.600900",
+     "",
+     "2025-05-23",
+     "2025-04-30",
+     "2025-07-11",
+     "2025-07-17",
+     "2025-07-18",
+     "2025-07-18",
+     "",
+     "0.733",
+     "0.6597或0.733",
+     "0.000000",
+     "10派7.33元（含税，扣税后6.597或7.33元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.600900",
+    "year": "2026",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600900",
+     "",
+     "",
+     "2025-12-31",
+     "2026-02-05",
+     "2026-02-11",
+     "2026-02-12",
+     "2026-02-12",
+     "",
+     "0.21",
+     "0.189或0.21",
+     "0.000000",
+     "10派2.1元（含税，扣税后1.89或2.1元）",
+     ""
+    ],
+    [
+     "sh.600900",
+     "",
+     "2026-05-22",
+     "2026-04-30",
+     "2026-07-10",
+     "2026-07-16",
+     "2026-07-17",
+     "2026-07-17",
+     "",
+     "0.79",
+     "0.711或0.79",
+     "0.000000",
+     "10派7.9元（含税，扣税后7.11或7.9元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.600941",
+    "year": "2025",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600941",
+     "",
+     "2025-05-23",
+     "2025-03-21",
+     "2025-05-30",
+     "2025-06-05",
+     "2025-06-06",
+     "2025-06-06",
+     "",
+     "2.2916",
+     "2.06244或2.2916",
+     "0.000000",
+     "10派22.916元（含税，扣税后20.6244或22.916元）",
+     ""
+    ],
+    [
+     "sh.600941",
+     "",
+     "",
+     "2025-08-08",
+     "2025-08-26",
+     "2025-08-29",
+     "2025-09-01",
+     "2025-09-01",
+     "",
+     "2.5025",
+     "2.25225或2.5025",
+     "0.000000",
+     "10派25.025元（含税，扣税后22.5225或25.025元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.600941",
+    "year": "2026",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600941",
+     "",
+     "2026-05-22",
+     "2026-03-27",
+     "2026-05-29",
+     "2026-06-04",
+     "2026-06-05",
+     "2026-06-05",
+     "",
+     "2.2012",
+     "1.98108或2.2012",
+     "0.000000",
+     "10派22.012元（含税，扣税后19.8108或22.012元）",
+     ""
+    ],
+    [
+     "sh.600941",
+     "",
+     "",
+     "2026-08-14",
+     "2026-09-21",
+     "2026-09-29",
+     "2026-09-30",
+     "2026-09-30",
+     "",
+     "2.51",
+     "2.259或2.51",
+     "0.000000",
+     "10派25.1元（含税，扣税后22.59或25.1元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2025",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "",
+     "2025-05-20",
+     "2025-04-03",
+     "2025-06-20",
+     "2025-06-25",
+     "2025-06-26",
+     "2025-06-26",
+     "",
+     "27.673",
+     "24.9057或27.673",
+     "0.000000",
+     "10派276.73元（含税，扣税后249.057或276.73元）",
+     ""
+    ],
+    [
+     "sh.600519",
+     "",
+     "2025-11-29",
+     "2025-11-06",
+     "2025-12-11",
+     "2025-12-18",
+     "2025-12-19",
+     "2025-12-19",
+     "",
+     "23.957",
+     "21.5613或23.957",
+     "0.000000",
+     "10派239.57元（含税，扣税后215.613或239.57元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.600519",
+    "year": "2026",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.600519",
+     "",
+     "2026-06-12",
+     "2026-04-17",
+     "2026-06-22",
+     "2026-06-25",
+     "2026-06-26",
+     "2026-06-26",
+     "",
+     "28.02423",
+     "25.22181或28.02423",
+     "0.000000",
+     "10派280.2423元（含税，扣税后252.2181或280.2423元）",
+     ""
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sz.300750",
+    "year": "2023",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sz.300750",
+     "",
+     "2023-03-31",
+     "2023-03-10",
+     "2023-04-18",
+     "2023-04-25",
+     "2023-04-26",
+     "2023-04-26",
+     "2023-04-26",
+     "2.52",
+     "2.268或2.52",
+     "0.000000",
+     "10转8派25.2元（含税，扣税后22.68或25.2元）",
+     "0.800000"
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sh.603288",
+    "year": "2021",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "sh.603288",
+     "",
+     "2021-04-24",
+     "2021-03-31",
+     "2021-05-11",
+     "2021-05-14",
+     "2021-05-17",
+     "2021-05-17",
+     "2021-05-18",
+     "1.03",
+     "0.917或1.03",
+     "0.100000",
+     "10转2送1派10.3元（含税，扣税后9.17或10.3元）",
+     "0.200000"
+    ]
+   ]
+  },
+  {
+   "method": "query_dividend_data",
+   "params": {
+    "code": "sz.000002",
+    "year": "2025",
+    "yearType": "operate"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "code",
+    "dividPreNoticeDate",
+    "dividAgmPumDate",
+    "dividPlanAnnounceDate",
+    "dividPlanDate",
+    "dividRegistDate",
+    "dividOperateDate",
+    "dividPayDate",
+    "dividStockMarketDate",
+    "dividCashPsBeforeTax",
+    "dividCashPsAfterTax",
+    "dividStocksPs",
+    "dividCashStock",
+    "dividReserveToStockPs"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": []
+  }
+ ]
+}

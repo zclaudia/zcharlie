@@ -10,7 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.a_share import format_listing_ticker
 from investment_agent.snapshots.collect import SnapshotPreconditionError
-from investment_agent.snapshots.jobs import FinancialSnapshotPayload, MarketSnapshotPayload
+from investment_agent.snapshots.jobs import (
+    DividendSnapshotPayload,
+    FinancialSnapshotPayload,
+    MarketSnapshotPayload,
+)
 from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.repositories.universe import UniverseRepository
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
@@ -20,7 +24,7 @@ _A_SHARE_TICKER = re.compile(r"^\d{6}\.(SH|SZ|BJ)$")
 
 async def scope_members(
     session: AsyncSession,
-    payload: MarketSnapshotPayload | FinancialSnapshotPayload,
+    payload: MarketSnapshotPayload | FinancialSnapshotPayload | DividendSnapshotPayload,
     as_of: date,
 ) -> dict[str, int]:
     """Ticker -> listing id for the payload's scope on ``as_of``.

@@ -26,6 +26,7 @@ from investment_agent.scheduler.snapshot_jobs import (
 )
 from investment_agent.scheduler.trading_calendar import load_trading_calendar
 from investment_agent.snapshots.jobs import (
+    DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
@@ -137,6 +138,8 @@ def test_payload_decisions():
             report_period=date(2026, 9, 30),
             as_of=saturday,
         ),
+        # baostock dividend events of the current and previous ex-date year (F2 / Q2)
+        DividendSnapshotPayload(universe_code="CSI300", as_of=saturday),
     ]
     assert snapshot_payloads(
         "financial_deadline", today=date(2026, 10, 9), calendar=CALENDAR, universes=["CSI300"]

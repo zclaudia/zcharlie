@@ -26,6 +26,7 @@ from investment_agent.snapshots.jobs import (
     SNAPSHOT_PROVIDERS,
     SNAPSHOT_SCOPES,
     AkshareFinancialPart,
+    DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     IndustrySystem,
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
         PartStatus,
     )
 
-app = typer.Typer(help="Point-in-time snapshot collection (universe, industry, market, financial)")
+app = typer.Typer(help="Point-in-time snapshot collection (universe, industry, market, financial, dividends)")
 
 _UNIVERSE_HELP = f"Universe code: {', '.join(INDEX_CODES)}"
 _PROVIDER_HELP = (
@@ -299,6 +300,34 @@ def collect_financial(
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc), param_hint="--period") from exc
+    _run(payload, now)
+
+
+@app.command("collect-dividends")
+def collect_dividends(
+    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    scope: str | None = typer.Option(None, help=_SCOPE_HELP),
+    as_of: str | None = typer.Option(None, help="Membership date (YYYY-MM-DD, default today)"),
+    year: list[int] | None = typer.Option(  # noqa: B008
+        None,
+        "--year",
+        help="Ex-date year to collect (repeatable); default: as-of year and the year before",
+    ),
+    now: bool = typer.Option(False, "--now", help=_NOW_HELP),
+) -> None:
+    """Enqueue baostock dividend events (by ex-date year) for the scope's listings."""
+
+    _, chosen_scope, code = _routing("baostock", scope, universe)
+    try:
+        payload = DividendSnapshotPayload(
+            provider="baostock",
+            scope=chosen_scope,
+            universe_code=code,
+            as_of=_date(as_of, "--as-of"),
+            years=tuple(year or ()),
+        )
+    except ValidationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--year") from exc
     _run(payload, now)
 
 

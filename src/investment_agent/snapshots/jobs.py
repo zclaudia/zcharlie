@@ -12,6 +12,10 @@ with a ``part`` - ``summary`` (whole-market period summaries) or
 ``cash_flow`` (per-stock cash-flow statements, also storing
 ``extra_periods`` from the same answer); ``backfill=True`` marks history
 backfill runs (rows ``is_backfill``; scope = every member since the period).
+
+Dividends (F2 / Q2): ``dividend_snapshot`` collects baostock dividend events
+(``query_dividend_data``, by ex-date year) for the payload's scope; the
+weekly financial schedule enqueues it for the current and previous year.
 """
 
 from __future__ import annotations
@@ -34,12 +38,14 @@ INDUSTRY_SYNC = "industry_sync"
 MARKET_SNAPSHOT = "market_snapshot"
 FINANCIAL_SNAPSHOT = "financial_snapshot"
 SNAPSHOT_BACKFILL = "snapshot_backfill"
+DIVIDEND_SNAPSHOT = "dividend_snapshot"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
     FINANCIAL_SNAPSHOT,
     SNAPSHOT_BACKFILL,
+    DIVIDEND_SNAPSHOT,
 )
 
 SnapshotProvider = Literal["baostock", "ifind", "akshare"]
@@ -185,9 +191,35 @@ class FinancialSnapshotPayload(_CollectionPayload):
         return (self.report_period, *self.extra_periods)
 
 
-BackfillPart = Literal["membership", "industry", "prices", "financials"]
-BACKFILL_PARTS: tuple[BackfillPart, ...] = ("membership", "industry", "prices", "financials")
-BACKFILL_CHUNKED_PARTS: frozenset[str] = frozenset({"prices", "financials"})
+class DividendSnapshotPayload(_CollectionPayload):
+    """baostock dividend events of the scope for whole ex-date years."""
+
+    as_of: date
+    """Membership date; also the day the job was scheduled for."""
+    years: tuple[int, ...] = ()
+    """Ex-date years to (re)collect; default: ``as_of`` year and the year before
+    (the trailing-365-day dividend window spans both)."""
+
+    @model_validator(mode="after")
+    def _dividend_options(self) -> Self:
+        if self.provider != "baostock":
+            raise ValueError("dividend events are collected from baostock only")
+        years = self.years or (self.as_of.year - 1, self.as_of.year)
+        if any(year < 1990 or year > self.as_of.year + 1 for year in years):
+            raise ValueError(f"dividend years out of range: {sorted(years)}")
+        object.__setattr__(self, "years", tuple(sorted(set(years))))
+        return self
+
+
+BackfillPart = Literal["membership", "industry", "prices", "financials", "dividends"]
+BACKFILL_PARTS: tuple[BackfillPart, ...] = (
+    "membership",
+    "industry",
+    "prices",
+    "financials",
+    "dividends",
+)
+BACKFILL_CHUNKED_PARTS: frozenset[str] = frozenset({"prices", "financials", "dividends"})
 _CANONICAL_TICKER = re.compile(r"^\d{6}\.(SH|SZ|BJ)$")
 
 
@@ -231,6 +263,7 @@ SnapshotPayload = (
     | MarketSnapshotPayload
     | FinancialSnapshotPayload
     | SnapshotBackfillPayload
+    | DividendSnapshotPayload
 )
 
 PAYLOAD_MODELS: dict[str, type[_Payload]] = {
@@ -239,6 +272,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     MARKET_SNAPSHOT: MarketSnapshotPayload,
     FINANCIAL_SNAPSHOT: FinancialSnapshotPayload,
     SNAPSHOT_BACKFILL: SnapshotBackfillPayload,
+    DIVIDEND_SNAPSHOT: DividendSnapshotPayload,
 }
 
 
@@ -267,6 +301,11 @@ def idempotency_key(payload: SnapshotPayload) -> str:
             f"{payload.part}:{payload.depth_label}"
         )
         return key if payload.chunk is None else f"{key}:c{payload.chunk:03d}"
+    if isinstance(payload, DividendSnapshotPayload):
+        years = "+".join(str(year) for year in payload.years)
+        return (
+            f"{kind}:{payload.provider}:{payload.scope_label}:{payload.as_of.isoformat()}:{years}"
+        )
     if isinstance(payload, MarketSnapshotPayload):
         return (
             f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"

@@ -25,6 +25,10 @@ jobs, so the summaries find the baostock pubDates; ``financial_weekly``
 additionally enqueues one per-stock cash-flow statement job
 (``part="cash_flow"``, all due periods from one call per stock) inside the
 disclosure-season windows :data:`CASH_FLOW_WINDOWS` only (~1.4 h for CSI 300).
+
+Dividends (F2 / Q2): ``financial_weekly`` also enqueues one baostock
+``dividend_snapshot`` per universe for the current and the previous ex-date
+year (~600 queries for CSI 300, a few minutes).
 """
 
 from __future__ import annotations
@@ -41,6 +45,7 @@ from investment_agent.scheduler.trading_calendar import TradingCalendar
 from investment_agent.snapshots.disclosure import statutory_deadline
 from investment_agent.snapshots.jobs import (
     INDUSTRY_SYSTEMS,
+    DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
@@ -168,7 +173,12 @@ def snapshot_payloads(
     if job == "universe_sync":
         return [UniverseSyncPayload(universe_code=code, as_of=today) for code in codes]
     if job == "financial_weekly":
-        return [*_financial(codes, today), *_akshare_cash_flow(codes, today)]
+        # Dividends (minutes) before the per-stock cash-flow statements (hours).
+        return [
+            *_financial(codes, today),
+            *_dividends(codes, today),
+            *_akshare_cash_flow(codes, today),
+        ]
     if calendar is None:
         raise ValueError(f"{job} needs the trading calendar")
     if job == "industry_sync":
@@ -221,6 +231,13 @@ def _financial(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]
         for period in periods
     ]
     return [*baostock, *summaries]
+
+
+def _dividends(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]:
+    return [
+        DividendSnapshotPayload(provider="baostock", scope="universe", universe_code=code, as_of=today)
+        for code in codes
+    ]
 
 
 def in_cash_flow_window(day: date) -> bool:

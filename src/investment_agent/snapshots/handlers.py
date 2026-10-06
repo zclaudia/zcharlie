@@ -4,6 +4,7 @@
 ``provider`` (decision D6): ``baostock`` -> :mod:`investment_agent.snapshots.breadth`
 (target pool), ``ifind`` -> the iFinD batch collectors (watchlist only),
 ``akshare`` (financials only) -> :mod:`investment_agent.snapshots.eastmoney`.
+``dividend_snapshot`` (baostock only) -> :mod:`investment_agent.snapshots.dividends`.
 """
 
 from __future__ import annotations
@@ -37,18 +38,21 @@ from investment_agent.snapshots.collect import (
     ProxyBatchCaller,
     ProxyClient,
 )
+from investment_agent.snapshots.dividends import DividendClient, collect_baostock_dividends
 from investment_agent.snapshots.eastmoney import (
     EastmoneyCollectorClient,
     collect_akshare_financial,
 )
 from investment_agent.snapshots.financial import collect_financial_snapshot
 from investment_agent.snapshots.jobs import (
+    DIVIDEND_SNAPSHOT,
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     UNIVERSE_SYNC,
+    DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
@@ -75,6 +79,7 @@ BaostockFactory = Callable[[], BaostockCollectorClient]
 BackfillFactory = Callable[[], BackfillClient]
 ShenwanFactory = Callable[[], ShenwanClient]
 EastmoneyFactory = Callable[[], EastmoneyCollectorClient]
+DividendFactory = Callable[[], DividendClient]
 
 
 def _utc_now() -> datetime:
@@ -97,6 +102,7 @@ class SnapshotRuntime:
     backfill_factory: BackfillFactory = BaostockMarketClient
     shenwan_factory: ShenwanFactory = AkshareShenwanClient
     eastmoney_factory: EastmoneyFactory = AkshareEastmoneyClient
+    dividend_factory: DividendFactory = BaostockMarketClient
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
@@ -204,6 +210,15 @@ class SnapshotJobHandler(BaseJobHandler):
             if isinstance(outcome, CollectionReport):
                 return await self._settle(outcome, job.run_id, lease)
             return _Result("success", outcome)
+        if self.kind == DIVIDEND_SNAPSHOT:
+            report = await collect_baostock_dividends(
+                DividendSnapshotPayload.model_validate(request),
+                client=self.runtime.dividend_factory(),
+                artifacts=artifacts,
+                lease=lease,
+                now=self.runtime.clock,
+            )
+            return await self._settle(report, job.run_id, lease)
         if self.kind == MARKET_SNAPSHOT:
             market_payload = MarketSnapshotPayload.model_validate(request)
             if market_payload.provider == "baostock":

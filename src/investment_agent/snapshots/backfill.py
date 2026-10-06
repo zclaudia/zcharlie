@@ -34,6 +34,13 @@ runs one *part* (:class:`~investment_agent.snapshots.jobs.SnapshotBackfillPayloa
     A report published before the listing date (baostock ``ipoDate``) is kept
     and flagged (``fields.pre_listing`` and run metadata).
 
+``dividends`` (chunks)
+    baostock dividend events (``query_dividend_data``, ``yearType=operate``)
+    for every ex-date year from one year before the window start to
+    ``as_of`` (the extra year lets the trailing-365-day dividend yield work
+    at the window start), skipping years already covered
+    (``dividend_coverage``). Rows are ``is_backfill=True``.
+
 ``report_overdue`` is never backfilled: overdue detection only runs live.
 
 Every chunk is idempotent (it skips stored data), failures are isolated per
@@ -61,6 +68,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.providers.baostock_market import (
     AdjustKind,
     DailyBarSeries,
+    DividendYear,
     QuarterlyFinancials,
     StockBasic,
     quarter_of,
@@ -90,6 +98,7 @@ from investment_agent.snapshots.collect import (
     fence_writes,
 )
 from investment_agent.snapshots.disclosure import statutory_deadline
+from investment_agent.snapshots.dividends import collect_dividend_years
 from investment_agent.snapshots.jobs import (
     BACKFILL_CHUNKED_PARTS,
     BACKFILL_PARTS,
@@ -107,6 +116,7 @@ from investment_agent.snapshots.shenwan import (
 )
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
+from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
 from investment_agent.storage.repositories.industry import IndustryRepository
 from investment_agent.storage.repositories.listing import ListingRepository
@@ -132,6 +142,7 @@ SECONDS_TABLE_QUERY = 0.6
 SECONDS_INDUSTRY_QUERY = 60.0
 SECONDS_CONSTITUENT_QUERY = 0.7
 SECONDS_BASIC_QUERY = 0.2
+SECONDS_DIVIDEND_QUERY = 0.3
 WEEKLY_QUERIES_PER_CHANGE = 3
 """Estimate: weekly refinement queries per pair of differing months."""
 
@@ -154,6 +165,8 @@ class BackfillClient(Protocol):
     ) -> QuarterlyFinancials | None: ...
 
     async def fetch_stock_basic(self, symbol: str) -> StockBasic | None: ...
+
+    async def fetch_dividends(self, symbol: str, year: int) -> DividendYear: ...
 
 
 # --------------------------------------------------------------------------- #
@@ -218,6 +231,13 @@ def report_periods(as_of: date, *, annual_years: int, quarters: int) -> list[dat
     periods = set(due[:quarters])
     periods.update([p for p in due if (p.month, p.day) == (12, 31)][:annual_years])
     return sorted(periods, reverse=True)
+
+
+def dividend_years(payload: SnapshotBackfillPayload) -> list[int]:
+    """Ex-date years of the dividend backfill: one year before the window start
+    through ``as_of`` (the trailing-365-day yield at the window start needs it)."""
+
+    return list(range(window_start(payload).year - 1, payload.as_of.year + 1))
 
 
 def chunked(symbols: Sequence[str], size: int | None = None) -> list[tuple[str, ...]]:
@@ -781,6 +801,61 @@ def _chunk_metadata(
 
 
 # --------------------------------------------------------------------------- #
+# Dividends
+# --------------------------------------------------------------------------- #
+
+
+async def backfill_dividends(
+    payload: SnapshotBackfillPayload,
+    *,
+    client: BackfillClient,
+    artifacts: ArtifactWriter,
+    lease: RunLease | None,
+) -> CollectionReport:
+    years = dividend_years(payload)
+    symbols = list(payload.symbols)
+    ids = await _listing_ids(symbols)
+    async with session_scope() as session:
+        covered = await DividendRepository(session).covered_years(
+            list(ids.values()), years, provider=BAOSTOCK_PROVIDER
+        )
+
+    completeness = Completeness(expected=sorted(symbols))
+    report = CollectionReport(completeness, provider=BAOSTOCK_PROVIDER)
+    plan: dict[str, tuple[int, list[int]]] = {}
+    skipped_existing = 0
+    for ticker in symbols:
+        listing_id = ids.get(ticker)
+        if listing_id is None:
+            completeness.mark_missing(ticker, "failed", "no listing; run the membership part first")
+            report.all_failures_transient = False
+            continue
+        done = covered.get(listing_id, {})
+        todo = [year for year in years if year not in done]
+        skipped_existing += len(years) - len(todo)
+        plan[ticker] = (listing_id, todo)
+    batch = await collect_dividend_years(
+        plan,
+        client=client,
+        artifacts=artifacts,
+        lease=lease,
+        completeness=completeness,
+        report=report,
+        is_backfill=True,
+        artifact_prefix="backfill-dividends",
+    )
+    report.metadata = {
+        **_chunk_metadata(payload, completeness),
+        "years": years,
+        "year_type": "operate (ex-date year)",
+        "skipped_existing": skipped_existing,
+        **batch.to_metadata(),
+        "is_backfill": True,
+    }
+    return report
+
+
+# --------------------------------------------------------------------------- #
 # Dispatch
 # --------------------------------------------------------------------------- #
 
@@ -801,6 +876,8 @@ async def run_backfill_part(
         )
     if payload.part == "prices":
         return await backfill_prices(payload, client=client, artifacts=artifacts, lease=lease)
+    if payload.part == "dividends":
+        return await backfill_dividends(payload, client=client, artifacts=artifacts, lease=lease)
     return await backfill_financials(payload, client=client, artifacts=artifacts, lease=lease)
 
 
@@ -923,7 +1000,7 @@ async def plan_followups(
     *,
     triggered_by: str,
 ) -> list[PlanAction]:
-    """Industry job, then price and financial chunks for the survivorship set."""
+    """Industry job, then price, financial and dividend chunks for the survivorship set."""
 
     runs = await backfill_runs(session, membership.universe_code, membership.as_of)
     base = membership.model_dump(exclude={"part", "symbols", "chunk"})
@@ -935,7 +1012,7 @@ async def plan_followups(
             triggered_by=triggered_by,
         )
     ]
-    for part in ("prices", "financials"):
+    for part in ("prices", "financials", "dividends"):
         for index, chunk in enumerate(chunked(sorted(symbols))):
             actions.append(
                 await enqueue_part(
@@ -1095,6 +1172,7 @@ def estimate_backfill(
     industry_queries = len(industry_samples(start, payload.as_of))
     scale = payload.price_years / 5
     financial_queries = symbols * (len(periods) * 4 + 1)
+    dividend_queries = symbols * len(dividend_years(payload))
     parts = (
         PartEstimate(
             "membership", 1, membership_queries, membership_queries * SECONDS_CONSTITUENT_QUERY
@@ -1113,6 +1191,9 @@ def estimate_backfill(
             chunks,
             financial_queries,
             symbols * (len(periods) * 4 * SECONDS_TABLE_QUERY + SECONDS_BASIC_QUERY),
+        ),
+        PartEstimate(
+            "dividends", chunks, dividend_queries, dividend_queries * SECONDS_DIVIDEND_QUERY
         ),
     )
     return BackfillEstimate(

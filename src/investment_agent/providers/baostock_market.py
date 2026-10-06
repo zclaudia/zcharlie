@@ -18,8 +18,14 @@ entries of the field registry (:mod:`investment_agent.research.ifind_mapping`).
 An undisclosed period answers with no rows -> ``None``. Empty strings mean
 "missing" throughout.
 
-Point-in-time guards: a bar dated after the capture date (Asia/Shanghai) or a
-``pubDate`` after the capture date raises :class:`LookaheadDataError`.
+Dividends (``query_dividend_data``, F2 / Q2): one query per ``(ticker,
+ex-date year)`` with ``yearType="operate"``; rows repeated for one ex-date
+(preliminary + final) are merged, cash per share is read from the numeric
+``dividCashPsBeforeTax`` column (verified live 2026-10-07).
+
+Point-in-time guards: a bar dated after the capture date (Asia/Shanghai), a
+``pubDate`` or a dividend plan announcement after the capture date raises
+:class:`LookaheadDataError`.
 """
 
 from __future__ import annotations
@@ -116,6 +122,10 @@ class BaostockDataBackend(BaostockBackend, Protocol):
 
     def query_stock_basic(self, code: str = "", code_name: str = "") -> BaostockResultSet: ...
 
+    def query_dividend_data(
+        self, code: str, year: str | None = None, yearType: str = "report"  # noqa: N803
+    ) -> BaostockResultSet: ...
+
 
 # --------------------------------------------------------------------------- #
 # Records
@@ -193,6 +203,82 @@ class QuarterlyFinancials:
     @property
     def missing_fields(self) -> list[str]:
         return sorted(name for name, value in self.fields.items() if value is None)
+
+
+DIVIDEND_OPERATION = "query_dividend_data"
+DIVIDEND_YEAR_TYPE = "operate"
+"""``yearType="operate"`` selects events by the year of the ex-date (除权除息日).
+``"report"`` is *not* the fiscal year: it selects by the year of the plan
+announcement (verified live 2026-10-07: 601398 ``report`` 2024 answers the
+FY2023 final dividend announced 2024-03-28), so no fiscal year is stored."""
+
+
+@dataclass(frozen=True)
+class DividendEvent:
+    """One executed (or scheduled) distribution of a security (baostock 分红送转).
+
+    ``cash_per_share`` is the pre-tax cash per share (``dividCashPsBeforeTax``),
+    always read from that numeric column: the text column ``dividCashStock``
+    ("10派3.064元（含税…）") is per 10 shares and only kept in ``details``.
+    """
+
+    ticker: str
+    ex_date: date
+    """``dividOperateDate`` (除权除息日)."""
+    record_date: date | None
+    """``dividRegistDate`` (股权登记日)."""
+    pay_date: date | None
+    """``dividPayDate`` (派息日)."""
+    announce_date: date | None
+    """``dividPlanAnnounceDate`` (预案公告日): the first public mention."""
+    implement_date: date | None
+    """``dividPlanDate`` (分红实施公告日)."""
+    cash_per_share: Decimal | None
+    stock_per_share: Decimal | None
+    """``dividStocksPs``: bonus shares (送股) per share."""
+    reserve_per_share: Decimal | None
+    """``dividReserveToStockPs``: capitalisation shares (转增) per share."""
+    details: Mapping[str, str]
+    """The raw row (all columns, strings)."""
+
+    @property
+    def available_from(self) -> date:
+        """When the event is public: the plan announcement, else the implementation
+        announcement, else the record date, else the ex-date."""
+
+        return (
+            self.announce_date or self.implement_date or self.record_date or self.ex_date
+        )
+
+    @property
+    def share_multiplier(self) -> float:
+        """Shares held after the event per share held before (1 + 送 + 转)."""
+
+        extra = (self.stock_per_share or Decimal(0)) + (self.reserve_per_share or Decimal(0))
+        return 1.0 + float(extra)
+
+    def completeness(self) -> int:
+        return sum(1 for value in self.details.values() if value.strip())
+
+
+@dataclass(frozen=True)
+class DividendYear:
+    """``query_dividend_data(yearType="operate")`` for one ``(ticker, year)``."""
+
+    ticker: str
+    year: int
+    events: tuple[DividendEvent, ...]
+    """One per ex-date, ascending."""
+    duplicates: tuple[str, ...]
+    """Ex-dates answered more than once (preliminary + final rows); the most
+    complete row was kept."""
+    conflicts: tuple[str, ...]
+    """Duplicated ex-dates whose rows disagree on the cash amount."""
+    no_ex_date: int
+    """Rows without an ex-date (plan not executed); dropped."""
+    captured_at: datetime
+    raw_rows: tuple[Mapping[str, str], ...] = field(repr=False)
+    source: str = PROVIDER
 
 
 def report_period_for(year: int, quarter: int) -> date:
@@ -299,6 +385,67 @@ def canonical_baostock_financials(
         (source_field,) = mapping.source_fields
         fields[mapping.canonical_field] = _convert(mapping, rows.get(table, {}).get(source_field))
     return fields
+
+
+def _optional_date(row: Mapping[str, str], name: str) -> date | None:
+    text = (row.get(name) or "").strip()
+    return _parse_date(text, operation=DIVIDEND_OPERATION, name=name) if text else None
+
+
+def parse_dividend_row(ticker: str, row: Mapping[str, str]) -> DividendEvent | None:
+    """One dividend row -> :class:`DividendEvent`; ``None`` without an ex-date."""
+
+    ex_date = _optional_date(row, "dividOperateDate")
+    if ex_date is None:
+        return None
+    return DividendEvent(
+        ticker=ticker,
+        ex_date=ex_date,
+        record_date=_optional_date(row, "dividRegistDate"),
+        pay_date=_optional_date(row, "dividPayDate"),
+        announce_date=_optional_date(row, "dividPlanAnnounceDate"),
+        implement_date=_optional_date(row, "dividPlanDate"),
+        cash_per_share=_decimal(row.get("dividCashPsBeforeTax")),
+        stock_per_share=_decimal(row.get("dividStocksPs")),
+        reserve_per_share=_decimal(row.get("dividReserveToStockPs")),
+        details={name: value for name, value in row.items() if name != "code"},
+    )
+
+
+def merge_dividend_rows(
+    ticker: str, rows: tuple[Mapping[str, str], ...]
+) -> tuple[tuple[DividendEvent, ...], tuple[str, ...], tuple[str, ...], int]:
+    """Parse and de-duplicate one answer: ``(events, duplicates, conflicts, no_ex_date)``.
+
+    baostock often answers an ex-date twice: a preliminary row (no AGM date,
+    no after-tax amount) and the final one. The most complete row wins (ties:
+    the later implementation announcement). Rows that disagree on the cash
+    amount are reported as conflicts (the kept row still wins).
+    """
+
+    by_ex: dict[date, list[DividendEvent]] = {}
+    no_ex_date = 0
+    for row in rows:
+        event = parse_dividend_row(ticker, row)
+        if event is None:
+            no_ex_date += 1
+            continue
+        by_ex.setdefault(event.ex_date, []).append(event)
+    events: list[DividendEvent] = []
+    duplicates: list[str] = []
+    conflicts: list[str] = []
+    for ex_date in sorted(by_ex):
+        candidates = by_ex[ex_date]
+        best = max(
+            candidates,
+            key=lambda item: (item.completeness(), item.implement_date or date.min),
+        )
+        if len(candidates) > 1:
+            duplicates.append(ex_date.isoformat())
+            if len({item.cash_per_share for item in candidates}) > 1:
+                conflicts.append(ex_date.isoformat())
+        events.append(best)
+    return tuple(events), tuple(duplicates), tuple(conflicts), no_ex_date
 
 
 # --------------------------------------------------------------------------- #
@@ -462,6 +609,64 @@ class BaostockMarketClient(BaostockReferenceClient):
             tables=tuple(rows),
             captured_at=captured_at,
             raw_rows={table: dict(row) for table, row in rows.items()},
+        )
+
+    async def fetch_dividends(self, symbol: str, year: int) -> DividendYear:
+        """Dividend events of ``symbol`` whose ex-date falls in ``year``.
+
+        An empty answer means "no distribution with an ex-date in that year"
+        (baostock answers ``0 success`` with no rows). A plan announced after
+        the capture date raises :class:`LookaheadDataError`; ex-dates after
+        it are legitimate (announced, not yet executed).
+        """
+
+        code = to_baostock_code(symbol)
+
+        def query(backend: BaostockBackend) -> BaostockResultSet:
+            data_backend: BaostockDataBackend = backend  # type: ignore[assignment]
+            return data_backend.query_dividend_data(
+                code=code, year=str(year), yearType=DIVIDEND_YEAR_TYPE
+            )
+
+        raw = await self._run(DIVIDEND_OPERATION, query)
+        captured_at = self._now()
+        capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
+        for row in raw.rows:
+            if _row_ticker(row, operation=DIVIDEND_OPERATION) != symbol.upper():
+                raise ProviderDataError(
+                    f"baostock {DIVIDEND_OPERATION} answered {row.get('code')!r} for {symbol}",
+                    provider=PROVIDER,
+                )
+        events, duplicates, conflicts, no_ex_date = merge_dividend_rows(
+            symbol.upper(), raw.rows
+        )
+        for event in events:
+            if event.ex_date.year != year:
+                raise ProviderDataError(
+                    f"baostock {DIVIDEND_OPERATION} answered ex-date "
+                    f"{event.ex_date.isoformat()} for operate year {year}",
+                    provider=PROVIDER,
+                )
+            if event.announce_date is not None and event.announce_date > capture_date:
+                raise LookaheadDataError(
+                    f"baostock {DIVIDEND_OPERATION} plan announced "
+                    f"{event.announce_date.isoformat()} after the capture date "
+                    f"{capture_date.isoformat()}",
+                    provider=PROVIDER,
+                )
+        if conflicts:
+            log.warning(
+                "baostock_dividend_conflict", symbol=symbol, year=year, ex_dates=conflicts
+            )
+        return DividendYear(
+            ticker=symbol.upper(),
+            year=year,
+            events=events,
+            duplicates=duplicates,
+            conflicts=conflicts,
+            no_ex_date=no_ex_date,
+            captured_at=captured_at,
+            raw_rows=raw.rows,
         )
 
     async def fetch_stock_basic(self, symbol: str) -> StockBasic | None:

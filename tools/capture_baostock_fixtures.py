@@ -9,11 +9,13 @@ exercised against genuine payloads without network access.
 Files: ``constituents.json`` and ``industry.json`` (reference data),
 ``daily.json`` (raw + backward daily bars incl. suspended stocks, a suspended
 *ST stock and a 2026 IPO) and ``financial.json`` (profit / balance /
-cash-flow / growth answers incl. an undisclosed period and a bank).
+cash-flow / growth answers incl. an undisclosed period and a bank) and
+``dividend.json`` (``query_dividend_data`` by ex-date year: duplicated
+preliminary rows, bonus / capitalisation issues and a year without dividends).
 
 Usage::
 
-    .venv/bin/python tools/capture_baostock_fixtures.py [reference] [daily] [financial]
+    .venv/bin/python tools/capture_baostock_fixtures.py [reference] [daily] [financial] [dividend]
 
 baostock logs in anonymously; no credentials exist. Only query answers
 (``error_code``, ``error_msg``, ``fields``, ``rows`` and the paging counters)
@@ -107,6 +109,20 @@ FINANCIAL_REQUESTS: tuple[tuple[str, int, int], ...] = (
     ("001248.SZ", 2026, 2),  # recent IPO
     ("001248.SZ", 2025, 4),
     ("000016.SZ", 2026, 2),
+)
+
+DIVIDEND_REQUESTS: tuple[tuple[str, int], ...] = (
+    ("601398.SH", 2025),  # 工商银行: preliminary + final rows for 2025-01-07
+    ("601398.SH", 2026),
+    ("600900.SH", 2025),  # 长江电力
+    ("600900.SH", 2026),
+    ("600941.SH", 2025),  # 中国移动
+    ("600941.SH", 2026),
+    ("600519.SH", 2025),  # 贵州茅台
+    ("600519.SH", 2026),
+    ("300750.SZ", 2023),  # 宁德时代: 10转8派25.2 (capitalisation issue)
+    ("603288.SH", 2021),  # 海天味业: 10转2送1派10.3 (bonus + capitalisation)
+    ("000002.SZ", 2025),  # 万科A: no dividend
 )
 
 
@@ -229,6 +245,13 @@ class RecordingBackend:
     ) -> BaostockResultSet:
         return self._quarterly("query_growth_data", code, year, quarter)
 
+    def query_dividend_data(
+        self, code: str, year: str | None = None, yearType: str = "report"  # noqa: N803
+    ) -> BaostockResultSet:
+        params = {"code": code, "year": str(year), "yearType": yearType}
+        result = self._real.query_dividend_data(code=code, year=year, yearType=yearType)
+        return self._record("query_dividend_data", params, result)
+
 
 def _opt_str(value: object) -> str | None:
     return None if value is None else str(value)
@@ -247,7 +270,7 @@ def _write(name: str, records: list[dict[str, Any]], captured_at: datetime) -> P
     return path
 
 
-GROUPS = ("reference", "daily", "financial")
+GROUPS = ("reference", "daily", "financial", "dividend")
 
 
 async def main(groups: tuple[str, ...] = GROUPS) -> None:
@@ -259,6 +282,8 @@ async def main(groups: tuple[str, ...] = GROUPS) -> None:
         await capture_daily(captured_at)
     if "financial" in groups:
         await capture_financial(captured_at)
+    if "dividend" in groups:
+        await capture_dividend(captured_at)
 
 
 async def capture_reference(captured_at: datetime) -> None:
@@ -303,6 +328,19 @@ async def capture_financial(captured_at: datetime) -> None:
             record = await market.fetch_quarterly_financials(symbol, year, quarter)
             print(f"{symbol} {year}Q{quarter}: {record.pub_date if record else 'undisclosed'}")
     print(_write("financial.json", financial.records, captured_at))
+
+
+async def capture_dividend(captured_at: datetime) -> None:
+    dividend = RecordingBackend(load_default_backend())  # type: ignore[arg-type]
+    market = BaostockMarketClient(dividend)
+    async with market.session():
+        for symbol, year in DIVIDEND_REQUESTS:
+            answer = await market.fetch_dividends(symbol, year)
+            print(
+                f"{symbol} {year}: {[(e.ex_date.isoformat(), str(e.cash_per_share)) for e in answer.events]}"
+                f" duplicates {answer.duplicates}"
+            )
+    print(_write("dividend.json", dividend.records, captured_at))
 
 
 if __name__ == "__main__":

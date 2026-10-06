@@ -155,3 +155,70 @@ class ReportOverdue(Base, TimestampMixin):
     resolved_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("pipeline_run.id"), nullable=True
     )
+
+
+class DividendEventSnapshot(Base, TimestampMixin):
+    """One distribution (分红送转) of a listing, keyed by ex-date (migration 017).
+
+    Immutable and versioned like the other snapshots: a re-capture whose
+    payload differs from the latest version inserts ``version + 1``; an
+    identical re-capture inserts nothing. ``available_from`` is when the
+    event became public (plan announcement, else implementation announcement,
+    else record date); yield factors only count cash dividends whose
+    ``ex_date <= as_of``.
+    """
+
+    __tablename__ = "dividend_event"
+    __table_args__ = (
+        UniqueConstraint("listing_id", "ex_date", "version", name="uq_dividend_event_version"),
+        Index("ix_dividend_event_listing_ex_date", "listing_id", "ex_date"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listing.id"), nullable=False)
+    ex_date: Mapped[date] = mapped_column(Date, nullable=False)
+    record_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    pay_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    announce_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    """Plan announcement (baostock ``dividPlanAnnounceDate``)."""
+    implement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    """Implementation announcement (baostock ``dividPlanDate``)."""
+    available_from: Mapped[date] = mapped_column(Date, nullable=False)
+    cash_per_share_pre_tax: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    stock_per_share: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    """Bonus shares (送股) per share."""
+    reserve_per_share: Mapped[Decimal | None] = mapped_column(Numeric(18, 8), nullable=True)
+    """Capitalisation shares (转增) per share."""
+    operate_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    """The ex-date year the event was collected under (baostock ``yearType=operate``)."""
+    details: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    raw_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    is_backfill: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class DividendCoverage(Base, TimestampMixin):
+    """Which ex-date years were collected per listing and provider (migration 017).
+
+    Distinguishes "no dividend" from "not collected": a listing without
+    events in a covered year paid nothing with an ex-date in that year.
+    ``first_checked_at`` is the knowledge time of the coverage (backfilled
+    rows: reconstructed, like the other backfill tables); ``last_checked_at``
+    and ``event_count`` follow the latest check.
+    """
+
+    __tablename__ = "dividend_coverage"
+    __table_args__ = (
+        UniqueConstraint("listing_id", "provider", "year", name="uq_dividend_coverage_year"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listing.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    first_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_backfill: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

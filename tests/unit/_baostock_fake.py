@@ -5,6 +5,8 @@
   collectors may ask for any window inside the recorded range;
 * quarterly tables: keyed by ``(method, code, year, quarter)``; unrecorded
   combinations answer like an undisclosed period (no rows);
+* dividends: keyed by ``(code, year, yearType)`` from ``dividend.json``;
+  unrecorded combinations answer no rows (no distribution that year);
 * ``extra_rows`` / ``fail`` let tests add synthetic rows or inject errors.
 """
 
@@ -80,6 +82,13 @@ class FakeBaostockData:
             key = (record["method"], params["code"], params["year"], params["quarter"])
             self.quarterly[key] = record
             self.quarterly_fields[record["method"]] = record["fields"]
+        self.dividends: dict[tuple[str, str, str], dict[str, Any]] = {}
+        self.dividend_fields: list[str] = []
+        for record in _load("dividend.json"):
+            params = record["params"]
+            self.dividends[(params["code"], params["year"], params["yearType"])] = record
+            self.dividend_fields = record["fields"] or self.dividend_fields
+        self.extra_dividends: dict[tuple[str, str], list[dict[str, str]]] = {}
 
     # -- session ----------------------------------------------------------- #
 
@@ -168,3 +177,16 @@ class FakeBaostockData:
         self, code: str, year: int | None = None, quarter: int | None = None
     ) -> ReplayResult:
         return self._quarterly("query_growth_data", code, year, quarter)
+
+    def query_dividend_data(
+        self, code: str, year: str | None = None, yearType: str = "report"  # noqa: N803
+    ) -> ReplayResult:
+        params = {"code": code, "year": str(year), "yearType": yearType}
+        failed = self._check("query_dividend_data", params)
+        if failed is not None:
+            return failed
+        record = self.dividends.get((code, str(year), yearType))
+        rows = [list(row) for row in record["rows"]] if record is not None else []
+        for extra in self.extra_dividends.get((code, str(year)), []):
+            rows.append([extra.get(name, "") for name in self.dividend_fields])
+        return ReplayResult(self.dividend_fields, rows)
