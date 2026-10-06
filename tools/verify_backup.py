@@ -6,6 +6,8 @@ Usage::
 
 Recomputes size and SHA-256 for every manifest entry and fails (exit 1)
 on any mismatch or missing file. Exits 2 on a missing/invalid manifest.
+Manifest paths that are absolute, escape the backup directory, or point at
+symbolic links are rejected rather than read.
 """
 
 from __future__ import annotations
@@ -25,6 +27,21 @@ def sha256_of(path: Path) -> str:
         while chunk := handle.read(CHUNK):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def resolve_entry(backup_dir: Path, relative: str) -> Path | None:
+    """Path for a manifest entry, or None when it is unsafe to read."""
+
+    if not relative or Path(relative).is_absolute():
+        return None
+    candidate = backup_dir / relative
+    if candidate.is_symlink():
+        return None
+    try:
+        candidate.resolve().relative_to(backup_dir.resolve())
+    except ValueError:
+        return None
+    return candidate
 
 
 def main() -> int:
@@ -47,7 +64,10 @@ def main() -> int:
     for entry in manifest.get("files", []):
         relative = str(entry.get("path", ""))
         seen.add(relative)
-        path = args.backup_dir / relative
+        path = resolve_entry(args.backup_dir, relative)
+        if path is None:
+            failures.append(f"unsafe manifest path: {relative}")
+            continue
         if not path.is_file():
             failures.append(f"missing file: {relative}")
             continue
@@ -61,7 +81,10 @@ def main() -> int:
     extra = [
         str(path.relative_to(args.backup_dir))
         for path in sorted(args.backup_dir.rglob("*"))
-        if path.is_file() and path.name != "manifest.json" and str(path.relative_to(args.backup_dir)) not in seen
+        if path.is_file()
+        and not path.is_symlink()
+        and path.name != "manifest.json"
+        and str(path.relative_to(args.backup_dir)) not in seen
     ]
     for relative in extra:
         failures.append(f"file not covered by manifest: {relative}")
