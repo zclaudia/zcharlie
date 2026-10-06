@@ -26,7 +26,9 @@ class OpenAICompatibleClient:
         self._config = config
         self._session = session
         self._client = AsyncOpenAI(
-            base_url=config.base_url, api_key=config.api_key
+            base_url=config.base_url,
+            api_key=config.api_key,
+            timeout=config.timeout_seconds,
         )
 
     async def complete(
