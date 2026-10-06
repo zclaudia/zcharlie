@@ -49,7 +49,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | `ia api` | `serve` | FastAPI 服务 |
 | `ia worker` | `start [--once] [--kinds ...]` | 队列 worker（研究 + 快照采集，按 kind 分派） |
 | `ia scheduler` | `start` | 日终刷新与快照采集调度 |
-| `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`status` | 时点快照采集（见下节） |
+| `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`backfill`、`status` | 时点快照采集（见下节） |
 | `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
 
@@ -94,6 +94,37 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 - 原始响应落盘到 `DATA_DIR/snapshot-runs/<run>/attempt-<n>/`，`raw_ref` 指向该文件。
 - `--now` 在当前进程立即执行（调试用）；`ia snapshot status` 查看各类任务最近运行与完整率。
   调度配置见 `config/app.yaml` 的 `snapshot:` 段；日线 18:30 基于 baostock 晚间更新，需在正常交易日实测确认。
+
+### 回补
+
+一次性历史回补（D5，全部经 baostock，不占 iFinD 额度）：
+
+```bash
+ia snapshot backfill --universe CSI300 --prices 5y --annual 6 --quarters 4 --dry-run  # 计划与预估，不取数据
+ia snapshot backfill --universe CSI300 --prices 5y --annual 6 --quarters 4            # 入队（worker 执行）
+ia snapshot backfill --universe CSI300 --status                                        # 各部分进度
+```
+
+- 任务 kind `snapshot_backfill`，按部分拆分：`membership`（单任务）→ 成功后自动入队 `industry`（单任务）与
+  `prices` / `financials`（每 20 只一个任务）。`--as-of` 默认今天，窗口为 `[as_of - 5 年, as_of]`。
+- **成分历史**：按月扫描成分快照，仅在前后两月成员不同时按周细化，找到每次变化的生效日（`updateDate`）；
+  窗口内以快照为准重建 `universe_membership`，与窗口之后的实时同步区间合并（无重复、无空档；
+  只移动边界的行保留原 `source` / `captured_at`）。重复执行结果不变。
+- **幸存者偏差**：回补标的 = 窗口内任何时点的成分股（当前 + 已调出），2026-10-06 实测沪深 300 为
+  439 只（当前 300 + 调出 139）。
+- **行业历史**：窗口起点、窗口内每年 1 月 1 日与 `as_of` 各查一次全市场证监会行业（每次约 1 分钟），
+  只写回补标的，不为非成分股建档；变化按年度采样定日。
+- **日线**：不复权 + 后复权，从窗口起点取到该股已存 baostock 最早一根的前一天（无数据则到 `as_of`），
+  每只每序列一次查询；行标记 `is_backfill=true`。时点读取（`series_as_of`）默认按交易日可见回补行，
+  `include_backfill=False` 时严格按 `captured_at`。
+- **财报**：最近 6 个年报 + 最近 4 个已过法定截止日的报告期，跳过已存的 baostock 期；`is_backfill=true`、
+  `available_from`=实际 `pubDate`；上市日（baostock `ipoDate`）之前披露的报告保留并标记 `pre_listing`。
+- `report_overdue` 不回补（只做实时检测）。
+- **预计耗时**（沪深 300、5 年，`--dry-run` 实测预估上限）：成分约 1 分钟、行业约 7 分钟、日线约 1.5 小时、
+  财报约 2.7 小时，合计约 4 小时；已存数据跳过。
+- **可续跑**：每个任务按股票幂等（跳过已存数据），单只失败只影响该只，连续 5 次瞬时错误停止本任务。
+  中断或失败后重新执行同一命令即续跑：已完成部分不动，`partial` / `failed` 的任务只以剩余标的重新入队
+  （幂等键加 `:r<n>`）。`--now` 在当前进程依次执行所有排队的回补任务（无 worker 时使用）。
 
 ## HTTP API（`X-API-Key` 或 Web 会话）
 
