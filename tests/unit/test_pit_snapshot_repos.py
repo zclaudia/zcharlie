@@ -307,10 +307,10 @@ async def test_market_snapshot_versioning_and_pit_series(db_session) -> None:
         listing_id=listing_id, trade_date=date(2026, 9, 30), provider="ifind", captured_at=t2,
         **_bar("1520"),
     )
-    # A forward-adjusted capture of the same day is versioned independently.
+    # A backward-adjusted capture of the same day is versioned independently.
     fwd = await repo.insert(
         listing_id=listing_id, trade_date=date(2026, 9, 29), provider="ifind", captured_at=t1,
-        adjust="forward", **_bar("1400"),
+        adjust="backward", **_bar("1400"),
     )
     assert (v1.version, v2.version, fwd.version) == (1, 2, 1)
 
@@ -330,7 +330,7 @@ async def test_market_snapshot_versioning_and_pit_series(db_session) -> None:
         listing_id, start, end, datetime(2026, 9, 29, tzinfo=UTC)
     )
     assert before_any == []
-    forward = await repo.series_as_of(listing_id, start, end, t3, adjust="forward")
+    forward = await repo.series_as_of(listing_id, start, end, t3, adjust="backward")
     assert [r.close for r in forward] == [Decimal("1400")]
     # Captures never exceed the knowledge time.
     for rows, cutoff in ((at_t1, t1), (at_t2, t2), (at_t3, t3)):
@@ -338,7 +338,7 @@ async def test_market_snapshot_versioning_and_pit_series(db_session) -> None:
     with pytest.raises(ValueError):
         await repo.insert(
             listing_id=listing_id, trade_date=date(2026, 9, 29), provider="ifind",
-            captured_at=t1, adjust="backward", **_bar("1"),
+            captured_at=t1, adjust="forward", **_bar("1"),
         )
 
 

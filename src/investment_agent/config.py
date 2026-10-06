@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     ifind_proxy_url: str = "http://127.0.0.1:7100"
     ifind_proxy_api_key: str = ""
 
+    # Snapshot collection (P1-A3). The worker process throttles every proxy
+    # call of its snapshot collectors through one shared token bucket.
+    ifind_collect_rate_per_minute: float = Field(default=40.0, gt=0, le=600)
+    # Extra attempts per batch for transient proxy failures (0 = no retry).
+    ifind_collect_batch_retries: int = Field(default=2, ge=0, le=10)
+    # Below this completeness ratio a market/financial run raises an
+    # ``action_required`` notification.
+    snapshot_completeness_threshold: float = Field(default=0.95, ge=0, le=1)
+
     # Browser web session for the same-origin /app UI.
     web_session_ttl_minutes: int = 720
     # Dedicated session-signing secret; empty falls back to deriving from API_KEY.

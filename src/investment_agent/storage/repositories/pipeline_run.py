@@ -132,6 +132,17 @@ class PipelineRunRepository(Repository[PipelineRun]):
             )
         ).scalar_one_or_none()
 
+    async def latest_by_kind(self, kind: str, *, limit: int = 5) -> list[PipelineRun]:
+        """Most recently created runs of one kind, newest first."""
+
+        stmt = (
+            select(PipelineRun)
+            .where(PipelineRun.kind == kind)
+            .order_by(PipelineRun.id.desc())
+            .limit(limit)
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def enqueue(
         self,
         *,

@@ -1,0 +1,8 @@
+{
+ "cached": false,
+ "api": "ifind_get_stock_financial_index",
+ "format": "json",
+ "data": {
+  "data_preview": "ths_asset_liab_ratio_stock,ths_asset_liab_ratiopc_stock,ths_dwi_stock,ths_equity_multiplier_stock,ths_flow_debt_to_total_debt_stock,ths_noncurrent_liab_to_total_liab_stock,ths_lt_liab_stock,thscode,time\n15.1931,6.2100520339774,54.670028423112,1.1791,99.3412,0.6588,0.0,600519.SH,\n90.9067,90.943251774827,98.53299957249,10.9971,,,6.9821009526197,000001.SZ,\n63.6525,57.230933450267,20.878036831473,2.7512,67.1251,32.8749,14.402458686661,300750.SZ,\n"
+ }
+}

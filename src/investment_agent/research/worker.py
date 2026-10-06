@@ -37,6 +37,7 @@ from investment_agent.research.ifind_chain import (
     run_ifind_research_chain,
 )
 from investment_agent.research.retry_policy import is_transient_error
+from investment_agent.snapshots.handlers import snapshot_job_handlers
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.repositories.pipeline_run import (
@@ -177,7 +178,10 @@ def default_job_handlers(
 ) -> list[JobHandler]:
     """Every job kind a worker serves unless restricted with ``kinds``."""
 
-    return [IfindResearchHandler(settings=settings, runner=runner)]
+    return [
+        IfindResearchHandler(settings=settings, runner=runner),
+        *snapshot_job_handlers(settings),
+    ]
 
 
 class ResearchWorker:

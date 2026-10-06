@@ -29,7 +29,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from investment_agent.storage.models.base import Base, TimestampMixin
 
-MARKET_ADJUST_KINDS = frozenset({"forward", "none"})
+# Raw ("none", for valuation) and backward-adjusted ("backward", 后复权, for
+# returns) series only: backward-adjusted history never changes, whereas
+# forward-adjusted prices rewrite every past bar on each dividend.
+MARKET_ADJUST_KINDS = frozenset({"none", "backward"})
 FINANCIAL_PERIOD_KINDS = frozenset({"annual", "semi", "q1", "q3"})
 FINANCIAL_AVAILABILITY = frozenset({"actual", "approx", "unknown"})
 

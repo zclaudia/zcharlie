@@ -118,7 +118,13 @@ def test_worker_rejects_unknown_kinds(tmp_path):
 
 def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
     worker = ResearchWorker(settings=_settings(tmp_path), worker_id="w")
-    assert set(worker.kinds) >= {"ifind_research"}
+    assert set(worker.kinds) == {
+        "ifind_research",
+        "universe_sync",
+        "industry_sync",
+        "market_snapshot",
+        "financial_snapshot",
+    }
 
 
 async def test_run_once_can_claim_a_specific_run(db_session, tmp_path):

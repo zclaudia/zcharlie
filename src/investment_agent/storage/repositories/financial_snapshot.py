@@ -1,5 +1,6 @@
 """Immutable, versioned financial-report snapshots with availability dates."""
 
+from collections.abc import Sequence
 from datetime import date, datetime
 
 from sqlalchemy import func, or_, select
@@ -96,3 +97,20 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
             .limit(1)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def listings_with_period(
+        self, listing_ids: Sequence[int], report_period: date
+    ) -> set[int]:
+        """Listings that already have any capture of ``report_period``."""
+
+        if not listing_ids:
+            return set()
+        stmt = (
+            select(FinancialSnapshot.listing_id)
+            .where(
+                FinancialSnapshot.listing_id.in_(list(listing_ids)),
+                FinancialSnapshot.report_period == report_period,
+            )
+            .distinct()
+        )
+        return set((await self.session.execute(stmt)).scalars().all())
