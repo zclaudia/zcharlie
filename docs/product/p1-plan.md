@@ -154,6 +154,10 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 ### P1-B1 因子库骨架（M）
 
+- **同名异义字段须先拆开**：baostock `net_profit` 含少数股东损益、`revenue` 为主营收入，与 iFinD 的归母净利润、
+  营业总收入口径不同。因子库必须使用不同的 canonical 名称（如 `net_profit_total` / `net_profit_parent`、
+  `revenue_main` / `revenue_total`），不得让两种口径共用一个字段名，也不得跨源直接比较。
+
 - 新包 `factors/`：注册表 + 纯函数。每个因子声明 `name`、`version`、`unit`、`inputs`、
   `applicability`（行业组）、`compute(snapshot_view) -> FactorValue`。
 - `FactorValue`：`value`、`quality`（`ok` / `missing` / `not_applicable` / `approx`）、`inputs_ref`（快照引用）。
@@ -289,7 +293,7 @@ M5 收口                                     B4 · E2 · F1 · F2 · F3
 | 里程碑 | 任务 | 完成标志 |
 |---|---|---|
 | M1 数据地基 | A1、A2、A3、A5 | 代码已合并（`d245847`～`d05930f`）；本机真实链路验证：成分、行业、不复权日线与总股本入库正常，后复权因 iFinD 额度耗尽中断 |
-| M1' 分工调整 | A7、A8、A6 | 目标池日线、估值、财务经 baostock 每日入库；iFinD 额度错误不再重试（**8 周计时起点**） |
+| M1' 分工调整 | A7、A8、A6 | 目标池日线、估值、财务经 baostock 每日入库；iFinD 额度错误不再重试（**8 周计时起点**）。代码已合并（`c7c2d71`～`8fd183f`）；本机实测 2026-09-30 日线与 2026H1 财务均 300/300，299 只与 iFinD 收盘价逐只一致 |
 | M2 因子库 | A4、B1、B2、B3 | 回补完成；13 只 golden 样本因子一致；分位因子可算 |
 | M3 规则与筛选 | C1、C2、C3、C4、F2 | 周筛选稳定产出带理由的命中列表 |
 | M4 候选闭环 | D1、D2、D3、C5、E1 | 浏览器内完成"候选 → 审阅草稿 → 晋级"全流程 |
