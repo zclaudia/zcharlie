@@ -20,3 +20,12 @@ snapshot:
   # gated: first trading day after 04-30/08-31/10-31; also flags overdue
   # reports (report_overdue). Evening, so deadline-day reports reach baostock.
   financial_deadline_cron: "0 19 * * *"
+
+# Weekly template screen (P1-C3): one screen_run per universe; the worker
+# syncs config/rule_templates, screens the target pool and stores
+# screen_result rows. Cron fields are in `timezone` (Sunday 20:00).
+screen:
+  universes: [CSI300]
+  timezone: Asia/Shanghai
+  cron: "0 20 * * sun"   # by name: APScheduler numbers weekdays from mon=0
+  hit_cap: 20

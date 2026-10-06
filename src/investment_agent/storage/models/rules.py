@@ -12,7 +12,8 @@
   row per ``(listing_id, scope)`` (partial unique index).
 * ``screen_result`` - one row per (screen run, template version, member):
   ``outcome`` hit / truncated / miss / skipped / excluded, structured
-  ``reasons`` and the hit ``rank``.
+  ``reasons``, the hit ``rank`` / ``strength`` and the member ``context``
+  (provider, as_of, industry match) that the reasons' ``snapshot_ref`` omit.
 """
 
 from datetime import date, datetime
@@ -122,6 +123,8 @@ class ScreenResultRecord(Base):
     rank: Mapped[int | None] = mapped_column(Integer, nullable=True)
     strength: Mapped[float | None] = mapped_column(Float, nullable=True)
     reasons: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False)
+    context: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    """Member-level provenance shared by all reasons (provider, as_of, industry match)."""
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

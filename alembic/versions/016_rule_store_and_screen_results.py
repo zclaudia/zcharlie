@@ -102,6 +102,7 @@ def upgrade() -> None:
         sa.Column("rank", sa.Integer(), nullable=True),
         sa.Column("strength", sa.Float(), nullable=True),
         sa.Column("reasons", sa.JSON(), nullable=False),
+        sa.Column("context", sa.JSON(), nullable=False),
         _created_at(),
         sa.ForeignKeyConstraint(["screen_run_id"], ["pipeline_run.id"]),
         sa.ForeignKeyConstraint(["listing_id"], ["listing.id"]),

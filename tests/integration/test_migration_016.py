@@ -110,14 +110,14 @@ def test_upgrade_from_015_constraints_and_downgrade(
         )
         conn.execute(
             "INSERT INTO screen_result (screen_run_id, as_of, template_id, template_version, "
-            "listing_id, ticker, outcome, hit, rank, strength, reasons) VALUES "
-            "(1, '2026-09-30', 'quality_growth', 1, 1, '600519.SH', 'hit', 1, 1, 0.5, '[]')"
+            "listing_id, ticker, outcome, hit, rank, strength, reasons, context) VALUES "
+            "(1, '2026-09-30', 'quality_growth', 1, 1, '600519.SH', 'hit', 1, 1, 0.5, '[]', '{}')"
         )
         with pytest.raises(sqlite3.IntegrityError):
             conn.execute(
                 "INSERT INTO screen_result (screen_run_id, as_of, template_id, "
-                "template_version, listing_id, ticker, outcome, hit, reasons) VALUES "
-                "(1, '2026-09-30', 'quality_growth', 1, 1, '600519.SH', 'miss', 0, '[]')"
+                "template_version, listing_id, ticker, outcome, hit, reasons, context) VALUES "
+                "(1, '2026-09-30', 'quality_growth', 1, 1, '600519.SH', 'miss', 0, '[]', '{}')"
             )
     assert _diffs(db_path) == []
 
