@@ -71,10 +71,24 @@ class UniverseSyncPayload(_Payload):
     as_of: date
 
 
+IndustrySystem = Literal["csrc", "sw2021"]
+INDUSTRY_SYSTEMS: tuple[IndustrySystem, ...] = ("csrc", "sw2021")
+
+
 class IndustrySyncPayload(_Payload):
     as_of: date
     universe_codes: tuple[IndexCode, ...] = ()
-    """Only classify members of these universes (as of ``as_of``); empty = whole market."""
+    """Only classify members of these universes (as of ``as_of``); empty = whole market
+    (CSRC creates the listings; Shenwan only updates existing listings)."""
+    systems: tuple[IndustrySystem, ...] = INDUSTRY_SYSTEMS
+    """Classification systems to sync: ``csrc`` (baostock) and / or ``sw2021`` (AkShare)."""
+
+    @field_validator("systems")
+    @classmethod
+    def _systems(cls, value: tuple[IndustrySystem, ...]) -> tuple[IndustrySystem, ...]:
+        if not value:
+            raise ValueError("at least one industry system is required")
+        return tuple(system for system in INDUSTRY_SYSTEMS if system in value)
 
 
 class _CollectionPayload(_Payload):
@@ -191,7 +205,10 @@ def idempotency_key(payload: SnapshotPayload) -> str:
         return f"{kind}:{payload.universe_code}:{payload.as_of.isoformat()}"
     if isinstance(payload, IndustrySyncPayload):
         scope = "+".join(sorted(payload.universe_codes)) or "ALL"
-        return f"{kind}:{scope}:{payload.as_of.isoformat()}"
+        key = f"{kind}:{scope}:{payload.as_of.isoformat()}"
+        if payload.systems != INDUSTRY_SYSTEMS:
+            key += ":" + "+".join(payload.systems)
+        return key
     if isinstance(payload, SnapshotBackfillPayload):
         key = (
             f"{kind}:{payload.universe_code}:{payload.as_of.isoformat()}:"

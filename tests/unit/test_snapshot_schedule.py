@@ -103,6 +103,11 @@ def test_payload_decisions():
     assert snapshot_payloads(
         "industry_sync", today=date(2026, 10, 8), calendar=CALENDAR, universes=universes
     ) == [IndustrySyncPayload(as_of=date(2026, 10, 8), universe_codes=("CSI300", "SSE50"))]
+    monthly = snapshot_payloads(
+        "industry_sync", today=date(2026, 10, 8), calendar=CALENDAR, universes=universes
+    )[0]
+    assert isinstance(monthly, IndustrySyncPayload)
+    assert monthly.systems == ("csrc", "sw2021")  # CSRC and Shenwan 2021 (P1-A9)
     assert snapshot_payloads(
         "industry_sync", today=date(2026, 10, 9), calendar=CALENDAR, universes=universes
     ) == []

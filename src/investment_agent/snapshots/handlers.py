@@ -19,6 +19,7 @@ import structlog
 from investment_agent.config import Settings
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.providers.akshare_shenwan import AkshareShenwanClient
 from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient
 from investment_agent.research.ifind_chain import IfindProxyClient
@@ -55,6 +56,7 @@ from investment_agent.snapshots.reference import (
     sync_industry,
     sync_universe,
 )
+from investment_agent.snapshots.shenwan import ShenwanClient
 from investment_agent.snapshots.throttle import AsyncRateLimiter
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
@@ -65,6 +67,7 @@ ProxyFactory = Callable[[], AbstractAsyncContextManager[ProxyClient]]
 ReferenceFactory = Callable[[], ReferenceClient]
 BaostockFactory = Callable[[], BaostockCollectorClient]
 BackfillFactory = Callable[[], BackfillClient]
+ShenwanFactory = Callable[[], ShenwanClient]
 
 
 def _utc_now() -> datetime:
@@ -85,6 +88,7 @@ class SnapshotRuntime:
     notifier: FileNotifier | None = field(default=None)
     baostock_factory: BaostockFactory = BaostockMarketClient
     backfill_factory: BackfillFactory = BaostockMarketClient
+    shenwan_factory: ShenwanFactory = AkshareShenwanClient
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
@@ -157,19 +161,34 @@ class SnapshotJobHandler(BaseJobHandler):
             )
             return _Result("success", metadata)
         if self.kind == INDUSTRY_SYNC:
+            industry_payload = IndustrySyncPayload.model_validate(request)
             metadata = await sync_industry(
-                IndustrySyncPayload.model_validate(request),
+                industry_payload,
                 client=self.runtime.reference_factory(),
                 artifacts=artifacts,
                 lease=lease,
+                shenwan=(
+                    self.runtime.shenwan_factory()
+                    if "sw2021" in industry_payload.systems
+                    else None
+                ),
             )
+            failed = metadata.get("failed_systems")
+            if isinstance(failed, list) and failed:
+                return _Result(
+                    "partial", metadata, f"industry systems failed: {', '.join(map(str, failed))}"
+                )
             return _Result("success", metadata)
         if self.kind == SNAPSHOT_BACKFILL:
+            backfill_payload = SnapshotBackfillPayload.model_validate(request)
             outcome = await run_backfill_part(
-                SnapshotBackfillPayload.model_validate(request),
+                backfill_payload,
                 client=self.runtime.backfill_factory(),
                 artifacts=artifacts,
                 lease=lease,
+                shenwan=(
+                    self.runtime.shenwan_factory() if backfill_payload.part == "industry" else None
+                ),
             )
             if isinstance(outcome, CollectionReport):
                 return await self._settle(outcome, job.run_id, lease)

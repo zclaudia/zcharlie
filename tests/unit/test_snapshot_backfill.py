@@ -313,12 +313,29 @@ async def test_full_backfill_through_the_worker(db_session, tmp_path, monkeypatc
 
     # Industry: A reclassified inside the window; F (non-member) never created.
     assert moutai is not None and f_listing is None
-    a_industry = [(r.code, r.valid_from, r.valid_to) for r in industry_rows if r.listing_id == moutai.id]
+    a_industry = [
+        (r.code, r.valid_from, r.valid_to)
+        for r in industry_rows
+        if r.listing_id == moutai.id and r.system == "csrc"
+    ]
     assert a_industry == [
         ("C14", date(2021, 1, 4), date(2025, 11, 17)),
         ("C15", date(2025, 11, 17), None),
     ]
     assert len(backend.methods("query_stock_industry")) == 3
+    # The same job writes the Shenwan 2021 history (one AkShare call, fixture replay).
+    a_shenwan = [
+        (r.code, r.valid_from, r.valid_to)
+        for r in industry_rows
+        if r.listing_id == moutai.id and r.system == "sw2021"
+    ]
+    assert a_shenwan == [
+        ("340301", date(2001, 7, 31), date(2021, 7, 30)),
+        ("340501", date(2021, 7, 30), None),
+    ]
+    industry_meta = next(r.metadata_json for r in runs if r.request_json["part"] == "industry")
+    assert industry_meta["sw2021"]["system"] == "sw2021"
+    assert industry_meta["sw2021"]["applied"] >= 1
 
     # Status: everything done.
     async with session_scope() as session:
