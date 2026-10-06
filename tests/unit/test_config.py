@@ -42,3 +42,56 @@ def test_app_yaml_loads(tmp_path):
     assert cfg.scheduler.watchlist_refresh_cron is None
     assert cfg.scheduler.watchlist_refresh_timezone == "Asia/Shanghai"
     assert cfg.auxiliary_tracking.strength_threshold == 0.5
+
+
+def _env(monkeypatch, tmp_path, **values):
+    monkeypatch.setenv("LLM_TIER2_API_KEY", "sk-1")
+    monkeypatch.setenv("LLM_TIER3_API_KEY", "sk-2")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for key, value in values.items():
+        monkeypatch.setenv(key, value)
+
+
+def test_empty_api_key_rejected(monkeypatch, tmp_path):
+    import pytest
+    from pydantic import ValidationError
+
+    for blank in ("", "   "):
+        _env(monkeypatch, tmp_path, API_KEY=blank)
+        with pytest.raises(ValidationError, match="must not be empty"):
+            Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_prod_rejects_short_or_placeholder_api_key(monkeypatch, tmp_path):
+    import pytest
+    from pydantic import ValidationError
+
+    for weak in ("short-key", "change-me-" + "x" * 40):
+        _env(monkeypatch, tmp_path, APP_ENV="prod", API_KEY=weak)
+        with pytest.raises(ValidationError, match="too weak"):
+            Settings(_env_file=None)  # type: ignore[call-arg]
+
+
+def test_prod_accepts_strong_api_key(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, APP_ENV="prod", API_KEY="Z" * 43)
+    assert Settings(_env_file=None).app_env == "prod"  # type: ignore[call-arg]
+
+
+def test_dev_weak_api_key_warns_once(monkeypatch, tmp_path, caplog):
+    import investment_agent.config as config_module
+
+    monkeypatch.setattr(config_module, "_weak_key_warned", False)
+    _env(monkeypatch, tmp_path, API_KEY="change-me-dev-key")
+    with caplog.at_level("WARNING", logger="investment_agent.config"):
+        Settings(_env_file=None)  # type: ignore[call-arg]
+        Settings(_env_file=None)  # type: ignore[call-arg]
+    warnings = [r for r in caplog.records if "API_KEY is weak" in r.getMessage()]
+    assert len(warnings) == 1
+
+
+def test_web_security_settings_defaults(monkeypatch, tmp_path):
+    _env(monkeypatch, tmp_path, API_KEY="test-key")
+    s = Settings(_env_file=None)  # type: ignore[call-arg]
+    assert s.web_cookie_secure is False
+    assert s.web_session_secret == ""
+    assert s.web_public_origin == ""

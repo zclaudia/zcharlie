@@ -1,11 +1,18 @@
 """Application configuration: env-based Settings + YAML config."""
 
+import logging
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_log = logging.getLogger(__name__)
+
+PROD_MIN_API_KEY_LENGTH = 32
+_PLACEHOLDER_KEY_PREFIX = "change-me"
+_weak_key_warned = False
 
 
 class LLMTierConfig(BaseModel):
@@ -44,6 +51,35 @@ class Settings(BaseSettings):
 
     # Browser web session for the same-origin /app UI.
     web_session_ttl_minutes: int = 720
+    # Dedicated session-signing secret; empty falls back to deriving from API_KEY.
+    web_session_secret: str = ""
+    # Set True whenever the UI is served over HTTPS (reverse proxy with TLS).
+    web_cookie_secure: bool = False
+    # Public origin (e.g. "https://research.example.com") accepted by the CSRF
+    # origin check when a reverse proxy rewrites the Host header.
+    web_public_origin: str = ""
+
+    @model_validator(mode="after")
+    def _validate_api_key(self) -> Self:
+        global _weak_key_warned
+        key = self.api_key
+        if not key or not key.strip():
+            raise ValueError("API_KEY must not be empty")
+        weak = len(key) < PROD_MIN_API_KEY_LENGTH or key.startswith(_PLACEHOLDER_KEY_PREFIX)
+        if weak and self.app_env == "prod":
+            raise ValueError(
+                f"API_KEY is too weak for APP_ENV=prod: use at least "
+                f"{PROD_MIN_API_KEY_LENGTH} random characters and not a "
+                f"'{_PLACEHOLDER_KEY_PREFIX}' placeholder "
+                '(python -c "import secrets;print(secrets.token_urlsafe(32))")'
+            )
+        if weak and not _weak_key_warned:
+            _weak_key_warned = True
+            _log.warning(
+                "API_KEY is weak (short or placeholder); acceptable for dev only, "
+                "APP_ENV=prod will refuse to start with it"
+            )
+        return self
 
     @property
     def llm_tier2(self) -> LLMTierConfig:

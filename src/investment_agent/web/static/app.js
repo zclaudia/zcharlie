@@ -3,6 +3,7 @@
 
 import {
   ApiError,
+  FETCH_MARKER_HEADERS,
   download,
   get,
   loadRegion,
@@ -32,7 +33,7 @@ function fmtNumber(value, digits = 2) {
 
 function stockLink(ticker) {
   if (!ticker) return null;
-  return el("a", { href: `/app/stocks/${ticker}` }, ticker);
+  return el("a", { href: `/app/stocks/${encodeURIComponent(ticker)}` }, ticker);
 }
 
 function table(headers, rows) {
@@ -176,7 +177,7 @@ function watchlistRow(region, item) {
   toggle.addEventListener("click", () => {
     const promise = fetch(`/watchlist/${item.listing_id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...FETCH_MARKER_HEADERS, "Content-Type": "application/json" },
       credentials: "same-origin",
       body: JSON.stringify({ enabled: !item.enabled }),
     }).then((response) => {
@@ -202,6 +203,7 @@ function watchlistRow(region, item) {
 async function removeWatchlistItem(region, item, button) {
   const promise = fetch(`/watchlist/${item.listing_id}`, {
     method: "DELETE",
+    headers: { ...FETCH_MARKER_HEADERS },
     credentials: "same-origin",
   }).then((response) => {
     if (response.status === 204) {
