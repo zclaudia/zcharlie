@@ -5,7 +5,7 @@
 
 **研究辅助，非投资建议。** 没有下单、模拟盘、自动调仓或任何券商连接路径。
 
-- 数据链路：`ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.2) → Agent 解释 → 持久化`
+- 数据链路：`ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
 - 持久化：SQLite + Alembic（迁移 `012`）；制品目录 `data/research-runs/<run_id>/`
 - 界面：同源 Web UI（`/app`，会话 Cookie 登录）+ CLI + HTTP API
@@ -73,7 +73,9 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 
 `.env`：`API_KEY`、`DATABASE_URL`（默认 `sqlite+aiosqlite:///./data/app.db`）、
 `DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
-`LLM_TIER2_*` / `LLM_TIER3_*`、`WEB_SESSION_TTL_MINUTES`（默认 720）、
+`LLM_TIER2_*` / `LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
+`WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
+`WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
 `LOG_LEVEL`。调度与 pipeline 见 `config/app.yaml`；交易日历见
 `config/calendars/a_share.yaml`（未知年份 fail-closed）。
 
@@ -89,7 +91,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 ## 测试与门禁
 
 ```bash
-pytest -q                  # 388 个测试（离线，fixture 全部脱敏）
+pytest -q                  # 578 个测试（离线，fixture 全部脱敏）
 ruff check .
 mypy src/investment_agent  # strict
 ```
@@ -103,7 +105,8 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - 严格单用户；无组织、权限组或订阅体系。
 - SQLite 单机存储；并发写入成为瓶颈时才评估 PostgreSQL。
 - 数据源仅有 iFinD（经 ifind-proxy）；无第二数据源容灾。
-- 交易日历仅审核到 2026 年；未审核年份 fail-closed。
+- 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天起调度日志与
+  `/dashboard/today` 会给出警告，交易所公布次年安排后需补入 `config/calendars/a_share.yaml`。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
   以沪深小盘替代并记录在
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。
@@ -124,3 +127,5 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - MVP 收口计划：[`docs/product/mvp-completion-plan.md`](docs/product/mvp-completion-plan.md)
 - 发布清单：[`docs/product/mvp-release-checklist.md`](docs/product/mvp-release-checklist.md)
 - 备份恢复：[`docs/product/backup-and-recovery.md`](docs/product/backup-and-recovery.md)
+- 评分 v1.3 变更与回归差异：[`docs/product/scoring-v1.3-changes.md`](docs/product/scoring-v1.3-changes.md)
+- 安全部署：[`docs/product/security-deployment.md`](docs/product/security-deployment.md)

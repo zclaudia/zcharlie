@@ -9,6 +9,8 @@ from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+# Legacy NASDAQ Discovery/Attribution business dates follow the US exchange.
+US_LEGACY_TZ = ZoneInfo("America/New_York")
 
 
 def today_in(timezone: str | ZoneInfo) -> date:

@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy import select
@@ -16,6 +15,7 @@ from investment_agent.api.schemas.listing import (
     RelationshipCreate,
     RelationshipOut,
 )
+from investment_agent.clock import shanghai_today
 from investment_agent.relationships.resolver import resolve_counterparty
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import StockScore
@@ -190,7 +190,7 @@ async def add_relationship(
             description=body.description,
             source="manual",
             confidence=Decimal("0.9"),
-            valid_from=datetime.now(ZoneInfo("Asia/Shanghai")).date(),
+            valid_from=shanghai_today(),
             discovered_at=now,
             last_verified_at=now,
         )

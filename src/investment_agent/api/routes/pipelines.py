@@ -1,7 +1,6 @@
 """/pipelines endpoints — Discovery run + read."""
 
-from datetime import date, datetime
-from zoneinfo import ZoneInfo
+from datetime import date
 
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -14,6 +13,7 @@ from investment_agent.api.schemas.pipeline import (
     PipelineRunOut,
     StockScoreOut,
 )
+from investment_agent.clock import US_LEGACY_TZ, today_in
 from investment_agent.config import Settings
 from investment_agent.pipelines.discovery import DiscoveryPipeline
 from investment_agent.sources.yfinance_source import YFinanceSource
@@ -77,7 +77,7 @@ async def run_discovery(
 
     `?async=false`: blocks until the pipeline finishes (or raises).
     """
-    as_of = req.as_of or datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    as_of = req.as_of or today_in(US_LEGACY_TZ)
 
     async with session_scope() as session:
         run = await PipelineRunRepository(session).create(

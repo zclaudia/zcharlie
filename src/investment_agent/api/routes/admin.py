@@ -2,12 +2,12 @@
 
 from datetime import date, datetime
 from typing import Annotated, cast
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from investment_agent.api.auth import verify_api_key
 from investment_agent.api.schemas.admin import LLMCallOut, LLMCostSummary
+from investment_agent.clock import shanghai_today
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.ops import LLMCall
 from investment_agent.storage.repositories.llm_call import LLMCallRepository
@@ -59,7 +59,7 @@ async def llm_cost_summary(
     ] = None,
 ) -> LLMCostSummary:
     if month is None:
-        month_start = datetime.now(ZoneInfo("Asia/Shanghai")).date().replace(day=1)
+        month_start = shanghai_today().replace(day=1)
     else:
         try:
             month_start = date.fromisoformat(f"{month}-01")

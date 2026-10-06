@@ -1,8 +1,7 @@
 """/attribute endpoints — Attribution pipeline trigger + read."""
 
-from datetime import date, datetime
+from datetime import date
 from typing import Annotated, cast
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query
 from sqlalchemy import select
@@ -17,6 +16,7 @@ from investment_agent.api.schemas.attribution import (
 from investment_agent.api.schemas.listing import TICKER_PATTERN
 from investment_agent.attribution.attribution_agent import AttributionAgent
 from investment_agent.attribution.pipeline import AttributionPipeline
+from investment_agent.clock import US_LEGACY_TZ, today_in
 from investment_agent.config import Settings
 from investment_agent.sources.yfinance_source import YFinanceSource
 from investment_agent.storage.database import session_scope
@@ -78,7 +78,7 @@ async def trigger_attribution(
     `?async=true` (default): pre-creates run, schedules work, returns HTTP 202.
     `?async=false`: blocks until pipeline finishes.
     """
-    as_of = req.as_of or datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    as_of = req.as_of or today_in(US_LEGACY_TZ)
 
     async with session_scope() as session:
         listing = (
