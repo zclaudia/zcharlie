@@ -22,8 +22,17 @@ def test_ifind_chain_uses_the_factor_library_definitions():
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [("1,234.5", 1234.5), (" 2 ", 2.0), ("--", None), ("", None), ("nan", None), ("x", None),
-     (None, None), ("inf", None), (3, 3.0)],
+    [
+        ("1,234.5", 1234.5),
+        (" 2 ", 2.0),
+        ("--", None),
+        ("", None),
+        ("nan", None),
+        ("x", None),
+        (None, None),
+        ("inf", None),
+        (3, 3.0),
+    ],
 )
 def test_parse_number(raw, expected):
     assert metrics.parse_number(raw) == expected
