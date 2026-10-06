@@ -1,5 +1,6 @@
 """Shared test fixtures."""
 
+import pytest
 import pytest_asyncio
 
 from investment_agent.storage.database import init_engine, session_scope
@@ -13,6 +14,20 @@ from investment_agent.storage.models import (  # noqa: F401
     user_domain,
 )
 from investment_agent.storage.models.base import Base
+
+
+@pytest.fixture(autouse=True)
+def _no_real_akshare(request, monkeypatch):
+    """Offline tests must never reach AkShare (swsresearch.com / legulegu.com)."""
+
+    if request.node.get_closest_marker("network") is not None:
+        return
+    from investment_agent.providers import akshare_shenwan
+
+    def refuse(self, func_name, *args):
+        raise RuntimeError(f"offline test tried to call akshare {func_name}; use a fake backend")
+
+    monkeypatch.setattr(akshare_shenwan.AkshareShenwanBackend, "_call", refuse)
 
 
 @pytest_asyncio.fixture
