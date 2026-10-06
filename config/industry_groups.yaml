@@ -1,18 +1,30 @@
-# CSRC industry (证监会行业分类) -> industry group (P1-B3).
+# Industry -> industry group (P1-B3, decision D7).
 #
 # Factor applicability and rule-template applicability reference these groups
-# instead of free-text industry keywords. Keys are CSRC 2012 divisions (门类
-# letter + two-digit 大类, e.g. J66, C15) exactly as baostock reports them
-# ("J66货币金融服务" -> code J66). Pre-2012 labels carry no code; they are
-# matched by `legacy_name_rules` (see below).
+# instead of free-text industry keywords.
 #
-# A code that is neither in `codes` nor matched by a legacy rule resolves to
-# `other` with `matched_by: fallback`; the coverage test requires every CSRC
-# code of the current CSI 300 constituents to be listed explicitly. `other`
-# is a valid explicit mapping (mixed or service industries).
+# Resolution on a date (`as_of`):
+#   1. Shenwan 2021 (`shenwan:` below): the stock's `sw2021` classification
+#      valid on `as_of` (level-3 code, e.g. 340501). A level-3 override wins
+#      (matched_by sw_l3), then a level-2 override (sw_l2), then the level-1
+#      default (sw_l1). Only codes of the 2021 standard listed in
+#      config/shenwan_2021.yaml count: intervals that ended on / before
+#      2021-07-30 carry pre-2021 codes and are ignored.
+#   2. Otherwise the CSRC table (`codes:` / `legacy_name_rules:`) is the
+#      FALLBACK; factor values carry the flag `industry_fallback`.
+#   3. Neither: `other` with matched_by `fallback`.
+#
+# CSRC keys are CSRC 2012 divisions (门类 letter + two-digit 大类, e.g. J66,
+# C15) exactly as baostock reports them ("J66货币金融服务" -> code J66).
+# Pre-2012 labels carry no code; they are matched by `legacy_name_rules`.
+#
+# Coverage tests: every CSRC code and every Shenwan level-1 code of the
+# current CSI 300 constituents must be mapped explicitly, every Shenwan
+# 2021 level-1 code must have a default, and every override must name a code
+# of the directory. `other` is a valid explicit mapping (mixed industries).
 #
 # Changing a mapping changes factor applicability: bump `version`.
-version: "2026-10-06.1"
+version: "2026-10-06.2"
 system: csrc
 
 groups:
@@ -190,3 +202,58 @@ legacy_name_rules:
   - {contains: 牧, group: cyclical}
   - {contains: 渔, group: cyclical}
   - {contains: 综合, group: other}
+
+# Shenwan 2021 (申万 2021, P1-A9) -> group. Codes are 6 digits: level 1 =
+# XX0000, level 2 = XXYY00, level 3 = XXYYZZ (names: config/shenwan_2021.yaml).
+shenwan:
+  system: sw2021
+  level1:
+    "110000": cyclical              # 农林牧渔 (hog, feed and crop cycles)
+    "220000": cyclical              # 基础化工
+    "230000": cyclical              # 钢铁
+    "240000": cyclical              # 有色金属
+    "270000": growth_manufacturing  # 电子
+    "280000": growth_manufacturing  # 汽车
+    "330000": consumer              # 家用电器 (consumer durables)
+    "340000": consumer              # 食品饮料
+    "350000": consumer              # 纺织服饰
+    "360000": consumer              # 轻工制造 (household / leisure goods; paper and packaging overridden)
+    "370000": healthcare            # 医药生物
+    "410000": utility               # 公用事业 (power, gas)
+    "420000": cyclical              # 交通运输 (shipping, ports, airlines; rail/road and express overridden)
+    "430000": real_estate           # 房地产
+    "450000": consumer              # 商贸零售 (trading overridden)
+    "460000": consumer              # 社会服务
+    "480000": banking               # 银行
+    "490000": broker                # 非银金融 (securities; insurance overridden)
+    "510000": other                 # 综合
+    "610000": cyclical              # 建筑材料
+    "620000": cyclical              # 建筑装饰
+    "630000": growth_manufacturing  # 电力设备 (incl. 光伏设备 630500, 风电设备 630600, 电池, 电网设备)
+    "640000": growth_manufacturing  # 机械设备
+    "650000": growth_manufacturing  # 国防军工
+    "710000": venture               # 计算机 (software / IT services; hardware overridden)
+    "720000": consumer              # 传媒 (advertising, film, publishing; internet media overridden)
+    "730000": growth_manufacturing  # 通信 (equipment; carriers overridden)
+    "740000": cyclical              # 煤炭
+    "750000": cyclical              # 石油石化
+    "760000": utility               # 环保 (environmental services, like CSRC N77)
+    "770000": consumer              # 美容护理 (medical aesthetics overridden)
+  # Level-2 / level-3 codes where the level-1 default does not fit.
+  overrides:
+    "110500": consumer              # 农林牧渔 > 农产品加工 (edible oil, grain processing)
+    "330600": growth_manufacturing  # 家用电器 > 家电零部件Ⅱ (compressors, valves)
+    "360100": cyclical              # 轻工制造 > 造纸
+    "360200": cyclical              # 轻工制造 > 包装印刷
+    "420900": utility               # 交通运输 > 铁路公路 (railways, toll roads)
+    "420804": consumer              # 交通运输 > 物流 > 快递 (express delivery, like CSRC G60)
+    "450200": other                 # 商贸零售 > 贸易Ⅱ (commodity trading, like CSRC F51)
+    "490200": insurance             # 非银金融 > 保险Ⅱ
+    "490300": broker                # 非银金融 > 多元金融 (futures, trusts, leasing, holdings)
+    "490306": venture               # 非银金融 > 多元金融 > 金融信息服务 (software, not balance-sheet financials)
+    "710100": growth_manufacturing  # 计算机 > 计算机设备 (servers, security cameras)
+    "720400": venture               # 传媒 > 游戏Ⅱ
+    "720700": venture               # 传媒 > 数字媒体
+    "720800": venture               # 传媒 > 社交Ⅱ
+    "730100": utility               # 通信 > 通信服务 (carriers, IDC)
+    "770300": healthcare            # 美容护理 > 医疗美容

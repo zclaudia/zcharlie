@@ -22,6 +22,7 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from investment_agent.factors.industry_groups import FLAG_INDUSTRY_FALLBACK as INDUSTRY_FALLBACK
 from investment_agent.factors.view import ProviderName, SnapshotView
 
 Quality = Literal["ok", "missing", "not_applicable", "approx"]
@@ -34,6 +35,8 @@ FLAG_NEGATIVE_BOOK_VALUE = "negative_book_value"
 FLAG_NON_POSITIVE_REVENUE = "non_positive_revenue"
 FLAG_SHORT_HISTORY = "short_history"
 FLAG_UNSUPPORTED_PROVIDER = "unsupported_provider"
+FLAG_INDUSTRY_FALLBACK = INDUSTRY_FALLBACK
+"""The industry group came from CSRC (or nothing), not Shenwan 2021 (P1-B3)."""
 
 
 @dataclass(frozen=True)
@@ -127,13 +130,17 @@ class Factor:
             "as_of": view.as_of.isoformat(),
             "industry_group": view.industry_group,
         }
-        overdue_flags: tuple[str, ...] = ()
+        if view.industry_match is not None:
+            base_ref["industry"] = view.industry_match.describe()
+        context_flags: tuple[str, ...] = ()
+        if view.industry_fallback:
+            context_flags = (FLAG_INDUSTRY_FALLBACK,)
         if self.carries_overdue_flag and view.overdue_periods:
-            overdue_flags = (FLAG_REPORT_OVERDUE,)
+            context_flags = (*context_flags, FLAG_REPORT_OVERDUE)
             base_ref["overdue_periods"] = [period.isoformat() for period in view.overdue_periods]
         if enforce_applicability and not self.applicability.applies_to(view.industry_group):
             return FactorValue(
-                self.name, self.version, None, "not_applicable", overdue_flags, base_ref
+                self.name, self.version, None, "not_applicable", context_flags, base_ref
             )
         if view.provider not in self.providers:
             return FactorValue(
@@ -141,7 +148,7 @@ class Factor:
                 self.version,
                 None,
                 "missing",
-                (FLAG_UNSUPPORTED_PROVIDER, *overdue_flags),
+                (FLAG_UNSUPPORTED_PROVIDER, *context_flags),
                 base_ref,
             )
         result = self.body(view)
@@ -150,7 +157,7 @@ class Factor:
             quality = result.quality
         else:
             quality = "ok" if result.value is not None else "missing"
-        flags = tuple(dict.fromkeys((*result.flags, *overdue_flags)))
+        flags = tuple(dict.fromkeys((*result.flags, *context_flags)))
         return FactorValue(
             self.name,
             self.version,

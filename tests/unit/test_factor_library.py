@@ -230,7 +230,7 @@ def test_moutai_market_factors():
     )
     assert _compute(view, "return_1y").inputs_ref["series"] == "backward"
     # iFinD-only factors are missing on the target-pool path.
-    assert _compute(view, "pe_fy").flags == ("unsupported_provider",)
+    assert _compute(view, "pe_fy").flags == ("unsupported_provider", "industry_fallback")
 
 
 def test_point_in_time_pubdate_gating():
@@ -293,8 +293,9 @@ def test_empty_view_is_missing_everywhere_with_reasons():
             continue
         assert value.quality == "missing", name
         assert value.flags, name
-    assert values["roe"].flags == ("no_annual_report",)
-    assert values["pe_ttm"].flags == ("no_price",)
+    # CSRC-only classification: the group is the CSRC fallback (P1-B3)
+    assert values["roe"].flags == ("no_annual_report", "industry_fallback")
+    assert values["pe_ttm"].flags == ("no_price", "industry_fallback")
 
 
 def test_negative_valuation_is_missing_with_flag():
