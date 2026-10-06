@@ -69,9 +69,9 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
         title="Investment Agent",
         version="1.0.0",
         description=(
-            "Multi-strategy stock analysis system. Daily Discovery pipeline +"
-            " on-demand Attribution. All endpoints require X-API-Key header"
-            " except /healthz. Same-origin web UI lives under /app."
+            "Personal A-share research desk: evidence-first single-stock research,"
+            " watchlist refresh and change tracking. All endpoints require"
+            " X-API-Key header except /healthz. Same-origin web UI lives under /app."
         ),
         lifespan=_lifespan,
         docs_url="/docs" if docs_enabled else None,
@@ -98,24 +98,12 @@ def _register_protected_routes(app: FastAPI) -> None:
     """Register routes that require X-API-Key auth."""
     from investment_agent.api.routes import (
         admin,
-        attribution,
         dashboard,
-        listings,
-        pipelines,
-        reports,
         research,
-        strategies,
-        universes,
         watchlist,
     )
 
-    app.include_router(pipelines.router)
-    app.include_router(attribution.router)
-    app.include_router(reports.router)
     app.include_router(research.router)
     app.include_router(dashboard.router)
-    app.include_router(listings.router)
-    app.include_router(strategies.router)
-    app.include_router(universes.router)
     app.include_router(watchlist.router)
     app.include_router(admin.router)

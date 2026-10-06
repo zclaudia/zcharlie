@@ -275,7 +275,7 @@ async def research_single_stock(
         status=run.status,
         stage=run.stage,
         created=created,
-        status_url=f"/pipelines/{run.id}",
+        status_url=f"/research/runs/{run.id}",
         result_url=f"/research/runs/{run.id}",
     )
 

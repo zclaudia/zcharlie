@@ -42,9 +42,9 @@ def test_login_throttle_resettable(api_client):
 
 def test_api_key_failures_throttled(api_client):
     for _ in range(5):
-        r = api_client.get("/pipelines", headers={"X-API-Key": "nope"})
+        r = api_client.get("/admin/llm-calls", headers={"X-API-Key": "nope"})
         assert r.status_code == 401
-    r = api_client.get("/pipelines", headers={"X-API-Key": "secret"})
+    r = api_client.get("/admin/llm-calls", headers={"X-API-Key": "secret"})
     assert r.status_code == 429
     assert "retry-after" in r.headers
     # Session-or-key routes share the same counter.
@@ -54,8 +54,8 @@ def test_api_key_failures_throttled(api_client):
 
 def test_missing_api_key_is_not_counted(api_client):
     for _ in range(10):
-        assert api_client.get("/pipelines").status_code == 401
-    assert api_client.get("/pipelines", headers={"X-API-Key": "secret"}).status_code == 200
+        assert api_client.get("/admin/llm-calls").status_code == 401
+    assert api_client.get("/admin/llm-calls", headers={"X-API-Key": "secret"}).status_code == 200
 
 
 def test_throttle_window_expires():
@@ -70,7 +70,7 @@ def test_throttle_window_expires():
 
 
 def test_non_ascii_api_key_rejected_not_crashing(api_client):
-    r = api_client.get("/pipelines", headers={"X-API-Key": "密钥".encode()})
+    r = api_client.get("/admin/llm-calls", headers={"X-API-Key": "密钥".encode()})
     assert r.status_code == 401
     assert _login(api_client, api_key="密钥").status_code == 401
 

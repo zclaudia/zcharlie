@@ -248,7 +248,6 @@ def test_research_run_exposes_diff_from_previous_snapshot(api_client, tmp_path):
     settings = Settings(  # type: ignore[call-arg]
         _env_file=None,
         api_key="secret",
-        llm_tier2_api_key="x",
         llm_tier3_api_key="x",
         data_dir=tmp_path,
     )
@@ -335,7 +334,7 @@ def test_research_enqueues_auditable_run(api_client, monkeypatch):
     assert body["status"] == "queued"
     assert body["stage"] == "queued"
     assert body["created"] is True
-    assert body["status_url"] == f"/pipelines/{body['run_id']}"
+    assert body["status_url"] == f"/research/runs/{body['run_id']}"
     assert body["result_url"] == f"/research/runs/{body['run_id']}"
 
     detail = api_client.get(

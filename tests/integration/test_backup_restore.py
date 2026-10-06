@@ -48,7 +48,6 @@ def drill_env(tmp_path: Path) -> dict[str, str]:
             "DATABASE_URL": f"sqlite+aiosqlite:///{data_dir / 'app.db'}",
             "DATA_DIR": str(data_dir),
             "API_KEY": "drill-secret",
-            "LLM_TIER2_API_KEY": "x",
             "LLM_TIER3_API_KEY": "x",
         }
     )

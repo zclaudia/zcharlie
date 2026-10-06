@@ -1,4 +1,10 @@
-"""Strategy + PipelineRun + StockScore + DiscoveryReport + AttributionReport."""
+"""PipelineRun + ResearchSnapshot + ResearchChangeSet.
+
+Legacy tables (from the retired NASDAQ Discovery/Attribution product, preserved
+at tag ``legacy-nasdaq-final``) keep their ORM classes so ``Base.metadata``
+keeps matching the alembic-migrated schema; nothing at runtime uses them.
+Legacy here: Strategy, StockScore, DiscoveryReport, AttributionReport.
+"""
 
 from datetime import date, datetime
 from decimal import Decimal

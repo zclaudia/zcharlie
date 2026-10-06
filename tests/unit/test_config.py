@@ -4,48 +4,72 @@ from investment_agent.config import Settings, load_app_yaml
 def test_settings_loads_env_with_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("API_KEY", "test-key")
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "sk-1")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "sk-2")
-    monkeypatch.setenv("LLM_TIER2_MODEL", "deepseek-chat")
+    monkeypatch.setenv("LLM_TIER3_MODEL", "deepseek-v4-flash")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
 
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.app_env == "dev"
     assert s.api_key == "test-key"
-    assert s.llm_tier2.model == "deepseek-chat"
-    assert s.yfinance_max_concurrent == 10
+    assert s.llm_tier3.model == "deepseek-v4-flash"
     assert s.ifind_proxy_url == "http://127.0.0.1:7100"
+
+
+def test_settings_propagate_llm_request_timeout():
+    from investment_agent.llm.openai_compatible import OpenAICompatibleClient
+
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="t",
+        llm_tier3_api_key="t",
+        llm_request_timeout_seconds=33.0,
+    )
+    assert settings.llm_tier3.timeout_seconds == 33.0
+    client = OpenAICompatibleClient(
+        tier_name="tier3", config=settings.llm_tier3, session=None  # type: ignore[arg-type]
+    )
+    assert client._client.timeout == 33.0
 
 
 def test_app_yaml_loads(tmp_path):
     p = tmp_path / "app.yaml"
     p.write_text(
+        "scheduler:\n"
+        "  watchlist_refresh_cron: '30 15 * * 1-5'\n"
+    )
+    cfg = load_app_yaml(p)
+    assert cfg.scheduler.watchlist_refresh_cron == "30 15 * * 1-5"
+    assert cfg.scheduler.watchlist_refresh_timezone == "Asia/Shanghai"
+    assert cfg.scheduler.a_share_calendar_path == "config/calendars/a_share.yaml"
+
+
+def test_app_yaml_tolerates_retired_legacy_keys(tmp_path):
+    """An app.yaml from before the legacy removal still loads (keys ignored)."""
+    p = tmp_path / "app.yaml"
+    p.write_text(
         "universes:\n"
         "  - code: NASDAQ_100\n"
-        "    refresh_membership_freq: weekly\n"
         "enabled_strategies: [value]\n"
         "pipeline:\n"
         "  tier2_score_threshold: 40\n"
-        "  tier3_top_n: 10\n"
-        "  deep_analysis_cache_days: 90\n"
         "scheduler:\n"
         "  discovery_cron: '30 16 * * 1-5'\n"
         "  discovery_timezone: America/New_York\n"
         "auxiliary_tracking:\n"
         "  strength_threshold: 0.5\n"
-        "  max_per_company: 5\n"
-        "  total_cap_multiplier: 2\n"
     )
     cfg = load_app_yaml(p)
-    assert cfg.pipeline.tier2_score_threshold == 40
-    assert cfg.scheduler.discovery_timezone == "America/New_York"
     assert cfg.scheduler.watchlist_refresh_cron is None
-    assert cfg.scheduler.watchlist_refresh_timezone == "Asia/Shanghai"
-    assert cfg.auxiliary_tracking.strength_threshold == 0.5
+
+
+def test_shipped_app_yaml_loads():
+    from pathlib import Path
+
+    cfg = load_app_yaml(Path(__file__).parents[2] / "config" / "app.yaml")
+    assert cfg.scheduler.watchlist_refresh_cron is not None
 
 
 def _env(monkeypatch, tmp_path, **values):
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "sk-1")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "sk-2")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     for key, value in values.items():

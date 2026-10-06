@@ -33,18 +33,11 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./data/app.db"
 
-    # Tier 2 (mid)
-    llm_tier2_base_url: str = "https://api.deepseek.com/v1"
-    llm_tier2_api_key: str
-    llm_tier2_model: str = "deepseek-chat"
-
-    # Tier 3 (top)
+    # Tier 3: research explanation model (any OpenAI-compatible endpoint).
     llm_tier3_base_url: str = "https://api.openai.com/v1"
     llm_tier3_api_key: str
     llm_tier3_model: str = "gpt-5"
 
-    yfinance_max_concurrent: int = 10
-    llm_max_concurrent: int = 8
     llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
 
     # A-share research MVP data gateway.
@@ -84,15 +77,6 @@ class Settings(BaseSettings):
         return self
 
     @property
-    def llm_tier2(self) -> LLMTierConfig:
-        return LLMTierConfig(
-            base_url=self.llm_tier2_base_url,
-            api_key=self.llm_tier2_api_key,
-            model=self.llm_tier2_model,
-            timeout_seconds=self.llm_request_timeout_seconds,
-        )
-
-    @property
     def llm_tier3(self) -> LLMTierConfig:
         return LLMTierConfig(
             base_url=self.llm_tier3_base_url,
@@ -102,37 +86,14 @@ class Settings(BaseSettings):
         )
 
 
-class UniverseEntry(BaseModel):
-    code: str
-    refresh_membership_freq: Literal["daily", "weekly", "monthly"] = "weekly"
-
-
-class PipelineConfig(BaseModel):
-    tier2_score_threshold: int = 40
-    tier3_top_n: int = 10
-    deep_analysis_cache_days: int = 90
-
-
 class SchedulerConfig(BaseModel):
-    discovery_cron: str
-    discovery_timezone: str
     watchlist_refresh_cron: str | None = None
     watchlist_refresh_timezone: str = "Asia/Shanghai"
     a_share_calendar_path: str = "config/calendars/a_share.yaml"
 
 
-class AuxiliaryTrackingConfig(BaseModel):
-    strength_threshold: float = 0.5
-    max_per_company: int = 5
-    total_cap_multiplier: int = 2
-
-
 class AppYamlConfig(BaseModel):
-    universes: list[UniverseEntry]
-    enabled_strategies: list[str] = Field(default_factory=list)
-    pipeline: PipelineConfig
     scheduler: SchedulerConfig
-    auxiliary_tracking: AuxiliaryTrackingConfig
 
 
 def load_app_yaml(path: Path) -> AppYamlConfig:

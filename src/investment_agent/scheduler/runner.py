@@ -1,4 +1,4 @@
-"""APScheduler-based daily Discovery and A-share watchlist runner.
+"""APScheduler-based A-share watchlist refresh runner.
 
 Runs in its own process (`ia scheduler start` or Docker service).
 Reads cron + timezone from config/app.yaml.scheduler.
@@ -13,10 +13,8 @@ import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-from investment_agent.clock import today_in
 from investment_agent.config import AppYamlConfig, Settings, load_app_yaml
 from investment_agent.logging import configure_logging
-from investment_agent.pipelines.discovery import DiscoveryPipeline
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
 from investment_agent.scheduler.trading_calendar import (
     CalendarCoverage,
@@ -25,9 +23,7 @@ from investment_agent.scheduler.trading_calendar import (
     calendar_coverage,
     load_trading_calendar,
 )
-from investment_agent.sources.yfinance_source import YFinanceSource
 from investment_agent.storage.database import init_engine, session_scope
-from investment_agent.strategies.registry import load_all_strategies
 
 log = structlog.get_logger(__name__)
 
@@ -55,30 +51,6 @@ def _parse_cron(cron_expr: str, *, timezone: str | None = None) -> CronTrigger:
         day_of_week=dow,
         timezone=timezone,
     )
-
-
-async def _run_discovery_job(universe_code: str, timezone: str = "Asia/Shanghai") -> None:
-    """One scheduled tick: run discovery for the given universe.
-
-    The business date is taken in the scheduler's configured discovery timezone
-    (the server itself may run in UTC), never from ``date.today()``.
-    """
-    log.info("scheduler.tick.start", universe=universe_code)
-    settings = Settings()  # type: ignore[call-arg]
-    strategies = load_all_strategies(
-        tier2_config=settings.llm_tier2, tier3_config=settings.llm_tier3,
-    )
-    pipeline = DiscoveryPipeline(
-        data_source=YFinanceSource(
-            max_concurrent=settings.yfinance_max_concurrent,
-        ),  # type: ignore[arg-type]
-        strategies=strategies, settings=settings,
-    )
-    try:
-        run_id = await pipeline.run(universe_code, today_in(timezone))
-        log.info("scheduler.tick.complete", universe=universe_code, run_id=run_id)
-    except Exception:
-        log.exception("scheduler.tick.failed", universe=universe_code)
 
 
 async def _enqueue_scheduled_watchlist_refresh(
@@ -214,33 +186,23 @@ async def _run_watchlist_refresh_job(calendar_path: str) -> None:
 def build_scheduler(
     *, settings: Settings, app_config: AppYamlConfig,
 ) -> AsyncIOScheduler:
-    """Construct discovery jobs plus an optional A-share watchlist refresh job.
+    """Construct the A-share watchlist refresh job (when a cron is configured).
 
     The Settings instance is accepted for future expansion; scheduled jobs rebuild
     settings inside their own process-local execution context.
     """
     _ = settings  # reserved for future
-    sched = AsyncIOScheduler(timezone=app_config.scheduler.discovery_timezone)
-    trigger = _parse_cron(
-        app_config.scheduler.discovery_cron,
-        timezone=app_config.scheduler.discovery_timezone,
-    )
-    for ue in app_config.universes:
-        sched.add_job(
-            _run_discovery_job, trigger=trigger,
-            args=[ue.code, app_config.scheduler.discovery_timezone],
-            id=f"discovery_{ue.code}", replace_existing=True,
-            **_JOB_DEFAULTS,
-        )
-    watchlist_cron = app_config.scheduler.watchlist_refresh_cron
+    scheduler_cfg = app_config.scheduler
+    sched = AsyncIOScheduler(timezone=scheduler_cfg.watchlist_refresh_timezone)
+    watchlist_cron = scheduler_cfg.watchlist_refresh_cron
     if watchlist_cron is not None:
         sched.add_job(
             _run_watchlist_refresh_job,
             trigger=_parse_cron(
                 watchlist_cron,
-                timezone=app_config.scheduler.watchlist_refresh_timezone,
+                timezone=scheduler_cfg.watchlist_refresh_timezone,
             ),
-            args=[app_config.scheduler.a_share_calendar_path],
+            args=[scheduler_cfg.a_share_calendar_path],
             id="watchlist_refresh",
             replace_existing=True,
             **_JOB_DEFAULTS,
@@ -258,11 +220,8 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
     sched.start()
     log.info(
         "scheduler.started",
-        cron=cfg.scheduler.discovery_cron,
-        tz=cfg.scheduler.discovery_timezone,
         watchlist_cron=cfg.scheduler.watchlist_refresh_cron,
         watchlist_tz=cfg.scheduler.watchlist_refresh_timezone,
-        universes=[u.code for u in cfg.universes],
     )
     await _startup_watchlist_check(cfg, datetime.now(ZoneInfo("UTC")))
     stop_event = asyncio.Event()

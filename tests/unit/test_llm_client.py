@@ -35,7 +35,7 @@ async def test_complete_returns_plain_text(db_session):
     cfg = LLMTierConfig(
         base_url="https://api.test.example/v1", api_key="sk-test", model="test-model"
     )
-    client = OpenAICompatibleClient(tier_name="tier2", config=cfg, session=db_session)
+    client = OpenAICompatibleClient(tier_name="tier3", config=cfg, session=db_session)
     out = await client.complete(
         system_prompt="you are helpful",
         user_message="say hi",
@@ -67,7 +67,7 @@ async def test_complete_with_output_model_parses_json(db_session):
     cfg = LLMTierConfig(
         base_url="https://api.test.example/v1", api_key="sk-test", model="test-model"
     )
-    client = OpenAICompatibleClient(tier_name="tier2", config=cfg, session=db_session)
+    client = OpenAICompatibleClient(tier_name="tier3", config=cfg, session=db_session)
     out = await client.complete(
         system_prompt="score this",
         user_message="AAPL",

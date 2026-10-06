@@ -1,4 +1,11 @@
-"""Reference entities: Market, Sector, Company, Listing, Universe, UniverseMembership."""
+"""Reference entities: Market, Sector, Company, Listing, Universe, UniverseMembership.
+
+Legacy tables (from the retired NASDAQ Discovery/Attribution product, preserved
+at tag ``legacy-nasdaq-final``) keep their ORM classes so ``Base.metadata``
+keeps matching the alembic-migrated schema; nothing at runtime uses them.
+Legacy here: Universe, UniverseMembership (PipelineRun.universe_code still
+has a foreign key to ``universe``).
+"""
 
 from datetime import date
 

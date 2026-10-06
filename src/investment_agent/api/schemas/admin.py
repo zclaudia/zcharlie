@@ -4,7 +4,9 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-from investment_agent.api.schemas.listing import TICKER_PATTERN
+# Ticker shape: A-share codes (600519.SH) plus plain alphanumeric symbols;
+# validated after upper-casing.
+TICKER_PATTERN = r"^[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,4})?$"
 
 
 class WatchlistLatestResearch(BaseModel):

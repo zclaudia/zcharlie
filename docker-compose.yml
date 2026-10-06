@@ -11,8 +11,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro
-      - ./strategies:/app/strategies:ro
-      - ./prompts:/app/prompts:ro
     working_dir: /app
     # Published on loopback only; put a TLS reverse proxy in front for remote
     # access (then set WEB_COOKIE_SECURE=true and WEB_PUBLIC_ORIGIN).
@@ -38,8 +36,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro
-      - ./strategies:/app/strategies:ro
-      - ./prompts:/app/prompts:ro
     working_dir: /app
     command: ["ia", "scheduler", "start"]
     depends_on:
@@ -58,8 +54,6 @@ services:
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro
-      - ./strategies:/app/strategies:ro
-      - ./prompts:/app/prompts:ro
     working_dir: /app
     command: ["ia", "worker", "start"]
     restart: unless-stopped
