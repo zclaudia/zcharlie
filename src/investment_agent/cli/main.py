@@ -6,6 +6,7 @@ from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import api as api_cmd
 from investment_agent.cli.commands import migrate as migrate_cmd
 from investment_agent.cli.commands import research as research_cmd
+from investment_agent.cli.commands import rules as rules_cmd
 from investment_agent.cli.commands import scheduler as scheduler_cmd
 from investment_agent.cli.commands import snapshot as snapshot_cmd
 from investment_agent.cli.commands import worker as worker_cmd
@@ -18,6 +19,7 @@ app.add_typer(scheduler_cmd.app, name="scheduler", help="Scheduler commands")
 app.add_typer(migrate_cmd.app, name="migrate", help="Database migration commands")
 app.add_typer(worker_cmd.app, name="worker", help="Persistent worker commands")
 app.add_typer(snapshot_cmd.app, name="snapshot", help="PIT snapshot collection commands")
+app.add_typer(rules_cmd.app, name="rules", help="Rule templates and instances")
 
 
 @app.callback()
