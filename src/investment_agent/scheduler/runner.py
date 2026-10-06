@@ -52,8 +52,48 @@ _JOB_DEFAULTS: dict[str, object] = {
 }
 
 
+# Standard crontab numbers weekdays 0/7 = Sunday, 1 = Monday ... 6 = Saturday,
+# but APScheduler 3.x CronTrigger numbers them 0 = Monday ... 6 = Sunday (even
+# via from_crontab), so "1-5" would fire Tuesday-Saturday. Numeric weekday
+# fields are translated to names, which both read the same way.
+_CRONTAB_WEEKDAYS = ("sun", "mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def _crontab_weekday_number(token: str) -> int:
+    if not token.isdigit() or int(token) > 7:
+        raise ValueError(f"Invalid crontab weekday: '{token}'")
+    return int(token) % 7  # 7 is an alias of 0 (Sunday)
+
+
+def _crontab_dow(dow: str) -> str:
+    """Translate a crontab day-of-week field into APScheduler weekday names.
+
+    Numeric items (``1-5``, ``0,6``, ``1-5/2``) are expanded to explicit names
+    (``mon,tue,wed,thu,fri``); ``*``, ``*/n`` and named items pass through.
+    """
+
+    items: list[str] = []
+    for item in dow.split(","):
+        base, _, step = item.partition("/")
+        if base == "*" or not any(ch.isdigit() for ch in base):
+            items.append(item)
+            continue
+        if "-" in base:
+            first, last = base.split("-", 1)
+            start, stop = _crontab_weekday_number(first), int(last)
+            if not last.isdigit() or stop > 7 or stop < start:
+                raise ValueError(f"Invalid crontab weekday range: '{item}'")
+            numbers = range(start, stop + 1, int(step) if step else 1)
+        else:
+            if step:
+                raise ValueError(f"Step without range in crontab weekday: '{item}'")
+            numbers = range(_crontab_weekday_number(base), _crontab_weekday_number(base) + 1)
+        items.extend(_CRONTAB_WEEKDAYS[number % 7] for number in numbers)
+    return ",".join(dict.fromkeys(items))
+
+
 def _parse_cron(cron_expr: str, *, timezone: str | None = None) -> CronTrigger:
-    """Accept a 5-field crontab: 'minute hour day month dow'."""
+    """Accept a standard 5-field crontab: 'minute hour day month dow'."""
     parts = cron_expr.strip().split()
     if len(parts) != 5:
         raise ValueError(f"Cron must have 5 fields: '{cron_expr}'")
@@ -63,7 +103,7 @@ def _parse_cron(cron_expr: str, *, timezone: str | None = None) -> CronTrigger:
         hour=hour,
         day=day,
         month=month,
-        day_of_week=dow,
+        day_of_week=_crontab_dow(dow),
         timezone=timezone,
     )
 
