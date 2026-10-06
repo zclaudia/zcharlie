@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 def test_healthz_does_not_require_auth(monkeypatch):
     monkeypatch.setenv("API_KEY", "secret")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
     monkeypatch.setenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 

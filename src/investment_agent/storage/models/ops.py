@@ -1,4 +1,10 @@
-"""LLMCall + DataFetchJob + DeepAnalysisCache."""
+"""LLMCall + DataFetchJob + DeepAnalysisCache.
+
+Legacy tables (from the retired NASDAQ Discovery/Attribution product, preserved
+at tag ``legacy-nasdaq-final``) keep their ORM classes so ``Base.metadata``
+keeps matching the alembic-migrated schema; nothing at runtime uses them.
+Legacy here: DataFetchJob, DeepAnalysisCache.
+"""
 
 from datetime import date, datetime
 from decimal import Decimal

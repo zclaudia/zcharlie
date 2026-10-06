@@ -61,7 +61,6 @@ def _settings(tmp_path: Path) -> Settings:
     return Settings(  # type: ignore[call-arg]
         _env_file=None,
         api_key="test",
-        llm_tier2_api_key="test",
         llm_tier3_api_key="test",
         ifind_proxy_api_key="proxy-test",
         data_dir=tmp_path,

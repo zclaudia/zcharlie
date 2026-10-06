@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 COPY src/ src/
 # Editable install on purpose: the runtime image ships the same /app/src tree
-# (prompts/templates are resolved relative to the source checkout, and web
-# templates/static are not declared as package data), so the code lives in the
+# (web templates/static are resolved relative to the source checkout and are
+# not declared as package data), so the code lives in the
 # image and compose no longer bind-mounts src/.
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .
@@ -33,8 +33,6 @@ COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/pytho
 COPY --from=builder /usr/local/bin /usr/local/bin
 COPY src/ src/
 COPY config/ config/
-COPY strategies/ strategies/
-COPY prompts/ prompts/
 COPY alembic/ alembic/
 COPY alembic.ini ./
 RUN mkdir -p /app/data && chown -R app:app /app/data

@@ -129,7 +129,6 @@ async def test_successful_idempotent_run_replays_persisted_snapshot(
     settings = Settings(  # type: ignore[call-arg]
         _env_file=None,
         api_key="test",
-        llm_tier2_api_key="test",
         llm_tier3_api_key="test",
     )
     result = await run_ifind_research_chain(
@@ -180,7 +179,6 @@ async def test_explanation_failure_persists_partial_deterministic_result(
     settings = Settings(  # type: ignore[call-arg]
         _env_file=None,
         api_key="test",
-        llm_tier2_api_key="test",
         llm_tier3_api_key="test",
     )
 

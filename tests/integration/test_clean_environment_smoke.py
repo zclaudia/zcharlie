@@ -119,13 +119,11 @@ def _smoke_env(tmp_path: Path, db_path: Path, stub: StubIfindProxy, api_port: in
             "DATABASE_URL": f"sqlite+aiosqlite:///{db_path}",
             "DATA_DIR": str(tmp_path / "data"),
             "API_KEY": "smoke-secret",
-            "LLM_TIER2_API_KEY": "stub",
             "LLM_TIER3_API_KEY": "stub",
             # The stub rejects every LLM request with a terminal 400, so the
             # deterministic scoring must survive with a partial outcome.
             # (An unreachable LLM would be a transient error and be retried.)
             "LLM_TIER3_BASE_URL": f"http://127.0.0.1:{stub.port}/v1",
-            "LLM_TIER2_BASE_URL": f"http://127.0.0.1:{stub.port}/v1",
             "IFIND_PROXY_URL": f"http://127.0.0.1:{stub.port}",
             "IFIND_PROXY_API_KEY": "stub-proxy-key",
         }

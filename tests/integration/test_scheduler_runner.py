@@ -8,11 +8,8 @@ from sqlalchemy import select
 
 from investment_agent.config import (
     AppYamlConfig,
-    AuxiliaryTrackingConfig,
-    PipelineConfig,
     SchedulerConfig,
     Settings,
-    UniverseEntry,
 )
 from investment_agent.scheduler.runner import (
     _enqueue_scheduled_watchlist_refresh,
@@ -37,26 +34,15 @@ def test_parse_cron_invalid_raises() -> None:
         _parse_cron("30 16 *")
 
 
-def test_build_scheduler_registers_job_per_universe(
+def test_build_scheduler_without_watchlist_cron_has_no_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("API_KEY", "x")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
-    cfg = AppYamlConfig(
-        universes=[UniverseEntry(code="NASDAQ_100"), UniverseEntry(code="TEST_U")],
-        pipeline=PipelineConfig(),
-        scheduler=SchedulerConfig(
-            discovery_cron="30 16 * * 1-5", discovery_timezone="UTC",
-        ),
-        auxiliary_tracking=AuxiliaryTrackingConfig(),
-    )
+    cfg = AppYamlConfig(scheduler=SchedulerConfig())
     sched = build_scheduler(settings=settings, app_config=cfg)
-    job_ids = {j.id for j in sched.get_jobs()}
-    assert "discovery_NASDAQ_100" in job_ids
-    assert "discovery_TEST_U" in job_ids
-    assert "watchlist_refresh" not in job_ids
+    assert sched.get_jobs() == []
     # Scheduler was never started, so no shutdown call is needed.
 
 
@@ -64,20 +50,14 @@ def test_build_scheduler_registers_a_share_watchlist_job(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("API_KEY", "x")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     cfg = AppYamlConfig(
-        universes=[],
-        pipeline=PipelineConfig(),
         scheduler=SchedulerConfig(
-            discovery_cron="30 16 * * 1-5",
-            discovery_timezone="America/New_York",
             watchlist_refresh_cron="30 15 * * 1-5",
             watchlist_refresh_timezone="Asia/Shanghai",
             a_share_calendar_path="config/calendars/a_share.yaml",
         ),
-        auxiliary_tracking=AuxiliaryTrackingConfig(),
     )
 
     sched = build_scheduler(settings=settings, app_config=cfg)
@@ -96,7 +76,6 @@ async def test_scheduled_watchlist_refresh_skips_holiday_and_is_idempotent(
     settings = Settings(  # type: ignore[call-arg]
         _env_file=None,
         api_key="test",
-        llm_tier2_api_key="test",
         llm_tier3_api_key="test",
         ifind_proxy_api_key="proxy-test",
         data_dir=tmp_path,
@@ -159,44 +138,6 @@ async def test_scheduled_watchlist_refresh_skips_holiday_and_is_idempotent(
         assert runs[0].request_json["as_of"] == "2026-10-08"
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("timezone", "expected"),
-    [("Asia/Shanghai", date(2026, 10, 9)), ("America/New_York", date(2026, 10, 8))],
-)
-async def test_discovery_job_uses_configured_business_timezone(
-    monkeypatch: pytest.MonkeyPatch, timezone: str, expected: date
-) -> None:
-    from freezegun import freeze_time
-
-    from investment_agent.scheduler import runner
-
-    seen: list[date] = []
-
-    class _FakePipeline:
-        def __init__(self, **_: object) -> None:
-            pass
-
-        async def run(self, universe_code: str, as_of: date) -> int:
-            seen.append(as_of)
-            return 1
-
-    class _FakeSettings:
-        llm_tier2 = None
-        llm_tier3 = None
-        yfinance_max_concurrent = 1
-
-    monkeypatch.setattr(runner, "Settings", _FakeSettings)
-    monkeypatch.setattr(runner, "load_all_strategies", lambda **_: [])
-    monkeypatch.setattr(runner, "YFinanceSource", lambda **_: object())
-    monkeypatch.setattr(runner, "DiscoveryPipeline", _FakePipeline)
-
-    with freeze_time("2026-10-08T20:00:00Z"):
-        await runner._run_discovery_job("TEST_U", timezone)
-
-    assert seen == [expected]
-
-
 def _watchlist_trigger():
     return _parse_cron("30 15 * * 1-5", timezone="Asia/Shanghai")
 
@@ -244,24 +185,18 @@ def test_build_scheduler_sets_misfire_grace_and_coalesce(
     from investment_agent.scheduler.runner import MISFIRE_GRACE_SECONDS
 
     monkeypatch.setenv("API_KEY", "x")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
     cfg = AppYamlConfig(
-        universes=[UniverseEntry(code="NASDAQ_100")],
-        pipeline=PipelineConfig(),
         scheduler=SchedulerConfig(
-            discovery_cron="30 16 * * 1-5",
-            discovery_timezone="America/New_York",
             watchlist_refresh_cron="30 15 * * 1-5",
         ),
-        auxiliary_tracking=AuxiliaryTrackingConfig(),
     )
 
     sched = build_scheduler(settings=settings, app_config=cfg)
     jobs = sched.get_jobs()
 
-    assert {job.id for job in jobs} == {"discovery_NASDAQ_100", "watchlist_refresh"}
+    assert {job.id for job in jobs} == {"watchlist_refresh"}
     for job in jobs:
         assert job.misfire_grace_time == MISFIRE_GRACE_SECONDS
         assert job.coalesce is True
@@ -284,14 +219,9 @@ async def test_startup_check_warns_on_expiring_calendar_and_catches_up(
 
     monkeypatch.setattr(runner, "_run_watchlist_refresh_job", fake_job)
     cfg = AppYamlConfig(
-        universes=[],
-        pipeline=PipelineConfig(),
         scheduler=SchedulerConfig(
-            discovery_cron="30 16 * * 1-5",
-            discovery_timezone="America/New_York",
             watchlist_refresh_cron="30 15 * * 1-5",
         ),
-        auxiliary_tracking=AuxiliaryTrackingConfig(),
     )
 
     with capture_logs() as logs:
@@ -326,14 +256,9 @@ async def test_startup_check_does_not_catch_up_before_schedule(
 
     monkeypatch.setattr(runner, "_run_watchlist_refresh_job", fake_job)
     cfg = AppYamlConfig(
-        universes=[],
-        pipeline=PipelineConfig(),
         scheduler=SchedulerConfig(
-            discovery_cron="30 16 * * 1-5",
-            discovery_timezone="America/New_York",
             watchlist_refresh_cron="30 15 * * 1-5",
         ),
-        auxiliary_tracking=AuxiliaryTrackingConfig(),
     )
 
     with capture_logs() as logs:
@@ -357,7 +282,6 @@ async def test_watchlist_tick_logs_expired_calendar_warning(
     from investment_agent.scheduler import runner
 
     monkeypatch.setenv("API_KEY", "x")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
     with capture_logs() as logs, freeze_time("2027-01-04T07:30:00Z"):
         await runner._run_watchlist_refresh_job("config/calendars/a_share.yaml")

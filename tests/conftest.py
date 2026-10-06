@@ -42,7 +42,7 @@ async def api_client(tmp_path, monkeypatch):
     """Shared FastAPI TestClient against a fresh disk-backed SQLite per test.
 
     Sets:
-      API_KEY=secret, LLM_TIER2_API_KEY=x, LLM_TIER3_API_KEY=x,
+      API_KEY=secret, LLM_TIER3_API_KEY=x,
       DATA_DIR=<tmp_path>, DATABASE_URL=sqlite+aiosqlite:///<tmp_path>/api.db
     """
     from fastapi.testclient import TestClient
@@ -50,7 +50,6 @@ async def api_client(tmp_path, monkeypatch):
     from investment_agent.api.app import create_app
 
     monkeypatch.setenv("API_KEY", "secret")
-    monkeypatch.setenv("LLM_TIER2_API_KEY", "x")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     db_path = tmp_path / "api.db"

@@ -1,4 +1,10 @@
-"""Daily price, financial report, fundamental snapshot, news, analyst ratings."""
+"""Daily price, financial report, fundamental snapshot, news, analyst ratings.
+
+Legacy tables (from the retired NASDAQ Discovery/Attribution product, preserved
+at tag ``legacy-nasdaq-final``) keep their ORM classes so ``Base.metadata``
+keeps matching the alembic-migrated schema; nothing at runtime uses them.
+All tables in this module are legacy.
+"""
 
 from datetime import date, datetime
 from decimal import Decimal

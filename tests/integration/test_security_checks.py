@@ -78,7 +78,7 @@ def test_artifact_download_refuses_traversal_names(api_client):
         assert "root:" not in response.text
 
 
-def test_shipped_assets_and_prompts_carry_no_credential_shapes():
+def test_shipped_assets_and_config_carry_no_credential_shapes():
     import re
     from pathlib import Path
 
@@ -88,7 +88,6 @@ def test_shipped_assets_and_prompts_carry_no_credential_shapes():
     )
     targets = [
         Path("src/investment_agent/web"),
-        Path("prompts"),
         Path("config"),
     ]
     violations: list[str] = []

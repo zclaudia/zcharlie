@@ -47,5 +47,4 @@ jobs:
           # Inert placeholders so required Settings fields parse; nothing
           # in the suite reads real credentials or calls real providers.
           API_KEY: ci-inert-api-key
-          LLM_TIER2_API_KEY: ci-inert-tier2
           LLM_TIER3_API_KEY: ci-inert-tier3
