@@ -37,7 +37,11 @@ Point-in-time rules (enforced by every constructor):
 * financial periods: public by ``as_of`` (``available_from <= as_of``,
   ``unknown`` availability excluded) - the pubDate gating of
   :meth:`FinancialSnapshotRepository.latest_available`;
-* report-overdue records open on ``as_of``.
+* report-overdue records open on ``as_of``;
+* dividend events (baostock, F2 / Q2): public by ``as_of``
+  (``available_from <= as_of``) with ``ex_date <= as_of``, plus the ex-date
+  years whose collection is known by ``as_of`` (``dividend_coverage``), so a
+  factor can tell "no dividend" from "not collected".
 
 **Field semantics.** Provider fields that share a stored name but not a
 meaning are renamed here and only here; the stored snapshot JSON keeps its
@@ -69,13 +73,14 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.factors.field_sources import (
     VERIFIER,
     FieldSource,
@@ -97,7 +102,12 @@ from investment_agent.providers.shenwan_directory import (
     ShenwanDirectory,
     default_shenwan_directory,
 )
-from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot
+from investment_agent.storage.models.pit_snapshot import (
+    DividendEventSnapshot,
+    FinancialSnapshot,
+    MarketSnapshot,
+)
+from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.industry import IndustryRepository
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
@@ -132,6 +142,8 @@ OBSERVATION = ProviderPolicy("observation", "ifind")
 # the window start is covered) and for the trailing one-year statistics.
 PRICE_HISTORY_DAYS = 5 * 366 + 7
 ADJUSTED_HISTORY_DAYS = 400
+# Dividend events loaded for the trailing-365-day dividend yield.
+DIVIDEND_HISTORY_DAYS = 366
 
 # Stored field name -> factor-layer name, per provider. Names absent here keep
 # their stored name; names mapped to ``None`` are dropped.
@@ -224,6 +236,33 @@ class Bar:
     total_shares: float | None = None
     """iFinD rows only (baostock market cap uses financial total shares)."""
     ref: str | None = None
+
+
+@dataclass(frozen=True)
+class Dividend:
+    """One distribution as usable on ``as_of`` (``dividend_event`` latest version)."""
+
+    ex_date: date
+    cash_per_share: float | None
+    """Pre-tax cash per share on the share base before the event."""
+    share_multiplier: float = 1.0
+    """Shares after / before the event (1 + bonus + capitalisation shares per share)."""
+    available_from: date | None = None
+    ref: str | None = None
+
+
+@dataclass(frozen=True)
+class DividendHistory:
+    """Dividend events of one listing plus the collected ex-date years."""
+
+    events: tuple[Dividend, ...] = ()
+    """Ascending by ex-date."""
+    covered_years: Mapping[int, date] = field(default_factory=dict)
+    """Ex-date year -> date (Asia/Shanghai) of the latest collection of that year."""
+    provider: str = "baostock"
+
+    def describe_coverage(self) -> dict[str, str]:
+        return {str(year): day.isoformat() for year, day in sorted(self.covered_years.items())}
 
 
 @dataclass(frozen=True)
@@ -466,6 +505,8 @@ class SnapshotView:
     sw_code: str | None = None
     """Shenwan 2021 code that decided the group (``None`` -> CSRC fallback)."""
     industry_match: IndustryGroupMatch | None = None
+    dividends: DividendHistory | None = None
+    """``None``: dividend data not loaded for this view (e.g. observation path)."""
 
     @property
     def industry_fallback(self) -> bool:
@@ -496,6 +537,7 @@ class SnapshotView:
         industry_groups: IndustryGroupMap | None = None,
         sw_code: str | None = None,
         field_sources: FieldSourceRegistry | None = None,
+        dividends: DividendHistory | None = None,
     ) -> SnapshotView:
         """Pure in-memory constructor; applies the point-in-time rules.
 
@@ -506,6 +548,8 @@ class SnapshotView:
         are the CSRC fallback. Under a resolving policy, a period given
         without ``sources`` is resolved as the anchor provider's only row
         (registry sanity rules apply; see :func:`resolve_period_fields`).
+        Dividend events with an ex-date after ``as_of`` or not public by
+        ``as_of`` are dropped.
         """
 
         groups = industry_groups or default_industry_groups()
@@ -541,6 +585,7 @@ class SnapshotView:
             industry_groups_version=groups.version,
             sw_code=sw_code if match.system == SW2021_SYSTEM else None,
             industry_match=match,
+            dividends=_dividends_until(dividends, as_of),
         )
 
     # -- accessors -------------------------------------------------------- #
@@ -593,6 +638,18 @@ class SnapshotView:
 
     def with_overdue(self, periods: Iterable[date]) -> SnapshotView:
         return replace(self, overdue_periods=tuple(sorted(set(periods))))
+
+
+def _dividends_until(history: DividendHistory | None, as_of: date) -> DividendHistory | None:
+    if history is None:
+        return None
+    by_ex = {
+        event.ex_date: event
+        for event in history.events
+        if event.ex_date <= as_of
+        and (event.available_from is None or event.available_from <= as_of)
+    }
+    return replace(history, events=tuple(by_ex[key] for key in sorted(by_ex)))
 
 
 def _bars_until(bars: Iterable[Bar], as_of: date) -> tuple[Bar, ...]:
@@ -754,6 +811,43 @@ def _financial_periods(
     return periods
 
 
+def _shanghai_date(value: datetime) -> date:
+    """Stored UTC timestamp (SQLite returns it naive) -> Asia/Shanghai date."""
+
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    return aware.astimezone(SHANGHAI_TZ).date()
+
+
+def _dividend_from_row(row: DividendEventSnapshot) -> Dividend:
+    extra = (row.stock_per_share or Decimal(0)) + (row.reserve_per_share or Decimal(0))
+    return Dividend(
+        ex_date=row.ex_date,
+        cash_per_share=_decimal(row.cash_per_share_pre_tax),
+        share_multiplier=1.0 + float(extra),
+        available_from=row.available_from,
+        ref=f"dividend_event:{row.id}",
+    )
+
+
+async def load_dividend_history(
+    session: AsyncSession, listing_id: int, as_of: date, *, provider: str = "baostock"
+) -> DividendHistory:
+    """Events of the trailing :data:`DIVIDEND_HISTORY_DAYS` and the covered years
+    (both as known on ``as_of``)."""
+
+    start = as_of - timedelta(days=DIVIDEND_HISTORY_DAYS)
+    repository = DividendRepository(session)
+    rows = await repository.events_as_of(listing_id, start, as_of, provider=provider)
+    coverage = await repository.coverage_as_of(
+        listing_id, list(range(start.year, as_of.year + 1)), as_of, provider=provider
+    )
+    return DividendHistory(
+        events=tuple(_dividend_from_row(row) for row in rows),
+        covered_years={year: _shanghai_date(row.last_checked_at) for year, row in coverage.items()},
+        provider=provider,
+    )
+
+
 async def load_snapshot_view(
     session: AsyncSession,
     ticker: str,
@@ -814,6 +908,11 @@ async def load_snapshot_view(
         session, listing.id, as_of, providers=policy.sources or (policy.provider,)
     )
     overdue = await ReportOverdueRepository(session).open_as_of(listing.id, as_of)
+    dividends = (
+        await load_dividend_history(session, listing.id, as_of, provider=policy.provider)
+        if policy.provider == "baostock"
+        else None
+    )
     return SnapshotView.build(
         ticker=ticker,
         as_of=as_of,
@@ -827,6 +926,7 @@ async def load_snapshot_view(
         industry_groups=industry_groups,
         sw_code=sw_code,
         field_sources=field_sources,
+        dividends=dividends,
     )
 
 

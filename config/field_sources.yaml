@@ -20,6 +20,7 @@
 #              | derived (computed in the view from other registered fields)
 #              | market (market_snapshot columns, baostock bars)
 #              | report_overdue (report_overdue records)
+#              | dividend (dividend_event rows, baostock query_dividend_data)
 #   primary    baostock | akshare | derived
 #   fallback   ordered list of baostock | akshare (default [])
 #   definition 口径 (unit and meaning)
@@ -29,7 +30,7 @@
 #              defect, not data
 #   approx     per provider: true when that source only approximates the field
 #   formula    derived fields only: "<field> <op> <field>", op in + - * /
-version: "2026-10-07.1"
+version: "2026-10-07.2"
 default_tolerance: 0.02
 
 fields:
@@ -181,3 +182,13 @@ fields:
     table: report_overdue
     primary: baostock
     definition: "periodic report past its statutory deadline without a baostock pubDate"
+
+  # -- dividends (dividend_event, F2 / Q2) ------------------------------------ #
+  cash_dividend_per_share:
+    table: dividend
+    primary: baostock
+    definition: >-
+      pre-tax cash dividend per share of one distribution, CNY/share (baostock
+      query_dividend_data dividCashPsBeforeTax, numeric column; the text column
+      dividCashStock "10派…元" is per 10 shares and not used), keyed by ex-date
+      (dividOperateDate); public from the plan announcement (dividPlanAnnounceDate)

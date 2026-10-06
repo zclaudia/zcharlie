@@ -45,8 +45,10 @@ from investment_agent.factors.registry import (
     Partial,
     Quality,
 )
-from investment_agent.factors.view import Bar, FinancialPeriod, SnapshotView
+from investment_agent.factors.view import Bar, Dividend, FinancialPeriod, SnapshotView
 
+FLAG_DIVIDENDS_NOT_COLLECTED = "dividends_not_collected"
+FLAG_DIVIDENDS_STALE = "dividends_stale"
 FLAG_NO_ANNUAL_REPORT = "no_annual_report"
 FLAG_NO_REPORT = "no_report"
 FLAG_NO_PRICE = "no_price"
@@ -66,6 +68,11 @@ NOT_FINANCIAL = Applicability(excluded=FINANCIAL_GROUPS)
 # long enough to span the Spring Festival / National Day closures.
 STALE_PRICE_DAYS = 14
 TURNOVER_WINDOW_SESSIONS = 20
+# Trailing dividend window: ex-dates in (as_of - 365 days, as_of].
+DIVIDEND_WINDOW_DAYS = 365
+# The latest collection of the as_of year older than this (calendar days) is
+# flagged stale (approx): the weekly job has missed two runs.
+DIVIDEND_STALE_DAYS = 15
 # baostock ``liabilityToAsset`` occasionally arrives scaled by 1/100 (seen on
 # FY2024/FY2025 annual rows, e.g. 600519 FY2024 0.0019 vs ~0.17 in adjacent
 # quarters). The rule lives in the field source registry (P1-A12,
@@ -379,6 +386,76 @@ def _bar_status(column: str) -> Callable[[SnapshotView], Partial]:
     return body
 
 
+def split_adjusted_cash(event: Dividend, later: list[Dividend]) -> float:
+    """Cash per share of ``event`` restated to the current share base.
+
+    A later bonus / capitalisation issue (送股 / 转增) multiplies the share
+    count, so cash paid per share before it is divided by the product of the
+    later events' share multipliers.
+    """
+
+    cash = event.cash_per_share or 0.0
+    for item in later:
+        if item.ex_date > event.ex_date and item.share_multiplier > 0:
+            cash /= item.share_multiplier
+    return cash
+
+
+def _dividend_yield_ttm(view: SnapshotView) -> Partial:
+    bar, flags = latest_bar(view)
+    if bar is None:
+        return Partial(None, flags=flags)
+    market = {"market": _bar_ref(bar)}
+    history = view.dividends
+    if history is None:
+        return Partial(None, flags=(FLAG_DIVIDENDS_NOT_COLLECTED,), inputs_ref=market)
+    window_start = view.as_of - timedelta(days=DIVIDEND_WINDOW_DAYS)
+    years = range((window_start + timedelta(days=1)).year, view.as_of.year + 1)
+    coverage = history.describe_coverage()
+    uncovered = [year for year in years if year not in history.covered_years]
+    if uncovered:
+        return Partial(
+            None,
+            flags=(FLAG_DIVIDENDS_NOT_COLLECTED,),
+            inputs_ref={**market, "covered_years": coverage, "uncovered_years": uncovered},
+        )
+    if bar.close <= 0:
+        return Partial(None, flags=(FLAG_NO_PRICE, *flags), inputs_ref=market)
+    # Bonus issues up to the price date restate earlier cash to the price's share base.
+    later = [event for event in history.events if event.ex_date <= bar.trade_date]
+    paid = [
+        (event, split_adjusted_cash(event, later))
+        for event in history.events
+        if window_start < event.ex_date <= view.as_of
+        and event.cash_per_share is not None
+        and event.cash_per_share > 0
+    ]
+    total = sum(cash for _, cash in paid)
+    result_flags = list(flags)
+    last_check = history.covered_years.get(view.as_of.year)
+    if last_check is not None and last_check < view.as_of - timedelta(days=DIVIDEND_STALE_DAYS):
+        result_flags.append(FLAG_DIVIDENDS_STALE)
+    ref = {
+        **market,
+        "window": f"({window_start.isoformat()}, {view.as_of.isoformat()}]",
+        "cash_per_share_ttm": round(total, 8),
+        "dividends": [
+            {
+                "ex_date": event.ex_date.isoformat(),
+                "cash_per_share": event.cash_per_share,
+                "adjusted_cash": round(cash, 8),
+                "ref": event.ref,
+            }
+            for event, cash in paid
+        ],
+        "covered_years": coverage,
+    }
+    quality: Quality | None = "approx" if result_flags else None
+    return Partial(
+        round(total / bar.close, 8), quality=quality, flags=tuple(result_flags), inputs_ref=ref
+    )
+
+
 def _report_overdue(view: SnapshotView) -> Partial:
     overdue = bool(view.overdue_periods)
     return Partial(
@@ -587,6 +664,22 @@ CORE_FACTORS: tuple[Factor, ...] = (
         "Largest peak-to-trough decline over the trailing 365 days (positive).",
         (FactorInput("baostock", "close", _BACKWARD), FactorInput("ifind", "close", _BACKWARD)),
         _one_year_stat(2),
+    ),
+    Factor(
+        "dividend_yield_ttm",
+        "1",
+        "fraction",
+        "Pre-tax cash dividends per share with ex-date in (as_of - 365 d, as_of] "
+        "(restated for later bonus / capitalisation issues) / raw close of the latest "
+        "session <= as_of. 0 when the collected years hold no cash dividend; missing "
+        "(dividends_not_collected) when a year of the window was not collected.",
+        (
+            FactorInput("baostock", "close", f"{_KDATA}(adjust=none).close"),
+            FactorInput(
+                "baostock", "cash_dividend_per_share", "dividend_event.cash_per_share_pre_tax"
+            ),
+        ),
+        _dividend_yield_ttm,
     ),
     Factor(
         "turnover_20d",

@@ -28,8 +28,10 @@ DEFAULT_FIELD_SOURCES_PATH = (
     Path(__file__).resolve().parents[3] / "config" / "field_sources.yaml"
 )
 
-FieldTable = Literal["financial", "derived", "market", "report_overdue"]
-FIELD_TABLES: frozenset[str] = frozenset({"financial", "derived", "market", "report_overdue"})
+FieldTable = Literal["financial", "derived", "market", "report_overdue", "dividend"]
+FIELD_TABLES: frozenset[str] = frozenset(
+    {"financial", "derived", "market", "report_overdue", "dividend"}
+)
 FREE_PROVIDERS: frozenset[str] = frozenset({"baostock", "akshare"})
 VERIFIER = "ifind"
 DERIVED = "derived"

@@ -71,7 +71,9 @@ def test_registry_content_matches_the_coverage_table():
     assert registry.require("net_profit_parent").fallback == ()
     assert registry.require("revenue_total").fallback == ()
     assert registry.require("eps_basic_fy").formula is not None
-    assert {s.table for s in registry} == {"financial", "derived", "market", "report_overdue"}
+    assert {s.table for s in registry} == {
+        "financial", "derived", "market", "report_overdue", "dividend"
+    }
 
 
 @pytest.mark.parametrize(
