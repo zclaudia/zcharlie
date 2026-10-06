@@ -34,6 +34,7 @@ _KIND_LABELS = {
     "industry_sync": "行业同步",
     "market_snapshot": "日线快照",
     "financial_snapshot": "财报快照",
+    "snapshot_backfill": "历史回补",
 }
 _MAX_LISTED = 30
 

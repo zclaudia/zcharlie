@@ -106,10 +106,27 @@ class BaostockDataBackend(BaostockBackend, Protocol):
         self, code: str, year: int | None = None, quarter: int | None = None
     ) -> BaostockResultSet: ...
 
+    def query_stock_basic(self, code: str = "", code_name: str = "") -> BaostockResultSet: ...
+
 
 # --------------------------------------------------------------------------- #
 # Records
 # --------------------------------------------------------------------------- #
+
+
+STOCK_BASIC_OPERATION = "query_stock_basic"
+
+
+@dataclass(frozen=True)
+class StockBasic:
+    """``query_stock_basic``: listing (IPO) and delisting dates of one security."""
+
+    ticker: str
+    name: str
+    ipo_date: date | None
+    out_date: date | None
+    """Delisting date; ``None`` while listed."""
+    listed: bool
 
 
 @dataclass(frozen=True)
@@ -437,4 +454,42 @@ class BaostockMarketClient(BaostockReferenceClient):
             tables=tuple(rows),
             captured_at=captured_at,
             raw_rows={table: dict(row) for table, row in rows.items()},
+        )
+
+    async def fetch_stock_basic(self, symbol: str) -> StockBasic | None:
+        """IPO / delisting dates of ``symbol``; ``None`` when baostock does not know it."""
+
+        code = to_baostock_code(symbol)
+
+        def query(backend: BaostockBackend) -> BaostockResultSet:
+            data_backend: BaostockDataBackend = backend  # type: ignore[assignment]
+            return data_backend.query_stock_basic(code=code)
+
+        raw = await self._run(STOCK_BASIC_OPERATION, query)
+        if not raw.rows:
+            return None
+        if len(raw.rows) > 1:
+            raise ProviderDataError(
+                f"baostock {STOCK_BASIC_OPERATION} returned {len(raw.rows)} rows for {symbol}",
+                provider=PROVIDER,
+            )
+        row = raw.rows[0]
+        if _row_ticker(row, operation=STOCK_BASIC_OPERATION) != symbol.upper():
+            raise ProviderDataError(
+                f"baostock {STOCK_BASIC_OPERATION} answered {row.get('code')!r} for {symbol}",
+                provider=PROVIDER,
+            )
+
+        def optional_date(name: str) -> date | None:
+            text = row.get(name, "").strip()
+            return (
+                _parse_date(text, operation=STOCK_BASIC_OPERATION, name=name) if text else None
+            )
+
+        return StockBasic(
+            ticker=symbol.upper(),
+            name=row.get("code_name", "").strip(),
+            ipo_date=optional_date("ipoDate"),
+            out_date=optional_date("outDate"),
+            listed=row.get("status", "").strip() == "1",
         )

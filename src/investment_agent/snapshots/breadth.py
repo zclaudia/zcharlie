@@ -31,7 +31,7 @@ are marked failed without further calls, so the worker can retry the job later.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -88,7 +88,7 @@ class BaostockCollectorClient(Protocol):
 
 
 @dataclass
-class _Breaker:
+class TransientBreaker:
     """Stops calling baostock after consecutive transient failures."""
 
     limit: int = MAX_CONSECUTIVE_TRANSIENT
@@ -130,6 +130,67 @@ def next_start(last_stored: date | None, trade_date: date) -> date:
     return last_stored + timedelta(days=1) if last_stored is not None else trade_date
 
 
+def write_daily_artifact(
+    artifacts: ArtifactWriter,
+    name: str,
+    ticker: str,
+    fetched: Mapping[AdjustKind, DailyBarSeries],
+) -> str:
+    """Raw k-data answers of one listing (all series) -> ``raw_ref``."""
+
+    return artifacts.write(
+        name,
+        {
+            "provider": BAOSTOCK_PROVIDER,
+            "ticker": ticker,
+            "series": {
+                adjust: {
+                    "start": series.start.isoformat(),
+                    "end": series.end.isoformat(),
+                    "captured_at": series.captured_at.isoformat(),
+                    "rows": [dict(row) for row in series.raw_rows],
+                }
+                for adjust, series in fetched.items()
+            },
+        },
+    )
+
+
+async def store_daily_bars(
+    market: MarketSnapshotRepository,
+    *,
+    listing_id: int,
+    series: DailyBarSeries,
+    raw_ref: str,
+    is_backfill: bool = False,
+) -> int:
+    """Insert every bar of one baostock series; returns the row count."""
+
+    for bar in series.bars:
+        await market.insert(
+            listing_id=listing_id,
+            trade_date=bar.trade_date,
+            open=bar.open,
+            high=bar.high,
+            low=bar.low,
+            close=bar.close,
+            volume=bar.volume,
+            amount=bar.amount,
+            adjust=series.adjust,
+            provider=BAOSTOCK_PROVIDER,
+            captured_at=series.captured_at,
+            raw_ref=raw_ref,
+            pe_ttm=bar.pe_ttm,
+            pb_mrq=bar.pb_mrq,
+            ps_ttm=bar.ps_ttm,
+            turnover=bar.turnover,
+            trade_status=bar.trade_status,
+            is_st=bar.is_st,
+            is_backfill=is_backfill,
+        )
+    return len(series.bars)
+
+
 async def collect_baostock_market(
     payload: MarketSnapshotPayload,
     *,
@@ -158,7 +219,7 @@ async def collect_baostock_market(
     rows_inserted = dict.fromkeys(SERIES, 0)
     skipped_rows: dict[str, list[str]] = {}
     flags = _Flags()
-    breaker = _Breaker()
+    breaker = TransientBreaker()
     queries = 0
 
     async with client.session():
@@ -180,48 +241,16 @@ async def collect_baostock_market(
                     fetched[adjust] = await client.fetch_daily_bars(
                         ticker, start, trade_date, adjust
                     )
-                ref = artifacts.write(
-                    f"daily-{ticker}-{trade_date.isoformat()}",
-                    {
-                        "provider": BAOSTOCK_PROVIDER,
-                        "ticker": ticker,
-                        "series": {
-                            adjust: {
-                                "start": series.start.isoformat(),
-                                "end": series.end.isoformat(),
-                                "captured_at": series.captured_at.isoformat(),
-                                "rows": [dict(row) for row in series.raw_rows],
-                            }
-                            for adjust, series in fetched.items()
-                        },
-                    },
+                ref = write_daily_artifact(
+                    artifacts, f"daily-{ticker}-{trade_date.isoformat()}", ticker, fetched
                 )
                 async with session_scope() as session:
                     await fence_writes(session, lease)
                     market = MarketSnapshotRepository(session)
                     for adjust, series in fetched.items():
-                        for bar in series.bars:
-                            await market.insert(
-                                listing_id=listing_id,
-                                trade_date=bar.trade_date,
-                                open=bar.open,
-                                high=bar.high,
-                                low=bar.low,
-                                close=bar.close,
-                                volume=bar.volume,
-                                amount=bar.amount,
-                                adjust=adjust,
-                                provider=BAOSTOCK_PROVIDER,
-                                captured_at=series.captured_at,
-                                raw_ref=ref,
-                                pe_ttm=bar.pe_ttm,
-                                pb_mrq=bar.pb_mrq,
-                                ps_ttm=bar.ps_ttm,
-                                turnover=bar.turnover,
-                                trade_status=bar.trade_status,
-                                is_st=bar.is_st,
-                            )
-                            rows_inserted[adjust] += 1
+                        rows_inserted[adjust] += await store_daily_bars(
+                            market, listing_id=listing_id, series=series, raw_ref=ref
+                        )
             except LeaseLostError:
                 raise
             except Exception as exc:
@@ -309,6 +338,48 @@ def financial_fields(record: QuarterlyFinancials) -> dict[str, object]:
     }
 
 
+def write_financial_artifact(artifacts: ArtifactWriter, record: QuarterlyFinancials) -> str:
+    """Raw quarterly table answers of one listing and period -> ``raw_ref``."""
+
+    year, quarter = quarter_of(record.report_period)
+    return artifacts.write(
+        f"financial-{record.ticker}-{record.report_period.isoformat()}",
+        {
+            "provider": BAOSTOCK_PROVIDER,
+            "ticker": record.ticker,
+            "year": year,
+            "quarter": quarter,
+            "captured_at": record.captured_at.isoformat(),
+            "tables": {table: dict(row) for table, row in record.raw_rows.items()},
+        },
+    )
+
+
+async def store_financial(
+    repository: FinancialSnapshotRepository,
+    *,
+    listing_id: int,
+    record: QuarterlyFinancials,
+    raw_ref: str,
+    is_backfill: bool = False,
+    extra_fields: Mapping[str, object] | None = None,
+) -> None:
+    """One baostock period: ``availability="actual"``, ``available_from`` = pubDate."""
+
+    await repository.insert(
+        listing_id=listing_id,
+        report_period=record.report_period,
+        period_kind=period_kind(record.report_period),
+        fields={**financial_fields(record), **(extra_fields or {})},
+        provider=BAOSTOCK_PROVIDER,
+        captured_at=record.captured_at,
+        availability="actual",
+        available_from=record.pub_date,
+        raw_ref=raw_ref,
+        is_backfill=is_backfill,
+    )
+
+
 async def collect_baostock_financial(
     payload: FinancialSnapshotPayload,
     *,
@@ -339,7 +410,7 @@ async def collect_baostock_financial(
         else:
             todo.append(ticker)
 
-    breaker = _Breaker()
+    breaker = TransientBreaker()
     stored: dict[str, str] = {}
     resolved: list[str] = []
     async with client.session():
@@ -356,30 +427,14 @@ async def collect_baostock_financial(
                     )
                     breaker.success()
                     continue
-                ref = artifacts.write(
-                    f"financial-{ticker}-{report_period.isoformat()}",
-                    {
-                        "provider": BAOSTOCK_PROVIDER,
-                        "ticker": ticker,
-                        "year": year,
-                        "quarter": quarter,
-                        "captured_at": record.captured_at.isoformat(),
-                        "tables": {table: dict(row) for table, row in record.raw_rows.items()},
-                    },
-                )
+                ref = write_financial_artifact(artifacts, record)
                 async with session_scope() as session:
                     await fence_writes(session, lease)
-                    await FinancialSnapshotRepository(session).insert(
+                    await store_financial(
+                        FinancialSnapshotRepository(session),
                         listing_id=listing_id,
-                        report_period=report_period,
-                        period_kind=kind,
-                        fields=financial_fields(record),
-                        provider=BAOSTOCK_PROVIDER,
-                        captured_at=record.captured_at,
-                        availability="actual",
-                        available_from=record.pub_date,
+                        record=record,
                         raw_ref=ref,
-                        is_backfill=False,
                     )
                     if await ReportOverdueRepository(session).resolve(
                         listing_id=listing_id,
