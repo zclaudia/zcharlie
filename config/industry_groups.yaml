@@ -1,0 +1,192 @@
+# CSRC industry (证监会行业分类) -> industry group (P1-B3).
+#
+# Factor applicability and rule-template applicability reference these groups
+# instead of free-text industry keywords. Keys are CSRC 2012 divisions (门类
+# letter + two-digit 大类, e.g. J66, C15) exactly as baostock reports them
+# ("J66货币金融服务" -> code J66). Pre-2012 labels carry no code; they are
+# matched by `legacy_name_rules` (see below).
+#
+# A code that is neither in `codes` nor matched by a legacy rule resolves to
+# `other` with `matched_by: fallback`; the coverage test requires every CSRC
+# code of the current CSI 300 constituents to be listed explicitly. `other`
+# is a valid explicit mapping (mixed or service industries).
+#
+# Changing a mapping changes factor applicability: bump `version`.
+version: "2026-10-06.1"
+system: csrc
+
+groups:
+  banking: Commercial banks. Balance-sheet business; gross margin and debt ratio not meaningful.
+  insurance: Insurers. Float-funded balance sheet; gross margin and debt ratio not meaningful.
+  broker: Securities / futures / asset managers (capital-market services); gross margin and debt ratio not meaningful.
+  utility: Regulated or quasi-regulated infrastructure (power, gas, water, toll roads, railways, telecom carriers).
+  cyclical: Commodities, materials, heavy construction and transport whose earnings follow the macro cycle.
+  growth_manufacturing: Equipment, autos, electrical machinery, electronics and instruments.
+  venture: Internet and software; asset-light, often early-profit growth.
+  consumer: Food, beverage, apparel, retail, media and consumer services.
+  healthcare: Pharmaceuticals, CRO / R&D services and health care providers.
+  real_estate: Property development and operation.
+  other: Mixed, conglomerate or uncategorised industries (listed explicitly below).
+
+codes:
+  # A 农、林、牧、渔业 - agricultural commodity cycles (e.g. hog prices)
+  A01: cyclical      # 农业
+  A02: cyclical      # 林业
+  A03: cyclical      # 畜牧业
+  A04: cyclical      # 渔业
+  A05: cyclical      # 农、林、牧、渔服务业
+  # B 采矿业
+  B06: cyclical      # 煤炭开采和洗选业
+  B07: cyclical      # 石油和天然气开采业
+  B08: cyclical      # 黑色金属矿采选业
+  B09: cyclical      # 有色金属矿采选业
+  B10: cyclical      # 非金属矿采选业
+  B11: cyclical      # 开采辅助活动
+  B12: cyclical      # 其他采矿业
+  # C 制造业
+  C13: consumer      # 农副食品加工业
+  C14: consumer      # 食品制造业
+  C15: consumer      # 酒、饮料和精制茶制造业
+  C16: consumer      # 烟草制品业
+  C17: consumer      # 纺织业
+  C18: consumer      # 纺织服装、服饰业
+  C19: consumer      # 皮革、毛皮、羽毛及其制品和制鞋业
+  C20: cyclical      # 木材加工和木、竹、藤、棕、草制品业
+  C21: consumer      # 家具制造业
+  C22: cyclical      # 造纸和纸制品业
+  C23: cyclical      # 印刷和记录媒介复制业
+  C24: consumer      # 文教、工美、体育和娱乐用品制造业
+  C25: cyclical      # 石油加工、炼焦和核燃料加工业
+  C26: cyclical      # 化学原料和化学制品制造业
+  C27: healthcare    # 医药制造业
+  C28: cyclical      # 化学纤维制造业
+  C29: cyclical      # 橡胶和塑料制品业
+  C30: cyclical      # 非金属矿物制品业
+  C31: cyclical      # 黑色金属冶炼和压延加工业
+  C32: cyclical      # 有色金属冶炼和压延加工业
+  C33: cyclical      # 金属制品业
+  C34: growth_manufacturing  # 通用设备制造业
+  C35: growth_manufacturing  # 专用设备制造业 (medical devices included; code-level map)
+  C36: growth_manufacturing  # 汽车制造业
+  C37: growth_manufacturing  # 铁路、船舶、航空航天和其他运输设备制造业
+  C38: growth_manufacturing  # 电气机械和器材制造业
+  C39: growth_manufacturing  # 计算机、通信和其他电子设备制造业
+  C40: growth_manufacturing  # 仪器仪表制造业
+  C41: other         # 其他制造业
+  C42: cyclical      # 废弃资源综合利用业
+  C43: growth_manufacturing  # 金属制品、机械和设备修理业
+  # D 电力、热力、燃气及水生产和供应业
+  D44: utility       # 电力、热力生产和供应业
+  D45: utility       # 燃气生产和供应业
+  D46: utility       # 水的生产和供应业
+  # E 建筑业
+  E47: cyclical      # 房屋建筑业
+  E48: cyclical      # 土木工程建筑业
+  E49: cyclical      # 建筑安装业
+  E50: cyclical      # 建筑装饰和其他建筑业
+  # F 批发和零售业
+  F51: other         # 批发业 (commodity trading and consumer distribution mixed)
+  F52: consumer      # 零售业
+  # G 交通运输、仓储和邮政业
+  G53: utility       # 铁路运输业
+  G54: utility       # 道路运输业 (toll roads)
+  G55: cyclical      # 水上运输业 (shipping, ports)
+  G56: cyclical      # 航空运输业
+  G57: utility       # 管道运输业
+  G58: cyclical      # 装卸搬运和运输代理业
+  G59: other         # 仓储业
+  G60: consumer      # 邮政业 (express delivery)
+  # H 住宿和餐饮业
+  H61: consumer      # 住宿业
+  H62: consumer      # 餐饮业
+  # I 信息传输、软件和信息技术服务业
+  I63: utility       # 电信、广播电视和卫星传输服务 (carriers)
+  I64: venture       # 互联网和相关服务
+  I65: venture       # 软件和信息技术服务业
+  # J 金融业
+  J66: banking       # 货币金融服务
+  J67: broker        # 资本市场服务
+  J68: insurance     # 保险业
+  J69: other         # 其他金融业 (CSI 300 members are financial-information software, not balance-sheet financials)
+  # K 房地产业
+  K70: real_estate   # 房地产业
+  # L 租赁和商务服务业
+  L71: other         # 租赁业
+  L72: consumer      # 商务服务业 (CSI 300: duty-free retail, consumer markets, advertising)
+  # M 科学研究和技术服务业
+  M73: healthcare    # 研究和试验发展 (CSI 300: CRO)
+  M74: other         # 专业技术服务业
+  M75: other         # 科技推广和应用服务业
+  # N 水利、环境和公共设施管理业
+  N76: utility       # 水利管理业
+  N77: utility       # 生态保护和环境治理业
+  N78: utility       # 公共设施管理业
+  # O 居民服务、修理和其他服务业
+  O79: consumer      # 居民服务业
+  O80: consumer      # 机动车、电子产品和日用产品修理业
+  O81: consumer      # 其他服务业
+  # P 教育
+  P82: consumer      # 教育
+  # Q 卫生和社会工作 (baostock labels 卫生 as Q84)
+  Q83: healthcare    # 卫生
+  Q84: healthcare    # 卫生 / 社会工作
+  # R 文化、体育和娱乐业
+  R85: consumer      # 新闻和出版业
+  R86: consumer      # 广播、电视、电影和影视录音制作业
+  R87: consumer      # 广播、电视、电影和录音制作业 / 文化艺术业
+  R88: consumer      # 体育
+  R89: consumer      # 娱乐业
+  # S 综合
+  S90: other         # 综合
+
+# Pre-2012 code-less labels, e.g. "金融、保险业-银行业" or "制造业-食品、饮料". Matched
+# against the most specific label segment first (split on "-"), rules in order;
+# the first substring hit wins.
+legacy_name_rules:
+  - {contains: 银行, group: banking}
+  - {contains: 保险, group: insurance}
+  - {contains: 证券, group: broker}
+  - {contains: 期货, group: broker}
+  - {contains: 房地产, group: real_estate}
+  - {contains: 电力, group: utility}
+  - {contains: 煤气, group: utility}
+  - {contains: 燃气, group: utility}
+  - {contains: 自来水, group: utility}
+  - {contains: 水的生产, group: utility}
+  - {contains: 公路, group: utility}
+  - {contains: 铁路运输, group: utility}
+  - {contains: 医药, group: healthcare}
+  - {contains: 生物制品, group: healthcare}
+  - {contains: 卫生, group: healthcare}
+  - {contains: 食品, group: consumer}
+  - {contains: 饮料, group: consumer}
+  - {contains: 纺织, group: consumer}
+  - {contains: 服装, group: consumer}
+  - {contains: 零售, group: consumer}
+  - {contains: 旅游, group: consumer}
+  - {contains: 餐饮, group: consumer}
+  - {contains: 传播, group: consumer}
+  - {contains: 软件, group: venture}
+  - {contains: 互联网, group: venture}
+  - {contains: 计算机应用, group: venture}
+  - {contains: 信息技术, group: venture}
+  - {contains: 电子, group: growth_manufacturing}
+  - {contains: 机械, group: growth_manufacturing}
+  - {contains: 设备, group: growth_manufacturing}
+  - {contains: 仪器, group: growth_manufacturing}
+  - {contains: 汽车, group: growth_manufacturing}
+  - {contains: 采掘, group: cyclical}
+  - {contains: 煤炭, group: cyclical}
+  - {contains: 石油, group: cyclical}
+  - {contains: 化学, group: cyclical}
+  - {contains: 金属, group: cyclical}
+  - {contains: 建筑, group: cyclical}
+  - {contains: 造纸, group: cyclical}
+  - {contains: 塑料, group: cyclical}
+  - {contains: 橡胶, group: cyclical}
+  - {contains: 交通运输, group: cyclical}
+  - {contains: 农, group: cyclical}
+  - {contains: 林, group: cyclical}
+  - {contains: 牧, group: cyclical}
+  - {contains: 渔, group: cyclical}
+  - {contains: 综合, group: other}
