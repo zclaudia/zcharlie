@@ -6,11 +6,15 @@ no-op, a changed one closes the open interval and opens a new one at the
 entry's effective date, and an empty classification closes the open interval.
 Snapshots may be partial (one symbol); listings absent from a snapshot are
 left untouched.
+
+The historical backfill (P1-A4) rebuilds a window from whole-market snapshots
+with :meth:`IndustryRepository.rebuild_history` instead (see :mod:`.intervals`).
 """
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
+from functools import partial
 from typing import Protocol
 
 import structlog
@@ -18,6 +22,14 @@ from sqlalchemy import or_, select
 
 from investment_agent.storage.models.pit_snapshot import IndustryClassification
 from investment_agent.storage.repositories.base import Repository
+from investment_agent.storage.repositories.intervals import (
+    Span,
+    boundaries,
+    merge_timeline,
+    plan_rows,
+    scalar_spans,
+    state_at,
+)
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pit import OutOfOrderSnapshotError, to_utc
 
@@ -66,8 +78,150 @@ class IndustryChange:
     new_name: str | None
 
 
+class DatedIndustrySnapshotLike(IndustrySnapshotLike, Protocol):
+    @property
+    def effective_date(self) -> date | None: ...
+
+
+@dataclass(frozen=True)
+class IndustryRebuild:
+    """Outcome of :meth:`IndustryRepository.rebuild_history`."""
+
+    listings: int
+    reclassified: tuple[str, ...]
+    """Tickers whose classification changed inside the window."""
+    unclassified: tuple[str, ...]
+    """Requested tickers that no snapshot classifies."""
+    kept: int
+    reused: int
+    deleted: int
+    inserted: int
+
+
+IndustryValue = tuple[str | None, str]
+
+
 class IndustryRepository(Repository[IndustryClassification]):
     model = IndustryClassification
+
+    async def rebuild_history(
+        self,
+        ordered_snapshots: Sequence[DatedIndustrySnapshotLike],
+        *,
+        tickers: Collection[str],
+    ) -> IndustryRebuild:
+        """Recompute the classification history of ``tickers`` from snapshots.
+
+        ``ordered_snapshots`` are whole-market answers ordered by query date
+        (e.g. one per year start plus the current one). For each ticker the
+        snapshots give a point per snapshot: its entry's ``(code, name)`` at
+        the entry's effective date, or "unclassified" at the snapshot's
+        effective date when the ticker is absent (not listed yet / delisted).
+        Inside the window the points are authoritative; rows before it and
+        changes recorded after it are kept (same merge as
+        :meth:`UniverseRepository.rebuild_history`): no duplicates, no gaps,
+        idempotent, provenance kept on rows that only move a bound.
+
+        Only ``tickers`` are touched; entries of other listings are ignored and
+        no listing is created for them.
+        """
+
+        system = ordered_snapshots[0].system if ordered_snapshots else "csrc"
+        if any(snapshot.system != system for snapshot in ordered_snapshots):
+            raise ValueError("industry snapshots of different systems cannot be merged")
+        dated = [s for s in ordered_snapshots if s.effective_date is not None]
+        captured_at = max((to_utc(s.captured_at) for s in dated), default=None)
+        source = dated[-1].source if dated else "baostock"
+        by_ticker = [{entry.ticker: entry for entry in s.entries} for s in dated]
+
+        listings = ListingRepository(self.session)
+        kept = reused = deleted = inserted = 0
+        reclassified: list[str] = []
+        unclassified: list[str] = []
+        for ticker in sorted(set(tickers)):
+            points_by_day: dict[date, IndustryValue | None] = {}
+            name: str | None = None
+            for snapshot, entries in zip(dated, by_ticker, strict=True):
+                entry = entries.get(ticker)
+                if entry is None:
+                    assert snapshot.effective_date is not None
+                    points_by_day[snapshot.effective_date] = None
+                    continue
+                name = entry.company_name or name
+                points_by_day[entry.effective_date] = (
+                    (entry.industry_code, entry.industry_name)
+                    if entry.industry_name is not None
+                    else None
+                )
+            if not points_by_day:
+                continue
+            points = sorted(points_by_day.items())
+            if all(value is None for _, value in points):
+                unclassified.append(ticker)
+            listing = await listings.ensure_a_share_listing(ticker, company_name=name)
+            rows = await self.history(listing.id, system=system)
+
+            def span_of(row: IndustryClassification) -> Span[IndustryValue]:
+                return Span((row.code, row.name), row.valid_from, row.valid_to)
+
+            stored_spans = [span_of(row) for row in rows]
+            timeline = merge_timeline(
+                partial(state_at, stored_spans),
+                boundaries(stored_spans),
+                points,
+            )
+            desired = scalar_spans(timeline)
+            window = (points[0][0], points[-1][0])
+            if len({span.value for span in desired if _overlaps(span, *window)}) > 1:
+                reclassified.append(ticker)
+            plan = plan_rows(rows, desired, span_of)
+            kept += len(plan.keep)
+            for row in plan.delete:
+                await self.session.delete(row)
+                deleted += 1
+            await self.session.flush()
+            for row, span in sorted(plan.reuse, key=lambda pair: pair[1].valid_from):
+                row.valid_from, row.valid_to = span.valid_from, span.valid_to
+                reused += 1
+                await self.session.flush()
+            for span in plan.insert:
+                assert captured_at is not None
+                code, label = span.value
+                self.session.add(
+                    IndustryClassification(
+                        listing_id=listing.id,
+                        system=system,
+                        code=code,
+                        name=label,
+                        valid_from=span.valid_from,
+                        valid_to=span.valid_to,
+                        source=source,
+                        captured_at=captured_at,
+                    )
+                )
+                inserted += 1
+            await self.session.flush()
+        result = IndustryRebuild(
+            listings=len(set(tickers)),
+            reclassified=tuple(reclassified),
+            unclassified=tuple(unclassified),
+            kept=kept,
+            reused=reused,
+            deleted=deleted,
+            inserted=inserted,
+        )
+        log.info(
+            "industry_history_rebuilt",
+            system=system,
+            snapshots=len(dated),
+            listings=result.listings,
+            reclassified=len(reclassified),
+            kept=kept,
+            reused=reused,
+            deleted=deleted,
+            inserted=inserted,
+        )
+        return result
 
     async def apply_industry_snapshot(
         self, snapshot: IndustrySnapshotLike
@@ -204,3 +358,7 @@ class IndustryRepository(Repository[IndustryClassification]):
         )
         await self.session.flush()
         return change
+
+
+def _overlaps(span: Span[IndustryValue], start: date, end: date) -> bool:
+    return span.valid_from <= end and (span.valid_to is None or span.valid_to > start)
