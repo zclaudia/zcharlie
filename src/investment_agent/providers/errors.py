@@ -28,3 +28,25 @@ class ProviderDataError(ProviderError):
 
 class LookaheadDataError(ProviderDataError):
     """The provider returned data effective after the capture (or as-of) date."""
+
+
+class QuotaExhaustedError(ProviderError):
+    """The provider's usage quota is exhausted (e.g. the iFinD gateway 5-hour limit).
+
+    Terminal for the current job: retrying inside the job only burns time and
+    whatever quota frees up. Collectors stop their remaining batches, keep
+    what they stored and finish ``partial`` (reason ``quota``); the next
+    scheduled run resumes naturally.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str,
+        status_code: int | None = None,
+        detail: str = "",
+    ) -> None:
+        super().__init__(message, provider=provider, error_code="quota_exhausted")
+        self.status_code = status_code
+        self.detail = detail

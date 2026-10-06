@@ -9,7 +9,11 @@ import openai
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 from sqlalchemy.exc import OperationalError
 
-from investment_agent.providers.errors import ProviderError, ProviderTransientError
+from investment_agent.providers.errors import (
+    ProviderError,
+    ProviderTransientError,
+    QuotaExhaustedError,
+)
 
 _SQLITE_TRANSIENT_MARKERS = ("database is locked", "database is busy", "database table is locked")
 
@@ -28,6 +32,32 @@ class ResearchRetryableError(RuntimeError):
         self.reason = reason
 
 
+_QUOTA_MARKERS = ("usage limit", "[http 403]")
+
+
+def is_quota_exhausted(exc: BaseException) -> bool:
+    """Whether ``exc`` means the iFinD gateway quota is used up.
+
+    Covers the typed :class:`QuotaExhaustedError` and, defensively, a raw
+    ``httpx.HTTPStatusError`` from ifind-proxy: 429, or 502 carrying the
+    upstream usage-limit message (older proxy builds).
+    """
+
+    if isinstance(exc, QuotaExhaustedError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        status = exc.response.status_code
+        if status == 429:
+            return True
+        if status == 502:
+            try:
+                text = exc.response.text.lower()
+            except Exception:  # streamed / undecodable body
+                return False
+            return any(marker in text for marker in _QUOTA_MARKERS)
+    return False
+
+
 def _is_retryable_status(status_code: int) -> bool:
     return status_code in {408, 429} or status_code >= 500
 
@@ -37,13 +67,18 @@ def is_transient_error(exc: BaseException) -> bool:
 
     Network, timeout, rate-limit and 5xx failures (iFinD proxy via httpx, LLM
     via openai / pydantic-ai, reference providers via
-    ``ProviderTransientError``) and SQLite lock contention are transient. Local
+    ``ProviderTransientError``) and SQLite lock contention are transient.
+    iFinD quota exhaustion (:func:`is_quota_exhausted`) is not. Local
     filesystem errors (``FileExistsError``, ``PermissionError``, disk full, ...)
     and validation/programming errors are terminal: retrying cannot fix them.
     """
 
     if isinstance(exc, ResearchRetryableError):
         return True
+    if is_quota_exhausted(exc):
+        # Quota exhaustion is never transient within a job: the 5-hour
+        # window cannot reset during in-job backoff.
+        return False
     if isinstance(exc, ProviderTransientError):
         # Reference-data providers (baostock) classify their own failures.
         return True

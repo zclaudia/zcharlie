@@ -25,6 +25,12 @@ listings that need a raw bar this run; the value is stored on the
 latest baostock financial ``total_shares`` instead (see
 :meth:`FinancialSnapshotRepository.total_shares_as_of`); these iFinD values
 serve watchlist cross-checks.
+
+Quota: when ifind-proxy reports the gateway quota exhausted
+(:class:`~investment_agent.providers.errors.QuotaExhaustedError`) the
+collector stops at once - no further request of this run - keeps every bar
+already stored and finishes ``partial`` with the remaining listings tagged
+``quota``.
 """
 
 from __future__ import annotations
@@ -37,6 +43,7 @@ from decimal import Decimal, InvalidOperation
 import structlog
 
 from investment_agent.research.ifind_chain import IfindProxyResult
+from investment_agent.research.retry_policy import is_quota_exhausted
 from investment_agent.snapshots.collect import (
     IFIND_PROVIDER,
     ArtifactWriter,
@@ -199,13 +206,23 @@ async def collect_market_snapshot(
             if start <= trade_date:
                 starts[adjust][ticker] = start
 
-    shares, share_errors = await _fetch_total_shares(
-        collector, sorted(starts["none"]), trade_date
-    )
-
     requests = plan_history_requests(starts, trade_date)
+    quota_hit = False
+    try:
+        shares, share_errors = await _fetch_total_shares(
+            collector, sorted(starts["none"]), trade_date
+        )
+    except Exception as exc:
+        if not is_quota_exhausted(exc):
+            raise
+        shares, share_errors = {}, {}
+        quota_hit = True
+        report.stop_for_quota(exc, [])
+
     failed_series: set[tuple[str, str]] = set()
     for index, request in enumerate(requests, start=1):
+        if quota_hit:
+            break
         tickers = [t for t in request.tickers if (t, request.adjust) not in failed_series]
         if not tickers:
             continue
@@ -228,6 +245,10 @@ async def collect_market_snapshot(
         except LeaseLostError:
             raise
         except Exception as exc:
+            if is_quota_exhausted(exc):
+                quota_hit = True
+                report.stop_for_quota(exc, [])
+                break
             reason = error_reason(exc)
             report.record_failure(exc)
             log.warning(
@@ -252,6 +273,8 @@ async def collect_market_snapshot(
             for adjust in SERIES
         ):
             completeness.mark_collected(ticker)
+        elif quota_hit:
+            report.stop_for_quota_ticker(ticker)
         else:
             completeness.mark_missing(
                 ticker,
@@ -280,6 +303,8 @@ async def collect_market_snapshot(
 async def _fetch_total_shares(
     collector: _Collector, tickers: Sequence[str], trade_date: date
 ) -> tuple[dict[str, Decimal], dict[str, str]]:
+    """Total shares per ticker; quota exhaustion propagates to the caller."""
+
     shares: dict[str, Decimal] = {}
     errors: dict[str, str] = {}
     for index, batch in enumerate(chunked(tickers), start=1):
@@ -287,6 +312,8 @@ async def _fetch_total_shares(
         try:
             result = await collector.caller.call(INFO_PATH, request)
         except Exception as exc:
+            if is_quota_exhausted(exc):
+                raise
             # Missing shares only degrade the cross-check; bars still count.
             reason = error_reason(exc)
             log.warning("snapshot.market.info_failed", tickers=batch, error=reason)

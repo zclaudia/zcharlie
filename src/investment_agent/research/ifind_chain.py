@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from investment_agent.config import Settings
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
+from investment_agent.providers.errors import QuotaExhaustedError
 from investment_agent.research.contracts import (
     CANONICAL_SCHEMA_VERSION,
     CanonicalResearchBundle,
@@ -107,16 +108,69 @@ class ResearchPartialError(RuntimeError):
         super().__init__(f"research run {run_id} completed partially: {reason}")
 
 
-class IfindProxyClient:
-    """Small async client that unwraps the proxy's nested ``data_preview`` CSV."""
+# Upstream quota answers relayed by older ifind-proxy builds as HTTP 502
+# (the Kimi gateway's ``403 You've reached your 5-hour usage limit``).
+_QUOTA_MARKERS = ("usage limit", "[http 403]")
+_MAX_DETAIL_CHARS = 300
 
-    def __init__(self, *, base_url: str, api_key: str, timeout_seconds: float = 60.0):
+
+def _response_detail(response: httpx.Response) -> str:
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    detail: object = body.get("detail", body) if isinstance(body, dict) else body
+    text = detail if isinstance(detail, str) else (response.text if detail is None else str(detail))
+    text = " ".join(text.split())
+    return text if len(text) <= _MAX_DETAIL_CHARS else text[: _MAX_DETAIL_CHARS - 3] + "..."
+
+
+def proxy_quota_error(response: httpx.Response, path: str) -> QuotaExhaustedError | None:
+    """Classify an ifind-proxy answer as quota exhaustion.
+
+    * HTTP 429 - ifind-proxy maps the gateway's usage-limit error to 429;
+    * HTTP 502 whose detail mentions ``usage limit`` or ``[HTTP 403]`` - the
+      same condition relayed by proxy builds that predate the 429 mapping.
+    """
+
+    status = response.status_code
+    if status not in {429, 502}:
+        return None
+    detail = _response_detail(response)
+    if status == 502 and not any(marker in detail.lower() for marker in _QUOTA_MARKERS):
+        return None
+    return QuotaExhaustedError(
+        f"iFinD quota exhausted (HTTP {status} from ifind-proxy at {path}): {detail}; "
+        "not retried - collection resumes once the gateway quota window resets",
+        provider="ifind",
+        status_code=status,
+        detail=detail,
+    )
+
+
+class IfindProxyClient:
+    """Small async client that unwraps the proxy's nested ``data_preview`` CSV.
+
+    Quota exhaustion is raised as :class:`QuotaExhaustedError` (terminal, never
+    retried); other HTTP errors keep their ``httpx.HTTPStatusError`` form so the
+    shared retry policy classifies them.
+    """
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        timeout_seconds: float = 60.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ):
         if not api_key:
             raise ValueError("IFIND_PROXY_API_KEY is required")
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"X-API-Key": api_key},
             timeout=timeout_seconds,
+            transport=transport,
         )
 
     async def __aenter__(self) -> IfindProxyClient:
@@ -127,6 +181,9 @@ class IfindProxyClient:
 
     async def post_rows(self, path: str, payload: dict[str, Any]) -> IfindProxyResult:
         response = await self._client.post(path, json=payload)
+        quota = proxy_quota_error(response, path)
+        if quota is not None:
+            raise quota
         response.raise_for_status()
         body = response.json()
         if not isinstance(body, dict):

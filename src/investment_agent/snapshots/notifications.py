@@ -1,8 +1,9 @@
 """Notifications for finished snapshot runs (via the notifier abstraction).
 
 * ``info`` - a universe sync changed index membership;
-* ``action_required`` - a snapshot run failed, or a market / financial run
-  finished below the completeness threshold.
+* ``action_required`` - a snapshot run failed, a market / financial run
+  finished below the completeness threshold, or it stopped because the iFinD
+  quota ran out (``stop_reason="quota"``).
 
 Each run notifies at most once: the target path is deterministic per run and
 an existing file is never rewritten.
@@ -14,6 +15,7 @@ from typing import Any, Literal
 
 from investment_agent.domain.protocols import Notifier, RenderedContent
 from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.snapshots.collect import QUOTA_STOP_REASON
 from investment_agent.snapshots.jobs import (
     FINANCIAL_SNAPSHOT,
     MARKET_SNAPSHOT,
@@ -48,6 +50,8 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
     if run.status == "failed":
         return "action_required"
     if run.kind in {MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT}:
+        if (run.metadata_json or {}).get("stop_reason") == QUOTA_STOP_REASON:
+            return "action_required"
         completeness = _completeness(run)
         ratio = completeness.get("ratio") if completeness else None
         if isinstance(ratio, int | float) and ratio < threshold:
@@ -89,6 +93,14 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         lines.append(f"- 数据源：{request['provider']}")
     if run.error_summary:
         lines.append(f"- 错误：{run.error_summary}")
+    quota_stop = metadata.get("stop_reason") == QUOTA_STOP_REASON
+    if quota_stop:
+        lines.append(
+            "- **iFinD 额度耗尽**：本次任务已停止剩余批次，已采数据保留；"
+            "额度窗口（约 5 小时）恢复后下次调度自动续采。"
+        )
+        if metadata.get("stop_error"):
+            lines.append(f"- 上游信息：{metadata.get('stop_error')}")
     if run.kind == UNIVERSE_SYNC:
         added = _tickers(metadata.get("added"))
         removed = _tickers(metadata.get("removed"))
@@ -100,7 +112,8 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         lines.append(
             f"- 完整率：{completeness.get('ratio')}（阈值 {threshold}）；"
             f"应采 {completeness.get('expected')}，实采 {completeness.get('collected')}，"
-            f"失败 {completeness.get('failed_count')}，待披露 {completeness.get('pending_count')}"
+            f"失败 {completeness.get('failed_count')}，待披露 {completeness.get('pending_count')}，"
+            f"额度未采 {completeness.get('quota_count', 0)}"
         )
         missing = completeness.get("missing") or {}
         if isinstance(missing, dict) and missing:
@@ -110,7 +123,12 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
                     lines.append(f"- {ticker}：{detail.get('kind')} · {detail.get('reason')}")
             if len(missing) > _MAX_LISTED:
                 lines.append(f"- ……另有 {len(missing) - _MAX_LISTED} 只，见运行元数据")
-    if level == "action_required":
+    if quota_stop:
+        lines += [
+            "",
+            "处理：无需立即重试；如需提前补采，等额度恢复后用 `ia snapshot` 重新入队。",
+        ]
+    elif level == "action_required":
         lines += ["", "处理：检查 iFinD proxy / baostock 可用性后用 `ia snapshot` 重新采集。"]
     return "\n".join(lines) + "\n"
 

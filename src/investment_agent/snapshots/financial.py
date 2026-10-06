@@ -19,6 +19,9 @@ the collector calls every ``/financial/...`` endpoint the registry cites
 Multi-period derived fields (growth, ROE stability) need several periods and
 are left to the factor library.
 
+Quota exhaustion stops the run at once (remaining batches tagged ``quota``,
+stored rows kept, run ``partial``); see :mod:`investment_agent.snapshots.market`.
+
 An answer with no values for a ticker means "not yet disclosed": the ticker
 is recorded as ``pending`` (not an error) and retried by the next run. Live
 rows use ``availability="approx"`` with ``available_from`` = the capture date
@@ -39,6 +42,7 @@ import structlog
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.research.ifind_chain import IfindProxyResult
 from investment_agent.research.ifind_mapping import IFIND_FIELD_MAPPINGS, IfindFieldMapping
+from investment_agent.research.retry_policy import is_quota_exhausted
 from investment_agent.snapshots.collect import (
     IFIND_PROVIDER,
     ArtifactWriter,
@@ -218,7 +222,8 @@ async def collect_financial_snapshot(
 
     endpoints = financial_endpoints()
     stored = 0
-    for index, batch in enumerate(chunked(todo), start=1):
+    batches = list(chunked(todo))
+    for index, batch in enumerate(batches, start=1):
         try:
             results: dict[str, IfindProxyResult] = {}
             for endpoint in endpoints:
@@ -274,6 +279,10 @@ async def collect_financial_snapshot(
         except LeaseLostError:
             raise
         except Exception as exc:
+            if is_quota_exhausted(exc):
+                remaining = [t for rest in batches[index - 1 :] for t in rest]
+                report.stop_for_quota(exc, remaining)
+                break
             reason = error_reason(exc)
             report.record_failure(exc)
             log.warning("snapshot.financial.batch_failed", tickers=batch, error=reason)

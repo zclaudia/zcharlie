@@ -57,8 +57,9 @@ def rows_by_ticker(rows: Sequence[dict[str, str]]) -> dict[str, list[dict[str, s
 class ProxyBatchCaller:
     """Throttled proxy calls with a small per-batch retry budget.
 
-    Transient failures (network, timeouts, 429/5xx) are retried up to
-    ``retries`` times with linear backoff; anything else is raised at once.
+    Transient failures (network, timeouts, 5xx) are retried up to ``retries``
+    times with linear backoff; anything else - including iFinD quota
+    exhaustion - is raised at once.
     The caller decides what a failed batch means; one batch never aborts the
     whole job.
     """
@@ -133,13 +134,16 @@ def error_reason(exc: BaseException) -> str:
     return text if len(text) <= 300 else text[:297] + "..."
 
 
-# Missing tickers fall into three buckets:
+# Missing tickers fall into four buckets:
 # * ``failed``  - a request or parse error; degrades the run to ``partial``;
 # * ``no_data`` - the provider answered but had nothing (e.g. suspended stock
 #   without a bar); counts against completeness but is not an error;
 # * ``pending`` - financial report not yet disclosed; excluded from the
-#   completeness denominator.
-MissingKind = Literal["failed", "no_data", "pending"]
+#   completeness denominator;
+# * ``quota``   - not attempted (or interrupted) because the iFinD quota ran
+#   out; the run finishes ``partial`` and the next run resumes them.
+MissingKind = Literal["failed", "no_data", "pending", "quota"]
+QUOTA_STOP_REASON = "quota"
 
 
 @dataclass
@@ -181,7 +185,14 @@ class Completeness:
             return 1.0
         return round(len(self.collected) / denominator, 4)
 
+    @property
+    def quota(self) -> list[str]:
+        return self.tickers("quota")
+
     def status(self) -> Literal["success", "partial", "failed"]:
+        if self.quota:
+            # Quota exhaustion keeps what was stored and never fails the run.
+            return "partial"
         if self.failed and not self.collected:
             return "failed"
         return "partial" if self.failed else "success"
@@ -193,6 +204,7 @@ class Completeness:
             "missing_count": len(self.missing),
             "failed_count": len(self.failed),
             "pending_count": len(self.pending),
+            "quota_count": len(self.quota),
             "ratio": self.ratio,
             "missing": {
                 ticker: {"kind": kind, "reason": reason}
@@ -209,25 +221,60 @@ class CollectionReport:
     metadata: dict[str, object] = field(default_factory=dict)
     all_failures_transient: bool = True
     provider: str = IFIND_PROVIDER
+    stop_reason: str | None = None
+    stop_error: str | None = None
 
     def record_failure(self, exc: BaseException) -> None:
         if not is_transient_error(exc):
             self.all_failures_transient = False
+
+    def stop_for_quota(self, exc: BaseException, tickers: Sequence[str]) -> None:
+        """Record quota exhaustion and tag every not-yet-collected ticker ``quota``."""
+
+        self.stop_reason = QUOTA_STOP_REASON
+        self.stop_error = error_reason(exc)
+        for ticker in tickers:
+            self.completeness.mark_missing(
+                ticker, "quota", f"not collected: iFinD quota exhausted ({self.stop_error})"
+            )
+        log.warning(
+            "snapshot.quota_exhausted",
+            provider=self.provider,
+            remaining=len(tickers),
+            error=self.stop_error,
+        )
+
+    def stop_for_quota_ticker(self, ticker: str) -> None:
+        """Tag one more ticker as not collected because of the recorded quota stop."""
+
+        self.completeness.mark_missing(
+            ticker, "quota", f"not collected: iFinD quota exhausted ({self.stop_error})"
+        )
 
     @property
     def status(self) -> Literal["success", "partial", "failed"]:
         return self.completeness.status()
 
     def to_metadata(self) -> dict[str, object]:
-        return {"completeness": self.completeness.to_metadata(), **self.metadata}
+        metadata: dict[str, object] = {
+            "completeness": self.completeness.to_metadata(),
+            **self.metadata,
+        }
+        if self.stop_reason is not None:
+            metadata["stop_reason"] = self.stop_reason
+            metadata["stop_error"] = self.stop_error
+        return metadata
 
     def summary(self) -> str:
         c = self.completeness
-        return (
+        text = (
             f"collected {len(c.collected)}/{len(c.expected)}; "
             f"failed {len(c.failed)}, no data {len(c.tickers('no_data'))}, "
             f"pending {len(c.pending)}"
         )
+        if self.stop_reason == QUOTA_STOP_REASON:
+            text += f"; stopped: iFinD quota exhausted, {len(c.quota)} not collected"
+        return text
 
     def failure(self) -> ProviderError:
         """The error raised when nothing could be collected."""
