@@ -188,8 +188,23 @@ def _fraction(value: Any) -> float | None:
 
 
 def _first_row(result: IfindProxyResult, name: str) -> dict[str, str]:
+    """Return the first row of a latest-period endpoint; fail hard when empty."""
+
     if not result.rows:
         raise ValueError(f"iFinD returned no rows for {name}")
+    return result.rows[0]
+
+
+def _optional_first_row(result: IfindProxyResult | None) -> dict[str, str] | None:
+    """Return the first row of a base/historical-period endpoint, or ``None``.
+
+    Newly listed companies have no FY-3 statements or full profitability
+    history; those periods only feed derived metrics (growth, ROE stability)
+    which then become missing instead of aborting the whole bundle.
+    """
+
+    if result is None or not result.rows:
+        return None
     return result.rows[0]
 
 
@@ -197,6 +212,39 @@ def _annualized_growth(latest: float | None, base: float | None, years: int) -> 
     if latest is None or base is None or latest < 0 or base <= 0 or years <= 0:
         return None
     return round(float((latest / base) ** (1 / years) - 1), 6)
+
+
+# Trailing window for the "1y" market statistics. The provider request asks for
+# ~400 calendar days so the window survives holidays; statistics are computed
+# only over sessions within 365 calendar days of the anchor date.
+ONE_YEAR_WINDOW_DAYS = 365
+# Fewer sessions than this inside the window means the "1y" statistics cover
+# materially less than a year (new listing, long suspension) and are flagged.
+MIN_ONE_YEAR_SESSIONS = 200
+
+
+def _row_date(row: dict[str, str]) -> date | None:
+    try:
+        return datetime.strptime(str(row.get("time", "")), "%Y%m%d").date()
+    except ValueError:
+        return None
+
+
+def _trim_to_one_year(
+    rows: list[dict[str, str]], anchor: date | None
+) -> list[dict[str, str]]:
+    """Keep only sessions in ``(anchor - 365d, anchor]``.
+
+    ``anchor`` defaults to the latest dated session. Rows whose date cannot be
+    parsed are dropped from the window.
+    """
+
+    dated = [(row_date, row) for row in rows if (row_date := _row_date(row)) is not None]
+    if not dated:
+        return []
+    end = anchor or max(row_date for row_date, _ in dated)
+    start = end - timedelta(days=ONE_YEAR_WINDOW_DAYS)
+    return [row for row_date, row in dated if start < row_date <= end]
 
 
 def _return_stats(rows: list[dict[str, str]]) -> tuple[float | None, float | None, float | None]:
@@ -242,13 +290,52 @@ def _source(
     }
 
 
+def _positive_multiple(price: float | None, per_share: float | None) -> float | None:
+    """``price / per_share`` only when both exist and the denominator is positive."""
+
+    if price is None or per_share is None or per_share <= 0:
+        return None
+    return price / per_share
+
+
+def _roe_stability(roe_values: list[float | None]) -> float | None:
+    """``1 - pstdev/mean`` over the full expected ROE history, clamped to [0, 1].
+
+    Every expected year must be present and the mean must be positive;
+    otherwise stability is undefined (a partial history or a loss-making
+    average would make the ratio meaningless) and the field stays missing.
+    """
+
+    if not roe_values or any(value is None for value in roe_values):
+        return None
+    values = [float(value) for value in roe_values if value is not None]
+    roe_mean = statistics.mean(values)
+    if roe_mean <= 0:
+        return None
+    return round(max(0.0, min(1.0, 1 - statistics.pstdev(values) / roe_mean)), 6)
+
+
 def _with_quality(
     item: dict[str, Any],
     required_fields: tuple[str, ...],
     *,
     derived_fields: tuple[str, ...] = (),
+    not_meaningful: dict[str, tuple[str, str]] | None = None,
+    extra_flags: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    missing = [field for field in required_fields if item.get(field) is None]
+    """Attach missing-field, derived-field and data-quality audit fields.
+
+    ``not_meaningful`` maps fields that are intentionally ``None`` (e.g. PE of a
+    loss-making company) to ``(flag, message)``; they are flagged for review
+    instead of being reported as provider data gaps.
+    """
+
+    not_meaningful = not_meaningful or {}
+    missing = [
+        field
+        for field in required_fields
+        if item.get(field) is None and field not in not_meaningful
+    ]
     flags = [
         {
             "field": field,
@@ -270,11 +357,25 @@ def _with_quality(
         for field in derived_fields
         if item.get(field) is not None
     )
+    flags.extend(
+        {
+            "field": field,
+            "flag": flag,
+            "message": message,
+            "provider": "ifind",
+            "severity": "review",
+        }
+        for field, (flag, message) in not_meaningful.items()
+        if item.get(field) is None
+    )
+    flags.extend(extra_flags or [])
     item["missing_fields"] = missing
     item["quality_flags"] = flags
     item["provider_conflicts"] = {}
     item["warnings"] = [flag["message"] for flag in flags]
-    item["needs_agent_review"] = bool(missing)
+    item["needs_agent_review"] = bool(missing) or any(
+        flag["severity"] in {"review", "error"} for flag in flags
+    )
     return item
 
 
@@ -360,12 +461,15 @@ def canonicalize_ifind_results(
     report_year: int,
     results: dict[str, IfindProxyResult],
     retrieved_at: str,
+    as_of: date | None = None,
 ) -> CanonicalBundle:
     """Normalize one ticker's decoded proxy responses to the canonical contract.
 
     Pure and offline: the caller supplies already-decoded ``IfindProxyResult``
     objects plus the retrieval timestamp, so saved provider fixtures can be
     replayed to byte-identical canonical data without network access.
+    ``as_of`` anchors the trailing one-year market window; when omitted the
+    latest returned trading session is used.
     """
 
     ticker = _validate_ticker(ticker)
@@ -387,28 +491,46 @@ def canonicalize_ifind_results(
         if latest_price is not None and total_shares is not None
         else None
     )
-    return_1y, volatility_1y, max_drawdown_1y = _return_stats(history_rows)
+    one_year_rows = _trim_to_one_year(history_rows, as_of)
+    return_1y, volatility_1y, max_drawdown_1y = _return_stats(one_year_rows)
+    one_year_sessions = sum(
+        1
+        for row in one_year_rows
+        if (close := _number(row.get("close"))) is not None and close > 0
+    )
+    short_history = return_1y is not None and one_year_sessions < MIN_ONE_YEAR_SESSIONS
 
     profitability = _first_row(results[f"profitability_{report_year}"], "profitability")
     eps = _number(profitability.get("ths_eps_basic_stock"))
     book_value_per_share = _number(profitability.get("ths_nav_ps_stock"))
     revenue_per_share = _number(profitability.get("ths_revenue_ps_stock"))
-    pe = latest_price / eps if latest_price is not None and eps is not None and eps != 0 else None
-    pb = (
-        latest_price / book_value_per_share
-        if latest_price is not None
-        and book_value_per_share is not None
-        and book_value_per_share != 0
-        else None
-    )
-    ps = (
-        latest_price / revenue_per_share
-        if latest_price is not None and revenue_per_share is not None and revenue_per_share != 0
-        else None
-    )
+    # Valuation multiples are only meaningful over a positive denominator: a
+    # loss-making year (EPS <= 0), negative book value or non-positive revenue
+    # per share yields ``None`` plus a visible quality flag, never a negative
+    # multiple that downstream thresholds would read as "cheap".
+    not_meaningful: dict[str, tuple[str, str]] = {}
+    pe = _positive_multiple(latest_price, eps)
+    if eps is not None and eps <= 0:
+        not_meaningful["pe"] = (
+            "negative_earnings",
+            f"PE not meaningful: FY{report_year} basic EPS {eps:g} <= 0 (loss-making)",
+        )
+    pb = _positive_multiple(latest_price, book_value_per_share)
+    if book_value_per_share is not None and book_value_per_share <= 0:
+        not_meaningful["pb"] = (
+            "negative_book_value",
+            f"PB not meaningful: FY{report_year} net assets per share "
+            f"{book_value_per_share:g} <= 0",
+        )
+    ps = _positive_multiple(latest_price, revenue_per_share)
+    if revenue_per_share is not None and revenue_per_share <= 0:
+        not_meaningful["ps"] = (
+            "non_positive_revenue",
+            f"PS not meaningful: FY{report_year} revenue per share {revenue_per_share:g} <= 0",
+        )
 
     income_latest = _first_row(results["income_latest"], "latest income statement")
-    income_base = _first_row(results["income_base"], "base income statement")
+    income_base = _optional_first_row(results.get("income_base")) or {}
     cash_latest = _first_row(results["cash_latest"], "cash flow statement")
     capital_latest = _first_row(results["capital_latest"], "capital structure")
     revenue = _number(income_latest.get("ths_operating_total_revenue_stock"))
@@ -422,26 +544,14 @@ def canonicalize_ifind_results(
         if operating_cash_flow is not None and capital_expenditure is not None
         else None
     )
-    roe_values = [
-        value
-        for year in range(report_year - 3, report_year + 1)
-        if (
-            value := _fraction(
-                _first_row(results[f"profitability_{year}"], f"profitability {year}").get(
-                    "ths_roe_stock"
-                )
-            )
-        )
-        is not None
-    ]
-    roe_stability = None
-    if roe_values:
-        roe_mean = statistics.mean(roe_values)
-        if roe_mean:
-            roe_stability = round(
-                max(0.0, min(1.0, 1 - statistics.pstdev(roe_values) / roe_mean)),
-                6,
-            )
+    roe_values: list[float | None] = []
+    for year in range(report_year - 3, report_year + 1):
+        if year == report_year:
+            row: dict[str, str] | None = profitability
+        else:
+            row = _optional_first_row(results.get(f"profitability_{year}"))
+        roe_values.append(None if row is None else _fraction(row.get("ths_roe_stock")))
+    roe_stability = _roe_stability(roe_values)
 
     stock_fields = ("symbol", "name", "market", "industry", "market_cap")
     stock_item = _with_quality(
@@ -503,7 +613,13 @@ def canonicalize_ifind_results(
             "updated_at": quote_at,
             "field_sources": {
                 "latest_price": _source("latest_price", "/stock/history", quote_at),
-                "return_1y": _source("return_1y", "/stock/history", quote_at, quality="derived"),
+                "return_1y": _source(
+                    "return_1y",
+                    "/stock/history",
+                    quote_at,
+                    quality="derived",
+                    note=f"trailing {ONE_YEAR_WINDOW_DAYS} days, {one_year_sessions} sessions",
+                ),
                 "volatility_1y": _source(
                     "volatility_1y", "/stock/history", quote_at, quality="derived"
                 ),
@@ -547,6 +663,25 @@ def canonicalize_ifind_results(
             },
         },
         market_fields,
+        not_meaningful=not_meaningful,
+        extra_flags=(
+            [
+                {
+                    "field": field,
+                    "flag": "short_price_history",
+                    "message": (
+                        f"{field} covers only {one_year_sessions} trading sessions "
+                        f"(< {MIN_ONE_YEAR_SESSIONS}) within the trailing "
+                        f"{ONE_YEAR_WINDOW_DAYS}-day window"
+                    ),
+                    "provider": "ifind",
+                    "severity": "review",
+                }
+                for field in ("return_1y", "volatility_1y", "max_drawdown_1y")
+            ]
+            if short_history
+            else []
+        ),
         derived_fields=(
             "pe",
             "pb",
@@ -699,6 +834,7 @@ async def fetch_canonical_bundle(
         report_year=report_year,
         results=results,
         retrieved_at=datetime.now(UTC).isoformat(),
+        as_of=as_of,
     )
 
 
@@ -710,37 +846,78 @@ def _write_json(path: Path, payload: Any) -> None:
     )
 
 
-def _path_exists(payload: dict[str, Any], path: str) -> bool:
+_MISSING = object()
+_NEEDS_REVIEW_LABEL = re.compile(r"(?<![A-Za-z0-9_])needs_review(?![A-Za-z0-9_])")
+
+
+def _resolve_path(payload: dict[str, Any], path: str) -> Any:
+    """Return the value at a dotted path, or ``_MISSING`` when it does not exist."""
+
     current: Any = payload
     for part in path.split("."):
         if isinstance(current, dict) and part in current:
             current = current[part]
         else:
-            return False
-    return True
+            return _MISSING
+    return current
+
+
+def _path_exists(payload: dict[str, Any], path: str) -> bool:
+    return _resolve_path(payload, path) is not _MISSING
+
+
+def _cites_missing_value(score_item: dict[str, Any], path: str, value: Any) -> bool:
+    """True when a citation points at a null value or a field the kernel marked missing."""
+
+    if value is None:
+        return True
+    if isinstance(value, dict | list):
+        # Containers (e.g. field_sources.<payload>.<field>) document provenance,
+        # including provenance of a missing field; they are not the value itself.
+        return False
+    missing = {str(field) for field in score_item.get("missing_fields", [])}
+    return path.rsplit(".", 1)[-1] in missing
 
 
 def validate_explanation_fields(
     explanation: ResearchExplanation,
     score_item: dict[str, Any],
 ) -> None:
-    claims = (
+    """Reject citations that do not resolve or that point at missing values.
+
+    Evidence claims (classification, positive, negative, risk) must be backed
+    by an actual value; citing a null or a ``missing_fields`` entry would let
+    the agent build an argument on data that does not exist. Data-quality
+    notes are the one place where citing a missing value is the point, so they
+    only need the path to exist.
+    """
+
+    evidence_claims = (
         explanation.classification_rationale
         + explanation.positive_evidence
         + explanation.negative_evidence
         + explanation.risk_factors
-        + explanation.data_quality_notes
     )
-    invalid = sorted(
-        {
-            field
-            for claim in claims
-            for field in claim.supporting_fields
-            if not _path_exists(score_item, field)
-        }
-    )
-    if invalid:
-        raise ValueError(f"Agent cited unknown canonical fields: {', '.join(invalid)}")
+    unknown: set[str] = set()
+    missing_backed: set[str] = set()
+    for claim in evidence_claims:
+        for field in claim.supporting_fields:
+            value = _resolve_path(score_item, field)
+            if value is _MISSING:
+                unknown.add(field)
+            elif _cites_missing_value(score_item, field, value):
+                missing_backed.add(field)
+    for claim in explanation.data_quality_notes:
+        for field in claim.supporting_fields:
+            if not _path_exists(score_item, field):
+                unknown.add(field)
+    if unknown:
+        raise ValueError(f"Agent cited unknown canonical fields: {', '.join(sorted(unknown))}")
+    if missing_backed:
+        raise ValueError(
+            "Agent cited missing or null fields as evidence: "
+            + ", ".join(sorted(missing_backed))
+        )
 
 
 def validate_explanation_policy(
@@ -749,20 +926,25 @@ def validate_explanation_policy(
 ) -> None:
     """Enforce the explanation contract: citations resolve and labels hold.
 
-    The explanation agent may only cite canonical score fields that exist,
-    and when the deterministic kernel flagged ``needs_agent_review`` the
-    workflow conclusion must keep the ``needs_review`` label. Trading
-    instructions are impossible by schema: ``ResearchExplanation`` has no
-    order, position or return-promise fields.
+    The explanation agent may only cite canonical score fields that exist
+    (and, outside data-quality notes, that carry a value), and when the
+    deterministic kernel flagged ``needs_agent_review`` the workflow
+    conclusion must carry the exact ``needs_review`` label token (not a
+    substring such as ``no_needs_review``). Trading instructions are
+    impossible by schema: ``ResearchExplanation`` has no order, position or
+    return-promise fields.
     """
 
     validate_explanation_fields(explanation, score_item)
-    if score_item.get("needs_agent_review") and "needs_review" not in explanation.workflow_conclusion:
+    if score_item.get("needs_agent_review") and not _NEEDS_REVIEW_LABEL.search(
+        explanation.workflow_conclusion
+    ):
         raise ValueError("Explanation did not preserve the required needs_review workflow label")
 
 
 EXPLANATION_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的解释 Agent。只解释输入 JSON 中已经生成的事实与分数，不能补充外部事实，不能给出买入、卖出、仓位或收益承诺。
 每条 classification_rationale、positive_evidence、negative_evidence、risk_factors、data_quality_notes 都必须给出 supporting_fields，并使用输入 JSON 中真实存在的点路径，例如 business_score、key_metrics.roe、factor_scores.growth_durability、missing_fields。
+值为 null 或列在 missing_fields 中的字段不能作为分类、正面、负面或风险论据，只能在 data_quality_notes 中引用。
 如果 needs_agent_review 为 true，workflow_conclusion 必须是包含“needs_review”的字符串，并优先解释 missing_fields、quality_flags、freshness 和 warnings。输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要省略字段：
 {output_schema}"""
 

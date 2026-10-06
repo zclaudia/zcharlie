@@ -49,19 +49,33 @@ def _sanitized_samples() -> list[dict[str, Any]]:
 
 def _score_item(sample: dict[str, Any]) -> dict[str, Any]:
     fixture_dir = FIXTURE_ROOT / sample["ticker"].split(".")[0]
-    scores_name = "legacy_scores.json" if (fixture_dir / "legacy_scores.json").is_file() else "golden_scores.json"
+    scores_name = "golden_scores.json" if (fixture_dir / "golden_scores.json").is_file() else "legacy_scores.json"
     scores = json.loads((fixture_dir / scores_name).read_text(encoding="utf-8"))
     item = scores["items"][0]
     assert isinstance(item, dict)
     return item
 
 
-def _walk_paths(node: Any, prefix: str = "") -> Iterator[str]:
+def _walk_paths(node: Any, prefix: str = "") -> Iterator[tuple[str, Any]]:
     if isinstance(node, dict):
         for key, value in node.items():
             path = f"{prefix}.{key}" if prefix else str(key)
-            yield path
+            yield path, value
             yield from _walk_paths(value, path)
+
+
+def _evidence_paths(score_item: dict[str, Any]) -> list[str]:
+    """Paths that carry an actual value (citable as evidence)."""
+
+    missing = set(score_item.get("missing_fields", []))
+    return sorted(
+        {
+            path
+            for path, value in _walk_paths(score_item)
+            if value is not None
+            and (isinstance(value, dict | list) or path.rsplit(".", 1)[-1] not in missing)
+        }
+    )
 
 
 def _explanation(supporting_fields: list[str], *, needs_review: bool) -> ResearchExplanation:
@@ -84,7 +98,7 @@ def _explanation(supporting_fields: list[str], *, needs_review: bool) -> Researc
 @pytest.mark.parametrize("sample", _sanitized_samples(), ids=lambda sample: sample["ticker"])
 def test_all_citations_resolve_against_deterministic_score(sample: dict[str, Any]):
     score_item = _score_item(sample)
-    paths = sorted(set(_walk_paths(score_item)))
+    paths = _evidence_paths(score_item)
     assert paths, f"{sample['ticker']} score item exposes no citable paths"
 
     needs_review = bool(score_item.get("needs_agent_review"))
@@ -107,17 +121,47 @@ def test_unknown_citation_is_rejected_for_every_sample(sample: dict[str, Any]):
 @pytest.mark.parametrize("sample", _sanitized_samples(), ids=lambda sample: sample["ticker"])
 def test_needs_agent_review_forces_needs_review_label(sample: dict[str, Any]):
     score_item = _score_item(sample)
-    assert score_item.get("needs_agent_review") is True, (
-        "every current corpus sample misses dividend_yield; update this eval "
-        "if the kernel or gateway stops flagging samples for review"
-    )
-
     compliant = _explanation(["investment_score"], needs_review=True)
     validate_explanation_policy(compliant, score_item)
 
     non_compliant = _explanation(["investment_score"], needs_review=False)
-    with pytest.raises(ValueError, match="needs_review workflow label"):
+    if score_item.get("needs_agent_review"):
+        with pytest.raises(ValueError, match="needs_review workflow label"):
+            validate_explanation_policy(non_compliant, score_item)
+    else:
         validate_explanation_policy(non_compliant, score_item)
+
+
+def test_corpus_keeps_review_and_non_review_samples():
+    """Scoring v1.3 stopped forcing review for the provider-wide dividend gap.
+
+    The corpus must still exercise both sides of the label contract.
+    """
+
+    flags = {bool(_score_item(sample).get("needs_agent_review")) for sample in _sanitized_samples()}
+    assert flags == {True, False}
+
+
+@pytest.mark.parametrize("sample", _sanitized_samples(), ids=lambda sample: sample["ticker"])
+def test_missing_field_cannot_back_evidence_but_can_back_data_quality_notes(
+    sample: dict[str, Any],
+):
+    score_item = _score_item(sample)
+    null_paths = sorted(
+        path
+        for path, value in _walk_paths(score_item)
+        if value is None and path.startswith("key_metrics.")
+    )
+    assert null_paths, "every corpus sample misses at least dividend_yield"
+    evidence = _explanation([null_paths[0]], needs_review=True)
+    with pytest.raises(ValueError, match="missing or null fields"):
+        validate_explanation_policy(evidence, score_item)
+
+    data_quality = _explanation(["investment_score"], needs_review=True)
+    data_quality.data_quality_notes = [
+        EvidenceClaim(text="字段缺失需复核", supporting_fields=[null_paths[0], "missing_fields"])
+    ]
+    validate_explanation_policy(data_quality, score_item)
 
 
 def test_explanation_schema_has_no_trading_surface():

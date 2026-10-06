@@ -71,6 +71,7 @@ def test_provider_fixture_replays_to_frozen_canonical(sample: dict[str, Any]):
         report_year=int(_manifest()["report_year"]),
         results=_decode_raw(raw),
         retrieved_at=str(raw["retrieved_at"]),
+        as_of=date.fromisoformat(str(sample["collected_at"])),
     )
 
     assert bundle.pool == frozen_pool
