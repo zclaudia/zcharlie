@@ -1,0 +1,100 @@
+# 质量成长 (quality growth) - template v1 DRAFT for user review (P1-F2).
+#
+# Source archetype: research_kernel classify_stock "quality_growth" (growth
+# industries 电力设备/新能源/自动化/汽车零部件/医药/高端制造, 3y revenue growth
+# >= 18%, ROE >= 15%, market cap >= 1000亿 as a bonus) and the
+# quality_growth scoring weights (industry space 25, competitive advantage
+# 25, revenue growth 20, ROE 15, cash flow 10, valuation 5).
+#
+# revenue_growth_3y on the baostock path is main-business revenue
+# (quality approx, flag main_business_revenue): it is allowed, and every
+# reason carries the flag. Free cash flow is iFinD-only (missing on the
+# target-pool path), so gross margin stands in for "competitive advantage".
+id: quality_growth
+name: 质量成长
+description: >-
+  High-ROE, durable growers in manufacturing, consumer and healthcare whose
+  valuation is not at the top of their own 5-year range.
+calibration_status: uncalibrated
+applicable_groups: [growth_manufacturing, consumer, healthcare]
+
+screen:
+  all:
+    # Competitive advantage: high return on equity (archetype: ROE >= 15%).
+    - {factor: roe, op: ">=", value: "$roe_min"}
+    # Durability: ROE not a one-year spike.
+    - {factor: roe_stability, op: ">=", value: "$roe_stability_min"}
+    # Growth (archetype: 3y revenue CAGR >= 18%; 15% default because the
+    # baostock series is main-business revenue only).
+    - {factor: revenue_growth_3y, op: ">=", value: "$revenue_growth_min"}
+    # Growth converts to profit.
+    - {factor: net_profit_growth_3y, op: ">=", value: "$profit_growth_min"}
+    # Pricing power proxy (stand-in for FCF quality).
+    - {factor: gross_margin, op: ">=", value: "$gross_margin_min"}
+    # Valuation not stretched vs own history (archetype weight is low: 5).
+    - {factor: pe_percentile_5y, op: "<=", value: "$pe_pct_max"}
+
+candidate_zones:
+  buy_zone:
+    all:
+      - {factor: pe_percentile_5y, op: "<=", value: "$buy_pe_pct_max"}
+  drop:
+    any:
+      - {factor: pe_percentile_5y, op: ">", value: "$drop_pe_pct_min"}
+      - {factor: revenue_growth_3y, op: "<", value: "$drop_revenue_growth_max"}
+      - {factor: roe, op: "<", value: "$drop_roe_max"}
+
+holding_zones:
+  add:
+    all:
+      - {factor: pe_percentile_5y, op: "<=", value: "$add_pe_pct_max"}
+      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+  trim:
+    any:
+      - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min"}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min"}      # P2 factor
+      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
+  exit_review:
+    any:
+      # Falsification: the quality thesis (margin, ROE, growth) breaks.
+      - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max"}
+      - {factor: roe, op: "<", value: "$exit_roe_max"}
+      - {factor: net_profit_growth_3y, op: "<", value: 0.0}
+
+params:
+  roe_min: 0.15
+  roe_stability_min: 0.70
+  revenue_growth_min: 0.15
+  profit_growth_min: 0.12
+  gross_margin_min: 0.25
+  pe_pct_max: 0.60
+  buy_pe_pct_max: 0.30
+  drop_pe_pct_min: 0.85
+  drop_revenue_growth_max: 0.05
+  drop_roe_max: 0.10
+  add_pe_pct_max: 0.25
+  add_weight_max: 0.08
+  trim_pe_pct_min: 0.90
+  trim_gain_min: 0.50
+  trim_weight_min: 0.15
+  exit_gross_margin_max: 0.18
+  exit_roe_max: 0.08
+
+param_ranges:
+  roe_min: {min: 0.10, max: 0.25}
+  roe_stability_min: {min: 0.40, max: 0.95}
+  revenue_growth_min: {min: 0.08, max: 0.30}
+  profit_growth_min: {min: 0.05, max: 0.30}
+  gross_margin_min: {min: 0.15, max: 0.50}
+  pe_pct_max: {min: 0.30, max: 0.90}
+  buy_pe_pct_max: {min: 0.10, max: 0.50}
+  drop_pe_pct_min: {min: 0.70, max: 0.98}
+  drop_revenue_growth_max: {min: 0.0, max: 0.10}
+  drop_roe_max: {min: 0.05, max: 0.15}
+  add_pe_pct_max: {min: 0.05, max: 0.50}
+  add_weight_max: {min: 0.02, max: 0.20}
+  trim_pe_pct_min: {min: 0.70, max: 0.99}
+  trim_gain_min: {min: 0.20, max: 1.50}
+  trim_weight_min: {min: 0.08, max: 0.30}
+  exit_gross_margin_max: {min: 0.10, max: 0.30}
+  exit_roe_max: {min: 0.03, max: 0.12}

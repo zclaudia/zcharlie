@@ -1,0 +1,89 @@
+# 高成长风险投资 (high-growth venture) - template v1 DRAFT for user review (P1-F2).
+#
+# Source archetype: research_kernel classify_stock "high_growth_venture"
+# (venture industries 半导体/AI/机器人/创新药/计算机/电子, 3y revenue growth
+# >= 30%, market cap < 1000亿; always needs review) and its scoring
+# weights (TAM 30 = revenue growth, technical barrier 25 = ROE, team 20,
+# commercialization 15 = profit growth, cash reserve 10 = debt ratio).
+#
+# PE-based factors are missing for loss-makers (negative_earnings), which
+# is common here, so valuation uses the PB percentile. Profit growth is
+# not required (commercialisation may lag); gross margin stands in for the
+# technical barrier. Highest-risk template: position caps are tighter.
+id: high_growth_venture
+name: 高成长风险投资
+description: >-
+  Fast-growing, high-gross-margin small/mid caps in software, internet,
+  electronics/equipment and healthcare; valuation not at a 5-year high.
+calibration_status: uncalibrated
+applicable_groups: [venture, growth_manufacturing, healthcare]
+
+screen:
+  all:
+    # TAM / traction (archetype: 3y revenue CAGR >= 30%).
+    - {factor: revenue_growth_3y, op: ">=", value: "$revenue_growth_min"}
+    # Technical barrier proxy.
+    - {factor: gross_margin, op: ">=", value: "$gross_margin_min"}
+    # Venture profile: not yet a mega cap (archetype: < 1000亿).
+    - {factor: market_cap, op: "<=", value: "$market_cap_max"}
+    # Not buying at the top of the stock's own PB range.
+    - {factor: pb_percentile_5y, op: "<=", value: "$pb_pct_max"}
+
+candidate_zones:
+  buy_zone:
+    all:
+      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max"}
+  drop:
+    any:
+      - {factor: revenue_growth_3y, op: "<", value: "$drop_revenue_growth_max"}
+      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min"}
+
+holding_zones:
+  add:
+    all:
+      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max"}
+      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+  trim:
+    any:
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min"}      # P2 factor
+      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
+      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min"}
+  exit_review:
+    any:
+      # Falsification: growth stalls or the margin (barrier) erodes.
+      - {factor: revenue_growth_3y, op: "<", value: "$exit_revenue_growth_max"}
+      - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max"}
+      # Cash reserve proxy (missing never triggers).
+      - {factor: debt_ratio, op: ">", value: 0.70}
+
+params:
+  revenue_growth_min: 0.25
+  gross_margin_min: 0.30
+  market_cap_max: 1.0e+11
+  pb_pct_max: 0.70
+  buy_pb_pct_max: 0.40
+  drop_revenue_growth_max: 0.10
+  drop_pb_pct_min: 0.90
+  add_pb_pct_max: 0.30
+  add_weight_max: 0.04
+  trim_gain_min: 1.00
+  trim_weight_min: 0.08
+  trim_pb_pct_min: 0.95
+  exit_revenue_growth_max: 0.05
+  exit_gross_margin_max: 0.20
+
+param_ranges:
+  revenue_growth_min: {min: 0.15, max: 0.50}
+  gross_margin_min: {min: 0.15, max: 0.60}
+  market_cap_max: {min: 3.0e+10, max: 3.0e+11}
+  pb_pct_max: {min: 0.30, max: 0.90}
+  buy_pb_pct_max: {min: 0.10, max: 0.60}
+  drop_revenue_growth_max: {min: 0.0, max: 0.20}
+  drop_pb_pct_min: {min: 0.70, max: 0.99}
+  add_pb_pct_max: {min: 0.05, max: 0.50}
+  add_weight_max: {min: 0.01, max: 0.10}
+  trim_gain_min: {min: 0.30, max: 3.00}
+  trim_weight_min: {min: 0.04, max: 0.15}
+  trim_pb_pct_min: {min: 0.80, max: 0.99}
+  exit_revenue_growth_max: {min: -0.10, max: 0.15}
+  exit_gross_margin_max: {min: 0.10, max: 0.40}

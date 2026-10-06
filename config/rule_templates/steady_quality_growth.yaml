@@ -1,0 +1,104 @@
+# 稳健质量成长 (steady quality growth) - template v1 DRAFT for user review (P1-F2).
+#
+# Source archetype: research_kernel classify_stock "steady_quality_growth"
+# (growth industries, ROE >= 12%, 3y revenue growth in [6%, 18%), positive
+# FCF, dividend yield >= 1.5%, debt ratio <= 55%) and its scoring weights
+# (profitability 20, growth durability 20, ROE stability 15, cash flow 15,
+# balance sheet 10, shareholder return 10, valuation 10).
+#
+# Gaps on the baostock target-pool path: no dividend-yield factor, free
+# cash flow missing (iFinD-only) - net margin stands in for earnings
+# quality. debt_ratio is missing for ~half of the members until the
+# Eastmoney fallback lands, so the archetype's "debt <= 55%" moves to
+# exit_review (debt > 70%), where a missing value never triggers.
+id: steady_quality_growth
+name: 稳健质量成长
+description: >-
+  Consistently profitable, moderately growing companies with low volatility
+  and a valuation in the lower-middle of their 5-year range.
+calibration_status: uncalibrated
+applicable_groups: [growth_manufacturing, consumer, healthcare, utility]
+
+screen:
+  all:
+    # Profitability (archetype: ROE >= 12%).
+    - {factor: roe, op: ">=", value: "$roe_min"}
+    # Steadiness: the defining trait vs quality_growth.
+    - {factor: roe_stability, op: ">=", value: "$roe_stability_min"}
+    # Moderate growth band (archetype: [6%, 18%)).
+    - {factor: revenue_growth_3y, op: between, value: ["$revenue_growth_min", "$revenue_growth_max"]}
+    # Profit keeps growing.
+    - {factor: net_profit_growth_3y, op: ">=", value: "$profit_growth_min"}
+    # Earnings quality proxy (stand-in for FCF > 0).
+    - {factor: net_margin, op: ">=", value: "$net_margin_min"}
+    # Steady price behaviour.
+    - {factor: volatility_1y, op: "<=", value: "$volatility_max"}
+    # Valuation not stretched.
+    - {factor: pe_percentile_5y, op: "<=", value: "$pe_pct_max"}
+
+candidate_zones:
+  buy_zone:
+    all:
+      - {factor: pe_percentile_5y, op: "<=", value: "$buy_pe_pct_max"}
+  drop:
+    any:
+      - {factor: pe_percentile_5y, op: ">", value: "$drop_pe_pct_min"}
+      - {factor: roe_stability, op: "<", value: "$drop_roe_stability_max"}
+      - {factor: net_profit_growth_3y, op: "<", value: 0.0}
+
+holding_zones:
+  add:
+    all:
+      - {factor: pe_percentile_5y, op: "<=", value: "$add_pe_pct_max"}
+      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+  trim:
+    any:
+      - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min"}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min"}      # P2 factor
+      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
+  exit_review:
+    any:
+      - {factor: roe, op: "<", value: "$exit_roe_max"}
+      - {factor: roe_stability, op: "<", value: 0.40}
+      # Archetype debt <= 55%; review above 70% (missing never triggers).
+      - {factor: debt_ratio, op: ">", value: "$exit_debt_ratio_min"}
+
+params:
+  roe_min: 0.12
+  roe_stability_min: 0.80
+  revenue_growth_min: 0.06
+  revenue_growth_max: 0.18
+  profit_growth_min: 0.05
+  net_margin_min: 0.08
+  volatility_max: 0.45
+  pe_pct_max: 0.60
+  buy_pe_pct_max: 0.30
+  drop_pe_pct_min: 0.85
+  drop_roe_stability_max: 0.60
+  add_pe_pct_max: 0.25
+  add_weight_max: 0.10
+  trim_pe_pct_min: 0.90
+  trim_gain_min: 0.40
+  trim_weight_min: 0.15
+  exit_roe_max: 0.08
+  exit_debt_ratio_min: 0.70
+
+param_ranges:
+  roe_min: {min: 0.08, max: 0.20}
+  roe_stability_min: {min: 0.50, max: 0.95}
+  revenue_growth_min: {min: 0.0, max: 0.10}
+  revenue_growth_max: {min: 0.12, max: 0.30}
+  profit_growth_min: {min: 0.0, max: 0.15}
+  net_margin_min: {min: 0.03, max: 0.20}
+  volatility_max: {min: 0.25, max: 0.60}
+  pe_pct_max: {min: 0.30, max: 0.90}
+  buy_pe_pct_max: {min: 0.10, max: 0.50}
+  drop_pe_pct_min: {min: 0.70, max: 0.98}
+  drop_roe_stability_max: {min: 0.30, max: 0.75}
+  add_pe_pct_max: {min: 0.05, max: 0.50}
+  add_weight_max: {min: 0.02, max: 0.20}
+  trim_pe_pct_min: {min: 0.70, max: 0.99}
+  trim_gain_min: {min: 0.20, max: 1.00}
+  trim_weight_min: {min: 0.08, max: 0.30}
+  exit_roe_max: {min: 0.03, max: 0.12}
+  exit_debt_ratio_min: {min: 0.55, max: 0.90}
