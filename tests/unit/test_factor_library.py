@@ -6,7 +6,8 @@ from datetime import date, timedelta
 
 import pytest
 
-from investment_agent.factors.library import DEFAULT_REGISTRY, MIN_PLAUSIBLE_DEBT_RATIO
+from investment_agent.factors.catalog import DEFAULT_REGISTRY
+from investment_agent.factors.library import MIN_PLAUSIBLE_DEBT_RATIO
 from investment_agent.factors.metrics import annualized_growth, return_stats, trim_to_window
 from investment_agent.factors.registry import (
     Applicability,

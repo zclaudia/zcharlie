@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import yaml
 
-from investment_agent.factors.library import DEFAULT_REGISTRY
+from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.view import OBSERVATION, ifind_research_view
 from investment_agent.research.ifind_chain import parse_proxy_rows
 

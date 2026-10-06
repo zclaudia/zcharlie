@@ -1,4 +1,4 @@
-"""First-batch factor definitions (P1-B1) and the default registry.
+"""First-batch factor definitions (P1-B1); the registry is :mod:`.catalog`.
 
 Conventions (see :mod:`investment_agent.factors.registry` for quality):
 
@@ -41,7 +41,6 @@ from investment_agent.factors.registry import (
     Applicability,
     Factor,
     FactorInput,
-    FactorRegistry,
     Partial,
     Quality,
 )
@@ -225,7 +224,9 @@ def _free_cash_flow(view: SnapshotView) -> Partial:
 # --------------------------------------------------------------------------- #
 
 
-def _latest_bar(view: SnapshotView) -> tuple[Bar | None, tuple[str, ...]]:
+def latest_bar(view: SnapshotView) -> tuple[Bar | None, tuple[str, ...]]:
+    """Latest raw bar on or before ``as_of`` plus ``stale_price`` when it is old."""
+
     bar = view.latest_raw_bar()
     if bar is None:
         return None, (FLAG_NO_PRICE,)
@@ -236,7 +237,7 @@ def _latest_bar(view: SnapshotView) -> tuple[Bar | None, tuple[str, ...]]:
 
 def _daily_valuation(column: str, non_positive_flag: str) -> Callable[[SnapshotView], Partial]:
     def body(view: SnapshotView) -> Partial:
-        bar, flags = _latest_bar(view)
+        bar, flags = latest_bar(view)
         if bar is None:
             return Partial(None, flags=flags)
         raw = getattr(bar, column)
@@ -254,7 +255,7 @@ def _daily_valuation(column: str, non_positive_flag: str) -> Callable[[SnapshotV
 
 def _fy_multiple(per_share_field: str, non_positive_flag: str) -> Callable[[SnapshotView], Partial]:
     def body(view: SnapshotView) -> Partial:
-        bar, flags = _latest_bar(view)
+        bar, flags = latest_bar(view)
         period = view.latest_annual()
         if bar is None or period is None:
             return Partial(None, flags=flags or (FLAG_NO_ANNUAL_REPORT,))
@@ -271,7 +272,7 @@ def _fy_multiple(per_share_field: str, non_positive_flag: str) -> Callable[[Snap
 
 
 def _market_cap(view: SnapshotView) -> Partial:
-    bar, flags = _latest_bar(view)
+    bar, flags = latest_bar(view)
     if bar is None:
         return Partial(None, flags=flags)
     shares = view.total_shares()
@@ -315,11 +316,9 @@ def _one_year_stat(index: int) -> Callable[[SnapshotView], Partial]:
 
 
 def _turnover_20d(view: SnapshotView) -> Partial:
-    sessions = [
-        bar
-        for bar in view.raw_bars
-        if bar.turnover is not None and bar.trade_status != 0
-    ][-TURNOVER_WINDOW_SESSIONS:]
+    sessions = [bar for bar in view.raw_bars if bar.turnover is not None and bar.trade_status != 0][
+        -TURNOVER_WINDOW_SESSIONS:
+    ]
     if not sessions:
         return Partial(None, flags=(FLAG_NO_PRICE,))
     value = sum(bar.turnover or 0.0 for bar in sessions) / len(sessions)
@@ -335,7 +334,7 @@ def _turnover_20d(view: SnapshotView) -> Partial:
 
 def _bar_status(column: str) -> Callable[[SnapshotView], Partial]:
     def body(view: SnapshotView) -> Partial:
-        bar, flags = _latest_bar(view)
+        bar, flags = latest_bar(view)
         if bar is None:
             return Partial(None, flags=flags)
         raw = getattr(bar, column)
@@ -365,102 +364,158 @@ _BACKWARD = "market_snapshot(adjust=backward).close"
 
 CORE_FACTORS: tuple[Factor, ...] = (
     Factor(
-        "roe", "1", "fraction",
+        "roe",
+        "1",
+        "fraction",
         "Return on equity of the latest annual report (baostock roeAvg on average equity; "
         "iFinD FY ROE).",
-        _both("roe"), _annual_value("roe"), carries_overdue_flag=True,
+        _both("roe"),
+        _annual_value("roe"),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "roe_stability", "1", "ratio [0,1]",
+        "roe_stability",
+        "1",
+        "ratio [0,1]",
         "clamp(1 - pstdev/mean) of the four latest annual ROEs; all four required and "
         "mean > 0 (v1.3).",
-        _both("roe"), _roe_stability, carries_overdue_flag=True,
+        _both("roe"),
+        _roe_stability,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "gross_margin", "1", "fraction", "Gross margin of the latest annual report.",
-        _both("gross_margin"), _annual_value("gross_margin"),
-        applicability=NOT_FINANCIAL, carries_overdue_flag=True,
+        "gross_margin",
+        "1",
+        "fraction",
+        "Gross margin of the latest annual report.",
+        _both("gross_margin"),
+        _annual_value("gross_margin"),
+        applicability=NOT_FINANCIAL,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "net_margin", "1", "fraction", "Net margin of the latest annual report.",
-        _both("net_margin"), _annual_value("net_margin"), carries_overdue_flag=True,
+        "net_margin",
+        "1",
+        "fraction",
+        "Net margin of the latest annual report.",
+        _both("net_margin"),
+        _annual_value("net_margin"),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "debt_ratio", "1", "fraction",
+        "debt_ratio",
+        "1",
+        "fraction",
         "Liabilities / assets of the latest annual report; baostock values below "
         f"{MIN_PLAUSIBLE_DEBT_RATIO} are treated as provider defects (missing).",
-        _both("debt_ratio"), _debt_ratio,
-        applicability=NOT_FINANCIAL, carries_overdue_flag=True,
+        _both("debt_ratio"),
+        _debt_ratio,
+        applicability=NOT_FINANCIAL,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "net_profit_growth_3y", "1", "fraction / year",
+        "net_profit_growth_3y",
+        "1",
+        "fraction / year",
         "3-year CAGR of annual net profit: baostock net_profit_total (incl. minority "
         "interests), iFinD net_profit_parent; missing for a negative latest value or a "
         "non-positive base (v1.3).",
         _both("net_profit", baostock="net_profit_total", ifind="net_profit_parent"),
-        _net_profit_growth_3y, carries_overdue_flag=True,
+        _net_profit_growth_3y,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "revenue_growth_3y", "1", "fraction / year",
+        "revenue_growth_3y",
+        "1",
+        "fraction / year",
         "3-year CAGR of annual revenue: iFinD revenue_total; baostock revenue_main "
         "(main-business revenue, approx; not_applicable for financials without it).",
         _both("revenue", baostock="revenue_main", ifind="revenue_total"),
-        _revenue_growth_3y, carries_overdue_flag=True,
+        _revenue_growth_3y,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "free_cash_flow", "1", "CNY",
+        "free_cash_flow",
+        "1",
+        "CNY",
         "Operating cash flow - cash paid for long-term assets, latest annual report "
         "(iFinD only; baostock has no absolute cash flows).",
         (
             FactorInput("ifind", "operating_cash_flow", _FIN),
             FactorInput("ifind", "capital_expenditure", _FIN),
         ),
-        _free_cash_flow, carries_overdue_flag=True,
+        _free_cash_flow,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "eps_ttm", "1", "CNY/share", "Trailing-twelve-month EPS of the latest public report.",
-        (FactorInput("baostock", "eps_ttm", _FIN),), _eps_ttm, carries_overdue_flag=True,
+        "eps_ttm",
+        "1",
+        "CNY/share",
+        "Trailing-twelve-month EPS of the latest public report.",
+        (FactorInput("baostock", "eps_ttm", _FIN),),
+        _eps_ttm,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "pe_ttm", "1", "times",
+        "pe_ttm",
+        "1",
+        "times",
         "baostock daily peTTM on the latest session <= as_of; missing (negative_earnings) "
         "when <= 0.",
         (FactorInput("baostock", "pe_ttm", f"{_KDATA}.pe_ttm"),),
-        _daily_valuation("pe_ttm", FLAG_NEGATIVE_EARNINGS), carries_overdue_flag=True,
+        _daily_valuation("pe_ttm", FLAG_NEGATIVE_EARNINGS),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "pb_mrq", "1", "times",
+        "pb_mrq",
+        "1",
+        "times",
         "baostock daily pbMRQ on the latest session <= as_of; missing when <= 0.",
         (FactorInput("baostock", "pb_mrq", f"{_KDATA}.pb_mrq"),),
-        _daily_valuation("pb_mrq", FLAG_NEGATIVE_BOOK_VALUE), carries_overdue_flag=True,
+        _daily_valuation("pb_mrq", FLAG_NEGATIVE_BOOK_VALUE),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "ps_ttm", "1", "times",
+        "ps_ttm",
+        "1",
+        "times",
         "baostock daily psTTM on the latest session <= as_of; missing when <= 0.",
         (FactorInput("baostock", "ps_ttm", f"{_KDATA}.ps_ttm"),),
-        _daily_valuation("ps_ttm", FLAG_NON_POSITIVE_REVENUE), carries_overdue_flag=True,
+        _daily_valuation("ps_ttm", FLAG_NON_POSITIVE_REVENUE),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "pe_fy", "1", "times",
+        "pe_fy",
+        "1",
+        "times",
         "Latest close / basic EPS of the latest fiscal year (iFinD research PE); "
         "missing when EPS <= 0.",
         (FactorInput("ifind", "eps_basic_fy", _FIN),),
-        _fy_multiple("eps_basic_fy", FLAG_NEGATIVE_EARNINGS), carries_overdue_flag=True,
+        _fy_multiple("eps_basic_fy", FLAG_NEGATIVE_EARNINGS),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "pb_fy", "1", "times",
+        "pb_fy",
+        "1",
+        "times",
         "Latest close / net assets per share of the latest fiscal year (iFinD research PB).",
         (FactorInput("ifind", "bvps_fy", _FIN),),
-        _fy_multiple("bvps_fy", FLAG_NEGATIVE_BOOK_VALUE), carries_overdue_flag=True,
+        _fy_multiple("bvps_fy", FLAG_NEGATIVE_BOOK_VALUE),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "ps_fy", "1", "times",
+        "ps_fy",
+        "1",
+        "times",
         "Latest close / revenue per share of the latest fiscal year (iFinD research PS).",
         (FactorInput("ifind", "revenue_ps_fy", _FIN),),
-        _fy_multiple("revenue_ps_fy", FLAG_NON_POSITIVE_REVENUE), carries_overdue_flag=True,
+        _fy_multiple("revenue_ps_fy", FLAG_NON_POSITIVE_REVENUE),
+        carries_overdue_flag=True,
     ),
     Factor(
-        "market_cap", "1", "CNY",
+        "market_cap",
+        "1",
+        "CNY",
         "Raw close of the latest session × total shares usable on as_of (baostock: "
         "latest public report's totalShare; iFinD: stock-info total shares).",
         (
@@ -469,45 +524,62 @@ CORE_FACTORS: tuple[Factor, ...] = (
             FactorInput("ifind", "close", f"{_KDATA}(adjust=none).close"),
             FactorInput("ifind", "total_shares", f"{_KDATA}.total_shares"),
         ),
-        _market_cap, carries_overdue_flag=True,
+        _market_cap,
+        carries_overdue_flag=True,
     ),
     Factor(
-        "return_1y", "1", "fraction",
+        "return_1y",
+        "1",
+        "fraction",
         "Last / first close - 1 over the trailing 365 days (adjusted series).",
         (FactorInput("baostock", "close", _BACKWARD), FactorInput("ifind", "close", _BACKWARD)),
         _one_year_stat(0),
     ),
     Factor(
-        "volatility_1y", "1", "fraction (annualized)",
+        "volatility_1y",
+        "1",
+        "fraction (annualized)",
         "Population stdev of daily returns × sqrt(252) over the trailing 365 days.",
         (FactorInput("baostock", "close", _BACKWARD), FactorInput("ifind", "close", _BACKWARD)),
         _one_year_stat(1),
     ),
     Factor(
-        "max_drawdown_1y", "1", "fraction",
+        "max_drawdown_1y",
+        "1",
+        "fraction",
         "Largest peak-to-trough decline over the trailing 365 days (positive).",
         (FactorInput("baostock", "close", _BACKWARD), FactorInput("ifind", "close", _BACKWARD)),
         _one_year_stat(2),
     ),
     Factor(
-        "turnover_20d", "1", "fraction of float / day",
+        "turnover_20d",
+        "1",
+        "fraction of float / day",
         "Mean daily turnover over the last 20 trading (non-suspended) sessions.",
-        (FactorInput("baostock", "turnover", f"{_KDATA}.turnover"),), _turnover_20d,
+        (FactorInput("baostock", "turnover", f"{_KDATA}.turnover"),),
+        _turnover_20d,
     ),
     Factor(
-        "is_st", "1", "bool (1/0)", "ST / *ST status on the latest session.",
-        (FactorInput("baostock", "is_st", f"{_KDATA}.is_st"),), _bar_status("is_st"),
+        "is_st",
+        "1",
+        "bool (1/0)",
+        "ST / *ST status on the latest session.",
+        (FactorInput("baostock", "is_st", f"{_KDATA}.is_st"),),
+        _bar_status("is_st"),
     ),
     Factor(
-        "trade_status", "1", "code (1 trading, 0 suspended)",
+        "trade_status",
+        "1",
+        "code (1 trading, 0 suspended)",
         "Trading status on the latest session.",
         (FactorInput("baostock", "trade_status", f"{_KDATA}.trade_status"),),
         _bar_status("trade_status"),
     ),
     Factor(
-        "report_overdue", "1", "bool (1/0)",
-        "1 when a periodic report is past its statutory deadline and still unpublished "
-        "on as_of.",
+        "report_overdue",
+        "1",
+        "bool (1/0)",
+        "1 when a periodic report is past its statutory deadline and still unpublished on as_of.",
         (
             FactorInput("baostock", "report_overdue", "report_overdue"),
             FactorInput("ifind", "report_overdue", "report_overdue"),
@@ -515,10 +587,3 @@ CORE_FACTORS: tuple[Factor, ...] = (
         _report_overdue,
     ),
 )
-
-
-def build_default_registry() -> FactorRegistry:
-    return FactorRegistry(CORE_FACTORS)
-
-
-DEFAULT_REGISTRY = build_default_registry()

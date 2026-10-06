@@ -7,7 +7,7 @@ from decimal import Decimal
 
 import pytest
 
-from investment_agent.factors.library import DEFAULT_REGISTRY
+from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.view import OBSERVATION, TARGET_POOL, load_snapshot_view
 from investment_agent.providers.baostock_reference import IndustryEntry, IndustrySnapshot
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
