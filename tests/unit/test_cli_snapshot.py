@@ -151,3 +151,39 @@ def test_cli_routes_provider_and_scope(cli_db):
     ]
     assert all(run.universe_code is None for run in runs)
     assert runs[0].request_json["scope"] == "watchlist"
+
+
+def test_sync_industry_defaults_to_the_configured_target_pool(cli_db, tmp_path):
+    from investment_agent.cli.main import app
+
+    config = tmp_path / "app.yaml"
+    config.write_text(
+        "scheduler: {}\nsnapshot:\n  universes: [SSE50, CSI300]\n", encoding="utf-8"
+    )
+    runner = CliRunner()
+    default = runner.invoke(
+        app, ["snapshot", "sync-industry", "--as-of", "2026-10-01", "--config", str(config)]
+    )
+    assert default.exit_code == 0, default.output
+    whole = runner.invoke(
+        app, ["snapshot", "sync-industry", "--as-of", "2026-10-02", "--all-market"]
+    )
+    assert whole.exit_code == 0, whole.output
+    shipped = runner.invoke(app, ["snapshot", "sync-industry", "--as-of", "2026-10-03"])
+    assert shipped.exit_code == 0, shipped.output
+    both = runner.invoke(
+        app, ["snapshot", "sync-industry", "--all-market", "--universe", "CSI300"]
+    )
+    assert both.exit_code != 0
+
+    runs = _runs(cli_db)
+    assert [run.request_json["universe_codes"] for run in runs] == [
+        ["CSI300", "SSE50"],
+        [],
+        ["CSI300"],  # config/app.yaml ships snapshot.universes: [CSI300]
+    ]
+    assert [run.idempotency_key for run in runs] == [
+        "industry_sync:CSI300+SSE50:2026-10-01",
+        "industry_sync:ALL:2026-10-02",
+        "industry_sync:CSI300:2026-10-03",
+    ]

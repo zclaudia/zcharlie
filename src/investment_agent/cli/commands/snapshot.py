@@ -6,6 +6,7 @@ import asyncio
 import os
 import socket
 from datetime import date
+from pathlib import Path
 
 import typer
 from pydantic import ValidationError
@@ -13,7 +14,7 @@ from rich import print as rprint
 from rich.table import Table
 
 from investment_agent.clock import shanghai_today
-from investment_agent.config import Settings
+from investment_agent.config import Settings, SnapshotScheduleConfig, load_app_yaml
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.snapshots.jobs import (
     SNAPSHOT_KINDS,
@@ -40,6 +41,7 @@ _SCOPE_HELP = (
     "universe (members of --universe) or watchlist (enabled watchlist items); "
     "default: universe for baostock, watchlist for ifind"
 )
+_CONFIG_HELP = "App config providing snapshot.universes (the target pool)"
 
 
 def _date(value: str | None, name: str) -> date:
@@ -81,6 +83,13 @@ def _routing(
         )
     code = _universe(universe) if scope == "universe" else None
     return chosen, scope, code
+
+
+def target_pool_universes(config_path: Path) -> tuple[IndexCode, ...]:
+    """``snapshot.universes`` from the app config (scheduler's target pool)."""
+
+    snapshot = load_app_yaml(config_path).snapshot or SnapshotScheduleConfig()
+    return tuple(sorted({_universe(code) for code in snapshot.universes}))
 
 
 async def _submit(settings: Settings, payload: SnapshotPayload, *, now: bool) -> None:
@@ -153,14 +162,30 @@ def sync_universe(
 @app.command("sync-industry")
 def sync_industry(
     universe: list[str] | None = typer.Option(  # noqa: B008
-        None, help="Limit to members of these universes (repeatable); default: whole market"
+        None,
+        help="Limit to members of these universes (repeatable); "
+        "default: the configured target pool (snapshot.universes)",
+    ),
+    all_market: bool = typer.Option(
+        False,
+        "--all-market",
+        help="Classify the whole market (~5000 listings are created) instead of the target pool",
     ),
     as_of: str | None = typer.Option(None, help="Classification as of (YYYY-MM-DD)"),
+    config: Path = typer.Option(Path("config/app.yaml"), help=_CONFIG_HELP),  # noqa: B008
     now: bool = typer.Option(False, "--now", help=_NOW_HELP),
 ) -> None:
-    """Enqueue a baostock CSRC industry sync."""
+    """Enqueue a baostock CSRC industry sync (target pool unless --all-market)."""
 
-    codes = tuple(sorted({_universe(code) for code in universe or []}))
+    if all_market and universe:
+        raise typer.BadParameter("--all-market excludes --universe", param_hint="--all-market")
+    codes: tuple[IndexCode, ...]
+    if all_market:
+        codes = ()
+    elif universe:
+        codes = tuple(sorted({_universe(code) for code in universe}))
+    else:
+        codes = target_pool_universes(config)
     _run(IndustrySyncPayload(as_of=_date(as_of, "--as-of"), universe_codes=codes), now)
 
 
