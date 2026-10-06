@@ -33,6 +33,7 @@ from sqlalchemy import (
     Numeric,
     String,
     UniqueConstraint,
+    false,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -102,6 +103,11 @@ class MarketSnapshot(Base, TimestampMixin):
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     raw_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    is_backfill: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    """Written by the historical backfill (P1-A4, migration 015), captured long
+    after ``trade_date``; see :meth:`MarketSnapshotRepository.series_as_of`."""
     version: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
