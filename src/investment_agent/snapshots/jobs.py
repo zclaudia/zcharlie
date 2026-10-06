@@ -6,10 +6,17 @@ D6): baostock serves the target pool (``scope="universe"`` + a
 watchlist (``scope="watchlist"``, enabled watchlist items), so its limited
 gateway quota is never spent on breadth collection. Payloads persisted before
 P1-A7 (no provider / scope) validate as baostock + universe.
+
+AkShare / Eastmoney (P1-A11) only collects financials: ``provider="akshare"``
+with a ``part`` - ``summary`` (whole-market period summaries) or
+``cash_flow`` (per-stock cash-flow statements, also storing
+``extra_periods`` from the same answer); ``backfill=True`` marks history
+backfill runs (rows ``is_backfill``; scope = every member since the period).
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
 from datetime import date
 from typing import Literal, Self
@@ -35,9 +42,11 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     SNAPSHOT_BACKFILL,
 )
 
-SnapshotProvider = Literal["baostock", "ifind"]
+SnapshotProvider = Literal["baostock", "ifind", "akshare"]
 SnapshotScope = Literal["universe", "watchlist"]
-SNAPSHOT_PROVIDERS: tuple[SnapshotProvider, ...] = ("baostock", "ifind")
+SNAPSHOT_PROVIDERS: tuple[SnapshotProvider, ...] = ("baostock", "ifind", "akshare")
+AkshareFinancialPart = Literal["summary", "cash_flow"]
+AKSHARE_FINANCIAL_PARTS: tuple[AkshareFinancialPart, ...] = ("summary", "cash_flow")
 SNAPSHOT_SCOPES: tuple[SnapshotScope, ...] = ("universe", "watchlist")
 WATCHLIST_SCOPE_LABEL = "watchlist"
 
@@ -120,17 +129,60 @@ class _CollectionPayload(_Payload):
 class MarketSnapshotPayload(_CollectionPayload):
     trade_date: date
 
+    @model_validator(mode="after")
+    def _market_provider(self) -> Self:
+        if self.provider == "akshare":
+            raise ValueError("AkShare (Eastmoney) collects financials only, not daily bars")
+        return self
+
 
 class FinancialSnapshotPayload(_CollectionPayload):
     report_period: date
     as_of: date
     """Membership date; also the day the job was scheduled for."""
+    part: AkshareFinancialPart | None = None
+    """AkShare only: ``summary`` (default) or ``cash_flow``."""
+    extra_periods: tuple[date, ...] = ()
+    """AkShare ``cash_flow`` only: further periods stored from the same answers."""
+    backfill: bool = False
+    """AkShare only: history backfill (rows ``is_backfill``)."""
 
     @field_validator("report_period")
     @classmethod
     def _quarter_end(cls, value: date) -> date:
         period_kind(value)
         return value
+
+    @field_validator("extra_periods")
+    @classmethod
+    def _extra_quarter_ends(cls, value: tuple[date, ...]) -> tuple[date, ...]:
+        for item in value:
+            period_kind(item)
+        return tuple(sorted(set(value), reverse=True))
+
+    @model_validator(mode="after")
+    def _akshare_options(self) -> Self:
+        if self.provider != "akshare":
+            if self.part is not None or self.extra_periods or self.backfill:
+                raise ValueError("part / extra_periods / backfill are AkShare options")
+            return self
+        if self.part is None:
+            object.__setattr__(self, "part", "summary")
+        if self.part != "cash_flow" and self.extra_periods:
+            raise ValueError("extra_periods only applies to part 'cash_flow'")
+        if self.report_period in self.extra_periods:
+            object.__setattr__(
+                self,
+                "extra_periods",
+                tuple(p for p in self.extra_periods if p != self.report_period),
+            )
+        return self
+
+    @property
+    def periods(self) -> tuple[date, ...]:
+        """``report_period`` first, then ``extra_periods`` (newest first)."""
+
+        return (self.report_period, *self.extra_periods)
 
 
 BackfillPart = Literal["membership", "industry", "prices", "financials"]
@@ -219,10 +271,20 @@ def idempotency_key(payload: SnapshotPayload) -> str:
         return (
             f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
         )
-    return (
+    key = (
         f"{kind}:{payload.provider}:{payload.scope_label}:"
         f"{payload.report_period.isoformat()}:{payload.as_of.isoformat()}"
     )
+    if payload.provider == "akshare":
+        key += f":{payload.part}"
+        if payload.extra_periods:
+            # count + digest keeps the key within 128 characters (D5: 8 extra periods)
+            listed = ",".join(p.strftime("%Y%m%d") for p in payload.extra_periods)
+            digest = hashlib.sha1(listed.encode(), usedforsecurity=False).hexdigest()[:8]
+            key += f":+{len(payload.extra_periods)}p{digest}"
+        if payload.backfill:
+            key += ":backfill"
+    return key
 
 
 def payload_universe(payload: SnapshotPayload) -> str | None:
@@ -248,6 +310,19 @@ async def enqueue_snapshot_job(
         idempotency_key=key or idempotency_key(payload),
         triggered_by=triggered_by,
         universe_code=universe_code,
-        request_json=payload.model_dump(mode="json"),
+        request_json=request_json(payload),
         max_attempts=max_attempts,
     )
+
+
+_AKSHARE_ONLY_FIELDS = frozenset({"part", "extra_periods", "backfill"})
+
+
+def request_json(payload: SnapshotPayload) -> dict[str, object]:
+    """The persisted request; AkShare-only options are omitted for other providers."""
+
+    data = payload.model_dump(mode="json")
+    if isinstance(payload, FinancialSnapshotPayload) and payload.provider != "akshare":
+        for name in _AKSHARE_ONLY_FIELDS:
+            data.pop(name, None)
+    return data

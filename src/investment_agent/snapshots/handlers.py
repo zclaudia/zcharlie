@@ -2,7 +2,8 @@
 
 ``market_snapshot`` / ``financial_snapshot`` are routed by the payload's
 ``provider`` (decision D6): ``baostock`` -> :mod:`investment_agent.snapshots.breadth`
-(target pool), ``ifind`` -> the iFinD batch collectors (watchlist only).
+(target pool), ``ifind`` -> the iFinD batch collectors (watchlist only),
+``akshare`` (financials only) -> :mod:`investment_agent.snapshots.eastmoney`.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import structlog
 from investment_agent.config import Settings
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.providers.akshare_eastmoney import AkshareEastmoneyClient
 from investment_agent.providers.akshare_shenwan import AkshareShenwanClient
 from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient
@@ -34,6 +36,10 @@ from investment_agent.snapshots.collect import (
     CollectionReport,
     ProxyBatchCaller,
     ProxyClient,
+)
+from investment_agent.snapshots.eastmoney import (
+    EastmoneyCollectorClient,
+    collect_akshare_financial,
 )
 from investment_agent.snapshots.financial import collect_financial_snapshot
 from investment_agent.snapshots.jobs import (
@@ -68,6 +74,7 @@ ReferenceFactory = Callable[[], ReferenceClient]
 BaostockFactory = Callable[[], BaostockCollectorClient]
 BackfillFactory = Callable[[], BackfillClient]
 ShenwanFactory = Callable[[], ShenwanClient]
+EastmoneyFactory = Callable[[], EastmoneyCollectorClient]
 
 
 def _utc_now() -> datetime:
@@ -89,6 +96,7 @@ class SnapshotRuntime:
     baostock_factory: BaostockFactory = BaostockMarketClient
     backfill_factory: BackfillFactory = BaostockMarketClient
     shenwan_factory: ShenwanFactory = AkshareShenwanClient
+    eastmoney_factory: EastmoneyFactory = AkshareEastmoneyClient
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
@@ -105,6 +113,9 @@ def default_runtime(settings: Settings) -> SnapshotRuntime:
         limiter=AsyncRateLimiter(settings.ifind_collect_rate_per_minute),
         proxy_factory=proxy_factory,
         reference_factory=BaostockReferenceClient,
+        eastmoney_factory=lambda: AkshareEastmoneyClient(
+            min_interval_seconds=settings.akshare_min_interval_seconds
+        ),
     )
 
 
@@ -215,7 +226,16 @@ class SnapshotJobHandler(BaseJobHandler):
             return await self._settle(report, job.run_id, lease)
         assert self.kind == FINANCIAL_SNAPSHOT
         financial_payload = FinancialSnapshotPayload.model_validate(request)
-        if financial_payload.provider == "baostock":
+        if financial_payload.provider == "akshare":
+            report = await collect_akshare_financial(
+                financial_payload,
+                client=self.runtime.eastmoney_factory(),
+                artifacts=artifacts,
+                lease=lease,
+                now=self.runtime.clock,
+                run_id=job.run_id,
+            )
+        elif financial_payload.provider == "baostock":
             report = await collect_baostock_financial(
                 financial_payload,
                 client=self.runtime.baostock_factory(),

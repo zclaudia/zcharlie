@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     ifind_collect_rate_per_minute: float = Field(default=40.0, gt=0, le=600)
     # Extra attempts per batch for transient proxy failures (0 = no retry).
     ifind_collect_batch_retries: int = Field(default=2, ge=0, le=10)
+    # AkShare / Eastmoney financial collector (P1-A11): calls are serialized and
+    # spaced at least this many seconds apart.
+    akshare_min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
     # Below this completeness ratio a market/financial run raises an
     # ``action_required`` notification.
     snapshot_completeness_threshold: float = Field(default=0.95, ge=0, le=1)

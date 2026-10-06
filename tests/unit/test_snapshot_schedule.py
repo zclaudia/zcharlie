@@ -121,15 +121,33 @@ def test_payload_decisions():
         FinancialSnapshotPayload(
             universe_code="CSI300", report_period=date(2026, 9, 30), as_of=saturday
         ),
+        # Eastmoney period summaries after baostock (P1-A11); 10-10 is outside
+        # the cash-flow windows, so no per-stock statements.
+        FinancialSnapshotPayload(
+            provider="akshare",
+            part="summary",
+            universe_code="CSI300",
+            report_period=date(2026, 6, 30),
+            as_of=saturday,
+        ),
+        FinancialSnapshotPayload(
+            provider="akshare",
+            part="summary",
+            universe_code="CSI300",
+            report_period=date(2026, 9, 30),
+            as_of=saturday,
+        ),
     ]
     assert snapshot_payloads(
         "financial_deadline", today=date(2026, 10, 9), calendar=CALENDAR, universes=["CSI300"]
     ) == []
-    assert len(
-        snapshot_payloads(
-            "financial_deadline", today=date(2026, 11, 2), calendar=CALENDAR, universes=["CSI300"]
-        )
-    ) == 1
+    deadline = snapshot_payloads(
+        "financial_deadline", today=date(2026, 11, 2), calendar=CALENDAR, universes=["CSI300"]
+    )
+    assert [(p.provider, getattr(p, "part", None)) for p in deadline] == [
+        ("baostock", None),
+        ("akshare", "summary"),
+    ]
     with pytest.raises(ValueError, match="calendar"):
         snapshot_payloads("market_snapshot", today=monday, calendar=None, universes=["CSI300"])
 
@@ -235,3 +253,25 @@ async def test_startup_catches_up_snapshot_jobs_that_fired_today(db_session):
 
     early = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 29, 23, 0, tzinfo=UTC))
     assert early == []  # 07:00 Shanghai: nothing has fired yet
+
+
+def test_cash_flow_statements_only_in_disclosure_windows():
+    from investment_agent.scheduler.snapshot_jobs import in_cash_flow_window
+
+    assert in_cash_flow_window(date(2026, 4, 15)) and in_cash_flow_window(date(2026, 5, 15))
+    assert not in_cash_flow_window(date(2026, 4, 14)) and not in_cash_flow_window(date(2026, 5, 16))
+    assert in_cash_flow_window(date(2026, 8, 22)) and in_cash_flow_window(date(2026, 10, 17))
+    assert not in_cash_flow_window(date(2026, 12, 5))
+    saturday = date(2026, 10, 17)
+    payloads = snapshot_payloads(
+        "financial_weekly", today=saturday, calendar=None, universes=["CSI300"]
+    )
+    (cash_flow,) = [p for p in payloads if getattr(p, "part", None) == "cash_flow"]
+    assert isinstance(cash_flow, FinancialSnapshotPayload)
+    assert cash_flow.provider == "akshare" and cash_flow.scope == "universe"
+    assert cash_flow.periods == (date(2026, 9, 30), date(2026, 6, 30))
+    assert payloads[-1] is cash_flow  # after baostock and the summaries
+    deadline = snapshot_payloads(
+        "financial_deadline", today=date(2026, 11, 2), calendar=CALENDAR, universes=["CSI300"]
+    )
+    assert all(getattr(p, "part", None) != "cash_flow" for p in deadline)

@@ -139,3 +139,33 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
             conditions.append(FinancialSnapshot.provider == provider)
         stmt = select(FinancialSnapshot.listing_id).where(*conditions).distinct()
         return set((await self.session.execute(stmt)).scalars().all())
+
+    async def latest_versions(
+        self,
+        listing_ids: Sequence[int],
+        report_periods: Sequence[date],
+        *,
+        provider: str,
+    ) -> dict[tuple[int, date, str], FinancialSnapshot]:
+        """Latest version per ``(listing, report period, fields.part)`` of one provider.
+
+        ``part`` is ``""`` for providers storing one row per period (baostock,
+        iFinD); AkShare keeps period summaries and cash-flow statements apart.
+        """
+
+        if not listing_ids or not report_periods:
+            return {}
+        stmt = (
+            select(FinancialSnapshot)
+            .where(
+                FinancialSnapshot.listing_id.in_(list(listing_ids)),
+                FinancialSnapshot.report_period.in_(list(report_periods)),
+                FinancialSnapshot.provider == provider,
+            )
+            .order_by(FinancialSnapshot.version)
+        )
+        latest: dict[tuple[int, date, str], FinancialSnapshot] = {}
+        for row in (await self.session.execute(stmt)).scalars():
+            part = row.fields.get("part") if isinstance(row.fields, dict) else None
+            latest[(row.listing_id, row.report_period, str(part or ""))] = row
+        return latest

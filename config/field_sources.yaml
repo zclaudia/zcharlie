@@ -1,0 +1,183 @@
+# Field source registry (P1-A12, decision D6 rev 2; docs/product/p1-plan.md 2.3).
+#
+# One entry per canonical factor-layer field (the B1 split names: never the
+# ambiguous stored names `net_profit` / `revenue`). The factor view resolves
+# every financial field in this order:
+#
+#   1. a value verified by iFinD (`provider = ifind` row whose
+#      `fields.verification[<field>] == "verified"`; written by P1-A13);
+#   2. `primary`;
+#   3. each `fallback` in order.
+#
+# A candidate failing its provider's `sanity` rule is skipped (recorded as
+# rejected, flag `suspect_provider_value`) and the next source is tried.
+# Values of other free sources that differ from the chosen one by more than
+# `tolerance` (relative) mark the field `conflict`. iFinD is never a primary
+# or fallback source: it only verifies (budgeted on-demand checks, P1-A13).
+#
+# Keys:
+#   table      financial (financial_snapshot.fields, resolved per report period)
+#              | derived (computed in the view from other registered fields)
+#              | market (market_snapshot columns, baostock bars)
+#              | report_overdue (report_overdue records)
+#   primary    baostock | akshare | derived
+#   fallback   ordered list of baostock | akshare (default [])
+#   definition 口径 (unit and meaning)
+#   tolerance  relative tolerance for cross-source comparison (default 0.02)
+#   key        critical field: a conflict or a gap triggers iFinD verification
+#   sanity     per provider: {min, max, reason}; a value outside is a provider
+#              defect, not data
+#   approx     per provider: true when that source only approximates the field
+#   formula    derived fields only: "<field> <op> <field>", op in + - * /
+version: "2026-10-07.1"
+default_tolerance: 0.02
+
+fields:
+  # -- profitability (baostock profit table, pubDate-gated) ---------------- #
+  roe:
+    table: financial
+    primary: baostock
+    definition: "ROE on average equity (baostock roeAvg), fraction, period-to-date"
+    key: true
+  gross_margin:
+    table: financial
+    primary: baostock
+    definition: "gross margin (gpMargin), fraction, period-to-date; null for banks"
+  net_margin:
+    table: financial
+    primary: baostock
+    definition: "net margin (npMargin), fraction, period-to-date"
+  eps_ttm:
+    table: financial
+    primary: baostock
+    definition: "EPS, trailing twelve months (epsTTM), CNY/share"
+    key: true
+  total_shares:
+    table: financial
+    primary: baostock
+    definition: "total shares (totalShare), effective from pubDate"
+    key: true
+
+  # -- balance sheet ------------------------------------------------------- #
+  debt_ratio:
+    table: financial
+    primary: baostock
+    fallback: [akshare]
+    definition: >-
+      total liabilities / total assets, fraction (baostock liabilityToAsset;
+      Eastmoney stock_zcfz_em 资产负债率 percent / 100)
+    key: true
+    sanity:
+      baostock:
+        min: 0.02
+        reason: >-
+          baostock liabilityToAsset arrives scaled by 1/100 on some annual rows
+          (FY2024 100%, 2025Q3 99.8%, FY2025 49.5% of rows; e.g. 600519 FY2024 0.0019)
+  total_equity:
+    table: financial
+    primary: akshare
+    definition: "total equity incl. minority interests (stock_zcfz_em 股东权益合计), CNY"
+
+  # -- income statement ---------------------------------------------------- #
+  net_profit_parent:
+    table: financial
+    primary: akshare
+    definition: >-
+      net profit attributable to the parent (归母净利润), CNY, period-to-date
+      (stock_lrb_em 净利润 = PARENT_NETPROFIT)
+    key: true
+  net_profit_total:
+    table: financial
+    primary: baostock
+    definition: "net profit incl. minority interests (baostock netProfit), CNY, period-to-date"
+  revenue_total:
+    table: financial
+    primary: akshare
+    definition: "total operating revenue (营业总收入, stock_lrb_em), CNY, period-to-date"
+    key: true
+  revenue_main:
+    table: financial
+    primary: baostock
+    definition: "main-business revenue (baostock MBRevenue), CNY; not comparable with revenue_total"
+
+  # -- cash flow ----------------------------------------------------------- #
+  operating_cash_flow:
+    table: financial
+    primary: akshare
+    fallback: [baostock]
+    definition: >-
+      net cash flow from operating activities, CNY, period-to-date (Eastmoney
+      经营性现金流-现金流量净额 / NETCASH_OPERATE; baostock fallback is
+      CFOToNP x netProfit, approx)
+    key: true
+    approx:
+      baostock: true
+  capital_expenditure:
+    table: financial
+    primary: akshare
+    definition: >-
+      cash paid for fixed / intangible / other long-term assets
+      (CONSTRUCT_LONG_ASSET, Eastmoney per-stock cash-flow statement), CNY, period-to-date
+    key: true
+  free_cash_flow:
+    table: financial
+    primary: akshare
+    definition: "NETCASH_OPERATE - CONSTRUCT_LONG_ASSET, CNY, period-to-date"
+    key: true
+
+  # -- fiscal-year per-share values (observation multiples pe_fy / pb_fy / ps_fy)
+  eps_basic_fy:
+    table: derived
+    primary: derived
+    formula: "net_profit_parent / total_shares"
+    definition: >-
+      approximates basic EPS of the fiscal year (iFinD ths_eps_basic_stock uses
+      weighted-average shares)
+  bvps_fy:
+    table: derived
+    primary: derived
+    formula: "total_equity / total_shares"
+    definition: >-
+      approximates net assets per share (iFinD ths_nav_ps_stock is parent equity;
+      total_equity includes minority interests)
+  revenue_ps_fy:
+    table: derived
+    primary: derived
+    formula: "revenue_total / total_shares"
+    definition: "revenue per share of the fiscal year"
+
+  # -- daily bars (market_snapshot, baostock) ------------------------------- #
+  close:
+    table: market
+    primary: baostock
+    definition: "close, CNY/share; adjust=none raw, adjust=backward 后复权"
+  pe_ttm:
+    table: market
+    primary: baostock
+    definition: "close / TTM EPS (peTTM), times"
+  pb_mrq:
+    table: market
+    primary: baostock
+    definition: "close / latest-quarter BVPS (pbMRQ), times"
+  ps_ttm:
+    table: market
+    primary: baostock
+    definition: "close / TTM revenue per share (psTTM), times"
+  turnover:
+    table: market
+    primary: baostock
+    definition: "turn percent / 100, fraction of float shares traded"
+  is_st:
+    table: market
+    primary: baostock
+    definition: "1 when ST / *ST"
+  trade_status:
+    table: market
+    primary: baostock
+    definition: "1 trading, 0 suspended"
+
+  # -- disclosure ---------------------------------------------------------- #
+  report_overdue:
+    table: report_overdue
+    primary: baostock
+    definition: "periodic report past its statutory deadline without a baostock pubDate"

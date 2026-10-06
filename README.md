@@ -59,7 +59,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 
 时点（PIT）快照由 worker 执行、scheduler 入队。数据源分工（D6）：**baostock 负责目标池广度**
 （日线、估值、季度财务、披露日），**iFinD 只服务观察池**（`--scope watchlist`，额度有限）。
-日线与财报任务的 payload 带 `provider`（`baostock` 默认 / `ifind`）与 `scope`
+日线与财报任务的 payload 带 `provider`（`baostock` 默认 / `ifind` / 财报另有 `akshare`，见下文东财采集）与 `scope`
 （`universe` 目标池成分 / `watchlist` 启用的观察池条目）；iFinD 只接受 `watchlist`。
 幂等键为 `kind:provider:scope:date(:period)`（成分 / 行业为 `kind:universe:date`）。
 
@@ -120,6 +120,43 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 - 原始响应落盘到 `DATA_DIR/snapshot-runs/<run>/attempt-<n>/`，`raw_ref` 指向该文件。
 - `--now` 在当前进程立即执行（调试用）；`ia snapshot status` 查看各类任务最近运行与完整率。
   调度配置见 `config/app.yaml` 的 `snapshot:` 段；日线 18:30 基于 baostock 晚间更新，需在正常交易日实测确认。
+
+### 东财财务采集（P1-A11，AkShare）
+
+`financial_snapshot` 任务 `provider=akshare` 加 `part`，行写入 `financial_snapshot`（`provider=akshare`）：
+
+```bash
+ia snapshot collect-financial --provider akshare --part summary --period 2025-12-31     # 按期汇总，全市场 3 次调用
+ia snapshot collect-financial --provider akshare --part cash_flow --period 2026-06-30   # 单股现金流量表，约 20 秒/只
+ia snapshot backfill --provider akshare [--with-cash-flow] [--dry-run|--status]          # D5 报告期回补
+```
+
+- **按期汇总**（`summary`）：`stock_lrb_em` / `stock_xjll_em` / `stock_zcfz_em` 各一次 →
+  `net_profit_parent`（净利润列即归母）、`revenue_total`、`operating_cash_flow`、`debt_ratio`（东财为百分数，÷100）
+  及总资产 / 总负债 / 权益。**单股现金流量表**（`cash_flow`）：`NETCASH_OPERATE`、`CONSTRUCT_LONG_ASSET`
+  （`capital_expenditure`），`free_cash_flow` = 两者之差；一次调用取回全部历史，按任务的报告期（`report_period`
+  + `extra_periods`）落库，已有全部期次的标的跳过。列名按 akshare 1.19.1 锁定，列变化为终止错误。
+- **范围**：目标池成分 + 启用的观察池；回补用报告期以来的全部成分（幸存者偏差），行标记 `is_backfill`。
+- **时点**：`available_from` 优先取同期 baostock `pubDate`（`actual`），否则取东财公告日（`approx`；汇总表的公告日是
+  最近一次更新该行的公告，偏晚、保守）。东财数据是重述后的最新值：现金流量表 `UPDATE_DATE > NOTICE_DATE`、汇总表
+  公告日晚于 baostock `pubDate`（无则晚于法定截止日）的行标 `restated`。内容有变化才写新版本，不覆盖旧行。
+- **交叉校验**：`debt_ratio` 与 baostock 比（baostock 值不合理时只记 suspect）、`operating_cash_flow` 与 baostock
+  `CFOToNP × netProfit` 比（实测相对差 < 1e-6）；营收口径不同不比。超容差写入行 `provider_conflicts` 与运行元数据
+  `provider_conflict`；关键字段冲突 / 缺失调用 `enqueue_verification`（P1-A13 前为空操作）。
+- **金融股**：银行 / 保险 / 券商四个汇总字段与现金流量表两列均可取到；取不到的字段记 `missing_fields`，不算错误。
+- **节流**：调用串行、间隔 ≥ `AKSHARE_MIN_INTERVAL_SECONDS`（默认 1 秒），瞬时错误重试一次；
+  连续 3 次失败停止本任务，剩余标的记 `stopped`，运行 `partial`（`stop_reason=provider_unavailable`）并发一次
+  `action_required` 通知。
+- **调度**：周六与截止日后的财报任务在 baostock 之后入队同期汇总；现金流量表只在披露季窗口
+  （4/15–5/15、8/15–9/15、10/15–11/15）随周六任务入队（沪深 300 约 1.4 小时）。
+
+### 字段来源登记表（P1-A12）
+
+`config/field_sources.yaml` 为每个因子层字段登记 `primary`、`fallback`、口径、容差（默认 2%）、是否关键字段与按数据源的
+`sanity` 规则；iFinD 不得为主 / 备来源（只做核对）。目标池视图按「iFinD 已核对值 > 主来源 > 备用来源」逐字段取值：
+例如 baostock `debt_ratio` < 0.02（缩小 100 倍缺陷）被拒并改用东财，因子带 `provider_fallback`；无备用值时为缺失并带
+`suspect_provider_value`。每个取值在 `FactorValue.inputs_ref` 中带 `provider` 与核对状态
+（`unverified` / `verified` / `conflict`；免费源之间超容差为 `conflict`）。测试校验因子库读到的每个字段都已登记。
 
 ### 回补
 
@@ -186,6 +223,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 `.env`：`API_KEY`、`DATABASE_URL`（默认 `sqlite+aiosqlite:///./data/app.db`）、
 `DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
 `IFIND_COLLECT_RATE_PER_MINUTE`、`IFIND_COLLECT_BATCH_RETRIES`、`SNAPSHOT_COMPLETENESS_THRESHOLD`、
+`AKSHARE_MIN_INTERVAL_SECONDS`（默认 1）、
 `LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
 `WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
 `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
