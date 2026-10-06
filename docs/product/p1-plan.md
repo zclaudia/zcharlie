@@ -124,7 +124,9 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 - 一次性 CLI：`ia snapshot backfill --universe CSI300 --prices 5y --annual 6 --quarters 4`（按 D5），全部经 baostock。
 - 成分历史：按周从最早日期向后依次同步（baostock 成分每周发布）。现有规则拒绝"早于最近一次变化"的快照，
   回补需支持**向前延伸**成员区间（较早快照与当前状态一致时把 `valid_from` 前移），或在任何实时同步之前完成回补。
-- 可中断续跑（按股票幂等）；回补行标记 `is_backfill=true`。
+- 可中断续跑（按股票幂等）；回补行标记 `is_backfill=true`；`market_snapshot` 增加 `is_backfill` 列（迁移 `015`），
+  历史查询按交易日纳入回补价格（价格不追溯修改），严格模式可排除。
+- 回补范围包含窗口内曾经是成分、后被调出的股票，避免幸存者偏差。
 - 预估：日线 300 只 × 两种复权约 1 小时；财务 300 只 × 10 期 × 4 表约 2 小时；不占 iFinD 额度。
 
 ### P1-A6 披露日与逾期检测（S）
@@ -212,7 +214,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 - 行业不适用的因子跳过而非判失败；缺失因子使该条件不成立并记录。
 - 每周日 20:00 运行（新任务类型 `screen_run`），结果写入 `screen_result`。
 
-### P1-C4 规则库与版本（S）· 迁移 `015`
+### P1-C4 规则库与版本（S）· 迁移 `016`
 
 - 表 `rule_template`、`rule_instance`（`symbol`、`scope`、`template_ref`、`version`、`status`、`definition`、
   `drafted_by`、`draft_rationale`、`approved_at`）。
@@ -228,7 +230,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 ## 6. 工作流 D：候选与决策日志
 
-### P1-D1 候选生命周期（M）· 迁移 `016`
+### P1-D1 候选生命周期（M）· 迁移 `017`
 
 - 表 `candidate`：`symbol`、`opened_at`、`expires_at`（默认 14 天）、`sources`（screen / manual）、
   `screen_result_ref`、`draft_rule_ref`、`status`（`open` / `promoted` / `dismissed` / `expired`）。
