@@ -19,12 +19,14 @@ from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings, SnapshotScheduleConfig, load_app_yaml
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.snapshots.jobs import (
+    INDUSTRY_SYSTEMS,
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     SNAPSHOT_PROVIDERS,
     SNAPSHOT_SCOPES,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
+    IndustrySystem,
     MarketSnapshotPayload,
     SnapshotBackfillPayload,
     SnapshotPayload,
@@ -94,6 +96,18 @@ def _routing(
         )
     code = _universe(universe) if scope == "universe" else None
     return chosen, scope, code
+
+
+def _systems(values: list[str] | None) -> tuple[IndustrySystem, ...]:
+    if not values:
+        return INDUSTRY_SYSTEMS
+    chosen: list[IndustrySystem] = []
+    for value in values:
+        system = value.strip().lower()
+        if system not in INDUSTRY_SYSTEMS:
+            raise typer.BadParameter(" or ".join(INDUSTRY_SYSTEMS), param_hint="--system")
+        chosen.append(system)
+    return tuple(item for item in INDUSTRY_SYSTEMS if item in chosen)
 
 
 def target_pool_universes(config_path: Path) -> tuple[IndexCode, ...]:
@@ -183,11 +197,22 @@ def sync_industry(
         help="Classify the whole market (~5000 listings are created) instead of the target pool",
     ),
     as_of: str | None = typer.Option(None, help="Classification as of (YYYY-MM-DD)"),
+    system: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--system",
+        help="Classification system: sw2021 (Shenwan 2021 via AkShare) or csrc (baostock); "
+        "repeatable; default: both",
+    ),
     config: Path = typer.Option(Path("config/app.yaml"), help=_CONFIG_HELP),  # noqa: B008
     now: bool = typer.Option(False, "--now", help=_NOW_HELP),
 ) -> None:
-    """Enqueue a baostock CSRC industry sync (target pool unless --all-market)."""
+    """Enqueue an industry sync: CSRC (baostock) and Shenwan 2021 (AkShare).
 
+    Target pool unless --all-market. CSRC creates listings for the whole
+    market with --all-market; Shenwan only updates existing listings.
+    """
+
+    systems = _systems(system)
     if all_market and universe:
         raise typer.BadParameter("--all-market excludes --universe", param_hint="--all-market")
     codes: tuple[IndexCode, ...]
@@ -197,7 +222,12 @@ def sync_industry(
         codes = tuple(sorted({_universe(code) for code in universe}))
     else:
         codes = target_pool_universes(config)
-    _run(IndustrySyncPayload(as_of=_date(as_of, "--as-of"), universe_codes=codes), now)
+    _run(
+        IndustrySyncPayload(
+            as_of=_date(as_of, "--as-of"), universe_codes=codes, systems=systems
+        ),
+        now,
+    )
 
 
 @app.command("collect-market")

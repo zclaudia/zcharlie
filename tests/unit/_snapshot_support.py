@@ -241,8 +241,11 @@ def runtime_for(
     *,
     reference: Any = None,
     baostock: Any = None,
+    shenwan: Any = None,
     clock: Callable[[], datetime] = lambda: CAPTURED_AT,
 ) -> SnapshotRuntime:
+    from tests.unit._shenwan_fake import fake_shenwan_client
+
     return SnapshotRuntime(
         settings=settings,
         limiter=AsyncRateLimiter(6000, burst=1000),
@@ -252,6 +255,8 @@ def runtime_for(
         sleep=NoSleep(),
         batch_backoff_seconds=0,
         baostock_factory=(lambda: baostock) if baostock is not None else (lambda: None),  # type: ignore[arg-type,return-value]
+        # offline: the Shenwan history replays tests/fixtures/shenwan
+        shenwan_factory=(lambda: shenwan) if shenwan is not None else fake_shenwan_client,
     )
 
 

@@ -51,8 +51,18 @@ from typing import Any, Literal
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.factors.industry_groups import IndustryGroupMap, default_industry_groups
+from investment_agent.factors.industry_groups import (
+    IndustryGroupMap,
+    IndustryGroupMatch,
+    default_industry_groups,
+    usable_sw_code,
+)
 from investment_agent.factors.metrics import parse_number, percent_to_fraction
+from investment_agent.providers.shenwan_directory import (
+    SW2021_SYSTEM,
+    ShenwanDirectory,
+    default_shenwan_directory,
+)
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot
 from investment_agent.storage.repositories.industry import IndustryRepository
 from investment_agent.storage.repositories.listing import ListingRepository
@@ -188,6 +198,15 @@ class SnapshotView:
     overdue_periods: tuple[date, ...] = ()
     adjusted_kind: str = "backward"
     industry_groups_version: str = field(default="")
+    sw_code: str | None = None
+    """Shenwan 2021 code that decided the group (``None`` -> CSRC fallback)."""
+    industry_match: IndustryGroupMatch | None = None
+
+    @property
+    def industry_fallback(self) -> bool:
+        """The group came from the CSRC fallback table (flag ``industry_fallback``)."""
+
+        return self.industry_match is not None and self.industry_match.fallback
 
     @property
     def provider(self) -> ProviderName:
@@ -210,14 +229,21 @@ class SnapshotView:
         overdue_periods: Iterable[date] = (),
         adjusted_kind: str = "backward",
         industry_groups: IndustryGroupMap | None = None,
+        sw_code: str | None = None,
     ) -> SnapshotView:
         """Pure in-memory constructor; applies the point-in-time rules.
 
         Bars after ``as_of`` and periods not public by ``as_of`` are dropped;
         for a period given more than once the last one wins (later capture).
+        ``sw_code`` is the Shenwan 2021 code valid on ``as_of`` (already vetted
+        with :func:`usable_sw_code`); ``industry_code`` / ``industry_name``
+        are the CSRC fallback.
         """
 
         groups = industry_groups or default_industry_groups()
+        match = groups.resolve_classification(
+            sw_code=sw_code, csrc_code=industry_code, csrc_name=industry_name
+        )
         by_period: dict[date, FinancialPeriod] = {}
         for period in periods:
             if period.availability == "unknown" or period.available_from is None:
@@ -231,13 +257,15 @@ class SnapshotView:
             policy=policy,
             industry_code=industry_code,
             industry_name=industry_name,
-            industry_group=groups.group_for(industry_code, industry_name),
+            industry_group=match.group,
             raw_bars=_bars_until(raw_bars, as_of),
             adjusted_bars=_bars_until(adjusted_bars, as_of),
             periods=tuple(by_period[key] for key in sorted(by_period)),
             overdue_periods=tuple(sorted(set(overdue_periods))),
             adjusted_kind=adjusted_kind,
             industry_groups_version=groups.version,
+            sw_code=sw_code if match.system == SW2021_SYSTEM else None,
+            industry_match=match,
         )
 
     # -- accessors -------------------------------------------------------- #
@@ -384,19 +412,34 @@ async def load_snapshot_view(
     *,
     policy: ProviderPolicy = TARGET_POOL,
     industry_groups: IndustryGroupMap | None = None,
+    shenwan_directory: ShenwanDirectory | None = None,
 ) -> SnapshotView:
     """Read-only point-in-time view of ``ticker`` on ``as_of`` from the database.
 
     Knowledge time is the end of ``as_of`` (Asia/Shanghai): rows captured
     later are invisible (backfilled financial rows excepted, as in
-    ``latest_available``).
+    ``latest_available``). The industry group comes from the ``sw2021``
+    classification valid on ``as_of``, else from ``csrc`` (P1-B3).
     """
 
     listing = await ListingRepository(session).get_a_share_listing(ticker)
     if listing is None:
         raise LookupError(f"no listing for {ticker}")
     knowledge_cutoff = end_of_business_day_utc(as_of) - timedelta(microseconds=1)
-    industry = await IndustryRepository(session).industry_as_of(listing.id, as_of)
+    industries = IndustryRepository(session)
+    industry = await industries.industry_as_of(listing.id, as_of)
+    shenwan = await industries.industry_as_of(listing.id, as_of, system=SW2021_SYSTEM)
+    sw_code = (
+        usable_sw_code(
+            shenwan.code,
+            shenwan.valid_from,
+            shenwan.valid_to,
+            shenwan_directory or default_shenwan_directory(),
+            shenwan.name,
+        )
+        if shenwan is not None
+        else None
+    )
     raw_rows = await _market_series(
         session,
         listing.id,
@@ -438,6 +481,7 @@ async def load_snapshot_view(
         ],
         overdue_periods=[record.report_period for record in overdue],
         industry_groups=industry_groups,
+        sw_code=sw_code,
     )
 
 

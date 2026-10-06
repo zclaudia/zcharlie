@@ -64,7 +64,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | 任务 kind | CLI | 调度（Asia/Shanghai） | 内容 |
 |---|---|---|---|
 | `universe_sync` | `ia snapshot sync-universe --universe CSI300 [--as-of]` | 每周一 08:00 | baostock 成分 → `universe_membership`；有进出发 `info` 通知 |
-| `industry_sync` | `ia snapshot sync-industry [--universe CSI300 \| --all-market] [--as-of]` | 每月首个交易日 08:00 | baostock 证监会行业 → `industry_classification`；不带参数时默认配置的目标池（`snapshot.universes`），全市场需显式 `--all-market` |
+| `industry_sync` | `ia snapshot sync-industry [--universe CSI300 \| --all-market] [--system sw2021\|csrc ...] [--as-of]` | 每月首个交易日 08:00 | 证监会行业（baostock，`system=csrc`）与申万 2021 行业（AkShare，`system=sw2021`）→ `industry_classification`，默认两者都同步（`--system` 可重复）；不带参数时默认配置的目标池（`snapshot.universes`），全市场需显式 `--all-market` |
 | `market_snapshot` | `ia snapshot collect-market [--provider baostock\|ifind] [--scope universe\|watchlist] [--universe CSI300] [--date]` | 交易日 18:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权；baostock 行附 `pe_ttm`、`pb_mrq`、`ps_ttm`、`turnover`、`trade_status`、`is_st` |
 | `financial_snapshot` | `ia snapshot collect-financial --period 2026-06-30 [--provider] [--scope] [--universe] [--as-of]` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 19:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采该数据源尚无该期的标的；截止日后顺带逾期检测 |
 
@@ -91,6 +91,30 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 - 运行元数据记录完整率：应采 / 实采 / 缺失清单（`failed` 错误、`no_data` 无数据、`pending` 财报未披露、
   `quota` 额度耗尽未采）。有 `failed` 或 `quota` 为 `partial`，全部失败为 `failed`；完整率低于
   `SNAPSHOT_COMPLETENESS_THRESHOLD`（默认 0.95）、失败、额度耗尽或新增逾期时发 `action_required` 通知（每次运行至多一次）。
+- **申万 2021 行业（P1-A9，D7）**：`akshare`（锁定 `>=1.19.1,<1.20`）的 `stock_industry_clf_hist_sw`
+  一次取回全市场每只股票的 `(计入日期, 6 位行业代码)` 变更历史（约 1 秒），按区间写入
+  `industry_classification`（`system=sw2021`，与 `csrc` 并存；`valid_to` = 下一条计入日期），
+  存最细的三级代码 + 名称。只更新**已存在**的 listing（目标池 / 回补标的），不为全市场建档；
+  `--all-market` 时证监会会建档，申万只覆盖库内已有的 listing。股票代码按前缀推断交易所：
+  `6`/`900` → `.SH`，`0`/`2`/`3` → `.SZ`，`920`/`4`/`8` → `.BJ`。计入日期晚于采集日（上海时区）报
+  `LookaheadDataError`；返回列变化（网站改版）为终止错误；网络 / 超时 / HTTP 5xx / 429 为瞬时错误。
+  一个系统终止失败不影响另一个（运行以 `partial` 结束，元数据 `failed_systems`）。
+- **申万代码对照表**：`config/shenwan_2021.yaml`（511 个代码 → 名称、层级、上级），由
+  `tools/refresh_shenwan_directory.py` 从申万官网的 `SwClassCode_2021.xls`（同域名、同证书处理，一次请求）
+  生成并提交；建议每月或出现 `shenwan_codes_unresolved` 日志时运行。不带 `--write` 只打印与已提交文件的差异，
+  `--write` 覆盖文件，需人工审阅后提交（不会自动提交）。`--cross-check` 另按原计划用乐咕乐股
+  `sw_index_*_info` + 每个三级行业的 `sw_index_third_cons` 反推核对名称与交易所后缀（乐咕乐股限流严：
+  连续请求会 429，随后数分钟 504；`--limit N` 抽样、`--cache DIR` 断点续跑）。同步时对照表里没有的 2021 年后
+  代码以代码作名称写入并记日志；2021-07-30 之前已结束的区间、以及 2021 年前退市股票仍挂着的旧代码，是旧版
+  （申万 2014 及更早）代码，按代码存名称，不参与行业组映射。
+- **行业组（P1-B3）**：`config/industry_groups.yaml` 先按 `as_of` 当时的申万 2021 分类映射（一级默认、二 / 三级覆盖，
+  `matched_by` = `sw_l1` / `sw_l2` / `sw_l3`），没有可用申万代码时退回证监会表并给因子值加 `industry_fallback`
+  标记，两者都没有时为 `other`（`matched_by=fallback`）。因子 `inputs_ref.industry` 记录所用体系、代码与匹配方式。
+- **申万证书**：`swsresearch.com` 下发的证书链缺中间证书，默认校验失败。只对该域名补全：仓库附带
+  `src/investment_agent/providers/certs/swsresearch-intermediate.pem`（DigiCert「GeoTrust G2 TLS CN RSA4096
+  SHA256 2022 CA1」，有效期至 2032-12-14），调用期间仅替换 AkShare 相关模块里的 `requests`，
+  对 `swsresearch.com` 用 certifi + 该中间证书校验，其他域名与全局校验不变。证书更换时按文件头的步骤
+  （`openssl s_client` 查 AIA 地址 → 下载 → 转 PEM）替换。
 - 原始响应落盘到 `DATA_DIR/snapshot-runs/<run>/attempt-<n>/`，`raw_ref` 指向该文件。
 - `--now` 在当前进程立即执行（调试用）；`ia snapshot status` 查看各类任务最近运行与完整率。
   调度配置见 `config/app.yaml` 的 `snapshot:` 段；日线 18:30 基于 baostock 晚间更新，需在正常交易日实测确认。
@@ -113,7 +137,8 @@ ia snapshot backfill --universe CSI300 --status                                 
 - **幸存者偏差**：回补标的 = 窗口内任何时点的成分股（当前 + 已调出），2026-10-06 实测沪深 300 为
   439 只（当前 300 + 调出 139）。
 - **行业历史**：窗口起点、窗口内每年 1 月 1 日与 `as_of` 各查一次全市场证监会行业（每次约 1 分钟），
-  只写回补标的，不为非成分股建档；变化按年度采样定日。
+  只写回补标的，不为非成分股建档；变化按年度采样定日。同一任务再调用一次 AkShare，把回补标的的
+  申万 2021 完整历史（精确到计入日期）写为 `sw2021`；申万终止错误只记入元数据，不影响证监会部分。
 - **日线**：不复权 + 后复权，从窗口起点取到该股已存 baostock 最早一根的前一天（无数据则到 `as_of`），
   每只每序列一次查询；行标记 `is_backfill=true`。时点读取（`series_as_of`）默认按交易日可见回补行，
   `include_backfill=False` 时严格按 `captured_at`。

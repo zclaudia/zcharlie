@@ -187,6 +187,35 @@ def test_sync_industry_defaults_to_the_configured_target_pool(cli_db, tmp_path):
         "industry_sync:ALL:2026-10-02",
         "industry_sync:CSI300:2026-10-03",
     ]
+    assert all(run.request_json["systems"] == ["csrc", "sw2021"] for run in runs)
+
+
+def test_sync_industry_system_option(cli_db):
+    from investment_agent.cli.main import app
+
+    runner = CliRunner()
+    only_sw = runner.invoke(
+        app,
+        ["snapshot", "sync-industry", "--universe", "CSI300", "--as-of", "2026-10-01",
+         "--system", "sw2021"],
+    )
+    assert only_sw.exit_code == 0, only_sw.output
+    both = runner.invoke(
+        app,
+        ["snapshot", "sync-industry", "--universe", "CSI300", "--as-of", "2026-10-01",
+         "--system", "SW2021", "--system", "csrc"],
+    )
+    assert both.exit_code == 0, both.output
+    bad = runner.invoke(
+        app, ["snapshot", "sync-industry", "--universe", "CSI300", "--system", "gics"]
+    )
+    assert bad.exit_code != 0
+
+    runs = _runs(cli_db)
+    assert [(run.idempotency_key, run.request_json["systems"]) for run in runs] == [
+        ("industry_sync:CSI300:2026-10-01:sw2021", ["sw2021"]),
+        ("industry_sync:CSI300:2026-10-01", ["csrc", "sw2021"]),
+    ]
 
 
 def test_backfill_cli_plans_membership_then_reports_status(cli_db):

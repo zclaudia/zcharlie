@@ -11,7 +11,7 @@ The historical backfill (P1-A4) rebuilds a window from whole-market snapshots
 with :meth:`IndustryRepository.rebuild_history` instead (see :mod:`.intervals`).
 """
 
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import partial
@@ -135,9 +135,8 @@ class IndustryRepository(Repository[IndustryClassification]):
         by_ticker = [{entry.ticker: entry for entry in s.entries} for s in dated]
 
         listings = ListingRepository(self.session)
-        kept = reused = deleted = inserted = 0
-        reclassified: list[str] = []
-        unclassified: list[str] = []
+        timelines: dict[int, list[tuple[date, IndustryValue | None]]] = {}
+        labels: dict[int, str] = {}
         for ticker in sorted(set(tickers)):
             points_by_day: dict[date, IndustryValue | None] = {}
             name: str | None = None
@@ -155,11 +154,50 @@ class IndustryRepository(Repository[IndustryClassification]):
                 )
             if not points_by_day:
                 continue
-            points = sorted(points_by_day.items())
-            if all(value is None for _, value in points):
-                unclassified.append(ticker)
             listing = await listings.ensure_a_share_listing(ticker, company_name=name)
-            rows = await self.history(listing.id, system=system)
+            timelines[listing.id] = sorted(points_by_day.items())
+            labels[listing.id] = ticker
+        return await self.rebuild_timelines(
+            timelines,
+            system=system,
+            source=source,
+            captured_at=captured_at,
+            labels=labels,
+            requested=len(set(tickers)),
+        )
+
+    async def rebuild_timelines(
+        self,
+        timelines: Mapping[int, Sequence[tuple[date, IndustryValue | None]]],
+        *,
+        system: str,
+        source: str,
+        captured_at: datetime | None,
+        labels: Mapping[int, str] | None = None,
+        requested: int | None = None,
+    ) -> IndustryRebuild:
+        """Recompute existing listings' ``system`` history from dated points.
+
+        ``timelines`` maps a listing id to its ``(effective date, (code, name)
+        | None)`` points, strictly increasing by date. Inside ``[first point,
+        last point]`` the points are authoritative; stored rows before and
+        changes recorded after are kept (:func:`merge_timeline`). Shared by
+        the CSRC backfill (:meth:`rebuild_history`) and the Shenwan history
+        sync, which passes each stock's full change list. No listing is
+        created here.
+        """
+
+        kept = reused = deleted = inserted = 0
+        reclassified: list[str] = []
+        unclassified: list[str] = []
+        for listing_id, raw_points in timelines.items():
+            points = list(raw_points)
+            if not points:
+                continue
+            label = (labels or {}).get(listing_id, str(listing_id))
+            if all(value is None for _, value in points):
+                unclassified.append(label)
+            rows = await self.history(listing_id, system=system)
 
             def span_of(row: IndustryClassification) -> Span[IndustryValue]:
                 return Span((row.code, row.name), row.valid_from, row.valid_to)
@@ -173,7 +211,7 @@ class IndustryRepository(Repository[IndustryClassification]):
             desired = scalar_spans(timeline)
             window = (points[0][0], points[-1][0])
             if len({span.value for span in desired if _overlaps(span, *window)}) > 1:
-                reclassified.append(ticker)
+                reclassified.append(label)
             plan = plan_rows(rows, desired, span_of)
             kept += len(plan.keep)
             for row in plan.delete:
@@ -186,13 +224,13 @@ class IndustryRepository(Repository[IndustryClassification]):
                 await self.session.flush()
             for span in plan.insert:
                 assert captured_at is not None
-                code, label = span.value
+                code, name = span.value
                 self.session.add(
                     IndustryClassification(
-                        listing_id=listing.id,
+                        listing_id=listing_id,
                         system=system,
                         code=code,
-                        name=label,
+                        name=name,
                         valid_from=span.valid_from,
                         valid_to=span.valid_to,
                         source=source,
@@ -202,7 +240,7 @@ class IndustryRepository(Repository[IndustryClassification]):
                 inserted += 1
             await self.session.flush()
         result = IndustryRebuild(
-            listings=len(set(tickers)),
+            listings=requested if requested is not None else len(timelines),
             reclassified=tuple(reclassified),
             unclassified=tuple(unclassified),
             kept=kept,
@@ -213,7 +251,6 @@ class IndustryRepository(Repository[IndustryClassification]):
         log.info(
             "industry_history_rebuilt",
             system=system,
-            snapshots=len(dated),
             listings=result.listings,
             reclassified=len(reclassified),
             kept=kept,

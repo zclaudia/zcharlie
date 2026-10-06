@@ -9,7 +9,7 @@
 | financial_deadline   | daily 19:00          | first trading day after 04-30 / 08-31 / 10-31 |
 
 Each fire enqueues one job per configured universe (industry: one job for
-the union) with the default per-date idempotency key, so a misfire catch-up
+the union, syncing both CSRC via baostock and Shenwan 2021 via AkShare) with the default per-date idempotency key, so a misfire catch-up
 or a restart never duplicates work. The deadline-triggered financial job also
 runs the disclosure-overdue scan (P1-A6, :mod:`investment_agent.snapshots.disclosure`);
 it fires in the evening so reports published on the deadline day itself have
@@ -33,6 +33,7 @@ from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.scheduler.trading_calendar import TradingCalendar
 from investment_agent.snapshots.disclosure import statutory_deadline
 from investment_agent.snapshots.jobs import (
+    INDUSTRY_SYSTEMS,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
@@ -159,7 +160,11 @@ def snapshot_payloads(
     if job == "industry_sync":
         if not is_first_trading_day_of_month(calendar, today):
             return []
-        return [IndustrySyncPayload(as_of=today, universe_codes=tuple(sorted(codes)))]
+        return [
+            IndustrySyncPayload(
+                as_of=today, universe_codes=tuple(sorted(codes)), systems=INDUSTRY_SYSTEMS
+            )
+        ]
     if job == "market_snapshot":
         if not calendar.is_trading_day(today):
             return []

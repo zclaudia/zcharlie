@@ -82,7 +82,7 @@ def _client(backend: FakeBaostockBackend) -> BaostockReferenceClient:
     )
 
 
-async def _run_job(tmp_path, payload, backend):
+async def _run_job(tmp_path, payload, backend, shenwan=None):
     settings = settings_for(tmp_path)
     async with session_scope() as session:
         run, _ = await enqueue_snapshot_job(session, payload, triggered_by="test")
@@ -90,7 +90,9 @@ async def _run_job(tmp_path, payload, backend):
     worker = ResearchWorker(
         settings=settings,
         worker_id="w",
-        handlers=handlers_for(settings, FakeProxy(), reference=_client(backend)),
+        handlers=handlers_for(
+            settings, FakeProxy(), reference=_client(backend), shenwan=shenwan
+        ),
     )
     assert await worker.run_once() == run_id
     async with session_scope() as session:
@@ -168,3 +170,62 @@ async def test_industry_sync_limited_to_universe_members(db_session, tmp_path):
         outsider = await ListingRepository(session).get_a_share_listing("000002.SZ")
     assert industry is not None and industry.code == "C15"
     assert outsider is None  # whole-market rows outside the universe are not applied
+    # The same job synced Shenwan 2021 (fixture replay) for the universe members only.
+    sw = run.metadata_json["sw2021"]
+    assert run.metadata_json["systems"] == ["csrc", "sw2021"]
+    assert (sw["scope"], sw["applied"], sw["system"]) == (1, 1, "sw2021")
+    assert (tmp_path / sw["raw_ref"]).is_file()
+    async with session_scope() as session:
+        assert listing is not None
+        shenwan = await IndustryRepository(session).industry_as_of(
+            listing.id, date(2026, 10, 5), system="sw2021"
+        )
+    assert shenwan is not None and (shenwan.code, shenwan.name) == ("340501", "白酒Ⅲ")
+
+
+async def _seed_universe(tmp_path, backend):
+    await _run_job(
+        tmp_path, UniverseSyncPayload(universe_code="CSI300", as_of=date(2026, 10, 5)), backend
+    )
+
+
+async def test_industry_sync_single_system(db_session, tmp_path):
+    del db_session
+    backend = FakeBaostockBackend(
+        {"sh.600519": "贵州茅台"}, "2026-10-05", {"sh.600519": "C15酒、饮料和精制茶制造业"}
+    )
+    await _seed_universe(tmp_path, backend)
+    payload = IndustrySyncPayload(
+        as_of=date(2026, 10, 5), universe_codes=("CSI300",), systems=("sw2021",)
+    )
+    assert idempotency_key(payload) == "industry_sync:CSI300:2026-10-05:sw2021"
+    run = await _run_job(tmp_path, payload, backend)
+    assert run.status == "success"
+    assert "provider_entries" not in run.metadata_json  # CSRC not synced
+    assert run.metadata_json["sw2021"]["applied"] == 1
+    async with session_scope() as session:
+        listing = await ListingRepository(session).get_a_share_listing("600519.SH")
+        assert listing is not None
+        assert await IndustryRepository(session).industry_as_of(listing.id, date(2026, 10, 5)) is None
+
+
+async def test_terminal_shenwan_failure_keeps_csrc_and_ends_partial(db_session, tmp_path):
+    del db_session
+    from tests.unit._shenwan_fake import FailingShenwanClient
+
+    backend = FakeBaostockBackend(
+        {"sh.600519": "贵州茅台"}, "2026-10-05", {"sh.600519": "C15酒、饮料和精制茶制造业"}
+    )
+    await _seed_universe(tmp_path, backend)
+    payload = IndustrySyncPayload(as_of=date(2026, 10, 5), universe_codes=("CSI300",))
+    run = await _run_job(tmp_path, payload, backend, shenwan=FailingShenwanClient())
+    assert run.status == "partial"
+    assert run.metadata_json["failed_systems"] == ["sw2021"]
+    assert "HTTP 404" in run.metadata_json["errors"]["sw2021"]
+    assert run.metadata_json["applied_entries"] == 1  # CSRC still applied
+
+    only_sw = IndustrySyncPayload(
+        as_of=date(2026, 10, 5), universe_codes=("CSI300",), systems=("sw2021",)
+    )
+    failed = await _run_job(tmp_path, only_sw, backend, shenwan=FailingShenwanClient())
+    assert failed.status == "failed"  # a lone system: its terminal error fails the run

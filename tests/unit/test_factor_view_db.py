@@ -199,7 +199,9 @@ async def test_target_pool_view_reads_baostock_point_in_time(db_session):
 
     values = DEFAULT_REGISTRY.compute_all(view)
     assert values["roe"].value == pytest.approx(0.33)
-    assert values["roe"].flags == ("report_overdue",)
+    # only a CSRC row is stored: the group comes from the fallback table
+    assert values["roe"].flags == ("industry_fallback", "report_overdue")
+    assert values["roe"].inputs_ref["industry"]["matched_by"] == "code"
     assert values["roe_stability"].quality == "ok"
     assert values["market_cap"].value == 1504.0 * 1_250_000_000.0
     assert values["report_overdue"].value == 1.0

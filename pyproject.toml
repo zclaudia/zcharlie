@@ -32,6 +32,9 @@ dependencies = [
 
     # Reference data (index constituents, CSRC industries)
     "baostock>=0.9.4",
+    # Shenwan 2021 industries (P1-A9); scraper wrapper, pinned to a minor version
+    "akshare>=1.19.1,<1.20",
+    "certifi",
 
     # LLM
     "openai>=1.30",
@@ -62,6 +65,9 @@ ia = "investment_agent.cli.main:app"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"investment_agent.providers" = ["certs/*.pem"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
@@ -88,5 +94,5 @@ namespace_packages = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["apscheduler.*", "baostock.*"]
+module = ["apscheduler.*", "baostock.*", "akshare.*"]
 ignore_missing_imports = true

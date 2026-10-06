@@ -17,7 +17,9 @@ runs one *part* (:class:`~investment_agent.snapshots.jobs.SnapshotBackfillPayloa
     window start and ``as_of``; applied with
     :meth:`IndustryRepository.rebuild_history` to the backfill set only.
     Granularity is therefore one year: a reclassification is dated at the
-    effective date of the first yearly sample that shows it.
+    effective date of the first yearly sample that shows it. The same job
+    also writes the Shenwan 2021 history (``sw2021``, exact change dates)
+    of the backfill set from one AkShare call (:mod:`.shenwan`).
 
 ``prices`` (chunks of :data:`CHUNK_SIZE` symbols)
     Raw and backward-adjusted daily bars from the window start to the day
@@ -68,6 +70,7 @@ from investment_agent.providers.baostock_reference import (
     IndexCode,
     IndustrySnapshot,
 )
+from investment_agent.providers.errors import ProviderError, ProviderTransientError
 from investment_agent.research.retry_policy import is_transient_error
 from investment_agent.snapshots.breadth import (
     BAOSTOCK_PROVIDER,
@@ -95,6 +98,12 @@ from investment_agent.snapshots.jobs import (
     SnapshotBackfillPayload,
     enqueue_snapshot_job,
     idempotency_key,
+)
+from investment_agent.snapshots.shenwan import (
+    ShenwanClient,
+    apply_sw2021_history,
+    existing_listing_ids,
+    write_history_artifact,
 )
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
@@ -367,6 +376,7 @@ async def backfill_industry(
     client: BackfillClient,
     artifacts: ArtifactWriter,
     lease: RunLease | None,
+    shenwan: ShenwanClient | None = None,
 ) -> dict[str, object]:
     start = window_start(payload)
     async with session_scope() as session:
@@ -407,6 +417,7 @@ async def backfill_industry(
     async with session_scope() as session:
         await fence_writes(session, lease)
         result = await IndustryRepository(session).rebuild_history(snapshots, tickers=symbols)
+    sw2021 = await _backfill_sw2021(payload, symbols, shenwan, artifacts, lease)
     return {
         "part": "industry",
         "universe_code": payload.universe_code,
@@ -426,7 +437,43 @@ async def backfill_industry(
         },
         "granularity": "yearly samples: a change is dated at the first sample showing it",
         "raw_ref": raw_ref,
+        "sw2021": sw2021,
     }
+
+
+async def _backfill_sw2021(
+    payload: SnapshotBackfillPayload,
+    symbols: Sequence[str],
+    shenwan: ShenwanClient | None,
+    artifacts: ArtifactWriter,
+    lease: RunLease | None,
+) -> dict[str, object]:
+    """Shenwan 2021 history of the backfill set (one whole-market call, P1-A9).
+
+    Transient AkShare errors propagate (the job retries; the CSRC rebuild is
+    idempotent). A terminal error is recorded and does not fail the part:
+    the monthly ``industry_sync`` repairs the target pool's Shenwan history.
+    """
+
+    if shenwan is None:
+        return {"skipped": "no Shenwan client"}
+    try:
+        history = await shenwan.fetch_industry_history()
+    except ProviderTransientError:
+        raise
+    except ProviderError as exc:
+        log.warning("backfill_sw2021_failed", error=str(exc))
+        return {"error": f"{type(exc).__name__}: {exc}"}
+    async with session_scope() as session:
+        scope = await existing_listing_ids(session, symbols)
+    raw_ref = write_history_artifact(
+        artifacts,
+        history,
+        name=f"industry-sw2021-history-{payload.universe_code}-{payload.as_of.isoformat()}",
+        tickers=scope,
+    )
+    result = await apply_sw2021_history(history, scope=scope, as_of=payload.as_of, lease=lease)
+    return {**result, "raw_ref": raw_ref}
 
 
 def _raw_ticker(row: Any) -> str:
@@ -744,11 +791,14 @@ async def run_backfill_part(
     client: BackfillClient,
     artifacts: ArtifactWriter,
     lease: RunLease | None,
+    shenwan: ShenwanClient | None = None,
 ) -> dict[str, object] | CollectionReport:
     if payload.part == "membership":
         return await backfill_membership(payload, client=client, artifacts=artifacts, lease=lease)
     if payload.part == "industry":
-        return await backfill_industry(payload, client=client, artifacts=artifacts, lease=lease)
+        return await backfill_industry(
+            payload, client=client, artifacts=artifacts, lease=lease, shenwan=shenwan
+        )
     if payload.part == "prices":
         return await backfill_prices(payload, client=client, artifacts=artifacts, lease=lease)
     return await backfill_financials(payload, client=client, artifacts=artifacts, lease=lease)

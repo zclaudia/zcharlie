@@ -1,0 +1,5330 @@
+{
+ "source": "akshare 1.19.1 stock_industry_clf_hist_sw (swsresearch.com)",
+ "captured_on": "2026-10-06",
+ "note": "rows of the CSI 300 fixture members (2026-10-05), 920002, 832317, 000003, 000004, 000005 and the constituents of 850111.SI, 850339.SI",
+ "full_rows": 12925,
+ "columns": [
+  "symbol",
+  "start_date",
+  "industry_code",
+  "update_time"
+ ],
+ "rows": [
+  {
+   "symbol": "000001",
+   "start_date": "1991-04-03",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000001",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000001",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2025-12-15"
+  },
+  {
+   "symbol": "000002",
+   "start_date": "1991-01-29",
+   "industry_code": "430101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000003",
+   "start_date": "1991-04-14",
+   "industry_code": "510101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "1990-01-01",
+   "industry_code": "420301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "2001-09-01",
+   "industry_code": "370301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "2007-07-02",
+   "industry_code": "430101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "2009-01-01",
+   "industry_code": "370301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "2019-07-24",
+   "industry_code": "370102",
+   "update_time": "2020-12-04"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "2021-06-11",
+   "industry_code": "710202",
+   "update_time": "2021-06-11"
+  },
+  {
+   "symbol": "000004",
+   "start_date": "2021-07-30",
+   "industry_code": "710402",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "000005",
+   "start_date": "1990-12-10",
+   "industry_code": "430101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000005",
+   "start_date": "2017-06-29",
+   "industry_code": "410401",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "000005",
+   "start_date": "2021-07-30",
+   "industry_code": "760104",
+   "update_time": "2022-10-11"
+  },
+  {
+   "symbol": "000063",
+   "start_date": "1997-11-18",
+   "industry_code": "320101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000063",
+   "start_date": "2008-06-02",
+   "industry_code": "320103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000063",
+   "start_date": "2014-02-21",
+   "industry_code": "730202",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000063",
+   "start_date": "2021-07-30",
+   "industry_code": "730204",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "000100",
+   "start_date": "2004-01-29",
+   "industry_code": "320102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000100",
+   "start_date": "2007-07-02",
+   "industry_code": "330201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000100",
+   "start_date": "2019-04-22",
+   "industry_code": "270301",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000157",
+   "start_date": "2000-10-12",
+   "industry_code": "260202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000157",
+   "start_date": "2014-02-21",
+   "industry_code": "640201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000157",
+   "start_date": "2021-07-30",
+   "industry_code": "640601",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "000166",
+   "start_date": "2015-01-18",
+   "industry_code": "490101",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "000301",
+   "start_date": "2000-04-24",
+   "industry_code": "350103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000301",
+   "start_date": "2009-10-09",
+   "industry_code": "450103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000301",
+   "start_date": "2014-02-21",
+   "industry_code": "450502",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000301",
+   "start_date": "2018-05-30",
+   "industry_code": "410104",
+   "update_time": "2019-02-27"
+  },
+  {
+   "symbol": "000301",
+   "start_date": "2019-07-24",
+   "industry_code": "220401",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000301",
+   "start_date": "2021-07-30",
+   "industry_code": "750301",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "000333",
+   "start_date": "2013-01-18",
+   "industry_code": "330102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000338",
+   "start_date": "2007-04-30",
+   "industry_code": "310201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000338",
+   "start_date": "2014-02-21",
+   "industry_code": "280201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000338",
+   "start_date": "2021-07-30",
+   "industry_code": "280203",
+   "update_time": "2023-07-01"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "1996-06-28",
+   "industry_code": "250103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "2008-06-02",
+   "industry_code": "450103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "2012-01-02",
+   "industry_code": "450201",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "2018-07-13",
+   "industry_code": "220306",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "2021-07-30",
+   "industry_code": "220804",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "2023-07-04",
+   "industry_code": "240603",
+   "update_time": "2025-02-24"
+  },
+  {
+   "symbol": "000408",
+   "start_date": "2026-07-01",
+   "industry_code": "220804",
+   "update_time": "2026-07-01"
+  },
+  {
+   "symbol": "000425",
+   "start_date": "1996-08-28",
+   "industry_code": "260202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000425",
+   "start_date": "2014-02-21",
+   "industry_code": "640201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000425",
+   "start_date": "2021-07-30",
+   "industry_code": "640601",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "000538",
+   "start_date": "1993-12-15",
+   "industry_code": "370201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000568",
+   "start_date": "1994-05-09",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000568",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "000596",
+   "start_date": "1996-09-27",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000596",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2025-06-01"
+  },
+  {
+   "symbol": "000617",
+   "start_date": "1996-10-22",
+   "industry_code": "260104",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000617",
+   "start_date": "2007-07-02",
+   "industry_code": "260205",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000617",
+   "start_date": "2011-10-10",
+   "industry_code": "260104",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000617",
+   "start_date": "2014-02-21",
+   "industry_code": "640104",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000617",
+   "start_date": "2018-07-13",
+   "industry_code": "490301",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000617",
+   "start_date": "2021-07-30",
+   "industry_code": "490302",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "000625",
+   "start_date": "1997-06-10",
+   "industry_code": "310101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000625",
+   "start_date": "2014-02-21",
+   "industry_code": "280101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000625",
+   "start_date": "2021-07-30",
+   "industry_code": "280502",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "000630",
+   "start_date": "1996-11-20",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000630",
+   "start_date": "2008-06-02",
+   "industry_code": "240103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000630",
+   "start_date": "2014-02-21",
+   "industry_code": "240302",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000651",
+   "start_date": "1996-11-18",
+   "industry_code": "330102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000657",
+   "start_date": "1996-12-05",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000657",
+   "start_date": "2008-06-02",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000657",
+   "start_date": "2014-02-21",
+   "industry_code": "240502",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000708",
+   "start_date": "1997-03-21",
+   "industry_code": "230102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000708",
+   "start_date": "2021-07-30",
+   "industry_code": "230501",
+   "update_time": "2022-07-05"
+  },
+  {
+   "symbol": "000713",
+   "start_date": "1997-04-22",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000725",
+   "start_date": "2001-01-12",
+   "industry_code": "270301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000768",
+   "start_date": "1997-06-26",
+   "industry_code": "310303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000768",
+   "start_date": "2008-06-02",
+   "industry_code": "310304",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000768",
+   "start_date": "2014-02-21",
+   "industry_code": "650201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000776",
+   "start_date": "1997-06-11",
+   "industry_code": "420201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000776",
+   "start_date": "2007-07-02",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000776",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000792",
+   "start_date": "1997-09-04",
+   "industry_code": "220306",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000792",
+   "start_date": "2021-07-30",
+   "industry_code": "220804",
+   "update_time": "2024-01-19"
+  },
+  {
+   "symbol": "000807",
+   "start_date": "1998-04-08",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000807",
+   "start_date": "2008-06-02",
+   "industry_code": "240102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000807",
+   "start_date": "2014-02-21",
+   "industry_code": "240301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000858",
+   "start_date": "1998-04-27",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000858",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "000881",
+   "start_date": "1998-06-15",
+   "industry_code": "510101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000881",
+   "start_date": "2002-05-01",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000881",
+   "start_date": "2007-07-02",
+   "industry_code": "510101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000881",
+   "start_date": "2019-07-24",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "000895",
+   "start_date": "1998-12-10",
+   "industry_code": "340101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000895",
+   "start_date": "2011-10-10",
+   "industry_code": "340401",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000938",
+   "start_date": "1999-11-04",
+   "industry_code": "320201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000938",
+   "start_date": "2014-02-21",
+   "industry_code": "710101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000938",
+   "start_date": "2019-07-24",
+   "industry_code": "710202",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000938",
+   "start_date": "2021-07-30",
+   "industry_code": "710301",
+   "update_time": "2026-06-18"
+  },
+  {
+   "symbol": "000963",
+   "start_date": "2000-01-27",
+   "industry_code": "370401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000963",
+   "start_date": "2019-07-24",
+   "industry_code": "370102",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2000-06-08",
+   "industry_code": "410401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2007-07-02",
+   "industry_code": "430101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2009-06-01",
+   "industry_code": "250102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2010-06-01",
+   "industry_code": "430101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2011-10-10",
+   "industry_code": "460201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2012-10-08",
+   "industry_code": "510101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2013-07-01",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2014-02-21",
+   "industry_code": "240504",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2014-07-01",
+   "industry_code": "240303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000975",
+   "start_date": "2019-07-24",
+   "industry_code": "240401",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "000977",
+   "start_date": "2000-06-08",
+   "industry_code": "320201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000977",
+   "start_date": "2014-02-21",
+   "industry_code": "710101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "000977",
+   "start_date": "2021-07-30",
+   "industry_code": "710103",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "000988",
+   "start_date": "2000-06-08",
+   "industry_code": "260207",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000988",
+   "start_date": "2007-07-02",
+   "industry_code": "320201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000988",
+   "start_date": "2011-01-10",
+   "industry_code": "270401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000988",
+   "start_date": "2021-07-30",
+   "industry_code": "640703",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "000998",
+   "start_date": "2000-06-29",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "000999",
+   "start_date": "2000-03-09",
+   "industry_code": "370201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "001218",
+   "start_date": "2021-09-17",
+   "industry_code": "220309",
+   "update_time": "2021-11-18"
+  },
+  {
+   "symbol": "001280",
+   "start_date": "2025-11-14",
+   "industry_code": "240501",
+   "update_time": "2025-12-09"
+  },
+  {
+   "symbol": "001358",
+   "start_date": "2023-12-01",
+   "industry_code": "220309",
+   "update_time": "2024-07-29"
+  },
+  {
+   "symbol": "001391",
+   "start_date": "2024-12-20",
+   "industry_code": "421001",
+   "update_time": "2024-12-20"
+  },
+  {
+   "symbol": "001391",
+   "start_date": "2025-01-03",
+   "industry_code": "420805",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "001965",
+   "start_date": "2017-12-21",
+   "industry_code": "420201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "001965",
+   "start_date": "2021-07-30",
+   "industry_code": "420901",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "001979",
+   "start_date": "2016-01-07",
+   "industry_code": "430101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "001979",
+   "start_date": "2021-07-30",
+   "industry_code": "430102",
+   "update_time": "2025-02-19"
+  },
+  {
+   "symbol": "002001",
+   "start_date": "2004-06-18",
+   "industry_code": "370101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002001",
+   "start_date": "2024-07-30",
+   "industry_code": "340407",
+   "update_time": "2024-07-30"
+  },
+  {
+   "symbol": "002001",
+   "start_date": "2024-08-07",
+   "industry_code": "220315",
+   "update_time": "2025-11-28"
+  },
+  {
+   "symbol": "002027",
+   "start_date": "2004-08-03",
+   "industry_code": "320201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002027",
+   "start_date": "2014-02-21",
+   "industry_code": "710101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002027",
+   "start_date": "2016-07-01",
+   "industry_code": "720201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002027",
+   "start_date": "2021-07-30",
+   "industry_code": "720502",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002028",
+   "start_date": "2004-08-02",
+   "industry_code": "260404",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002028",
+   "start_date": "2014-02-21",
+   "industry_code": "630201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002028",
+   "start_date": "2019-07-24",
+   "industry_code": "630401",
+   "update_time": "2020-08-10"
+  },
+  {
+   "symbol": "002028",
+   "start_date": "2021-07-30",
+   "industry_code": "630801",
+   "update_time": "2025-11-10"
+  },
+  {
+   "symbol": "002041",
+   "start_date": "2005-03-24",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002049",
+   "start_date": "2005-05-30",
+   "industry_code": "270201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002049",
+   "start_date": "2011-01-10",
+   "industry_code": "270101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002049",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "002050",
+   "start_date": "2005-05-25",
+   "industry_code": "330102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002050",
+   "start_date": "2012-01-02",
+   "industry_code": "330105",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002050",
+   "start_date": "2021-07-30",
+   "industry_code": "330601",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002074",
+   "start_date": "2006-10-18",
+   "industry_code": "260402",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002074",
+   "start_date": "2011-10-10",
+   "industry_code": "260404",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002074",
+   "start_date": "2014-02-21",
+   "industry_code": "630402",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002074",
+   "start_date": "2019-07-24",
+   "industry_code": "630305",
+   "update_time": "2021-05-31"
+  },
+  {
+   "symbol": "002074",
+   "start_date": "2021-07-30",
+   "industry_code": "630701",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002142",
+   "start_date": "2007-07-18",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002142",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002142",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002179",
+   "start_date": "2007-10-31",
+   "industry_code": "270401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002179",
+   "start_date": "2011-10-10",
+   "industry_code": "270502",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002179",
+   "start_date": "2019-07-24",
+   "industry_code": "650201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002179",
+   "start_date": "2021-07-30",
+   "industry_code": "650501",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002202",
+   "start_date": "2007-12-25",
+   "industry_code": "260401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002202",
+   "start_date": "2008-10-07",
+   "industry_code": "260403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002202",
+   "start_date": "2014-02-21",
+   "industry_code": "630302",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002202",
+   "start_date": "2021-07-30",
+   "industry_code": "630601",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002230",
+   "start_date": "2008-04-17",
+   "industry_code": "470301",
+   "update_time": "2024-10-08"
+  },
+  {
+   "symbol": "002230",
+   "start_date": "2008-06-02",
+   "industry_code": "470303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002230",
+   "start_date": "2014-02-21",
+   "industry_code": "710201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002230",
+   "start_date": "2021-07-30",
+   "industry_code": "710402",
+   "update_time": "2025-02-19"
+  },
+  {
+   "symbol": "002236",
+   "start_date": "2008-05-20",
+   "industry_code": "320201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002236",
+   "start_date": "2014-02-21",
+   "industry_code": "710101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002236",
+   "start_date": "2017-06-29",
+   "industry_code": "270501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002236",
+   "start_date": "2021-07-30",
+   "industry_code": "710102",
+   "update_time": "2025-02-19"
+  },
+  {
+   "symbol": "002241",
+   "start_date": "2008-05-05",
+   "industry_code": "270201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002241",
+   "start_date": "2011-10-10",
+   "industry_code": "270501",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002241",
+   "start_date": "2021-07-30",
+   "industry_code": "270504",
+   "update_time": "2025-09-09"
+  },
+  {
+   "symbol": "002304",
+   "start_date": "2009-01-22",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002304",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002311",
+   "start_date": "2009-01-11",
+   "industry_code": "110401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002311",
+   "start_date": "2021-07-30",
+   "industry_code": "110403",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002352",
+   "start_date": "2010-01-18",
+   "industry_code": "260501",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002352",
+   "start_date": "2014-02-21",
+   "industry_code": "640401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002352",
+   "start_date": "2017-03-01",
+   "industry_code": "420801",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002352",
+   "start_date": "2021-07-30",
+   "industry_code": "420804",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002353",
+   "start_date": "2010-01-18",
+   "industry_code": "260205",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002353",
+   "start_date": "2014-02-21",
+   "industry_code": "640203",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002371",
+   "start_date": "2010-01-23",
+   "industry_code": "270103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002371",
+   "start_date": "2021-07-30",
+   "industry_code": "270108",
+   "update_time": "2025-10-28"
+  },
+  {
+   "symbol": "002384",
+   "start_date": "2010-03-22",
+   "industry_code": "260102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002384",
+   "start_date": "2011-10-10",
+   "industry_code": "270502",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002384",
+   "start_date": "2019-07-24",
+   "industry_code": "270202",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002415",
+   "start_date": "2010-05-12",
+   "industry_code": "320201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002415",
+   "start_date": "2014-02-21",
+   "industry_code": "710101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002415",
+   "start_date": "2017-06-29",
+   "industry_code": "270501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002415",
+   "start_date": "2021-07-30",
+   "industry_code": "710102",
+   "update_time": "2025-02-19"
+  },
+  {
+   "symbol": "002422",
+   "start_date": "2010-01-20",
+   "industry_code": "370102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002430",
+   "start_date": "2010-05-25",
+   "industry_code": "260106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002430",
+   "start_date": "2011-10-10",
+   "industry_code": "260207",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002430",
+   "start_date": "2014-02-21",
+   "industry_code": "640209",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002430",
+   "start_date": "2024-07-30",
+   "industry_code": "220309",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002453",
+   "start_date": "2010-01-16",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002455",
+   "start_date": "2010-01-02",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002460",
+   "start_date": "2010-07-28",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002460",
+   "start_date": "2014-02-21",
+   "industry_code": "240503",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002460",
+   "start_date": "2021-07-30",
+   "industry_code": "240603",
+   "update_time": "2022-01-11"
+  },
+  {
+   "symbol": "002463",
+   "start_date": "2010-08-09",
+   "industry_code": "270201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002463",
+   "start_date": "2011-10-10",
+   "industry_code": "270202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002466",
+   "start_date": "2010-08-12",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002466",
+   "start_date": "2014-02-21",
+   "industry_code": "240503",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002466",
+   "start_date": "2021-07-30",
+   "industry_code": "240603",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "002475",
+   "start_date": "2010-09-14",
+   "industry_code": "270201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002475",
+   "start_date": "2011-10-10",
+   "industry_code": "270502",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002475",
+   "start_date": "2021-07-30",
+   "industry_code": "270504",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "002493",
+   "start_date": "2010-10-20",
+   "industry_code": "220101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002493",
+   "start_date": "2011-01-10",
+   "industry_code": "220401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002493",
+   "start_date": "2021-07-30",
+   "industry_code": "750301",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "002532",
+   "start_date": "2010-12-22",
+   "industry_code": "260106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002532",
+   "start_date": "2014-02-21",
+   "industry_code": "640106",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002532",
+   "start_date": "2021-07-30",
+   "industry_code": "240301",
+   "update_time": "2024-09-12"
+  },
+  {
+   "symbol": "002549",
+   "start_date": "2011-01-10",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002549",
+   "start_date": "2011-02-09",
+   "industry_code": "510101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002549",
+   "start_date": "2011-10-10",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "002558",
+   "start_date": "2011-01-21",
+   "industry_code": "460301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002558",
+   "start_date": "2017-05-22",
+   "industry_code": "720302",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002558",
+   "start_date": "2021-07-30",
+   "industry_code": "720401",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002591",
+   "start_date": "2011-06-09",
+   "industry_code": "220701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002591",
+   "start_date": "2014-01-01",
+   "industry_code": "220309",
+   "update_time": "2018-06-20"
+  },
+  {
+   "symbol": "002591",
+   "start_date": "2018-07-13",
+   "industry_code": "720201",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "002591",
+   "start_date": "2021-07-30",
+   "industry_code": "720501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002591",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-07-29"
+  },
+  {
+   "symbol": "002594",
+   "start_date": "2011-06-21",
+   "industry_code": "310101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002594",
+   "start_date": "2014-02-21",
+   "industry_code": "280101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002594",
+   "start_date": "2021-07-30",
+   "industry_code": "280501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002600",
+   "start_date": "2011-01-06",
+   "industry_code": "240202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002600",
+   "start_date": "2018-07-13",
+   "industry_code": "270502",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002600",
+   "start_date": "2021-07-30",
+   "industry_code": "270504",
+   "update_time": "2025-03-17"
+  },
+  {
+   "symbol": "002602",
+   "start_date": "2011-07-13",
+   "industry_code": "310201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002602",
+   "start_date": "2014-02-21",
+   "industry_code": "280201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002602",
+   "start_date": "2017-06-29",
+   "industry_code": "720301",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002602",
+   "start_date": "2021-07-30",
+   "industry_code": "720401",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "002625",
+   "start_date": "2011-10-26",
+   "industry_code": "310201",
+   "update_time": "2024-07-01"
+  },
+  {
+   "symbol": "002625",
+   "start_date": "2014-02-21",
+   "industry_code": "280201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "002625",
+   "start_date": "2021-07-30",
+   "industry_code": "650201",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "002637",
+   "start_date": "2011-01-16",
+   "industry_code": "220304",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002637",
+   "start_date": "2021-07-30",
+   "industry_code": "220309",
+   "update_time": "2025-09-26"
+  },
+  {
+   "symbol": "002648",
+   "start_date": "2011-12-16",
+   "industry_code": "220101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002648",
+   "start_date": "2012-01-08",
+   "industry_code": "220204",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002648",
+   "start_date": "2021-07-30",
+   "industry_code": "750303",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002648",
+   "start_date": "2021-12-03",
+   "industry_code": "220309",
+   "update_time": "2022-07-16"
+  },
+  {
+   "symbol": "002648",
+   "start_date": "2022-07-29",
+   "industry_code": "220204",
+   "update_time": "2025-09-11"
+  },
+  {
+   "symbol": "002666",
+   "start_date": "2012-01-14",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002709",
+   "start_date": "2014-01-08",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002709",
+   "start_date": "2021-07-30",
+   "industry_code": "630702",
+   "update_time": "2025-12-03"
+  },
+  {
+   "symbol": "002714",
+   "start_date": "2014-01-22",
+   "industry_code": "110701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "002714",
+   "start_date": "2021-07-30",
+   "industry_code": "110702",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "002736",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-10-08"
+  },
+  {
+   "symbol": "002802",
+   "start_date": "2016-06-24",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "002809",
+   "start_date": "2016-08-23",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "002810",
+   "start_date": "2016-08-23",
+   "industry_code": "220309",
+   "update_time": "2021-07-01"
+  },
+  {
+   "symbol": "002837",
+   "start_date": "2016-12-19",
+   "industry_code": "640209",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "002916",
+   "start_date": "2017-12-08",
+   "industry_code": "270202",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002920",
+   "start_date": "2017-12-08",
+   "industry_code": "710201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002920",
+   "start_date": "2021-07-30",
+   "industry_code": "710401",
+   "update_time": "2023-04-03"
+  },
+  {
+   "symbol": "002938",
+   "start_date": "2018-09-18",
+   "industry_code": "270202",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "002971",
+   "start_date": "2019-12-05",
+   "industry_code": "220309",
+   "update_time": "2020-01-09"
+  },
+  {
+   "symbol": "003816",
+   "start_date": "2019-08-08",
+   "industry_code": "410105",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "003816",
+   "start_date": "2021-07-30",
+   "industry_code": "410108",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300014",
+   "start_date": "2009-01-12",
+   "industry_code": "270401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300014",
+   "start_date": "2020-07-24",
+   "industry_code": "630305",
+   "update_time": "2021-06-26"
+  },
+  {
+   "symbol": "300014",
+   "start_date": "2021-07-30",
+   "industry_code": "630701",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300015",
+   "start_date": "2009-01-12",
+   "industry_code": "370601",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300015",
+   "start_date": "2021-07-30",
+   "industry_code": "370604",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300033",
+   "start_date": "2009-12-10",
+   "industry_code": "470303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300033",
+   "start_date": "2011-10-10",
+   "industry_code": "470302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300033",
+   "start_date": "2014-02-21",
+   "industry_code": "710201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300033",
+   "start_date": "2021-07-30",
+   "industry_code": "710401",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300059",
+   "start_date": "2010-03-10",
+   "industry_code": "470303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300059",
+   "start_date": "2011-10-10",
+   "industry_code": "470201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300059",
+   "start_date": "2014-02-21",
+   "industry_code": "720301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300059",
+   "start_date": "2020-07-23",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300072",
+   "start_date": "2010-01-16",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300072",
+   "start_date": "2017-06-29",
+   "industry_code": "410401",
+   "update_time": "2018-06-20"
+  },
+  {
+   "symbol": "300072",
+   "start_date": "2019-07-24",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300072",
+   "start_date": "2021-07-30",
+   "industry_code": "760101",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300072",
+   "start_date": "2023-08-21",
+   "industry_code": "220309",
+   "update_time": "2023-08-21"
+  },
+  {
+   "symbol": "300087",
+   "start_date": "2010-01-12",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300109",
+   "start_date": "2010-01-09",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300122",
+   "start_date": "2010-01-25",
+   "industry_code": "370301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300122",
+   "start_date": "2021-07-30",
+   "industry_code": "370303",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300124",
+   "start_date": "2010-09-08",
+   "industry_code": "260404",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300124",
+   "start_date": "2011-10-10",
+   "industry_code": "260402",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300124",
+   "start_date": "2014-02-21",
+   "industry_code": "630202",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300124",
+   "start_date": "2021-07-30",
+   "industry_code": "640702",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300163",
+   "start_date": "2011-01-04",
+   "industry_code": "220701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300163",
+   "start_date": "2014-01-01",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300169",
+   "start_date": "2011-01-14",
+   "industry_code": "220701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300169",
+   "start_date": "2014-01-01",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300174",
+   "start_date": "2011-01-24",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300189",
+   "start_date": "2011-01-07",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300214",
+   "start_date": "2011-01-10",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300214",
+   "start_date": "2011-05-03",
+   "industry_code": "220501",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300214",
+   "start_date": "2011-10-10",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300214",
+   "start_date": "2021-07-30",
+   "industry_code": "220501",
+   "update_time": "2022-02-21"
+  },
+  {
+   "symbol": "300214",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2024-03-01"
+  },
+  {
+   "symbol": "300251",
+   "start_date": "2011-07-26",
+   "industry_code": "470402",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300251",
+   "start_date": "2014-02-21",
+   "industry_code": "720102",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300251",
+   "start_date": "2021-07-30",
+   "industry_code": "720601",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300274",
+   "start_date": "2011-10-24",
+   "industry_code": "260403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300274",
+   "start_date": "2014-02-21",
+   "industry_code": "630303",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300274",
+   "start_date": "2021-07-30",
+   "industry_code": "630503",
+   "update_time": "2026-06-17"
+  },
+  {
+   "symbol": "300308",
+   "start_date": "2012-03-26",
+   "industry_code": "260401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300308",
+   "start_date": "2014-02-21",
+   "industry_code": "630101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300308",
+   "start_date": "2018-07-13",
+   "industry_code": "730202",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300308",
+   "start_date": "2021-07-30",
+   "industry_code": "730204",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "300316",
+   "start_date": "2012-04-27",
+   "industry_code": "260403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300316",
+   "start_date": "2014-02-21",
+   "industry_code": "630303",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "300316",
+   "start_date": "2021-07-30",
+   "industry_code": "630505",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300394",
+   "start_date": "2015-01-15",
+   "industry_code": "270203",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "300394",
+   "start_date": "2018-07-13",
+   "industry_code": "730202",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300394",
+   "start_date": "2021-07-30",
+   "industry_code": "730204",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "300405",
+   "start_date": "2014-01-24",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300408",
+   "start_date": "2014-01-25",
+   "industry_code": "270203",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300413",
+   "start_date": "2015-01-15",
+   "industry_code": "450303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300413",
+   "start_date": "2019-07-24",
+   "industry_code": "720301",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300413",
+   "start_date": "2021-07-30",
+   "industry_code": "720701",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300418",
+   "start_date": "2015-01-15",
+   "industry_code": "720302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "300418",
+   "start_date": "2021-07-30",
+   "industry_code": "720401",
+   "update_time": "2026-04-02"
+  },
+  {
+   "symbol": "300433",
+   "start_date": "2015-01-09",
+   "industry_code": "270502",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "300433",
+   "start_date": "2021-07-30",
+   "industry_code": "270504",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "300442",
+   "start_date": "2015-04-13",
+   "industry_code": "640208",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300442",
+   "start_date": "2023-07-04",
+   "industry_code": "730104",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300450",
+   "start_date": "2015-01-06",
+   "industry_code": "640106",
+   "update_time": "2015-10-28"
+  },
+  {
+   "symbol": "300450",
+   "start_date": "2019-07-24",
+   "industry_code": "640209",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300450",
+   "start_date": "2021-07-30",
+   "industry_code": "630703",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300476",
+   "start_date": "2015-01-15",
+   "industry_code": "270202",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "300498",
+   "start_date": "2015-11-02",
+   "industry_code": "110701",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300498",
+   "start_date": "2021-07-30",
+   "industry_code": "110702",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300502",
+   "start_date": "2016-03-04",
+   "industry_code": "270401",
+   "update_time": "2018-06-26"
+  },
+  {
+   "symbol": "300502",
+   "start_date": "2018-07-13",
+   "industry_code": "730201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300502",
+   "start_date": "2021-07-30",
+   "industry_code": "730204",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "300535",
+   "start_date": "2016-08-04",
+   "industry_code": "220308",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300535",
+   "start_date": "2021-07-30",
+   "industry_code": "220309",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300596",
+   "start_date": "2017-01-05",
+   "industry_code": "220309",
+   "update_time": "2021-03-09"
+  },
+  {
+   "symbol": "300596",
+   "start_date": "2021-07-30",
+   "industry_code": "220501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300596",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-10-12"
+  },
+  {
+   "symbol": "300610",
+   "start_date": "2017-01-19",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300610",
+   "start_date": "2021-07-30",
+   "industry_code": "220501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300610",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-07-29"
+  },
+  {
+   "symbol": "300628",
+   "start_date": "2017-03-10",
+   "industry_code": "730202",
+   "update_time": "2019-02-27"
+  },
+  {
+   "symbol": "300628",
+   "start_date": "2019-07-24",
+   "industry_code": "730201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300628",
+   "start_date": "2021-07-30",
+   "industry_code": "730206",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "300637",
+   "start_date": "2017-03-30",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300637",
+   "start_date": "2021-07-30",
+   "industry_code": "270601",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300637",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-07-29"
+  },
+  {
+   "symbol": "300641",
+   "start_date": "2017-03-30",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300661",
+   "start_date": "2017-05-22",
+   "industry_code": "270101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300661",
+   "start_date": "2021-07-30",
+   "industry_code": "270105",
+   "update_time": "2024-01-26"
+  },
+  {
+   "symbol": "300721",
+   "start_date": "2017-11-08",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "300750",
+   "start_date": "2018-05-28",
+   "industry_code": "630305",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300750",
+   "start_date": "2021-07-30",
+   "industry_code": "630701",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "300760",
+   "start_date": "2018-09-19",
+   "industry_code": "370501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300760",
+   "start_date": "2021-07-30",
+   "industry_code": "370502",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "300801",
+   "start_date": "2019-10-28",
+   "industry_code": "220309",
+   "update_time": "2020-11-10"
+  },
+  {
+   "symbol": "300803",
+   "start_date": "2019-11-01",
+   "industry_code": "710201",
+   "update_time": "2019-11-06"
+  },
+  {
+   "symbol": "300803",
+   "start_date": "2021-07-30",
+   "industry_code": "710401",
+   "update_time": "2024-01-24"
+  },
+  {
+   "symbol": "300832",
+   "start_date": "2020-04-27",
+   "industry_code": "370501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300832",
+   "start_date": "2021-07-30",
+   "industry_code": "370504",
+   "update_time": "2025-09-09"
+  },
+  {
+   "symbol": "300866",
+   "start_date": "2020-08-04",
+   "industry_code": "270401",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "300866",
+   "start_date": "2021-07-30",
+   "industry_code": "270503",
+   "update_time": "2021-09-02"
+  },
+  {
+   "symbol": "300896",
+   "start_date": "2020-09-14",
+   "industry_code": "370501",
+   "update_time": "2024-07-14"
+  },
+  {
+   "symbol": "300896",
+   "start_date": "2021-07-30",
+   "industry_code": "770301",
+   "update_time": "2026-01-21"
+  },
+  {
+   "symbol": "300910",
+   "start_date": "2020-11-21",
+   "industry_code": "220309",
+   "update_time": "2021-07-01"
+  },
+  {
+   "symbol": "300999",
+   "start_date": "2020-09-21",
+   "industry_code": "110502",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "301059",
+   "start_date": "2021-08-27",
+   "industry_code": "220309",
+   "update_time": "2021-09-17"
+  },
+  {
+   "symbol": "301076",
+   "start_date": "2021-09-17",
+   "industry_code": "220309",
+   "update_time": "2021-11-18"
+  },
+  {
+   "symbol": "301077",
+   "start_date": "2021-09-17",
+   "industry_code": "220309",
+   "update_time": "2021-11-18"
+  },
+  {
+   "symbol": "301100",
+   "start_date": "2021-12-03",
+   "industry_code": "220309",
+   "update_time": "2021-12-29"
+  },
+  {
+   "symbol": "301149",
+   "start_date": "2021-10-29",
+   "industry_code": "220309",
+   "update_time": "2021-11-18"
+  },
+  {
+   "symbol": "301165",
+   "start_date": "2022-11-04",
+   "industry_code": "730204",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "301212",
+   "start_date": "2022-03-25",
+   "industry_code": "220309",
+   "update_time": "2023-09-08"
+  },
+  {
+   "symbol": "301236",
+   "start_date": "2022-02-25",
+   "industry_code": "710301",
+   "update_time": "2023-05-24"
+  },
+  {
+   "symbol": "301269",
+   "start_date": "2022-07-15",
+   "industry_code": "710401",
+   "update_time": "2023-06-01"
+  },
+  {
+   "symbol": "301286",
+   "start_date": "2022-05-27",
+   "industry_code": "220309",
+   "update_time": "2023-12-25"
+  },
+  {
+   "symbol": "301308",
+   "start_date": "2022-07-25",
+   "industry_code": "270104",
+   "update_time": "2024-05-13"
+  },
+  {
+   "symbol": "301373",
+   "start_date": "2023-01-20",
+   "industry_code": "220309",
+   "update_time": "2023-01-20"
+  },
+  {
+   "symbol": "301518",
+   "start_date": "2023-07-14",
+   "industry_code": "220309",
+   "update_time": "2023-07-14"
+  },
+  {
+   "symbol": "301617",
+   "start_date": "2024-11-22",
+   "industry_code": "220309",
+   "update_time": "2025-01-08"
+  },
+  {
+   "symbol": "301688",
+   "start_date": "2026-08-07",
+   "industry_code": "220309",
+   "update_time": "2026-08-07"
+  },
+  {
+   "symbol": "302132",
+   "start_date": "2025-02-17",
+   "industry_code": "650501",
+   "update_time": "2025-02-17"
+  },
+  {
+   "symbol": "302132",
+   "start_date": "2026-08-21",
+   "industry_code": "650201",
+   "update_time": "2026-08-21"
+  },
+  {
+   "symbol": "600000",
+   "start_date": "1999-11-10",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600000",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600000",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2022-12-08"
+  },
+  {
+   "symbol": "600009",
+   "start_date": "1998-02-18",
+   "industry_code": "420501",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600009",
+   "start_date": "2021-07-30",
+   "industry_code": "421002",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600010",
+   "start_date": "2001-02-22",
+   "industry_code": "230101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600010",
+   "start_date": "2021-07-30",
+   "industry_code": "230402",
+   "update_time": "2025-12-03"
+  },
+  {
+   "symbol": "600011",
+   "start_date": "2001-12-06",
+   "industry_code": "410101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600015",
+   "start_date": "2003-09-10",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600015",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600015",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2025-01-16"
+  },
+  {
+   "symbol": "600016",
+   "start_date": "2000-12-19",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600016",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600016",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2025-01-16"
+  },
+  {
+   "symbol": "600018",
+   "start_date": "2000-07-19",
+   "industry_code": "420101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600018",
+   "start_date": "2021-07-30",
+   "industry_code": "421102",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600019",
+   "start_date": "2000-12-12",
+   "industry_code": "230101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600019",
+   "start_date": "2021-07-30",
+   "industry_code": "230402",
+   "update_time": "2022-07-05"
+  },
+  {
+   "symbol": "600023",
+   "start_date": "2013-01-19",
+   "industry_code": "410101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600025",
+   "start_date": "2017-11-21",
+   "industry_code": "410102",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600026",
+   "start_date": "2002-05-23",
+   "industry_code": "420601",
+   "update_time": "2024-07-07"
+  },
+  {
+   "symbol": "600026",
+   "start_date": "2021-07-30",
+   "industry_code": "421101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600027",
+   "start_date": "2005-02-03",
+   "industry_code": "410101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600028",
+   "start_date": "2001-08-08",
+   "industry_code": "220101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600028",
+   "start_date": "2021-07-30",
+   "industry_code": "750301",
+   "update_time": "2025-09-11"
+  },
+  {
+   "symbol": "600029",
+   "start_date": "2003-07-23",
+   "industry_code": "420401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600029",
+   "start_date": "2021-07-30",
+   "industry_code": "421001",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600030",
+   "start_date": "2003-01-06",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600030",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600031",
+   "start_date": "2003-06-26",
+   "industry_code": "260202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600031",
+   "start_date": "2014-02-21",
+   "industry_code": "640201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600031",
+   "start_date": "2021-07-30",
+   "industry_code": "640601",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600036",
+   "start_date": "2002-04-09",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600036",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600036",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600039",
+   "start_date": "2003-03-25",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600039",
+   "start_date": "2011-10-10",
+   "industry_code": "250204",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600039",
+   "start_date": "2014-02-21",
+   "industry_code": "620302",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600039",
+   "start_date": "2021-07-30",
+   "industry_code": "620306",
+   "update_time": "2021-08-25"
+  },
+  {
+   "symbol": "600048",
+   "start_date": "2006-07-11",
+   "industry_code": "430101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600050",
+   "start_date": "2002-10-01",
+   "industry_code": "470101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600050",
+   "start_date": "2014-02-21",
+   "industry_code": "730101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600050",
+   "start_date": "2021-07-30",
+   "industry_code": "730102",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "600061",
+   "start_date": "1997-05-19",
+   "industry_code": "220401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600061",
+   "start_date": "2018-06-19",
+   "industry_code": "490101",
+   "update_time": "2021-07-01"
+  },
+  {
+   "symbol": "600061",
+   "start_date": "2021-07-30",
+   "industry_code": "490302",
+   "update_time": "2023-11-24"
+  },
+  {
+   "symbol": "600061",
+   "start_date": "2025-08-11",
+   "industry_code": "490101",
+   "update_time": "2025-08-11"
+  },
+  {
+   "symbol": "600066",
+   "start_date": "1997-05-08",
+   "industry_code": "310103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600066",
+   "start_date": "2014-02-21",
+   "industry_code": "280103",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600066",
+   "start_date": "2021-07-30",
+   "industry_code": "280602",
+   "update_time": "2023-07-03"
+  },
+  {
+   "symbol": "600085",
+   "start_date": "1997-06-25",
+   "industry_code": "370201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600089",
+   "start_date": "1997-06-18",
+   "industry_code": "260404",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600089",
+   "start_date": "2014-02-21",
+   "industry_code": "630401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600089",
+   "start_date": "2021-07-30",
+   "industry_code": "630801",
+   "update_time": "2025-12-08"
+  },
+  {
+   "symbol": "600104",
+   "start_date": "1997-11-25",
+   "industry_code": "310101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600104",
+   "start_date": "2014-02-21",
+   "industry_code": "280101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600104",
+   "start_date": "2021-07-30",
+   "industry_code": "280502",
+   "update_time": "2023-09-01"
+  },
+  {
+   "symbol": "600111",
+   "start_date": "1997-09-24",
+   "industry_code": "240201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600111",
+   "start_date": "2008-06-02",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600111",
+   "start_date": "2014-02-21",
+   "industry_code": "240501",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600115",
+   "start_date": "1997-11-05",
+   "industry_code": "420401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600115",
+   "start_date": "2021-07-30",
+   "industry_code": "421001",
+   "update_time": "2025-10-22"
+  },
+  {
+   "symbol": "600118",
+   "start_date": "1997-09-08",
+   "industry_code": "510101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600118",
+   "start_date": "2008-06-02",
+   "industry_code": "310304",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600118",
+   "start_date": "2014-02-21",
+   "industry_code": "650101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600150",
+   "start_date": "1998-05-20",
+   "industry_code": "260104",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600150",
+   "start_date": "2008-06-02",
+   "industry_code": "310305",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600150",
+   "start_date": "2014-02-21",
+   "industry_code": "650401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600160",
+   "start_date": "1998-06-26",
+   "industry_code": "220701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600160",
+   "start_date": "2011-10-10",
+   "industry_code": "220311",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600165",
+   "start_date": "1998-05-29",
+   "industry_code": "230201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600165",
+   "start_date": "2008-06-02",
+   "industry_code": "260501",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600165",
+   "start_date": "2014-02-21",
+   "industry_code": "640401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600165",
+   "start_date": "2019-07-24",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "600176",
+   "start_date": "1999-01-01",
+   "industry_code": "220701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600176",
+   "start_date": "2011-10-10",
+   "industry_code": "220703",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600176",
+   "start_date": "2014-02-21",
+   "industry_code": "220314",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600176",
+   "start_date": "2021-07-30",
+   "industry_code": "610202",
+   "update_time": "2024-02-29"
+  },
+  {
+   "symbol": "600183",
+   "start_date": "1998-10-28",
+   "industry_code": "270201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600183",
+   "start_date": "2011-10-10",
+   "industry_code": "270202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600188",
+   "start_date": "1998-07-01",
+   "industry_code": "210201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600188",
+   "start_date": "2021-07-30",
+   "industry_code": "740101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600196",
+   "start_date": "1998-08-07",
+   "industry_code": "370301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600196",
+   "start_date": "2021-07-30",
+   "industry_code": "370102",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600219",
+   "start_date": "1999-12-23",
+   "industry_code": "350101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600219",
+   "start_date": "2005-07-01",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600219",
+   "start_date": "2008-06-02",
+   "industry_code": "240102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600219",
+   "start_date": "2014-02-21",
+   "industry_code": "240301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600221",
+   "start_date": "1999-11-25",
+   "industry_code": "420401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600221",
+   "start_date": "2021-07-30",
+   "industry_code": "421001",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600233",
+   "start_date": "2000-04-24",
+   "industry_code": "350201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600233",
+   "start_date": "2011-10-10",
+   "industry_code": "350202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600233",
+   "start_date": "2016-01-01",
+   "industry_code": "420801",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600233",
+   "start_date": "2021-07-30",
+   "industry_code": "420804",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600273",
+   "start_date": "2003-06-23",
+   "industry_code": "350102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600273",
+   "start_date": "2015-07-01",
+   "industry_code": "220309",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600276",
+   "start_date": "2000-10-18",
+   "industry_code": "370101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600276",
+   "start_date": "2008-01-02",
+   "industry_code": "370102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600309",
+   "start_date": "2001-01-05",
+   "industry_code": "220701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600309",
+   "start_date": "2011-10-10",
+   "industry_code": "220702",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600309",
+   "start_date": "2014-02-21",
+   "industry_code": "220313",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600313",
+   "start_date": "2001-01-09",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600313",
+   "start_date": "2011-01-10",
+   "industry_code": "110601",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600313",
+   "start_date": "2018-12-24",
+   "industry_code": "110101",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "600346",
+   "start_date": "2001-08-01",
+   "industry_code": "260207",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600346",
+   "start_date": "2014-02-21",
+   "industry_code": "640209",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600346",
+   "start_date": "2017-06-29",
+   "industry_code": "220401",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600346",
+   "start_date": "2021-07-30",
+   "industry_code": "750301",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "600354",
+   "start_date": "2004-01-14",
+   "industry_code": "110103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600354",
+   "start_date": "2007-07-02",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600362",
+   "start_date": "2002-01-11",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600362",
+   "start_date": "2008-06-02",
+   "industry_code": "240103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600362",
+   "start_date": "2014-02-21",
+   "industry_code": "240302",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600371",
+   "start_date": "2002-09-16",
+   "industry_code": "110601",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600371",
+   "start_date": "2011-01-10",
+   "industry_code": "110101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600372",
+   "start_date": "2001-07-04",
+   "industry_code": "310101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600372",
+   "start_date": "2009-06-01",
+   "industry_code": "310304",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600372",
+   "start_date": "2014-02-21",
+   "industry_code": "650201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600406",
+   "start_date": "2003-10-15",
+   "industry_code": "260402",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600406",
+   "start_date": "2014-02-21",
+   "industry_code": "630201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600406",
+   "start_date": "2021-07-30",
+   "industry_code": "630803",
+   "update_time": "2025-11-10"
+  },
+  {
+   "symbol": "600415",
+   "start_date": "2002-05-09",
+   "industry_code": "450101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600415",
+   "start_date": "2008-06-02",
+   "industry_code": "450103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600415",
+   "start_date": "2014-02-21",
+   "industry_code": "450502",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600415",
+   "start_date": "2021-07-30",
+   "industry_code": "450304",
+   "update_time": "2026-01-21"
+  },
+  {
+   "symbol": "600426",
+   "start_date": "2002-06-01",
+   "industry_code": "220301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600426",
+   "start_date": "2021-07-30",
+   "industry_code": "220205",
+   "update_time": "2022-01-01"
+  },
+  {
+   "symbol": "600426",
+   "start_date": "2022-07-29",
+   "industry_code": "220801",
+   "update_time": "2024-01-19"
+  },
+  {
+   "symbol": "600436",
+   "start_date": "2003-06-16",
+   "industry_code": "370201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600438",
+   "start_date": "2004-03-01",
+   "industry_code": "110401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600438",
+   "start_date": "2019-05-10",
+   "industry_code": "630303",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600438",
+   "start_date": "2021-07-30",
+   "industry_code": "630501",
+   "update_time": "2025-12-10"
+  },
+  {
+   "symbol": "600460",
+   "start_date": "2003-03-11",
+   "industry_code": "270101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600460",
+   "start_date": "2011-10-10",
+   "industry_code": "270302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600460",
+   "start_date": "2015-10-31",
+   "industry_code": "270101",
+   "update_time": "2016-06-23"
+  },
+  {
+   "symbol": "600460",
+   "start_date": "2021-07-30",
+   "industry_code": "270102",
+   "update_time": "2022-03-28"
+  },
+  {
+   "symbol": "600482",
+   "start_date": "2004-07-13",
+   "industry_code": "310201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600482",
+   "start_date": "2014-02-21",
+   "industry_code": "280201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600482",
+   "start_date": "2017-06-29",
+   "industry_code": "630305",
+   "update_time": "2019-02-27"
+  },
+  {
+   "symbol": "600482",
+   "start_date": "2019-07-09",
+   "industry_code": "650401",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600482",
+   "start_date": "2022-07-29",
+   "industry_code": "630306",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600489",
+   "start_date": "2003-08-12",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600489",
+   "start_date": "2008-06-02",
+   "industry_code": "240105",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600489",
+   "start_date": "2014-02-21",
+   "industry_code": "240401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600500",
+   "start_date": "2000-03-01",
+   "industry_code": "450201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600500",
+   "start_date": "2014-01-01",
+   "industry_code": "220303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600500",
+   "start_date": "2018-07-13",
+   "industry_code": "220309",
+   "update_time": "2020-03-06"
+  },
+  {
+   "symbol": "600515",
+   "start_date": "2002-08-06",
+   "industry_code": "450101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600515",
+   "start_date": "2014-02-21",
+   "industry_code": "450303",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600515",
+   "start_date": "2017-06-29",
+   "industry_code": "430101",
+   "update_time": "2020-12-16"
+  },
+  {
+   "symbol": "600515",
+   "start_date": "2022-07-29",
+   "industry_code": "510101",
+   "update_time": "2023-02-20"
+  },
+  {
+   "symbol": "600515",
+   "start_date": "2023-07-04",
+   "industry_code": "430101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600519",
+   "start_date": "2001-07-31",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600519",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2022-05-09"
+  },
+  {
+   "symbol": "600522",
+   "start_date": "2002-10-24",
+   "industry_code": "320103",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600522",
+   "start_date": "2014-02-21",
+   "industry_code": "730202",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600522",
+   "start_date": "2021-07-30",
+   "industry_code": "730205",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "600547",
+   "start_date": "2003-08-26",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600547",
+   "start_date": "2008-06-02",
+   "industry_code": "240105",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600547",
+   "start_date": "2014-02-21",
+   "industry_code": "240401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600549",
+   "start_date": "2002-11-07",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600549",
+   "start_date": "2008-06-02",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600549",
+   "start_date": "2014-02-21",
+   "industry_code": "240502",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600570",
+   "start_date": "2003-12-11",
+   "industry_code": "470301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600570",
+   "start_date": "2008-06-02",
+   "industry_code": "470303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600570",
+   "start_date": "2014-02-21",
+   "industry_code": "710201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600570",
+   "start_date": "2021-07-30",
+   "industry_code": "710401",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600584",
+   "start_date": "2003-06-02",
+   "industry_code": "270201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600584",
+   "start_date": "2008-06-02",
+   "industry_code": "270102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600584",
+   "start_date": "2011-01-10",
+   "industry_code": "270101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600584",
+   "start_date": "2021-07-30",
+   "industry_code": "270107",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600585",
+   "start_date": "2002-02-07",
+   "industry_code": "250102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600585",
+   "start_date": "2014-02-21",
+   "industry_code": "610101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600588",
+   "start_date": "2001-05-18",
+   "industry_code": "470301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600588",
+   "start_date": "2008-06-02",
+   "industry_code": "470302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600588",
+   "start_date": "2014-02-21",
+   "industry_code": "710201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600588",
+   "start_date": "2021-07-30",
+   "industry_code": "710402",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600600",
+   "start_date": "1993-08-27",
+   "industry_code": "340302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600600",
+   "start_date": "2021-07-30",
+   "industry_code": "340601",
+   "update_time": "2025-09-11"
+  },
+  {
+   "symbol": "600660",
+   "start_date": "1993-06-10",
+   "industry_code": "250101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600660",
+   "start_date": "2007-07-02",
+   "industry_code": "310201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600660",
+   "start_date": "2014-02-21",
+   "industry_code": "280201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600660",
+   "start_date": "2021-07-30",
+   "industry_code": "280202",
+   "update_time": "2025-12-24"
+  },
+  {
+   "symbol": "600674",
+   "start_date": "1993-09-24",
+   "industry_code": "230102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600674",
+   "start_date": "2005-07-01",
+   "industry_code": "410101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600674",
+   "start_date": "2011-01-10",
+   "industry_code": "410102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600690",
+   "start_date": "1993-11-19",
+   "industry_code": "330102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600690",
+   "start_date": "2011-01-10",
+   "industry_code": "330101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600690",
+   "start_date": "2021-07-30",
+   "industry_code": "330106",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600741",
+   "start_date": "1996-08-26",
+   "industry_code": "420301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600741",
+   "start_date": "2009-06-01",
+   "industry_code": "310201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600741",
+   "start_date": "2014-02-21",
+   "industry_code": "280201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600741",
+   "start_date": "2021-07-30",
+   "industry_code": "280202",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "600760",
+   "start_date": "1996-10-11",
+   "industry_code": "310302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600760",
+   "start_date": "2011-10-10",
+   "industry_code": "310304",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600760",
+   "start_date": "2014-02-21",
+   "industry_code": "650301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600760",
+   "start_date": "2018-07-13",
+   "industry_code": "650201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600795",
+   "start_date": "1997-03-18",
+   "industry_code": "410101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600803",
+   "start_date": "1994-01-03",
+   "industry_code": "370301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600803",
+   "start_date": "2011-01-10",
+   "industry_code": "220303",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600803",
+   "start_date": "2017-06-29",
+   "industry_code": "410401",
+   "update_time": "2019-02-27"
+  },
+  {
+   "symbol": "600803",
+   "start_date": "2019-07-24",
+   "industry_code": "220309",
+   "update_time": "2020-02-24"
+  },
+  {
+   "symbol": "600803",
+   "start_date": "2020-08-31",
+   "industry_code": "410301",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600809",
+   "start_date": "1994-01-06",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600809",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600845",
+   "start_date": "1993-10-08",
+   "industry_code": "230102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600845",
+   "start_date": "2002-05-01",
+   "industry_code": "470301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600845",
+   "start_date": "2008-06-02",
+   "industry_code": "470302",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600845",
+   "start_date": "2014-02-21",
+   "industry_code": "710202",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600845",
+   "start_date": "2021-07-30",
+   "industry_code": "710301",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "600875",
+   "start_date": "1995-10-10",
+   "industry_code": "260403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600875",
+   "start_date": "2014-02-21",
+   "industry_code": "630301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600886",
+   "start_date": "1990-01-01",
+   "industry_code": "220101",
+   "update_time": "2024-10-09"
+  },
+  {
+   "symbol": "600886",
+   "start_date": "2003-05-01",
+   "industry_code": "410101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600886",
+   "start_date": "2017-06-29",
+   "industry_code": "410102",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600887",
+   "start_date": "1996-03-12",
+   "industry_code": "340202",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600887",
+   "start_date": "2011-10-10",
+   "industry_code": "340403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600887",
+   "start_date": "2021-07-30",
+   "industry_code": "340702",
+   "update_time": "2025-09-11"
+  },
+  {
+   "symbol": "600893",
+   "start_date": "1996-04-08",
+   "industry_code": "110502",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600893",
+   "start_date": "2008-06-02",
+   "industry_code": "310304",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600893",
+   "start_date": "2014-02-21",
+   "industry_code": "650201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "600900",
+   "start_date": "2003-11-11",
+   "industry_code": "410102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600905",
+   "start_date": "2021-05-08",
+   "industry_code": "410105",
+   "update_time": "2021-07-05"
+  },
+  {
+   "symbol": "600905",
+   "start_date": "2021-07-30",
+   "industry_code": "410107",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "600918",
+   "start_date": "2020-04-27",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600919",
+   "start_date": "2016-06-23",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600919",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "600926",
+   "start_date": "2016-10-12",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600926",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2024-01-23"
+  },
+  {
+   "symbol": "600930",
+   "start_date": "2025-06-27",
+   "industry_code": "410107",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "600938",
+   "start_date": "2022-04-01",
+   "industry_code": "750101",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "600941",
+   "start_date": "2021-12-17",
+   "industry_code": "730102",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "600958",
+   "start_date": "2015-01-18",
+   "industry_code": "490101",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "600989",
+   "start_date": "2019-05-06",
+   "industry_code": "210202",
+   "update_time": "2020-08-20"
+  },
+  {
+   "symbol": "600989",
+   "start_date": "2020-12-18",
+   "industry_code": "220204",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "600989",
+   "start_date": "2021-07-30",
+   "industry_code": "220205",
+   "update_time": "2022-03-10"
+  },
+  {
+   "symbol": "600999",
+   "start_date": "2009-11-03",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "600999",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601006",
+   "start_date": "2006-08-01",
+   "industry_code": "420701",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601006",
+   "start_date": "2021-07-30",
+   "industry_code": "420903",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601009",
+   "start_date": "2007-07-18",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601009",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601009",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2025-12-15"
+  },
+  {
+   "symbol": "601012",
+   "start_date": "2012-03-27",
+   "industry_code": "260403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601012",
+   "start_date": "2014-02-21",
+   "industry_code": "630303",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601012",
+   "start_date": "2021-07-30",
+   "industry_code": "630501",
+   "update_time": "2022-07-11"
+  },
+  {
+   "symbol": "601012",
+   "start_date": "2022-07-29",
+   "industry_code": "630502",
+   "update_time": "2026-06-17"
+  },
+  {
+   "symbol": "601018",
+   "start_date": "2010-01-06",
+   "industry_code": "420101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601018",
+   "start_date": "2021-07-30",
+   "industry_code": "421102",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601021",
+   "start_date": "2014-01-19",
+   "industry_code": "420401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601021",
+   "start_date": "2021-07-30",
+   "industry_code": "421001",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601058",
+   "start_date": "2011-01-22",
+   "industry_code": "220601",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601058",
+   "start_date": "2021-07-30",
+   "industry_code": "280204",
+   "update_time": "2025-09-26"
+  },
+  {
+   "symbol": "601059",
+   "start_date": "2022-12-23",
+   "industry_code": "490101",
+   "update_time": "2022-12-27"
+  },
+  {
+   "symbol": "601066",
+   "start_date": "2018-06-26",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601077",
+   "start_date": "2019-09-16",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601077",
+   "start_date": "2021-07-30",
+   "industry_code": "480501",
+   "update_time": "2025-10-22"
+  },
+  {
+   "symbol": "601088",
+   "start_date": "2007-10-08",
+   "industry_code": "210201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601088",
+   "start_date": "2021-07-30",
+   "industry_code": "740101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601100",
+   "start_date": "2011-10-18",
+   "industry_code": "260102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601100",
+   "start_date": "2014-02-21",
+   "industry_code": "640102",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601100",
+   "start_date": "2021-07-30",
+   "industry_code": "640602",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601111",
+   "start_date": "2006-08-18",
+   "industry_code": "420401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601111",
+   "start_date": "2021-07-30",
+   "industry_code": "421001",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601117",
+   "start_date": "2009-12-21",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601117",
+   "start_date": "2011-10-10",
+   "industry_code": "250205",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601117",
+   "start_date": "2014-02-21",
+   "industry_code": "620402",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601127",
+   "start_date": "2016-05-25",
+   "industry_code": "280101",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "601127",
+   "start_date": "2021-07-30",
+   "industry_code": "280502",
+   "update_time": "2024-04-22"
+  },
+  {
+   "symbol": "601127",
+   "start_date": "2024-07-30",
+   "industry_code": "280501",
+   "update_time": "2026-04-14"
+  },
+  {
+   "symbol": "601136",
+   "start_date": "2022-11-21",
+   "industry_code": "490101",
+   "update_time": "2022-11-21"
+  },
+  {
+   "symbol": "601138",
+   "start_date": "2018-05-28",
+   "industry_code": "270501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601138",
+   "start_date": "2021-07-30",
+   "industry_code": "270504",
+   "update_time": "2025-10-22"
+  },
+  {
+   "symbol": "601166",
+   "start_date": "2007-02-05",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601166",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601166",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601169",
+   "start_date": "2007-09-18",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601169",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601169",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2022-12-08"
+  },
+  {
+   "symbol": "601186",
+   "start_date": "2008-02-26",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601186",
+   "start_date": "2011-10-10",
+   "industry_code": "250204",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601186",
+   "start_date": "2014-02-21",
+   "industry_code": "620304",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601186",
+   "start_date": "2021-07-30",
+   "industry_code": "620306",
+   "update_time": "2021-08-25"
+  },
+  {
+   "symbol": "601211",
+   "start_date": "2015-01-18",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601225",
+   "start_date": "2014-01-08",
+   "industry_code": "210201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601225",
+   "start_date": "2021-07-30",
+   "industry_code": "740101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601229",
+   "start_date": "2016-10-12",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601229",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2025-01-16"
+  },
+  {
+   "symbol": "601238",
+   "start_date": "2012-03-29",
+   "industry_code": "310101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601238",
+   "start_date": "2014-02-21",
+   "industry_code": "280101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601238",
+   "start_date": "2021-07-30",
+   "industry_code": "280502",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "601288",
+   "start_date": "2010-06-10",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601288",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601288",
+   "start_date": "2021-07-30",
+   "industry_code": "480201",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601318",
+   "start_date": "2007-02-28",
+   "industry_code": "440401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601318",
+   "start_date": "2014-02-21",
+   "industry_code": "490201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601319",
+   "start_date": "2018-10-30",
+   "industry_code": "490201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601328",
+   "start_date": "2007-05-14",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601328",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601328",
+   "start_date": "2021-07-30",
+   "industry_code": "480201",
+   "update_time": "2022-12-09"
+  },
+  {
+   "symbol": "601336",
+   "start_date": "2011-12-07",
+   "industry_code": "440401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601336",
+   "start_date": "2014-02-21",
+   "industry_code": "490201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601360",
+   "start_date": "2018-03-01",
+   "industry_code": "710201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601360",
+   "start_date": "2021-07-30",
+   "industry_code": "710402",
+   "update_time": "2023-06-01"
+  },
+  {
+   "symbol": "601377",
+   "start_date": "2010-09-20",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601377",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601390",
+   "start_date": "2007-12-03",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601390",
+   "start_date": "2011-10-10",
+   "industry_code": "250204",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601390",
+   "start_date": "2014-02-21",
+   "industry_code": "620304",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601390",
+   "start_date": "2021-07-30",
+   "industry_code": "620306",
+   "update_time": "2022-02-24"
+  },
+  {
+   "symbol": "601398",
+   "start_date": "2006-10-26",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601398",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601398",
+   "start_date": "2021-07-30",
+   "industry_code": "480201",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601456",
+   "start_date": "2020-07-21",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601600",
+   "start_date": "2007-04-30",
+   "industry_code": "240101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601600",
+   "start_date": "2008-06-02",
+   "industry_code": "240102",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601600",
+   "start_date": "2014-02-21",
+   "industry_code": "240301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601601",
+   "start_date": "2007-12-24",
+   "industry_code": "440401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601601",
+   "start_date": "2014-02-21",
+   "industry_code": "490201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601607",
+   "start_date": "1994-03-24",
+   "industry_code": "370401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601607",
+   "start_date": "2021-07-30",
+   "industry_code": "370402",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601618",
+   "start_date": "2009-09-01",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601618",
+   "start_date": "2011-10-10",
+   "industry_code": "250205",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601618",
+   "start_date": "2014-02-21",
+   "industry_code": "620404",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601628",
+   "start_date": "2007-01-08",
+   "industry_code": "440401",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601628",
+   "start_date": "2014-02-21",
+   "industry_code": "490201",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601633",
+   "start_date": "2011-09-19",
+   "industry_code": "310101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601633",
+   "start_date": "2014-02-21",
+   "industry_code": "280101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601633",
+   "start_date": "2021-07-30",
+   "industry_code": "280502",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601658",
+   "start_date": "2019-11-01",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601658",
+   "start_date": "2021-07-30",
+   "industry_code": "480201",
+   "update_time": "2025-12-15"
+  },
+  {
+   "symbol": "601668",
+   "start_date": "2009-07-14",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601668",
+   "start_date": "2011-10-10",
+   "industry_code": "250203",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601668",
+   "start_date": "2014-02-21",
+   "industry_code": "620101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601669",
+   "start_date": "2011-09-27",
+   "industry_code": "250201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601669",
+   "start_date": "2011-10-10",
+   "industry_code": "250204",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601669",
+   "start_date": "2014-02-21",
+   "industry_code": "620303",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601669",
+   "start_date": "2021-07-30",
+   "industry_code": "620306",
+   "update_time": "2022-02-24"
+  },
+  {
+   "symbol": "601688",
+   "start_date": "2010-02-03",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601688",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601689",
+   "start_date": "2015-01-09",
+   "industry_code": "280201",
+   "update_time": "2015-11-05"
+  },
+  {
+   "symbol": "601689",
+   "start_date": "2021-07-30",
+   "industry_code": "280203",
+   "update_time": "2023-02-21"
+  },
+  {
+   "symbol": "601698",
+   "start_date": "2019-06-14",
+   "industry_code": "650101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601727",
+   "start_date": "2008-11-11",
+   "industry_code": "260403",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601727",
+   "start_date": "2014-02-21",
+   "industry_code": "630301",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601728",
+   "start_date": "2021-08-13",
+   "industry_code": "730102",
+   "update_time": "2026-06-01"
+  },
+  {
+   "symbol": "601766",
+   "start_date": "2008-07-28",
+   "industry_code": "310306",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601766",
+   "start_date": "2014-02-21",
+   "industry_code": "640501",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601788",
+   "start_date": "2009-07-28",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601788",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601800",
+   "start_date": "2012-02-14",
+   "industry_code": "250204",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601800",
+   "start_date": "2014-02-21",
+   "industry_code": "620302",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601800",
+   "start_date": "2021-07-30",
+   "industry_code": "620306",
+   "update_time": "2021-08-25"
+  },
+  {
+   "symbol": "601816",
+   "start_date": "2020-01-06",
+   "industry_code": "420701",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601816",
+   "start_date": "2021-07-30",
+   "industry_code": "420903",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601818",
+   "start_date": "2010-08-05",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601818",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601818",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2022-12-08"
+  },
+  {
+   "symbol": "601825",
+   "start_date": "2021-07-09",
+   "industry_code": "480101",
+   "update_time": "2021-07-09"
+  },
+  {
+   "symbol": "601825",
+   "start_date": "2021-07-30",
+   "industry_code": "480501",
+   "update_time": "2023-09-27"
+  },
+  {
+   "symbol": "601838",
+   "start_date": "2017-12-20",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601838",
+   "start_date": "2021-07-30",
+   "industry_code": "480401",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601857",
+   "start_date": "2007-11-01",
+   "industry_code": "210101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601857",
+   "start_date": "2021-07-30",
+   "industry_code": "750301",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "601868",
+   "start_date": "2021-09-30",
+   "industry_code": "620306",
+   "update_time": "2022-02-24"
+  },
+  {
+   "symbol": "601872",
+   "start_date": "2006-11-30",
+   "industry_code": "420601",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601872",
+   "start_date": "2021-07-30",
+   "industry_code": "421101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601877",
+   "start_date": "2010-01-04",
+   "industry_code": "260404",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601877",
+   "start_date": "2014-02-21",
+   "industry_code": "630403",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601877",
+   "start_date": "2021-07-30",
+   "industry_code": "630802",
+   "update_time": "2026-06-17"
+  },
+  {
+   "symbol": "601878",
+   "start_date": "2017-05-22",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601881",
+   "start_date": "2016-12-28",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601888",
+   "start_date": "2009-01-17",
+   "industry_code": "460301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601888",
+   "start_date": "2021-07-30",
+   "industry_code": "450701",
+   "update_time": "2022-08-20"
+  },
+  {
+   "symbol": "601898",
+   "start_date": "2008-01-02",
+   "industry_code": "210201",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601898",
+   "start_date": "2021-07-30",
+   "industry_code": "740101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601899",
+   "start_date": "2008-04-07",
+   "industry_code": "240101",
+   "update_time": "2024-10-09"
+  },
+  {
+   "symbol": "601899",
+   "start_date": "2008-06-02",
+   "industry_code": "240105",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601899",
+   "start_date": "2014-02-21",
+   "industry_code": "240401",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601899",
+   "start_date": "2021-07-30",
+   "industry_code": "240302",
+   "update_time": "2022-03-31"
+  },
+  {
+   "symbol": "601901",
+   "start_date": "2011-08-01",
+   "industry_code": "440301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601901",
+   "start_date": "2014-02-21",
+   "industry_code": "490101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601916",
+   "start_date": "2019-11-28",
+   "industry_code": "480101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601916",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2025-01-16"
+  },
+  {
+   "symbol": "601919",
+   "start_date": "2007-06-26",
+   "industry_code": "420601",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601919",
+   "start_date": "2021-07-30",
+   "industry_code": "421101",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601939",
+   "start_date": "2007-09-24",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601939",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601939",
+   "start_date": "2021-07-30",
+   "industry_code": "480201",
+   "update_time": "2022-12-09"
+  },
+  {
+   "symbol": "601985",
+   "start_date": "2015-06-15",
+   "industry_code": "410105",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601985",
+   "start_date": "2021-07-30",
+   "industry_code": "410108",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "601988",
+   "start_date": "2006-05-31",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601988",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601988",
+   "start_date": "2021-07-30",
+   "industry_code": "480201",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "601995",
+   "start_date": "2020-10-16",
+   "industry_code": "490101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "601998",
+   "start_date": "2007-04-27",
+   "industry_code": "440101",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "601998",
+   "start_date": "2014-02-21",
+   "industry_code": "480101",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "601998",
+   "start_date": "2021-07-30",
+   "industry_code": "480301",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603004",
+   "start_date": "2023-12-08",
+   "industry_code": "220309",
+   "update_time": "2024-07-29"
+  },
+  {
+   "symbol": "603010",
+   "start_date": "2014-01-26",
+   "industry_code": "220309",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "603010",
+   "start_date": "2021-07-30",
+   "industry_code": "220501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603010",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-07-29"
+  },
+  {
+   "symbol": "603019",
+   "start_date": "2014-02-21",
+   "industry_code": "710101",
+   "update_time": "2024-10-09"
+  },
+  {
+   "symbol": "603019",
+   "start_date": "2021-07-30",
+   "industry_code": "710103",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603065",
+   "start_date": "2023-02-13",
+   "industry_code": "220309",
+   "update_time": "2023-02-14"
+  },
+  {
+   "symbol": "603120",
+   "start_date": "2025-03-28",
+   "industry_code": "220309",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "603125",
+   "start_date": "2023-03-27",
+   "industry_code": "220309",
+   "update_time": "2023-12-25"
+  },
+  {
+   "symbol": "603181",
+   "start_date": "2017-08-07",
+   "industry_code": "220309",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "603181",
+   "start_date": "2021-07-30",
+   "industry_code": "220501",
+   "update_time": "2022-06-01"
+  },
+  {
+   "symbol": "603181",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-07-29"
+  },
+  {
+   "symbol": "603217",
+   "start_date": "2019-05-20",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "603255",
+   "start_date": "2022-07-15",
+   "industry_code": "220309",
+   "update_time": "2025-09-26"
+  },
+  {
+   "symbol": "603259",
+   "start_date": "2018-05-05",
+   "industry_code": "370601",
+   "update_time": "2021-06-05"
+  },
+  {
+   "symbol": "603259",
+   "start_date": "2021-07-30",
+   "industry_code": "370603",
+   "update_time": "2025-09-09"
+  },
+  {
+   "symbol": "603260",
+   "start_date": "2017-10-30",
+   "industry_code": "240203",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "603260",
+   "start_date": "2021-07-30",
+   "industry_code": "220901",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603260",
+   "start_date": "2022-07-29",
+   "industry_code": "220316",
+   "update_time": "2025-07-28"
+  },
+  {
+   "symbol": "603276",
+   "start_date": "2023-09-08",
+   "industry_code": "220309",
+   "update_time": "2023-09-08"
+  },
+  {
+   "symbol": "603285",
+   "start_date": "2024-07-04",
+   "industry_code": "220309",
+   "update_time": "2024-07-04"
+  },
+  {
+   "symbol": "603288",
+   "start_date": "2014-01-22",
+   "industry_code": "340402",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "603288",
+   "start_date": "2021-07-30",
+   "industry_code": "340901",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603296",
+   "start_date": "2023-07-31",
+   "industry_code": "270504",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "603334",
+   "start_date": "2025-10-17",
+   "industry_code": "220309",
+   "update_time": "2026-04-27"
+  },
+  {
+   "symbol": "603369",
+   "start_date": "2014-01-20",
+   "industry_code": "340301",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "603369",
+   "start_date": "2021-07-30",
+   "industry_code": "340501",
+   "update_time": "2022-05-09"
+  },
+  {
+   "symbol": "603392",
+   "start_date": "2020-04-08",
+   "industry_code": "370501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "603392",
+   "start_date": "2021-07-30",
+   "industry_code": "370504",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603392",
+   "start_date": "2022-07-29",
+   "industry_code": "370303",
+   "update_time": "2024-10-10"
+  },
+  {
+   "symbol": "603392",
+   "start_date": "2026-07-01",
+   "industry_code": "370504",
+   "update_time": "2026-07-01"
+  },
+  {
+   "symbol": "603501",
+   "start_date": "2017-04-19",
+   "industry_code": "270101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "603501",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "603722",
+   "start_date": "2017-10-10",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "603722",
+   "start_date": "2021-07-30",
+   "industry_code": "220501",
+   "update_time": "2021-07-31"
+  },
+  {
+   "symbol": "603722",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2022-07-29"
+  },
+  {
+   "symbol": "603799",
+   "start_date": "2015-01-15",
+   "industry_code": "240504",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "603799",
+   "start_date": "2021-07-30",
+   "industry_code": "240601",
+   "update_time": "2025-01-21"
+  },
+  {
+   "symbol": "603822",
+   "start_date": "2016-04-18",
+   "industry_code": "220309",
+   "update_time": "2020-09-07"
+  },
+  {
+   "symbol": "603867",
+   "start_date": "2019-06-14",
+   "industry_code": "220309",
+   "update_time": "2019-08-09"
+  },
+  {
+   "symbol": "603893",
+   "start_date": "2020-01-14",
+   "industry_code": "270101",
+   "update_time": "2020-04-09"
+  },
+  {
+   "symbol": "603893",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2025-09-09"
+  },
+  {
+   "symbol": "603916",
+   "start_date": "2017-11-08",
+   "industry_code": "220309",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "603948",
+   "start_date": "2020-02-17",
+   "industry_code": "220309",
+   "update_time": "2020-04-09"
+  },
+  {
+   "symbol": "603986",
+   "start_date": "2016-08-04",
+   "industry_code": "270101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "603986",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "603993",
+   "start_date": "2012-09-24",
+   "industry_code": "240106",
+   "update_time": "2015-10-27"
+  },
+  {
+   "symbol": "603993",
+   "start_date": "2014-02-21",
+   "industry_code": "240504",
+   "update_time": "2024-09-27"
+  },
+  {
+   "symbol": "603993",
+   "start_date": "2021-07-30",
+   "industry_code": "240505",
+   "update_time": "2022-06-07"
+  },
+  {
+   "symbol": "603993",
+   "start_date": "2024-11-15",
+   "industry_code": "240302",
+   "update_time": "2025-01-21"
+  },
+  {
+   "symbol": "605117",
+   "start_date": "2021-04-05",
+   "industry_code": "330105",
+   "update_time": "2021-04-12"
+  },
+  {
+   "symbol": "605117",
+   "start_date": "2021-07-30",
+   "industry_code": "330601",
+   "update_time": "2023-06-01"
+  },
+  {
+   "symbol": "605117",
+   "start_date": "2023-07-04",
+   "industry_code": "630503",
+   "update_time": "2026-06-17"
+  },
+  {
+   "symbol": "605366",
+   "start_date": "2020-07-27",
+   "industry_code": "220309",
+   "update_time": "2020-08-17"
+  },
+  {
+   "symbol": "605499",
+   "start_date": "2021-05-12",
+   "industry_code": "340304",
+   "update_time": "2021-07-06"
+  },
+  {
+   "symbol": "605499",
+   "start_date": "2021-07-30",
+   "industry_code": "340701",
+   "update_time": "2022-01-11"
+  },
+  {
+   "symbol": "688008",
+   "start_date": "2019-07-02",
+   "industry_code": "270101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688008",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "688009",
+   "start_date": "2019-07-08",
+   "industry_code": "640501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688012",
+   "start_date": "2019-07-08",
+   "industry_code": "640209",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688012",
+   "start_date": "2021-07-30",
+   "industry_code": "270108",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "688036",
+   "start_date": "2019-09-16",
+   "industry_code": "270501",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688036",
+   "start_date": "2021-07-30",
+   "industry_code": "270503",
+   "update_time": "2023-04-25"
+  },
+  {
+   "symbol": "688041",
+   "start_date": "2022-08-02",
+   "industry_code": "270104",
+   "update_time": "2022-08-03"
+  },
+  {
+   "symbol": "688047",
+   "start_date": "2022-06-10",
+   "industry_code": "270104",
+   "update_time": "2024-01-24"
+  },
+  {
+   "symbol": "688065",
+   "start_date": "2020-07-27",
+   "industry_code": "220309",
+   "update_time": "2021-07-01"
+  },
+  {
+   "symbol": "688072",
+   "start_date": "2022-04-01",
+   "industry_code": "270108",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "688082",
+   "start_date": "2021-11-05",
+   "industry_code": "270108",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "688111",
+   "start_date": "2019-11-01",
+   "industry_code": "710201",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688111",
+   "start_date": "2021-07-30",
+   "industry_code": "710402",
+   "update_time": "2025-02-19"
+  },
+  {
+   "symbol": "688126",
+   "start_date": "2020-04-02",
+   "industry_code": "270103",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688133",
+   "start_date": "2020-10-16",
+   "industry_code": "220309",
+   "update_time": "2024-07-19"
+  },
+  {
+   "symbol": "688179",
+   "start_date": "2020-10-16",
+   "industry_code": "220309",
+   "update_time": "2021-06-08"
+  },
+  {
+   "symbol": "688183",
+   "start_date": "2021-02-05",
+   "industry_code": "270202",
+   "update_time": "2021-03-04"
+  },
+  {
+   "symbol": "688196",
+   "start_date": "2019-11-09",
+   "industry_code": "220309",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688199",
+   "start_date": "2019-10-21",
+   "industry_code": "220309",
+   "update_time": "2020-12-11"
+  },
+  {
+   "symbol": "688223",
+   "start_date": "2022-01-07",
+   "industry_code": "630502",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "688256",
+   "start_date": "2020-07-07",
+   "industry_code": "270101",
+   "update_time": "2021-03-03"
+  },
+  {
+   "symbol": "688256",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2023-04-03"
+  },
+  {
+   "symbol": "688267",
+   "start_date": "2022-01-21",
+   "industry_code": "220309",
+   "update_time": "2025-09-26"
+  },
+  {
+   "symbol": "688269",
+   "start_date": "2021-05-23",
+   "industry_code": "240201",
+   "update_time": "2021-07-14"
+  },
+  {
+   "symbol": "688269",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2024-03-11"
+  },
+  {
+   "symbol": "688271",
+   "start_date": "2022-08-05",
+   "industry_code": "370502",
+   "update_time": "2025-01-24"
+  },
+  {
+   "symbol": "688303",
+   "start_date": "2021-07-09",
+   "industry_code": "630303",
+   "update_time": "2021-07-22"
+  },
+  {
+   "symbol": "688303",
+   "start_date": "2021-07-30",
+   "industry_code": "630501",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "688350",
+   "start_date": "2021-01-14",
+   "industry_code": "220309",
+   "update_time": "2021-01-15"
+  },
+  {
+   "symbol": "688357",
+   "start_date": "2019-11-20",
+   "industry_code": "240203",
+   "update_time": "2020-11-09"
+  },
+  {
+   "symbol": "688357",
+   "start_date": "2021-07-30",
+   "industry_code": "220901",
+   "update_time": "2021-08-02"
+  },
+  {
+   "symbol": "688357",
+   "start_date": "2022-07-29",
+   "industry_code": "220309",
+   "update_time": "2025-09-26"
+  },
+  {
+   "symbol": "688396",
+   "start_date": "2020-02-04",
+   "industry_code": "270101",
+   "update_time": "2020-08-10"
+  },
+  {
+   "symbol": "688396",
+   "start_date": "2021-07-30",
+   "industry_code": "270106",
+   "update_time": "2024-05-06"
+  },
+  {
+   "symbol": "688398",
+   "start_date": "2020-01-22",
+   "industry_code": "220309",
+   "update_time": "2020-04-09"
+  },
+  {
+   "symbol": "688472",
+   "start_date": "2023-05-26",
+   "industry_code": "630502",
+   "update_time": "2025-10-15"
+  },
+  {
+   "symbol": "688506",
+   "start_date": "2022-12-23",
+   "industry_code": "370102",
+   "update_time": "2025-12-26"
+  },
+  {
+   "symbol": "688521",
+   "start_date": "2020-07-31",
+   "industry_code": "270101",
+   "update_time": "2020-11-10"
+  },
+  {
+   "symbol": "688521",
+   "start_date": "2021-07-30",
+   "industry_code": "270104",
+   "update_time": "2026-02-26"
+  },
+  {
+   "symbol": "688602",
+   "start_date": "2023-07-14",
+   "industry_code": "270601",
+   "update_time": "2023-07-14"
+  },
+  {
+   "symbol": "688602",
+   "start_date": "2024-07-30",
+   "industry_code": "370102",
+   "update_time": "2025-01-08"
+  },
+  {
+   "symbol": "688602",
+   "start_date": "2025-04-25",
+   "industry_code": "220309",
+   "update_time": "2025-04-25"
+  },
+  {
+   "symbol": "688625",
+   "start_date": "2021-05-21",
+   "industry_code": "220309",
+   "update_time": "2021-07-06"
+  },
+  {
+   "symbol": "688659",
+   "start_date": "2021-03-19",
+   "industry_code": "220309",
+   "update_time": "2021-04-12"
+  },
+  {
+   "symbol": "688981",
+   "start_date": "2020-07-06",
+   "industry_code": "270101",
+   "update_time": "2021-04-23"
+  },
+  {
+   "symbol": "688981",
+   "start_date": "2021-07-30",
+   "industry_code": "270106",
+   "update_time": "2022-04-14"
+  },
+  {
+   "symbol": "832317",
+   "start_date": "2020-07-27",
+   "industry_code": "650201",
+   "update_time": "2021-12-14"
+  },
+  {
+   "symbol": "920002",
+   "start_date": "2024-06-14",
+   "industry_code": "640108",
+   "update_time": "2025-02-19"
+  }
+ ]
+}
