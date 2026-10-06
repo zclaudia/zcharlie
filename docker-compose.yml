@@ -5,17 +5,19 @@ services:
     container_name: investment-agent-api
     env_file:
       - .env
+    # Code (src/, alembic/) ships in the image; only data is writable.
+    # On Linux the host ./data must be writable by uid 10001 (or rebuild with
+    # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
     volumes:
       - ./data:/app/data
-      - ./config:/app/config
-      - ./strategies:/app/strategies
-      - ./prompts:/app/prompts
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
+      - ./config:/app/config:ro
+      - ./strategies:/app/strategies:ro
+      - ./prompts:/app/prompts:ro
     working_dir: /app
+    # Published on loopback only; put a TLS reverse proxy in front for remote
+    # access (then set WEB_COOKIE_SECURE=true and WEB_PUBLIC_ORIGIN).
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: ["ia", "api", "serve", "--host", "0.0.0.0", "--port", "8000"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
@@ -30,14 +32,14 @@ services:
     container_name: investment-agent-scheduler
     env_file:
       - .env
+    # Code (src/, alembic/) ships in the image; only data is writable.
+    # On Linux the host ./data must be writable by uid 10001 (or rebuild with
+    # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
     volumes:
       - ./data:/app/data
-      - ./config:/app/config
-      - ./strategies:/app/strategies
-      - ./prompts:/app/prompts
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
+      - ./config:/app/config:ro
+      - ./strategies:/app/strategies:ro
+      - ./prompts:/app/prompts:ro
     working_dir: /app
     command: ["ia", "scheduler", "start"]
     depends_on:
@@ -50,14 +52,14 @@ services:
     container_name: investment-agent-worker
     env_file:
       - .env
+    # Code (src/, alembic/) ships in the image; only data is writable.
+    # On Linux the host ./data must be writable by uid 10001 (or rebuild with
+    # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
     volumes:
       - ./data:/app/data
-      - ./config:/app/config
-      - ./strategies:/app/strategies
-      - ./prompts:/app/prompts
-      - ./src:/app/src
-      - ./alembic:/app/alembic
-      - ./alembic.ini:/app/alembic.ini
+      - ./config:/app/config:ro
+      - ./strategies:/app/strategies:ro
+      - ./prompts:/app/prompts:ro
     working_dir: /app
     command: ["ia", "worker", "start"]
     restart: unless-stopped

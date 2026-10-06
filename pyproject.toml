@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "investment-agent"
 version = "0.1.0"
 description = "Personal investment analysis agent"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     # Web / API
     "fastapi>=0.111",
