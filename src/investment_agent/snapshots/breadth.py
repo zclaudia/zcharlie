@@ -17,6 +17,10 @@
     cash-flow / growth merged into canonical fields from the field registry;
     ``availability="actual"``, ``available_from`` = baostock ``pubDate``.
     An empty answer means "not disclosed yet" -> ``pending``.
+    Disclosure overdue detection (P1-A6, :mod:`investment_agent.snapshots.disclosure`):
+    for the ``universe`` scope, once ``as_of`` is past the period's statutory
+    deadline every member still ``pending`` is recorded in ``report_overdue``;
+    a stored report resolves its open record with the actual pubDate.
 
 Both run inside one baostock session (one login; calls are serialized by the
 process-wide session lock, so no token bucket is needed). Failures are
@@ -50,6 +54,7 @@ from investment_agent.snapshots.collect import (
     error_reason,
     fence_writes,
 )
+from investment_agent.snapshots.disclosure import is_past_deadline, statutory_deadline
 from investment_agent.snapshots.jobs import (
     FinancialSnapshotPayload,
     MarketSnapshotPayload,
@@ -60,6 +65,7 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.pipeline_run import LeaseLostError, RunLease
+from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
 
 log = structlog.get_logger(__name__)
 
@@ -310,6 +316,7 @@ async def collect_baostock_financial(
     artifacts: ArtifactWriter,
     lease: RunLease | None,
     now: Callable[[], datetime],
+    run_id: int | None = None,
 ) -> CollectionReport:
     if payload.provider != BAOSTOCK_PROVIDER:
         raise ValueError(f"baostock financial collector got provider {payload.provider!r}")
@@ -334,6 +341,7 @@ async def collect_baostock_financial(
 
     breaker = _Breaker()
     stored: dict[str, str] = {}
+    resolved: list[str] = []
     async with client.session():
         for ticker in todo:
             if breaker.reason is not None:
@@ -373,6 +381,13 @@ async def collect_baostock_financial(
                         raw_ref=ref,
                         is_backfill=False,
                     )
+                    if await ReportOverdueRepository(session).resolve(
+                        listing_id=listing_id,
+                        report_period=report_period,
+                        resolved_on=record.pub_date,
+                        run_id=run_id,
+                    ):
+                        resolved.append(ticker)
             except LeaseLostError:
                 raise
             except Exception as exc:
@@ -385,6 +400,15 @@ async def collect_baostock_financial(
             breaker.success()
             completeness.mark_collected(ticker)
             stored[ticker] = record.pub_date.isoformat()
+
+    overdue = await _detect_overdue(
+        payload,
+        completeness=completeness,
+        listing_by_ticker=listing_by_ticker,
+        lease=lease,
+        run_id=run_id,
+    )
+    overdue["resolved"] = sorted(resolved)
 
     report.metadata = {
         "provider": BAOSTOCK_PROVIDER,
@@ -399,5 +423,65 @@ async def collect_baostock_financial(
         "pub_dates": dict(sorted(stored.items())),
         "aborted": breaker.reason,
         "availability": "actual: available_from = baostock pubDate",
+        "report_overdue": overdue,
     }
     return report
+
+
+async def _detect_overdue(
+    payload: FinancialSnapshotPayload,
+    *,
+    completeness: Completeness,
+    listing_by_ticker: dict[str, int],
+    lease: RunLease | None,
+    run_id: int | None,
+) -> dict[str, object]:
+    """Record members still without the period after its deadline (target pool only).
+
+    Only ``pending`` members (baostock answered "not disclosed") count;
+    failed / skipped members are unknown and checked again by the next run.
+    """
+
+    period = payload.report_period
+    deadline = statutory_deadline(period)
+    result: dict[str, object] = {
+        "deadline": deadline.isoformat(),
+        "checked": False,
+        "detected": [],
+        "open": [],
+    }
+    if payload.scope != "universe" or not is_past_deadline(period, payload.as_of):
+        return result
+    detected: list[str] = []
+    async with session_scope() as session:
+        await fence_writes(session, lease)
+        repository = ReportOverdueRepository(session)
+        for ticker in completeness.pending:
+            if await repository.record(
+                listing_id=listing_by_ticker[ticker],
+                report_period=period,
+                deadline=deadline,
+                detected_on=payload.as_of,
+                provider=BAOSTOCK_PROVIDER,
+                run_id=run_id,
+            ):
+                detected.append(ticker)
+        ticker_by_listing = {listing_id: ticker for ticker, listing_id in listing_by_ticker.items()}
+        open_rows = [
+            row
+            for row in await repository.for_period(period, list(ticker_by_listing))
+            if row.resolved_on is None
+        ]
+    if detected:
+        log.warning(
+            "snapshot.report_overdue.detected",
+            report_period=period.isoformat(),
+            deadline=deadline.isoformat(),
+            tickers=detected,
+        )
+    result.update(
+        checked=True,
+        detected=sorted(detected),
+        open=sorted(ticker_by_listing[row.listing_id] for row in open_rows),
+    )
+    return result

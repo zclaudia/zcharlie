@@ -3,7 +3,8 @@
 * ``info`` - a universe sync changed index membership;
 * ``action_required`` - a snapshot run failed, a market / financial run
   finished below the completeness threshold, or it stopped because the iFinD
-  quota ran out (``stop_reason="quota"``).
+  quota ran out (``stop_reason="quota"``), or a financial run detected new
+  overdue reports (``report_overdue.detected``).
 
 Each run notifies at most once: the target path is deterministic per run and
 an existing file is never rewritten.
@@ -52,6 +53,8 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
     if run.kind in {MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT}:
         if (run.metadata_json or {}).get("stop_reason") == QUOTA_STOP_REASON:
             return "action_required"
+        if _overdue_detected(run):
+            return "action_required"
         completeness = _completeness(run)
         ratio = completeness.get("ratio") if completeness else None
         if isinstance(ratio, int | float) and ratio < threshold:
@@ -60,6 +63,15 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
     if run.kind == UNIVERSE_SYNC and (run.metadata_json or {}).get("changed"):
         return "info"
     return None
+
+
+def _overdue(run: PipelineRun) -> dict[str, Any]:
+    value = (run.metadata_json or {}).get("report_overdue")
+    return value if isinstance(value, dict) else {}
+
+
+def _overdue_detected(run: PipelineRun) -> list[str]:
+    return _tickers(_overdue(run).get("detected"))
 
 
 def _tickers(value: object) -> list[str]:
@@ -107,6 +119,20 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         lines.append(f"- 生效日期：{metadata.get('effective_date')}")
         lines.append(f"- 调入（{len(added)}）：{', '.join(added) or '无'}")
         lines.append(f"- 调出（{len(removed)}）：{', '.join(removed) or '无'}")
+    detected = _overdue_detected(run)
+    if detected:
+        overdue = _overdue(run)
+        lines += [
+            "",
+            f"## 逾期未披露（{len(detected)}）",
+            "",
+            f"报告期 {request.get('report_period')} 法定截止日 {overdue.get('deadline')} 已过，"
+            "baostock 仍无该期财报。该期视为不可得、沿用上一期，已写入 `report_overdue`；"
+            "补披露后自动以实际披露日解除。",
+            "",
+            f"- {', '.join(detected[:_MAX_LISTED])}"
+            + (f" ……另有 {len(detected) - _MAX_LISTED} 只" if len(detected) > _MAX_LISTED else ""),
+        ]
     completeness = _completeness(run)
     if completeness is not None:
         lines.append(
@@ -128,6 +154,8 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
             "",
             "处理：无需立即重试；如需提前补采，等额度恢复后用 `ia snapshot` 重新入队。",
         ]
+    elif detected and run.status == "success":
+        lines += ["", "处理：核实逾期公司公告（停牌、延期披露、退市风险）；筛选将排除这些标的。"]
     elif level == "action_required":
         lines += ["", "处理：检查 iFinD proxy / baostock 可用性后用 `ia snapshot` 重新采集。"]
     return "\n".join(lines) + "\n"

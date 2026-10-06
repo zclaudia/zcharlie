@@ -117,7 +117,9 @@ class SnapshotScheduleConfig(BaseModel):
     # the observed availability (re-verify on a normal trading day).
     market_snapshot_cron: str | None = "30 18 * * 1-5"
     financial_weekly_cron: str | None = "0 9 * * 6"
-    financial_deadline_cron: str | None = "0 9 * * *"
+    # Also runs the overdue-report scan; evening, so deadline-day reports
+    # have reached baostock.
+    financial_deadline_cron: str | None = "0 19 * * *"
 
     @model_validator(mode="after")
     def _known_universes(self) -> Self:

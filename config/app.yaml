@@ -17,4 +17,6 @@ snapshot:
   # regular trading day (could not be verified on the 2026 National Day break).
   market_snapshot_cron: "30 18 * * 1-5"
   financial_weekly_cron: "0 9 * * 6"     # Saturday 09:00
-  financial_deadline_cron: "0 9 * * *"   # gated: first trading day after 04-30/08-31/10-31
+  # gated: first trading day after 04-30/08-31/10-31; also flags overdue
+  # reports (report_overdue). Evening, so deadline-day reports reach baostock.
+  financial_deadline_cron: "0 19 * * *"

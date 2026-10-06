@@ -188,6 +188,7 @@ class SnapshotJobHandler(BaseJobHandler):
                 artifacts=artifacts,
                 lease=lease,
                 now=self.runtime.clock,
+                run_id=job.run_id,
             )
         else:
             async with self.runtime.proxy_factory() as client:

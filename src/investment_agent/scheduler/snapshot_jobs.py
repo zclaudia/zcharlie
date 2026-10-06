@@ -6,11 +6,14 @@
 | industry_sync        | daily 08:00          | first trading day of the month               |
 | market_snapshot      | Mon-Fri 18:30        | trading day                                  |
 | financial_weekly     | Sat 09:00            | none                                         |
-| financial_deadline   | daily 09:00          | first trading day after 04-30 / 08-31 / 10-31 |
+| financial_deadline   | daily 19:00          | first trading day after 04-30 / 08-31 / 10-31 |
 
 Each fire enqueues one job per configured universe (industry: one job for
 the union) with the default per-date idempotency key, so a misfire catch-up
-or a restart never duplicates work. Market and financial jobs collect the
+or a restart never duplicates work. The deadline-triggered financial job also
+runs the disclosure-overdue scan (P1-A6, :mod:`investment_agent.snapshots.disclosure`);
+it fires in the evening so reports published on the deadline day itself have
+reached baostock first. Market and financial jobs collect the
 target pool from baostock (``provider="baostock"``, ``scope="universe"``,
 decision D6); no iFinD job is scheduled for breadth data. The financial jobs collect the most
 recent report period(s) whose statutory disclosure deadline has passed plus
@@ -28,6 +31,7 @@ import structlog
 
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.scheduler.trading_calendar import TradingCalendar
+from investment_agent.snapshots.disclosure import statutory_deadline
 from investment_agent.snapshots.jobs import (
     FinancialSnapshotPayload,
     IndustrySyncPayload,
@@ -61,21 +65,6 @@ CALENDAR_FREE_JOBS = frozenset({"universe_sync", "financial_weekly"})
 # day triggers an extra financial collection.
 FINANCIAL_DEADLINES: tuple[tuple[int, int], ...] = ((4, 30), (8, 31), (10, 31))
 _QUARTER_ENDS: tuple[tuple[int, int], ...] = ((3, 31), (6, 30), (9, 30), (12, 31))
-
-
-def statutory_deadline(report_period: date) -> date:
-    """Last day a periodic report for ``report_period`` may be published."""
-
-    month_day = (report_period.month, report_period.day)
-    if month_day == (3, 31):
-        return date(report_period.year, 4, 30)
-    if month_day == (6, 30):
-        return date(report_period.year, 8, 31)
-    if month_day == (9, 30):
-        return date(report_period.year, 10, 31)
-    if month_day == (12, 31):
-        return date(report_period.year + 1, 4, 30)
-    raise ValueError(f"not a report period: {report_period.isoformat()}")
 
 
 def _recent_periods(today: date, count: int = 8) -> list[date]:
