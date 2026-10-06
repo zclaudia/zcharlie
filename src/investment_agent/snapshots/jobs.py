@@ -10,10 +10,11 @@ P1-A7 (no provider / scope) validate as baostock + universe.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.providers.baostock_reference import IndexCode
@@ -25,11 +26,13 @@ UNIVERSE_SYNC = "universe_sync"
 INDUSTRY_SYNC = "industry_sync"
 MARKET_SNAPSHOT = "market_snapshot"
 FINANCIAL_SNAPSHOT = "financial_snapshot"
+SNAPSHOT_BACKFILL = "snapshot_backfill"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
     FINANCIAL_SNAPSHOT,
+    SNAPSHOT_BACKFILL,
 )
 
 SnapshotProvider = Literal["baostock", "ifind"]
@@ -116,8 +119,52 @@ class FinancialSnapshotPayload(_CollectionPayload):
         return value
 
 
+BackfillPart = Literal["membership", "industry", "prices", "financials"]
+BACKFILL_PARTS: tuple[BackfillPart, ...] = ("membership", "industry", "prices", "financials")
+BACKFILL_CHUNKED_PARTS: frozenset[str] = frozenset({"prices", "financials"})
+_CANONICAL_TICKER = re.compile(r"^\d{6}\.(SH|SZ|BJ)$")
+
+
+class SnapshotBackfillPayload(_Payload):
+    """One unit of the historical backfill (P1-A4, decision D5; all via baostock).
+
+    ``membership`` and ``industry`` are single jobs for the whole universe;
+    ``prices`` and ``financials`` run per chunk of ``symbols``. Depths are part
+    of the payload so a plan is reproducible.
+    """
+
+    universe_code: IndexCode
+    as_of: date
+    part: BackfillPart
+    symbols: tuple[str, ...] = ()
+    chunk: int | None = None
+    price_years: int = Field(default=5, ge=1, le=20)
+    annual_years: int = Field(default=6, ge=0, le=20)
+    quarters: int = Field(default=4, ge=0, le=12)
+
+    @model_validator(mode="after")
+    def _chunking(self) -> Self:
+        if self.part in BACKFILL_CHUNKED_PARTS:
+            if not self.symbols or self.chunk is None:
+                raise ValueError(f"backfill part {self.part!r} needs symbols and a chunk index")
+        elif self.symbols or self.chunk is not None:
+            raise ValueError(f"backfill part {self.part!r} takes no symbols / chunk")
+        bad = [symbol for symbol in self.symbols if not _CANONICAL_TICKER.fullmatch(symbol)]
+        if bad:
+            raise ValueError(f"not canonical A-share tickers: {bad[:5]}")
+        return self
+
+    @property
+    def depth_label(self) -> str:
+        return f"p{self.price_years}a{self.annual_years}q{self.quarters}"
+
+
 SnapshotPayload = (
-    UniverseSyncPayload | IndustrySyncPayload | MarketSnapshotPayload | FinancialSnapshotPayload
+    UniverseSyncPayload
+    | IndustrySyncPayload
+    | MarketSnapshotPayload
+    | FinancialSnapshotPayload
+    | SnapshotBackfillPayload
 )
 
 PAYLOAD_MODELS: dict[str, type[_Payload]] = {
@@ -125,6 +172,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     INDUSTRY_SYNC: IndustrySyncPayload,
     MARKET_SNAPSHOT: MarketSnapshotPayload,
     FINANCIAL_SNAPSHOT: FinancialSnapshotPayload,
+    SNAPSHOT_BACKFILL: SnapshotBackfillPayload,
 }
 
 
@@ -144,6 +192,12 @@ def idempotency_key(payload: SnapshotPayload) -> str:
     if isinstance(payload, IndustrySyncPayload):
         scope = "+".join(sorted(payload.universe_codes)) or "ALL"
         return f"{kind}:{scope}:{payload.as_of.isoformat()}"
+    if isinstance(payload, SnapshotBackfillPayload):
+        key = (
+            f"{kind}:{payload.universe_code}:{payload.as_of.isoformat()}:"
+            f"{payload.part}:{payload.depth_label}"
+        )
+        return key if payload.chunk is None else f"{key}:c{payload.chunk:03d}"
     if isinstance(payload, MarketSnapshotPayload):
         return (
             f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"

@@ -187,3 +187,65 @@ def test_sync_industry_defaults_to_the_configured_target_pool(cli_db, tmp_path):
         "industry_sync:ALL:2026-10-02",
         "industry_sync:CSI300:2026-10-03",
     ]
+
+
+def test_backfill_cli_plans_membership_then_reports_status(cli_db):
+    from investment_agent.cli.main import app
+
+    runner = CliRunner()
+    args = ["snapshot", "backfill", "--universe", "csi300", "--as-of", "2026-10-06",
+            "--prices", "5y", "--annual", "6", "--quarters", "4"]
+    first = runner.invoke(app, args)
+    assert first.exit_code == 0, first.output
+    assert "membership: queued" in first.output
+    again = runner.invoke(app, args)
+    assert again.exit_code == 0 and "membership: pending" in again.output
+    runs = _runs(cli_db)
+    assert len(runs) == 1
+    assert runs[0].kind == "snapshot_backfill"
+    assert runs[0].idempotency_key == "snapshot_backfill:CSI300:2026-10-06:membership:p5a6q4"
+    assert runs[0].request_json["part"] == "membership"
+
+    status = runner.invoke(app, ["snapshot", "backfill", "--universe", "CSI300", "--status"])
+    assert status.exit_code == 0, status.output
+    assert "2026-10-06" in status.output and "queued 1" in status.output
+
+
+def test_backfill_cli_rejects_bad_depth_and_future_dates(cli_db):
+    from investment_agent.cli.main import app
+
+    runner = CliRunner()
+    bad = runner.invoke(app, ["snapshot", "backfill", "--prices", "five"])
+    assert bad.exit_code != 0
+    future = runner.invoke(app, ["snapshot", "backfill", "--as-of", "2099-01-01"])
+    assert future.exit_code != 0
+    assert _runs(cli_db) == []
+
+
+def test_backfill_cli_dry_run_prints_estimates(cli_db, monkeypatch):
+    from datetime import UTC, date, datetime
+
+    from investment_agent.cli.main import app
+    from investment_agent.providers import baostock_market
+    from tests.unit._baostock_history_fake import FakeBaostockHistory
+
+    backend = FakeBaostockHistory(
+        constituent_changes=[
+            (date(2020, 1, 6), {"600519.SH", "000001.SZ"}),
+            (date(2024, 6, 17), {"600519.SH", "601398.SH"}),
+        ]
+    )
+    real = baostock_market.BaostockMarketClient
+
+    def client(*_args, **_kwargs):
+        return real(backend, clock=lambda: datetime(2026, 10, 6, 9, 0, tzinfo=UTC))  # type: ignore[arg-type]
+
+    monkeypatch.setattr(baostock_market, "BaostockMarketClient", client)
+    result = CliRunner().invoke(
+        app, ["snapshot", "backfill", "--as-of", "2026-10-06", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Symbols: 3 (current 2 + removed 1)" in result.output
+    assert "prices" in result.output and "financials" in result.output
+    assert {method for method, _ in backend.calls} <= {"login", "logout", "query_hs300_stocks"}
+    assert _runs(cli_db) == []

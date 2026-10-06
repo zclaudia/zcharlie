@@ -22,6 +22,7 @@ from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient
 from investment_agent.research.ifind_chain import IfindProxyClient
+from investment_agent.snapshots.backfill import BackfillClient, run_backfill_part
 from investment_agent.snapshots.breadth import (
     BaostockCollectorClient,
     collect_baostock_financial,
@@ -38,11 +39,13 @@ from investment_agent.snapshots.jobs import (
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
+    SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     UNIVERSE_SYNC,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
+    SnapshotBackfillPayload,
     UniverseSyncPayload,
 )
 from investment_agent.snapshots.market import collect_market_snapshot
@@ -61,6 +64,7 @@ log = structlog.get_logger(__name__)
 ProxyFactory = Callable[[], AbstractAsyncContextManager[ProxyClient]]
 ReferenceFactory = Callable[[], ReferenceClient]
 BaostockFactory = Callable[[], BaostockCollectorClient]
+BackfillFactory = Callable[[], BackfillClient]
 
 
 def _utc_now() -> datetime:
@@ -80,6 +84,7 @@ class SnapshotRuntime:
     batch_backoff_seconds: float = 2.0
     notifier: FileNotifier | None = field(default=None)
     baostock_factory: BaostockFactory = BaostockMarketClient
+    backfill_factory: BackfillFactory = BaostockMarketClient
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
@@ -159,6 +164,16 @@ class SnapshotJobHandler(BaseJobHandler):
                 lease=lease,
             )
             return _Result("success", metadata)
+        if self.kind == SNAPSHOT_BACKFILL:
+            outcome = await run_backfill_part(
+                SnapshotBackfillPayload.model_validate(request),
+                client=self.runtime.backfill_factory(),
+                artifacts=artifacts,
+                lease=lease,
+            )
+            if isinstance(outcome, CollectionReport):
+                return await self._settle(outcome, job.run_id, lease)
+            return _Result("success", outcome)
         if self.kind == MARKET_SNAPSHOT:
             market_payload = MarketSnapshotPayload.model_validate(request)
             if market_payload.provider == "baostock":
