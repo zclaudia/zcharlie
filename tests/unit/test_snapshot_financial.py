@@ -1,4 +1,5 @@
-"""financial_snapshot collector: registry-driven fields, disclosure, idempotency."""
+"""iFinD financial_snapshot collector (watchlist scope): registry-driven fields,
+disclosure, idempotency; payload routing rules."""
 
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ from tests.unit._snapshot_support import (
     FixtureProxy,
     NoSleep,
     handlers_for,
-    seed_universe,
+    seed_watchlist,
     settings_for,
 )
 
@@ -45,7 +46,9 @@ TICKERS = ["000001.SZ", "300750.SZ", "600519.SH"]
 
 async def _collect(proxy, tmp_path, period: date, *, as_of: date = date(2026, 10, 6)):
     return await collect_financial_snapshot(
-        FinancialSnapshotPayload(universe_code="CSI300", report_period=period, as_of=as_of),
+        FinancialSnapshotPayload(
+            provider="ifind", scope="watchlist", report_period=period, as_of=as_of
+        ),
         caller=ProxyBatchCaller(proxy, AsyncRateLimiter(6000, burst=1000), sleep=NoSleep()),
         artifacts=ArtifactWriter(tmp_path, run_id=7, attempt=1),
         lease=None,
@@ -99,7 +102,7 @@ def test_blank_rows_mean_not_disclosed():
 
 async def test_fixture_replay_stores_canonical_fields(db_session, tmp_path):
     del db_session
-    ids = await seed_universe(TICKERS)
+    ids = await seed_watchlist(TICKERS)
     proxy = FixtureProxy()
 
     report = await _collect(proxy, tmp_path, date(2026, 6, 30))
@@ -137,7 +140,7 @@ async def test_fixture_replay_stores_canonical_fields(db_session, tmp_path):
 
 async def test_undisclosed_period_is_pending_not_an_error(db_session, tmp_path):
     del db_session
-    await seed_universe(TICKERS)
+    await seed_watchlist(TICKERS)
     report = await _collect(FixtureProxy(), tmp_path, date(2026, 9, 30))
     assert await _rows() == []
     assert report.completeness.pending == TICKERS
@@ -148,7 +151,7 @@ async def test_undisclosed_period_is_pending_not_an_error(db_session, tmp_path):
 
 async def test_only_members_without_the_period_are_requested(db_session, tmp_path):
     del db_session
-    await seed_universe(TICKERS)
+    await seed_watchlist(TICKERS)
     await _collect(FixtureProxy(), tmp_path, date(2026, 6, 30))
     proxy = FixtureProxy()
     report = await _collect(proxy, tmp_path, date(2026, 6, 30))
@@ -161,7 +164,7 @@ async def test_only_members_without_the_period_are_requested(db_session, tmp_pat
 async def test_failed_batch_marks_its_tickers_missing(db_session, tmp_path):
     del db_session
     tickers = ["000001.SZ", "000002.SZ", "000003.SZ", "600000.SH"]
-    await seed_universe(tickers)
+    await seed_watchlist(tickers)
     profit = {t: {"ths_roe_stock": "10", "ths_gross_selling_rate_stock": "30"} for t in tickers}
 
     def fail(path, payload):
@@ -181,13 +184,16 @@ async def test_failed_batch_marks_its_tickers_missing(db_session, tmp_path):
 
 async def test_financial_job_runs_through_worker(db_session, tmp_path):
     del db_session
-    await seed_universe(TICKERS)
+    await seed_watchlist(TICKERS)
     settings = settings_for(tmp_path)
     async with session_scope() as session:
         run, created = await enqueue_snapshot_job(
             session,
             FinancialSnapshotPayload(
-                universe_code="CSI300", report_period=date(2026, 6, 30), as_of=date(2026, 10, 6)
+                provider="ifind",
+                scope="watchlist",
+                report_period=date(2026, 6, 30),
+                as_of=date(2026, 10, 6),
             ),
             triggered_by="test",
         )
@@ -200,19 +206,46 @@ async def test_financial_job_runs_through_worker(db_session, tmp_path):
     async with session_scope() as session:
         run = await PipelineRunRepository(session).get(run_id)
     assert run.status == "success"
-    assert run.universe_code == "CSI300"
+    assert run.universe_code is None
+    assert run.metadata_json["scope"] == "watchlist"
     assert run.metadata_json["completeness"]["collected"] == 3
     assert run.metadata_json["stored"] == 3
+
+
+def test_payload_routing_rules():
+    legacy = MarketSnapshotPayload.model_validate(
+        {"universe_code": "CSI300", "trade_date": "2026-09-30"}
+    )
+    assert (legacy.provider, legacy.scope) == ("baostock", "universe")
+    watch = MarketSnapshotPayload(provider="baostock", scope="watchlist", trade_date=date(2026, 9, 30))
+    assert watch.scope_label == "watchlist"
+    with pytest.raises(ValidationError, match="watchlist scope"):
+        MarketSnapshotPayload(provider="ifind", universe_code="CSI300", trade_date=date(2026, 9, 30))
+    with pytest.raises(ValidationError, match="needs a universe_code"):
+        MarketSnapshotPayload(trade_date=date(2026, 9, 30))
+    with pytest.raises(ValidationError, match="takes no universe_code"):
+        FinancialSnapshotPayload(
+            provider="ifind",
+            scope="watchlist",
+            universe_code="CSI300",
+            report_period=date(2026, 6, 30),
+            as_of=date(2026, 10, 6),
+        )
+    ifind = MarketSnapshotPayload(provider="ifind", scope="watchlist", trade_date=date(2026, 9, 30))
+    assert idempotency_key(ifind) == "market_snapshot:ifind:watchlist:2026-09-30"
 
 
 async def test_enqueue_is_idempotent_per_kind_universe_date(db_session):
     del db_session
     payload = MarketSnapshotPayload(universe_code="CSI300", trade_date=date(2026, 9, 30))
-    assert idempotency_key(payload) == "market_snapshot:CSI300:2026-09-30"
+    assert idempotency_key(payload) == "market_snapshot:baostock:CSI300:2026-09-30"
     financial = FinancialSnapshotPayload(
         universe_code="CSI300", report_period=date(2026, 6, 30), as_of=date(2026, 10, 10)
     )
-    assert idempotency_key(financial) == "financial_snapshot:CSI300:2026-06-30:2026-10-10"
+    assert (
+        idempotency_key(financial)
+        == "financial_snapshot:baostock:CSI300:2026-06-30:2026-10-10"
+    )
     async with session_scope() as session:
         first, created_first = await enqueue_snapshot_job(session, payload, triggered_by="a")
         second, created_second = await enqueue_snapshot_job(session, payload, triggered_by="b")
@@ -223,5 +256,5 @@ async def test_enqueue_is_idempotent_per_kind_universe_date(db_session):
                 session,
                 MarketSnapshotPayload(universe_code="CSI300", trade_date=date(2026, 10, 1)),
                 triggered_by="c",
-                key="market_snapshot:CSI300:2026-09-30",
+                key="market_snapshot:baostock:CSI300:2026-09-30",
             )

@@ -77,14 +77,19 @@ def test_cli_enqueues_each_kind_idempotently(cli_db):
     assert [(run.kind, run.idempotency_key, run.status) for run in runs] == [
         ("universe_sync", "universe_sync:CSI300:2026-10-05", "queued"),
         ("industry_sync", "industry_sync:CSI300:2026-10-01", "queued"),
-        ("market_snapshot", "market_snapshot:CSI300:2026-09-30", "queued"),
+        ("market_snapshot", "market_snapshot:baostock:CSI300:2026-09-30", "queued"),
         (
             "financial_snapshot",
-            "financial_snapshot:CSI300:2026-06-30:2026-10-06",
+            "financial_snapshot:baostock:CSI300:2026-06-30:2026-10-06",
             "queued",
         ),
     ]
-    assert runs[2].request_json == {"universe_code": "CSI300", "trade_date": "2026-09-30"}
+    assert runs[2].request_json == {
+        "provider": "baostock",
+        "scope": "universe",
+        "universe_code": "CSI300",
+        "trade_date": "2026-09-30",
+    }
     assert all(run.triggered_by == "cli" for run in runs)
 
     status = runner.invoke(app, ["snapshot", "status"], env={"COLUMNS": "200"})
@@ -116,3 +121,33 @@ def test_worker_cli_accepts_kinds():
         "ifind_research",
     ]
     assert parse_kinds("") is None
+
+
+def test_cli_routes_provider_and_scope(cli_db):
+    from investment_agent.cli.main import app
+
+    runner = CliRunner()
+    ok = [
+        ["snapshot", "collect-market", "--provider", "ifind", "--date", "2026-09-30"],
+        ["snapshot", "collect-market", "--scope", "watchlist", "--date", "2026-09-30"],
+        ["snapshot", "collect-financial", "--provider", "ifind", "--scope", "watchlist",
+         "--period", "2026-06-30", "--as-of", "2026-10-06"],
+    ]
+    for command in ok:
+        result = runner.invoke(app, command)
+        assert result.exit_code == 0, result.output
+    rejected = runner.invoke(
+        app, ["snapshot", "collect-market", "--provider", "ifind", "--scope", "universe"]
+    )
+    assert rejected.exit_code != 0
+    assert runner.invoke(app, ["snapshot", "collect-market", "--provider", "wind"]).exit_code != 0
+    assert runner.invoke(app, ["snapshot", "collect-market", "--scope", "all"]).exit_code != 0
+
+    runs = _runs(cli_db)
+    assert [run.idempotency_key for run in runs] == [
+        "market_snapshot:ifind:watchlist:2026-09-30",
+        "market_snapshot:baostock:watchlist:2026-09-30",
+        "financial_snapshot:ifind:watchlist:2026-06-30:2026-10-06",
+    ]
+    assert all(run.universe_code is None for run in runs)
+    assert runs[0].request_json["scope"] == "watchlist"

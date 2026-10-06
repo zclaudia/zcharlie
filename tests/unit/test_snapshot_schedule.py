@@ -135,7 +135,8 @@ def test_snapshot_config_validates_universes():
     shipped = load_app_yaml(ROOT / "config" / "app.yaml")
     assert shipped.snapshot is not None
     assert shipped.snapshot.universes == ["CSI300"]
-    assert shipped.snapshot.market_snapshot_cron == "30 16 * * 1-5"
+    assert shipped.snapshot.market_snapshot_cron == "30 18 * * 1-5"
+    assert SnapshotScheduleConfig().market_snapshot_cron == "30 18 * * 1-5"
 
 
 def _settings(monkeypatch) -> Settings:
@@ -190,9 +191,13 @@ async def test_scheduled_market_job_enqueues_once_per_date(db_session):
     assert (created, again, holiday) == (2, 0, 0)
     runs = await _runs()
     assert [run.idempotency_key for run in runs] == [
-        "market_snapshot:CSI300:2026-09-30",
-        "market_snapshot:SSE50:2026-09-30",
+        "market_snapshot:baostock:CSI300:2026-09-30",
+        "market_snapshot:baostock:SSE50:2026-09-30",
     ]
+    assert all(
+        run.request_json["provider"] == "baostock" and run.request_json["scope"] == "universe"
+        for run in runs
+    )
     assert all(run.triggered_by == "scheduler" and run.status == "queued" for run in runs)
 
 
@@ -215,9 +220,9 @@ async def test_startup_catches_up_snapshot_jobs_that_fired_today(db_session):
         scheduler=SchedulerConfig(a_share_calendar_path=CALENDAR_PATH),
         snapshot=SnapshotScheduleConfig(),
     )
-    # Wednesday 2026-09-30 17:00 Asia/Shanghai: market (16:30) and the gated
+    # Wednesday 2026-09-30 19:00 Asia/Shanghai: market (18:30) and the gated
     # 08:00 / 09:00 jobs already fired today; Monday/Saturday jobs did not.
-    caught = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 30, 9, 0, tzinfo=UTC))
+    caught = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 30, 11, 0, tzinfo=UTC))
     assert set(caught) == {"industry_sync", "market_snapshot", "financial_deadline"}
     runs = await _runs()
     assert [run.kind for run in runs] == ["market_snapshot"]

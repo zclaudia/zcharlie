@@ -1,4 +1,9 @@
-"""``market_snapshot``: incremental daily bars and total shares for a universe.
+"""iFinD ``market_snapshot`` (watchlist scope): incremental daily bars + total shares.
+
+Target pools are collected from baostock (:mod:`investment_agent.snapshots.breadth`,
+decision D6); this collector only runs for ``provider="ifind"``,
+``scope="watchlist"`` payloads, so the gateway quota is spent on a few dozen
+watchlist stocks, never on the whole target pool.
 
 Two immutable series are stored per listing:
 
@@ -13,19 +18,17 @@ last stored trade date (or at ``trade_date`` for a listing without history;
 deep history is the backfill job's business) and requests at most three years
 per call. Tickers sharing the same window are batched three per call.
 
-Total shares rule: ``/stock/info`` is called (three tickers per call) only for
-listings whose latest known ``total_shares`` was fetched more than
-:data:`TOTAL_SHARES_REFRESH_DAYS` days before ``trade_date`` (or never). The
-fetched value is written onto that trade date's raw row; every other raw row
-carries the latest known value. The value's provenance - the info response
-file and the date it was fetched for - is appended to the row's ``raw_ref``
-as ``#total_shares=<ref>@<YYYY-MM-DD>``, which is also how the next run finds
-the source date. Rows dated before the first known fetch get ``None``.
+Total shares: ``/stock/info`` is called (three tickers per call) for the
+listings that need a raw bar this run; the value is stored on the
+``trade_date`` raw row only (older rows of the window keep ``None``) and
+``raw_ref`` points at the history response. Factor-time market cap uses the
+latest baostock financial ``total_shares`` instead (see
+:meth:`FinancialSnapshotRepository.total_shares_as_of`); these iFinD values
+serve watchlist cross-checks.
 """
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -40,17 +43,16 @@ from investment_agent.snapshots.collect import (
     CollectionReport,
     Completeness,
     ProxyBatchCaller,
-    SnapshotPreconditionError,
     chunked,
     error_reason,
     fence_writes,
     rows_by_ticker,
 )
 from investment_agent.snapshots.jobs import MarketSnapshotPayload
+from investment_agent.snapshots.scope import scope_members
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.pipeline_run import LeaseLostError, RunLease
-from investment_agent.storage.repositories.universe import UniverseRepository
 
 log = structlog.get_logger(__name__)
 
@@ -58,18 +60,7 @@ HISTORY_PATH = "/stock/history"
 INFO_PATH = "/stock/info"
 SERIES: tuple[str, ...] = ("none", "backward")
 MAX_WINDOW_YEARS = 3
-TOTAL_SHARES_REFRESH_DAYS = 7
 TOTAL_SHARES_FIELD = "ths_total_shares_stock"
-
-_TOTAL_SHARES_MARK = "#total_shares="
-_TOTAL_SHARES_REF = re.compile(r"#total_shares=(?P<ref>.*)@(?P<date>\d{4}-\d{2}-\d{2})$")
-
-
-@dataclass(frozen=True)
-class TotalSharesSource:
-    value: Decimal
-    ref: str | None
-    as_of: date | None
 
 
 @dataclass(frozen=True)
@@ -106,34 +97,6 @@ class _Collector:
     lease: RunLease | None
     now: Callable[[], datetime]
     rows_inserted: dict[str, int] = field(default_factory=lambda: dict.fromkeys(SERIES, 0))
-
-
-def format_raw_ref(history_ref: str, source: TotalSharesSource | None) -> str:
-    if source is None or source.ref is None or source.as_of is None:
-        return history_ref
-    return f"{history_ref}{_TOTAL_SHARES_MARK}{source.ref}@{source.as_of.isoformat()}"
-
-
-def parse_total_shares_source(raw_ref: str | None) -> tuple[str | None, date | None]:
-    """Recover ``(info_ref, fetched_for)`` from a raw row's ``raw_ref``."""
-
-    if not raw_ref:
-        return None, None
-    match = _TOTAL_SHARES_REF.search(raw_ref)
-    if match is None:
-        return None, None
-    try:
-        return match.group("ref"), date.fromisoformat(match.group("date"))
-    except ValueError:
-        return match.group("ref"), None
-
-
-def total_shares_stale(source: TotalSharesSource | None, trade_date: date) -> bool:
-    """Whether ``/stock/info`` must be called again for ``trade_date``."""
-
-    if source is None or source.as_of is None:
-        return True
-    return (trade_date - source.as_of).days > TOTAL_SHARES_REFRESH_DAYS
 
 
 def add_years(value: date, years: int) -> date:
@@ -210,25 +173,20 @@ async def collect_market_snapshot(
     lease: RunLease | None,
     now: Callable[[], datetime],
 ) -> CollectionReport:
+    if payload.provider != IFIND_PROVIDER:
+        raise ValueError(f"iFinD market collector got provider {payload.provider!r}")
     trade_date = payload.trade_date
     async with session_scope() as session:
-        members = await UniverseRepository(session).members_as_of(
-            payload.universe_code, trade_date
-        )
-        if not members:
-            raise SnapshotPreconditionError(
-                f"{payload.universe_code} has no members on {trade_date.isoformat()}; "
-                "run universe_sync first"
-            )
-        listing_ids = [member.listing_id for member in members]
+        listing_by_ticker = await scope_members(session, payload, trade_date)
+        listing_ids = list(listing_by_ticker.values())
         repository = MarketSnapshotRepository(session)
         last = {
-            adjust: await repository.latest_trade_dates(listing_ids, adjust=adjust)
+            adjust: await repository.latest_trade_dates(
+                listing_ids, adjust=adjust, provider=IFIND_PROVIDER
+            )
             for adjust in SERIES
         }
-        share_rows = await repository.latest_total_shares(listing_ids)
 
-    listing_by_ticker = {member.ticker: member.listing_id for member in members}
     completeness = Completeness(expected=sorted(listing_by_ticker))
     report = CollectionReport(completeness)
     collector = _Collector(caller, artifacts, lease, now)
@@ -241,19 +199,9 @@ async def collect_market_snapshot(
             if start <= trade_date:
                 starts[adjust][ticker] = start
 
-    known: dict[str, TotalSharesSource] = {}
-    for ticker, listing_id in listing_by_ticker.items():
-        row = share_rows.get(listing_id)
-        if row is not None and row.total_shares is not None:
-            ref, fetched_for = parse_total_shares_source(row.raw_ref)
-            known[ticker] = TotalSharesSource(row.total_shares, ref, fetched_for)
-
-    stale = sorted(
-        ticker
-        for ticker in starts["none"]
-        if total_shares_stale(known.get(ticker), trade_date)
+    shares, share_errors = await _fetch_total_shares(
+        collector, sorted(starts["none"]), trade_date
     )
-    fresh, share_errors = await _refresh_total_shares(collector, stale, trade_date)
 
     requests = plan_history_requests(starts, trade_date)
     failed_series: set[tuple[str, str]] = set()
@@ -274,8 +222,7 @@ async def collect_market_snapshot(
                 result=result,
                 ref=ref,
                 listing_by_ticker=listing_by_ticker,
-                fresh=fresh,
-                known=known,
+                shares=shares,
                 trade_date=trade_date,
             )
         except LeaseLostError:
@@ -313,6 +260,8 @@ async def collect_market_snapshot(
             )
 
     report.metadata = {
+        "provider": IFIND_PROVIDER,
+        "scope": payload.scope,
         "universe_code": payload.universe_code,
         "trade_date": trade_date.isoformat(),
         "series": list(SERIES),
@@ -320,33 +269,30 @@ async def collect_market_snapshot(
         "proxy_calls": caller.calls,
         "rows_inserted": dict(collector.rows_inserted),
         "total_shares": {
-            "rule": (
-                f"refresh via /stock/info when older than {TOTAL_SHARES_REFRESH_DAYS} days; "
-                "otherwise carry the latest known value"
-            ),
-            "refreshed": sorted(fresh),
+            "rule": "fetched via /stock/info and stored on the trade-date raw row only",
+            "fetched": sorted(shares),
             "errors": share_errors,
         },
     }
     return report
 
 
-async def _refresh_total_shares(
+async def _fetch_total_shares(
     collector: _Collector, tickers: Sequence[str], trade_date: date
-) -> tuple[dict[str, TotalSharesSource], dict[str, str]]:
-    fresh: dict[str, TotalSharesSource] = {}
+) -> tuple[dict[str, Decimal], dict[str, str]]:
+    shares: dict[str, Decimal] = {}
     errors: dict[str, str] = {}
     for index, batch in enumerate(chunked(tickers), start=1):
         request = {"ticker": ",".join(batch), "request_time": trade_date.isoformat()}
         try:
             result = await collector.caller.call(INFO_PATH, request)
         except Exception as exc:
-            # Missing shares only degrade market-cap freshness; bars still count.
+            # Missing shares only degrade the cross-check; bars still count.
             reason = error_reason(exc)
             log.warning("snapshot.market.info_failed", tickers=batch, error=reason)
             errors.update(dict.fromkeys(batch, reason))
             continue
-        ref = collector.artifacts.write(
+        collector.artifacts.write(
             f"info-{trade_date.isoformat()}-b{index:03d}",
             {"path": INFO_PATH, "request": request, "body": result.body},
         )
@@ -357,8 +303,8 @@ async def _refresh_total_shares(
             if value is None or value <= 0:
                 errors[ticker] = "no total shares in /stock/info response"
                 continue
-            fresh[ticker] = TotalSharesSource(value, ref, trade_date)
-    return fresh, errors
+            shares[ticker] = value
+    return shares, errors
 
 
 async def _store_bars(
@@ -368,8 +314,7 @@ async def _store_bars(
     result: IfindProxyResult,
     ref: str,
     listing_by_ticker: dict[str, int],
-    fresh: dict[str, TotalSharesSource],
-    known: dict[str, TotalSharesSource],
+    shares: dict[str, Decimal],
     trade_date: date,
 ) -> dict[str, date]:
     grouped = rows_by_ticker(result.rows)
@@ -390,9 +335,11 @@ async def _store_bars(
         repository = MarketSnapshotRepository(session)
         for ticker, bars in parsed.items():
             for bar in bars:
-                source: TotalSharesSource | None = None
-                if request.adjust == "none":
-                    source = _shares_for(ticker, bar.trade_date, fresh, known, trade_date)
+                total_shares = (
+                    shares.get(ticker)
+                    if request.adjust == "none" and bar.trade_date == trade_date
+                    else None
+                )
                 await repository.insert(
                     listing_id=listing_by_ticker[ticker],
                     trade_date=bar.trade_date,
@@ -402,28 +349,12 @@ async def _store_bars(
                     close=bar.close,
                     volume=bar.volume,
                     adjust=request.adjust,
-                    total_shares=source.value if source is not None else None,
+                    total_shares=total_shares,
                     provider=IFIND_PROVIDER,
                     captured_at=captured_at,
-                    raw_ref=format_raw_ref(ref, source),
+                    raw_ref=ref,
                 )
                 collector.rows_inserted[request.adjust] += 1
             if bars:
                 latest[ticker] = bars[-1].trade_date
     return latest
-
-
-def _shares_for(
-    ticker: str,
-    day: date,
-    fresh: dict[str, TotalSharesSource],
-    known: dict[str, TotalSharesSource],
-    trade_date: date,
-) -> TotalSharesSource | None:
-    refreshed = fresh.get(ticker)
-    if refreshed is not None and day >= trade_date:
-        return refreshed
-    carried = known.get(ticker)
-    if carried is not None and (carried.as_of is None or carried.as_of <= day):
-        return carried
-    return None

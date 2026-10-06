@@ -8,6 +8,7 @@ import socket
 from datetime import date
 
 import typer
+from pydantic import ValidationError
 from rich import print as rprint
 from rich.table import Table
 
@@ -16,10 +17,14 @@ from investment_agent.config import Settings
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.snapshots.jobs import (
     SNAPSHOT_KINDS,
+    SNAPSHOT_PROVIDERS,
+    SNAPSHOT_SCOPES,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
     SnapshotPayload,
+    SnapshotProvider,
+    SnapshotScope,
     UniverseSyncPayload,
     enqueue_snapshot_job,
 )
@@ -27,6 +32,14 @@ from investment_agent.snapshots.jobs import (
 app = typer.Typer(help="Point-in-time snapshot collection (universe, industry, market, financial)")
 
 _UNIVERSE_HELP = f"Universe code: {', '.join(INDEX_CODES)}"
+_PROVIDER_HELP = (
+    "Data source: baostock (target pool breadth, default) or ifind (watchlist only; "
+    "spends the iFinD gateway quota)"
+)
+_SCOPE_HELP = (
+    "universe (members of --universe) or watchlist (enabled watchlist items); "
+    "default: universe for baostock, watchlist for ifind"
+)
 
 
 def _date(value: str | None, name: str) -> date:
@@ -43,6 +56,31 @@ def _universe(value: str) -> IndexCode:
     if code not in INDEX_CODES:
         raise typer.BadParameter(_UNIVERSE_HELP, param_hint="--universe")
     return code
+
+
+def _provider(value: str) -> SnapshotProvider:
+    provider = value.strip().lower()
+    if provider not in SNAPSHOT_PROVIDERS:
+        raise typer.BadParameter(", ".join(SNAPSHOT_PROVIDERS), param_hint="--provider")
+    return provider
+
+
+def _routing(
+    provider: str, scope: str | None, universe: str
+) -> tuple[SnapshotProvider, SnapshotScope, IndexCode | None]:
+    chosen = _provider(provider)
+    if scope is None:
+        scope = "watchlist" if chosen == "ifind" else "universe"
+    scope = scope.strip().lower()
+    if scope not in SNAPSHOT_SCOPES:
+        raise typer.BadParameter(", ".join(SNAPSHOT_SCOPES), param_hint="--scope")
+    if chosen == "ifind" and scope != "watchlist":
+        raise typer.BadParameter(
+            "iFinD only collects the watchlist scope; use --provider baostock for target pools",
+            param_hint="--scope",
+        )
+    code = _universe(universe) if scope == "universe" else None
+    return chosen, scope, code
 
 
 async def _submit(settings: Settings, payload: SnapshotPayload, *, now: bool) -> None:
@@ -129,16 +167,21 @@ def sync_industry(
 @app.command("collect-market")
 def collect_market(
     universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    provider: str = typer.Option("baostock", help=_PROVIDER_HELP),
+    scope: str | None = typer.Option(None, help=_SCOPE_HELP),
     trade_date: str | None = typer.Option(
         None, "--date", help="Trade date (YYYY-MM-DD, default today in Asia/Shanghai)"
     ),
     now: bool = typer.Option(False, "--now", help=_NOW_HELP),
 ) -> None:
-    """Enqueue incremental daily bars + total shares for every universe member."""
+    """Enqueue incremental daily bars (raw + backward) for the scope's listings."""
 
+    chosen, chosen_scope, code = _routing(provider, scope, universe)
     _run(
         MarketSnapshotPayload(
-            universe_code=_universe(universe),
+            provider=chosen,
+            scope=chosen_scope,
+            universe_code=code,
             trade_date=_date(trade_date, "--date"),
         ),
         now,
@@ -149,18 +192,23 @@ def collect_market(
 def collect_financial(
     period: str = typer.Option(..., help="Report period, a quarter end such as 2026-06-30"),
     universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    provider: str = typer.Option("baostock", help=_PROVIDER_HELP),
+    scope: str | None = typer.Option(None, help=_SCOPE_HELP),
     as_of: str | None = typer.Option(None, help="Membership date (YYYY-MM-DD, default today)"),
     now: bool = typer.Option(False, "--now", help=_NOW_HELP),
 ) -> None:
-    """Enqueue one report period for members that do not have it yet."""
+    """Enqueue one report period for listings that do not have it yet."""
 
+    chosen, chosen_scope, code = _routing(provider, scope, universe)
     try:
         payload = FinancialSnapshotPayload(
-            universe_code=_universe(universe),
+            provider=chosen,
+            scope=chosen_scope,
+            universe_code=code,
             report_period=_date(period, "--period"),
             as_of=_date(as_of, "--as-of"),
         )
-    except ValueError as exc:
+    except ValidationError as exc:
         raise typer.BadParameter(str(exc), param_hint="--period") from exc
     _run(payload, now)
 
@@ -171,7 +219,9 @@ async def _status(settings: Settings, limit: int) -> Table:
 
     init_engine(settings.database_url)
     table = Table(title="Snapshot runs")
-    for column in ("run", "kind", "universe", "request", "status", "completeness", "finished"):
+    for column in (
+        "run", "kind", "provider", "scope", "request", "status", "completeness", "finished"
+    ):
         table.add_column(column)
     async with session_scope() as session:
         repository = PipelineRunRepository(session)
@@ -193,7 +243,8 @@ async def _status(settings: Settings, limit: int) -> Table:
                 table.add_row(
                     str(run.id),
                     kind,
-                    run.universe_code or "-",
+                    str(request.get("provider", "baostock")),
+                    run.universe_code or str(request.get("scope", "-")),
                     detail,
                     run.status,
                     ratio,

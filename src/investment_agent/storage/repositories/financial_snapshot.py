@@ -65,7 +65,12 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
         return row
 
     async def latest_available(
-        self, listing_id: int, as_of: date, *, include_backfill: bool = True
+        self,
+        listing_id: int,
+        as_of: date,
+        *,
+        include_backfill: bool = True,
+        provider: str | None = None,
     ) -> FinancialSnapshot | None:
         """Most recent report period usable on ``as_of`` (Asia/Shanghai date).
 
@@ -75,21 +80,24 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
         their knowledge time is reconstructed from ``available_from``, so they
         are eligible regardless of ``captured_at`` unless ``include_backfill``
         is false. Among eligible rows the latest report period wins, then the
-        highest version.
+        highest version. ``provider`` restricts the choice to one source.
         """
 
         cutoff = end_of_business_day_utc(as_of)
         known = FinancialSnapshot.captured_at < cutoff
         knowledge = or_(known, FinancialSnapshot.is_backfill.is_(True)) if include_backfill else known
+        conditions = [
+            FinancialSnapshot.listing_id == listing_id,
+            FinancialSnapshot.availability != "unknown",
+            FinancialSnapshot.available_from.is_not(None),
+            FinancialSnapshot.available_from <= as_of,
+            knowledge,
+        ]
+        if provider is not None:
+            conditions.append(FinancialSnapshot.provider == provider)
         stmt = (
             select(FinancialSnapshot)
-            .where(
-                FinancialSnapshot.listing_id == listing_id,
-                FinancialSnapshot.availability != "unknown",
-                FinancialSnapshot.available_from.is_not(None),
-                FinancialSnapshot.available_from <= as_of,
-                knowledge,
-            )
+            .where(*conditions)
             .order_by(
                 FinancialSnapshot.report_period.desc(),
                 FinancialSnapshot.version.desc(),
@@ -98,19 +106,36 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def total_shares_as_of(
+        self, listing_id: int, as_of: date, *, provider: str = "baostock"
+    ) -> tuple[float, FinancialSnapshot] | None:
+        """Total shares usable on ``as_of`` and the snapshot they come from.
+
+        The factor-time source of total shares for market cap (decision D6):
+        ``fields["total_shares"]`` of the latest report available on ``as_of``
+        (effective from its ``available_from`` = pubDate).
+        """
+
+        snapshot = await self.latest_available(listing_id, as_of, provider=provider)
+        if snapshot is None:
+            return None
+        value = snapshot.fields.get("total_shares")
+        if not isinstance(value, int | float) or value <= 0:
+            return None
+        return float(value), snapshot
+
     async def listings_with_period(
-        self, listing_ids: Sequence[int], report_period: date
+        self, listing_ids: Sequence[int], report_period: date, *, provider: str | None = None
     ) -> set[int]:
         """Listings that already have any capture of ``report_period``."""
 
         if not listing_ids:
             return set()
-        stmt = (
-            select(FinancialSnapshot.listing_id)
-            .where(
-                FinancialSnapshot.listing_id.in_(list(listing_ids)),
-                FinancialSnapshot.report_period == report_period,
-            )
-            .distinct()
-        )
+        conditions = [
+            FinancialSnapshot.listing_id.in_(list(listing_ids)),
+            FinancialSnapshot.report_period == report_period,
+        ]
+        if provider is not None:
+            conditions.append(FinancialSnapshot.provider == provider)
+        stmt = select(FinancialSnapshot.listing_id).where(*conditions).distinct()
         return set((await self.session.execute(stmt)).scalars().all())

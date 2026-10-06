@@ -113,7 +113,9 @@ class SnapshotScheduleConfig(BaseModel):
     timezone: str = "Asia/Shanghai"
     universe_sync_cron: str | None = "0 8 * * 1"
     industry_sync_cron: str | None = "0 8 * * *"
-    market_snapshot_cron: str | None = "30 16 * * 1-5"
+    # baostock publishes the day's bars in the evening; 18:30 is a margin over
+    # the observed availability (re-verify on a normal trading day).
+    market_snapshot_cron: str | None = "30 18 * * 1-5"
     financial_weekly_cron: str | None = "0 9 * * 6"
     financial_deadline_cron: str | None = "0 9 * * *"
 

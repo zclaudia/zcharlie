@@ -309,3 +309,25 @@ def test_canonical_extraction_ignores_unknown_tables() -> None:
     assert fields["roe"] == pytest.approx(0.1)
     assert fields["net_margin"] is None
     assert fields["debt_ratio"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Live smoke (network)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.network
+async def test_live_baostock_market_smoke() -> None:
+    client = BaostockMarketClient()
+    async with client.session():
+        raw = await client.fetch_daily_bars(
+            "600519.SH", date(2026, 9, 30), date(2026, 9, 30), "none"
+        )
+        backward = await client.fetch_daily_bars(
+            "600519.SH", date(2026, 9, 30), date(2026, 9, 30), "backward"
+        )
+        record = await client.fetch_quarterly_financials("600519.SH", 2025, 4)
+    assert raw.bars[0].close == Decimal("1258.6200")
+    assert backward.bars[0].close > raw.bars[0].close
+    assert record is not None and record.pub_date == date(2026, 4, 17)
+    assert 0 < (record.fields["roe"] or 0) < 1  # a fraction, not a percent

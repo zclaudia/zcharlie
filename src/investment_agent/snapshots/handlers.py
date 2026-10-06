@@ -1,4 +1,9 @@
-"""Queue job handlers for the snapshot collectors."""
+"""Queue job handlers for the snapshot collectors.
+
+``market_snapshot`` / ``financial_snapshot`` are routed by the payload's
+``provider`` (decision D6): ``baostock`` -> :mod:`investment_agent.snapshots.breadth`
+(target pool), ``ifind`` -> the iFinD batch collectors (watchlist only).
+"""
 
 from __future__ import annotations
 
@@ -14,8 +19,14 @@ import structlog
 from investment_agent.config import Settings
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient
 from investment_agent.research.ifind_chain import IfindProxyClient
+from investment_agent.snapshots.breadth import (
+    BaostockCollectorClient,
+    collect_baostock_financial,
+    collect_baostock_market,
+)
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
     CollectionReport,
@@ -49,6 +60,7 @@ log = structlog.get_logger(__name__)
 
 ProxyFactory = Callable[[], AbstractAsyncContextManager[ProxyClient]]
 ReferenceFactory = Callable[[], ReferenceClient]
+BaostockFactory = Callable[[], BaostockCollectorClient]
 
 
 def _utc_now() -> datetime:
@@ -67,6 +79,7 @@ class SnapshotRuntime:
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
     batch_backoff_seconds: float = 2.0
     notifier: FileNotifier | None = field(default=None)
+    baostock_factory: BaostockFactory = BaostockMarketClient
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
@@ -148,25 +161,43 @@ class SnapshotJobHandler(BaseJobHandler):
             return _Result("success", metadata)
         if self.kind == MARKET_SNAPSHOT:
             market_payload = MarketSnapshotPayload.model_validate(request)
-            async with self.runtime.proxy_factory() as client:
-                report = await collect_market_snapshot(
+            if market_payload.provider == "baostock":
+                report = await collect_baostock_market(
                     market_payload,
+                    client=self.runtime.baostock_factory(),
+                    artifacts=artifacts,
+                    lease=lease,
+                    now=self.runtime.clock,
+                )
+            else:
+                async with self.runtime.proxy_factory() as client:
+                    report = await collect_market_snapshot(
+                        market_payload,
+                        caller=self._caller(client),
+                        artifacts=artifacts,
+                        lease=lease,
+                        now=self.runtime.clock,
+                    )
+            return await self._settle(report, job.run_id, lease)
+        assert self.kind == FINANCIAL_SNAPSHOT
+        financial_payload = FinancialSnapshotPayload.model_validate(request)
+        if financial_payload.provider == "baostock":
+            report = await collect_baostock_financial(
+                financial_payload,
+                client=self.runtime.baostock_factory(),
+                artifacts=artifacts,
+                lease=lease,
+                now=self.runtime.clock,
+            )
+        else:
+            async with self.runtime.proxy_factory() as client:
+                report = await collect_financial_snapshot(
+                    financial_payload,
                     caller=self._caller(client),
                     artifacts=artifacts,
                     lease=lease,
                     now=self.runtime.clock,
                 )
-            return await self._settle(report, job.run_id, lease)
-        assert self.kind == FINANCIAL_SNAPSHOT
-        financial_payload = FinancialSnapshotPayload.model_validate(request)
-        async with self.runtime.proxy_factory() as client:
-            report = await collect_financial_snapshot(
-                financial_payload,
-                caller=self._caller(client),
-                artifacts=artifacts,
-                lease=lease,
-                now=self.runtime.clock,
-            )
         return await self._settle(report, job.run_id, lease)
 
     def _caller(self, client: ProxyClient) -> ProxyBatchCaller:
@@ -206,7 +237,11 @@ class SnapshotJobHandler(BaseJobHandler):
 def snapshot_job_handlers(
     settings: Settings, runtime: SnapshotRuntime | None = None
 ) -> list[SnapshotJobHandler]:
-    """One handler per snapshot kind, all sharing one proxy rate limiter."""
+    """One handler per snapshot kind, all sharing one proxy rate limiter.
+
+    baostock calls need no token bucket: the process-wide baostock session
+    lock already serializes them.
+    """
 
     shared = runtime or default_runtime(settings)
     return [SnapshotJobHandler(kind, shared) for kind in SNAPSHOT_KINDS]

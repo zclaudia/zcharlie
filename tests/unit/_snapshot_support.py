@@ -20,6 +20,7 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import UniverseMembership
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.universe import UniverseRepository
+from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "ifind_batch"
 CAPTURED_AT = datetime(2026, 10, 6, 9, 0, tzinfo=UTC)  # 17:00 Asia/Shanghai
@@ -212,6 +213,20 @@ async def seed_universe(
     return ids
 
 
+async def seed_watchlist(tickers: list[str], *, disabled: tuple[str, ...] = ()) -> dict[str, int]:
+    """Watchlist items for ``tickers``; returns ticker -> listing id."""
+
+    ids: dict[str, int] = {}
+    async with session_scope() as session:
+        listings = ListingRepository(session)
+        watchlist = WatchlistRepository(session)
+        for ticker in tickers:
+            listing = await listings.ensure_a_share_listing(ticker)
+            ids[ticker] = listing.id
+            await watchlist.add(listing.id, enabled=ticker not in disabled)
+    return ids
+
+
 class NoSleep:
     def __init__(self) -> None:
         self.slept: list[float] = []
@@ -225,6 +240,7 @@ def runtime_for(
     proxy: Any,
     *,
     reference: Any = None,
+    baostock: Any = None,
     clock: Callable[[], datetime] = lambda: CAPTURED_AT,
 ) -> SnapshotRuntime:
     return SnapshotRuntime(
@@ -235,6 +251,7 @@ def runtime_for(
         clock=clock,
         sleep=NoSleep(),
         batch_backoff_seconds=0,
+        baostock_factory=(lambda: baostock) if baostock is not None else (lambda: None),  # type: ignore[arg-type,return-value]
     )
 
 

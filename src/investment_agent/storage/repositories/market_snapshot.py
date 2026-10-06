@@ -30,6 +30,12 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
         amount: Decimal | None = None,
         total_shares: Decimal | None = None,
         raw_ref: str | None = None,
+        pe_ttm: Decimal | None = None,
+        pb_mrq: Decimal | None = None,
+        ps_ttm: Decimal | None = None,
+        turnover: Decimal | None = None,
+        trade_status: int | None = None,
+        is_st: bool | None = None,
     ) -> MarketSnapshot:
         """Insert a capture; a re-capture of the same key gets ``version + 1``."""
 
@@ -54,6 +60,12 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
             volume=volume,
             amount=amount,
             total_shares=total_shares,
+            pe_ttm=pe_ttm,
+            pb_mrq=pb_mrq,
+            ps_ttm=ps_ttm,
+            turnover=turnover,
+            trade_status=trade_status,
+            is_st=is_st,
             adjust=adjust,
             provider=provider,
             captured_at=to_utc(captured_at),
@@ -72,22 +84,29 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
         as_of_captured: datetime,
         *,
         adjust: str = "none",
+        provider: str | None = None,
     ) -> list[MarketSnapshot]:
-        """Latest version per trade date in ``[start, end]`` known at ``as_of_captured``."""
+        """Latest version per trade date in ``[start, end]`` known at ``as_of_captured``.
+
+        ``provider`` restricts the series to one source (``None`` = any).
+        """
 
         cutoff = to_utc(as_of_captured)
+        conditions = [
+            MarketSnapshot.listing_id == listing_id,
+            MarketSnapshot.adjust == adjust,
+            MarketSnapshot.trade_date >= start,
+            MarketSnapshot.trade_date <= end,
+            MarketSnapshot.captured_at <= cutoff,
+        ]
+        if provider is not None:
+            conditions.append(MarketSnapshot.provider == provider)
         latest = (
             select(
                 MarketSnapshot.trade_date.label("trade_date"),
                 func.max(MarketSnapshot.version).label("version"),
             )
-            .where(
-                MarketSnapshot.listing_id == listing_id,
-                MarketSnapshot.adjust == adjust,
-                MarketSnapshot.trade_date >= start,
-                MarketSnapshot.trade_date <= end,
-                MarketSnapshot.captured_at <= cutoff,
-            )
+            .where(*conditions)
             .group_by(MarketSnapshot.trade_date)
             .subquery()
         )
@@ -107,18 +126,25 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
         return list((await self.session.execute(stmt)).scalars().all())
 
     async def latest_trade_dates(
-        self, listing_ids: Sequence[int], *, adjust: str
+        self, listing_ids: Sequence[int], *, adjust: str, provider: str | None = None
     ) -> dict[int, date]:
-        """Last stored trade date per listing for one series (any version)."""
+        """Last stored trade date per listing for one series (any version).
+
+        ``provider`` limits it to one source, so baostock and iFinD keep
+        independent incremental cursors.
+        """
 
         if not listing_ids:
             return {}
+        conditions = [
+            MarketSnapshot.listing_id.in_(list(listing_ids)),
+            MarketSnapshot.adjust == adjust,
+        ]
+        if provider is not None:
+            conditions.append(MarketSnapshot.provider == provider)
         stmt = (
             select(MarketSnapshot.listing_id, func.max(MarketSnapshot.trade_date))
-            .where(
-                MarketSnapshot.listing_id.in_(list(listing_ids)),
-                MarketSnapshot.adjust == adjust,
-            )
+            .where(*conditions)
             .group_by(MarketSnapshot.listing_id)
         )
         return {
@@ -126,41 +152,3 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
             for listing_id, trade_date in (await self.session.execute(stmt)).tuples().all()
             if trade_date is not None
         }
-
-    async def latest_total_shares(
-        self, listing_ids: Sequence[int]
-    ) -> dict[int, MarketSnapshot]:
-        """Latest raw (``adjust="none"``) row carrying ``total_shares`` per listing."""
-
-        if not listing_ids:
-            return {}
-        latest = (
-            select(
-                MarketSnapshot.listing_id.label("listing_id"),
-                func.max(MarketSnapshot.trade_date).label("trade_date"),
-            )
-            .where(
-                MarketSnapshot.listing_id.in_(list(listing_ids)),
-                MarketSnapshot.adjust == "none",
-                MarketSnapshot.total_shares.is_not(None),
-            )
-            .group_by(MarketSnapshot.listing_id)
-            .subquery()
-        )
-        stmt = (
-            select(MarketSnapshot)
-            .join(
-                latest,
-                (MarketSnapshot.listing_id == latest.c.listing_id)
-                & (MarketSnapshot.trade_date == latest.c.trade_date),
-            )
-            .where(
-                MarketSnapshot.adjust == "none",
-                MarketSnapshot.total_shares.is_not(None),
-            )
-            .order_by(MarketSnapshot.version)
-        )
-        rows: dict[int, MarketSnapshot] = {}
-        for row in (await self.session.execute(stmt)).scalars().all():
-            rows[row.listing_id] = row  # highest version wins
-        return rows

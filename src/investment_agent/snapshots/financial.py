@@ -1,4 +1,8 @@
-"""``financial_snapshot``: one report period's canonical financial fields.
+"""iFinD ``financial_snapshot`` (watchlist scope): one period's canonical fields.
+
+Target pools are collected from baostock (:mod:`investment_agent.snapshots.breadth`,
+decision D6); this collector serves ``provider="ifind"``, ``scope="watchlist"``
+payloads only.
 
 The request plan and the field extraction both come from the auditable
 registry in :mod:`investment_agent.research.ifind_mapping` - there is no
@@ -41,17 +45,16 @@ from investment_agent.snapshots.collect import (
     CollectionReport,
     Completeness,
     ProxyBatchCaller,
-    SnapshotPreconditionError,
     chunked,
     error_reason,
     fence_writes,
     rows_by_ticker,
 )
 from investment_agent.snapshots.jobs import FinancialSnapshotPayload, period_kind
+from investment_agent.snapshots.scope import scope_members
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
 from investment_agent.storage.repositories.pipeline_run import LeaseLostError, RunLease
-from investment_agent.storage.repositories.universe import UniverseRepository
 
 log = structlog.get_logger(__name__)
 
@@ -194,20 +197,14 @@ async def collect_financial_snapshot(
     lease: RunLease | None,
     now: Callable[[], datetime],
 ) -> CollectionReport:
+    if payload.provider != IFIND_PROVIDER:
+        raise ValueError(f"iFinD financial collector got provider {payload.provider!r}")
     report_period = payload.report_period
     kind = period_kind(report_period)
     async with session_scope() as session:
-        members = await UniverseRepository(session).members_as_of(
-            payload.universe_code, payload.as_of
-        )
-        if not members:
-            raise SnapshotPreconditionError(
-                f"{payload.universe_code} has no members on {payload.as_of.isoformat()}; "
-                "run universe_sync first"
-            )
-        listing_by_ticker = {member.ticker: member.listing_id for member in members}
+        listing_by_ticker = await scope_members(session, payload, payload.as_of)
         present = await FinancialSnapshotRepository(session).listings_with_period(
-            list(listing_by_ticker.values()), report_period
+            list(listing_by_ticker.values()), report_period, provider=IFIND_PROVIDER
         )
 
     completeness = Completeness(expected=sorted(listing_by_ticker))
@@ -284,6 +281,8 @@ async def collect_financial_snapshot(
                 completeness.mark_missing(ticker, "failed", reason)
 
     report.metadata = {
+        "provider": IFIND_PROVIDER,
+        "scope": payload.scope,
         "universe_code": payload.universe_code,
         "report_period": report_period.isoformat(),
         "period_kind": kind,

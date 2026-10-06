@@ -4,13 +4,15 @@
 |----------------------|----------------------|----------------------------------------------|
 | universe_sync        | Mon 08:00            | none (trading-day agnostic)                  |
 | industry_sync        | daily 08:00          | first trading day of the month               |
-| market_snapshot      | Mon-Fri 16:30        | trading day                                  |
+| market_snapshot      | Mon-Fri 18:30        | trading day                                  |
 | financial_weekly     | Sat 09:00            | none                                         |
 | financial_deadline   | daily 09:00          | first trading day after 04-30 / 08-31 / 10-31 |
 
 Each fire enqueues one job per configured universe (industry: one job for
 the union) with the default per-date idempotency key, so a misfire catch-up
-or a restart never duplicates work. The financial jobs collect the most
+or a restart never duplicates work. Market and financial jobs collect the
+target pool from baostock (``provider="baostock"``, ``scope="universe"``,
+decision D6); no iFinD job is scheduled for breadth data. The financial jobs collect the most
 recent report period(s) whose statutory disclosure deadline has passed plus
 any period still inside its disclosure season.
 """
@@ -172,7 +174,12 @@ def snapshot_payloads(
     if job == "market_snapshot":
         if not calendar.is_trading_day(today):
             return []
-        return [MarketSnapshotPayload(universe_code=code, trade_date=today) for code in codes]
+        return [
+            MarketSnapshotPayload(
+                provider="baostock", scope="universe", universe_code=code, trade_date=today
+            )
+            for code in codes
+        ]
     if job == "financial_deadline":
         return _financial(codes, today) if is_financial_deadline_trigger(calendar, today) else []
     raise ValueError(f"unknown snapshot schedule job: {job!r}")
@@ -180,7 +187,13 @@ def snapshot_payloads(
 
 def _financial(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]:
     return [
-        FinancialSnapshotPayload(universe_code=code, report_period=period, as_of=today)
+        FinancialSnapshotPayload(
+            provider="baostock",
+            scope="universe",
+            universe_code=code,
+            report_period=period,
+            as_of=today,
+        )
         for code in codes
         for period in financial_periods_due(today)
     ]

@@ -1,5 +1,5 @@
-"""Shared plumbing for batched iFinD collection: batching, retries, artifacts,
-completeness accounting.
+"""Shared plumbing for snapshot collection: iFinD batching and retries, raw
+response artifacts, completeness accounting (iFinD and baostock collectors).
 """
 
 from __future__ import annotations
@@ -208,6 +208,7 @@ class CollectionReport:
     completeness: Completeness
     metadata: dict[str, object] = field(default_factory=dict)
     all_failures_transient: bool = True
+    provider: str = IFIND_PROVIDER
 
     def record_failure(self, exc: BaseException) -> None:
         if not is_transient_error(exc):
@@ -233,8 +234,8 @@ class CollectionReport:
 
         message = f"snapshot collection failed: {self.summary()}"
         if self.all_failures_transient:
-            return ProviderTransientError(message, provider=IFIND_PROVIDER)
-        return ProviderError(message, provider=IFIND_PROVIDER)
+            return ProviderTransientError(message, provider=self.provider)
+        return ProviderError(message, provider=self.provider)
 
 
 class SnapshotPreconditionError(ProviderError):

@@ -74,7 +74,10 @@ def _run_date(run: PipelineRun) -> str:
 
 def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: float) -> str:
     label = _KIND_LABELS.get(run.kind, run.kind)
-    universe = run.universe_code or "全市场"
+    request = run.request_json or {}
+    universe = run.universe_code or (
+        "观察池" if request.get("scope") == "watchlist" else "全市场"
+    )
     metadata = run.metadata_json or {}
     lines = [
         f"# {label} · {universe} · {_run_date(run)}",
@@ -82,6 +85,8 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         f"- 级别：`{level}`",
         f"- 运行：#{run.id}（{run.kind}，状态 `{run.status}`）",
     ]
+    if "provider" in request:
+        lines.append(f"- 数据源：{request['provider']}")
     if run.error_summary:
         lines.append(f"- 错误：{run.error_summary}")
     if run.kind == UNIVERSE_SYNC:

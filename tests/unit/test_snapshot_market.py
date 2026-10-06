@@ -1,4 +1,5 @@
-"""market_snapshot collector: batching, incremental windows, both series, total shares."""
+"""iFinD market_snapshot collector (watchlist scope): batching, incremental
+windows, both series, total shares."""
 
 from __future__ import annotations
 
@@ -19,13 +20,9 @@ from investment_agent.snapshots.collect import (
 from investment_agent.snapshots.jobs import MarketSnapshotPayload, enqueue_snapshot_job
 from investment_agent.snapshots.market import (
     HistoryRequest,
-    TotalSharesSource,
     collect_market_snapshot,
-    format_raw_ref,
     history_windows,
-    parse_total_shares_source,
     plan_history_requests,
-    total_shares_stale,
 )
 from investment_agent.snapshots.throttle import AsyncRateLimiter
 from investment_agent.storage.database import session_scope
@@ -38,7 +35,7 @@ from tests.unit._snapshot_support import (
     FixtureProxy,
     NoSleep,
     handlers_for,
-    seed_universe,
+    seed_watchlist,
     settings_for,
 )
 
@@ -51,9 +48,13 @@ def _caller(proxy, *, retries: int = 2) -> ProxyBatchCaller:
     )
 
 
-async def _collect(proxy, tmp_path, trade_date: date, universe: str = "CSI300", **kwargs):
+def _payload(trade_date: date) -> MarketSnapshotPayload:
+    return MarketSnapshotPayload(provider="ifind", scope="watchlist", trade_date=trade_date)
+
+
+async def _collect(proxy, tmp_path, trade_date: date, **kwargs):
     return await collect_market_snapshot(
-        MarketSnapshotPayload(universe_code=universe, trade_date=trade_date),
+        _payload(trade_date),
         caller=_caller(proxy, **kwargs),
         artifacts=ArtifactWriter(tmp_path, run_id=1, attempt=1),
         lease=None,
@@ -72,6 +73,8 @@ async def _rows(adjust: str | None = None) -> list[MarketSnapshot]:
 
 
 async def _seed_bar(listing_id: int, day: date, *, total_shares=None, raw_ref=None) -> None:
+    """One iFinD bar per series (baostock rows would not move the iFinD cursor)."""
+
     async with session_scope() as session:
         repository = MarketSnapshotRepository(session)
         for adjust in ("none", "backward"):
@@ -127,28 +130,12 @@ def test_plan_groups_tickers_by_start_date_and_batches_by_three():
     assert all(len(request.tickers) <= 3 for request in plan)
 
 
-def test_total_shares_refresh_rule_is_weekly():
-    trade = date(2026, 10, 6)
-    assert total_shares_stale(None, trade)
-    assert total_shares_stale(TotalSharesSource(Decimal(1), "r", None), trade)
-    assert not total_shares_stale(TotalSharesSource(Decimal(1), "r", trade - timedelta(7)), trade)
-    assert total_shares_stale(TotalSharesSource(Decimal(1), "r", trade - timedelta(8)), trade)
-
-
-def test_total_shares_source_round_trips_through_raw_ref():
-    source = TotalSharesSource(Decimal(5), "snapshot-runs/1/attempt-1/info.json", date(2026, 9, 30))
-    raw_ref = format_raw_ref("snapshot-runs/1/attempt-1/history.json", source)
-    assert parse_total_shares_source(raw_ref) == (source.ref, source.as_of)
-    assert parse_total_shares_source("plain.json") == (None, None)
-    assert format_raw_ref("plain.json", None) == "plain.json"
-
-
 # --- recorded fixtures -----------------------------------------------------------
 
 
 async def test_fixture_replay_stores_raw_and_backward_series(db_session, tmp_path):
     del db_session
-    ids = await seed_universe(TICKERS)
+    ids = await seed_watchlist(TICKERS)
     for listing_id in ids.values():
         await _seed_bar(listing_id, date(2026, 9, 21))
     proxy = FixtureProxy()
@@ -161,7 +148,7 @@ async def test_fixture_replay_stores_raw_and_backward_series(db_session, tmp_pat
     assert all(len(p["ticker"].split(",")) == 3 for p in history_calls)
     assert len(history_calls) == 2
     info_calls = [p for path, p in proxy.calls if path == "/stock/info"]
-    assert len(info_calls) == 1  # no known total shares yet -> one 3-ticker call
+    assert len(info_calls) == 1  # one 3-ticker call for the listings needing bars
 
     raw = [r for r in await _rows("none") if r.trade_date > date(2026, 9, 21)]
     backward = [r for r in await _rows("backward") if r.trade_date > date(2026, 9, 21)]
@@ -174,9 +161,10 @@ async def test_fixture_replay_stores_raw_and_backward_series(db_session, tmp_pat
     assert moutai_raw[date(2026, 9, 30)].total_shares == Decimal("1250081601.0")
     assert moutai_raw[date(2026, 9, 29)].total_shares is None
     assert all(r.total_shares is None for r in backward)
-    ref, fetched_for = parse_total_shares_source(moutai_raw[date(2026, 9, 30)].raw_ref)
-    assert fetched_for == date(2026, 9, 30)
-    assert ref is not None and (tmp_path / ref).is_file()
+    # raw_ref is the plain history response (no total-shares suffix any more).
+    ref = moutai_raw[date(2026, 9, 30)].raw_ref
+    assert ref is not None and "#" not in ref and (tmp_path / ref).is_file()
+    assert all(r.provider == "ifind" and r.pe_ttm is None for r in raw)
     assert report.status == "success"
     assert report.completeness.ratio == 1.0
     assert "proxy-test" not in "".join(p.read_text() for p in tmp_path.rglob("*.json"))
@@ -187,7 +175,7 @@ async def test_fixture_replay_stores_raw_and_backward_series(db_session, tmp_pat
 
 async def test_second_run_fetches_only_new_days(db_session, tmp_path):
     del db_session
-    ids = await seed_universe(TICKERS)
+    ids = await seed_watchlist(TICKERS)
     for listing_id in ids.values():
         await _seed_bar(listing_id, date(2026, 9, 25))
     proxy = FakeProxy(
@@ -203,13 +191,10 @@ async def test_second_run_fetches_only_new_days(db_session, tmp_path):
     history = proxy.calls_to("/stock/history")
     assert {(p["start_date"], p["end_date"]) for p in history} == {("2026-09-30", "2026-09-30")}
     assert len(await _rows()) == before + 2 * len(TICKERS)
-    # Total shares were refreshed yesterday: carried, not re-fetched.
-    assert proxy.calls_to("/stock/info") == []
+    # Shares are fetched for every run that stores a new raw bar.
+    assert len(proxy.calls_to("/stock/info")) == 1
     raw_today = [r for r in await _rows("none") if r.trade_date == date(2026, 9, 30)]
     assert all(r.total_shares == Decimal("1000000000") for r in raw_today)
-    assert all(
-        parse_total_shares_source(r.raw_ref)[1] == date(2026, 9, 29) for r in raw_today
-    )
     assert second.status == "success"
 
     proxy.calls.clear()
@@ -218,24 +203,47 @@ async def test_second_run_fetches_only_new_days(db_session, tmp_path):
     assert third.completeness.ratio == 1.0
 
 
-async def test_total_shares_refetched_after_a_week(db_session, tmp_path):
+async def test_total_shares_land_on_trade_date_row_only(db_session, tmp_path):
     del db_session
-    ids = await seed_universe(["600519.SH"])
-    old_ref = format_raw_ref(
-        "h.json", TotalSharesSource(Decimal(7), "old-info.json", date(2026, 9, 21))
-    )
-    await _seed_bar(ids["600519.SH"], date(2026, 9, 28), total_shares=Decimal(7), raw_ref=old_ref)
+    ids = await seed_watchlist(["600519.SH"])
+    await _seed_bar(ids["600519.SH"], date(2026, 9, 25))
     proxy = FakeProxy(base_close={"600519.SH": 10.0}, total_shares={"600519.SH": 9.0})
 
-    await _collect(proxy, tmp_path, date(2026, 9, 29))  # 8 days after the last fetch
+    report = await _collect(proxy, tmp_path, date(2026, 9, 29))
     assert len(proxy.calls_to("/stock/info")) == 1
-    raw = {r.trade_date: r for r in await _rows("none")}
+    raw = {r.trade_date: r for r in await _rows("none") if r.trade_date > date(2026, 9, 25)}
     assert raw[date(2026, 9, 29)].total_shares == Decimal("9.0")
+    assert raw[date(2026, 9, 28)].total_shares is None
+    assert report.metadata["total_shares"]["fetched"] == ["600519.SH"]
+
+
+async def test_baostock_rows_do_not_move_the_ifind_cursor(db_session, tmp_path):
+    del db_session
+    ids = await seed_watchlist(["600519.SH"])
+    async with session_scope() as session:
+        repository = MarketSnapshotRepository(session)
+        for adjust in ("none", "backward"):
+            await repository.insert(
+                listing_id=ids["600519.SH"], trade_date=date(2026, 9, 30), open=Decimal(1),
+                high=Decimal(1), low=Decimal(1), close=Decimal(1), volume=Decimal(1),
+                adjust=adjust, provider="baostock", captured_at=CAPTURED_AT,
+            )
+    proxy = FakeProxy(base_close={"600519.SH": 10.0}, total_shares={"600519.SH": 9.0})
+    await _collect(proxy, tmp_path, date(2026, 9, 30))
+    assert {p["start_date"] for p in proxy.calls_to("/stock/history")} == {"2026-09-30"}
+
+
+async def test_disabled_watchlist_items_are_not_collected(db_session, tmp_path):
+    del db_session
+    await seed_watchlist(["600519.SH", "000001.SZ"], disabled=("000001.SZ",))
+    proxy = FakeProxy(base_close={"600519.SH": 10.0}, total_shares={"600519.SH": 9.0})
+    report = await _collect(proxy, tmp_path, date(2026, 9, 30))
+    assert report.completeness.expected == ["600519.SH"]
 
 
 async def test_listing_without_history_starts_at_trade_date(db_session, tmp_path):
     del db_session
-    await seed_universe(["600519.SH"])
+    await seed_watchlist(["600519.SH"])
     proxy = FakeProxy(base_close={"600519.SH": 10.0}, total_shares={"600519.SH": 9.0})
     await _collect(proxy, tmp_path, date(2026, 9, 30))
     assert {p["start_date"] for p in proxy.calls_to("/stock/history")} == {"2026-09-30"}
@@ -247,7 +255,7 @@ async def test_listing_without_history_starts_at_trade_date(db_session, tmp_path
 async def test_failed_batch_does_not_fail_the_job(db_session, tmp_path):
     del db_session
     tickers = ["000001.SZ", "000002.SZ", "000003.SZ", "600000.SH", "600001.SH"]
-    await seed_universe(tickers)
+    await seed_watchlist(tickers)
 
     def fail(path, payload):
         if path == "/stock/history" and "600000.SH" in payload["ticker"]:
@@ -278,7 +286,7 @@ async def test_failed_batch_does_not_fail_the_job(db_session, tmp_path):
 
 async def test_transient_batch_error_is_retried(db_session, tmp_path):
     del db_session
-    await seed_universe(["600519.SH"])
+    await seed_watchlist(["600519.SH"])
     attempts = {"n": 0}
 
     def flaky(path, payload):
@@ -293,7 +301,7 @@ async def test_transient_batch_error_is_retried(db_session, tmp_path):
     assert len(proxy.calls_to("/stock/history")) == 4  # 2 failures + none + backward
 
 
-async def test_empty_universe_is_a_precondition_error(db_session, tmp_path):
+async def test_empty_watchlist_is_a_precondition_error(db_session, tmp_path):
     del db_session
     with pytest.raises(SnapshotPreconditionError):
         await _collect(FakeProxy(), tmp_path, date(2026, 9, 30))
@@ -316,12 +324,12 @@ async def test_rate_limiter_paces_calls():
 
 async def test_caller_throttles_every_call(db_session, tmp_path):
     del db_session
-    await seed_universe(TICKERS)
+    await seed_watchlist(TICKERS)
     limiter = AsyncRateLimiter(6000, burst=1000)
     proxy = FakeProxy(base_close={t: 1.0 for t in TICKERS}, total_shares={t: 1.0 for t in TICKERS})
     caller = ProxyBatchCaller(proxy, limiter, sleep=NoSleep())
     await collect_market_snapshot(
-        MarketSnapshotPayload(universe_code="CSI300", trade_date=date(2026, 9, 30)),
+        _payload(date(2026, 9, 30)),
         caller=caller,
         artifacts=ArtifactWriter(tmp_path, run_id=1, attempt=1),
         lease=None,
@@ -335,11 +343,7 @@ async def test_caller_throttles_every_call(db_session, tmp_path):
 
 async def _enqueue_market(trade_date: date) -> int:
     async with session_scope() as session:
-        run, _ = await enqueue_snapshot_job(
-            session,
-            MarketSnapshotPayload(universe_code="CSI300", trade_date=trade_date),
-            triggered_by="test",
-        )
+        run, _ = await enqueue_snapshot_job(session, _payload(trade_date), triggered_by="test")
         return run.id
 
 
@@ -351,7 +355,7 @@ async def _run(run_id: int):
 async def test_worker_persists_completeness_and_partial_status(db_session, tmp_path):
     del db_session
     tickers = ["000001.SZ", "000002.SZ", "000003.SZ", "600000.SH"]
-    await seed_universe(tickers)
+    await seed_watchlist(tickers)
     settings = settings_for(tmp_path)
 
     def fail(path, payload):
@@ -384,7 +388,7 @@ async def test_worker_persists_completeness_and_partial_status(db_session, tmp_p
 
 async def test_worker_retries_when_every_batch_failed_transiently(db_session, tmp_path):
     del db_session
-    await seed_universe(["600519.SH"])
+    await seed_watchlist(["600519.SH"])
     settings = settings_for(tmp_path, ifind_collect_batch_retries=0)
     proxy = FakeProxy(
         fail=lambda path, payload: httpx.ReadTimeout("slow")
@@ -408,7 +412,7 @@ async def test_worker_retries_when_every_batch_failed_transiently(db_session, tm
 
 async def test_terminal_total_failure_fails_the_run(db_session, tmp_path):
     del db_session
-    await seed_universe(["600519.SH"])
+    await seed_watchlist(["600519.SH"])
     settings = settings_for(tmp_path)
     proxy = FakeProxy(fail=lambda path, payload: ValueError("schema changed"))
     run_id = await _enqueue_market(date(2026, 9, 30))
@@ -425,7 +429,7 @@ async def test_terminal_total_failure_fails_the_run(db_session, tmp_path):
 
 async def test_lease_lost_mid_collection_writes_nothing(db_session, tmp_path):
     del db_session
-    await seed_universe(["600519.SH"])
+    await seed_watchlist(["600519.SH"])
     settings = settings_for(tmp_path)
     run_id = await _enqueue_market(date(2026, 9, 30))
 
