@@ -329,11 +329,16 @@ async def _market_series(
     provider: str,
 ) -> list[MarketSnapshot]:
     repository = MarketSnapshotRepository(session)
-    # INTEGRATION(include_backfill): when MarketSnapshotRepository.series_as_of
-    # gains ``include_backfill`` (migration 015), pass it here explicitly:
-    #     include_backfill=True,
+    # Backfilled bars are visible by trade_date even though captured later:
+    # prices are never restated (see MarketSnapshotRepository.series_as_of).
     return await repository.series_as_of(
-        listing_id, start, end, knowledge_cutoff, adjust=adjust, provider=provider
+        listing_id,
+        start,
+        end,
+        knowledge_cutoff,
+        adjust=adjust,
+        provider=provider,
+        include_backfill=True,
     )
 
 
