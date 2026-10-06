@@ -1,6 +1,6 @@
 # P1 执行计划：目标池、模板筛选与候选
 
-状态：Ready for execution（第 2 节决策已于 2026-10-06 确认）
+状态：Ready for execution（第 2 节决策已于 2026-10-06 确认；同日按 D6 数据源分工修订，见 2.1）
 
 日期：2026-10-06
 
@@ -23,34 +23,56 @@ P1 分两道门：
 
 | 事实 | 影响 |
 |---|---|
-| 现有单股链路每只股票发 10 次 proxy 请求，每次 1 只 | 沪深 300 全量刷新约 3000 次请求；P1 需要按 3 只一批重写采集，降到约 1000 次 |
+| 现有单股链路每只股票发 10 次 proxy 请求，每次 1 只 | 沪深 300 全量刷新约 3000 次请求；即使按 3 只一批也约 1000 次 |
+| **iFinD 经 Kimi 网关有 5 小时滚动额度**，本机实测约 350 次调用后返回 403（额度大小未知，可能与用户日常 Kimi 使用共用） | iFinD 不能承担目标池全量采集与回补；见 D6 |
+| baostock 免费提供日线（不复权 / 后复权，含 PE TTM、PB MRQ、PS TTM、停牌、ST）与季度财务（含实际披露日 `pubDate`） | 广度数据改由 baostock 承担；披露日不再需要逐只查公告 |
 | 因子计算分散在 `research/ifind_chain.py`（canonicalize）与 `research_kernel/scoring.py` | 需抽出统一因子库，否则会出现第二套定义 |
 | 分类依赖行业**关键词**匹配用户手填的行业（如"电力设备"） | baostock 返回证监会分类（如"C38电气机械和器材制造业"），关键词匹配会失效，需要显式映射表 |
 | 已有 `universe` / `universe_membership`（`valid_from` / `valid_to`）表，原为 legacy 保留 | 结构正好适合时点成分，可直接复用，不必新建 |
 | 已有 `holding_item` 表（预留未用） | P1 不使用，P2 再评估是否沿用 |
 | 队列、租约、心跳、幂等、调度、交易日历都已就绪 | 新增批处理任务全部复用现有 worker 与 `pipeline_run` |
-| 数据库迁移当前到 `012` | P1 新迁移从 `013` 起 |
+| 数据库迁移当前到 `013`（M1 已合并） | 后续迁移从 `014` 起 |
 
 ## 2. 已确认的决策
 
 | # | 决策 | 结论 |
 |---|---|---|
 | D1 | 规则草稿何时起草 | 候选产生时自动起草 |
-| D2 | 财报"可得日期" | 取**实际披露日**（见 2.1）；查不到时退回法定截止日近似并标记 `approx`；逾期未披露视为不可得并标记 `report_overdue` |
+| D2 | 财报"可得日期" | 取**实际披露日**（baostock `pubDate`，见 2.1）；缺失时退回法定截止日近似并标记 `approx`；逾期未披露视为不可得并标记 `report_overdue` |
 | D3 | 观察端迁移到因子库后分数是否允许变化 | 不允许：golden corpus 逐字段一致，不升 scoring version |
 | D4 | 成分表 | 复用 `universe` / `universe_membership` |
-| D5 | 回补深度 | 价格 5 年、年报 6 年、最近 4 个季报 |
+| D5 | 回补深度 | 价格 5 年、年报 6 年、最近 4 个季报（全部经 baostock） |
+| D6 | 数据源分工 | **baostock 负责广度**（目标池全量日线、估值、季度财务、披露日、回补）；**iFinD 负责深度**（观察池 / 候选 / 持仓的单股研究、自由现金流、完整报表、公告）；两源重叠字段做交叉校验 |
 
-### 2.1 披露日的取得方式（2026-10-06 实测 `ifind_get_stock_announcement`）
+### 2.1 数据源分工与实测（2026-10-06）
 
-- 公告接口可返回实际披露日（`reportDate`）与标题；如贵州茅台 2024 年年报为 2025-04-03、2021 年年报为 2022-03-31。
-- 限制：单次调用最多返回最近 50 条；多只股票合并查询时 `thscode` 为空，无法归属，因此**只能单只查询**。
-- 做法：按披露季窗口逐只查询（年报与一季报 3/1～5/15，半年报 7/15～9/5，三季报 10/1～11/5）；
-  返回满 50 条时把窗口对半切分重查；按标题正则匹配定期报告并排除"摘要""英文版"。
-- 回补成本：300 只 × 6 个年报季 + 最近 4 个季报窗口 ≈ 3000 次调用（约 1.3 小时，40 次/分钟）。
-- 日常：交易日对成分股增量查询当日公告，可得日期即实际披露日（真正的时点数据）。
-- 逾期：过法定截止日仍未见定期报告的股票，该期视为不可得、沿用上一期，并产生 `report_overdue` 质量标记；
-  筛选排除，P2 作为 `exit_review` 的候选触发条件。
+**iFinD 额度。** 本机首次真实采集沪深 300 日线时，约 350 次调用后 Kimi 网关返回
+`403 You've reached your 5-hour usage limit`。额度按 5 小时滚动窗口计算，具体大小未知，且可能与用户日常 Kimi 使用共用。
+ifind-proxy 把该错误转成 502，采集器误判为瞬时错误反复重试。
+
+**baostock 实测**（贵州茅台等）：
+
+| 数据 | 接口 | 结果 |
+|---|---|---|
+| 日线 | `query_history_k_data_plus` | 5 年 1211 条一次取回：不复权 2.7 秒、后复权 8.6 秒；收盘价与 iFinD 一致（2026-09-30 为 1258.62）；附 `peTTM`、`pbMRQ`、`psTTM`、`turn`、`tradestatus`、`isST` |
+| 季度财务 | `query_profit_data` / `balance` / `cash_flow` / `growth` / `operation` | ROE、毛利率、净利率、净利润、EPS TTM、主营收入、总股本、资产负债率、现金流比率等；每期带 `pubDate`（如 2025 年报 2026-04-17、2026 半年报 2026-08-15）与 `statDate`；未披露期返回空 |
+| 速度 | — | 单只单日约 0.2 秒；沪深 300 日增量约 1～2 分钟 |
+
+baostock 不提供：自由现金流绝对值、三大报表明细、公告。这些仍由 iFinD 在观察池范围提供。
+
+**分工（D6）：**
+
+| 范围 | 数据源 | 规模 |
+|---|---|---|
+| 目标池全量（沪深 300）：日线、估值、季度财务、披露日、历史回补 | baostock | 免费，不占 Kimi 额度 |
+| 观察池 / 候选 / 持仓：单股研究、自由现金流、完整报表、公告[P4] | iFinD | 数十只，每日数十次调用 |
+| 重叠字段（收盘价、ROE、毛利率等） | 两源交叉校验 | 不一致记为 `provider_conflict` |
+
+iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无法归属）保留作为 P4 披露原文接入的依据，
+不再用于披露日。
+
+逾期规则不变：过法定截止日仍无该期 `pubDate` 的股票，该期视为不可得、沿用上一期，并产生 `report_overdue`；
+筛选排除，P2 作为 `exit_review` 的候选触发条件。
 
 ## 3. 工作流 A：数据层
 
@@ -72,28 +94,44 @@ P1 分两道门：
 - 不可变约束：同一主键重采产生新版本行（`version` 列），读取时按 `captured_at <= as_of` 取最新。
 - 测试：迁移从空库与从 `012` 升级均可用；时点查询不读到 `as_of` 之后写入的数据。
 
-### P1-A3 iFinD 批量采集器（M）
+### P1-A3 iFinD 批量采集器（M）· 已合并（`aa32e9b`～`d05930f`）
 
-- 新任务类型 `snapshot_collect`，复用 worker、租约与幂等键（键 = 任务类型 + 日期 + 分片）。
-- 按 3 只一批调用 proxy；按配置节流（默认 40 次/分钟，低于 proxy 的 60）；单批失败只影响该批，可重试。
-- 子任务：`market_daily`（增量日线）、`financial_period`（指定报告期的利润/现金流/资本结构/盈利能力）。
-- 原始响应落盘到制品目录，`raw_ref` 指向文件。
-- 完整率统计：每次采集输出 应采 / 实采 / 缺失清单。
+- worker 按任务类型分发；新任务类型 `universe_sync`、`industry_sync`、`market_snapshot`、`financial_snapshot`。
+- 按 3 只一批调用 proxy、令牌桶节流、单批失败隔离、完整率统计；日线存不复权与后复权两套（不存前复权）。
+- 按 D6，`market_snapshot` / `financial_snapshot` 的目标池范围改由 P1-A7 的 baostock 采集器承担；
+  本任务的 iFinD 采集器保留，范围收窄为观察池 / 候选 / 持仓（P1-A7 一并调整）。
+
+### P1-A7 广度采集切换到 baostock（M）· 迁移 `014`
+
+- baostock 日线采集器：目标池全量，不复权 + 后复权，增量；`market_snapshot` 增加 `pe_ttm`、`pb_mrq`、`ps_ttm`、
+  `turnover`、`trade_status`、`is_st` 列（迁移 `014`）。
+- baostock 季度财务采集器：profit / balance / cash_flow / growth 四张表映射为 canonical 字段，
+  `available_from = pubDate`、`availability = actual`；字段映射登记到统一注册表，标明来源。
+- 总股本取 baostock 季度 `totalShare` 并按 `pubDate` 生效，替代把取数日期拼在 `raw_ref` 的做法（清理技术债）。
+- 任务类型区分数据源（如 `market_snapshot` 的 payload 增加 `provider`），iFinD 采集器只对观察池运行。
+- 同一快照表、同一时点语义；两源并存时按 `provider` 区分，因子层按 D6 选择来源。
+- 测试：fixture 回放；`pubDate` 驱动的可得性；停牌（`tradestatus=0`）与 ST 标记；未披露期返回空。
+
+### P1-A8 iFinD 额度耗尽处理（S，跨 ifind-proxy 与 zcharlie）
+
+- ifind-proxy：识别上游额度错误（`403` + usage limit），返回 `429` 与可读详情，而非 `502`。
+- zcharlie：`429` 额度错误归类为 `QuotaExhausted`：立即停止本次任务剩余批次、状态记为 `partial`（原因 `quota`），
+  发 `action_required` 通知，不做批内重试；下次调度自然续采。
+- 测试：额度错误不触发重试；已采数据保留；通知只发一次。
 
 ### P1-A4 历史回补（M）
 
-- 一次性 CLI：`ia snapshot backfill --universe CSI300 --prices 5y --annual 6 --quarters 4`（按 D5）。
-- 可中断续跑（按批次幂等）；回补行标记 `is_backfill=true`。
-- 财务数据约 4000 次调用 + 披露日约 3000 次调用，合计约 3 小时（40 次/分钟）；进度与剩余量可查询。
+- 一次性 CLI：`ia snapshot backfill --universe CSI300 --prices 5y --annual 6 --quarters 4`（按 D5），全部经 baostock。
+- 成分历史：按周从最早日期向后依次同步（baostock 成分每周发布）。现有规则拒绝"早于最近一次变化"的快照，
+  回补需支持**向前延伸**成员区间（较早快照与当前状态一致时把 `valid_from` 前移），或在任何实时同步之前完成回补。
+- 可中断续跑（按股票幂等）；回补行标记 `is_backfill=true`。
+- 预估：日线 300 只 × 两种复权约 1 小时；财务 300 只 × 10 期 × 4 表约 2 小时；不占 iFinD 额度。
 
-### P1-A6 披露日采集（M）
+### P1-A6 披露日与逾期检测（S）
 
-- 新表 `disclosure_event`：`symbol`、`report_period`、`kind`（annual / semi / q1 / q3）、`disclosed_on`、
-  `title`、`source_seq`、`captured_at`。
-- 回补：按 2.1 的窗口策略逐只查询；日常：交易日 17:00 增量查询当日公告。
-- `financial_snapshot.available_from` 优先取 `disclosed_on`，否则取法定截止日并标记 `approx`。
-- 逾期检测：每个法定截止日次日扫描，未见定期报告的成分股写入 `report_overdue`，发 `action_required` 通知。
-- 测试：标题匹配（含"摘要""英文版""更正""补充"等干扰）；50 条截断时的窗口切分；逾期判定。
+- 披露日直接取 baostock `pubDate`（P1-A7 写入 `financial_snapshot.available_from`），不再新建公告表。
+- 逾期检测：每个法定截止日次日扫描，目标池中尚无该期 `pubDate` 的股票写入 `report_overdue`，发 `action_required` 通知。
+- 测试：截止日边界；逾期后补披露的处理（`available_from` 取实际 `pubDate`，逾期标记保留历史）。
 
 ### P1-A5 采集调度（S）
 
@@ -106,7 +144,11 @@ P1 分两道门：
 | 日线快照 | 交易日 16:30 | 全成分股 `market_daily` |
 | 财报快照 | 每周六 + 4/30、8/31、10/31 后首个交易日 | 最近报告期 `financial_period`，只采尚无该期数据的股票 |
 
-沿用 misfire 宽限、启动补跑与日历到期告警。
+沿用 misfire 宽限、启动补跑与日历到期告警。已随 P1-A3 合并；P1-A7 完成后目标池日线与财报改调 baostock 采集器，
+执行时间需按 baostock 实际数据更新时间调整（待实测，预计晚于 17:30）。
+
+遗留修正：`ia snapshot sync-industry` 未指定 `--universe` 时默认同步全市场并为约 5000 只股票建档，
+应改为默认使用配置中的目标池，与调度器一致。
 
 ## 4. 工作流 B：因子库
 
@@ -122,10 +164,11 @@ P1 分两道门：
 
 ### P1-B2 估值分位因子（M）
 
-- `pe_percentile_5y`、`pb_percentile_5y`：每个交易日 PE = 收盘价 ÷ 当日可得的最近年报 EPS（按 `available_from`）。
+- `pe_percentile_5y`、`pb_percentile_5y`：基于 baostock 每日 `peTTM` / `pbMRQ` 序列计算分位（按 D6）；
+  观察池内用 iFinD 年报 EPS 自算的 PE 作交叉校验，偏差超阈值记为 `provider_conflict`。
 - 历史不足 5 年按实际长度计算并标记 `approx`；不足 1 年为 `missing`。
-- 逾期未披露的报告期不进入计算，沿用上一期 EPS，因子附带 `report_overdue` 标记。
-- EPS ≤ 0 的交易日不计入分布（与 v1.3 负 PE 规则一致）。
+- 逾期未披露的股票，因子附带 `report_overdue` 标记。
+- PE ≤ 0（亏损）的交易日不计入分布（与 v1.3 负 PE 规则一致）。
 - 测试：合成序列验证分位；时点边界（披露截止日前后）；亏损年份排除。
 
 ### P1-B3 行业适用性映射（S）
@@ -165,7 +208,7 @@ P1 分两道门：
 - 行业不适用的因子跳过而非判失败；缺失因子使该条件不成立并记录。
 - 每周日 20:00 运行（新任务类型 `screen_run`），结果写入 `screen_result`。
 
-### P1-C4 规则库与版本（S）· 迁移 `014`
+### P1-C4 规则库与版本（S）· 迁移 `015`
 
 - 表 `rule_template`、`rule_instance`（`symbol`、`scope`、`template_ref`、`version`、`status`、`definition`、
   `drafted_by`、`draft_rationale`、`approved_at`）。
@@ -181,7 +224,7 @@ P1 分两道门：
 
 ## 6. 工作流 D：候选与决策日志
 
-### P1-D1 候选生命周期（M）· 迁移 `015`
+### P1-D1 候选生命周期（M）· 迁移 `016`
 
 - 表 `candidate`：`symbol`、`opened_at`、`expires_at`（默认 14 天）、`sources`（screen / manual）、
   `screen_result_ref`、`draft_rule_ref`、`status`（`open` / `promoted` / `dismissed` / `expired`）。
@@ -234,9 +277,9 @@ P1 分两道门：
 ## 9. 依赖与里程碑
 
 ```text
-M1 数据地基          A1 ─┬─ A2 ─┬─ A3 ─┬─ A5     ← 尽早上线，开始积累快照
-                         │      │      ├─ A6
-                         │      │      └─ A4
+M1 数据地基          A1 ─┬─ A2 ─┬─ A3 ─┬─ A5     ← 代码已合并
+M1' 分工调整              │      ├─ A8   └─ A7 ─┬─ A6   ← 广度切到 baostock 后开始积累快照
+                         │      │             └─ A4
 M2 因子库                └─ B3  └─ B1 ─── B2
 M3 规则与筛选                          C1 ─ C2 ─ C3 ─ C4
 M4 候选闭环                                 D1 ─ D2 ─ D3 ─ C5 ─ E1
@@ -245,21 +288,22 @@ M5 收口                                     B4 · E2 · F1 · F2 · F3
 
 | 里程碑 | 任务 | 完成标志 |
 |---|---|---|
-| M1 数据地基 | A1、A2、A3、A5 | 日线与成分开始按日/周写入快照（**8 周计时起点**） |
-| M2 因子库 | A4、A6、B1、B2、B3 | 回补完成；13 只 golden 样本因子一致；分位因子可算 |
+| M1 数据地基 | A1、A2、A3、A5 | 代码已合并（`d245847`～`d05930f`）；本机真实链路验证：成分、行业、不复权日线与总股本入库正常，后复权因 iFinD 额度耗尽中断 |
+| M1' 分工调整 | A7、A8、A6 | 目标池日线、估值、财务经 baostock 每日入库；iFinD 额度错误不再重试（**8 周计时起点**） |
+| M2 因子库 | A4、B1、B2、B3 | 回补完成；13 只 golden 样本因子一致；分位因子可算 |
 | M3 规则与筛选 | C1、C2、C3、C4、F2 | 周筛选稳定产出带理由的命中列表 |
 | M4 候选闭环 | D1、D2、D3、C5、E1 | 浏览器内完成"候选 → 审阅草稿 → 晋级"全流程 |
 | M5 收口 | B4、E2、F1、F3 | 代码完成门禁通过；观察端只剩一套因子定义 |
 
-规模：S 约 0.5～1 天，M 约 1～3 天（一名开发者配合编码 Agent）。合计约 18 个任务、3～4 周代码量；
+规模：S 约 0.5～1 天，M 约 1～3 天（一名开发者配合编码 Agent）。合计约 20 个任务、3～4 周代码量；
 阶段退出另需快照积累满 8 周，从 M1 完成之日起算。
 
 ## 10. 风险
 
 | 风险 | 缓解 |
 |---|---|
-| Kimi 网关上游配额不足以支撑回补 | A4 可中断续跑；先回补价格，再分批回补财务；必要时降低节流 |
-| baostock 服务不稳定 | 只影响成分/行业更新，快照已落库；失败发 `action_required` 通知 |
+| Kimi 网关 5 小时额度（大小未知，可能与用户日常使用共用） | 广度与回补改走 baostock（D6）；iFinD 只覆盖观察池；额度耗尽立即停止并通知（A8） |
+| baostock 服务不稳定（D6 后成为广度数据的单一来源） | 快照已落库，故障只影响增量；失败发 `action_required` 通知；观察池仍有 iFinD 交叉校验；必要时评估 Tushare Pro 作为备用 |
 | 因子库迁移导致观察端分数变化 | D3 要求逐字段一致；B4 放在最后，失败可延后到 P2 |
 | 模板阈值拍脑袋 | 全部标注 `uncalibrated`；F2 由用户确认；P3 校准 |
 | 候选过多导致审阅负担 | 每模板设命中上限（如前 20），超出按理由强度截断并在页面提示 |

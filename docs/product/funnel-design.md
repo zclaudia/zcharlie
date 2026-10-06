@@ -98,7 +98,7 @@ LLM 起草规则与抽取事实，永不执行规则、永不打分、永不做�
 
 ```text
 ┌───────────────────────────── 数据层 ─────────────────────────────┐
-│ iFinD：行情 / 财报 / 指数行情 / 公告[P4]   baostock：成分 / 行业      │
+│ baostock：目标池成分/行业/日线/估值/季报/披露日   iFinD：观察池深度/公告[P4] │
 │        │ canonical.vN                                              │
 │        ▼                                                           │
 │ PIT Snapshot Store   不可变，按 as_of 分区；含目标池成分与持仓快照     │
@@ -351,7 +351,7 @@ notify: { add: info, trim: info, exit_review: action_required }
 
 | 现有能力 | 在本设计中的位置 | 处理 |
 |---|---|---|
-| canonical 契约、iFinD adapter | 数据层 | 复用；扩展为成分股批量采集；新增 baostock 参考数据 adapter（见 15.1） |
+| canonical 契约、iFinD adapter | 数据层 | 复用于观察池深度数据；目标池广度数据新增 baostock adapter（见 15.1 分工） |
 | 五个策略原型 + 因子权重 | 模板层 v1 | 改写为模板：补筛选条件与区间默认值 |
 | 确定性评分内核 | 因子库 + 观察端评分视图 | 因子计算下沉为因子库；分数退为次要展示 |
 | 运行队列、worker、租约、幂等 | 所有批处理 | 复用 |
@@ -415,8 +415,15 @@ notify: { add: info, trim: info, exit_review: action_required }
 - 无成分权重；本设计不依赖权重。
 - 证监会分类比申万粗；如模板需要更细的行业口径，再评估替换。
 
-架构处理：baostock 作为独立的参考数据 provider，只负责成分与行业；采集结果按 `updateDate`
-写入 PIT Snapshot Store（`universe_membership`、`industry_classification` 两类快照）。运行时与回测只读快照，
+**补充实测与分工（2026-10-06 修订）**：首次真实采集时 iFinD 约 350 次调用后触发 Kimi 网关 5 小时额度（403），
+额度大小未知且可能与用户日常 Kimi 使用共用。baostock 另经实测可免费提供日线（不复权 / 后复权，含 PE TTM、PB MRQ、
+PS TTM、停牌、ST）与季度财务（含实际披露日 `pubDate`），收盘价与 iFinD 一致。据此分工：
+**baostock 负责广度**（目标池全量日线、估值、季度财务、披露日与历史回补），**iFinD 负责深度**
+（观察池 / 候选 / 持仓的单股研究、自由现金流、完整报表、公告），两源重叠字段交叉校验。
+详见 [`p1-plan.md`](p1-plan.md) 2.1。
+
+架构处理：baostock 作为独立 provider，不与 iFinD 共享代码；成分与行业按 `updateDate`、财务按 `pubDate`
+写入 PIT Snapshot Store（成分、行业、日线、财务快照）。运行时与回测只读快照，
 外部源不可用只影响更新，不影响已有数据。成分每周同步，行业每月同步；成分发生变化时推送 `info` 通知。
 
 ### 15.2 开放问题
@@ -426,7 +433,8 @@ notify: { add: info, trim: info, exit_review: action_required }
 2. **持仓录入方式**：手工表单起步；券商导出文件格式各异，导入格式需另行约定。
 3. **推送渠道**：企业微信 / Telegram / 邮件 选一；内网部署时的出网策略。
 4. **规则起草的偏好信号**：用户驳回理由如何结构化，才能有效反馈到下一次起草。
-5. **Kimi 网关上游配额**：批量采集前需确认，必要时在 ifind-proxy 增加按批次的节流与重试。
+5. **Kimi 网关上游配额**：已确认存在 5 小时滚动额度（约 350 次调用即触发，具体大小未知）；按分工 iFinD 只承担观察池，
+   额度耗尽时 ifind-proxy 返回 429、采集器停止并通知。
 6. **ifind-proxy 临时文件泄漏**：每次调用以 `NamedTemporaryFile(delete=False)` 创建文件且从不删除，
    批量采集前需修复。
 7. **候选过期时长、通知去重窗口**：使用中调整。
