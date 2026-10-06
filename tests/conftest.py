@@ -18,16 +18,18 @@ from investment_agent.storage.models.base import Base
 
 @pytest.fixture(autouse=True)
 def _no_real_akshare(request, monkeypatch):
-    """Offline tests must never reach AkShare (swsresearch.com / legulegu.com)."""
+    """Offline tests must never reach AkShare (swsresearch.com / legulegu.com /
+    eastmoney.com)."""
 
     if request.node.get_closest_marker("network") is not None:
         return
-    from investment_agent.providers import akshare_shenwan
+    from investment_agent.providers import akshare_eastmoney, akshare_shenwan
 
-    def refuse(self, func_name, *args):
+    def refuse(self, func_name, *args, **kwargs):
         raise RuntimeError(f"offline test tried to call akshare {func_name}; use a fake backend")
 
     monkeypatch.setattr(akshare_shenwan.AkshareShenwanBackend, "_call", refuse)
+    monkeypatch.setattr(akshare_eastmoney.AkshareEastmoneyBackend, "_call", refuse)
 
 
 @pytest_asyncio.fixture
