@@ -74,6 +74,31 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 逾期规则不变：过法定截止日仍无该期 `pubDate` 的股票，该期视为不可得、沿用上一期，并产生 `report_overdue`；
 筛选排除，P2 作为 `exit_review` 的候选触发条件。
 
+### 2.2 AkShare 补充实测（2026-10-06，akshare 1.19.1）
+
+目的：评估 AkShare 能否补上 baostock 与 iFinD 都覆盖不到、或成本过高的缺口。AkShare 本质是对东财、巨潮、中证、
+申万等网站的爬虫封装，接口与返回列会随网站改版变化，因此只按具体能力评估，不作为通用 provider。
+
+| 缺口 | 接口 | 实测结果 | 结论 |
+|---|---|---|---|
+| 申万行业（证监会分类过粗，见 funnel-design 15.1） | `stock_industry_clf_hist_sw` | 0.8 秒取回全市场 12925 行、5930 只；每行带 `start_date`，即**时点行业历史**（如贵州茅台 2021-07-30 起为 `340501` 白酒）。只有 6 位代码，没有名称；申万官网证书链不完整，默认会报 SSL 校验失败 | 可用。代码到名称的对照用 `sw_index_third_info`（335 个三级行业，含上级行业）加 `sw_index_third_cons`（每个约 0.7 秒，全部约 4 分钟）按当前成分反推；SSL 问题只对 `swsresearch.com` 补全中间证书，不全局关闭校验 |
+| 指数成分权重 | `index_stock_cons_weight_csindex` | 3.1 秒取回沪深 300 共 300 行；权重为月度数据（最新 2026-08-31），只有最新一期，没有历史 | 可选。当前设计不依赖权重，先不接 |
+| 自由现金流（目标池范围） | `stock_cash_flow_sheet_by_report_em` | 单只单表约 16～24 秒（每次拉回全部历史，约 100 期）。现金流量表 254 列，含 `NETCASH_OPERATE`（经营现金流净额）与 `CONSTRUCT_LONG_ASSET`（购建长期资产支付的现金），可以算 FCF；带 `NOTICE_DATE` 与 `UPDATE_DATE`。20 只连续调用 324 秒，没有被限流 | 可用但慢：沪深 300 全量约 1.4 小时，只适合在披露季窗口低频刷新。**不是时点数据**：贵州茅台 2025H1 的 `UPDATE_DATE` 为 2026-08-15，说明上年同期数在新报告披露时被覆盖，必须以采集时刻落快照 |
+| 三大报表明细 | `stock_balance_sheet_by_report_em` / `stock_profit_sheet_by_report_em` | 资产负债表 319 列、利润表 203 列，单只各约 23～25 秒 | 同上；P1 不需要明细，先不接 |
+| 全市场按期财务 | `stock_xjll_em` / `stock_zcfz_em` / `stock_lrb_em` | 每期一次调用、6～9 秒取回 5228 只，带公告日期；只有汇总项（经营 / 投资 / 筹资现金流净额、净利润、营收、资产负债率等），**没有资本支出** | 适合交叉校验 baostock 财务字段，不能用来算 FCF |
+| 公告（P4）与披露日核对 | `stock_zh_a_disclosure_report_cninfo` | 单只 1.4 秒；`symbol` 留空即可查全市场：单日 6540 条用时 79 秒，半年报窗口（7/15～9/5）按类别过滤得 11220 条，用时 108 秒。返回代码、标题、精确到秒的公告时间、巨潮链接 | 可用，并且解决了 iFinD 公告接口"单次 50 条、合并查询无法归属"的问题。P4 接入公告原文时优先用它；P1 可用来抽查 baostock `pubDate` |
+
+**定位：** AkShare 作为第三个数据源，只做补缺，不碰 D6 定下的主路径：
+
+- 披露日与财务的时点语义仍以 baostock `pubDate` 为准；AkShare 的财务数据只作为补充字段或交叉校验，
+  `provider` 记为 `akshare`。
+- 两源冲突时以 iFinD 为准（仅限观察池范围）；目标池范围内的冲突只记 `provider_conflict`，不覆盖。
+- 每项能力一个独立 adapter，锁定 akshare 版本，测试用 fixture 回放；接口失败只影响它负责的那一类快照。
+- 数据仅供个人研究使用。
+
+**待确认（Q1）：** P1-B3 的行业组映射是基于证监会分类（现方案），还是改为基于申万（P1-A9 第 1 项）。
+申万更细，而且自带时点历史；代价是多一个外部依赖，同时要处理证书问题。确认前 B3 按现方案推进，映射表要能切换数据源。
+
 ## 3. 工作流 A：数据层
 
 ### P1-A1 baostock 参考数据 adapter（S）
@@ -151,6 +176,26 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 遗留修正：`ia snapshot sync-industry` 未指定 `--universe` 时默认同步全市场并为约 5000 只股票建档，
 应改为默认使用配置中的目标池，与调度器一致。
+
+### P1-A9 AkShare 补缺采集（候选，M）· 未排入里程碑
+
+依据 2.2 的实测结论。按价值排序，每一项可以单独落地：
+
+1. **申万行业**（S，取决于 Q1）：`stock_industry_clf_hist_sw` 按 `start_date` 写入 `industry_classification`
+   （`scheme = sw2021`，与证监会分类并存）；代码到名称的对照表每月由三级行业成分反推一次；
+   SSL 只为该域名补中间证书。行业同步任务每月顺带执行。
+2. **目标池 FCF 近似**（S）：`stock_cash_flow_sheet_by_report_em` 只在披露季窗口刷新；
+   `fcf = NETCASH_OPERATE - CONSTRUCT_LONG_ASSET`，`available_from` 取 baostock `pubDate`（缺失时取 `NOTICE_DATE`
+   并标记 `approx`），`provider = akshare`；`UPDATE_DATE` 晚于 `NOTICE_DATE` 的行标记 `restated`。
+   观察池仍以 iFinD FCF 为准；两者重叠时做交叉校验。
+3. **财务交叉校验**（S）：每期披露窗口结束后用 `stock_lrb_em` / `stock_xjll_em` / `stock_zcfz_em` 各调用一次，
+   与 baostock 的净利润、营收、经营现金流、资产负债率对比，不一致写入 `provider_conflict`，数据健康页展示。
+4. **巨潮公告**（P4 范围，P1 只留接口）：`stock_zh_a_disclosure_report_cninfo` 按日全市场拉取，
+   P1 只用来抽查 `pubDate`。
+
+- 依赖：`akshare` 锁定小版本，作为可选依赖（`[project.optional-dependencies] akshare`），未安装时对应任务跳过并记日志。
+- 节流：东财接口单线程，默认每次调用间隔至少 1 秒；连续失败 3 次，本次任务置为 `partial` 并发通知。
+- 测试：每个接口一份 fixture，固定列名，列名变化时测试失败；`restated` 标记；`approx` 回退。
 
 ## 4. 工作流 B：因子库
 
@@ -310,6 +355,7 @@ M5 收口                                     B4 · E2 · F1 · F2 · F3
 |---|---|
 | Kimi 网关 5 小时额度（大小未知，可能与用户日常使用共用） | 广度与回补改走 baostock（D6）；iFinD 只覆盖观察池；额度耗尽立即停止并通知（A8） |
 | baostock 服务不稳定（D6 后成为广度数据的单一来源） | 快照已落库，故障只影响增量；失败发 `action_required` 通知；观察池仍有 iFinD 交叉校验；必要时评估 Tushare Pro 作为备用 |
+| AkShare 接口随网站改版失效（爬虫性质） | 只用于补缺与交叉校验（2.2），不进入主路径；锁定版本 + fixture 列名校验；失败只影响对应快照类型 |
 | 因子库迁移导致观察端分数变化 | D3 要求逐字段一致；B4 放在最后，失败可延后到 P2 |
 | 模板阈值拍脑袋 | 全部标注 `uncalibrated`；F2 由用户确认；P3 校准 |
 | 候选过多导致审阅负担 | 每模板设命中上限（如前 20），超出按理由强度截断并在页面提示 |
