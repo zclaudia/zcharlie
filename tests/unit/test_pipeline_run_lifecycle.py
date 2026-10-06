@@ -4,7 +4,10 @@ import pytest
 
 from investment_agent.storage.repositories.pipeline_run import (
     IdempotencyPayloadMismatchError,
+    LeaseLostError,
     PipelineRunRepository,
+    RunLease,
+    lease_scope,
 )
 
 
@@ -167,3 +170,118 @@ async def test_recover_stale_run_requeues_then_exhausts_retry_budget(db_session)
     assert failed == [run.id]
     assert run.status == "failed"
     assert run.stage == "failed"
+
+
+async def _claim_with_lease(repository, *, worker_id, now=None):
+    claimed = await repository.claim_next(
+        worker_id=worker_id, kind="ifind_research", now=now
+    )
+    assert claimed is not None
+    return claimed, RunLease(
+        run_id=claimed.id, worker_id=worker_id, attempt=claimed.attempt_count
+    )
+
+
+async def test_stale_worker_cannot_clobber_newer_attempt(db_session):
+    repository = PipelineRunRepository(db_session)
+    now = datetime.now(UTC)
+    run, _ = await repository.enqueue(
+        kind="ifind_research",
+        idempotency_key="fenced",
+        triggered_by="api",
+        available_at=now - timedelta(minutes=11),
+    )
+    _, old_lease = await _claim_with_lease(
+        repository, worker_id="slow-worker", now=now - timedelta(minutes=10)
+    )
+    requeued, _ = await repository.recover_stale(
+        kind="ifind_research", stale_before=now - timedelta(minutes=5), now=now
+    )
+    assert requeued == [run.id]
+    _, new_lease = await _claim_with_lease(repository, worker_id="fresh-worker", now=now)
+    assert new_lease.attempt == old_lease.attempt + 1
+
+    with pytest.raises(LeaseLostError):
+        await repository.set_stage(run.id, "scoring", lease=old_lease)
+    with pytest.raises(LeaseLostError):
+        await repository.heartbeat(run.id, lease=old_lease)
+    with pytest.raises(LeaseLostError):
+        await repository.mark_success(run.id, {"x": 1}, lease=old_lease)
+    with pytest.raises(LeaseLostError):
+        await repository.mark_failed(run.id, "late failure", lease=old_lease)
+    # A late retry decision must not flip the live claim back to queued.
+    with pytest.raises(LeaseLostError):
+        await repository.schedule_retry(
+            run.id,
+            error_summary="late retry",
+            available_at=now,
+            lease=old_lease,
+        )
+    with lease_scope(old_lease), pytest.raises(LeaseLostError):
+        # Implicit fencing via the active lease scope (chain code path).
+        await repository.mark_partial(run.id, "late partial")
+
+    current = await repository.get(run.id)
+    assert current is not None
+    assert current.status == "running"
+    assert current.worker_id == "fresh-worker"
+    assert current.error_summary is None
+
+    await repository.heartbeat(run.id, lease=new_lease)
+    with lease_scope(new_lease):
+        await repository.mark_success(run.id, {"x": 2})
+    assert current.status == "success"
+    assert current.metadata_json == {"x": 2}
+
+
+async def test_mark_failed_never_overwrites_terminal_status(db_session):
+    repository = PipelineRunRepository(db_session)
+    success = await repository.create(kind="ifind_research")
+    await repository.mark_success(success.id)
+    partial = await repository.create(kind="ifind_research")
+    await repository.mark_partial(partial.id, "explanation failed")
+
+    assert await repository.mark_failed(success.id, "late failure") is False
+    assert await repository.mark_failed(partial.id, "late failure") is False
+    assert success.status == "success"
+    assert partial.status == "partial"
+    assert partial.error_summary == "explanation failed"
+
+
+async def test_schedule_retry_returns_false_when_budget_exhausted(db_session):
+    repository = PipelineRunRepository(db_session)
+    await repository.enqueue(
+        kind="ifind_research",
+        idempotency_key="one-shot",
+        triggered_by="api",
+        max_attempts=1,
+    )
+    run, lease = await _claim_with_lease(repository, worker_id="w")
+
+    assert (
+        await repository.schedule_retry(
+            run.id,
+            error_summary="retry",
+            available_at=datetime.now(UTC),
+            lease=lease,
+        )
+        is False
+    )
+    assert run.status == "running"
+    assert await repository.mark_failed(run.id, "terminal", lease=lease) is True
+    assert run.status == "failed"
+
+
+async def test_recover_stale_ignores_unclaimed_cli_runs(db_session):
+    repository = PipelineRunRepository(db_session)
+    run = await repository.create(kind="ifind_research", triggered_by="cli")
+    run.heartbeat_at = datetime.now(UTC) - timedelta(hours=1)
+    await db_session.flush()
+
+    requeued, failed = await repository.recover_stale(
+        kind="ifind_research",
+        stale_before=datetime.now(UTC) - timedelta(minutes=5),
+    )
+
+    assert (requeued, failed) == ([], [])
+    assert run.status == "running"
