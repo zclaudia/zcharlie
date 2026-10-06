@@ -52,7 +52,7 @@
 
 - [x] 不存在下单、券商连接或自动交易路径（仓库内无交易执行代码路径）。
 - [x] 不新增 LLM 角色、供应商、组合管理能力。
-- [x] 非 A 股 Discovery/Attribution 保留为 legacy，不扩展、不删除。
+- [x] 非 A 股 Discovery/Attribution 保留为 legacy，不扩展、不删除。（2026-10-06 后续：已移出主干，代码保留在 tag `legacy-nasdaq-final`。）
 - [x] 单用户、SQLite、iFinD 单数据源、2026 交易日历已列入 README 已知限制。
 
 ## 6. 遗留事项（不阻塞 MVP 发布）

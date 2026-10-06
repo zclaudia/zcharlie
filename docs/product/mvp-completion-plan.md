@@ -44,7 +44,7 @@
 
 - 严格单用户；MVP 不增加用户、组织、权限组或订阅系统。
 - 最终用户界面只做响应式 Web；CLI 继续承担诊断、恢复和运维，不做原生客户端。
-- 非 A 股 Discovery/Attribution 保留为 legacy，不扩展、不删除，也不阻塞 A 股 MVP。
+- 非 A 股 Discovery/Attribution 保留为 legacy，不扩展、不删除，也不阻塞 A 股 MVP。（2026-10-06 后续：已移出主干，代码保留在 tag `legacy-nasdaq-final`。）
 - 继续坚持“研究辅助、非投资建议”，不增加任何交易执行路径。
 - MVP Web 使用 FastAPI 同源托管的 Jinja2 HTML、原生 ES modules 和仓库内 CSS；不引入 Node 构建链或外部 CDN。
 
