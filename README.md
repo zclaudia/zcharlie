@@ -55,26 +55,45 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 
 ## 快照采集
 
-时点（PIT）快照由 worker 执行、scheduler 入队，任务幂等键为 `kind:universe:date(:period)`：
+时点（PIT）快照由 worker 执行、scheduler 入队。数据源分工（D6）：**baostock 负责目标池广度**
+（日线、估值、季度财务、披露日），**iFinD 只服务观察池**（`--scope watchlist`，额度有限）。
+日线与财报任务的 payload 带 `provider`（`baostock` 默认 / `ifind`）与 `scope`
+（`universe` 目标池成分 / `watchlist` 启用的观察池条目）；iFinD 只接受 `watchlist`。
+幂等键为 `kind:provider:scope:date(:period)`（成分 / 行业为 `kind:universe:date`）。
 
 | 任务 kind | CLI | 调度（Asia/Shanghai） | 内容 |
 |---|---|---|---|
 | `universe_sync` | `ia snapshot sync-universe --universe CSI300 [--as-of]` | 每周一 08:00 | baostock 成分 → `universe_membership`；有进出发 `info` 通知 |
-| `industry_sync` | `ia snapshot sync-industry [--universe CSI300] [--as-of]` | 每月首个交易日 08:00 | baostock 证监会行业 → `industry_classification` |
-| `market_snapshot` | `ia snapshot collect-market --universe CSI300 [--date]` | 交易日 16:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权 |
-| `financial_snapshot` | `ia snapshot collect-financial --universe CSI300 --period 2026-06-30` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 09:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采尚无该期的成分股 |
+| `industry_sync` | `ia snapshot sync-industry [--universe CSI300 \| --all-market] [--as-of]` | 每月首个交易日 08:00 | baostock 证监会行业 → `industry_classification`；不带参数时默认配置的目标池（`snapshot.universes`），全市场需显式 `--all-market` |
+| `market_snapshot` | `ia snapshot collect-market [--provider baostock\|ifind] [--scope universe\|watchlist] [--universe CSI300] [--date]` | 交易日 18:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权；baostock 行附 `pe_ttm`、`pb_mrq`、`ps_ttm`、`turnover`、`trade_status`、`is_st` |
+| `financial_snapshot` | `ia snapshot collect-financial --period 2026-06-30 [--provider] [--scope] [--universe] [--as-of]` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 19:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采该数据源尚无该期的标的；截止日后顺带逾期检测 |
 
-- 每次 proxy 调用最多 3 只标的；全部调用经共享令牌桶节流（`IFIND_COLLECT_RATE_PER_MINUTE`，默认 40/分钟），
-  瞬时错误按批重试（`IFIND_COLLECT_BATCH_RETRIES`，默认 2）。单批失败只影响该批。
-- 运行元数据记录完整率：应采 / 实采 / 缺失清单（`failed` 错误、`no_data` 无数据如停牌、`pending` 财报未披露）。
-  有 `failed` 为 `partial`，全部失败为 `failed`；完整率低于 `SNAPSHOT_COMPLETENESS_THRESHOLD`（默认 0.95）
-  或失败时发 `action_required` 通知。
-- 总股本：距上次获取超过 7 天才调用 `/stock/info`，当日不复权行写入新值，其余行沿用最近值；
-  来源文件与获取日期记录在 `raw_ref` 的 `#total_shares=<ref>@<date>` 后缀。
-- 财报行 `availability=approx`、`available_from`=采集日（保守上界，待披露日采集细化）。
+- **baostock（目标池）**：一次运行只登录一次，调用经进程级锁串行，无需令牌桶。每只股票每个序列从该数据源最后一个
+  交易日 +1 增量取到 `--date`（无历史的从当日开始，深度历史由回补负责）。停牌日（`trade_status=0`，
+  价格为前收、量为 0）原样入库并在运行元数据 `flags` 中列出，ST 同理。单只失败只影响该只；
+  连续 5 次瞬时错误视为服务不可用，剩余标的不再调用、记为 `failed`，由 worker 稍后重试。
+  财报：profit / balance / cash_flow / growth 四表合并为 canonical 字段（映射登记在
+  `research/ifind_mapping.py` 的统一注册表，逐字段标明来源与单位；比率均为小数），
+  `availability=actual`、`available_from`=baostock `pubDate`；未披露期为 `pending`。
+  CSI300 日增量约 600 次查询、约 2.5 分钟；一个报告期全量约 1200 次查询、约 4 分钟（未披露的只查 1 表）。
+- **总股本**：baostock 日线不带股本；因子计算市值时使用该日已可得的最新 baostock 财报
+  `total_shares`（`FinancialSnapshotRepository.total_shares_as_of`）。iFinD 观察池采集把 `/stock/info`
+  股本直接写在当日不复权行上，`raw_ref` 不再拼接后缀。
+- **iFinD（观察池）**：每次 proxy 调用最多 3 只标的；全部调用经共享令牌桶节流（`IFIND_COLLECT_RATE_PER_MINUTE`，
+  默认 40/分钟），瞬时错误按批重试（`IFIND_COLLECT_BATCH_RETRIES`，默认 2）。
+- **iFinD 额度耗尽**：ifind-proxy 返回 `429`（或旧版本返回带 `usage limit` / `[HTTP 403]` 的 `502`）时归类为
+  `QuotaExhaustedError`，不重试：采集任务立即停止剩余批次、保留已入库数据，以 `partial` 收尾
+  （元数据 `stop_reason=quota`，未采标的标记 `quota`），并发一次 `action_required` 通知；下次调度自然续采。
+  单股研究直接以 `failed` 结束并注明额度耗尽，不占用重试次数。
+- **披露逾期**：目标池财报任务在 `as_of` 晚于法定截止日（Q1 4/30、半年报 8/31、Q3 10/31、年报次年 4/30）时，
+  把仍无该期财报的成分股写入 `report_overdue`（每只每期一次）并发一次 `action_required` 通知；
+  迟到的财报入库时以实际 `pubDate` 写 `resolved_on`，记录保留。
+- 运行元数据记录完整率：应采 / 实采 / 缺失清单（`failed` 错误、`no_data` 无数据、`pending` 财报未披露、
+  `quota` 额度耗尽未采）。有 `failed` 或 `quota` 为 `partial`，全部失败为 `failed`；完整率低于
+  `SNAPSHOT_COMPLETENESS_THRESHOLD`（默认 0.95）、失败、额度耗尽或新增逾期时发 `action_required` 通知（每次运行至多一次）。
 - 原始响应落盘到 `DATA_DIR/snapshot-runs/<run>/attempt-<n>/`，`raw_ref` 指向该文件。
 - `--now` 在当前进程立即执行（调试用）；`ia snapshot status` 查看各类任务最近运行与完整率。
-  调度配置见 `config/app.yaml` 的 `snapshot:` 段。
+  调度配置见 `config/app.yaml` 的 `snapshot:` 段；日线 18:30 基于 baostock 晚间更新，需在正常交易日实测确认。
 
 ## HTTP API（`X-API-Key` 或 Web 会话）
 
@@ -116,7 +135,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 ## 测试与门禁
 
 ```bash
-pytest -q                  # 427 个测试（离线，fixture 全部脱敏）
+pytest -q -m "not network"  # 601 个测试（离线，fixture 全部脱敏）
 ruff check .
 mypy src/investment_agent  # strict
 ```
@@ -129,7 +148,7 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 
 - 严格单用户；无组织、权限组或订阅体系。
 - SQLite 单机存储；并发写入成为瓶颈时才评估 PostgreSQL。
-- 数据源仅有 iFinD（经 ifind-proxy）；无第二数据源容灾。
+- 目标池广度数据只有 baostock 一个来源（D6）；iFinD 经 Kimi 网关有 5 小时滚动额度，只用于观察池。
 - 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天起调度日志与
   `/dashboard/today` 会给出警告，交易所公布次年安排后需补入 `config/calendars/a_share.yaml`。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
