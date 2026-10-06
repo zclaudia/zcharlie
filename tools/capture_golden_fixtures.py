@@ -43,6 +43,7 @@ from investment_agent.research.ifind_chain import (  # noqa: E402
     fetch_canonical_bundle,
 )
 from investment_agent.research.kernel import InProcessResearchKernel  # noqa: E402
+from investment_agent.research_kernel.scoring import SCORING_VERSION  # noqa: E402
 
 MANIFEST_PATH = REPO_ROOT / "tests" / "fixtures" / "research_kernel" / "manifest.yaml"
 FIXTURE_ROOT = MANIFEST_PATH.parent
@@ -225,7 +226,7 @@ Captured from the live ifind-proxy on {as_of.isoformat()} (retrieved_at {retriev
 - provider_raw.json: sanitized raw proxy responses (ifind-raw.v1)
 - pool.json / market.json / financial.json: canonical inputs (ifind-canonical.v1)
 - golden_scores.json / golden_report_context.json: deterministic kernel
-  output frozen as the offline golden expectation (scoring {sample.get('scoring_version', 'v1.2')})
+  output frozen as the offline golden expectation (scoring {SCORING_VERSION})
 
 Sanitization: credential-bearing keys dropped, credential-shaped values
 redacted; the full written payload was re-scanned against credential
