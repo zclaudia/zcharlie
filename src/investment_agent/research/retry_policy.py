@@ -9,6 +9,8 @@ import openai
 from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
 from sqlalchemy.exc import OperationalError
 
+from investment_agent.providers.errors import ProviderError, ProviderTransientError
+
 _SQLITE_TRANSIENT_MARKERS = ("database is locked", "database is busy", "database table is locked")
 
 
@@ -34,13 +36,19 @@ def is_transient_error(exc: BaseException) -> bool:
     """Return whether ``exc`` is worth retrying later.
 
     Network, timeout, rate-limit and 5xx failures (iFinD proxy via httpx, LLM
-    via openai / pydantic-ai) and SQLite lock contention are transient. Local
+    via openai / pydantic-ai, reference providers via
+    ``ProviderTransientError``) and SQLite lock contention are transient. Local
     filesystem errors (``FileExistsError``, ``PermissionError``, disk full, ...)
     and validation/programming errors are terminal: retrying cannot fix them.
     """
 
     if isinstance(exc, ResearchRetryableError):
         return True
+    if isinstance(exc, ProviderTransientError):
+        # Reference-data providers (baostock) classify their own failures.
+        return True
+    if isinstance(exc, ProviderError):
+        return False
     if isinstance(exc, httpx.HTTPStatusError):
         return _is_retryable_status(exc.response.status_code)
     if isinstance(exc, httpx.TransportError):

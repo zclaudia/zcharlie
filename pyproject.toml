@@ -30,6 +30,9 @@ dependencies = [
     # Scheduler
     "apscheduler>=3.10",
 
+    # Reference data (index constituents, CSRC industries)
+    "baostock>=0.9.4",
+
     # LLM
     "openai>=1.30",
     "pydantic-ai>=1.0.0",
@@ -85,5 +88,5 @@ namespace_packages = true
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["apscheduler.*"]
+module = ["apscheduler.*", "baostock.*"]
 ignore_missing_imports = true

@@ -1,0 +1,600 @@
+{
+ "captured_at": "2026-10-06T10:06:16+00:00",
+ "baostock_version": "00.9.40",
+ "requests": [
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600519",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600519",
+     "贵州茅台",
+     "C15酒、饮料和精制茶制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.000858",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.000858",
+     "五粮液",
+     "C15酒、饮料和精制茶制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.601398",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.601398",
+     "工商银行",
+     "J66货币金融服务",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600036",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600036",
+     "招商银行",
+     "J66货币金融服务",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.000001",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.000001",
+     "平安银行",
+     "J66货币金融服务",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.601318",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.601318",
+     "中国平安",
+     "J68保险业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.601628",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.601628",
+     "中国人寿",
+     "J68保险业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600030",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600030",
+     "中信证券",
+     "J67资本市场服务",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600900",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600900",
+     "长江电力",
+     "D44电力、热力生产和供应业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600011",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600011",
+     "华能国际",
+     "D44电力、热力生产和供应业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.601088",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.601088",
+     "中国神华",
+     "B06煤炭开采和洗选业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.601857",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.601857",
+     "中国石油",
+     "B07石油和天然气开采业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600028",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600028",
+     "中国石化",
+     "B07石油和天然气开采业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.300750",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.300750",
+     "宁德时代",
+     "C38电气机械和器材制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.002594",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.002594",
+     "比亚迪",
+     "C36汽车制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.000333",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.000333",
+     "美的集团",
+     "C38电气机械和器材制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600276",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600276",
+     "恒瑞医药",
+     "C27医药制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.002415",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.002415",
+     "海康威视",
+     "C39计算机、通信和其他电子设备制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sz.000002",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sz.000002",
+     "万科A",
+     "K70房地产业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.688981",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.688981",
+     "中芯国际",
+     "C39计算机、通信和其他电子设备制造业",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600001",
+    "date": "2026-09-30"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2026-09-28",
+     "sh.600001",
+     "邯郸钢铁",
+     "",
+     "证监会行业分类"
+    ]
+   ]
+  },
+  {
+   "method": "query_stock_industry",
+   "params": {
+    "code": "sh.600519",
+    "date": "2010-01-04"
+   },
+   "error_code": "0",
+   "error_msg": "success",
+   "fields": [
+    "updateDate",
+    "code",
+    "code_name",
+    "industry",
+    "industryClassification"
+   ],
+   "cur_page_num": "1",
+   "per_page_count": "2000",
+   "rows": [
+    [
+     "2010-01-04",
+     "sh.600519",
+     "贵州茅台",
+     "制造业-饮料制造业-食品、饮料-酒精及饮料酒制造业",
+     "证监会行业分类"
+    ]
+   ]
+  }
+ ]
+}
