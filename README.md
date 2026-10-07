@@ -41,6 +41,13 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 运行中心 `/app/runs` 展示 queued/running/success/partial/failed、阶段、
 重试、错误摘要与受控制品下载。
 
+候选页 `/app/candidates`（P1-E1）：本周候选列表（行业组、命中模板 + "未校准"标记、
+可读理由如 "ROE 12.0% ≥ 8%"、开启 / 到期日、草稿与 iFinD 核对状态；不展示 0～100 分）。
+详情页 `/app/candidates/{id}` 先展示逐条理由（点击查看报告期、可得日期、提供方、字段核对状态），
+再审阅规则草稿（区间条件按生效参数渲染，参数可在允许范围内修改并保存），
+然后"批准并晋级 / 驳回草稿 / 忽略候选"（后两者必填理由），并显示 iFinD 核对与决策记录。
+今日概览新增"本周候选"计数（待处理、草稿待审阅、起草中、iFinD 核对未完成）。
+
 ## CLI
 
 | 组 | 命令 | 用途 |
@@ -264,7 +271,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /research/runs/{id}/changes`、`/change-notification` | 结构化 diff / 重要变化通知下载 |
 | `GET /research/runs/{id}/artifacts[/{name}]` | 受控制品下载（限本 run 目录内） |
 | `GET /research/stocks/{ticker}/history` | 分页快照历史 |
-| `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化） |
+| `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数） |
 | `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
 | `GET /admin/llm-calls`、`/admin/llm-calls/cost` | LLM 调用审计 / 月度成本 |
 | `GET /candidates?status=&limit=&offset=`、`GET /candidates/{id}` | 候选分页列表（来源、最新理由、草稿状态）/ 详情（理由与快照引用、草稿规则、决策历史） |
@@ -272,6 +279,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `POST /candidates/{id}/dismiss`、`/promote` | 忽略 `{reason}` / 晋级 `{rule_instance_id?, params_override?, reason?}`（无可批准规则时 409） |
 | `GET /rules/{id}`、`PATCH /rules/{id}`、`POST /rules/{id}/reject` | 规则详情（含参数范围）/ 改参数（新版本）/ 驳回草稿 `{reason}` |
 | `GET /screen-runs/{id}` | 筛选运行摘要 + 各模板命中 |
+| `GET /verification/requests?listing_id=&ticker=&status=&limit=` | iFinD 核对请求（只读）：状态、延后时间、核对一致 / 冲突字段 |
 
 批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
 只有 meaningful change 才生成一次 Markdown 通知，baseline 与噪声保持静默。

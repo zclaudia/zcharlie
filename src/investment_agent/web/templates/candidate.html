@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="candidate-detail" class="data-region"
+     data-endpoint="/candidates/{{ candidate_id }}"
+     data-candidate-id="{{ candidate_id }}">
+  <section class="card">
+    <p class="small"><a href="/app/candidates">← 返回候选列表</a></p>
+    <h1 id="candidate-title">候选 #{{ candidate_id }}</h1>
+    <p class="notice notice-warn calibration-banner">
+      基于 <span class="badge badge-uncalibrated">未校准</span> 模板：默认参数与起草的参数都是尚未回测的假设。
+      本页只用于研究优先级审阅，不是操作建议。
+    </p>
+    <div id="candidate-header" aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+    <div id="candidate-flash" aria-live="polite"></div>
+  </section>
+
+  <section class="card" aria-labelledby="candidate-reasons-title">
+    <h2 id="candidate-reasons-title">触发理由</h2>
+    <div id="candidate-reasons" data-empty-text="没有筛选理由。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+    <aside id="candidate-inspector" class="card evidence-inspector" tabindex="-1" hidden
+           aria-label="理由来源"></aside>
+  </section>
+
+  <section class="card" aria-labelledby="candidate-rule-title">
+    <h2 id="candidate-rule-title">规则草稿审阅</h2>
+    <div id="candidate-rule">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="candidate-actions-title">
+    <h2 id="candidate-actions-title">处理</h2>
+    <div id="candidate-actions">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="candidate-verification-title">
+    <h2 id="candidate-verification-title">iFinD 核对</h2>
+    <div id="candidate-verification">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="candidate-decisions-title">
+    <h2 id="candidate-decisions-title">决策记录</h2>
+    <div id="candidate-decisions">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

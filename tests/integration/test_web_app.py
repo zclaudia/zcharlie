@@ -135,6 +135,14 @@ def test_stock_page_renders_for_valid_ticker(api_client):
 
 def test_api_key_never_appears_in_web_pages(api_client):
     _login(api_client)
-    for path in ("/app", "/app/watchlist", "/app/runs", "/app/stocks/600406.SH", "/app/login"):
+    for path in (
+        "/app",
+        "/app/watchlist",
+        "/app/runs",
+        "/app/stocks/600406.SH",
+        "/app/candidates",
+        "/app/candidates/1",
+        "/app/login",
+    ):
         response = api_client.get(path)
         assert "secret" not in response.text, path

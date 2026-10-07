@@ -12,6 +12,7 @@
     <a class="brand" href="/app">zcharlie 研究台</a>
     <nav class="app-nav" aria-label="主导航">
       <a href="/app" {% if active_nav == "overview" %}class="active" aria-current="page"{% endif %}>今日概览</a>
+      <a href="/app/candidates" {% if active_nav == "candidates" %}class="active" aria-current="page"{% endif %}>候选</a>
       <a href="/app/watchlist" {% if active_nav == "watchlist" %}class="active" aria-current="page"{% endif %}>自选股</a>
       <a href="/app/runs" {% if active_nav == "runs" %}class="active" aria-current="page"{% endif %}>运行中心</a>
       <form method="post" action="/app/logout" class="logout-form">

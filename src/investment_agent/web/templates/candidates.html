@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>本周候选</h1>
+  <p class="muted">筛选命中与手动提名的标的：先看触发理由，再审阅起草的区间规则。候选只表示研究优先级，不是操作建议。</p>
+  <p class="notice notice-warn calibration-banner">
+    标注 <span class="badge badge-uncalibrated">未校准</span> 的模板，默认参数尚未经回测校准，只是假设；
+    命中理由与规则草稿都基于未校准模板。
+  </p>
+  <div class="toolbar">
+    <label for="candidates-status-filter">状态</label>
+    <select id="candidates-status-filter">
+      <option value="open" selected>待处理</option>
+      <option value="promoted">已晋级</option>
+      <option value="dismissed">已忽略</option>
+      <option value="expired">已过期</option>
+    </select>
+    <label for="candidates-template-filter">模板</label>
+    <select id="candidates-template-filter">
+      <option value="">全部模板</option>
+    </select>
+  </div>
+  <p id="candidates-total" class="muted small" aria-live="polite"></p>
+  <div id="candidates-list" class="data-region"
+       data-endpoint="/candidates"
+       data-empty-text="没有该状态的候选。每周筛选完成后会自动生成候选。"
+       aria-live="polite">
+    <p class="notice notice-loading" data-state="loading">正在加载…</p>
+  </div>
+</section>
+{% endblock %}

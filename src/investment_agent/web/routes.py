@@ -231,3 +231,27 @@ async def stock_page(request: Request, ticker: str) -> HTMLResponse:
 @router.get("/runs", response_class=HTMLResponse)
 async def runs_page(request: Request) -> HTMLResponse:
     return _render("runs.html", request, page_title="运行中心", active_nav="runs")
+
+
+@router.get("/candidates", response_class=HTMLResponse)
+async def candidates_page(request: Request) -> HTMLResponse:
+    return _render("candidates.html", request, page_title="本周候选", active_nav="candidates")
+
+
+@router.get("/candidates/{candidate_id}", response_class=HTMLResponse)
+async def candidate_page(request: Request, candidate_id: str) -> HTMLResponse:
+    if re.fullmatch(r"[1-9]\d{0,9}", candidate_id) is None:
+        return _render(
+            "error.html",
+            request,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            page_title="无效候选",
+            message=f"不是有效的候选编号：{candidate_id}",
+        )
+    return _render(
+        "candidate.html",
+        request,
+        page_title=f"候选 #{candidate_id}",
+        active_nav="candidates",
+        candidate_id=int(candidate_id),
+    )

@@ -8,11 +8,13 @@ const TIMEOUT_MS = 15000;
 export const FETCH_MARKER_HEADERS = Object.freeze({ "X-Requested-With": "fetch" });
 
 export class ApiError extends Error {
-  constructor(status, message, { retryable = false } = {}) {
+  constructor(status, message, { retryable = false, detail = null } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.retryable = retryable;
+    // 原始 detail（如 422 规则校验的 issues 列表），供页面逐条展示。
+    this.detail = detail;
   }
 }
 
@@ -83,6 +85,7 @@ async function request(path, { method = "GET", body, idempotency = false, signal
         : `请求失败（HTTP ${response.status}）。`;
     throw new ApiError(response.status, text, {
       retryable: response.status >= 500 || response.status === 409,
+      detail,
     });
   }
   return data;
@@ -94,6 +97,10 @@ export function get(path, options = {}) {
 
 export function post(path, body, options = {}) {
   return request(path, { ...options, method: "POST", body, idempotency: options.idempotency ?? true });
+}
+
+export function patch(path, body, options = {}) {
+  return request(path, { ...options, method: "PATCH", body, idempotency: options.idempotency ?? false });
 }
 
 export async function download(path) {
@@ -131,7 +138,7 @@ export async function download(path) {
 
 export function renderRegion(region, state, content) {
   region.dataset.state = state;
-  region.innerHTML = "";
+  region.replaceChildren();
   if (state === "loading") {
     const notice = document.createElement("p");
     notice.className = "notice notice-loading";

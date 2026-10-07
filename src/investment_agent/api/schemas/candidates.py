@@ -59,6 +59,8 @@ class ScreenReasonOut(BaseModel):
     outcome: str | None = None
     snapshot_ref: dict[str, Any] = Field(default_factory=dict)
     detail: str | None = None
+    unit: str | None = None
+    """The factor's unit from the factor registry (display only)."""
 
 
 class ScreenResultOut(BaseModel):
@@ -107,6 +109,13 @@ class RuleDetailOut(RuleSummaryOut):
     template_params: dict[str, float]
     param_ranges: dict[str, ParamRangeOut]
     effective_params: dict[str, float]
+    zones: dict[str, Any] = Field(default_factory=dict)
+    """The zones in force for the rule's scope: the instance's own zones, or
+    the template's when the instance only overrides parameters. Condition
+    values may still be ``"$param"`` references (resolve with
+    ``effective_params``)."""
+    factor_units: dict[str, str] = Field(default_factory=dict)
+    """Unit of every factor the zones reference (display only)."""
 
 
 class DecisionOut(BaseModel):

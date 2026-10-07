@@ -11,59 +11,8 @@ import {
   post,
   renderRegion,
 } from "./api.js";
-
-function el(tag, attributes = {}, text) {
-  const node = document.createElement(tag);
-  for (const [key, value] of Object.entries(attributes)) {
-    if (value !== undefined && value !== null) node.setAttribute(key, String(value));
-  }
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-function fmt(value) {
-  if (value === null || value === undefined || value === "") return "—";
-  return String(value);
-}
-
-function fmtNumber(value, digits = 2) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: digits });
-}
-
-function stockLink(ticker) {
-  if (!ticker) return null;
-  return el("a", { href: `/app/stocks/${encodeURIComponent(ticker)}` }, ticker);
-}
-
-function table(headers, rows) {
-  const node = el("table");
-  const headRow = el("tr");
-  for (const header of headers) headRow.appendChild(el("th", {}, header.label));
-  node.appendChild(el("thead")).appendChild(headRow);
-  const body = el("tbody");
-  for (const row of rows) body.appendChild(row);
-  node.appendChild(body);
-  return node;
-}
-
-function kvTable(pairs) {
-  const node = el("table");
-  const body = el("tbody");
-  for (const [key, value] of pairs) {
-    const tr = el("tr");
-    tr.appendChild(el("td", { class: "kv-key" }, key));
-    tr.appendChild(el("td", {}, fmt(value)));
-    body.appendChild(tr);
-  }
-  node.appendChild(body);
-  return node;
-}
-
-function statusBadge(value) {
-  if (!value) return el("span", {}, "—");
-  return el("span", { class: `status status-${value}` }, value);
-}
+import { CANDIDATE_REGIONS, bootCandidates } from "./candidates.js";
+import { el, fmt, fmtNumber, kvTable, statusBadge, stockLink, table } from "./dom.js";
 
 // ---- 今日概览 ---------------------------------------------------------
 
@@ -379,7 +328,7 @@ function runRow(run) {
 async function loadRunDetail(container, runId) {
   try {
     const detail = await get(`/research/runs/${runId}`);
-    container.innerHTML = "";
+    container.replaceChildren();
     container.appendChild(
       kvTable([
         ["ticker", detail.ticker],
@@ -406,7 +355,7 @@ async function loadRunDetail(container, runId) {
     }
     container.dataset.loaded = "true";
   } catch (error) {
-    container.innerHTML = "";
+    container.replaceChildren();
     container.appendChild(
       el(
         "p",
@@ -558,7 +507,7 @@ function showEvidence(detailRegion, scoreItem, path) {
   const resolved = resolveEvidence(scoreItem, path);
   const inspector = detailRegion.querySelector("#evidence-inspector");
   if (!inspector) return;
-  inspector.innerHTML = "";
+  inspector.replaceChildren();
   if (!resolved) {
     inspector.appendChild(
       el("p", { class: "notice notice-error" }, `引用失效：确定性结果中不存在字段 ${path}。`)
@@ -700,7 +649,7 @@ async function loadStockDetail(detailRegion, latestSnapshot) {
   try {
     const detail = await get(`/research/runs/${latestSnapshot.run_id}`);
     detailRegion.hidden = false;
-    detailRegion.innerHTML = "";
+    detailRegion.replaceChildren();
     detailRegion.appendChild(el("h2", {}, `最新运行 #${detail.run_id}（${detail.status}）`));
     const score = detail.result && detail.result.score;
     const scoreItem =
@@ -732,7 +681,7 @@ async function loadStockDetail(detailRegion, latestSnapshot) {
     if (changesRegion) await loadStockChanges(changesRegion, detail.run_id);
   } catch (error) {
     detailRegion.hidden = false;
-    detailRegion.innerHTML = "";
+    detailRegion.replaceChildren();
     detailRegion.appendChild(
       el("p", { class: "notice notice-error" }, error instanceof ApiError ? error.message : "详情加载失败。")
     );
@@ -816,6 +765,7 @@ function wireStockRunForm(form) {
 function boot() {
   for (const region of document.querySelectorAll(".data-region[data-endpoint]")) {
     const id = region.id;
+    if (CANDIDATE_REGIONS.has(id)) continue;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
     else if (id === "watchlist-list") loadRegion(region, { render: loadWatchlist });
     else if (id === "runs-list") loadRunsPage(region, 0);
@@ -838,6 +788,8 @@ function boot() {
   if (filter) {
     filter.addEventListener("change", () => loadRunsPage(document.querySelector("#runs-list"), 0));
   }
+
+  bootCandidates();
 }
 
 if (document.readyState === "loading") {

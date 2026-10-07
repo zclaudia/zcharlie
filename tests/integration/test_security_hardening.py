@@ -204,7 +204,15 @@ def test_web_pages_send_security_headers(api_client):
 
 def test_templates_have_no_inline_script_or_style(api_client):
     _login(api_client)
-    for path in ("/app", "/app/watchlist", "/app/runs", "/app/stocks/600519.SH", "/app/login"):
+    for path in (
+        "/app",
+        "/app/watchlist",
+        "/app/runs",
+        "/app/stocks/600519.SH",
+        "/app/candidates",
+        "/app/candidates/1",
+        "/app/login",
+    ):
         html = api_client.get(path).text
         assert "<style" not in html, path
         assert " style=" not in html, path

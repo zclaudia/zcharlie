@@ -57,6 +57,7 @@ from investment_agent.candidates.promote import (
 )
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
+from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.rules.screen_job import SCREEN_RUN, screen_results
 from investment_agent.rules.store import template_from_record
 from investment_agent.rules.validation import RuleValidationError, effective_params
@@ -133,8 +134,32 @@ class _Templates:
         return record.calibration_status if record is not None else None
 
 
+def _factor_unit(name: object) -> str | None:
+    if isinstance(name, str) and name in DEFAULT_REGISTRY:
+        return DEFAULT_REGISTRY.get(name).unit
+    return None
+
+
 def _reasons(raw: list[dict[str, Any]] | None) -> list[ScreenReasonOut]:
-    return [ScreenReasonOut.model_validate(item) for item in raw or []]
+    reasons: list[ScreenReasonOut] = []
+    for item in raw or []:
+        reason = ScreenReasonOut.model_validate(item)
+        if reason.unit is None:
+            reason.unit = _factor_unit(reason.factor)
+        reasons.append(reason)
+    return reasons
+
+
+def _zone_factors(node: Any) -> list[str]:
+    if isinstance(node, dict):
+        if isinstance(node.get("factor"), str):
+            return [node["factor"]]
+        found: list[str] = []
+        for key in ("all", "any"):
+            for child in node.get(key) or []:
+                found += _zone_factors(child)
+        return found
+    return []
 
 
 async def _screen_result_out(row: ScreenResultRecord, templates: _Templates) -> ScreenResultOut:
@@ -176,8 +201,16 @@ async def _rule_detail(rule: RuleInstanceRecord, templates: _Templates) -> RuleD
     template_params: dict[str, float] = {}
     ranges: dict[str, ParamRangeOut] = {}
     effective: dict[str, float] = dict(summary.params)
+    definition: dict[str, Any] = dict(rule.definition or {})
+    raw_zones = definition.get("zones")
+    zones: dict[str, Any] = dict(raw_zones) if isinstance(raw_zones, dict) else {}
     if record is not None:
         template = template_from_record(record)
+        if not zones:
+            zones = {
+                name: group.model_dump(mode="json", by_alias=True, exclude_none=True)
+                for name, group in template.zones_for(rule.scope).items()
+            }
         template_params = dict(template.params)
         ranges = {
             name: ParamRangeOut(min=item.min, max=item.max)
@@ -186,7 +219,7 @@ async def _rule_detail(rule: RuleInstanceRecord, templates: _Templates) -> RuleD
         effective = effective_params(template) | summary.params
     return RuleDetailOut(
         **summary.model_dump(),
-        definition=dict(rule.definition or {}),
+        definition=definition,
         draft_rationale=rule.draft_rationale,
         approved_by=rule.approved_by,
         approved_at=_optional_utc(rule.approved_at),
@@ -195,6 +228,12 @@ async def _rule_detail(rule: RuleInstanceRecord, templates: _Templates) -> RuleD
         template_params=template_params,
         param_ranges=ranges,
         effective_params=effective,
+        zones=zones,
+        factor_units={
+            name: unit
+            for name in dict.fromkeys(_zone_factors({"all": list(zones.values())}))
+            if (unit := _factor_unit(name)) is not None
+        },
     )
 
 
