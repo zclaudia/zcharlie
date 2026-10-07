@@ -88,6 +88,11 @@ export function scoreFactorLabel(name) {
 
 // 点路径 -> 中文标签："key_metrics.roe" -> "ROE"，"factor_scores.valuation_level" -> "估值水平（分项）"。
 const PATH_LABELS = Object.freeze({
+  research_confidence_label: "研究置信度等级",
+  primary_strategy_label: "主策略",
+  selected_model_label: "选用模型",
+  strategy_type: "策略类型",
+  source_mode: "数据模式",
   strategy_label: "策略",
   primary_strategy: "主策略",
   secondary_strategy: "次策略",
