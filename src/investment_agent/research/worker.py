@@ -1,9 +1,9 @@
 """Persistent database worker for queued jobs.
 
 The worker claims runs of every registered job kind (``ifind_research`` plus
-the snapshot collectors and ``screen_run``), keeps each claim's heartbeat fresh, fences all
-lifecycle updates with the claim's lease, and settles failures through the
-shared retry policy. Kind-specific behaviour lives in
+the snapshot collectors, ``screen_run`` and ``rule_draft``), keeps each
+claim's heartbeat fresh, fences all lifecycle updates with the claim's lease,
+and settles failures through the shared retry policy. Kind-specific behaviour lives in
 :class:`~investment_agent.jobs.base.JobHandler` implementations.
 """
 
@@ -37,6 +37,7 @@ from investment_agent.research.ifind_chain import (
     run_ifind_research_chain,
 )
 from investment_agent.research.retry_policy import is_transient_error
+from investment_agent.rules.drafting import RuleDraftHandler
 from investment_agent.rules.screen_job import ScreenRunHandler
 from investment_agent.snapshots.handlers import snapshot_job_handlers
 from investment_agent.storage.database import session_scope
@@ -183,6 +184,7 @@ def default_job_handlers(
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
         ScreenRunHandler(),
+        RuleDraftHandler(settings=settings),
     ]
 
 

@@ -177,3 +177,130 @@ def show(
         rprint(f"[red]Not found[/red]: {escape(ref)}")
         raise typer.Exit(code=1)
     typer.echo(text)
+
+
+@app.command("draft")
+def draft(
+    ticker: str = typer.Option(..., help="A-share ticker, e.g. 600519.SH"),
+    template: str = typer.Option(..., help="Template id (latest stored version) or id@version"),
+    as_of: str | None = typer.Option(None, help="Factor values as of (YYYY-MM-DD, default today)"),
+    now: bool = typer.Option(
+        False, "--now", help="Also execute the job in this process instead of the worker"
+    ),
+    candidate_id: int = typer.Option(
+        0, min=0, help="Candidate to notify when done (0 = manual draft, no candidate)"
+    ),
+    screen_result_id: int | None = typer.Option(None, help="screen_result row to cite"),
+    note: list[str] | None = typer.Option(  # noqa: B008
+        None, "--note", help="Preference note (repeatable), e.g. a past rejection reason"
+    ),
+    rerun: bool = typer.Option(
+        False, "--rerun", help="Queue a new run even if an identical draft run exists"
+    ),
+) -> None:
+    """Enqueue (or with --now run) an LLM rule draft for one stock and template.
+
+    Calls the configured tier-3 LLM; the draft is stored only if it passes
+    validation (one retry with the issues fed back).
+    """
+
+    from datetime import UTC, date, datetime
+
+    from investment_agent.clock import shanghai_today
+    from investment_agent.rules.drafting import RuleDraftPayload
+
+    try:
+        day = date.fromisoformat(as_of) if as_of else shanghai_today()
+    except ValueError as exc:
+        raise typer.BadParameter("expected YYYY-MM-DD", param_hint="--as-of") from exc
+    settings = Settings()  # type: ignore[call-arg]
+
+    async def submit() -> int:
+        import os
+        import socket
+
+        from investment_agent.research.worker import ResearchWorker
+        from investment_agent.rules.drafting import (
+            RuleDraftHandler,
+            enqueue_rule_draft,
+            rule_draft_idempotency_key,
+        )
+        from investment_agent.rules.store import RuleStore, instance_from_record
+        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.repositories.pipeline_run import (
+            IdempotencyPayloadMismatchError,
+            PipelineRunRepository,
+        )
+
+        init_engine(settings.database_url)
+        async with session_scope() as session:
+            stored = await RuleStore(session).template_by_ref(template)
+        if stored is None:
+            rprint(f"[red]Unknown template[/red] {escape(template)}; run `ia rules sync`")
+            return 1
+        payload = RuleDraftPayload(
+            candidate_id=candidate_id,
+            ticker=ticker.strip().upper(),
+            template_id=stored.id,
+            template_version=stored.version,
+            as_of=day,
+            screen_result_id=screen_result_id,
+            preference_notes=list(note or []),
+        )
+        key = rule_draft_idempotency_key(payload)
+        if candidate_id == 0:
+            key = f"{key}:{payload.ticker}:{day.isoformat()}"
+        if rerun:
+            key = f"{key}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
+        try:
+            async with session_scope() as session:
+                queued, created = await enqueue_rule_draft(
+                    session, payload, triggered_by="cli", key=key
+                )
+                run_id, status = queued.id, queued.status
+        except IdempotencyPayloadMismatchError:
+            rprint(f"[red]Run {escape(key)} exists with different input[/red]; use --rerun")
+            return 1
+        label = "[green]Queued[/green]" if created else "[yellow]Existing[/yellow]"
+        rprint(f"{label} rule draft run #{run_id} (key={escape(key)}) status={status}")
+        if not now:
+            return 0
+        if status != "queued":
+            rprint(f"Run #{run_id} is {status}; nothing to run inline")
+            return 0
+        worker = ResearchWorker(
+            settings=settings,
+            worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
+            handlers=[RuleDraftHandler(settings=settings)],
+        )
+        await worker.run_once(run_id=run_id)
+        async with session_scope() as session:
+            finished = await PipelineRunRepository(session).get(run_id)
+            assert finished is not None
+            rprint(f"Run #{run_id} finished: status={finished.status}")
+            if finished.error_summary:
+                rprint(f"Error: {escape(finished.error_summary)}")
+            rule_id = (finished.metadata_json or {}).get("rule_instance_id")
+            if not isinstance(rule_id, int):
+                return 0 if finished.status == "success" else 2
+            record = await RuleStore(session).get_instance(rule_id)
+            assert record is not None
+            typer.echo(
+                f"# rule instance #{record.id} {record.symbol} {record.scope} "
+                f"v{record.version} {record.status} drafted_by={record.drafted_by}"
+            )
+            typer.echo(to_yaml(instance_from_record(record)))
+        return 0
+
+    async def main() -> int:
+        from investment_agent.storage.database import get_engine
+
+        try:
+            return await submit()
+        finally:
+            # Close pooled connections inside this event loop.
+            await get_engine().dispose()
+
+    code = asyncio.run(main())
+    if code:
+        raise typer.Exit(code=code)
