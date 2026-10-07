@@ -233,6 +233,11 @@ async def runs_page(request: Request) -> HTMLResponse:
     return _render("runs.html", request, page_title="运行中心", active_nav="runs")
 
 
+@router.get("/health", response_class=HTMLResponse)
+async def health_page(request: Request) -> HTMLResponse:
+    return _render("health.html", request, page_title="数据健康", active_nav="health")
+
+
 @router.get("/candidates", response_class=HTMLResponse)
 async def candidates_page(request: Request) -> HTMLResponse:
     return _render("candidates.html", request, page_title="本周候选", active_nav="candidates")

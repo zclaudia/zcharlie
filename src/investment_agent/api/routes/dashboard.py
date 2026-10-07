@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.api.auth import verify_api_key_or_session
+from investment_agent.api.auth import get_settings, verify_api_key_or_session
 from investment_agent.api.schemas.dashboard import (
     DashboardBucket,
     DashboardEntry,
@@ -25,7 +25,7 @@ from investment_agent.api.schemas.dashboard import (
 )
 from investment_agent.candidates.lifecycle import effective_draft
 from investment_agent.clock import today_in
-from investment_agent.config import SchedulerConfig, load_app_yaml
+from investment_agent.config import SchedulerConfig, Settings, load_app_yaml
 from investment_agent.scheduler.trading_calendar import (
     calendar_coverage,
     load_trading_calendar,
@@ -59,6 +59,20 @@ class DashboardWarning(BaseModel):
     message: str
     coverage_end: str | None = None
     days_remaining: int | None = None
+    source: Literal["calendar", "data_health"] = "calendar"
+    link: str | None = None
+    """Page with the details (data-health warnings link to ``/app/health``)."""
+
+
+class DataHealthCounts(BaseModel):
+    """The overview's "数据健康" bucket (P1-E2): warning counts and accumulation."""
+
+    errors: int
+    warnings: int
+    infos: int
+    streak_weeks: int
+    target_weeks: int
+    link: str = "/app/health"
 
 
 class CandidateCounts(BaseModel):
@@ -77,6 +91,49 @@ class CandidateCounts(BaseModel):
 class DashboardTodayWithWarnings(DashboardToday):
     warnings: list[DashboardWarning] = Field(default_factory=list)
     candidates: CandidateCounts | None = None
+    data_health: DataHealthCounts | None = None
+
+
+async def data_health_summary(
+    session: AsyncSession, settings: Settings
+) -> tuple[list[DashboardWarning], DataHealthCounts | None]:
+    """``warn`` / ``error`` data-health warnings for the overview (never raises)."""
+
+    from investment_agent.api.routes.data_health import compute_data_health
+
+    try:
+        health = await compute_data_health(session, settings, include_calendar_warnings=False)
+    except Exception:
+        log.exception("dashboard.data_health_failed")
+        return [
+            DashboardWarning(
+                code="data_health_unavailable",
+                level="error",
+                message="数据健康检查失败，请查看服务日志。",
+                source="data_health",
+                link="/app/health",
+            )
+        ], None
+    levels = [item.level for item in health.warnings]
+    warnings = [
+        DashboardWarning(
+            code=item.code,
+            level=item.level,
+            message=item.message,
+            source="data_health",
+            link=f"/app/health#health-{item.section}",
+        )
+        for item in health.warnings
+        if item.level in ("warn", "error")
+    ]
+    counts = DataHealthCounts(
+        errors=levels.count("error"),
+        warnings=levels.count("warn"),
+        infos=levels.count("info"),
+        streak_weeks=health.accumulation.streak_weeks,
+        target_weeks=health.accumulation.target_weeks,
+    )
+    return warnings, counts
 
 
 async def candidate_counts(session: AsyncSession) -> CandidateCounts:
@@ -172,6 +229,7 @@ def _entry(
 
 @router.get("/today", response_model=DashboardTodayWithWarnings)
 async def dashboard_today(
+    settings: Annotated[Settings, Depends(get_settings)],
     window: Annotated[int, Query(ge=10, le=500)] = _WINDOW,
 ) -> DashboardTodayWithWarnings:
     async with session_scope() as session:
@@ -225,6 +283,7 @@ async def dashboard_today(
                 entries=[_entry(*row) for row in entries[:_MAX_ENTRIES]],
             )
 
+        health_warnings, health_counts = await data_health_summary(session, settings)
         return DashboardTodayWithWarnings(
             running=bucket("running"),
             failed=bucket("failed"),
@@ -232,6 +291,7 @@ async def dashboard_today(
             needs_review=bucket("needs_review"),
             meaningful_changes=bucket("meaningful_changes"),
             generated_at=datetime.now(UTC),
-            warnings=calendar_warnings(),
+            warnings=calendar_warnings() + health_warnings,
             candidates=await candidate_counts(session),
+            data_health=health_counts,
         )
