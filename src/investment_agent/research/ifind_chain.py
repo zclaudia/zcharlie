@@ -20,7 +20,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from investment_agent.config import Settings
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
@@ -128,6 +128,18 @@ class ResearchExplanation(BaseModel):
     data_quality_notes: list[EvidenceClaim]
     open_questions: list[str]
     workflow_conclusion: str
+
+    @field_validator("workflow_conclusion", mode="before")
+    @classmethod
+    def _flatten_structured_conclusion(cls, value: Any) -> Any:
+        # Models sometimes answer {"status": "needs_review", "warnings": [...]}
+        # instead of a sentence; keep every part so the label token survives.
+        if isinstance(value, dict):
+            return "；".join(
+                f"{key}: {item if isinstance(item, str) else json.dumps(item, ensure_ascii=False)}"
+                for key, item in value.items()
+            )
+        return value
 
 
 @dataclass(frozen=True)
@@ -951,6 +963,24 @@ EXPLANATION_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的解释 Age
 {output_schema}"""
 
 
+# One extra call when the model's JSON misses the schema (dropped fields,
+# wrong types); the retry tells it exactly what failed.
+EXPLANATION_SCHEMA_ATTEMPTS = 2
+
+
+def _schema_retry_message(score_item: dict[str, Any], exc: ValidationError) -> str:
+    problems = "\n".join(
+        f"- {'.'.join(str(part) for part in error['loc']) or '(root)'}: {error['msg']}"
+        for error in exc.errors()
+    )
+    return (
+        json.dumps(score_item, ensure_ascii=False, sort_keys=True)
+        + "\n\n上一次输出不符合 JSON Schema：\n"
+        + problems
+        + "\n请重新输出完整 JSON 对象，包含全部字段，workflow_conclusion 必须是字符串。"
+    )
+
+
 async def _explain_score(
     *,
     settings: Settings,
@@ -969,13 +999,21 @@ async def _explain_score(
             config=settings.llm_tier3,
             session=session,
         )
-        result = await client.complete(
-            system_prompt=system_prompt,
-            user_message=json.dumps(score_item, ensure_ascii=False, sort_keys=True),
-            output_model=ResearchExplanation,
-            purpose="ifind_research_explanation",
-            pipeline_run_id=run_id,
-        )
+        user_message = json.dumps(score_item, ensure_ascii=False, sort_keys=True)
+        for attempt in range(EXPLANATION_SCHEMA_ATTEMPTS):
+            try:
+                result = await client.complete(
+                    system_prompt=system_prompt,
+                    user_message=user_message,
+                    output_model=ResearchExplanation,
+                    purpose="ifind_research_explanation",
+                    pipeline_run_id=run_id,
+                )
+                break
+            except ValidationError as exc:
+                if attempt + 1 >= EXPLANATION_SCHEMA_ATTEMPTS:
+                    raise
+                user_message = _schema_retry_message(score_item, exc)
     explanation = result.output
     if not isinstance(explanation, ResearchExplanation):
         raise ValueError("Explanation agent did not return ResearchExplanation")

@@ -211,3 +211,78 @@ async def test_explanation_failure_persists_partial_deterministic_result(
     assert snapshot.explanation_json is None
     assert "agent_report" not in snapshot.artifact_manifest
     assert str(snapshot.artifact_manifest["scores"]).endswith("/scores.json")
+
+
+def _explanation_payload(**overrides):
+    payload = {
+        "summary": "summary",
+        "classification_rationale": [],
+        "positive_evidence": [],
+        "negative_evidence": [],
+        "risk_factors": [],
+        "data_quality_notes": [],
+        "open_questions": [],
+        "workflow_conclusion": "needs_review",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_explanation_flattens_structured_workflow_conclusion():
+    explanation = ResearchExplanation.model_validate(
+        _explanation_payload(
+            workflow_conclusion={
+                "status": "needs_review",
+                "warnings": ["缺少 roe"],
+                "suggestion": "补齐财报",
+            }
+        )
+    )
+
+    assert explanation.workflow_conclusion == (
+        'status: needs_review；warnings: ["缺少 roe"]；suggestion: 补齐财报'
+    )
+
+
+async def test_explain_score_retries_once_on_schema_error(monkeypatch):
+    from contextlib import asynccontextmanager
+
+    calls: list[str] = []
+    replies = [
+        json.dumps({"classification_rationale": []}),
+        json.dumps(_explanation_payload()),
+    ]
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def complete(self, *, user_message, output_model, **kwargs):
+            calls.append(user_message)
+
+            class Result:
+                output = output_model.model_validate_json(replies[len(calls) - 1])
+
+            return Result()
+
+    @asynccontextmanager
+    async def fake_scope():
+        yield None
+
+    monkeypatch.setattr(ifind_chain, "OpenAICompatibleClient", FakeClient)
+    monkeypatch.setattr(ifind_chain, "session_scope", fake_scope)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="test",
+        llm_tier3_api_key="test",
+    )
+
+    explanation = await ifind_chain._explain_score(
+        settings=settings,
+        run_id=1,
+        score_item={"needs_agent_review": True},
+    )
+
+    assert explanation.summary == "summary"
+    assert len(calls) == 2
+    assert "summary: Field required" in calls[1]
