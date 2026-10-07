@@ -32,6 +32,7 @@ from investment_agent.research.worker import ResearchWorker, run_worker
 from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models import (  # noqa: F401
     analysis,
+    candidates,
     market_data,
     ops,
     pit_snapshot,

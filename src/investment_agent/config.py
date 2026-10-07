@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     # ``action_required`` notification.
     snapshot_completeness_threshold: float = Field(default=0.95, ge=0, le=1)
 
+    # Candidates (P1-D1): an open candidate expires after this many days; a
+    # dismissed listing is not re-proposed by the screen within the cooldown.
+    candidate_expiry_days: int = Field(default=14, ge=1, le=365)
+    candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
+
     # Browser web session for the same-origin /app UI.
     web_session_ttl_minutes: int = 720
     # Dedicated session-signing secret; empty falls back to deriving from API_KEY.
@@ -165,10 +170,21 @@ class ScreenScheduleConfig(BaseModel):
         return self
 
 
+class CandidateScheduleConfig(BaseModel):
+    """Daily candidate expiry sweep (P1-D1); a ``None`` cron disables it.
+
+    The sweep also runs at the start of every ``screen_run``.
+    """
+
+    timezone: str = "Asia/Shanghai"
+    expiry_sweep_cron: str | None = "0 7 * * *"
+
+
 class AppYamlConfig(BaseModel):
     scheduler: SchedulerConfig
     snapshot: SnapshotScheduleConfig | None = None
     screen: ScreenScheduleConfig | None = None
+    candidates: CandidateScheduleConfig | None = None
 
 
 def load_app_yaml(path: Path) -> AppYamlConfig:

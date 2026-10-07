@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # 触发所有 model 模块导入（让 Base.metadata 收集到所有表）
 from investment_agent.storage.models import (  # noqa: F401
     analysis,
+    candidates,
     market_data,
     ops,
     pit_snapshot,
