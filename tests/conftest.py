@@ -14,6 +14,7 @@ from investment_agent.storage.models import (  # noqa: F401
     relationship,
     rules,
     user_domain,
+    verification,
 )
 from investment_agent.storage.models.base import Base
 

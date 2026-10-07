@@ -41,7 +41,7 @@ not comparable (``revenue_total`` vs ``revenue_main``). A difference beyond
 the field's registry tolerance is stored on the row
 (``fields.provider_conflicts``, read by the factor view as ``conflict``) and
 listed in the run metadata (``provider_conflict``); key-field conflicts and
-missing key fields go to :func:`enqueue_verification` (no-op until P1-A13).
+missing key fields go to :func:`enqueue_verification` (P1-A13 verification queue).
 
 Throttle and failures: the client serializes calls (>= 1 s apart by default).
 :data:`MAX_CONSECUTIVE_FAILURES` consecutive failed calls stop the job: the
@@ -128,6 +128,8 @@ _CASH_FLOW_VALUE_KEYS = (
 )
 
 VerificationTrigger = Literal["conflict", "missing"]
+# AkShare cross-check reason -> verification_request trigger (P1-A13)
+_VERIFICATION_TRIGGERS: dict[str, str] = {"conflict": "conflict", "missing": "missing"}
 
 
 class EastmoneyCollectorClient(Protocol):
@@ -138,7 +140,7 @@ class EastmoneyCollectorClient(Protocol):
     async def fetch_cash_flow_statement(self, ticker: str) -> CashFlowStatement | None: ...
 
 
-def enqueue_verification(
+async def enqueue_verification(
     *,
     listing_id: int,
     ticker: str,
@@ -148,25 +150,36 @@ def enqueue_verification(
     detail: Mapping[str, Any] | None = None,
     run_id: int | None = None,
 ) -> bool:
-    """Ask for an iFinD verification of key ``fields`` (P1-A13 hook).
+    """Ask for an iFinD verification of key ``fields`` (P1-A13).
 
-    TODO(A13): insert a ``verification_request`` (trigger ``conflict`` /
-    ``missing``, deduplicated per listing and trigger) for the ``ifind_verify``
-    queue. Until then this is a no-op that only logs; it returns whether a
-    request was queued (always ``False``).
+    Delegates to :func:`investment_agent.verification.enqueue_verification`
+    (trigger ``conflict`` -> ``conflict``, ``missing`` -> ``missing``; one open
+    request per listing, trigger and period, merged on repeat). Returns whether
+    a new request was queued. Never raises: a failed enqueue only logs, the
+    collection result stands.
     """
 
-    log.info(
-        "snapshot.akshare.verification_wanted",
-        listing_id=listing_id,
-        ticker=ticker,
-        report_period=report_period.isoformat(),
-        fields=list(fields),
-        trigger=trigger,
-        detail=dict(detail or {}),
-        run_id=run_id,
-    )
-    return False
+    from investment_agent.verification import enqueue_verification as enqueue
+
+    try:
+        return await enqueue(
+            listing_id=listing_id,
+            ticker=ticker,
+            trigger=_VERIFICATION_TRIGGERS[trigger],
+            fields=list(fields),
+            report_period=report_period,
+            detail=detail,
+            run_id=run_id,
+        )
+    except Exception:
+        log.exception(
+            "snapshot.akshare.verification_enqueue_failed",
+            listing_id=listing_id,
+            ticker=ticker,
+            trigger=trigger,
+            report_period=report_period.isoformat(),
+        )
+        return False
 
 
 @dataclass
@@ -567,7 +580,7 @@ async def _collect_summary(
 
     for ticker, conflicts in check.conflicts.items():
         key_fields = [name for name in conflicts if (source := registry.get(name)) and source.key]
-        if key_fields and enqueue_verification(
+        if key_fields and await enqueue_verification(
             listing_id=listing_by_ticker[ticker],
             ticker=ticker,
             report_period=period,
@@ -578,7 +591,7 @@ async def _collect_summary(
         ):
             check.verification_requests += 1
     for ticker, gaps in missing_key.items():
-        if enqueue_verification(
+        if await enqueue_verification(
             listing_id=listing_by_ticker[ticker],
             ticker=ticker,
             report_period=period,

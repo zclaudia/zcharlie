@@ -128,6 +128,7 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "dividend_snapshot",
         "screen_run",
         "rule_draft",
+        "ifind_verify",
     }
 
 

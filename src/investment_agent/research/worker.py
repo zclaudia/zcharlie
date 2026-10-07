@@ -1,7 +1,7 @@
 """Persistent database worker for queued jobs.
 
 The worker claims runs of every registered job kind (``ifind_research`` plus
-the snapshot collectors, ``screen_run`` and ``rule_draft``), keeps each
+the snapshot collectors, ``screen_run``, ``rule_draft`` and ``ifind_verify``), keeps each
 claim's heartbeat fresh, fences all lifecycle updates with the claim's lease,
 and settles failures through the shared retry policy. Kind-specific behaviour lives in
 :class:`~investment_agent.jobs.base.JobHandler` implementations.
@@ -54,6 +54,7 @@ from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
 )
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
+from investment_agent.verification.job import IfindVerifyHandler
 
 log = structlog.get_logger(__name__)
 
@@ -186,6 +187,7 @@ def default_job_handlers(
         *snapshot_job_handlers(settings),
         ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings)),
         RuleDraftHandler(settings=settings),
+        IfindVerifyHandler(settings),
     ]
 
 

@@ -764,6 +764,14 @@ def _provider_fields(provider: str, rows: Sequence[FinancialSnapshot]) -> Provid
     return ProviderFields(provider, fields, ref, verification, conflicts)
 
 
+def provider_fields_from_rows(provider: str, rows: Sequence[FinancialSnapshot]) -> ProviderFields:
+    """Public form of the resolver input for one provider's rows of a period
+    (used by the iFinD verification job, P1-A13, to compare against the free
+    sources exactly as the view resolves them)."""
+
+    return _provider_fields(provider, rows)
+
+
 def _financial_periods(
     rows: Sequence[FinancialSnapshot],
     policy: ProviderPolicy,

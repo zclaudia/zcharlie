@@ -2,7 +2,7 @@
 
 Runs in its own process (`ia scheduler start` or Docker service).
 Reads cron + timezone from config/app.yaml (``scheduler``, ``snapshot``,
-``screen`` and ``candidates``).
+``screen``, ``candidates`` and ``verification``).
 The scheduler only enqueues; the worker executes the jobs. The one exception
 is the daily candidate expiry sweep: a few row updates, run in-process.
 """
@@ -22,6 +22,7 @@ from investment_agent.config import (
     ScreenScheduleConfig,
     Settings,
     SnapshotScheduleConfig,
+    VerificationScheduleConfig,
     load_app_yaml,
 )
 from investment_agent.logging import configure_logging
@@ -299,6 +300,45 @@ def _candidate_trigger(cfg: CandidateScheduleConfig | None) -> CronTrigger | Non
     return _parse_cron(cfg.expiry_sweep_cron, timezone=cfg.timezone)
 
 
+async def run_verification_dispatch() -> int | None:
+    """One dispatcher fire: enqueue an ``ifind_verify`` run when requests are due."""
+
+    from investment_agent.verification.schedule import dispatch_verification
+
+    try:
+        outcome = await dispatch_verification()
+    except Exception:
+        log.exception("scheduler.verification.dispatch_failed")
+        return None
+    return outcome.run_id if outcome.created else None
+
+
+async def run_verification_calibration(
+    cfg: VerificationScheduleConfig, *, today: date | None = None
+) -> list[str] | None:
+    """Weekly calibration: queue ``calibration`` requests for this week's sample."""
+
+    from investment_agent.verification.schedule import enqueue_calibration
+
+    local_today = today or datetime.now(ZoneInfo(cfg.timezone)).date()
+    try:
+        return await enqueue_calibration(today=local_today, count=cfg.calibration_count)
+    except Exception:
+        log.exception("scheduler.verification.calibration_failed", today=local_today.isoformat())
+        return None
+
+
+def _verification_triggers(cfg: VerificationScheduleConfig | None) -> dict[str, CronTrigger]:
+    if cfg is None:
+        return {}
+    crons = {"dispatch": cfg.dispatch_cron, "calibration": cfg.calibration_cron}
+    return {
+        name: _parse_cron(cron, timezone=cfg.timezone)
+        for name, cron in crons.items()
+        if cron is not None
+    }
+
+
 def _screen_trigger(cfg: ScreenScheduleConfig | None) -> CronTrigger | None:
     if cfg is None or cfg.cron is None:
         return None
@@ -451,7 +491,35 @@ def build_scheduler(
             replace_existing=True,
             **_JOB_DEFAULTS,
         )
+    verification_cfg = app_config.verification
+    for name, trigger in _verification_triggers(verification_cfg).items():
+        assert verification_cfg is not None
+        sched.add_job(
+            run_verification_dispatch if name == "dispatch" else run_verification_calibration,
+            trigger=trigger,
+            args=[] if name == "dispatch" else [verification_cfg],
+            id=f"verification_{name}",
+            replace_existing=True,
+            **_JOB_DEFAULTS,
+        )
     return sched
+
+
+async def _startup_verification_check(app_config: AppYamlConfig, now: datetime) -> None:
+    """Dispatch due requests at startup; catch up today's calibration if it fired."""
+
+    cfg = app_config.verification
+    triggers = _verification_triggers(cfg)
+    if cfg is None or not triggers:
+        return
+    if "dispatch" in triggers:
+        await run_verification_dispatch()
+    calibration = triggers.get("calibration")
+    if calibration is not None:
+        today = fired_today(now=now, trigger=calibration)
+        if today is not None:
+            log.info("scheduler.verification.calibration_catch_up", today=today.isoformat())
+            await run_verification_calibration(cfg, today=today)
 
 
 async def _startup_screen_check(app_config: AppYamlConfig, now: datetime) -> bool:
@@ -488,6 +556,7 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
     await _startup_screen_check(cfg, started_at)
     if _candidate_trigger(cfg.candidates) is not None:
         await run_candidate_expiry_job()
+    await _startup_verification_check(cfg, started_at)
     stop_event = asyncio.Event()
     try:
         await stop_event.wait()

@@ -55,6 +55,14 @@ class Settings(BaseSettings):
     # Below this completeness ratio a market/financial run raises an
     # ``action_required`` notification.
     snapshot_completeness_threshold: float = Field(default=0.95, ge=0, le=1)
+    # iFinD verification budget (P1-A13): at most this many ifind-proxy calls
+    # (every source counted by ``ifind_call_ledger``) in a rolling window of
+    # ``ifind_budget_window_hours``; verification jobs defer beyond it.
+    ifind_budget_per_5h: int = Field(default=150, ge=1, le=10000)
+    ifind_budget_window_hours: float = Field(default=5.0, gt=0, le=48)
+    # Requests one ``ifind_verify`` run picks at most (the rest wait for the
+    # next dispatch slot).
+    ifind_verify_max_requests: int = Field(default=30, ge=1, le=500)
 
     # Candidates (P1-D1): an open candidate expires after this many days; a
     # dismissed listing is not re-proposed by the screen within the cooldown.
@@ -180,11 +188,27 @@ class CandidateScheduleConfig(BaseModel):
     expiry_sweep_cron: str | None = "0 7 * * *"
 
 
+class VerificationScheduleConfig(BaseModel):
+    """iFinD verification schedule (P1-A13); standard crontab fields in ``timezone``.
+
+    ``dispatch_cron`` enqueues one ``ifind_verify`` run per slot when requests
+    are due; ``calibration_cron`` queues ``calibration`` requests for
+    ``calibration_count`` watchlist stocks sampled per ISO week. ``None``
+    disables a job.
+    """
+
+    timezone: str = "Asia/Shanghai"
+    dispatch_cron: str | None = "*/30 * * * *"
+    calibration_cron: str | None = "0 21 * * 0"
+    calibration_count: int = Field(default=10, ge=0, le=200)
+
+
 class AppYamlConfig(BaseModel):
     scheduler: SchedulerConfig
     snapshot: SnapshotScheduleConfig | None = None
     screen: ScreenScheduleConfig | None = None
     candidates: CandidateScheduleConfig | None = None
+    verification: VerificationScheduleConfig | None = None
 
 
 def load_app_yaml(path: Path) -> AppYamlConfig:

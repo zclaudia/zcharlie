@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -167,6 +168,12 @@ def proxy_quota_error(response: httpx.Response, path: str) -> QuotaExhaustedErro
     )
 
 
+ProxyCallHook = Callable[[str, dict[str, Any], str], Awaitable[None]]
+"""``(path, payload, outcome)`` after every proxy call; outcome ``ok`` / ``error`` /
+``quota``. Used to count calls in the iFinD budget ledger (P1-A13); a hook must
+not raise."""
+
+
 class IfindProxyClient:
     """Small async client that unwraps the proxy's nested ``data_preview`` CSV.
 
@@ -182,9 +189,11 @@ class IfindProxyClient:
         api_key: str,
         timeout_seconds: float = 60.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        on_call: ProxyCallHook | None = None,
     ):
         if not api_key:
             raise ValueError("IFIND_PROXY_API_KEY is required")
+        self._on_call = on_call
         self._client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"X-API-Key": api_key},
@@ -199,6 +208,19 @@ class IfindProxyClient:
         await self._client.aclose()
 
     async def post_rows(self, path: str, payload: dict[str, Any]) -> IfindProxyResult:
+        outcome = "error"
+        try:
+            result = await self._post_rows(path, payload)
+            outcome = "ok"
+            return result
+        except QuotaExhaustedError:
+            outcome = "quota"
+            raise
+        finally:
+            if self._on_call is not None:
+                await self._on_call(path, payload, outcome)
+
+    async def _post_rows(self, path: str, payload: dict[str, Any]) -> IfindProxyResult:
         response = await self._client.post(path, json=payload)
         quota = proxy_quota_error(response, path)
         if quota is not None:
@@ -1099,7 +1121,13 @@ async def run_ifind_research_chain(
     )
     try:
         artifact_dir.mkdir(parents=True, exist_ok=False)
-        async with IfindProxyClient(base_url=proxy_url, api_key=proxy_api_key) as client:
+        from investment_agent.verification.budget import ledger_hook
+
+        async with IfindProxyClient(
+            base_url=proxy_url,
+            api_key=proxy_api_key,
+            on_call=ledger_hook(source="research", run_id=run_id),
+        ) as client:
             bundle = await fetch_canonical_bundle(
                 client,
                 ticker=ticker,

@@ -52,6 +52,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`backfill`、`status` | 时点快照采集（见下节） |
 | `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>`、`draft --ticker --template [--as-of] [--now]` | 规则模板 / 实例校验与版本库、LLM 规则起草（见“规则与筛选”） |
 | `ia screen` | `run [--universe] [--as-of] [--now] [--rerun]`、`show <run_id> [--reasons]` | 周频模板筛选 |
+| `ia verify` | `status`、`request --ticker [--trigger] [--fields] [--period]`、`run [--now]` | iFinD 按需核对队列与预算（见“iFinD 按需核对”） |
 | `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
 
@@ -142,7 +143,7 @@ ia snapshot backfill --provider akshare [--with-cash-flow] [--dry-run|--status] 
   公告日晚于 baostock `pubDate`（无则晚于法定截止日）的行标 `restated`。内容有变化才写新版本，不覆盖旧行。
 - **交叉校验**：`debt_ratio` 与 baostock 比（baostock 值不合理时只记 suspect）、`operating_cash_flow` 与 baostock
   `CFOToNP × netProfit` 比（实测相对差 < 1e-6）；营收口径不同不比。超容差写入行 `provider_conflicts` 与运行元数据
-  `provider_conflict`；关键字段冲突 / 缺失调用 `enqueue_verification`（P1-A13 前为空操作）。
+  `provider_conflict`；关键字段冲突 / 缺失投递 iFinD 核对请求（P1-A13）。
 - **金融股**：银行 / 保险 / 券商四个汇总字段与现金流量表两列均可取到；取不到的字段记 `missing_fields`，不算错误。
 - **节流**：调用串行、间隔 ≥ `AKSHARE_MIN_INTERVAL_SECONDS`（默认 1 秒），瞬时错误重试一次；
   连续 3 次失败停止本任务，剩余标的记 `stopped`，运行 `partial`（`stop_reason=provider_unavailable`）并发一次
@@ -157,6 +158,33 @@ ia snapshot backfill --provider akshare [--with-cash-flow] [--dry-run|--status] 
 例如 baostock `debt_ratio` < 0.02（缩小 100 倍缺陷）被拒并改用东财，因子带 `provider_fallback`；无备用值时为缺失并带
 `suspect_provider_value`。每个取值在 `FactorValue.inputs_ref` 中带 `provider` 与核对状态
 （`unverified` / `verified` / `conflict`；免费源之间超容差为 `conflict`）。测试校验因子库读到的每个字段都已登记。
+
+### iFinD 按需核对（P1-A13）
+
+iFinD 只在固定触发时调用（D6 二次修订）：`promote`（晋级前）> `conflict`（免费源关键字段冲突）>
+`missing`（免费源缺失）> `exit_review` > `calibration`（每周抽样）。请求写入 `verification_request`
+（同一股票、触发、报告期只保留一个 pending / deferred 请求，重复投递合并字段）；其他流程调用
+`investment_agent.verification.enqueue_verification(...)`（可传入调用方 session，与其事务一同提交），
+东财交叉校验的冲突 / 缺失已自动投递。
+
+- **预算账本**：每次 ifind-proxy 调用记一行 `ifind_call_ledger`（核对任务、观察池 A3 采集器、单股研究链路都计数），
+  按 5 小时滚动窗口计数，上限 `IFIND_BUDGET_PER_5H`（默认 150）。核对任务每批调用前检查余量，不足则剩余请求
+  `deferred`，`not_before` = 窗口内足够多的旧调用过期的时刻；遇额度错误（A8）立即停止、全部延后一个窗口并发
+  一条 `action_required` 通知。其他路径只计数、不受限。
+- **任务 `ifind_verify`**：按优先级出队，同一报告期最多 3 只合并为一次调用，复用 A3 的请求形状
+  （`/financial/...` 各端点、`/stock/info` 总股本、`/stock/history` 不复权收盘价）。结果写入 iFinD 快照
+  （`provider = ifind`），与观察端按登记表实际取用的免费源值比较（登记表容差）：新版本财务行带
+  `fields.verification = {字段: "verified" | "conflict"}`，因子视图对 `verified` 字段取 iFinD 值，
+  `conflict` 字段仍取免费源并标记冲突；关键字段冲突发 `action_required` 通知。
+- **调度**（`config/app.yaml` 的 `verification:` 段，标准 crontab）：每 30 分钟有到期请求时入队一次
+  `ifind_verify`（按时间槽幂等）；每周日 21:00 按 ISO 周固定种子从观察池抽 10 只投递 `calibration`。
+
+```bash
+ia verify status                                              # 窗口内已用 / 剩余预算，队列按状态 × 触发统计
+ia verify request --ticker 600519.SH --trigger promote        # 全部关键字段，最近年报
+ia verify request --ticker 601398.SH --trigger conflict --fields debt_ratio --period 2025-12-31
+ia verify run --now                                           # 当场执行一次（消耗 iFinD 额度）
+```
 
 ### 回补
 
@@ -254,6 +282,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 `DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
 `IFIND_COLLECT_RATE_PER_MINUTE`、`IFIND_COLLECT_BATCH_RETRIES`、`SNAPSHOT_COMPLETENESS_THRESHOLD`、
 `AKSHARE_MIN_INTERVAL_SECONDS`（默认 1）、
+`IFIND_BUDGET_PER_5H`（默认 150）、`IFIND_BUDGET_WINDOW_HOURS`（默认 5）、`IFIND_VERIFY_MAX_REQUESTS`（默认 30）、
 `LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
 `WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
 `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
