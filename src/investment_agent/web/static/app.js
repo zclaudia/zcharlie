@@ -958,16 +958,12 @@ function wireStockRunForm(form) {
     const formData = new FormData(form);
     const ticker = String(formData.get("ticker") || "");
     const industry = String(formData.get("industry") || "").trim();
-    if (!industry) {
-      const result = document.querySelector("#stock-run-result");
-      if (result) renderRegion(result, "error", "行业为必填项。");
-      return;
-    }
-    const promise = post(
-      "/research/single-stock",
-      { ticker, industry, report_year: new Date().getFullYear() - 1 },
-      { idempotency: true }
-    )
+    // Snapshot research falls back to the data industry group, so industry
+    // is optional; only send it (with the fiscal year) when the user gave one.
+    const body = industry
+      ? { ticker, industry, report_year: new Date().getFullYear() - 1 }
+      : { ticker };
+    const promise = post("/research/single-stock", body, { idempotency: true })
       .then((accepted) => {
         const result = document.querySelector("#stock-run-result");
         if (result) {
