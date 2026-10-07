@@ -5,6 +5,7 @@
 import {
   FIELD_LABELS,
   FRESHNESS_LABELS,
+  INDUSTRY_GROUP_LABELS,
   METRIC_UNITS,
   QUALITY_FLAG_LABELS,
   TEMPLATE_LABELS,
@@ -187,6 +188,11 @@ export function formatPathValue(path, value) {
 // LLM 文本里残留的点路径 / 标识符 / 原始小数（旧数据或模型未遵守提示）：
 // "key_metrics.roe 为 0.120198" -> "ROE 为 12.0%"；只替换已知标识符，其余原样。
 const IDENT_LABELS = Object.freeze({
+  ...INDUSTRY_GROUP_LABELS,
+  calibration_status: "校准状态",
+  preference_notes: "用户偏好备注",
+  negative_earnings: "亏损",
+  screen_result: "筛选结果",
   ...STRATEGY_LABELS,
   ...SCORE_FACTOR_LABELS,
   ...FIELD_LABELS,

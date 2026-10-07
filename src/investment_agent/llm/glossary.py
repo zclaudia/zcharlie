@@ -49,6 +49,18 @@ FIELD_LABELS: dict[str, str] = {
     "missing_fields": "缺失字段",
     "quality_flags": "质量标记",
     "freshness": "数据新鲜度",
+    # templates / prompt inputs
+    "cycle_reversal": "周期反转",
+    "dividend_blue_chip": "红利蓝筹",
+    "high_growth_venture": "高成长风险投资",
+    "quality_growth": "质量成长",
+    "steady_quality_growth": "稳健质量成长",
+    "growth_manufacturing": "成长制造",
+    "calibration_status": "校准状态",
+    "preference_notes": "用户偏好备注",
+    "screen_result": "筛选结果",
+    "provider_fallback": "备用数据源",
+    "main_business_revenue": "主营收入口径",
     # rule zones
     "buy_zone": "可研究区间",
     "drop": "移出候选",
