@@ -521,3 +521,26 @@ async def test_threshold_comes_from_settings(db_session, threshold: float) -> No
     assert health.threshold == threshold
     assert (health.accumulation.streak_weeks == 1) is (threshold == 0.5)
     assert ("completeness_low" in _codes(health)) is (threshold == 0.99)
+
+
+async def test_dashboard_summary_survives_a_failing_health_check(db_session, monkeypatch, tmp_path) -> None:
+    from investment_agent.api.routes import dashboard, data_health
+    from tests.unit._snapshot_support import settings_for
+
+    async def boom(*args, **kwargs):
+        raise RuntimeError("broken aggregate")
+
+    monkeypatch.setattr(data_health, "compute_data_health", boom)
+    warnings, counts = await dashboard.data_health_summary(db_session, settings_for(tmp_path))
+    assert [w.code for w in warnings] == ["data_health_unavailable"]
+    assert warnings[0].level == "error" and warnings[0].link == "/app/health"
+    assert counts is None
+
+
+async def test_dashboard_summary_keeps_only_warn_and_error(db_session, tmp_path) -> None:
+    from investment_agent.api.routes import dashboard
+    from tests.unit._snapshot_support import settings_for
+
+    warnings, counts = await dashboard.data_health_summary(db_session, settings_for(tmp_path))
+    assert warnings == []  # empty database: info only
+    assert counts is not None and counts.infos >= 1 and counts.errors == counts.warnings == 0
