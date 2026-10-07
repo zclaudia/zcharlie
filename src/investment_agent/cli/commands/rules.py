@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 import typer
@@ -25,11 +25,13 @@ app = typer.Typer(help="Rule templates and instances (validate, sync, list, show
 _DIR_HELP = "Template directory (default: config/rule_templates)"
 
 
-def _init() -> None:
-    from investment_agent.storage.database import init_engine
+def _run[T](main: Callable[[], Awaitable[T]]) -> T:
+    """Run ``main`` with the database engine opened and disposed on its loop."""
+
+    from investment_agent.storage.database import run_with_engine
 
     settings = Settings()  # type: ignore[call-arg]
-    init_engine(settings.database_url)
+    return run_with_engine(settings.database_url, main)
 
 
 def _report(exc: RuleValidationError) -> None:
@@ -50,8 +52,7 @@ def validate(
             template = load_template_file(file)
             rprint(f"[green]Valid template[/green] {template.id} ({template.name})")
             return
-        _init()
-        instance_template = asyncio.run(_stored_template(str(raw["template_ref"])))
+        instance_template = _run(lambda: _stored_template(str(raw["template_ref"])))
         if instance_template is None:
             rprint(f"[red]Unknown template[/red] {raw['template_ref']}; run `ia rules sync`")
             raise typer.Exit(code=1)
@@ -82,8 +83,6 @@ def sync(
     except RuleValidationError as exc:
         _report(exc)
         raise typer.Exit(code=1) from exc
-    _init()
-
     async def run() -> None:
         from investment_agent.rules.store import RuleStore
         from investment_agent.storage.database import session_scope
@@ -98,7 +97,7 @@ def sync(
                           outcome.hash[:12])
         rprint(table)
 
-    asyncio.run(run())
+    _run(run)
 
 
 @app.command("list")
@@ -106,8 +105,6 @@ def list_rules(
     symbol: str | None = typer.Option(None, help="Only instances of this ticker"),
 ) -> None:
     """Stored template versions and rule instances."""
-
-    _init()
 
     async def run() -> None:
         from investment_agent.rules.store import RuleStore
@@ -141,7 +138,7 @@ def list_rules(
             )
         rprint(table)
 
-    asyncio.run(run())
+    _run(run)
 
 
 @app.command("show")
@@ -149,8 +146,6 @@ def show(
     ref: str = typer.Argument(..., help="Template id[@version], or a numeric rule instance id"),
 ) -> None:
     """Print a stored template version or rule instance as canonical YAML."""
-
-    _init()
 
     async def run() -> str | None:
         from investment_agent.rules.store import RuleStore, instance_from_record
@@ -172,7 +167,7 @@ def show(
                 return None
             return f"# template {template.ref}\n" + to_yaml(template)
 
-    text = asyncio.run(run())
+    text = _run(run)
     if text is None:
         rprint(f"[red]Not found[/red]: {escape(ref)}")
         raise typer.Exit(code=1)
@@ -226,13 +221,12 @@ def draft(
             rule_draft_idempotency_key,
         )
         from investment_agent.rules.store import RuleStore, instance_from_record
-        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.pipeline_run import (
             IdempotencyPayloadMismatchError,
             PipelineRunRepository,
         )
 
-        init_engine(settings.database_url)
         async with session_scope() as session:
             stored = await RuleStore(session).template_by_ref(template)
         if stored is None:
@@ -292,15 +286,8 @@ def draft(
             typer.echo(to_yaml(instance_from_record(record)))
         return 0
 
-    async def main() -> int:
-        from investment_agent.storage.database import get_engine
+    from investment_agent.storage.database import run_with_engine
 
-        try:
-            return await submit()
-        finally:
-            # Close pooled connections inside this event loop.
-            await get_engine().dispose()
-
-    code = asyncio.run(main())
+    code = run_with_engine(settings.database_url, submit)
     if code:
         raise typer.Exit(code=code)

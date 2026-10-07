@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import socket
@@ -14,6 +13,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from investment_agent.config import Settings
+from investment_agent.storage.database import run_with_engine
 
 app = typer.Typer(help="iFinD on-demand verification queue and budget ledger")
 
@@ -41,12 +41,11 @@ def status() -> None:
     async def load() -> None:
         from sqlalchemy import func, select
 
-        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.database import session_scope
         from investment_agent.storage.models.verification import IfindCallLedger
         from investment_agent.verification.budget import as_utc, budget_status
         from investment_agent.verification.queue import count_due, queue_summary
 
-        init_engine(settings.database_url)
         now = datetime.now(UTC)
         window = timedelta(hours=settings.ifind_budget_window_hours)
         async with session_scope() as session:
@@ -77,7 +76,7 @@ def status() -> None:
         rprint(table)
         rprint(f"Due now: {due}")
 
-    asyncio.run(load())
+    run_with_engine(settings.database_url, load)
 
 
 @app.command("request")
@@ -102,11 +101,10 @@ def request(
     settings = Settings()  # type: ignore[call-arg]
 
     async def submit() -> None:
-        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.listing import ListingRepository
         from investment_agent.verification import enqueue_verification
 
-        init_engine(settings.database_url)
         async with session_scope() as session:
             listing = await ListingRepository(session).get_a_share_listing(ticker.strip().upper())
             if listing is None:
@@ -127,7 +125,7 @@ def request(
             f"(fields={names or 'all key fields'}, period={report_period or 'latest annual'})"
         )
 
-    asyncio.run(submit())
+    run_with_engine(settings.database_url, submit)
 
 
 @app.command("run")
@@ -143,11 +141,10 @@ def run(
 
     async def submit() -> None:
         from investment_agent.research.worker import ResearchWorker
-        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
         from investment_agent.verification.job import IfindVerifyHandler, enqueue_verify_run
 
-        init_engine(settings.database_url)
         stamp = datetime.now(UTC).strftime("cli-%Y%m%dT%H%M%S%f")
         async with session_scope() as session:
             queued, _ = await enqueue_verify_run(
@@ -171,4 +168,4 @@ def run(
                 rprint(f"Summary: {escape(finished.error_summary)}")
             typer.echo(json.dumps(finished.metadata_json, ensure_ascii=False, indent=1, default=str))
 
-    asyncio.run(submit())
+    run_with_engine(settings.database_url, submit)

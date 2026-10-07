@@ -1,14 +1,13 @@
 import pytest
 
-from investment_agent.storage.database import init_engine, session_scope
+from investment_agent.storage.database import engine_lifespan, init_engine, session_scope
 
 
 @pytest.mark.asyncio
 async def test_session_scope_commits():
     from sqlalchemy import text
 
-    init_engine("sqlite+aiosqlite:///:memory:")
-    async with session_scope() as s:
+    async with engine_lifespan("sqlite+aiosqlite:///:memory:"), session_scope() as s:
         result = await s.execute(text("SELECT 1 AS one"))
         assert result.scalar() == 1
 
@@ -17,11 +16,11 @@ async def test_session_scope_commits():
 async def test_session_scope_rolls_back_on_error():
     from sqlalchemy import text
 
-    init_engine("sqlite+aiosqlite:///:memory:")
-    with pytest.raises(ValueError):
-        async with session_scope() as s:
-            await s.execute(text("SELECT 1"))
-            raise ValueError("boom")
+    async with engine_lifespan("sqlite+aiosqlite:///:memory:"):
+        with pytest.raises(ValueError):
+            async with session_scope() as s:
+                await s.execute(text("SELECT 1"))
+                raise ValueError("boom")
 
 
 async def _create_probe_table(engine) -> None:

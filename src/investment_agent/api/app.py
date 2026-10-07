@@ -10,15 +10,15 @@ from investment_agent.api.routes import health
 from investment_agent.api.throttle import AuthFailureThrottle
 from investment_agent.config import Settings
 from investment_agent.logging import configure_logging
-from investment_agent.storage.database import init_engine
+from investment_agent.storage.database import engine_lifespan
 
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()  # type: ignore[call-arg]
     configure_logging(settings.log_level)
-    init_engine(settings.database_url)
-    yield
+    async with engine_lifespan(settings.database_url):
+        yield
 
 
 # CSP for the /app UI: templates and app.js use no inline scripts or styles.
