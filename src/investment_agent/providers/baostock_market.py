@@ -31,7 +31,7 @@ Point-in-time guards: a bar dated after the capture date (Asia/Shanghai), a
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Literal, Protocol
@@ -238,8 +238,9 @@ class DividendEvent:
     """``dividStocksPs``: bonus shares (送股) per share."""
     reserve_per_share: Decimal | None
     """``dividReserveToStockPs``: capitalisation shares (转增) per share."""
-    details: Mapping[str, str]
-    """The raw row (all columns, strings)."""
+    details: Mapping[str, object]
+    """The raw row (all columns, strings); a combined event (several
+    distributions with one ex-date) adds ``components`` (their raw rows)."""
 
     @property
     def available_from(self) -> date:
@@ -258,7 +259,8 @@ class DividendEvent:
         return 1.0 + float(extra)
 
     def completeness(self) -> int:
-        return sum(1 for value in self.details.values() if value.strip())
+        return sum(1 for value in self.details.values() if isinstance(value, str) and value.strip())
+
 
 
 @dataclass(frozen=True)
@@ -270,10 +272,11 @@ class DividendYear:
     events: tuple[DividendEvent, ...]
     """One per ex-date, ascending."""
     duplicates: tuple[str, ...]
-    """Ex-dates answered more than once (preliminary + final rows); the most
-    complete row was kept."""
-    conflicts: tuple[str, ...]
-    """Duplicated ex-dates whose rows disagree on the cash amount."""
+    """Ex-dates with repeated rows of one distribution (preliminary + final,
+    or a copy without the numeric cash); the most complete row was kept."""
+    combined: tuple[str, ...]
+    """Ex-dates carrying several distinct distributions (e.g. a final and an
+    interim dividend paid together); their amounts were summed."""
     no_ex_date: int
     """Rows without an ex-date (plan not executed); dropped."""
     captured_at: datetime
@@ -415,12 +418,23 @@ def parse_dividend_row(ticker: str, row: Mapping[str, str]) -> DividendEvent | N
 def merge_dividend_rows(
     ticker: str, rows: tuple[Mapping[str, str], ...]
 ) -> tuple[tuple[DividendEvent, ...], tuple[str, ...], tuple[str, ...], int]:
-    """Parse and de-duplicate one answer: ``(events, duplicates, conflicts, no_ex_date)``.
+    """Parse and de-duplicate one answer: ``(events, duplicates, combined, no_ex_date)``.
 
-    baostock often answers an ex-date twice: a preliminary row (no AGM date,
-    no after-tax amount) and the final one. The most complete row wins (ties:
-    the later implementation announcement). Rows that disagree on the cash
-    amount are reported as conflicts (the kept row still wins).
+    Observed on the CSI 300 survivorship set (2020-2026, 3073 answers, 57
+    repeated ex-dates):
+
+    * the same distribution twice - a preliminary row (no AGM date, no
+      after-tax amount) and the final one, a copy with an empty numeric cash
+      column, or a copy without the capitalisation column (300015
+      2021-06-24): rows with equal cash per share are one distribution, and
+      a row without the numeric cash is dropped when another row of the
+      ex-date has it. The most complete row wins (ties: the later
+      implementation announcement); bonus / capitalisation shares take the
+      largest value of the copies;
+    * several *distinct* distributions executed on one ex-date (different
+      cash amounts, e.g. 300760 FY final 0.56 + special 1.41 on 2025-05-29):
+      their amounts are summed into one event (``details.components`` keeps
+      every row).
     """
 
     by_ex: dict[date, list[DividendEvent]] = {}
@@ -433,19 +447,70 @@ def merge_dividend_rows(
         by_ex.setdefault(event.ex_date, []).append(event)
     events: list[DividendEvent] = []
     duplicates: list[str] = []
-    conflicts: list[str] = []
+    combined: list[str] = []
     for ex_date in sorted(by_ex):
         candidates = by_ex[ex_date]
-        best = max(
-            candidates,
-            key=lambda item: (item.completeness(), item.implement_date or date.min),
-        )
-        if len(candidates) > 1:
+        if any(item.cash_per_share is not None for item in candidates):
+            candidates = [item for item in candidates if item.cash_per_share is not None]
+        groups: dict[Decimal | None, list[DividendEvent]] = {}
+        for item in candidates:
+            groups.setdefault(item.cash_per_share, []).append(item)
+        if len(by_ex[ex_date]) > len(groups):
             duplicates.append(ex_date.isoformat())
-            if len({item.cash_per_share for item in candidates}) > 1:
-                conflicts.append(ex_date.isoformat())
-        events.append(best)
-    return tuple(events), tuple(duplicates), tuple(conflicts), no_ex_date
+        kept = [_one_distribution(groups[cash]) for cash in sorted(groups, key=lambda c: c or 0)]
+        if len(kept) == 1:
+            events.append(kept[0])
+            continue
+        combined.append(ex_date.isoformat())
+        events.append(_combine(kept))
+    return tuple(events), tuple(duplicates), tuple(combined), no_ex_date
+
+
+def _rank(item: DividendEvent) -> tuple[int, date]:
+    return item.completeness(), item.implement_date or date.min
+
+
+def _largest(values: list[Decimal | None]) -> Decimal | None:
+    present = [value for value in values if value is not None]
+    return max(present) if present else None
+
+
+def _one_distribution(copies: list[DividendEvent]) -> DividendEvent:
+    """Copies of one distribution -> the most complete row (share columns filled)."""
+
+    best = max(copies, key=_rank)
+    if len(copies) == 1:
+        return best
+    return replace(
+        best,
+        stock_per_share=_largest([item.stock_per_share for item in copies]),
+        reserve_per_share=_largest([item.reserve_per_share for item in copies]),
+    )
+
+
+def _sum(values: list[Decimal | None]) -> Decimal | None:
+    present = [value for value in values if value is not None]
+    return sum(present, Decimal(0)) if present else None
+
+
+def _combine(parts: list[DividendEvent]) -> DividendEvent:
+    """Several distributions with one ex-date -> one event (amounts summed)."""
+
+    first = max(parts, key=_rank)
+    announced = [item.announce_date for item in parts if item.announce_date is not None]
+    return DividendEvent(
+        ticker=first.ticker,
+        ex_date=first.ex_date,
+        record_date=first.record_date,
+        pay_date=first.pay_date,
+        # public once the last component was announced (conservative)
+        announce_date=max(announced) if announced else None,
+        implement_date=first.implement_date,
+        cash_per_share=_sum([item.cash_per_share for item in parts]),
+        stock_per_share=_sum([item.stock_per_share for item in parts]),
+        reserve_per_share=_sum([item.reserve_per_share for item in parts]),
+        details={**first.details, "components": [dict(item.details) for item in parts]},
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -637,9 +702,7 @@ class BaostockMarketClient(BaostockReferenceClient):
                     f"baostock {DIVIDEND_OPERATION} answered {row.get('code')!r} for {symbol}",
                     provider=PROVIDER,
                 )
-        events, duplicates, conflicts, no_ex_date = merge_dividend_rows(
-            symbol.upper(), raw.rows
-        )
+        events, duplicates, combined, no_ex_date = merge_dividend_rows(symbol.upper(), raw.rows)
         for event in events:
             if event.ex_date.year != year:
                 raise ProviderDataError(
@@ -654,16 +717,14 @@ class BaostockMarketClient(BaostockReferenceClient):
                     f"{capture_date.isoformat()}",
                     provider=PROVIDER,
                 )
-        if conflicts:
-            log.warning(
-                "baostock_dividend_conflict", symbol=symbol, year=year, ex_dates=conflicts
-            )
+        if combined:
+            log.info("baostock_dividend_combined", symbol=symbol, year=year, ex_dates=combined)
         return DividendYear(
             ticker=symbol.upper(),
             year=year,
             events=events,
             duplicates=duplicates,
-            conflicts=conflicts,
+            combined=combined,
             no_ex_date=no_ex_date,
             captured_at=captured_at,
             raw_rows=raw.rows,

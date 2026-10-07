@@ -150,7 +150,7 @@ class DividendBatch:
     stored: DividendStoreResult
     queries: int
     duplicates: dict[str, list[str]]
-    conflicts: dict[str, list[str]]
+    combined: dict[str, list[str]]
     no_ex_date: int
     aborted: str | None
 
@@ -161,7 +161,7 @@ class DividendBatch:
             "inserted": self.stored.inserted,
             "unchanged": self.stored.unchanged,
             "duplicate_rows_merged": sum(len(v) for v in self.duplicates.values()),
-            "conflicts": dict(sorted(self.conflicts.items())[:_MAX_LISTED]),
+            "combined_ex_dates": dict(sorted(self.combined.items())[:_MAX_LISTED]),
             "rows_without_ex_date": self.no_ex_date,
             "aborted": self.aborted,
         }
@@ -183,7 +183,7 @@ async def collect_dividend_years(
     breaker = TransientBreaker()
     stored = DividendStoreResult()
     duplicates: dict[str, list[str]] = {}
-    conflicts: dict[str, list[str]] = {}
+    combined: dict[str, list[str]] = {}
     no_ex_date = 0
     queries = 0
     async with client.session():
@@ -229,10 +229,10 @@ async def collect_dividend_years(
             for answer in answers:
                 if answer.duplicates:
                     duplicates.setdefault(ticker, []).extend(answer.duplicates)
-                if answer.conflicts:
-                    conflicts.setdefault(ticker, []).extend(answer.conflicts)
+                if answer.combined:
+                    combined.setdefault(ticker, []).extend(answer.combined)
                 no_ex_date += answer.no_ex_date
-    return DividendBatch(stored, queries, duplicates, conflicts, no_ex_date, breaker.reason)
+    return DividendBatch(stored, queries, duplicates, combined, no_ex_date, breaker.reason)
 
 
 async def collect_baostock_dividends(

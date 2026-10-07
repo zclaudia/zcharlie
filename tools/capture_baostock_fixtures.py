@@ -123,6 +123,8 @@ DIVIDEND_REQUESTS: tuple[tuple[str, int], ...] = (
     ("300750.SZ", 2023),  # 宁德时代: 10转8派25.2 (capitalisation issue)
     ("603288.SH", 2021),  # 海天味业: 10转2送1派10.3 (bonus + capitalisation)
     ("000002.SZ", 2025),  # 万科A: no dividend
+    ("300760.SZ", 2025),  # 迈瑞医疗: two distributions on 2025-05-29 (summed)
+    ("000651.SZ", 2020),  # 格力电器: a copy without the numeric cash on 2020-11-12
 )
 
 

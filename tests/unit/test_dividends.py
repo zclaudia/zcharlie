@@ -60,7 +60,7 @@ async def test_fetch_dividends_merges_duplicates_and_reads_the_numeric_cash_colu
         date(2025, 7, 14),
         date(2025, 12, 15),
     ]
-    assert answer.duplicates == ("2025-01-07",) and answer.conflicts == ()
+    assert answer.duplicates == ("2025-01-07",) and answer.combined == ()
     first = answer.events[0]
     # The complete (final) row wins over the preliminary one.
     assert first.details["dividAgmPumDate"] == "2024-12-03"
@@ -99,21 +99,51 @@ async def test_fetch_dividends_guards():
         await _client(backend).fetch_dividends("600036.SH", 2025)
 
 
-def test_merge_dividend_rows_reports_conflicts_and_rows_without_ex_date():
+async def test_distinct_distributions_on_one_ex_date_are_summed():
+    backend = FakeBaostockData()
+    mindray = await _client(backend).fetch_dividends("300760.SZ", 2025)
+    (combined,) = [e for e in mindray.events if e.ex_date == date(2025, 5, 29)]
+    assert mindray.combined == ("2025-05-29",) and mindray.duplicates == ()
+    assert combined.cash_per_share == Decimal("1.97")  # 0.56 + 1.41
+    assert len(combined.details["components"]) == 2  # type: ignore[arg-type]
+    # A copy without the numeric cash is a duplicate, not a second distribution.
+    gree = await _client(backend).fetch_dividends("000651.SZ", 2020)
+    (copy,) = [e for e in gree.events if e.ex_date == date(2020, 11, 12)]
+    assert gree.duplicates == ("2020-11-12",) and gree.combined == ()
+    assert copy.cash_per_share == Decimal("1")
+
+
+def test_merge_dividend_rows_keeps_the_complete_row_and_counts_rows_without_ex_date():
     rows = (
         {"code": "sh.600000", "dividOperateDate": "2025-07-01", "dividCashPsBeforeTax": "0.5"},
         {
             "code": "sh.600000",
             "dividOperateDate": "2025-07-01",
-            "dividCashPsBeforeTax": "0.6",
+            "dividCashPsBeforeTax": "0.5",
             "dividPlanDate": "2025-06-20",
         },
+        {"code": "sh.600000", "dividOperateDate": "2025-07-01", "dividCashPsBeforeTax": ""},
         {"code": "sh.600000", "dividOperateDate": "", "dividCashPsBeforeTax": "0.3"},
     )
-    events, duplicates, conflicts, no_ex_date = merge_dividend_rows("600000.SH", rows)
-    assert [event.cash_per_share for event in events] == [Decimal("0.6")]
-    assert duplicates == conflicts == ("2025-07-01",)
+    events, duplicates, combined, no_ex_date = merge_dividend_rows("600000.SH", rows)
+    assert [event.cash_per_share for event in events] == [Decimal("0.5")]
+    assert events[0].implement_date == date(2025, 6, 20)
+    assert duplicates == ("2025-07-01",) and combined == ()
     assert no_ex_date == 1
+
+
+def test_copy_without_the_capitalisation_column_is_one_distribution():
+    row = {
+        "code": "sz.300015",
+        "dividOperateDate": "2021-06-24",
+        "dividCashPsBeforeTax": "0.148289",
+        "dividStocksPs": "0.000000",
+        "dividReserveToStockPs": "",
+    }
+    rows = (row, {**row, "dividReserveToStockPs": "0.296579"})
+    events, duplicates, combined, _ = merge_dividend_rows("300015.SZ", rows)
+    assert duplicates == ("2021-06-24",) and combined == ()
+    assert events[0].reserve_per_share == Decimal("0.296579")
 
 
 # --------------------------------------------------------------------------- #
