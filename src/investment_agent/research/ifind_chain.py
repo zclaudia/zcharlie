@@ -32,6 +32,7 @@ from investment_agent.factors.registry import (
     FLAG_SHORT_HISTORY,
 )
 from investment_agent.factors.view import ifind_research_view
+from investment_agent.llm.glossary import readability_rules
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.providers.errors import QuotaExhaustedError
 from investment_agent.research.contracts import (
@@ -992,7 +993,11 @@ async def _explain_score(
         ensure_ascii=False,
         sort_keys=True,
     )
-    system_prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE.format(output_schema=output_schema)
+    system_prompt = (
+        EXPLANATION_SYSTEM_PROMPT_TEMPLATE.format(output_schema=output_schema)
+        + "\n\n"
+        + readability_rules()
+    )
     async with session_scope() as session:
         client = OpenAICompatibleClient(
             tier_name="tier3",

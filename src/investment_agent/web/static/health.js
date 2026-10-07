@@ -5,8 +5,15 @@
 // 进度条用原生 <meter> / <progress>，不写内联样式。
 
 import { ApiError, get } from "./api.js";
-import { clear, el, fmt, stockLink } from "./dom.js";
-import { VERIFICATION_STATUS_LABELS, VERIFICATION_TRIGGER_LABELS, label } from "./format.js";
+import { clear, el, errorText, fmt, stockLink } from "./dom.js";
+import {
+  INDUSTRY_SYSTEM_LABELS,
+  VERIFICATION_STATUS_LABELS,
+  VERIFICATION_TRIGGER_LABELS,
+  fieldLabel,
+  humanizeDetail,
+  label,
+} from "./format.js";
 
 export const HEALTH_REGIONS = new Set(["data-health"]);
 
@@ -350,7 +357,9 @@ function renderCollection(item, threshold) {
     );
   }
   if (run.error_summary && run.status !== "success") {
-    block.appendChild(el("p", { class: "small error-text" }, run.error_summary));
+    const error = el("div", { class: "small error-text" });
+    error.appendChild(errorText(run.error_summary));
+    block.appendChild(error);
   }
   if (item.trend.length > 1) {
     const trend = el("p", { class: "trend small" });
@@ -437,10 +446,10 @@ function renderIndustry(data) {
     simpleTable(
       ["体系", "最近同步", "状态", "说明"],
       industry.systems.map((system) => [
-        system.system,
+        label(INDUSTRY_SYSTEM_LABELS, system.system),
         localTime(system.at),
         system.status ? statusChip(system.status) : "—",
-        system.detail,
+        humanizeDetail(system.detail),
       ])
     )
   );
@@ -463,7 +472,7 @@ function renderBackfill(data) {
         .map(([status, count]) => `${label(RUN_STATUS_LABELS, status)} ${count}`)
         .join("，");
       item.appendChild(el("p", { class: "small muted" }, `任务 ${part.jobs}${statuses ? `（${statuses}）` : ""}`));
-      if (part.detail) item.appendChild(el("p", { class: "small" }, part.detail));
+      if (part.detail) item.appendChild(el("p", { class: "small" }, humanizeDetail(part.detail)));
       if (part.failed) item.appendChild(tickerList("失败", part.failed_symbols, part.failed));
       list.appendChild(item);
     }
@@ -522,7 +531,7 @@ function renderVerification(data) {
         ["代码", "字段", "报告期", "来源", "时间"],
         verification.conflicts.map((item) => [
           tickerNode(item.ticker),
-          item.fields.join("、"),
+          item.fields.map(fieldLabel).join("、"),
           item.report_period,
           item.source === "verification" ? "iFinD 核对" : item.backfill ? "东财交叉校验（回补）" : "东财交叉校验",
           localTime(item.at),

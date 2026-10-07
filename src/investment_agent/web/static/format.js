@@ -296,3 +296,262 @@ export function inRange(value, range) {
     value <= range.max
   );
 }
+
+// ---- 可读化（P0）：把标识符、枚举、原始小数换成人读文字 ----------------
+
+// 字段（数据层）中文名；未在 FACTOR_LABELS 中的补充。
+export const FIELD_LABELS = Object.freeze({
+  ...FACTOR_LABELS,
+  pe: "PE",
+  pb: "PB",
+  dividend_yield: "股息率",
+  close: "收盘价",
+  turnover: "换手率",
+  bvps_fy: "每股净资产(FY)",
+  eps_basic_fy: "基本 EPS(FY)",
+  revenue_ps_fy: "每股营收(FY)",
+  capital_expenditure: "资本开支",
+  cash_dividend_per_share: "每股现金分红",
+  net_profit_parent: "归母净利润",
+  net_profit_total: "净利润",
+  operating_cash_flow: "经营现金流",
+  revenue_main: "主营收入",
+  revenue_total: "营业总收入",
+  total_equity: "所有者权益",
+  total_shares: "总股本",
+});
+
+// 关键指标与因子的单位，复用 formatFactorValue。
+export const METRIC_UNITS = Object.freeze({
+  market_cap: "CNY",
+  pe: "times",
+  pb: "times",
+  pe_ttm: "times",
+  pb_mrq: "times",
+  ps_ttm: "times",
+  dividend_yield: "fraction",
+  dividend_yield_ttm: "fraction",
+  roe: "fraction",
+  roe_stability: "ratio",
+  debt_ratio: "fraction",
+  gross_margin: "fraction",
+  net_margin: "fraction",
+  revenue_growth_3y: "fraction",
+  net_profit_growth_3y: "fraction",
+  max_drawdown_1y: "fraction",
+  volatility_1y: "fraction",
+  return_1y: "fraction",
+  pe_percentile_5y: "fraction",
+  pb_percentile_5y: "fraction",
+  position_weight: "fraction",
+  gain_vs_cost: "fraction",
+  holding_days: "days",
+  free_cash_flow: "CNY",
+  operating_cash_flow: "CNY",
+  eps_ttm: "CNY/share",
+});
+
+// 规则模板 id -> 中文名（与 config/rule_templates/*.yaml 的 name 保持一致）。
+export const TEMPLATE_LABELS = Object.freeze({
+  cycle_reversal: "周期反转",
+  dividend_blue_chip: "红利蓝筹",
+  high_growth_venture: "高成长风险投资",
+  quality_growth: "质量成长",
+  steady_quality_growth: "稳健质量成长",
+});
+
+// 运行 / 刷新 / 新鲜度等状态值（statusBadge 统一使用）。
+export const STATUS_LABELS = Object.freeze({
+  queued: "排队中",
+  running: "运行中",
+  success: "成功",
+  partial: "部分成功",
+  failed: "失败",
+  needs_review: "待复核",
+  ok: "正常",
+  stale: "已过期",
+  unknown: "未知",
+  created: "已排队",
+  reused: "复用运行",
+  skipped: "已跳过",
+  cancelled: "已取消",
+  error: "错误",
+  warning: "警告",
+});
+
+export const RUN_STAGE_LABELS = Object.freeze({
+  queued: "排队",
+  claimed: "已领取",
+  created: "已创建",
+  fetching: "获取数据",
+  scoring: "评分",
+  explaining: "生成解释",
+  persisting: "写入结果",
+  completed: "已完成",
+  partial: "部分完成",
+  failed: "失败",
+});
+
+export const QUALITY_FLAG_LABELS = Object.freeze({
+  derived_field: "派生字段",
+  factor_missing: "因子缺失",
+  missing_field: "字段缺失",
+  model_not_applicable: "模型不适用",
+  short_price_history: "价格历史不足",
+  stale_data: "数据过期",
+  main_business_revenue: "主营收入口径",
+  ...FLAG_LABELS,
+});
+
+export const PROVIDER_LABELS = Object.freeze({
+  baostock: "baostock",
+  akshare: "AkShare",
+  eastmoney: "东方财富",
+  ifind: "iFinD",
+});
+
+export const SOURCE_VERIFICATION_LABELS = Object.freeze({
+  unverified: "未核对",
+  verified: "已核对",
+  conflict: "有冲突",
+});
+
+export const PERIOD_KIND_LABELS = Object.freeze({
+  annual: "年报",
+  q1: "一季报",
+  half: "半年报",
+  h1: "半年报",
+  q3: "三季报",
+});
+
+export const FRESHNESS_LABELS = Object.freeze({
+  stock: "公司信息",
+  market_data: "行情",
+  financial_data: "财报",
+});
+
+export function fieldLabel(name) {
+  return label(FIELD_LABELS, name);
+}
+
+// "cycle_reversal@2" -> "周期反转 v2"；未知模板原样返回。
+export function templateLabel(ref) {
+  if (typeof ref !== "string" || !ref) return "—";
+  const [id, version] = ref.split("@");
+  const name = label(TEMPLATE_LABELS, id);
+  return version ? `${name} v${version}` : name;
+}
+
+// 规则参数名 -> 中文："buy_pb_pct_max" -> "可研究区间 · PB 5 年分位上限"。
+// 命名约定：[区间前缀_]因子缩写_(min|max)；无前缀为筛选条件参数。
+const PARAM_ZONE_PREFIXES = Object.freeze({
+  buy: "buy_zone",
+  drop: "drop",
+  add: "add",
+  trim: "trim",
+  exit: "exit_review",
+});
+
+const PARAM_FACTOR_ALIASES = Object.freeze({
+  pb_pct: "pb_percentile_5y",
+  pe_pct: "pe_percentile_5y",
+  weight: "position_weight",
+  gain: "gain_vs_cost",
+  drawdown: "max_drawdown_1y",
+  revenue_growth: "revenue_growth_3y",
+  profit_growth: "net_profit_growth_3y",
+  volatility: "volatility_1y",
+  dividend_yield: "dividend_yield_ttm",
+  holding_days: "holding_days",
+});
+
+export function parseParamName(name) {
+  if (typeof name !== "string") return null;
+  const match = /^(?:(buy|drop|add|trim|exit)_)?([a-z0-9_]+?)_(min|max)$/.exec(name);
+  if (!match) return null;
+  const [, prefix, body, bound] = match;
+  const factor = PARAM_FACTOR_ALIASES[body] || body;
+  return { zone: prefix ? PARAM_ZONE_PREFIXES[prefix] : "screen", factor, bound };
+}
+
+export function paramLabel(name) {
+  const parsed = parseParamName(name);
+  if (!parsed) return String(name ?? "—");
+  const zone = parsed.zone === "screen" ? "筛选" : label(ZONE_LABELS, parsed.zone);
+  return `${zone} · ${factorLabel(parsed.factor)}${parsed.bound === "min" ? "下限" : "上限"}`;
+}
+
+// 参数取值按其因子的单位显示；units 来自 API 的 factor_units，缺省用 METRIC_UNITS。
+export function formatParamValue(name, value, units) {
+  if (value === null || value === undefined || value === "") return "—";
+  const parsed = parseParamName(name);
+  const unit = parsed ? (units && units[parsed.factor]) || METRIC_UNITS[parsed.factor] : undefined;
+  return unit ? formatFactorValue(value, unit, { precise: false }) : String(value);
+}
+
+// 原始错误串 -> 一行人话 + 原文（展开查看）。
+export function summarizeError(raw) {
+  if (raw === null || raw === undefined || raw === "") return { summary: "—", raw: "" };
+  const text = String(raw);
+  let prefix = "";
+  let body = text;
+  const stage = /^(explanation|scoring|fetching|persisting) failed:\s*/i.exec(body);
+  if (stage) {
+    prefix = { explanation: "解释生成失败", scoring: "评分失败", fetching: "数据获取失败", persisting: "写入失败" }[
+      stage[1].toLowerCase()
+    ];
+    body = body.slice(stage[0].length);
+  }
+  let summary;
+  const http = /Error code:\s*(\d{3})/.exec(body);
+  const model = /model ([\w.\-]+)/.exec(body);
+  if (http && /model_not_found|No available channel/.test(body)) {
+    summary = `LLM 服务不可用（HTTP ${http[1]}${model ? ` · 模型 ${model[1]} 无可用渠道` : ""}）`;
+  } else if (http) {
+    summary = `LLM 服务返回错误（HTTP ${http[1]}）`;
+  } else if (/IntegrityError/.test(body)) {
+    const constraint = /(NOT NULL|UNIQUE|FOREIGN KEY) constraint failed:\s*([\w.]+)/.exec(body);
+    summary = constraint
+      ? `数据库写入失败（${constraint[2]} ${constraint[1] === "NOT NULL" ? "不能为空" : constraint[1] === "UNIQUE" ? "重复" : "外键不匹配"}）`
+      : "数据库写入失败";
+  } else if (/validation errors? for (\w+)/.test(body)) {
+    const match = /(\d+) validation errors? for (\w+)/.exec(body);
+    summary = match ? `LLM 输出不符合格式（${match[2]} 有 ${match[1]} 处校验错误）` : "LLM 输出不符合格式";
+  } else if (/timed? ?out|Timeout/i.test(body)) {
+    summary = "请求超时";
+  } else if (/Quota|quota|budget/.test(body)) {
+    summary = "数据源配额用尽";
+  } else {
+    summary = body.length > 80 ? `${body.slice(0, 80)}…` : body;
+  }
+  if (prefix) summary = `${prefix}：${summary}`;
+  return { summary, raw: summary === text ? "" : text };
+}
+
+// 采集任务的英文明细（"applied 300, changed 300"）-> 中文；未知词原样保留。
+const DETAIL_WORDS = Object.freeze({
+  applied: "应用",
+  changed: "变更",
+  current: "当前",
+  removed: "移除",
+  added: "新增",
+  changes: "变动",
+  skipped: "跳过",
+  failed: "失败",
+  missing: "缺失",
+  updated: "更新",
+});
+
+export function humanizeDetail(text) {
+  if (typeof text !== "string" || !text) return text ?? "—";
+  return text
+    .replace(/\b([a-z]+) (\d+)/g, (whole, word, count) =>
+      Object.prototype.hasOwnProperty.call(DETAIL_WORDS, word) ? `${DETAIL_WORDS[word]} ${count}` : whole
+    )
+    .replace(/, /g, "，");
+}
+
+export const INDUSTRY_SYSTEM_LABELS = Object.freeze({
+  csrc: "证监会行业",
+  sw2021: "申万 2021",
+});

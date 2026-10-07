@@ -50,6 +50,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from investment_agent.factors.registry import FactorValue
+from investment_agent.llm.glossary import readability_rules
 from investment_agent.rules.schema import ConditionGroup, RuleInstance, RuleTemplate, param_ref
 from investment_agent.rules.validation import RuleContext, check_instance
 
@@ -111,13 +112,17 @@ RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的"规则起�
 2. rationale：params 中的每个参数各写一条 choice=adjusted 的说明；也可以为保持默认的关键参数写 choice=default 的说明。cited_factors 只能写输入 factors 中存在且 value 非 null 的因子名，choice=adjusted 时至少引用一个因子。value 为 null（quality 为 missing / not_applicable）的因子不能作为论据，只能在 watch_points 中作为数据缺口提及。
 3. 结合 screen_result（该股满足或未满足哪些筛选条件）、行业组与申万行业、preference_notes（用户过去驳回或忽略时写下的理由，代表其偏好）决定参数松紧。
 4. overall_rationale 概述参数化思路；watch_points 列出后续需要复核的数据点或证伪信号。
-5. 禁止交易指令语言：不得出现"买入""卖出""加仓""减仓""清仓""建仓""止损""止盈""目标价""仓位建议"等字样，不得给出收益承诺。提到区间时只使用标识符 buy_zone、drop、add、trim、exit_review。
+5. 禁止交易指令语言：不得出现"买入""卖出""加仓""减仓""清仓""建仓""止损""止盈""目标价""仓位建议"等字样，不得给出收益承诺。提到区间时使用中性中文名（可研究区间、移出候选、持仓 add 区间、持仓 trim 区间、持仓复核区间），不要用交易动作描述区间。
 6. 输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要输出其他文字：
 {output_schema}"""
 
 
 def system_prompt() -> str:
-    return RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE.format(output_schema=output_json_schema())
+    return (
+        RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE.format(output_schema=output_json_schema())
+        + "\n\n"
+        + readability_rules()
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
+from investment_agent.providers.shenwan_directory import default_shenwan_directory
 from investment_agent.rules.store import RuleStore
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
@@ -140,8 +141,20 @@ def screen_result_snapshot(row: ScreenResultRecord) -> dict[str, Any]:
         "outcome": row.outcome,
         "rank": row.rank,
         "reasons": list(row.reasons or []),
-        "context": dict(row.context or {}),
+        "context": _context_with_industry_name(row.context),
     }
+
+
+def _context_with_industry_name(context: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The stored screen context plus the Shenwan industry name (display only)."""
+
+    result = dict(context or {})
+    industry = result.get("industry")
+    if isinstance(industry, dict) and industry.get("system") == "sw2021" and not industry.get("name"):
+        name = default_shenwan_directory().name_of(industry.get("code"))
+        if name:
+            result["industry"] = {**industry, "name": name}
+    return result
 
 
 async def latest_screen_results(

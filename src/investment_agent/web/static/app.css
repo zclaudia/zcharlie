@@ -187,7 +187,7 @@ code[data-field-path] { text-decoration: underline dotted; }
 .chip-warn, .chip-pending, .draft-pending, .draft-none { color: var(--warn); border-color: var(--warn); }
 .draft-ready, .state-promoted, .rule-active, .verify-done { color: var(--ok); border-color: var(--ok); }
 .draft-failed, .verify-failed, .state-dismissed { color: var(--error); border-color: var(--error); }
-.chip-template { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chip-template { font-weight: 600; }
 
 .calibration-banner { font-size: 0.88rem; }
 
@@ -330,3 +330,60 @@ progress.accumulation-progress { width: 100%; height: 1rem; accent-color: var(--
   .health-table td { border-bottom: none; padding: 0.1rem 0; }
   .health-table td::before { content: attr(data-label) "："; color: var(--ink-muted); }
 }
+
+/* ---- 可读化（P0） ---- */
+
+.num, .score-bar-value, .param-table td { font-variant-numeric: tabular-nums; }
+
+/* 分项评分：标签 + meter + 分值 */
+.score-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.score-bars li {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 9rem) 1fr 3rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.score-bar-label { color: var(--ink); }
+.score-bar-meter { width: 100%; height: 0.6rem; accent-color: var(--accent); }
+.score-bar-meter::-webkit-meter-bar { background: var(--line); border: none; border-radius: 999px; height: 0.6rem; }
+.score-bar-meter::-webkit-meter-optimum-value { background: var(--accent); border-radius: 999px; }
+.score-bar-meter::-moz-meter-bar { background: var(--accent); border-radius: 999px; }
+.score-bar-value { text-align: right; font-weight: 600; }
+
+/* 错误：一行摘要，原文收起 */
+.error-detail summary { cursor: pointer; color: var(--error); }
+.error-detail summary::marker { color: var(--ink-muted); }
+.raw-error {
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.6rem;
+  max-height: 14rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.error-cell { max-width: 28rem; }
+
+/* AI 解释中的证据引用：中文标签 + 格式化值 */
+.explain-summary { font-size: 0.98rem; }
+.field-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; margin-left: 0.4rem; }
+.evidence-chip {
+  font-size: 0.78rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.evidence-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 参数表：中文名为主，标识符小字 */
+.param-name { display: block; font-weight: 600; }
+.param-id { display: block; font-weight: 400; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.range-hint:not(:empty) { display: block; color: var(--ink-muted); }
+input[aria-invalid="true"] + .range-hint { color: var(--error); }

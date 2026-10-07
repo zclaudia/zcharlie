@@ -1,6 +1,8 @@
 // DOM 构造工具：只用 createElement / textContent / setAttribute，
 // 绝不以 HTML 字符串写入数据（CSP + XSS 基线）。
 
+import { STATUS_LABELS, label, summarizeError } from "./format.js";
+
 export function el(tag, attributes = {}, text) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attributes)) {
@@ -51,7 +53,17 @@ export function kvTable(pairs) {
 
 export function statusBadge(value) {
   if (!value) return el("span", {}, "—");
-  return el("span", { class: `status status-${value}` }, value);
+  return el("span", { class: `status status-${value}`, title: value }, label(STATUS_LABELS, value));
+}
+
+// 原始错误：一行人话，原文收进 <details>（不直接铺满表格）。
+export function errorText(raw) {
+  const { summary, raw: original } = summarizeError(raw);
+  if (!original) return el("span", {}, summary);
+  const box = el("details", { class: "error-detail" });
+  box.appendChild(el("summary", {}, summary));
+  box.appendChild(el("pre", { class: "raw-error" }, original));
+  return box;
 }
 
 export function clear(node) {
