@@ -38,7 +38,11 @@ class SecurityHeadersMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        is_web = str(scope.get("path", "")).startswith("/app")
+        path = str(scope.get("path", ""))
+        is_web = path.startswith("/app")
+        # Static UI files carry no version in their URLs: make browsers
+        # revalidate (ETag -> 304) so an upgrade never runs stale JS modules.
+        is_static = path.startswith("/app/static/")
 
         async def send_with_headers(message: Any) -> None:
             if message["type"] == "http.response.start":
@@ -53,6 +57,8 @@ class SecurityHeadersMiddleware:
                         (b"content-security-policy", WEB_CONTENT_SECURITY_POLICY.encode())
                     )
                     extra.append((b"x-frame-options", b"DENY"))
+                if is_static:
+                    extra.append((b"cache-control", b"no-cache"))
                 for name, value in extra:
                     if name not in present:
                         headers.append((name, value))

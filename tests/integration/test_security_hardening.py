@@ -202,6 +202,17 @@ def test_web_pages_send_security_headers(api_client):
     assert r.headers["referrer-policy"] == "same-origin"
 
 
+def test_static_ui_files_are_revalidated_not_heuristically_cached(api_client):
+    # Unversioned module URLs: without this an upgrade keeps running stale JS.
+    r = api_client.get("/app/static/app.js")
+    assert r.status_code == 200
+    assert r.headers["cache-control"] == "no-cache"
+    assert r.headers.get("etag")
+    again = api_client.get("/app/static/app.js", headers={"If-None-Match": r.headers["etag"]})
+    assert again.status_code == 304
+    assert "cache-control" not in api_client.get("/healthz").headers
+
+
 def test_templates_have_no_inline_script_or_style(api_client):
     _login(api_client)
     for path in (
