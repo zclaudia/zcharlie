@@ -50,7 +50,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | `ia worker` | `start [--once] [--kinds ...]` | 队列 worker（研究 + 快照采集，按 kind 分派） |
 | `ia scheduler` | `start` | 日终刷新与快照采集调度 |
 | `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`backfill`、`status` | 时点快照采集（见下节） |
-| `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>` | 规则模板 / 实例校验与版本库（见“规则与筛选”） |
+| `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>`、`draft --ticker --template [--as-of] [--now]` | 规则模板 / 实例校验与版本库、LLM 规则起草（见“规则与筛选”） |
 | `ia screen` | `run [--universe] [--as-of] [--now] [--rerun]`、`show <run_id> [--reasons]` | 周频模板筛选 |
 | `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
@@ -200,6 +200,14 @@ ia snapshot backfill --universe CSI300 --status                                 
   运行全部模板的 `screen` 条件，结果写入 `screen_result`（命中 / 截断 / 未命中 / 跳过 / 剔除，附结构化理由）。
   ST 与逾期未披露标的全局剔除；每模板默认最多 20 个命中，按"阈值内距离"强度排序。
   `ia screen run --as-of 2026-09-30 --now` 当场执行，`ia screen show <run_id> --reasons` 查看理由。
+- 规则起草（P1-C5，任务 `rule_draft`，由候选生命周期按 `rule_draft:{candidate_id}:{template}@{ver}` 投递）：
+  LLM（`LLM_TIER3_*`）只为模板**选择参数取值**（条件与区间来自模板），输入为该股时点因子值（值 / 质量 / 标记 / 单位，
+  含 5 年估值分位）、行业组与申万行业、命中的筛选理由与用户偏好备注。输出须通过校验才入库：参数存在且在
+  `param_ranges` 内、逐参数理由只引用输入中非空的因子、无交易指令用语（买入 / 卖出 / 加仓 / 止损 / 目标价……）、
+  P1-C1 实例校验；不通过则把问题反馈给 LLM 重试一次，仍失败则不入库、任务 `partial`（"草稿不可用"，可人工补写）。
+  通过的草稿存为 `scope=candidate` 的 `draft`（`drafted_by=llm:<model>`，`draft_rationale` 为 JSON），同内容重复起草返回已有草稿；
+  每次调用记入 `llm_call`（`purpose=rule_draft`）。手动试用：`ia rules draft --ticker 600519.SH --template quality_growth --as-of 2026-09-30 --now`
+  （会调用已配置的 LLM）。
 
 ## HTTP API（`X-API-Key` 或 Web 会话）
 
