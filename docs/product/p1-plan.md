@@ -258,7 +258,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 - `snapshot_view` 按登记表取值：已核对值 > 主来源 > 备用来源；返回值带 `provider` 与核对状态。
 - 覆盖校验：观察端单股研究用到的每个字段都必须登记，且主来源不得是 iFinD，否则测试失败。
 
-### P1-A13 iFinD 按需核对与预算账本（M）· 迁移 `018`
+### P1-A13 iFinD 按需核对与预算账本（M）· 迁移 `019`
 
 - 表 `ifind_call_ledger`：每次 proxy 调用记一行（时间、接口、标的数、结果）；预算按 5 小时滚动窗口计算，
   上限可配置，默认 150 次。
@@ -367,7 +367,7 @@ iFinD 公告接口的实测结论（单次最多 50 条、多只合并查询无�
 
 ## 6. 工作流 D：候选与决策日志
 
-### P1-D1 候选生命周期（M）· 迁移 `017`
+### P1-D1 候选生命周期（M）· 迁移 `018`
 
 - 表 `candidate`：`symbol`、`opened_at`、`expires_at`（默认 14 天）、`sources`（screen / manual）、
   `screen_result_ref`、`draft_rule_ref`、`status`（`open` / `promoted` / `dismissed` / `expired`）。
