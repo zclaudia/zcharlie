@@ -382,3 +382,8 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - 备份恢复：[`docs/product/backup-and-recovery.md`](docs/product/backup-and-recovery.md)
 - 评分 v1.3 变更与回归差异：[`docs/product/scoring-v1.3-changes.md`](docs/product/scoring-v1.3-changes.md)
 - 安全部署：[`docs/product/security-deployment.md`](docs/product/security-deployment.md)
+- 选股—观察—持仓漏斗设计：[`docs/product/funnel-design.md`](docs/product/funnel-design.md)
+- P1 执行计划与决策：[`docs/product/p1-plan.md`](docs/product/p1-plan.md)
+- P1 运维手册（部署、回补、调度、日常检查、故障处理）：[`docs/product/operations.md`](docs/product/operations.md)
+- 规则模板审阅与决定：[`docs/product/templates-v1-review.md`](docs/product/templates-v1-review.md)
+- 观察端 snapshot 模式：[`docs/product/observation-snapshot-mode.md`](docs/product/observation-snapshot-mode.md)

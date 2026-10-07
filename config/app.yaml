@@ -1,5 +1,8 @@
 scheduler:
-  watchlist_refresh_cron: "30 15 * * 1-5"
+  # Watchlist research reads the snapshot store (P1-B5, source mode
+  # "snapshot"), so it runs after the evening baostock market snapshot
+  # (snapshot.market_snapshot_cron, 18:30) has stored the day's bars.
+  watchlist_refresh_cron: "30 19 * * 1-5"
   watchlist_refresh_timezone: Asia/Shanghai
   a_share_calendar_path: config/calendars/a_share.yaml
 
@@ -27,7 +30,7 @@ snapshot:
 screen:
   universes: [CSI300]
   timezone: Asia/Shanghai
-  cron: "0 20 * * sun"   # by name: APScheduler numbers weekdays from mon=0
+  cron: "0 20 * * 0"     # Sunday 20:00 (standard crontab weekdays, 0 = Sunday)
   hit_cap: 20
 
 # Candidates (P1-D1): daily sweep moving open candidates past expires_at to

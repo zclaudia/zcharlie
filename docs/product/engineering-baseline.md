@@ -177,8 +177,8 @@ mypy src/investment_agent
 | 主存储 | SQLite + Alembic | 多用户或并发写入成为瓶颈 |
 | 长任务 | 持久化数据库队列 + worker | 多机器后再评估 Redis/Celery |
 | UI | 响应式 Web UI | 明确需要系统级移动能力 |
-| 数据源 | iFinD 优先、provider 接口可替换 | 新数据源能改善覆盖或容灾 |
-| 评分 | 仓库内确定性 kernel | 每次变化必须版本化与回测 |
+| 数据源 | **免费源为主**（D6 二次修订，2026-10-06）：baostock 负责成分、证监会行业、日线、估值、季度财务、披露日与分红；AkShare 负责申万行业（D7）与东财财务（归母净利润、营业总收入、经营现金流、负债率兜底、自由现金流）；**iFinD 只做按需核对**，受 5 小时窗口预算约束。字段主 / 备来源见 `config/field_sources.yaml` | 免费源停服或口径漂移持续出现；需要 iFinD 以外的付费源时评估 Tushare Pro |
+| 评分 | 仓库内确定性 kernel；选股端为版本化规则模板 + 确定性筛选引擎（P1） | 每次变化必须版本化与回测 |
 | LLM | OpenAI-compatible adapter | 保持供应商可替换 |
 | 部署 | 本地 Docker Compose | 需要远程访问时再设计云部署 |
 
