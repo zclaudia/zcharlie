@@ -206,7 +206,8 @@ class DividendCoverage(Base, TimestampMixin):
     events in a covered year paid nothing with an ex-date in that year.
     ``first_checked_at`` is the knowledge time of the coverage (backfilled
     rows: reconstructed, like the other backfill tables); ``last_checked_at``
-    and ``event_count`` follow the latest check.
+    and ``event_count`` follow the latest check. Point-in-time readers take
+    the latest check known on a date from :class:`DividendCoverageCheck`.
     """
 
     __tablename__ = "dividend_coverage"
@@ -220,5 +221,30 @@ class DividendCoverage(Base, TimestampMixin):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     first_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_backfill: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class DividendCoverageCheck(Base, TimestampMixin):
+    """Append-only history of dividend coverage checks (migration 020).
+
+    ``dividend_coverage.last_checked_at`` moves with every re-collection, so
+    reading it for a past ``as_of`` leaked later checks into point-in-time
+    results (the dividend factor's freshness and ``inputs_ref``). One row per
+    check lets readers take the latest check known by the end of ``as_of``.
+    """
+
+    __tablename__ = "dividend_coverage_check"
+    __table_args__ = (
+        Index(
+            "ix_dividend_coverage_check_lookup", "listing_id", "provider", "year", "checked_at"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listing.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     event_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_backfill: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
