@@ -48,6 +48,22 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 然后"批准并晋级 / 驳回草稿 / 忽略候选"（后两者必填理由），并显示 iFinD 核对与决策记录。
 今日概览新增"本周候选"计数（待处理、草稿待审阅、起草中、iFinD 核对未完成）。
 
+数据健康页 `/app/health`（P1-E2，导航"数据健康"）：快照积累进度"快照积累 X / 8 周"（阶段退出指标）、
+日线 / 财报 / 分红新鲜度与覆盖率、各采集任务最近一次完整率（缺失按 failed / stopped / quota / no_data /
+pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同步、历史回补进度、iFinD 预算与核对队列、
+字段冲突、逾期财报，以及提醒列表。只读，不触发采集。
+
+- **积累口径**：目标池（`snapshot.universes` 第一个）的实时 `market_snapshot` 运行（baostock，
+  `success` / `partial` 且采到至少一只；回补不算）按交易日所在 ISO 周统计；同一交易日取最好的一次。
+  一周至少有一个交易日的快照、且当周最低完整率 ≥ `SNAPSHOT_COMPLETENESS_THRESHOLD` 即达标；
+  无交易日的周（按交易日历）与进行中的本周既不计数也不中断，其余周使连续周数归零。进度 = 连续达标周数。
+- **提醒规则**：最新日线落后应有交易日（今天之前最近的交易日）≥ 1 个交易日为 warn、≥ 3 个为 error；
+  最新日线覆盖成分低于阈值；任一采集任务最近一次失败（error）或完整率低于阈值（warn）；
+  24 小时内因 iFinD 额度或数据源连续失败提前停止；成分同步超过 14 天、行业同步超过 40 天（info）；
+  最近一个已结束的交易周未达标（积累归零）；iFinD 预算用尽；近 7 天的实时字段冲突（回补冲突只列出不提醒）；
+  逾期财报；交易日历到期。warn / error 级提醒同时并入 `/dashboard/today` 的 `warnings`
+  （`source = "data_health"`，`link` 指向页内分区），今日概览另显示"数据健康"计数卡片。
+
 ## CLI
 
 | 组 | 命令 | 用途 |
@@ -271,7 +287,8 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /research/runs/{id}/changes`、`/change-notification` | 结构化 diff / 重要变化通知下载 |
 | `GET /research/runs/{id}/artifacts[/{name}]` | 受控制品下载（限本 run 目录内） |
 | `GET /research/stocks/{ticker}/history` | 分页快照历史 |
-| `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数） |
+| `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数 + `data_health` 计数；`warnings` 含日历与数据健康提醒） |
+| `GET /health/data` | 数据健康聚合（只读）：`accumulation`、`freshness`、`universes`、`industry`、`collections`、`backfill`、`verification`、`overdue`、`warnings` |
 | `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
 | `GET /admin/llm-calls`、`/admin/llm-calls/cost` | LLM 调用审计 / 月度成本 |
 | `GET /candidates?status=&limit=&offset=`、`GET /candidates/{id}` | 候选分页列表（来源、最新理由、草稿状态）/ 详情（理由与快照引用、草稿规则、决策历史） |
