@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from investment_agent.research_kernel import __version__
 from investment_agent.research_kernel.company_profile import classify_company_profile
+from investment_agent.research_kernel.industry import IndustryBasis, resolve_industry_basis
 from investment_agent.research_kernel.models import (
     MODEL_LABELS,
     STRATEGY_LABELS,
@@ -57,20 +58,14 @@ MARKET_TIMEZONE = ZoneInfo("Asia/Shanghai")
 
 TradingDayPredicate = Callable[[date], bool]
 
-CYCLE_INDUSTRY_KEYWORDS = ("有色", "煤炭", "石油", "化工", "钢铁", "航运", "能源", "矿")
-VENTURE_INDUSTRY_KEYWORDS = ("半导体", "AI", "机器人", "创新药", "计算机", "电子")
-GROWTH_INDUSTRY_KEYWORDS = ("电力设备", "新能源", "自动化", "汽车零部件", "医药", "高端制造")
-DIVIDEND_INDUSTRY_KEYWORDS = ("公用事业", "银行", "运营商", "电力", "高速")
-
-
-def industry_has(industry: str, keywords: tuple[str, ...]) -> bool:
-    return any(keyword.lower() in industry.lower() for keyword in keywords)
-
-
 def classify_stock(
-    stock: dict[str, Any], market: dict[str, Any], financial: dict[str, Any]
+    stock: dict[str, Any],
+    market: dict[str, Any],
+    financial: dict[str, Any],
+    *,
+    industry: IndustryBasis | None = None,
 ) -> dict[str, Any]:
-    industry = str(stock.get("industry", ""))
+    basis = industry or resolve_industry_basis(stock)
     market_cap = metric(stock, "market_cap")
     if market_cap is None:
         market_cap = metric(market, "market_cap")
@@ -87,7 +82,7 @@ def classify_stock(
         "high_growth_venture": 0.0,
     }
 
-    if industry_has(industry, DIVIDEND_INDUSTRY_KEYWORDS):
+    if basis.has("dividend"):
         fit_scores["dividend_blue_chip"] += 35
     if market_cap is not None and market_cap >= 300_000_000_000:
         fit_scores["dividend_blue_chip"] += 20
@@ -96,7 +91,7 @@ def classify_stock(
     if free_cash_flow is not None and free_cash_flow > 0:
         fit_scores["dividend_blue_chip"] += 20
 
-    if industry_has(industry, GROWTH_INDUSTRY_KEYWORDS):
+    if basis.has("growth"):
         fit_scores["quality_growth"] += 35
     if revenue_growth is not None and revenue_growth >= 0.18:
         fit_scores["quality_growth"] += 35
@@ -106,7 +101,7 @@ def classify_stock(
         fit_scores["quality_growth"] += 10
 
     debt_ratio = metric(financial, "debt_ratio")
-    if industry_has(industry, GROWTH_INDUSTRY_KEYWORDS):
+    if basis.has("growth"):
         fit_scores["steady_quality_growth"] += 30
     if roe is not None and roe >= 0.12:
         fit_scores["steady_quality_growth"] += 20
@@ -119,7 +114,7 @@ def classify_stock(
     if debt_ratio is not None and debt_ratio <= 0.55:
         fit_scores["steady_quality_growth"] += 5
 
-    if industry_has(industry, CYCLE_INDUSTRY_KEYWORDS):
+    if basis.has("cycle"):
         fit_scores["cycle_reversal"] += 65
     drawdown = metric(market, "max_drawdown_1y")
     if drawdown is not None and drawdown >= 0.30:
@@ -127,7 +122,7 @@ def classify_stock(
     if revenue_growth is not None and revenue_growth >= 0.10:
         fit_scores["cycle_reversal"] += 15
 
-    if industry_has(industry, VENTURE_INDUSTRY_KEYWORDS):
+    if basis.has("venture"):
         fit_scores["high_growth_venture"] += 55
     if revenue_growth is not None and revenue_growth >= 0.30:
         fit_scores["high_growth_venture"] += 25
@@ -616,11 +611,12 @@ def score_stock(
     *,
     freshness: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    classification = classify_stock(stock, market, financial)
+    industry = resolve_industry_basis(stock)
+    classification = classify_stock(stock, market, financial, industry=industry)
     strategy_ranking = ranked_strategies(classification["classification_fit_scores"])
     primary_strategy = strategy_ranking[0][0]
     secondary_strategy = strategy_ranking[1][0] if len(strategy_ranking) > 1 else primary_strategy
-    profile = classify_company_profile(stock, market, financial)
+    profile = classify_company_profile(stock, market, financial, industry=industry)
     selected_model = select_scoring_model(profile, primary_strategy)
     if selected_model in SECTOR_MODEL_KEYS:
         factors, weights = factor_scores_for_model(selected_model, market, financial)
