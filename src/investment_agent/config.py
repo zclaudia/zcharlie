@@ -15,11 +15,18 @@ _PLACEHOLDER_KEY_PREFIX = "change-me"
 _weak_key_warned = False
 
 
+ThinkingMode = Literal["auto", "enabled", "disabled"]
+
+
 class LLMTierConfig(BaseModel):
     base_url: str
     api_key: str
     model: str
     timeout_seconds: float = 120.0
+    thinking: ThinkingMode = "auto"
+    """Reasoning toggle sent as ``thinking: {type: ...}`` (DeepSeek-style
+    OpenAI-compatible extension). ``auto`` sends nothing, so endpoints that do
+    not know the parameter are unaffected."""
 
 
 class Settings(BaseSettings):
@@ -37,6 +44,10 @@ class Settings(BaseSettings):
     llm_tier3_base_url: str = "https://api.openai.com/v1"
     llm_tier3_api_key: str
     llm_tier3_model: str = "gpt-5"
+    llm_tier3_thinking: ThinkingMode = "auto"
+    # Rule drafting picks parameters within template ranges and is validated
+    # afterwards; reasoning tokens dominate its latency. ``auto`` = tier default.
+    llm_rule_draft_thinking: ThinkingMode = "auto"
 
     llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
 
@@ -108,7 +119,17 @@ class Settings(BaseSettings):
             api_key=self.llm_tier3_api_key,
             model=self.llm_tier3_model,
             timeout_seconds=self.llm_request_timeout_seconds,
+            thinking=self.llm_tier3_thinking,
         )
+
+    @property
+    def llm_rule_draft(self) -> LLMTierConfig:
+        """Tier-3 config for rule drafting (its own thinking override)."""
+
+        config = self.llm_tier3
+        if self.llm_rule_draft_thinking == "auto":
+            return config
+        return config.model_copy(update={"thinking": self.llm_rule_draft_thinking})
 
 
 class SchedulerConfig(BaseModel):

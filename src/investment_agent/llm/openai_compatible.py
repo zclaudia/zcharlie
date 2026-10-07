@@ -57,6 +57,7 @@ class OpenAICompatibleClient:
                     {"role": "user", "content": user_message},
                 ],
                 response_format=ResponseFormatJSONObject(type="json_object") if output_model else NOT_GIVEN,  # type: ignore[arg-type]
+                extra_body=thinking_extra_body(self._config),
             )
             text = resp.choices[0].message.content or ""
             prompt_tokens = resp.usage.prompt_tokens if resp.usage else 0
@@ -92,6 +93,14 @@ class OpenAICompatibleClient:
             model=self._config.model,
             provider=_provider_name(self._config.base_url),
         )
+
+
+def thinking_extra_body(config: LLMTierConfig) -> dict[str, Any] | None:
+    """``{"thinking": {"type": ...}}`` when the tier sets a mode; else nothing."""
+
+    if config.thinking == "auto":
+        return None
+    return {"thinking": {"type": config.thinking}}
 
 
 def _provider_name(base_url: str) -> str:

@@ -329,6 +329,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 `AKSHARE_MIN_INTERVAL_SECONDS`（默认 1）、
 `IFIND_BUDGET_PER_5H`（默认 150）、`IFIND_BUDGET_WINDOW_HOURS`（默认 5）、`IFIND_VERIFY_MAX_REQUESTS`（默认 30）、
 `LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
+`LLM_TIER3_THINKING` / `LLM_RULE_DRAFT_THINKING`（`auto` 不发送；`disabled` 关闭推理，规则起草约快 4 倍）、
 `WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
 `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
 `LOG_LEVEL`。调度见 `config/app.yaml`；交易日历见

@@ -329,7 +329,7 @@ class DraftResult:
 
 def default_client_factory(settings: Settings) -> ClientFactory:
     def build(session: AsyncSession) -> LLMClient:
-        return OpenAICompatibleClient(tier_name="tier3", config=settings.llm_tier3, session=session)
+        return OpenAICompatibleClient(tier_name="tier3", config=settings.llm_rule_draft, session=session)
 
     return build
 
