@@ -252,3 +252,21 @@ async def test_watch_metadata_fallbacks() -> None:
         bare = await seed_listing(session, "601398.SH", "工商银行")
         meta = await watch_metadata(session, bare.id, date(2026, 5, 2))
     assert meta.industry is None and meta.industry_source is None
+
+
+async def test_promote_queues_a_real_ifind_verification_request() -> None:
+    # Integration with P1-A13: no fake module, the real queue is used.
+    from investment_agent.storage.models.verification import VerificationRequest
+
+    ids = await seed_promotable()
+    outcome = await run_promotion(ids["candidate_id"], settings=_settings(), today=TODAY)
+    assert outcome.verification_requested
+    async with session_scope() as session:
+        request = (await session.execute(select(VerificationRequest))).scalar_one()
+    assert (request.listing_id, request.ticker, request.trigger, request.status) == (
+        ids["listing_id"],
+        "600519.SH",
+        "promote",
+        "pending",
+    )
+    assert request.detail["candidate_id"] == ids["candidate_id"]

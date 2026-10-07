@@ -21,10 +21,11 @@ each row gated by its own ``available_from``. Per registered financial field:
    value that passes the provider's ``sanity`` rule; a failing value is kept
    as *rejected* (e.g. baostock ``debt_ratio < 0.02``) and the next source is
    tried;
-3. the chosen value is ``conflict`` when another free source differs beyond
-   the field's ``tolerance`` (approximate sources excluded), when a collector
-   recorded a ``provider_conflicts`` entry, or when iFinD marked it
-   ``conflict``; else ``unverified``.
+3. if iFinD verification marked the field ``conflict``, the iFinD value wins
+   (D6 rev 2) and the free-source values are kept as ``conflicts``;
+4. otherwise the chosen value is ``conflict`` when another free source
+   differs beyond the field's ``tolerance`` (approximate sources excluded) or
+   a collector recorded a ``provider_conflicts`` entry; else ``unverified``.
 
 Each resolved field carries a :class:`FieldResolution` (``provider``,
 ``verification``, rejected values, conflicts) that factors copy into
@@ -375,6 +376,12 @@ class ProviderFields:
         return self.fields.get(name) is None and (self.provider, name) in PROVIDER_DERIVED_FIELDS
 
 
+def _ifind_conflict_value(name: str, verifier: ProviderFields | None) -> float | None:
+    if verifier is None or verifier.verification.get(name) != "conflict":
+        return None
+    return verifier.value(name)
+
+
 def _resolve_one(
     source: FieldSource, by_provider: Mapping[str, ProviderFields]
 ) -> tuple[float | None, FieldResolution]:
@@ -403,10 +410,29 @@ def _resolve_one(
         sane[provider] = value
         if chosen is None:
             chosen = (provider, value, candidate)
+    ifind_conflict = _ifind_conflict_value(name, verifier)
     if chosen is None:
+        if ifind_conflict is not None:
+            return ifind_conflict, FieldResolution(
+                VERIFIER, "conflict", verifier.ref if verifier else None, rejected=tuple(rejected)
+            )
         return None, FieldResolution(None, "unverified", rejected=tuple(rejected))
 
     provider, value, candidate = chosen
+    if ifind_conflict is not None:
+        # D6 rev 2 (p1-plan 2.3): when iFinD verification disagrees with the
+        # free sources, iFinD wins; the free values stay on record.
+        free_values = [
+            {"provider": other, "value": other_value, "verification": "conflict"}
+            for other, other_value in sane.items()
+        ]
+        return ifind_conflict, FieldResolution(
+            VERIFIER,
+            "conflict",
+            verifier.ref if verifier else None,
+            rejected=tuple(rejected),
+            conflicts=tuple(free_values),
+        )
     approx = source.is_approx(provider) or candidate.is_derived(name)
     conflicts: list[dict[str, Any]] = []
     if not approx:
@@ -428,8 +454,6 @@ def _resolve_one(
         recorded = candidate_fields.recorded_conflicts.get(name)
         if recorded:
             conflicts.append({"recorded_by": candidate_fields.provider, "detail": recorded})
-    if verifier is not None and verifier.verification.get(name) == "conflict":
-        conflicts.append({"provider": VERIFIER, "verification": "conflict"})
     verification: Verification = "conflict" if conflicts else "unverified"
     return value, FieldResolution(
         provider,

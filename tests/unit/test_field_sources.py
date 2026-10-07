@@ -186,7 +186,7 @@ def test_verified_ifind_value_wins_and_unverified_ifind_is_ignored():
     assert fields["roe"] == 0.30 and sources["roe"].provider == "baostock"
 
 
-def test_ifind_conflict_marker_and_recorded_conflicts_mark_the_free_value():
+def test_ifind_conflict_wins_and_recorded_conflicts_mark_the_free_value():
     fields, sources = _resolve(
         ProviderFields("baostock", {"roe": 0.30}, "b:1"),
         ProviderFields("ifind", {"roe": 0.5}, "i:1", verification={"roe": "conflict"}),
@@ -197,7 +197,11 @@ def test_ifind_conflict_marker_and_recorded_conflicts_mark_the_free_value():
             recorded_conflicts={"operating_cash_flow": {"baostock": 8.0, "akshare": 10.0}},
         ),
     )
-    assert fields["roe"] == 0.30 and sources["roe"].verification == "conflict"
+    # D6 rev 2: a verified conflict means iFinD wins; the free value stays on record.
+    assert fields["roe"] == 0.5
+    assert sources["roe"].provider == "ifind" and sources["roe"].verification == "conflict"
+    assert [c["provider"] for c in sources["roe"].conflicts] == ["baostock"]
+    assert sources["roe"].conflicts[0]["value"] == 0.30
     assert sources["operating_cash_flow"].verification == "conflict"
 
 

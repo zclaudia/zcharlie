@@ -239,7 +239,8 @@ async def test_full_verification_writes_back_and_view_prefers_verified(db_sessio
         ("verification", run.id, request.id, "ok")
     }
 
-    # The factor view now resolves verified fields to iFinD and flags the conflict.
+    # The factor view now resolves verified fields to iFinD; on a conflict iFinD
+    # wins too (D6 rev 2) and the free value stays on record.
     async with session_scope() as session:
         view = await load_snapshot_view(session, MOUTAI, AS_OF)
     period = view.latest_annual()
@@ -249,9 +250,10 @@ async def test_full_verification_writes_back_and_view_prefers_verified(db_sessio
     assert period.source("roe").verification == "verified"
     assert period.fields["revenue_total"] == pytest.approx(1.75e11)
     assert period.source("revenue_total").verification == "verified"
-    assert period.fields["debt_ratio"] == pytest.approx(0.20)
-    assert period.source("debt_ratio").provider == "baostock"
+    assert period.fields["debt_ratio"] == pytest.approx(0.25)
+    assert period.source("debt_ratio").provider == "ifind"
     assert period.source("debt_ratio").verification == "conflict"
+    assert period.source("debt_ratio").conflicts[0]["value"] == pytest.approx(0.20)
     # Not visible before the verification happened (point in time).
     async with session_scope() as session:
         before = await load_snapshot_view(session, MOUTAI, date(2026, 10, 5))
