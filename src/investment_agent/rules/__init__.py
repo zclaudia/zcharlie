@@ -6,8 +6,11 @@
 * :mod:`~investment_agent.rules.templates` - ``config/rule_templates`` files;
 * :mod:`~investment_agent.rules.store` - versioned rule store (migration 016);
 * :mod:`~investment_agent.rules.screen` - deterministic weekly screen engine;
-* :mod:`~investment_agent.rules.screen_job` - the ``screen_run`` queue job.
+* :mod:`~investment_agent.rules.screen_job` - the ``screen_run`` queue job;
+* :mod:`~investment_agent.rules.draft_policy` - LLM rule draft output contract and checks;
+* :mod:`~investment_agent.rules.drafting` - the ``rule_draft`` queue job (P1-C5).
 
 Rules only reference factors of :data:`investment_agent.factors.catalog.DEFAULT_REGISTRY`;
-no LLM takes part in evaluating them (funnel design 11).
+no LLM takes part in evaluating them (funnel design 11). The drafting LLM
+only chooses template parameter values for a draft the user must approve.
 """

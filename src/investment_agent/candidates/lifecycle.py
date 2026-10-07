@@ -280,6 +280,7 @@ async def mark_draft_result(
     *,
     rule_instance_id: int | None,
     failed: bool = False,
+    error: str | None = None,
     session: AsyncSession | None = None,
 ) -> None:
     """Record the drafting job's outcome on the candidate.
@@ -292,7 +293,11 @@ async def mark_draft_result(
     if session is None:
         async with session_scope() as own:
             await mark_draft_result(
-                candidate_id, rule_instance_id=rule_instance_id, failed=failed, session=own
+                candidate_id,
+                rule_instance_id=rule_instance_id,
+                failed=failed,
+                error=error,
+                session=own,
             )
         return
     candidate = await CandidateRepository(session).get(candidate_id)
@@ -300,6 +305,8 @@ async def mark_draft_result(
         raise CandidateNotFoundError(f"no candidate {candidate_id}")
     if failed or rule_instance_id is None:
         candidate.draft_state = "failed"
+        if error:
+            log.warning("candidate.draft_failed", candidate_id=candidate_id, error=error)
     else:
         rule = await session.get(RuleInstanceRecord, rule_instance_id)
         if rule is None or rule.listing_id != candidate.listing_id:
