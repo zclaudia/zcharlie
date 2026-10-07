@@ -100,6 +100,7 @@ def _register_protected_routes(app: FastAPI) -> None:
         admin,
         candidates,
         dashboard,
+        data_health,
         research,
         verification,
         watchlist,
@@ -107,6 +108,7 @@ def _register_protected_routes(app: FastAPI) -> None:
 
     app.include_router(research.router)
     app.include_router(dashboard.router)
+    app.include_router(data_health.router)
     app.include_router(watchlist.router)
     app.include_router(admin.router)
     app.include_router(verification.router)
