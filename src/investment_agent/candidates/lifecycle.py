@@ -26,7 +26,7 @@ the job reports back through :func:`mark_draft_result`.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -35,6 +35,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.rules.store import RuleStore
 from investment_agent.storage.database import session_scope
@@ -239,6 +240,38 @@ def rule_draft_payload(
     }
 
 
+_LIVE_RUN_STATUSES = frozenset({"queued", "running"})
+
+
+async def _draft_run_key(
+    repository: PipelineRunRepository,
+    base_key: str,
+    payload: Mapping[str, object],
+    *,
+    fresh: bool = False,
+) -> str:
+    """``base_key`` for the first draft; ``base_key:r<n>`` for each re-draft.
+
+    An enqueue with an identical payload reuses its run (a retried screen run
+    stays idempotent); a different payload (new preference notes, manual
+    trigger) gets its own run instead of tripping the payload-mismatch guard.
+    ``fresh`` (user re-draft) only reuses a run that is still queued/running.
+    """
+
+    key = base_key
+    attempt = 1
+    while True:
+        existing = await repository.by_idempotency_key(kind=RULE_DRAFT, idempotency_key=key)
+        if existing is None:
+            return key
+        if existing.request_json == dict(payload) and (
+            not fresh or existing.status in _LIVE_RUN_STATUSES
+        ):
+            return key
+        key = f"{base_key}:r{attempt}"
+        attempt += 1
+
+
 async def enqueue_rule_draft(
     session: AsyncSession,
     candidate: CandidateRecord,
@@ -248,6 +281,7 @@ async def enqueue_rule_draft(
     as_of: date,
     screen_result_id: int | None,
     triggered_by: str,
+    fresh: bool = False,
 ) -> PipelineRun:
     """Queue the drafting job for ``candidate`` and mark its draft pending.
 
@@ -263,9 +297,16 @@ async def enqueue_rule_draft(
         screen_result_id=screen_result_id,
         preference_notes=await preference_notes(session),
     )
-    run, _created = await PipelineRunRepository(session).enqueue(
+    repository = PipelineRunRepository(session)
+    key = await _draft_run_key(
+        repository,
+        rule_draft_idempotency_key(candidate.id, template_id, template_version),
+        payload,
+        fresh=fresh,
+    )
+    run, _created = await repository.enqueue(
         kind=RULE_DRAFT,
-        idempotency_key=rule_draft_idempotency_key(candidate.id, template_id, template_version),
+        idempotency_key=key,
         triggered_by=triggered_by,
         listing_id=candidate.listing_id,
         request_json=payload,
@@ -669,6 +710,49 @@ async def nominate_candidate(
         )
         draft_run_id = run.id
     return NominationOutcome(candidate, created, draft_run_id)
+
+
+async def redraft_candidate(
+    session: AsyncSession,
+    candidate_id: int,
+    *,
+    template_id: str | None = None,
+    today: date | None = None,
+) -> PipelineRun:
+    """Queue a fresh rule draft for an open candidate (user-requested).
+
+    The template defaults to the candidate's newest templated source; the
+    latest stored template version is drafted, with the user's latest
+    rejection/dismissal reasons as preference notes. Each re-draft gets its own
+    run (see :func:`_draft_run_key`).
+    """
+
+    candidate = await open_candidate(session, candidate_id)
+    if template_id is None:
+        ref = primary_template_ref(candidate)
+        if ref is None:
+            raise CandidateInputError(
+                f"candidate {candidate_id} has no template; pass template_id"
+            )
+        template_id = ref.split("@", 1)[0]
+    record = await RuleStore(session).latest_template_record(template_id)
+    if record is None:
+        raise CandidateInputError(f"unknown template {template_id!r}")
+    screen_result_id: int | None = None
+    for source in reversed(candidate.sources or []):
+        if source.get("template_id") == template_id and source.get("screen_result_id"):
+            screen_result_id = int(source["screen_result_id"])
+            break
+    return await enqueue_rule_draft(
+        session,
+        candidate,
+        template_id=template_id,
+        template_version=record.version,
+        as_of=today or shanghai_today(),
+        screen_result_id=screen_result_id,
+        triggered_by="manual",
+        fresh=True,
+    )
 
 
 async def open_candidate(session: AsyncSession, candidate_id: int) -> CandidateRecord:

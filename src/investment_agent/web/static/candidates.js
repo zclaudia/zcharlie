@@ -602,20 +602,14 @@ function renderRule(candidate) {
       )
     );
     const template = primaryTemplate(candidate);
-    // 浏览器端没有重新起草接口：给出 CLI 入口（ia rules draft），不在页面上发明端点。
     if (candidate.status === "open" && ["none", "failed"].includes(candidate.draft_state) && template) {
-      const hint = el("p", { class: "muted small" }, "如需重新起草，可在 CLI 运行：");
-      hint.appendChild(
-        el(
-          "code",
-          { class: "cli-hint" },
-          `ia rules draft --ticker ${candidate.ticker} --template ${template} --candidate-id ${candidate.id} --rerun`
-        )
-      );
-      box.appendChild(hint);
+      box.appendChild(redraftButton(candidate, template));
     }
     sectionReady(node, box);
     return;
+  }
+  if (candidate.status === "open" && rule.status === "draft") {
+    box.appendChild(redraftButton(candidate, rule.template_ref));
   }
 
   const editable = candidate.status === "open" && rule.status === "draft";
@@ -702,6 +696,29 @@ function setBusy(busy) {
     button.disabled = busy || button.dataset.unavailable === "true";
     button.setAttribute("aria-busy", busy ? "true" : "false");
   }
+}
+
+function redraftButton(candidate, templateRef) {
+  const button = el(
+    "button",
+    { type: "button", class: "secondary", "data-action": "redraft" },
+    "重新起草"
+  );
+  button.addEventListener("click", () => {
+    const template = String(templateRef || "").split("@")[0];
+    if (!globalThis.confirm(`按模板 ${template} 重新起草 ${candidate.ticker} 的规则？现有草稿会被新草稿替换。`)) return;
+    runAction(button, async () => {
+      try {
+        await post(`/candidates/${candidate.id}/redraft`, { template_id: template || null }, { idempotency: false });
+        flash("已提交重新起草，完成后刷新本页即可审阅。");
+        await loadCandidateDetail();
+      } catch (error) {
+        if (redirectOn401(error)) return;
+        flash(error instanceof Error ? `重新起草失败：${error.message}` : "重新起草失败", "notice-error");
+      }
+    });
+  });
+  return button;
 }
 
 async function runAction(button, work) {

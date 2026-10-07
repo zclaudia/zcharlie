@@ -30,6 +30,8 @@ from investment_agent.api.schemas.candidates import (
     PromoteOut,
     PromoteRequest,
     ReasonRequest,
+    RedraftOut,
+    RedraftRequest,
     RuleDecisionOut,
     RuleDetailOut,
     RulePatchRequest,
@@ -48,6 +50,8 @@ from investment_agent.candidates.lifecycle import (
     effective_draft,
     latest_screen_results,
     nominate_candidate,
+    open_candidate,
+    redraft_candidate,
     rule_params,
 )
 from investment_agent.candidates.promote import (
@@ -387,6 +391,19 @@ async def dismiss(candidate_id: int, body: ReasonRequest) -> CandidateDetailOut:
             candidate = await dismiss_candidate(session, candidate_id, reason=body.reason)
             return await _candidate_detail(session, candidate)
     except (CandidateError, ReasonRequiredError) as exc:
+        _raise_http(exc)
+
+
+@candidates_router.post("/{candidate_id}/redraft", response_model=RedraftOut, status_code=202)
+async def redraft(candidate_id: int, body: RedraftRequest) -> RedraftOut:
+    """Queue a fresh LLM rule draft for an open candidate."""
+
+    try:
+        async with session_scope() as session:
+            run = await redraft_candidate(session, candidate_id, template_id=body.template_id)
+            candidate = await _candidate_detail(session, await open_candidate(session, candidate_id))
+            return RedraftOut(candidate=candidate, draft_run_id=run.id)
+    except CandidateError as exc:
         _raise_http(exc)
 
 

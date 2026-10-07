@@ -248,7 +248,6 @@ textarea {
   color: var(--ink);
 }
 .issues:empty { display: none; }
-.cli-hint { display: block; margin-top: 0.25rem; overflow-wrap: anywhere; }
 .more-params summary { cursor: pointer; color: var(--ink-muted); margin: 0.5rem 0; }
 .issue-list { margin: 0.25rem 0; padding-left: 1.2rem; }
 

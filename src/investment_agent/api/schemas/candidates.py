@@ -276,3 +276,12 @@ class ScreenRunOut(BaseModel):
     templates: list[ScreenTemplateOut]
     candidates: dict[str, Any] | None
     """Candidate bookkeeping of the run (created / merged / skipped / expired)."""
+
+
+class RedraftRequest(BaseModel):
+    template_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class RedraftOut(BaseModel):
+    candidate: CandidateDetailOut
+    draft_run_id: int

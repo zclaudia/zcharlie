@@ -60,6 +60,7 @@ MUTATIONS = [
     ("post", "/candidates/1/promote", {}),
     ("post", "/rules/1/reject", {"reason": "x"}),
     ("patch", "/rules/1", {"params": {"pe_pct_max": 0.2}}),
+    ("post", "/candidates/1/redraft", {}),
 ]
 
 
@@ -153,6 +154,64 @@ async def test_manual_nomination(api_client) -> None:
         assert api_client.post("/candidates", json=bad, headers=KEY).status_code == 422
     unknown = api_client.post(
         "/candidates", json={"ticker": "600900.SH", "template_id": "unknown"}, headers=KEY
+    )
+    assert unknown.status_code == 422
+
+
+async def test_redraft_queues_a_new_run_each_time(api_client) -> None:
+    async with session_scope() as session:
+        await seed_template(session)
+    created = api_client.post(
+        "/candidates", json={"ticker": "600900.SH", "template_id": "cand_test"}, headers=KEY
+    ).json()
+    candidate_id = created["candidate"]["id"]
+    first_run = created["draft_run_id"]
+
+    # A preference note changes the drafting payload: re-nominating with the
+    # same template used to hit the idempotency payload guard (HTTP 500).
+    other = api_client.post(
+        "/candidates", json={"ticker": "601398.SH", "template_id": "cand_test"}, headers=KEY
+    ).json()
+    api_client.post(
+        f"/candidates/{other['candidate']['id']}/dismiss", json={"reason": "估值不便宜"}, headers=KEY
+    )
+    again = api_client.post(
+        "/candidates", json={"ticker": "600900.SH", "template_id": "cand_test"}, headers=KEY
+    )
+    assert again.status_code == 201, again.text
+
+    first = api_client.post(f"/candidates/{candidate_id}/redraft", json={}, headers=KEY)
+    # A double click while the re-draft is still queued reuses that run.
+    double = api_client.post(f"/candidates/{candidate_id}/redraft", json={}, headers=KEY)
+    assert (first.status_code, double.status_code) == (202, 202), first.text
+    assert double.json()["draft_run_id"] == first.json()["draft_run_id"]
+    # Once it finished, another re-draft really drafts again.
+    async with session_scope() as session:
+        done = await session.get(PipelineRun, first.json()["draft_run_id"])
+        assert done is not None
+        done.status = "success"
+    second = api_client.post(f"/candidates/{candidate_id}/redraft", json={}, headers=KEY)
+    assert second.status_code == 202, second.text
+    redrafts = [first, second]
+    run_ids = [first_run, *(r.json()["draft_run_id"] for r in redrafts)]
+    assert len(set(run_ids)) == 3
+    async with session_scope() as session:
+        runs = {
+            row.id: row
+            for row in (
+                await session.execute(select(PipelineRun).where(PipelineRun.kind == "rule_draft"))
+            ).scalars()
+        }
+    keys = [runs[run_id].idempotency_key for run_id in run_ids]
+    assert keys[0] == f"rule_draft:{candidate_id}:cand_test@1"
+    assert keys[1] == f"{keys[0]}:r1" and keys[2] == f"{keys[0]}:r2"
+    assert runs[run_ids[1]].request_json["preference_notes"][0].endswith("估值不便宜")
+    assert redrafts[0].json()["candidate"]["draft_state"] == "pending"
+
+    missing = api_client.post("/candidates/99999/redraft", json={}, headers=KEY)
+    assert missing.status_code == 404
+    unknown = api_client.post(
+        f"/candidates/{candidate_id}/redraft", json={"template_id": "nope"}, headers=KEY
     )
     assert unknown.status_code == 422
 
