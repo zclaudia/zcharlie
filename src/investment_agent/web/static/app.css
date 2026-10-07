@@ -261,7 +261,7 @@ textarea {
 .verification-item p { margin: 0.15rem 0; overflow-wrap: anywhere; }
 .verification-item .chip { margin-left: 0.5rem; }
 
-.candidates-bucket .bucket-counts {
+.candidates-bucket .bucket-counts, .health-bucket .bucket-counts {
   list-style: none;
   margin: 0.25rem 0;
   padding: 0;
@@ -269,8 +269,8 @@ textarea {
   flex-wrap: wrap;
   gap: 0.5rem 1.25rem;
 }
-.candidates-bucket .bucket-counts li { display: flex; align-items: baseline; gap: 0.35rem; }
-.candidates-bucket .count { font-size: 1.3rem; font-weight: 700; }
+.candidates-bucket .bucket-counts li, .health-bucket .bucket-counts li { display: flex; align-items: baseline; gap: 0.35rem; }
+.candidates-bucket .count, .health-bucket .count { font-size: 1.3rem; font-weight: 700; }
 
 @media (max-width: 40rem) {
   .param-table thead { display: none; }
@@ -280,4 +280,53 @@ textarea {
   .param-table td::before { content: attr(data-label) "："; color: var(--ink-muted); }
   .kv-list { grid-template-columns: 1fr; }
   .kv-list dd { margin-bottom: 0.35rem; }
+}
+
+/* ---- 数据健康页（P1-E2） ------------------------------------------------- */
+
+.health-section[hidden] { display: none; }
+.health-section h3 { font-size: 0.98rem; margin: 0.75rem 0 0.35rem; }
+.health-section h4 { font-size: 0.92rem; margin: 0.6rem 0 0.3rem; }
+
+.accumulation-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; margin: 0.25rem 0; }
+.accumulation-count { font-size: 1.6rem; font-weight: 700; }
+progress.accumulation-progress { width: 100%; height: 1rem; accent-color: var(--ok); }
+
+.health-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.6rem; min-width: 0; }
+.health-bar meter { flex: 1 1 8rem; max-width: 20rem; height: 0.9rem; }
+.health-bar-text { font-size: 0.88rem; overflow-wrap: anywhere; }
+
+.collection-list, .backfill-list { display: grid; gap: 0.75rem; }
+.collection-item, .backfill-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  min-width: 0;
+}
+.collection-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; }
+.collection-title { margin: 0; font-size: 0.98rem; overflow-wrap: anywhere; }
+.collection-meta { margin: 0.2rem 0; overflow-wrap: anywhere; }
+.trend { margin: 0.35rem 0; }
+.trend .chip { margin-right: 0.25rem; }
+.health-section details summary { cursor: pointer; color: var(--accent); margin: 0.35rem 0; }
+.ticker-list { overflow-wrap: anywhere; }
+.ticker-list a { margin-right: 0.35rem; }
+.error-text { color: var(--error); overflow-wrap: anywhere; }
+
+.run-success, .week-qualified { color: var(--ok); border-color: var(--ok); }
+.run-partial, .week-below_threshold { color: var(--partial); border-color: var(--partial); }
+.run-failed, .week-missing { color: var(--error); border-color: var(--error); }
+.run-queued, .run-running, .week-in_progress { color: var(--warn); border-color: var(--warn); }
+.week-no_trading { color: var(--ink-muted); }
+
+.health-table td { overflow-wrap: anywhere; }
+.health-warnings .notice { margin: 0.4rem 0; overflow-wrap: anywhere; }
+.health-warnings .notice a { margin-left: 0.25rem; }
+
+@media (max-width: 40rem) {
+  .health-table thead { display: none; }
+  .health-table, .health-table tbody, .health-table tr, .health-table td { display: block; width: 100%; }
+  .health-table tr { border-bottom: 1px solid var(--line); padding: 0.35rem 0; }
+  .health-table td { border-bottom: none; padding: 0.1rem 0; }
+  .health-table td::before { content: attr(data-label) "："; color: var(--ink-muted); }
 }

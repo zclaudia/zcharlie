@@ -12,6 +12,7 @@ import {
   renderRegion,
 } from "./api.js";
 import { CANDIDATE_REGIONS, bootCandidates, candidatesBucket } from "./candidates.js";
+import { HEALTH_REGIONS, bootHealth, healthBucket } from "./health.js";
 import { el, fmt, fmtNumber, kvTable, statusBadge, stockLink, table } from "./dom.js";
 
 // ---- 今日概览 ---------------------------------------------------------
@@ -58,20 +59,25 @@ async function loadDashboard(region, data) {
   const warnings = Array.isArray(data.warnings) ? data.warnings : [];
 
   const candidates = data.candidates && typeof data.candidates === "object" ? data.candidates : null;
-  if (!sections.length && !warnings.length && !candidates) {
+  const health = data.data_health && typeof data.data_health === "object" ? data.data_health : null;
+  if (!sections.length && !warnings.length && !candidates && !health) {
     renderRegion(region, "empty", "今日无待处理项。");
     return;
   }
   const container = el("div");
   if (candidates) container.appendChild(candidatesBucket(candidates));
+  if (health) container.appendChild(healthBucket(health));
   if (!sections.length && !warnings.length) {
     container.appendChild(el("p", { class: "notice" }, "今日无待处理的研究运行。"));
   }
   for (const warning of warnings) {
     const level = warning.level === "error" ? "error" : "warn";
-    container.appendChild(
-      el("p", { class: `notice notice-${level}`, role: "alert" }, fmt(warning.message))
-    );
+    const notice = el("p", { class: `notice notice-${level}`, role: "alert" }, fmt(warning.message));
+    if (typeof warning.link === "string" && warning.link.startsWith("/app/")) {
+      notice.appendChild(document.createTextNode(" "));
+      notice.appendChild(el("a", { href: warning.link }, "查看数据健康"));
+    }
+    container.appendChild(notice);
   }
   for (const [title, bucket] of sections) {
     container.appendChild(
@@ -770,7 +776,7 @@ function wireStockRunForm(form) {
 function boot() {
   for (const region of document.querySelectorAll(".data-region[data-endpoint]")) {
     const id = region.id;
-    if (CANDIDATE_REGIONS.has(id)) continue;
+    if (CANDIDATE_REGIONS.has(id) || HEALTH_REGIONS.has(id)) continue;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
     else if (id === "watchlist-list") loadRegion(region, { render: loadWatchlist });
     else if (id === "runs-list") loadRunsPage(region, 0);
@@ -795,6 +801,7 @@ function boot() {
   }
 
   bootCandidates();
+  bootHealth();
 }
 
 if (document.readyState === "loading") {

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h1>数据健康</h1>
+  <p class="muted">采集任务的完整率与缺失清单、数据新鲜度、快照积累进度（P1 阶段退出指标）、历史回补、iFinD 预算与核对队列。只读汇总，不触发任何采集。</p>
+  <div id="data-health" class="data-region"
+       data-endpoint="/health/data"
+       aria-live="polite">
+    <p class="notice notice-loading" data-state="loading">正在加载…</p>
+  </div>
+</section>
+<section id="health-warnings" class="card health-section" hidden>
+  <h2>提醒</h2>
+  <div data-health-section="warnings"></div>
+</section>
+<section id="health-accumulation" class="card health-section" hidden>
+  <h2>快照积累</h2>
+  <div data-health-section="accumulation"></div>
+</section>
+<section id="health-freshness" class="card health-section" hidden>
+  <h2>数据新鲜度</h2>
+  <div data-health-section="freshness"></div>
+</section>
+<section id="health-collections" class="card health-section" hidden>
+  <h2>采集任务</h2>
+  <div data-health-section="collections"></div>
+</section>
+<section id="health-universes" class="card health-section" hidden>
+  <h2>目标池成分</h2>
+  <div data-health-section="universes"></div>
+</section>
+<section id="health-industry" class="card health-section" hidden>
+  <h2>行业分类</h2>
+  <div data-health-section="industry"></div>
+</section>
+<section id="health-backfill" class="card health-section" hidden>
+  <h2>历史回补</h2>
+  <div data-health-section="backfill"></div>
+</section>
+<section id="health-verification" class="card health-section" hidden>
+  <h2>iFinD 核对</h2>
+  <div data-health-section="verification"></div>
+</section>
+<section id="health-overdue" class="card health-section" hidden>
+  <h2>逾期财报</h2>
+  <div data-health-section="overdue"></div>
+</section>
+{% endblock %}

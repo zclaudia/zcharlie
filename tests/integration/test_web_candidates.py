@@ -114,7 +114,7 @@ def test_nav_links_candidates_on_every_page(api_client) -> None:
 
 def test_pages_load_only_same_origin_module_scripts(api_client) -> None:
     _login(api_client)
-    for path in ("/app", "/app/candidates", "/app/candidates/1", "/app/login"):
+    for path in ("/app", "/app/candidates", "/app/candidates/1", "/app/health", "/app/login"):
         html = api_client.get(path).text
         assert "<style" not in html and " style=" not in html, path
         sources = re.findall(r"<script\b([^>]*)>", html)
@@ -154,7 +154,7 @@ def test_ui_has_no_trading_language_or_scores() -> None:
     for name, text in texts.items():
         for word in TRADING_WORDS:
             assert word not in text, (name, word)
-    for name in ("candidates.js", "format.js"):
+    for name in ("candidates.js", "format.js", "health.js"):
         source = texts[name]
         assert "score" not in source and "strength" not in source, name
 
