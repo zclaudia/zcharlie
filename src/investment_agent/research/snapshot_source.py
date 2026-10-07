@@ -13,7 +13,10 @@ Canonical field mapping (documented in ``docs/product/observation-snapshot-mode.
 canonical field            snapshot source
 =========================  =======================================================
 pool.market_cap            factor ``market_cap`` (raw close x total shares)
-pool.industry              user text, else the Shenwan 2021 (CSRC fallback) name
+pool.industry              user text, else the Shenwan 2021 (CSRC fallback) name;
+                           text equal to one of the stock's own classification
+                           names (e.g. the Shenwan level-1 name a promotion
+                           stores on the watchlist item) is not a user override
 pool.industry_group        industry group on ``as_of`` (P1-B3)
 market.latest_price        latest raw (unadjusted) baostock close <= as_of
 market.pe / pb / ps        factors ``pe_ttm`` / ``pb_mrq`` / ``ps_ttm`` (baostock
@@ -374,6 +377,16 @@ def _industry_display(
     return "", "none"
 
 
+def _data_industry_names(view: SnapshotView, directory: ShenwanDirectory) -> set[str]:
+    """The stock's own classification names on ``as_of``: every level of its
+    Shenwan 2021 chain and its CSRC name."""
+
+    names = {item.name for item in directory.chain(view.sw_code)} if view.sw_code else set()
+    if view.industry_name:
+        names.add(view.industry_name)
+    return names
+
+
 def build_snapshot_bundle(
     view: SnapshotView,
     *,
@@ -414,6 +427,12 @@ def build_snapshot_bundle(
     directory = shenwan_directory or default_shenwan_directory()
     user_text = (industry or "").strip()
     data_name, system = _industry_display(view, directory)
+    # A text that only restates the stock's own classification (the promotion
+    # flow fills the watchlist industry with the Shenwan level-1 name) is not
+    # a user override: the data industry group decides, as without text.
+    restated = user_text if user_text in _data_industry_names(view, directory) else ""
+    if restated:
+        user_text = ""
     pool = _ItemBuilder(provider_label=SNAPSHOT_PROVIDER)
     pool.sources["name"] = {
         "field": "name",
@@ -435,6 +454,7 @@ def build_snapshot_bundle(
             f"({industry_match.get('matched_by')}, {system})"
             if user_text
             else f"group {view.industry_group} ({industry_match.get('matched_by')})"
+            + (f"; watchlist text {restated!r} restates the classification" if restated else "")
         ),
     }
     if view.industry_fallback:
@@ -450,7 +470,7 @@ def build_snapshot_bundle(
             "symbol": symbol,
             "name": company_name or symbol,
             "market": market_code,
-            "industry": user_text or data_name,
+            "industry": user_text or restated or data_name,
             "industry_group": view.industry_group,
             "source": f"{SNAPSHOT_SOURCE}:listing+industry+market",
             "updated_at": retrieved_at,
