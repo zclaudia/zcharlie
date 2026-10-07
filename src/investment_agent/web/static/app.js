@@ -446,6 +446,25 @@ function metricsCard(item) {
   return card;
 }
 
+const FRESHNESS_LABELS = { stock: "公司信息", market_data: "行情", financial_data: "财报" };
+
+// Freshness is judged per data kind: market data in exchange trading days,
+// financial data by report period, the rest by hours / days.
+function describeFreshness(block) {
+  const status = block.is_stale ? "过期" : "正常";
+  if (block.age_trading_days !== undefined && block.age_trading_days !== null) {
+    return `${status}（${block.age_trading_days} 个交易日 / 上限 ${block.max_age_trading_days ?? block.max_age_days} 个交易日）`;
+  }
+  if (block.basis === "report_period") {
+    const period = block.report_period_end || block.report_year || "未知";
+    const expected = block.expected_report_year ? `，应有 ${block.expected_report_year} 年报` : "";
+    return `${status}（报告期 ${period}${expected}）`;
+  }
+  const hours = Number(block.age_hours);
+  const age = Number.isFinite(hours) && hours >= 48 ? `${fmtNumber(hours / 24, 1)} 天` : `${fmtNumber(block.age_hours, 1)} 小时`;
+  return `${status}（${age} / 上限 ${block.max_age_days} 天）`;
+}
+
 function qualityCard(item) {
   const card = el("div", { class: "card", "data-evidence-section": "evidence-quality" });
   card.appendChild(el("h2", {}, "数据质量"));
@@ -454,22 +473,29 @@ function qualityCard(item) {
     card.appendChild(el("p", { class: "notice notice-warn" }, "needs_agent_review：该标的已标记需要人工复核。"));
   }
   card.appendChild(kvTable([["缺失字段", missing.length ? missing.join(", ") : "无"]]));
-  const reviewFlags = (item.quality_flags || []).filter(
-    (flag) => flag.severity === "review" || flag.flag === "model_not_applicable"
+  const flags = Array.isArray(item.quality_flags) ? item.quality_flags : [];
+  // A field the selected model does not use is "not applicable", not missing:
+  // show that once instead of the data layer's missing-field note.
+  const notApplicable = new Set(
+    flags.filter((flag) => flag.flag === "model_not_applicable").map((flag) => flag.field)
   );
-  if (reviewFlags.length) {
+  const reviewLines = [];
+  for (const field of notApplicable) {
+    reviewLines.push(`${field}：不适用于当前模型（不参与评分）`);
+  }
+  for (const flag of flags) {
+    if (flag.severity !== "review" || notApplicable.has(flag.field)) continue;
+    reviewLines.push(`${flag.field}：${flag.message || flag.flag || "需复核"}`);
+  }
+  if (reviewLines.length) {
     const list = el("ul");
-    for (const flag of reviewFlags) {
-      list.appendChild(el("li", {}, `${flag.field}: ${flag.message}`));
-    }
+    for (const line of reviewLines) list.appendChild(el("li", {}, line));
     card.appendChild(list);
   }
   const freshness = item.freshness || {};
   const freshnessPairs = Object.entries(freshness).map(([name, block]) => [
-    name,
-    block && typeof block === "object"
-      ? `${block.is_stale ? "stale" : "ok"}（age ${fmtNumber(block.age_hours, 1)}h / 上限 ${block.max_age_days}d）`
-      : fmt(block),
+    FRESHNESS_LABELS[name] || name,
+    block && typeof block === "object" ? describeFreshness(block) : fmt(block),
   ]);
   if (freshnessPairs.length) {
     card.appendChild(el("h3", {}, "freshness"));
