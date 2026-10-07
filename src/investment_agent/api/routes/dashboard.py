@@ -14,7 +14,8 @@ from typing import Annotated, Literal
 import structlog
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.auth import verify_api_key_or_session
 from investment_agent.api.schemas.dashboard import (
@@ -22,6 +23,7 @@ from investment_agent.api.schemas.dashboard import (
     DashboardEntry,
     DashboardToday,
 )
+from investment_agent.candidates.lifecycle import effective_draft
 from investment_agent.clock import today_in
 from investment_agent.config import SchedulerConfig, load_app_yaml
 from investment_agent.scheduler.trading_calendar import (
@@ -34,6 +36,8 @@ from investment_agent.storage.models.analysis import (
     ResearchChangeSet,
     ResearchSnapshot,
 )
+from investment_agent.storage.models.candidates import CandidateRecord
+from investment_agent.storage.models.verification import VerificationRequest
 
 router = APIRouter(
     prefix="/dashboard",
@@ -43,6 +47,7 @@ router = APIRouter(
 
 _WINDOW = 300
 _MAX_ENTRIES = 20
+_UNFINISHED_VERIFICATION = ("pending", "deferred", "running")
 _APP_CONFIG_PATH = Path("config/app.yaml")
 
 log = structlog.get_logger(__name__)
@@ -56,8 +61,45 @@ class DashboardWarning(BaseModel):
     days_remaining: int | None = None
 
 
+class CandidateCounts(BaseModel):
+    """The overview's "本周候选" bucket (P1-E1): counts only, no scores."""
+
+    open: int
+    drafts_ready: int
+    """Open candidates whose draft rule awaits review."""
+    drafting: int
+    """Open candidates without a draft yet (queued or running)."""
+    draft_failed: int
+    verification_pending: int
+    """iFinD verification requests not finished yet (pending / deferred / running)."""
+
+
 class DashboardTodayWithWarnings(DashboardToday):
     warnings: list[DashboardWarning] = Field(default_factory=list)
+    candidates: CandidateCounts | None = None
+
+
+async def candidate_counts(session: AsyncSession) -> CandidateCounts:
+    stmt = select(CandidateRecord).where(CandidateRecord.status == "open")
+    open_rows = (await session.execute(stmt)).scalars().all()
+    states: dict[str, int] = {}
+    for candidate in open_rows:
+        state, _draft = await effective_draft(session, candidate)
+        states[state] = states.get(state, 0) + 1
+    pending = (
+        await session.execute(
+            select(func.count())
+            .select_from(VerificationRequest)
+            .where(VerificationRequest.status.in_(_UNFINISHED_VERIFICATION))
+        )
+    ).scalar_one()
+    return CandidateCounts(
+        open=len(open_rows),
+        drafts_ready=states.get("ready", 0),
+        drafting=states.get("pending", 0) + states.get("none", 0),
+        draft_failed=states.get("failed", 0),
+        verification_pending=int(pending),
+    )
 
 
 def _calendar_path() -> Path:
@@ -191,4 +233,5 @@ async def dashboard_today(
             meaningful_changes=bucket("meaningful_changes"),
             generated_at=datetime.now(UTC),
             warnings=calendar_warnings(),
+            candidates=await candidate_counts(session),
         )

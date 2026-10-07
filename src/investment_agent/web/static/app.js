@@ -11,7 +11,7 @@ import {
   post,
   renderRegion,
 } from "./api.js";
-import { CANDIDATE_REGIONS, bootCandidates } from "./candidates.js";
+import { CANDIDATE_REGIONS, bootCandidates, candidatesBucket } from "./candidates.js";
 import { el, fmt, fmtNumber, kvTable, statusBadge, stockLink, table } from "./dom.js";
 
 // ---- 今日概览 ---------------------------------------------------------
@@ -57,11 +57,16 @@ async function loadDashboard(region, data) {
   ].filter(([, bucket]) => bucket && bucket.count > 0);
   const warnings = Array.isArray(data.warnings) ? data.warnings : [];
 
-  if (!sections.length && !warnings.length) {
+  const candidates = data.candidates && typeof data.candidates === "object" ? data.candidates : null;
+  if (!sections.length && !warnings.length && !candidates) {
     renderRegion(region, "empty", "今日无待处理项。");
     return;
   }
   const container = el("div");
+  if (candidates) container.appendChild(candidatesBucket(candidates));
+  if (!sections.length && !warnings.length) {
+    container.appendChild(el("p", { class: "notice" }, "今日无待处理的研究运行。"));
+  }
   for (const warning of warnings) {
     const level = warning.level === "error" ? "error" : "warn";
     container.appendChild(

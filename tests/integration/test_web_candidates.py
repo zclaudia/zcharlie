@@ -283,3 +283,14 @@ console.log(JSON.stringify(Object.values(rule.zones).flatMap((g) => (g.all || g.
 """
     )
     assert conditions == ["PE 5 年分位 ≤ 25%", "ROE < 5%"]
+
+
+async def test_dashboard_candidates_bucket(api_client) -> None:
+    empty = api_client.get("/dashboard/today", headers=KEY).json()["candidates"]
+    assert empty == {
+        "open": 0, "drafts_ready": 0, "drafting": 0, "draft_failed": 0, "verification_pending": 0,
+    }
+    await seed_promotable()
+    counts = api_client.get("/dashboard/today", headers=KEY).json()["candidates"]
+    assert counts["open"] == 1 and counts["drafts_ready"] == 1
+    assert counts["verification_pending"] == 0
