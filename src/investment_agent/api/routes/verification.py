@@ -53,7 +53,8 @@ def result_summary(raw: dict[str, Any] | None) -> VerificationResultSummary | No
     if not raw:
         return None
     conflicts = _str_list(raw.get("conflicts"))
-    fields = raw.get("fields") if isinstance(raw.get("fields"), dict) else {}
+    raw_fields = raw.get("fields")
+    fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
     superseded = raw.get("superseded_by")
     return VerificationResultSummary(
         report_period=_optional_str(raw.get("report_period")),
