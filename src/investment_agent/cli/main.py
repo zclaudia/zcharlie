@@ -10,6 +10,7 @@ from investment_agent.cli.commands import rules as rules_cmd
 from investment_agent.cli.commands import scheduler as scheduler_cmd
 from investment_agent.cli.commands import screen as screen_cmd
 from investment_agent.cli.commands import snapshot as snapshot_cmd
+from investment_agent.cli.commands import verify as verify_cmd
 from investment_agent.cli.commands import worker as worker_cmd
 
 app = typer.Typer(help="Investment Agent CLI")
@@ -22,6 +23,7 @@ app.add_typer(worker_cmd.app, name="worker", help="Persistent worker commands")
 app.add_typer(snapshot_cmd.app, name="snapshot", help="PIT snapshot collection commands")
 app.add_typer(rules_cmd.app, name="rules", help="Rule templates and instances")
 app.add_typer(screen_cmd.app, name="screen", help="Weekly template screen")
+app.add_typer(verify_cmd.app, name="verify", help="iFinD on-demand verification (P1-A13)")
 
 
 @app.callback()

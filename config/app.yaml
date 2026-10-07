@@ -29,3 +29,14 @@ screen:
   timezone: Asia/Shanghai
   cron: "0 20 * * sun"   # by name: APScheduler numbers weekdays from mon=0
   hit_cap: 20
+
+# iFinD on-demand verification (P1-A13). The dispatcher enqueues one
+# ifind_verify run per slot when requests are due (pending, or deferred past
+# their not_before); runs stay within IFIND_BUDGET_PER_5H calls per rolling
+# 5 hours. Weekly calibration samples watchlist stocks (deterministic per ISO
+# week). Standard crontab weekdays (0 = Sunday); null disables a job.
+verification:
+  timezone: Asia/Shanghai
+  dispatch_cron: "*/30 * * * *"
+  calibration_cron: "0 21 * * 0"   # Sunday 21:00
+  calibration_count: 10
