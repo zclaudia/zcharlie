@@ -73,6 +73,7 @@ def run(
     settings = Settings()  # type: ignore[call-arg]
 
     async def submit() -> None:
+        from investment_agent.candidates.lifecycle import CandidatePolicy
         from investment_agent.research.worker import ResearchWorker
         from investment_agent.rules.screen_job import ScreenRunHandler
         from investment_agent.storage.database import init_engine, session_scope
@@ -94,7 +95,9 @@ def run(
         worker = ResearchWorker(
             settings=settings,
             worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-            handlers=[ScreenRunHandler()],
+            handlers=[
+                ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings))
+            ],
         )
         await worker.run_once(run_id=run_id)
         async with session_scope() as session:
@@ -120,6 +123,15 @@ def _print_summary(metadata: dict[str, object]) -> None:
             *(str(counts.get(key, 0)) for key in ("hit", "truncated", "miss", "skipped", "excluded")),
         )
     rprint(table)
+    candidates = metadata.get("candidates")
+    if isinstance(candidates, dict):
+        rprint(
+            "Candidates: "
+            + ", ".join(
+                f"{key}={len(value) if isinstance(value, list) else value}"
+                for key, value in candidates.items()
+            )
+        )
     timing = metadata.get("timing_seconds")
     if timing:
         rprint(f"Timing (s): {timing}")

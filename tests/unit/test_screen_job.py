@@ -24,7 +24,7 @@ from investment_agent.rules.screen_job import (
     enqueue_screen_run,
     screen_idempotency_key,
 )
-from investment_agent.storage.database import init_engine, session_scope
+from investment_agent.storage.database import get_engine, init_engine, session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.reference import UniverseMembership
@@ -103,7 +103,14 @@ def screen_db(tmp_path, monkeypatch):
                 )
 
     asyncio.run(create())
-    return url
+    yield url
+
+    async def dispose() -> None:
+        # Close pooled aiosqlite connections deterministically: an engine left
+        # to the garbage collector closes them from a dead event loop.
+        await get_engine().dispose()
+
+    asyncio.run(dispose())
 
 
 def _templates_from(directory: Path):  # noqa: ANN202

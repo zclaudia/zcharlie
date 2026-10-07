@@ -21,6 +21,7 @@ import structlog
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.candidates.lifecycle import CandidatePolicy
 from investment_agent.config import Settings
 from investment_agent.jobs.base import (
     BaseJobHandler,
@@ -182,7 +183,7 @@ def default_job_handlers(
     return [
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
-        ScreenRunHandler(),
+        ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings)),
     ]
 
 

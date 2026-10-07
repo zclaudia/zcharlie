@@ -29,3 +29,10 @@ screen:
   timezone: Asia/Shanghai
   cron: "0 20 * * sun"   # by name: APScheduler numbers weekdays from mon=0
   hit_cap: 20
+
+# Candidates (P1-D1): daily sweep moving open candidates past expires_at to
+# `expired` (a system decision each). Expiry / dismiss cooldown lengths are
+# env settings (CANDIDATE_EXPIRY_DAYS, CANDIDATE_DISMISS_COOLDOWN_DAYS).
+candidates:
+  timezone: Asia/Shanghai
+  expiry_sweep_cron: "0 7 * * *"   # daily 07:00

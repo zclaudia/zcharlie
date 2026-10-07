@@ -1,9 +1,10 @@
 """APScheduler-based runner: A-share watchlist refresh + PIT snapshot collection.
 
 Runs in its own process (`ia scheduler start` or Docker service).
-Reads cron + timezone from config/app.yaml (``scheduler``, ``snapshot`` and
-``screen``).
-The scheduler only enqueues; the worker executes the jobs.
+Reads cron + timezone from config/app.yaml (``scheduler``, ``snapshot``,
+``screen`` and ``candidates``).
+The scheduler only enqueues; the worker executes the jobs. The one exception
+is the daily candidate expiry sweep: a few row updates, run in-process.
 """
 
 import asyncio
@@ -17,6 +18,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from investment_agent.config import (
     AppYamlConfig,
+    CandidateScheduleConfig,
     ScreenScheduleConfig,
     Settings,
     SnapshotScheduleConfig,
@@ -273,6 +275,30 @@ async def run_screen_schedule_job(
     return created
 
 
+async def run_candidate_expiry_job() -> int | None:
+    """Daily sweep: open candidates past ``expires_at`` -> ``expired`` (P1-D1).
+
+    Idempotent. Returns the number of expired candidates, ``None`` on error.
+    """
+
+    from investment_agent.candidates.lifecycle import expire_candidates
+
+    try:
+        async with session_scope() as session:
+            expired = await expire_candidates(session)
+    except Exception:
+        log.exception("scheduler.candidates.expiry_failed")
+        return None
+    log.info("scheduler.candidates.expiry_swept", expired=len(expired))
+    return len(expired)
+
+
+def _candidate_trigger(cfg: CandidateScheduleConfig | None) -> CronTrigger | None:
+    if cfg is None or cfg.expiry_sweep_cron is None:
+        return None
+    return _parse_cron(cfg.expiry_sweep_cron, timezone=cfg.timezone)
+
+
 def _screen_trigger(cfg: ScreenScheduleConfig | None) -> CronTrigger | None:
     if cfg is None or cfg.cron is None:
         return None
@@ -416,6 +442,15 @@ def build_scheduler(
             replace_existing=True,
             **_JOB_DEFAULTS,
         )
+    candidate_trigger = _candidate_trigger(app_config.candidates)
+    if candidate_trigger is not None:
+        sched.add_job(
+            run_candidate_expiry_job,
+            trigger=candidate_trigger,
+            id="candidate_expiry",
+            replace_existing=True,
+            **_JOB_DEFAULTS,
+        )
     return sched
 
 
@@ -451,6 +486,8 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
     await _startup_watchlist_check(cfg, started_at)
     await _startup_snapshot_check(cfg, started_at)
     await _startup_screen_check(cfg, started_at)
+    if _candidate_trigger(cfg.candidates) is not None:
+        await run_candidate_expiry_job()
     stop_event = asyncio.Event()
     try:
         await stop_event.wait()

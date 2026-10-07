@@ -11,7 +11,11 @@ One run = one universe on one ``as_of``:
    pre-filter need (:data:`investment_agent.factors.catalog.DEFAULT_REGISTRY`);
 4. :func:`investment_agent.rules.screen.run_screen` (pure);
 5. replace this run's ``screen_result`` rows (a retried attempt rewrites
-   them) and store a summary in ``pipeline_run.metadata_json``.
+   them) and store a summary in ``pipeline_run.metadata_json``;
+6. in a second transaction: expire overdue candidates and open / merge
+   candidates from the ``hit`` rows (P1-D1,
+   :func:`investment_agent.candidates.lifecycle.create_candidates_from_screen`;
+   idempotent, so a retried run neither duplicates candidates nor drafts).
 
 Idempotency key ``screen_run:<universe>:<as_of>``: a re-enqueue for the same
 slot returns the existing run (``ia screen run --rerun`` adds a suffix).
@@ -31,6 +35,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.candidates.lifecycle import (
+    CandidatePolicy,
+    create_candidates_from_screen,
+    expire_candidates,
+)
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.view import load_snapshot_view
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
@@ -202,8 +211,10 @@ async def execute_screen_run(
     *,
     run_id: int,
     templates_dir: Path | None = None,
+    candidate_policy: CandidatePolicy | None = None,
 ) -> dict[str, Any]:
-    """Sync templates (optional), screen the universe, persist; returns metadata."""
+    """Sync templates (optional), screen the universe, persist, then create
+    candidates from the hits; returns metadata."""
 
     if payload.sync_templates:
         files = load_templates(templates_dir)
@@ -229,7 +240,14 @@ async def execute_screen_run(
         )
         rows = await persist_screen(session, run_id, screen)
         screen_seconds = time.perf_counter() - started
+    async with session_scope() as session:
+        expired = await expire_candidates(session)
+        candidates = await create_candidates_from_screen(
+            session, run_id=run_id, policy=candidate_policy or CandidatePolicy()
+        )
+        candidates.expired = expired
     metadata = screen_summary(screen)
+    metadata["candidates"] = candidates.to_metadata()
     metadata.update(
         {
             "universe_code": payload.universe_code,
@@ -248,15 +266,24 @@ async def execute_screen_run(
 class ScreenRunHandler(BaseJobHandler):
     kind = SCREEN_RUN
 
-    def __init__(self, *, templates_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        templates_dir: Path | None = None,
+        candidate_policy: CandidatePolicy | None = None,
+    ) -> None:
         self.templates_dir = templates_dir
+        self.candidate_policy = candidate_policy
 
     async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
         payload = ScreenRunPayload.model_validate(job.request_json)
 
         async def work() -> dict[str, Any]:
             return await execute_screen_run(
-                payload, run_id=job.run_id, templates_dir=self.templates_dir
+                payload,
+                run_id=job.run_id,
+                templates_dir=self.templates_dir,
+                candidate_policy=self.candidate_policy,
             )
 
         metadata = await ctx.run_with_heartbeat(job.lease, work)
