@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "zcharlie-api",
+      "runtimeExecutable": "/Users/zhvala/SourceCode/zcharlie/.venv/bin/ia",
+      "runtimeArgs": ["api", "serve", "--host", "127.0.0.1", "--port", "8010"],
+      "port": 8010
+    }
+  ]
+}
