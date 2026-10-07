@@ -1,4 +1,4 @@
-# 稳健质量成长 (steady quality growth) - template v1 DRAFT for user review (P1-F2).
+# 稳健质量成长 (steady quality growth) - template v2 (user review P1-F2, 2026-10-07).
 #
 # Source archetype: research_kernel classify_stock "steady_quality_growth"
 # (growth industries, ROE >= 12%, 3y revenue growth in [6%, 18%), positive
@@ -6,11 +6,19 @@
 # (profitability 20, growth durability 20, ROE stability 15, cash flow 15,
 # balance sheet 10, shareholder return 10, valuation 10).
 #
-# Gaps on the baostock target-pool path: no dividend-yield factor, free
-# cash flow missing (iFinD-only) - net margin stands in for earnings
-# quality. debt_ratio is missing for ~half of the members until the
-# Eastmoney fallback lands, so the archetype's "debt <= 55%" moves to
-# exit_review (debt > 70%), where a missing value never triggers.
+# Free cash flow is not used (net margin stands in for earnings quality).
+#
+# v2 (review 2026-10-07):
+# * Q3: the archetype's "debt ratio <= 55%" is back in the screen
+#   (`debt_ratio <= $debt_ratio_max`): debt_ratio is fully covered on the
+#   target pool since the Eastmoney fallback (P1-A11/A12). exit_review keeps
+#   the looser "debt > 70%" review trigger.
+# * Q6: ROE is bounded above (`roe between [$roe_min, $roe_max]`, 40%): a
+#   "steady" compounder with an ROE above 40% is an equity-base artefact
+#   more often than a franchise; the cap is a parameter.
+# * The archetype's "dividend yield >= 1.5%" is still not a screen condition
+#   (the dividend_yield_ttm factor now exists; adding it is a calibration
+#   question, not part of this review).
 id: steady_quality_growth
 name: 稳健质量成长
 description: >-
@@ -21,8 +29,9 @@ applicable_groups: [growth_manufacturing, consumer, healthcare, utility]
 
 screen:
   all:
-    # Profitability (archetype: ROE >= 12%).
-    - {factor: roe, op: ">=", value: "$roe_min"}
+    # Profitability (archetype: ROE >= 12%), capped against equity-base
+    # artefacts (review Q6).
+    - {factor: roe, op: between, value: ["$roe_min", "$roe_max"]}
     # Steadiness: the defining trait vs quality_growth.
     - {factor: roe_stability, op: ">=", value: "$roe_stability_min"}
     # Moderate growth band (archetype: [6%, 18%)).
@@ -31,6 +40,8 @@ screen:
     - {factor: net_profit_growth_3y, op: ">=", value: "$profit_growth_min"}
     # Earnings quality proxy (stand-in for FCF > 0).
     - {factor: net_margin, op: ">=", value: "$net_margin_min"}
+    # Balance sheet (archetype: debt ratio <= 55%; review Q3).
+    - {factor: debt_ratio, op: "<=", value: "$debt_ratio_max"}
     # Steady price behaviour.
     - {factor: volatility_1y, op: "<=", value: "$volatility_max"}
     # Valuation not stretched.
@@ -65,11 +76,13 @@ holding_zones:
 
 params:
   roe_min: 0.12
+  roe_max: 0.40
   roe_stability_min: 0.80
   revenue_growth_min: 0.06
   revenue_growth_max: 0.18
   profit_growth_min: 0.05
   net_margin_min: 0.08
+  debt_ratio_max: 0.55
   volatility_max: 0.45
   pe_pct_max: 0.60
   buy_pe_pct_max: 0.30
@@ -85,11 +98,13 @@ params:
 
 param_ranges:
   roe_min: {min: 0.08, max: 0.20}
+  roe_max: {min: 0.25, max: 0.60}
   roe_stability_min: {min: 0.50, max: 0.95}
   revenue_growth_min: {min: 0.0, max: 0.10}
   revenue_growth_max: {min: 0.12, max: 0.30}
   profit_growth_min: {min: 0.0, max: 0.15}
   net_margin_min: {min: 0.03, max: 0.20}
+  debt_ratio_max: {min: 0.40, max: 0.70}
   volatility_max: {min: 0.25, max: 0.60}
   pe_pct_max: {min: 0.30, max: 0.90}
   buy_pe_pct_max: {min: 0.10, max: 0.50}

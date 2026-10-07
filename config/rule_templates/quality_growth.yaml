@@ -1,4 +1,4 @@
-# 质量成长 (quality growth) - template v1 DRAFT for user review (P1-F2).
+# 质量成长 (quality growth) - template v2 (user review P1-F2, 2026-10-07).
 #
 # Source archetype: research_kernel classify_stock "quality_growth" (growth
 # industries 电力设备/新能源/自动化/汽车零部件/医药/高端制造, 3y revenue growth
@@ -10,6 +10,13 @@
 # (quality approx, flag main_business_revenue): it is allowed, and every
 # reason carries the flag. Free cash flow is iFinD-only (missing on the
 # target-pool path), so gross margin stands in for "competitive advantage".
+#
+# v2 (review Q6): ROE is bounded above (`roe between [$roe_min, $roe_max]`)
+# like the other templates, but with a looser default (60%): a very high,
+# *stable* ROE is this template's thesis (asset-light franchises with high
+# payouts, e.g. 605499 东鹏饮料 at 51.6%), and roe_stability >= 0.70 already
+# rejects one-year spikes from a collapsed equity base. Tighten per instance
+# down to 40%.
 id: quality_growth
 name: 质量成长
 description: >-
@@ -20,8 +27,9 @@ applicable_groups: [growth_manufacturing, consumer, healthcare]
 
 screen:
   all:
-    # Competitive advantage: high return on equity (archetype: ROE >= 15%).
-    - {factor: roe, op: ">=", value: "$roe_min"}
+    # Competitive advantage: high return on equity (archetype: ROE >= 15%),
+    # capped against equity-base artefacts (review Q6).
+    - {factor: roe, op: between, value: ["$roe_min", "$roe_max"]}
     # Durability: ROE not a one-year spike.
     - {factor: roe_stability, op: ">=", value: "$roe_stability_min"}
     # Growth (archetype: 3y revenue CAGR >= 18%; 15% default because the
@@ -63,6 +71,7 @@ holding_zones:
 
 params:
   roe_min: 0.15
+  roe_max: 0.60
   roe_stability_min: 0.70
   revenue_growth_min: 0.15
   profit_growth_min: 0.12
@@ -82,6 +91,7 @@ params:
 
 param_ranges:
   roe_min: {min: 0.10, max: 0.25}
+  roe_max: {min: 0.40, max: 1.00}
   roe_stability_min: {min: 0.40, max: 0.95}
   revenue_growth_min: {min: 0.08, max: 0.30}
   profit_growth_min: {min: 0.05, max: 0.30}

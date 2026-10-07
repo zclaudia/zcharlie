@@ -1,26 +1,33 @@
-# 红利蓝筹 (dividend blue chip) - template v1 DRAFT for user review (P1-F2).
+# 红利蓝筹 (dividend blue chip) - template v2 (user review P1-F2, 2026-10-07).
 #
 # Source archetype: research_kernel classify_stock "dividend_blue_chip"
 # (dividend industries 公用事业/银行/运营商/电力/高速, market cap >= 3000亿,
 # dividend yield >= 2.5%, positive FCF) and its scoring weights (FCF 25,
 # dividend yield 20, ROE stability 20, debt 15, valuation 15, growth 5).
 #
-# KNOWN GAP: the factor library has no dividend-yield factor (and free cash
-# flow is iFinD-only, missing on the baostock target-pool path). This
-# template approximates "able and willing to pay" with regulated / bank
-# industry groups + scale + stable ROE + non-shrinking profit + low
-# volatility, and "cheap" with the 5-year PB percentile (banks are valued on
-# PB; their PE percentiles are distorted by shrinking earnings). Add
-# dividend_yield to the screen once the factor exists.
+# "Able and willing to pay" = regulated / bank industry groups + scale +
+# stable ROE + non-shrinking profit + low volatility + a trailing dividend
+# yield floor; "cheap" = the 5-year PB percentile (banks are valued on PB;
+# their PE percentiles are distorted by shrinking earnings).
 #
-# debt_ratio is not_applicable for banks and missing for ~half of the other
-# members until the Eastmoney fallback lands, so it is only used in
-# exit_review (a missing factor never triggers a zone).
+# v2 (review 2026-10-07):
+# * Q1: groups stay utility + banking (no insurance / broker).
+# * Q2: `dividend_yield_ttm >= $dividend_yield_min` (trailing 365-day
+#   pre-tax cash dividends / close, baostock dividend events). Default 3.0%
+#   (archetype 2.5%; utility median 3.6%, bank median 4.8% on 2026-09-30).
+#   drop gains a yield floor (`dividend_yield_ttm < $drop_dividend_yield_max`,
+#   2%): the dividend thesis is gone. buy_zone stays PB-only: for a stable
+#   payout a low PB percentile already means a high yield vs its own history.
+# * Q6: ROE is bounded above (`roe between [$roe_min, $roe_max]`, 40%).
+# * Q7: airports / ports are utility now (600009, 600018, 601018 reach this
+#   template).
+#
+# debt_ratio is not_applicable for banks; it stays in exit_review only.
 id: dividend_blue_chip
 name: 红利蓝筹
 description: >-
-  Large, stable-profit utilities and banks trading in the lower half of their
-  5-year PB range. Dividend yield is not yet a factor (known gap).
+  Large, stable-profit utilities and banks with a trailing dividend yield
+  above the floor, trading in the lower half of their 5-year PB range.
 calibration_status: uncalibrated
 applicable_groups: [utility, banking]
 
@@ -29,14 +36,17 @@ screen:
     # Scale: blue chips only (archetype used 3000亿 as a fit bonus; 1000亿
     # keeps mid-size regional utilities and city banks in view).
     - {factor: market_cap, op: ">=", value: "$market_cap_min"}
-    # Profitability floor: banks' median ROE is ~9%, utilities ~10%.
-    - {factor: roe, op: ">=", value: "$roe_min"}
+    # Profitability floor: banks' median ROE is ~9%, utilities ~10%; capped
+    # against equity-base artefacts (review Q6).
+    - {factor: roe, op: between, value: ["$roe_min", "$roe_max"]}
     # Payout capacity proxy: 4 annual ROEs with low dispersion.
     - {factor: roe_stability, op: ">=", value: "$roe_stability_min"}
     # Earnings must not be shrinking (dividend sustainability proxy).
     - {factor: net_profit_growth_3y, op: ">=", value: "$profit_growth_min"}
     # Defensive price behaviour.
     - {factor: volatility_1y, op: "<=", value: "$volatility_max"}
+    # Shareholder return: trailing 365-day cash dividend yield (review Q2).
+    - {factor: dividend_yield_ttm, op: ">=", value: "$dividend_yield_min"}
     # Valuation: lower part of the stock's own 5-year PB range.
     - {factor: pb_percentile_5y, op: "<=", value: "$pb_pct_max"}
 
@@ -53,6 +63,8 @@ candidate_zones:
       - {factor: roe, op: "<", value: "$drop_roe_max"}
       # Earnings started shrinking materially.
       - {factor: net_profit_growth_3y, op: "<", value: -0.10}
+      # The dividend thesis is gone: trailing yield below the floor.
+      - {factor: dividend_yield_ttm, op: "<", value: "$drop_dividend_yield_max"}
 
 holding_zones:
   add:
@@ -74,13 +86,16 @@ holding_zones:
 params:
   market_cap_min: 1.0e+11
   roe_min: 0.08
+  roe_max: 0.40
   roe_stability_min: 0.80
   profit_growth_min: -0.05
   volatility_max: 0.30
+  dividend_yield_min: 0.030
   pb_pct_max: 0.50
   buy_pb_pct_max: 0.30
   drop_pb_pct_min: 0.80
   drop_roe_max: 0.06
+  drop_dividend_yield_max: 0.020
   add_pb_pct_max: 0.20
   add_weight_max: 0.10
   trim_pb_pct_min: 0.90
@@ -90,13 +105,16 @@ params:
 param_ranges:
   market_cap_min: {min: 3.0e+10, max: 5.0e+11}
   roe_min: {min: 0.05, max: 0.15}
+  roe_max: {min: 0.25, max: 0.60}
   roe_stability_min: {min: 0.50, max: 0.95}
   profit_growth_min: {min: -0.15, max: 0.05}
   volatility_max: {min: 0.20, max: 0.45}
+  dividend_yield_min: {min: 0.020, max: 0.050}
   pb_pct_max: {min: 0.20, max: 0.80}
   buy_pb_pct_max: {min: 0.05, max: 0.50}
   drop_pb_pct_min: {min: 0.60, max: 0.95}
   drop_roe_max: {min: 0.03, max: 0.10}
+  drop_dividend_yield_max: {min: 0.010, max: 0.030}
   add_pb_pct_max: {min: 0.05, max: 0.40}
   add_weight_max: {min: 0.02, max: 0.20}
   trim_pb_pct_min: {min: 0.70, max: 0.99}
