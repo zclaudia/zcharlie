@@ -278,6 +278,9 @@ def cross_check(
                 "relative_difference": round(difference, 6),
                 "tolerance": tolerance,
                 "baostock_ref": f"financial_snapshot:{baostock_row.id}",
+                # The baostock operating cash flow is derived from ratios: a
+                # difference is worth recording, not an iFinD verification.
+                "baostock_approx": name != "debt_ratio",
             }
     if conflicts:
         check.conflicts[ticker] = conflicts
@@ -578,8 +581,16 @@ async def _collect_summary(
         if availability.availability != "actual":
             approx.append(ticker)
 
-    for ticker, conflicts in check.conflicts.items():
-        key_fields = [name for name in conflicts if (source := registry.get(name)) and source.key]
+    # iFinD verification is for current decisions: history backfills only
+    # record conflicts and gaps (provider_conflicts / run metadata), and a
+    # difference against an approximate baostock value never asks iFinD.
+    verify = not payload.backfill
+    for ticker, conflicts in check.conflicts.items() if verify else ():
+        key_fields = [
+            name
+            for name, detail in conflicts.items()
+            if (source := registry.get(name)) and source.key and not detail.get("baostock_approx")
+        ]
         if key_fields and await enqueue_verification(
             listing_id=listing_by_ticker[ticker],
             ticker=ticker,
@@ -590,7 +601,7 @@ async def _collect_summary(
             run_id=run_id,
         ):
             check.verification_requests += 1
-    for ticker, gaps in missing_key.items():
+    for ticker, gaps in missing_key.items() if verify else ():
         if await enqueue_verification(
             listing_id=listing_by_ticker[ticker],
             ticker=ticker,

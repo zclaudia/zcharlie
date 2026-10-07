@@ -469,3 +469,35 @@ def test_cli_collect_financial_and_backfill_with_akshare(cli_db):
          "--annual", "1", "--quarters", "1", "--status"],
     )
     assert status.exit_code == 0 and "queued" in status.output
+
+
+async def test_only_live_conflicts_on_exact_values_ask_ifind(db_session, tmp_path):
+    """Backfills never queue iFinD verification; neither do differences against
+    baostock's approximate (ratio-derived) operating cash flow."""
+
+    from investment_agent.storage.models.verification import VerificationRequest
+
+    del db_session
+    ids = await seed_universe(POOL)
+    await _seed_baostock(ids["601398.SH"], FY2024, date(2025, 3, 29), debt_ratio=0.95)
+    # Ratio-derived operating cash flow far from Eastmoney's figure.
+    await _seed_baostock(
+        ids["600519.SH"], FY2024, date(2025, 4, 3),
+        debt_ratio=0.19, cfo_to_np=2.5, net_profit=86_228_146_421.62,
+    )
+
+    async def requests() -> list[VerificationRequest]:
+        async with session_scope() as session:
+            return list((await session.execute(select(VerificationRequest))).scalars())
+
+    backfill = await _collect(_summary(backfill=True), tmp_path)
+    assert backfill.status == "success"
+    assert backfill.to_metadata()["provider_conflict"]["count"] == 2
+    assert await requests() == []
+
+    live = await _collect(_summary(), tmp_path)
+    assert live.to_metadata()["provider_conflict"]["count"] == 2
+    queued = await requests()
+    assert [(r.ticker, r.trigger, r.fields) for r in queued] == [
+        ("601398.SH", "conflict", ["debt_ratio"])
+    ]
