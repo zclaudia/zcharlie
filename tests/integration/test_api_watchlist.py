@@ -169,18 +169,29 @@ async def test_add_a_share_derives_metadata_from_latest_research(api_client):
     assert body["market_code"] == "BSE"
     assert body["name"] == "北交测试"
     assert body["industry"] == "机械设备"
-    assert body["provider"] == "ifind"
+    # New A-share entries refresh from the free-source snapshot store (P1-B5).
+    assert body["provider"] == "auto"
     assert body["report_year"] == 2025
 
 
 def test_a_share_requires_metadata_and_rejects_market_conflict(api_client):
     missing = api_client.post(
         "/watchlist",
-        json={"ticker": "000001.SZ"},
+        json={"ticker": "000001.SZ", "provider": "ifind"},
         headers={"X-API-Key": "secret"},
     )
     assert missing.status_code == 422
     assert "industry is required" in missing.json()["detail"]
+
+    # Snapshot research (the default) falls back to the data industry group,
+    # so only the company name is still needed for an unknown listing.
+    unnamed = api_client.post(
+        "/watchlist",
+        json={"ticker": "000001.SZ"},
+        headers={"X-API-Key": "secret"},
+    )
+    assert unnamed.status_code == 422
+    assert "name is required" in unnamed.json()["detail"]
 
     conflict = api_client.post(
         "/watchlist",

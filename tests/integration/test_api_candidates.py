@@ -289,7 +289,8 @@ async def test_promote_override_and_conflicts(api_client, verification_calls) ->
     body = response.json()
     assert [d["kind"] for d in body["decisions"]] == ["edit_rule", "approve_rule", "promote"]
     assert body["rule"]["version"] == 3 and body["rule"]["params"] == {"pe_pct_max": 0.2}
-    assert any("IFIND_PROXY_API_KEY" in warning for warning in body["warnings"])
+    # Research after promotion reads the free-source snapshot store (P1-B5).
+    assert not any("IFIND_PROXY_API_KEY" in warning for warning in body["warnings"])
 
 
 async def test_promote_without_rule_is_409(api_client) -> None:

@@ -33,10 +33,29 @@ def test_research_requires_ifind_configuration(api_client, monkeypatch):
             "ticker": "600406.SH",
             "industry": "电力设备",
             "report_year": 2025,
+            "provider": "ifind",
         },
     )
 
     assert response.status_code == 503
+
+    # Snapshot research (the default) needs no iFinD key.
+    snapshot = api_client.post(
+        "/research/single-stock",
+        headers={"X-API-Key": "secret"},
+        json={"ticker": "600406.SH"},
+    )
+    assert snapshot.status_code == 202
+    assert snapshot.json()["created"] is True
+
+
+def test_research_ifind_provider_needs_industry_and_report_year(api_client):
+    response = api_client.post(
+        "/research/single-stock",
+        headers={"X-API-Key": "secret"},
+        json={"ticker": "600406.SH", "provider": "ifind"},
+    )
+    assert response.status_code == 422
 
 
 def test_get_unknown_research_run_returns_404(api_client):
@@ -358,6 +377,7 @@ def test_research_enqueues_auditable_run(api_client, monkeypatch):
         "industry": "电力设备",
         "report_year": 2025,
         "as_of": "2026-10-05",
+        "provider": "snapshot",
     }
     assert run.available_at is not None
 

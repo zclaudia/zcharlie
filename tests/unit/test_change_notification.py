@@ -64,3 +64,39 @@ def test_notification_mentions_scoring_version_change():
 
     assert "评分版本变更：v1.2 → v1.3" in content.body
     assert "重要变化：1 项" in content.body
+
+
+def test_notification_explains_a_data_source_switch():
+    content = render_change_notification(
+        ticker="600519.SH",
+        company_name="贵州茅台",
+        current_run_id=5,
+        previous_run_id=4,
+        diff={
+            "source_changed": True,
+            "changes": [
+                {
+                    "category": "methodology",
+                    "field": "source_mode",
+                    "kind": "source_changed",
+                    "before": "ifind",
+                    "after": "snapshot",
+                    "meaningful": False,
+                },
+                {
+                    "category": "score",
+                    "field": "business_score",
+                    "before": 50.0,
+                    "after": 70.0,
+                    "meaningful": False,
+                    "suppressed_reason": "source_changed",
+                },
+            ],
+        },
+    )
+
+    assert "数据源变更：iFinD → 免费源快照" in content.body
+    assert "可能源于数据源切换" in content.body
+    assert "重要变化：0 项" in content.body
+    assert "## 数据源切换带来的差异（未计入重要变化）" in content.body
+    assert "`business_score`：50.0 → 70.0" in content.body

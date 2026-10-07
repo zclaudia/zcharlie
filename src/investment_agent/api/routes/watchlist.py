@@ -20,7 +20,10 @@ from investment_agent.api.schemas.admin import (
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
-from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
+from investment_agent.research.watchlist_refresh import (
+    enqueue_watchlist_refresh,
+    research_source_mode,
+)
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.user_domain import WatchlistItem
@@ -93,7 +96,12 @@ async def add_watchlist(body: WatchlistAdd) -> WatchlistItemOut:
                 industry = existing_item.industry
             if report_year is None and existing_item is not None:
                 report_year = existing_item.report_year
-            if industry is None:
+            requested_provider = body.provider or (
+                existing_item.provider if existing_item is not None else "auto"
+            )
+            # Snapshot research (P1-B5) falls back to the data industry group;
+            # only iFinD deep research needs the industry text.
+            if industry is None and research_source_mode(requested_provider) == "ifind":
                 raise HTTPException(
                     status_code=422,
                     detail=(
@@ -127,10 +135,10 @@ async def add_watchlist(body: WatchlistAdd) -> WatchlistItemOut:
                 detail=f"Listing not found: {body.market_code or 'NASDAQ'}/{body.ticker}",
             )
         existing_item = await watchlist_repository.get_by_listing(listing.id)
+        # New A-share entries refresh from the free-source snapshot store
+        # (``auto`` -> snapshot, P1-B5); ``ifind`` is an explicit opt-in.
         provider = body.provider or (
-            existing_item.provider
-            if existing_item is not None
-            else "ifind" if parsed is not None else "auto"
+            existing_item.provider if existing_item is not None else "auto"
         )
         item = await watchlist_repository.add(
             listing.id,
@@ -163,11 +171,6 @@ async def refresh_watchlist(
 ) -> WatchlistRefreshOut:
     """Queue independent research jobs for every enabled watchlist item."""
 
-    if not settings.ifind_proxy_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="IFIND_PROXY_API_KEY is not configured",
-        )
     refresh_date = body.as_of or shanghai_today()
     async with session_scope() as session:
         outcomes = await enqueue_watchlist_refresh(
@@ -175,6 +178,7 @@ async def refresh_watchlist(
             as_of=refresh_date,
             triggered_by="watchlist_api",
             idempotency_key=idempotency_key,
+            ifind_available=bool(settings.ifind_proxy_api_key),
         )
     items = [WatchlistRefreshItemOut(**outcome.__dict__) for outcome in outcomes]
     return WatchlistRefreshOut(

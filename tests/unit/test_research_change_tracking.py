@@ -295,3 +295,54 @@ def test_unknown_scoring_version_does_not_trigger_guard():
 
     assert all(c.get("kind") != "scoring_version_changed" for c in diff.changes)
     assert diff.has_meaningful_changes is True
+
+
+def _scored(mode: str | None, business: float, pe: float) -> dict[str, object]:
+    score: dict[str, object] = {
+        "business_score": business,
+        "investment_score": business,
+        "primary_strategy": "quality_growth" if business < 60 else "dividend_blue_chip",
+        "key_metrics": {"pe": pe, "dividend_yield": None if mode != "snapshot" else 0.03},
+        "scoring_version": "v1.3",
+    }
+    if mode is not None:
+        score["source_mode"] = mode
+    return score
+
+
+def test_source_switch_is_recorded_and_suppresses_jumps():
+    diff = build_research_diff(
+        current_run_id=2,
+        current_score=_scored("snapshot", 70.0, 15.0),
+        previous_run_id=1,
+        previous_score=_scored(None, 50.0, 25.0),  # pre-P1-B5 score = iFinD
+    )
+
+    assert diff.source_changed is True
+    assert diff.as_dict()["source_changed"] is True
+    assert diff.has_meaningful_changes is False
+    source = next(change for change in diff.changes if change["field"] == "source_mode")
+    assert (source["kind"], source["before"], source["after"]) == (
+        "source_changed",
+        "ifind",
+        "snapshot",
+    )
+    jumps = [change for change in diff.changes if change["field"] != "source_mode"]
+    assert {change["field"] for change in jumps} >= {"business_score", "key_metrics.pe"}
+    assert all(change["meaningful"] is False for change in jumps)
+    score_reasons = {
+        change.get("suppressed_reason") for change in jumps if change["category"] == "score"
+    }
+    assert score_reasons == {"source_changed"}
+
+
+def test_same_source_mode_keeps_normal_change_semantics():
+    diff = build_research_diff(
+        current_run_id=3,
+        current_score=_scored("snapshot", 70.0, 15.0),
+        previous_run_id=2,
+        previous_score=_scored("snapshot", 50.0, 15.0),
+    )
+    assert diff.source_changed is False
+    assert diff.has_meaningful_changes is True
+    assert not any(change["field"] == "source_mode" for change in diff.changes)

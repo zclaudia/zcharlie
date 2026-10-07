@@ -45,17 +45,7 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
         explanation_json: dict[str, object] | None,
         artifact_manifest: dict[str, object],
     ) -> ResearchSnapshot:
-        previous = (
-            await self.session.execute(
-                select(ResearchSnapshot)
-                .where(
-                    ResearchSnapshot.symbol == symbol,
-                    ResearchSnapshot.market == market,
-                )
-                .order_by(ResearchSnapshot.id.desc())
-                .limit(1)
-            )
-        ).scalar_one_or_none()
+        previous = await self.latest(symbol=symbol, market=market)
         snapshot = ResearchSnapshot(
             pipeline_run_id=pipeline_run_id,
             symbol=symbol,
@@ -97,6 +87,21 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
         )
         await self.session.flush()
         return snapshot
+
+    async def latest(self, *, symbol: str, market: str) -> ResearchSnapshot | None:
+        """The most recently persisted snapshot of one listing."""
+
+        return (
+            await self.session.execute(
+                select(ResearchSnapshot)
+                .where(
+                    ResearchSnapshot.symbol == symbol,
+                    ResearchSnapshot.market == market,
+                )
+                .order_by(ResearchSnapshot.id.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
 
     async def by_run(self, pipeline_run_id: int) -> ResearchSnapshot | None:
         return (

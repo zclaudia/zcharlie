@@ -53,7 +53,10 @@ from investment_agent.providers.shenwan_directory import (
     SW2021_SYSTEM,
     default_shenwan_directory,
 )
-from investment_agent.research.watchlist_refresh import enqueue_single_stock_research
+from investment_agent.research.watchlist_refresh import (
+    enqueue_single_stock_research,
+    research_source_mode,
+)
 from investment_agent.rules.store import RuleStore, RuleStoreError, instance_from_record
 from investment_agent.rules.validation import RuleValidationError
 from investment_agent.storage.database import session_scope
@@ -368,7 +371,8 @@ async def promote_candidate(
         industry=(
             metadata.industry if existing is None or not existing.industry else None
         ),
-        provider="ifind" if existing is None else None,
+        # Daily refresh reads the free-source snapshot store (P1-B5).
+        provider="auto" if existing is None else None,
         report_year=(
             metadata.report_year if existing is None or existing.report_year is None else None
         ),
@@ -450,23 +454,30 @@ async def _enqueue_promote_research(
 ) -> tuple[int | None, str | None]:
     item = outcome.watchlist_item
     ticker = outcome.candidate.ticker
-    if settings is not None and not settings.ifind_proxy_api_key:
-        return None, "research not queued: IFIND_PROXY_API_KEY is not configured"
-    if not item.industry:
-        return None, "research not queued: no industry known for the watchlist entry"
-    if item.report_year is None:
-        return None, "research not queued: no report year known for the watchlist entry"
+    # Source mode follows the watchlist entry (P1-B5): ``auto`` -> free-source
+    # snapshot (the promote verification above already asks iFinD to check).
+    mode = research_source_mode(item.provider)
+    if mode is None:
+        return None, f"research not queued: unsupported research provider {item.provider}"
+    if mode == "ifind":
+        if settings is not None and not settings.ifind_proxy_api_key:
+            return None, "research not queued: IFIND_PROXY_API_KEY is not configured"
+        if not item.industry:
+            return None, "research not queued: no industry known for the watchlist entry"
+        if item.report_year is None:
+            return None, "research not queued: no report year known for the watchlist entry"
     try:
         async with session_scope() as session:
             run, _created = await enqueue_single_stock_research(
                 session,
                 listing_id=item.listing_id,
                 ticker=ticker,
-                industry=item.industry,
+                industry=item.industry or None,
                 report_year=item.report_year,
                 as_of=as_of,
                 triggered_by="promote",
                 idempotency_key=f"promote:{outcome.candidate.id}",
+                provider=mode,
             )
             return run.id, None
     except Exception as exc:  # noqa: BLE001 - must not undo the promotion

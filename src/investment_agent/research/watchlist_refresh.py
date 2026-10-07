@@ -1,4 +1,10 @@
-"""Batch enqueueing for durable watchlist research refreshes."""
+"""Batch enqueueing for durable watchlist research refreshes.
+
+Provider routing (P1-B5, decision D6 rev 2): ``watchlist_item.provider``
+``auto`` (the default) and ``snapshot`` refresh from the free-source snapshot
+store (no iFinD call); an explicit ``ifind`` / ``ifind-proxy`` keeps the
+iFinD deep-research path (budget-ledgered).
+"""
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -13,7 +19,19 @@ from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
 
-_SUPPORTED_PROVIDERS = {"ifind", "ifind-proxy"}
+_SUPPORTED_PROVIDERS: dict[str, str] = {
+    "auto": "snapshot",
+    "snapshot": "snapshot",
+    "ifind": "ifind",
+    "ifind-proxy": "ifind",
+}
+DEFAULT_SOURCE_MODE = "snapshot"
+
+
+def research_source_mode(provider: str | None) -> str | None:
+    """Watchlist ``provider`` -> research source mode; ``None`` when unsupported."""
+
+    return _SUPPORTED_PROVIDERS.get((provider or "auto").strip().lower())
 _TERMINAL_STATUSES = {"success", "partial", "failed"}
 
 
@@ -33,8 +51,13 @@ async def enqueue_watchlist_refresh(
     as_of: date,
     triggered_by: str,
     idempotency_key: str | None = None,
+    ifind_available: bool = True,
 ) -> list[WatchlistRefreshOutcome]:
-    """Queue each enabled entry independently so one bad item cannot abort the batch."""
+    """Queue each enabled entry independently so one bad item cannot abort the batch.
+
+    ``ifind_available=False`` (no ``IFIND_PROXY_API_KEY``) fails only the
+    entries that explicitly use iFinD; snapshot entries need no key.
+    """
 
     watchlist_repository = WatchlistRepository(session)
     pipeline_repository = PipelineRunRepository(session)
@@ -50,7 +73,9 @@ async def enqueue_watchlist_refresh(
             if listing is not None
             else None
         )
-        validation_error = _validate_refresh_item(item=item, ticker=ticker)
+        validation_error = _validate_refresh_item(
+            item=item, ticker=ticker, ifind_available=ifind_available
+        )
         if validation_error is not None:
             await watchlist_repository.mark_refresh_enqueue_failed(
                 item.listing_id,
@@ -69,13 +94,12 @@ async def enqueue_watchlist_refresh(
             continue
 
         assert ticker is not None
-        assert item.industry is not None
-        assert item.report_year is not None
         payload: dict[str, object] = {
             "ticker": ticker,
-            "industry": item.industry,
+            "industry": item.industry or None,
             "report_year": item.report_year,
             "as_of": as_of.isoformat(),
+            "provider": research_source_mode(item.provider),
         }
         try:
             async with session.begin_nested():
@@ -136,17 +160,25 @@ def _validate_refresh_item(
     *,
     item: WatchlistItem,
     ticker: str | None,
+    ifind_available: bool = True,
 ) -> str | None:
     if ticker is None:
         return "listing is missing"
     if parse_a_share_ticker(ticker) is None:
         return "only canonical A-share tickers are supported"
-    if not item.industry:
-        return "industry is required"
-    if item.report_year is None:
-        return "report_year is required"
-    if item.provider not in _SUPPORTED_PROVIDERS:
+    mode = research_source_mode(item.provider)
+    if mode is None:
         return f"unsupported research provider: {item.provider}"
+    if mode == "ifind":
+        if not ifind_available:
+            return "IFIND_PROXY_API_KEY is not configured"
+        # iFinD deep research names the industry and fiscal year explicitly;
+        # snapshot research falls back to the data industry group and the
+        # latest annual report public on as_of.
+        if not item.industry:
+            return "industry is required"
+        if item.report_year is None:
+            return "report_year is required"
     return None
 
 
@@ -166,20 +198,24 @@ async def enqueue_single_stock_research(
     *,
     listing_id: int,
     ticker: str,
-    industry: str,
-    report_year: int,
+    industry: str | None,
+    report_year: int | None,
     as_of: date,
     triggered_by: str,
     idempotency_key: str | None = None,
+    provider: str = DEFAULT_SOURCE_MODE,
 ) -> tuple[PipelineRun, bool]:
     """Queue one ``ifind_research`` run for a watchlist entry (same payload as
-    ``POST /research/single-stock``) and track it on the entry."""
+    ``POST /research/single-stock``) and track it on the entry.
+
+    ``provider`` is the research source mode (``snapshot`` by default)."""
 
     payload: dict[str, object] = {
         "ticker": ticker,
         "industry": industry,
         "report_year": report_year,
         "as_of": as_of.isoformat(),
+        "provider": provider,
     }
     run, created = await PipelineRunRepository(session).enqueue(
         kind="ifind_research",

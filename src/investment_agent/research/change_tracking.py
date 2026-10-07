@@ -5,6 +5,9 @@ from typing import TypeGuard
 
 CHANGE_SCHEMA_VERSION = "research-change.v2"
 SCORING_VERSION_CHANGED = "scoring_version_changed"
+SOURCE_CHANGED = "source_changed"
+# Scores persisted before P1-B5 carry no ``source_mode``; they came from iFinD.
+DEFAULT_SOURCE_MODE = "ifind"
 
 
 @dataclass(frozen=True)
@@ -92,9 +95,11 @@ class ResearchDiff:
     meaningful_change_count: int
     category_counts: dict[str, int]
     changes: list[dict[str, object]]
+    source_changed: bool = False
 
     def as_dict(self) -> dict[str, object]:
         return {
+            "source_changed": self.source_changed,
             "schema_version": self.schema_version,
             "baseline": self.baseline,
             "previous_run_id": self.previous_run_id,
@@ -115,6 +120,8 @@ def build_research_diff(
     previous_score: dict[str, object] | None,
     current_scoring_version: str | None = None,
     previous_scoring_version: str | None = None,
+    current_source_mode: str | None = None,
+    previous_source_mode: str | None = None,
 ) -> ResearchDiff:
     """Compare stable research fields while ignoring timestamps and display text.
 
@@ -122,6 +129,14 @@ def build_research_diff(
     When both are known and differ, a single ``methodology`` change is
     recorded and algorithm-derived deltas are marked non-meaningful with
     ``suppressed_reason="scoring_version_changed"``.
+
+    Source modes (P1-B5) default to ``score["source_mode"]`` (``ifind`` for
+    scores persisted before the field existed). When they differ - the first
+    run after a listing switched between iFinD and the free-source snapshot -
+    a ``methodology`` change of kind ``source_changed`` is recorded, the diff
+    carries ``source_changed=True``, and every other delta is kept but marked
+    non-meaningful with ``suppressed_reason="source_changed"``: score and
+    metric jumps then reflect the data-source switch, not the company.
     """
 
     if previous_score is None:
@@ -145,6 +160,22 @@ def build_research_diff(
         and after_version is not None
         and before_version != after_version
     )
+    before_mode = previous_source_mode or _source_mode_value(previous_score)
+    after_mode = current_source_mode or _source_mode_value(current_score)
+    source_changed = before_mode != after_mode
+    if source_changed:
+        changes.append(
+            {
+                "category": "methodology",
+                "field": "source_mode",
+                "kind": SOURCE_CHANGED,
+                "before": before_mode,
+                "after": after_mode,
+                "delta": None,
+                "relative_change_pct": None,
+                "meaningful": False,
+            }
+        )
     if version_changed:
         changes.append(
             {
@@ -246,6 +277,12 @@ def build_research_diff(
                 change["meaningful"] = False
                 change["suppressed_reason"] = SCORING_VERSION_CHANGED
 
+    if source_changed:
+        for change in changes:
+            if change["meaningful"] is True:
+                change["meaningful"] = False
+                change["suppressed_reason"] = SOURCE_CHANGED
+
     category_counts: dict[str, int] = {}
     for change in changes:
         category = str(change["category"])
@@ -261,7 +298,13 @@ def build_research_diff(
         meaningful_change_count=meaningful_count,
         category_counts=category_counts,
         changes=changes,
+        source_changed=source_changed,
     )
+
+
+def _source_mode_value(payload: dict[str, object]) -> str:
+    value = payload.get("source_mode")
+    return value if isinstance(value, str) and value else DEFAULT_SOURCE_MODE
 
 
 def _append_change(

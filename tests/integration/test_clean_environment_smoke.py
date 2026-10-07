@@ -199,6 +199,8 @@ def test_clean_environment_deploy_research_and_restart(tmp_path: Path) -> None:
                     "industry": "白酒",
                     "name": "贵州茅台",
                     "report_year": 2025,
+                    # Exercises the iFinD deep-research path against the stub proxy.
+                    "provider": "ifind",
                 },
             )
             assert added.status_code == 201, added.text

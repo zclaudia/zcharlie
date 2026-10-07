@@ -95,7 +95,7 @@ async def test_promote_happy_path(fake_verification) -> None:
             "食品饮料",
             2025,
             True,
-            "ifind",
+            "auto",
         )
         research = (
             await session.execute(select(PipelineRun).where(PipelineRun.kind == "ifind_research"))
@@ -108,6 +108,7 @@ async def test_promote_happy_path(fake_verification) -> None:
             "industry": "食品饮料",
             "report_year": 2025,
             "as_of": "2026-10-07",
+            "provider": "snapshot",
         }
         assert item.last_research_run_id == research.id and item.last_refresh_status == "queued"
         promote_decision = (
@@ -170,7 +171,9 @@ async def test_verification_error_is_a_warning(monkeypatch) -> None:
         ids["candidate_id"], settings=_settings(ifind_proxy_api_key=""), today=TODAY
     )
     assert any("ledger locked" in warning for warning in outcome.warnings)
-    assert any("IFIND_PROXY_API_KEY" in warning for warning in outcome.warnings)
+    # The research run reads the free-source snapshot store: no iFinD key needed.
+    assert not any("IFIND_PROXY_API_KEY" in warning for warning in outcome.warnings)
+    assert outcome.research_run_id is not None
 
 
 async def test_promote_without_rule_is_conflict() -> None:

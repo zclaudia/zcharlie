@@ -126,14 +126,13 @@ async def _enqueue_scheduled_watchlist_refresh(
             reason="non_trading_day",
         )
         return None
-    if not settings.ifind_proxy_api_key:
-        raise RuntimeError("IFIND_PROXY_API_KEY is not configured")
     async with session_scope() as session:
         outcomes = await enqueue_watchlist_refresh(
             session,
             as_of=trading_date,
             triggered_by="scheduler",
             idempotency_key=f"scheduled-watchlist:{trading_date.isoformat()}",
+            ifind_available=bool(settings.ifind_proxy_api_key),
         )
     return sum(outcome.created for outcome in outcomes)
 

@@ -335,19 +335,24 @@ def _source(
     }
 
 
-def _with_quality(
+def with_quality(
     item: dict[str, Any],
     required_fields: tuple[str, ...],
     *,
     derived_fields: tuple[str, ...] = (),
     not_meaningful: dict[str, tuple[str, str]] | None = None,
     extra_flags: list[dict[str, Any]] | None = None,
+    provider: str = "ifind",
+    missing_message: str = "iFinD normalization could not produce {field}",
+    derived_message: str = "{field} was derived from iFinD source fields",
+    provider_conflicts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Attach missing-field, derived-field and data-quality audit fields.
 
     ``not_meaningful`` maps fields that are intentionally ``None`` (e.g. PE of a
     loss-making company) to ``(flag, message)``; they are flagged for review
-    instead of being reported as provider data gaps.
+    instead of being reported as provider data gaps. Shared by every source
+    mode (``provider`` and the message templates name the source).
     """
 
     not_meaningful = not_meaningful or {}
@@ -360,8 +365,8 @@ def _with_quality(
         {
             "field": field,
             "flag": "missing_field",
-            "message": f"iFinD normalization could not produce {field}",
-            "provider": "ifind",
+            "message": missing_message.format(field=field),
+            "provider": provider,
             "severity": "review",
         }
         for field in missing
@@ -370,8 +375,8 @@ def _with_quality(
         {
             "field": field,
             "flag": "derived_field",
-            "message": f"{field} was derived from iFinD source fields",
-            "provider": "ifind",
+            "message": derived_message.format(field=field),
+            "provider": provider,
             "severity": "info",
         }
         for field in derived_fields
@@ -382,7 +387,7 @@ def _with_quality(
             "field": field,
             "flag": flag,
             "message": message,
-            "provider": "ifind",
+            "provider": provider,
             "severity": "review",
         }
         for field, (flag, message) in not_meaningful.items()
@@ -391,10 +396,12 @@ def _with_quality(
     flags.extend(extra_flags or [])
     item["missing_fields"] = missing
     item["quality_flags"] = flags
-    item["provider_conflicts"] = {}
+    item["provider_conflicts"] = dict(provider_conflicts or {})
     item["warnings"] = [flag["message"] for flag in flags]
-    item["needs_agent_review"] = bool(missing) or any(
-        flag["severity"] in {"review", "error"} for flag in flags
+    item["needs_agent_review"] = (
+        bool(missing)
+        or bool(item["provider_conflicts"])
+        or any(flag["severity"] in {"review", "error"} for flag in flags)
     )
     return item
 
@@ -549,7 +556,7 @@ def canonicalize_ifind_results(
             )
 
     stock_fields = ("symbol", "name", "market", "industry", "market_cap")
-    stock_item = _with_quality(
+    stock_item = with_quality(
         {
             "symbol": symbol,
             "name": info.get("ths_stock_short_name_stock") or symbol,
@@ -592,7 +599,7 @@ def canonicalize_ifind_results(
         "max_drawdown_1y",
         "market_cap",
     )
-    market_item = _with_quality(
+    market_item = with_quality(
         {
             "symbol": symbol,
             "latest_price": latest_price,
@@ -701,7 +708,7 @@ def canonicalize_ifind_results(
         "revenue_growth_3y",
         "net_profit_growth_3y",
     )
-    financial_item = _with_quality(
+    financial_item = with_quality(
         {
             "symbol": symbol,
             "revenue": latest.value("revenue_total"),
@@ -976,13 +983,20 @@ async def _explain_score(
     return explanation
 
 
+_REPORT_TITLES = {
+    "ifind": "# iFinD 单股研究验证报告",
+    "snapshot": "# 单股研究报告（免费源快照）",
+}
+
+
 def render_agent_report(
     *,
     score_item: dict[str, Any],
     explanation: ResearchExplanation,
+    source_mode: str = "ifind",
 ) -> str:
     lines = [
-        "# iFinD 单股研究验证报告",
+        _REPORT_TITLES.get(source_mode, _REPORT_TITLES["ifind"]),
         "",
         "研究参考，非投资建议；所有 Agent 论据均须回溯到下列 canonical 字段。",
         "",
@@ -1026,22 +1040,150 @@ def _artifact_dir_for_attempt(
     return run_dir if attempt_count <= 1 else run_dir / f"attempt-{attempt_count}"
 
 
+def score_source_mode(score: dict[str, Any] | None) -> str | None:
+    """Source mode of a stored score; pre-P1-B5 scores came from iFinD."""
+
+    if score is None:
+        return None
+    value = score.get("source_mode")
+    return str(value) if isinstance(value, str) and value else "ifind"
+
+
+async def _previous_source_mode(session: Any, *, symbol: str, market: str) -> str | None:
+    previous = await ResearchSnapshotRepository(session).latest(symbol=symbol, market=market)
+    return None if previous is None else score_source_mode(previous.score_json)
+
+
+async def _finish_snapshot_missing(
+    *,
+    run_id: int,
+    ticker: str,
+    as_of: date,
+    report_year: int | None,
+    error: Exception,
+) -> str:
+    """Snapshot store cannot answer: queue an A13 ``missing`` request, end ``partial``.
+
+    No iFinD call is made here; the verification job fetches within budget.
+    """
+
+    from investment_agent.research.snapshot_source import SnapshotDataMissingError
+    from investment_agent.verification.queue import enqueue_verification
+
+    listing_id = error.listing_id if isinstance(error, SnapshotDataMissingError) else None
+    detail = str(getattr(error, "reason", error))
+    queued = False
+    if listing_id is not None:
+        await enqueue_verification(
+            listing_id=listing_id,
+            ticker=ticker,
+            trigger="missing",
+            fields=None,
+            report_period=date(report_year, 12, 31) if report_year is not None else None,
+            detail={"source": "research_snapshot", "reason": detail, "as_of": as_of.isoformat()},
+            run_id=run_id,
+        )
+        queued = True
+    reason = (
+        f"snapshot_data_missing: {detail}; "
+        + (
+            "iFinD verification request (trigger=missing) queued"
+            if queued
+            else "listing unknown, no verification request queued"
+        )
+    )
+    metadata: dict[str, object] = {
+        "source_mode": "snapshot",
+        "partial_reason": "snapshot_data_missing",
+        "missing_detail": detail,
+        "verification_requested": queued,
+    }
+    async with session_scope() as session:
+        await PipelineRunRepository(session).mark_partial(run_id, reason, metadata)
+    return reason
+
+
+async def _request_missing_key_fields(
+    *,
+    run_id: int,
+    ticker: str,
+    report_year: int | None,
+    score_item: dict[str, Any],
+) -> list[str]:
+    """Snapshot mode: queue an A13 ``missing`` request for absent key fields.
+
+    Best effort (never fails the run); the open request dedups repeats, and
+    once iFinD verified a value the view resolves it, so it is asked once.
+    """
+
+    from investment_agent.research.snapshot_source import missing_key_fields
+    from investment_agent.storage.repositories.listing import ListingRepository
+    from investment_agent.verification.queue import enqueue_verification
+
+    fields = missing_key_fields(score_item)
+    if not fields:
+        return []
+    try:
+        async with session_scope() as session:
+            listing = await ListingRepository(session).get_a_share_listing(ticker)
+        if listing is None:
+            return []
+        await enqueue_verification(
+            listing_id=listing.id,
+            ticker=ticker,
+            trigger="missing",
+            fields=fields,
+            report_period=date(report_year, 12, 31) if report_year is not None else None,
+            detail={"source": "research_snapshot", "missing_fields": score_item.get("missing_fields")},
+            run_id=run_id,
+        )
+    except Exception:  # noqa: BLE001 - the score stands without the request
+        import structlog
+
+        structlog.get_logger(__name__).exception(
+            "research.snapshot.verification_request_failed", run_id=run_id, ticker=ticker
+        )
+        return []
+    return fields
+
+
 async def run_ifind_research_chain(
     *,
     settings: Settings,
     proxy_url: str,
     proxy_api_key: str,
     ticker: str,
-    industry: str,
-    report_year: int,
+    industry: str | None,
+    report_year: int | None,
     as_of: date,
     output_root: Path,
     kernel: DeterministicResearchKernel | None = None,
     triggered_by: str = "cli",
     idempotency_key: str | None = None,
     claimed_run_id: int | None = None,
+    source_mode: str = "ifind",
 ) -> ResearchChainResult:
-    """Run and persist the complete iFinD -> score -> explanation vertical slice."""
+    """Run and persist the complete data -> score -> explanation vertical slice.
+
+    ``source_mode`` (P1-B5):
+
+    * ``ifind`` - manual deep research through ifind-proxy (every call counted
+      in the A13 budget ledger); ``industry`` and ``report_year`` required;
+    * ``snapshot`` - the canonical bundle comes from the free-source snapshot
+      store (:mod:`investment_agent.research.snapshot_source`), no iFinD call.
+      ``industry`` is optional (the data industry group is used without it);
+      the latest annual report public on ``as_of`` is used. When the store
+      has no data for the listing, a ``missing`` iFinD verification request is
+      queued (A13) and the run ends ``partial`` without a score.
+
+    The run metadata and the snapshot's score record ``source_mode``; the
+    first run after a switch carries ``source_changed`` (see change tracking).
+    """
+
+    if source_mode not in {"ifind", "snapshot"}:
+        raise ValueError(f"unknown research source mode {source_mode!r}")
+    if source_mode == "ifind" and (not industry or report_year is None):
+        raise ValueError("iFinD research needs industry and report_year")
 
     async with session_scope() as session:
         run_repository = PipelineRunRepository(session)
@@ -1099,20 +1241,50 @@ async def run_ifind_research_chain(
     )
     try:
         artifact_dir.mkdir(parents=True, exist_ok=False)
-        from investment_agent.verification.budget import ledger_hook
-
-        async with IfindProxyClient(
-            base_url=proxy_url,
-            api_key=proxy_api_key,
-            on_call=ledger_hook(source="research", run_id=run_id),
-        ) as client:
-            bundle = await fetch_canonical_bundle(
-                client,
-                ticker=ticker,
-                industry=industry,
-                report_year=report_year,
-                as_of=as_of,
+        if source_mode == "snapshot":
+            from investment_agent.research.snapshot_source import (
+                SnapshotDataMissingError,
+                load_snapshot_bundle,
             )
+
+            try:
+                async with session_scope() as session:
+                    loaded = await load_snapshot_bundle(
+                        session,
+                        ticker=ticker,
+                        as_of=as_of,
+                        industry=industry,
+                        requested_report_year=report_year,
+                    )
+            except SnapshotDataMissingError as exc:
+                reason = await _finish_snapshot_missing(
+                    run_id=run_id,
+                    ticker=ticker,
+                    as_of=as_of,
+                    report_year=report_year,
+                    error=exc,
+                )
+                raise ResearchPartialError(run_id=run_id, reason=reason) from exc
+            bundle = loaded.bundle
+            report_year = loaded.report_year
+            raw_name = "raw_snapshot.json"
+        else:
+            from investment_agent.verification.budget import ledger_hook
+
+            assert industry is not None and report_year is not None
+            async with IfindProxyClient(
+                base_url=proxy_url,
+                api_key=proxy_api_key,
+                on_call=ledger_hook(source="research", run_id=run_id),
+            ) as client:
+                bundle = await fetch_canonical_bundle(
+                    client,
+                    ticker=ticker,
+                    industry=industry,
+                    report_year=report_year,
+                    as_of=as_of,
+                )
+            raw_name = "raw_ifind.json"
 
         async with session_scope() as session:
             await PipelineRunRepository(session).set_stage(run_id, "scoring")
@@ -1123,7 +1295,7 @@ async def run_ifind_research_chain(
         _write_json(pool_path, bundle.pool)
         _write_json(market_path, bundle.market)
         _write_json(financial_path, bundle.financial)
-        _write_json(artifact_dir / "raw_ifind.json", bundle.raw)
+        _write_json(artifact_dir / raw_name, bundle.raw)
 
         kernel_artifacts = (kernel or InProcessResearchKernel()).score_and_render(
             pool=pool_path,
@@ -1142,16 +1314,34 @@ async def run_ifind_research_chain(
             "pool": str(pool_path.resolve()),
             "market": str(market_path.resolve()),
             "financial": str(financial_path.resolve()),
-            "raw_provider": str((artifact_dir / "raw_ifind.json").resolve()),
+            "raw_provider": str((artifact_dir / raw_name).resolve()),
             "scores": str(kernel_artifacts.scores_json.resolve()),
             "scores_csv": str(kernel_artifacts.scores_csv.resolve()),
             "report_context": str(kernel_artifacts.report_context_json.resolve()),
             "deterministic_report": str(kernel_artifacts.report_markdown.resolve()),
         }
+        score_item["source_mode"] = source_mode
+        verification_fields: list[str] = []
+        if source_mode == "snapshot":
+            verification_fields = await _request_missing_key_fields(
+                run_id=run_id,
+                ticker=ticker,
+                report_year=report_year,
+                score_item=score_item,
+            )
+        async with session_scope() as session:
+            previous_mode = await _previous_source_mode(
+                session, symbol=str(score_item["symbol"]), market=str(score_item["market"])
+            )
+        source_changed = previous_mode is not None and previous_mode != source_mode
         metadata: dict[str, object] = {
             "symbol": score_item["symbol"],
             "market": score_item["market"],
-            "provider": "ifind-proxy",
+            "provider": "ifind-proxy" if source_mode == "ifind" else "snapshot_view",
+            "source_mode": source_mode,
+            "previous_source_mode": previous_mode,
+            "source_changed": source_changed,
+            "verification_requested_fields": verification_fields,
             "canonical_schema_version": CANONICAL_SCHEMA_VERSION,
             "scoring_version": score_item["scoring_version"],
             "score_schema_version": score_item["schema_version"],
@@ -1213,7 +1403,9 @@ async def run_ifind_research_chain(
         report_path = artifact_dir / "agent_report.md"
         _write_json(explanation_path, explanation.model_dump())
         report_path.write_text(
-            render_agent_report(score_item=score_item, explanation=explanation),
+            render_agent_report(
+                score_item=score_item, explanation=explanation, source_mode=source_mode
+            ),
             encoding="utf-8",
         )
 

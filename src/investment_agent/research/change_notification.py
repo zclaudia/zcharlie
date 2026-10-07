@@ -2,6 +2,8 @@
 
 from investment_agent.domain.protocols import RenderedContent
 
+_SOURCE_LABELS = {"ifind": "iFinD", "snapshot": "免费源快照"}
+
 
 def render_change_notification(
     *,
@@ -26,6 +28,19 @@ def render_change_notification(
         ),
         None,
     )
+    source_change = next(
+        (
+            item
+            for item in changes
+            if isinstance(item, dict) and item.get("kind") == "source_changed"
+        ),
+        None,
+    )
+    source_suppressed = [
+        item
+        for item in changes
+        if isinstance(item, dict) and item.get("suppressed_reason") == "source_changed"
+    ]
     lines = [
         f"# 研究变化提醒：{ticker} {company_name}",
         "",
@@ -38,6 +53,13 @@ def render_change_notification(
             f"评分版本变更：{version_change.get('before')!s} → "
             f"{version_change.get('after')!s}（评分与策略差异源于算法调整，未计入重要变化）"
         )
+    if source_change is not None:
+        lines.append(
+            f"数据源变更：{_SOURCE_LABELS.get(str(source_change.get('before')), source_change.get('before'))}"
+            f" → {_SOURCE_LABELS.get(str(source_change.get('after')), source_change.get('after'))}"
+            "（本次评分、策略与指标的跳变可能源于数据源切换（字段口径不同），"
+            "相关差异已列出但未计入重要变化）"
+        )
     lines.extend(["", "## 变化明细", ""])
     for item in meaningful:
         field = item.get("field", "unknown")
@@ -45,6 +67,14 @@ def render_change_notification(
         after = item.get("after")
         category = item.get("category", "other")
         lines.append(f"- [{category}] `{field}`：{before!s} → {after!s}")
+    if not meaningful:
+        lines.append("- 无")
+    if source_suppressed:
+        lines.extend(["", "## 数据源切换带来的差异（未计入重要变化）", ""])
+        for item in source_suppressed:
+            field = item.get("field", "unknown")
+            category = item.get("category", "other")
+            lines.append(f"- [{category}] `{field}`：{item.get('before')!s} → {item.get('after')!s}")
     lines.extend(
         [
             "",

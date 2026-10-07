@@ -15,10 +15,10 @@ import time
 from collections.abc import Awaitable, Callable, Collection, Sequence
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import structlog
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.candidates.lifecycle import CandidatePolicy
@@ -65,12 +65,25 @@ MAX_LOOP_BACKOFF_SECONDS = 60.0
 
 
 class ResearchJobPayload(BaseModel):
-    """Credential-free input persisted for a queued research run."""
+    """Credential-free input persisted for a queued research run.
+
+    ``provider`` is the research source mode (P1-B5): ``snapshot`` reads the
+    free-source snapshot store, ``ifind`` calls ifind-proxy. Payloads queued
+    before the field existed were iFinD runs. iFinD runs need ``industry``
+    and ``report_year``; snapshot runs may omit both.
+    """
 
     ticker: str = Field(pattern=r"^\d{6}\.(SH|SZ|BJ)$")
-    industry: str = Field(min_length=1, max_length=128)
-    report_year: int = Field(ge=1990, le=2100)
+    industry: str | None = Field(None, min_length=1, max_length=128)
+    report_year: int | None = Field(None, ge=1990, le=2100)
     as_of: date
+    provider: Literal["ifind", "snapshot"] = "ifind"
+
+    @model_validator(mode="after")
+    def _ifind_inputs(self) -> ResearchJobPayload:
+        if self.provider == "ifind" and (self.industry is None or self.report_year is None):
+            raise ValueError("iFinD research needs industry and report_year")
+        return self
 
 
 class IfindResearchHandler(BaseJobHandler):
@@ -110,6 +123,7 @@ class IfindResearchHandler(BaseJobHandler):
                 output_root=self.settings.data_dir / "research-runs",
                 triggered_by="worker",
                 claimed_run_id=job.run_id,
+                source_mode=payload.provider,
             )
 
         try:
@@ -439,7 +453,8 @@ async def _sync_watchlist_refresh(*, run_id: int, listing_id: int) -> None:
 
 
 async def _notify_meaningful_change(*, settings: Settings, run_id: int) -> str | None:
-    """Write the change notification for one run at most once.
+    """Write the change notification for one run at most once (meaningful
+    changes, or the first run after a data-source switch).
 
     The target path is deterministic per run, the write is atomic, and an
     already-written file is reused, so a crash between writing the file and
@@ -449,10 +464,15 @@ async def _notify_meaningful_change(*, settings: Settings, run_id: int) -> str |
     async with session_scope() as session:
         change_set = await ResearchChangeRepository(session).by_run(run_id)
         snapshot = await ResearchSnapshotRepository(session).by_run(run_id)
+        # A data-source switch (P1-B5) is announced even though its deltas are
+        # suppressed, so the user learns why the score may have jumped.
         if (
             change_set is None
             or snapshot is None
-            or not change_set.has_meaningful_changes
+            or not (
+                change_set.has_meaningful_changes
+                or change_set.diff_json.get("source_changed") is True
+            )
         ):
             return None
         if change_set.notification_path is not None:

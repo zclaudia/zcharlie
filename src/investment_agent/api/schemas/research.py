@@ -1,15 +1,27 @@
 """Pydantic models for evidence-first research endpoints."""
 
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class SingleStockResearchRequest(BaseModel):
+    """``provider``: ``snapshot`` (default, free-source snapshot store, no iFinD
+    call) or ``ifind`` (manual deep research through ifind-proxy, counted in
+    the iFinD budget ledger; needs ``industry`` and ``report_year``)."""
+
     ticker: str = Field(pattern=r"^\d{6}\.(SH|SZ|BJ)$")
-    industry: str = Field(min_length=1, max_length=128)
-    report_year: int = Field(ge=1990, le=2100)
+    industry: str | None = Field(None, min_length=1, max_length=128)
+    report_year: int | None = Field(None, ge=1990, le=2100)
     as_of: date | None = None
+    provider: Literal["snapshot", "ifind"] = "snapshot"
+
+    @model_validator(mode="after")
+    def _ifind_inputs(self) -> "SingleStockResearchRequest":
+        if self.provider == "ifind" and (self.industry is None or self.report_year is None):
+            raise ValueError("provider=ifind needs industry and report_year")
+        return self
 
     @field_validator("ticker", mode="before")
     @classmethod

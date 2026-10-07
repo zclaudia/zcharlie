@@ -249,7 +249,7 @@ async def research_single_stock(
 ) -> ResearchRunAccepted:
     """Persist a single-stock research request for an independent worker."""
 
-    if not settings.ifind_proxy_api_key:
+    if body.provider == "ifind" and not settings.ifind_proxy_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="IFIND_PROXY_API_KEY is not configured",

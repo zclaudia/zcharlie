@@ -45,7 +45,11 @@ def run_ifind_research(
         help="Persistent research artifact root",
     ),
 ) -> None:
-    """Validate iFinD -> canonical data -> deterministic score -> agent report."""
+    """Manual deep research: iFinD -> canonical data -> deterministic score -> agent report.
+
+    Every proxy call is counted in the iFinD budget ledger (P1-A13). Daily
+    watchlist research uses ``ia research snapshot`` (free sources) instead.
+    """
 
     from investment_agent.config import Settings
     from investment_agent.research.ifind_chain import (
@@ -83,6 +87,70 @@ def run_ifind_research(
                 as_of=date.fromisoformat(as_of),
                 output_root=output_root,
                 idempotency_key=idempotency_key,
+            )
+        )
+    except ResearchPartialError as exc:
+        rprint(f"[yellow]ResearchRun {exc.run_id} partial[/yellow]: {exc.reason}")
+        raise typer.Exit(code=2) from exc
+    rprint(f"[green]ResearchRun {result.run_id} complete[/green]")
+    rprint(f"Score: {result.score['business_score']}")
+    rprint(f"Workflow: {result.score['suggestion']}")
+    rprint(f"Artifacts: {result.artifact_dir.resolve()}")
+
+
+@app.command("snapshot")
+def run_snapshot_research(
+    ticker: str = typer.Argument(..., help="A-share ticker, e.g. 600519.SH"),
+    as_of: str = typer.Option(date.today().isoformat(), help="Research date (YYYY-MM-DD)"),
+    industry: str | None = typer.Option(
+        None,
+        help="Optional user industry text (overrides the Shenwan / CSRC industry group)",
+        show_default=False,
+    ),
+    report_year: int | None = typer.Option(
+        None,
+        min=1990,
+        help="Expected annual report year (informational; the latest public one is used)",
+        show_default=False,
+    ),
+    idempotency_key: str | None = typer.Option(
+        None,
+        help="Optional retry-safe key; a completed run is replayed",
+        show_default=False,
+    ),
+    output_root: Path = typer.Option(  # noqa: B008
+        _DEFAULT_OUTPUT_ROOT,
+        help="Persistent research artifact root",
+    ),
+) -> None:
+    """Free-source research: snapshot store -> canonical data -> score -> agent report.
+
+    No iFinD call (P1-B5). Missing free-source data queues an iFinD
+    verification request (trigger ``missing``) and ends the run partial.
+    """
+
+    from investment_agent.config import Settings
+    from investment_agent.research.ifind_chain import (
+        ResearchPartialError,
+        run_ifind_research_chain,
+    )
+    from investment_agent.storage.database import init_engine
+
+    settings = Settings()  # type: ignore[call-arg]
+    init_engine(settings.database_url)
+    try:
+        result = asyncio.run(
+            run_ifind_research_chain(
+                settings=settings,
+                proxy_url="",
+                proxy_api_key="",
+                ticker=ticker.upper(),
+                industry=industry,
+                report_year=report_year,
+                as_of=date.fromisoformat(as_of),
+                output_root=output_root,
+                idempotency_key=idempotency_key,
+                source_mode="snapshot",
             )
         )
     except ResearchPartialError as exc:
