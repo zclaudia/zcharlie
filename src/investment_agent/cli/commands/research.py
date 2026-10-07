@@ -1,6 +1,5 @@
 """Research validation commands."""
 
-import asyncio
 import os
 from datetime import date
 from pathlib import Path
@@ -56,7 +55,7 @@ def run_ifind_research(
         ResearchPartialError,
         run_ifind_research_chain,
     )
-    from investment_agent.storage.database import init_engine
+    from investment_agent.storage.database import run_with_engine
 
     key = proxy_api_key or os.getenv("PROXY_API_KEY", "")
     if not key:
@@ -74,10 +73,10 @@ def run_ifind_research(
     settings = Settings()  # type: ignore[call-arg]
     if explanation_model:
         settings = settings.model_copy(update={"llm_tier3_model": explanation_model})
-    init_engine(settings.database_url)
     try:
-        result = asyncio.run(
-            run_ifind_research_chain(
+        result = run_with_engine(
+            settings.database_url,
+            lambda: run_ifind_research_chain(
                 settings=settings,
                 proxy_url=proxy_url,
                 proxy_api_key=key,
@@ -134,13 +133,13 @@ def run_snapshot_research(
         ResearchPartialError,
         run_ifind_research_chain,
     )
-    from investment_agent.storage.database import init_engine
+    from investment_agent.storage.database import run_with_engine
 
     settings = Settings()  # type: ignore[call-arg]
-    init_engine(settings.database_url)
     try:
-        result = asyncio.run(
-            run_ifind_research_chain(
+        result = run_with_engine(
+            settings.database_url,
+            lambda: run_ifind_research_chain(
                 settings=settings,
                 proxy_url="",
                 proxy_api_key="",

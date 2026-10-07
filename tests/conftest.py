@@ -19,6 +19,27 @@ from investment_agent.storage.models import (  # noqa: F401
 from investment_agent.storage.models.base import Base
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _uncached_structlog_loggers():
+    """``configure_logging`` (CLI callback, API lifespan) enables structlog's
+    ``cache_logger_on_first_use``; a module logger first used after that keeps
+    its processors forever, so later ``capture_logs`` blocks see nothing and
+    log assertions depend on test order. Tests never cache loggers."""
+
+    import structlog
+
+    original = structlog.configure
+
+    def configure(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        kwargs["cache_logger_on_first_use"] = False
+        return original(*args, **kwargs)
+
+    patcher = pytest.MonkeyPatch()
+    patcher.setattr(structlog, "configure", configure)
+    yield
+    patcher.undo()
+
+
 @pytest.fixture(autouse=True)
 def _no_real_akshare(request, monkeypatch):
     """Offline tests must never reach AkShare (swsresearch.com / legulegu.com /

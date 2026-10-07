@@ -21,7 +21,13 @@ from investment_agent.research.snapshot_source import (
     build_snapshot_bundle,
 )
 from investment_agent.research_kernel.scoring import SCORING_VERSION, score_pool
-from tests.unit._factor_support import baostock_view, synthetic_bars
+from tests.unit._factor_support import (
+    baostock_view,
+    fixture_backward_bars,
+    fixture_periods,
+    fixture_raw_bars,
+    synthetic_bars,
+)
 
 AS_OF = date(2026, 9, 30)
 RETRIEVED = "2026-10-01T00:00:00+00:00"
@@ -82,6 +88,40 @@ def test_user_industry_text_overrides_the_data_group():
     assert stock["industry"] == "银行" and stock["industry_group"] == "consumer"
     assert stock["field_sources"]["industry"]["provider"] == "manual"
     assert _score(bundle)["company_profile"]["sector_type"] == "banking"
+
+
+def _shenwan_view(sw_code: str) -> SnapshotView:
+    return SnapshotView.build(
+        ticker="600519.SH",
+        as_of=AS_OF,
+        policy=TARGET_POOL,
+        sw_code=sw_code,
+        raw_bars=fixture_raw_bars("600519"),
+        adjusted_bars=fixture_backward_bars("600519"),
+        periods=fixture_periods("600519"),
+    )
+
+
+@pytest.mark.parametrize("text", ["交通运输", "航空机场", "机场"])
+def test_watchlist_text_restating_the_classification_keeps_the_data_group(text: str):
+    # A promotion stores the Shenwan level-1 name on the watchlist item. That
+    # text restates the classification; it must not override the data group
+    # (airports: level-1 交通运输 has no legacy keyword -> "general", while the
+    # 421002 override makes the stock a utility).
+    view = _shenwan_view("421002")
+    assert view.industry_group == "utility"
+    bundle = build_snapshot_bundle(view, company_name="上海机场", industry=text, retrieved_at=RETRIEVED)
+    stock = _item(bundle.pool)
+    assert stock["industry"] == text and stock["industry_group"] == "utility"
+    source = stock["field_sources"]["industry"]
+    assert source["provider"] == "sw2021"
+    assert "restates the classification" in source["note"]
+    assert _score(bundle)["company_profile"]["sector_type"] == "public_utility"
+
+    # Any other text is still the user's override.
+    other = build_snapshot_bundle(view, company_name="上海机场", industry="物流", retrieved_at=RETRIEVED)
+    assert _item(other.pool)["field_sources"]["industry"]["provider"] == "manual"
+    assert _score(other)["company_profile"]["sector_type"] == "general"
 
 
 def test_requested_report_year_substitution_is_flagged():

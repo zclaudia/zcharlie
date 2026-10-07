@@ -41,7 +41,7 @@ from investment_agent.scheduler.trading_calendar import (
     calendar_coverage,
     load_trading_calendar,
 )
-from investment_agent.storage.database import init_engine, session_scope
+from investment_agent.storage.database import engine_lifespan, session_scope
 
 log = structlog.get_logger(__name__)
 
@@ -539,7 +539,11 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
     """Entry point: configure logging, init engine, start scheduler, idle until cancelled."""
     settings = Settings()  # type: ignore[call-arg]
     configure_logging(settings.log_level)
-    init_engine(settings.database_url)
+    async with engine_lifespan(settings.database_url):
+        await _run_scheduler(settings, app_config_path)
+
+
+async def _run_scheduler(settings: Settings, app_config_path: str) -> None:
     cfg = load_app_yaml(Path(app_config_path))
     sched = build_scheduler(settings=settings, app_config=cfg)
     sched.start()

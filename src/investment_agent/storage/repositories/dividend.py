@@ -4,17 +4,26 @@ Knowledge rules (as in the other PIT repositories): a live capture is known
 from ``captured_at``; backfilled rows (``is_backfill``) are captured long
 after the fact and are known from their ``available_from`` (events) or
 unconditionally (coverage), since the provider history is not restated.
+
+The latest coverage check known on a date comes from the append-only
+``dividend_coverage_check`` history (migration 020); a backfilled year whose
+checks all happened later reports its first (reconstructed) check, which
+never changes, so results for a past ``as_of`` are reproducible.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
-from investment_agent.storage.models.pit_snapshot import DividendCoverage, DividendEventSnapshot
+from investment_agent.storage.models.pit_snapshot import (
+    DividendCoverage,
+    DividendCoverageCheck,
+    DividendEventSnapshot,
+)
 from investment_agent.storage.repositories.base import Repository
 from investment_agent.storage.repositories.pit import end_of_business_day_utc, to_utc
 
@@ -29,6 +38,12 @@ EVENT_PAYLOAD_COLUMNS: tuple[str, ...] = (
     "stock_per_share",
     "reserve_per_share",
 )
+
+
+def _stored_utc(value: datetime) -> datetime:
+    """Stored timestamps are UTC; SQLite returns them naive."""
+
+    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _same(stored: object, new: object) -> bool:
@@ -142,6 +157,16 @@ class DividendRepository(Repository[DividendEventSnapshot]):
         else:
             row.last_checked_at = checked
             row.event_count = event_count
+        self.session.add(
+            DividendCoverageCheck(
+                listing_id=listing_id,
+                provider=provider,
+                year=year,
+                checked_at=checked,
+                event_count=event_count,
+                is_backfill=is_backfill,
+            )
+        )
         await self.session.flush()
         return row
 
@@ -175,6 +200,35 @@ class DividendRepository(Repository[DividendEventSnapshot]):
             or_(DividendCoverage.first_checked_at < cutoff, DividendCoverage.is_backfill.is_(True)),
         )
         return {row.year: row for row in (await self.session.execute(stmt)).scalars()}
+
+    async def last_checks_as_of(
+        self, listing_id: int, years: Sequence[int], as_of: date, *, provider: str
+    ) -> dict[int, datetime]:
+        """Latest coverage check of each year known by the end of ``as_of``.
+
+        Years covered on ``as_of`` without a check by then (backfilled years)
+        report their first check (``first_checked_at``, never updated).
+        """
+
+        coverage = await self.coverage_as_of(listing_id, years, as_of, provider=provider)
+        if not coverage:
+            return {}
+        cutoff = end_of_business_day_utc(as_of)
+        stmt = (
+            select(DividendCoverageCheck.year, func.max(DividendCoverageCheck.checked_at))
+            .where(
+                DividendCoverageCheck.listing_id == listing_id,
+                DividendCoverageCheck.provider == provider,
+                DividendCoverageCheck.year.in_(list(coverage)),
+                DividendCoverageCheck.checked_at < cutoff,
+            )
+            .group_by(DividendCoverageCheck.year)
+        )
+        known = {year: _stored_utc(at) for year, at in (await self.session.execute(stmt)).all()}
+        return {
+            year: known.get(year) or _stored_utc(row.first_checked_at)
+            for year, row in sorted(coverage.items())
+        }
 
     async def events_as_of(
         self,

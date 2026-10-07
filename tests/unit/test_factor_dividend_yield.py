@@ -174,3 +174,44 @@ async def test_load_snapshot_view_reads_dividends_point_in_time(db_session):
     # The 2026 coverage was first checked after 2026-09-20: not collected yet then.
     early = _compute(before_coverage)
     assert early.quality == "missing" and FLAG_DIVIDENDS_NOT_COLLECTED in early.flags
+
+
+async def test_later_coverage_checks_do_not_change_a_past_as_of(db_session):
+    """Re-collecting dividends after ``as_of`` must not move the coverage check
+    seen on ``as_of`` (freshness flag and ``inputs_ref`` stay reproducible)."""
+
+    del db_session
+    async with session_scope() as session:
+        listing = await ListingRepository(session).ensure_a_share_listing("600900.SH")
+        await MarketSnapshotRepository(session).insert(
+            listing_id=listing.id, trade_date=AS_OF, open=Decimal(25), high=Decimal(25),
+            low=Decimal(25), close=Decimal(25), volume=Decimal(1), provider="baostock",
+            captured_at=datetime(2026, 9, 30, 9, tzinfo=UTC),
+        )
+        repository = DividendRepository(session)
+        await repository.upsert_event(
+            listing_id=listing.id, ex_date=date(2026, 7, 17), available_from=date(2026, 5, 18),
+            operate_year=2026, provider="baostock", captured_at=datetime(2026, 7, 20, tzinfo=UTC),
+            payload={"cash_per_share_pre_tax": Decimal("0.79")}, details={},
+        )
+        for year in (2025, 2026):
+            # Last checked 2026-07-20: stale on 2026-09-30.
+            await repository.record_coverage(
+                listing_id=listing.id, provider="baostock", year=year,
+                checked_at=datetime(2026, 7, 20, tzinfo=UTC), event_count=1,
+            )
+        before = _compute(await load_snapshot_view(session, "600900.SH", AS_OF))
+        for year in (2025, 2026):
+            await repository.record_coverage(
+                listing_id=listing.id, provider="baostock", year=year,
+                checked_at=datetime(2026, 10, 8, 9, tzinfo=UTC), event_count=1,
+            )
+        after = _compute(await load_snapshot_view(session, "600900.SH", AS_OF))
+        today = _compute(await load_snapshot_view(session, "600900.SH", date(2026, 10, 8)))
+
+    assert FLAG_DIVIDENDS_STALE in before.flags and before.quality == "approx"
+    assert after == before
+    assert after.inputs_ref["covered_years"] == {"2025": "2026-07-20", "2026": "2026-07-20"}
+    # The new check is visible from its own day on.
+    assert FLAG_DIVIDENDS_STALE not in today.flags
+    assert today.inputs_ref["covered_years"] == {"2025": "2026-10-08", "2026": "2026-10-08"}

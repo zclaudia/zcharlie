@@ -1,6 +1,5 @@
 """admin sub-commands: cost summary, db migrate."""
 
-import asyncio
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -9,7 +8,8 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import func, select
 
-from investment_agent.storage.database import session_scope
+from investment_agent.config import Settings
+from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.ops import LLMCall
 
 app = typer.Typer(help="Admin commands")
@@ -49,7 +49,8 @@ def cost_summary(
             )
             return list((await session.execute(stmt)).all())  # type: ignore[arg-type]
 
-    rows = asyncio.run(_run())
+    settings = Settings()  # type: ignore[call-arg]
+    rows = run_with_engine(settings.database_url, _run)
     table = Table(title=f"LLM Cost Summary — {month}")
     table.add_column("Provider")
     table.add_column("Model")

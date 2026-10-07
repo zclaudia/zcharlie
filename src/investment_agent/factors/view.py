@@ -870,12 +870,12 @@ async def load_dividend_history(
     start = as_of - timedelta(days=DIVIDEND_HISTORY_DAYS)
     repository = DividendRepository(session)
     rows = await repository.events_as_of(listing_id, start, as_of, provider=provider)
-    coverage = await repository.coverage_as_of(
+    checks = await repository.last_checks_as_of(
         listing_id, list(range(start.year, as_of.year + 1)), as_of, provider=provider
     )
     return DividendHistory(
         events=tuple(_dividend_from_row(row) for row in rows),
-        covered_years={year: _shanghai_date(row.last_checked_at) for year, row in coverage.items()},
+        covered_years={year: _shanghai_date(at) for year, at in checks.items()},
         provider=provider,
     )
 

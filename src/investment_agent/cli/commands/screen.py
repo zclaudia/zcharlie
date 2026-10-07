@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import socket
@@ -16,6 +15,7 @@ from rich.table import Table
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
+from investment_agent.storage.database import run_with_engine
 
 app = typer.Typer(help="Weekly template screen over a target pool (screen_run)")
 
@@ -76,10 +76,9 @@ def run(
         from investment_agent.candidates.lifecycle import CandidatePolicy
         from investment_agent.research.worker import ResearchWorker
         from investment_agent.rules.screen_job import ScreenRunHandler
-        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
-        init_engine(settings.database_url)
         async with session_scope() as session:
             queued, created = await enqueue_screen_run(
                 session, payload, triggered_by="cli", key=key
@@ -108,7 +107,7 @@ def run(
                 rprint(f"Error: {escape(finished.error_summary)}")
             _print_summary(finished.metadata_json)
 
-    asyncio.run(submit())
+    run_with_engine(settings.database_url, submit)
 
 
 def _print_summary(metadata: dict[str, object]) -> None:
@@ -149,10 +148,9 @@ def show(
 
     async def load() -> None:
         from investment_agent.rules.screen_job import SCREEN_RUN, screen_results
-        from investment_agent.storage.database import init_engine, session_scope
+        from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
-        init_engine(settings.database_url)
         async with session_scope() as session:
             pipeline_run = await PipelineRunRepository(session).get(run_id)
             if pipeline_run is None or pipeline_run.kind != SCREEN_RUN:
@@ -190,4 +188,4 @@ def show(
                             )
                         )
 
-    asyncio.run(load())
+    run_with_engine(settings.database_url, load)

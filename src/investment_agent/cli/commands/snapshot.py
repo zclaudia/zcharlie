@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 import re
 import socket
@@ -38,6 +37,7 @@ from investment_agent.snapshots.jobs import (
     UniverseSyncPayload,
     enqueue_snapshot_job,
 )
+from investment_agent.storage.database import run_with_engine
 
 if TYPE_CHECKING:
     from investment_agent.snapshots.backfill import (
@@ -139,9 +139,8 @@ def target_pool_universes(config_path: Path) -> tuple[IndexCode, ...]:
 async def _submit(settings: Settings, payload: SnapshotPayload, *, now: bool) -> None:
     from investment_agent.research.worker import ResearchWorker
     from investment_agent.snapshots.handlers import snapshot_job_handlers
-    from investment_agent.storage.database import init_engine, session_scope
+    from investment_agent.storage.database import session_scope
 
-    init_engine(settings.database_url)
     async with session_scope() as session:
         run, created = await enqueue_snapshot_job(session, payload, triggered_by="cli")
         run_id, kind, status, key = run.id, run.kind, run.status, run.idempotency_key
@@ -183,7 +182,7 @@ def _print_completeness(metadata: dict[str, object], error: str | None) -> None:
 
 def _run(payload: SnapshotPayload, now: bool) -> None:
     settings = Settings()  # type: ignore[call-arg]
-    asyncio.run(_submit(settings, payload, now=now))
+    run_with_engine(settings.database_url, lambda: _submit(settings, payload, now=now))
 
 
 _NOW_HELP = "Also execute the job in this process (debugging) instead of leaving it to the worker"
@@ -332,10 +331,9 @@ def collect_dividends(
 
 
 async def _status(settings: Settings, limit: int) -> Table:
-    from investment_agent.storage.database import init_engine, session_scope
+    from investment_agent.storage.database import session_scope
     from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
-    init_engine(settings.database_url)
     table = Table(title="Snapshot runs")
     for column in (
         "run", "kind", "provider", "scope", "request", "status", "completeness", "finished"
@@ -376,7 +374,7 @@ def status(limit: int = typer.Option(3, min=1, max=50, help="Runs per kind")) ->
     """Latest runs per snapshot kind with their completeness."""
 
     settings = Settings()  # type: ignore[call-arg]
-    rprint(asyncio.run(_status(settings, limit)))
+    rprint(run_with_engine(settings.database_url, lambda: _status(settings, limit)))
 
 
 # --------------------------------------------------------------------------- #
@@ -485,9 +483,8 @@ async def _backfill(
         dry_run_estimate,
         plan_backfill,
     )
-    from investment_agent.storage.database import init_engine, session_scope
+    from investment_agent.storage.database import session_scope
 
-    init_engine(settings.database_url)
     if show_status:
         async with session_scope() as session:
             as_of, statuses = await backfill_status(
@@ -542,7 +539,7 @@ async def _akshare_backfill(
         estimate_akshare_backfill,
         plan_akshare_backfill,
     )
-    from investment_agent.storage.database import init_engine, session_scope
+    from investment_agent.storage.database import session_scope
     from investment_agent.storage.repositories.universe import UniverseRepository
 
     payloads = akshare_backfill_payloads(
@@ -557,7 +554,6 @@ async def _akshare_backfill(
         f"[bold]AkShare (Eastmoney) backfill[/bold] {universe_code} as of {as_of.isoformat()}: "
         f"{len(periods)} period(s) " + ", ".join(period.isoformat() for period in periods)
     )
-    init_engine(settings.database_url)
     if dry_run:
         async with session_scope() as session:
             members = await UniverseRepository(session).members_between(
@@ -662,9 +658,11 @@ def backfill(
             "--with-cash-flow only applies to --provider akshare", param_hint="--with-cash-flow"
         )
     if chosen == "akshare":
-        asyncio.run(
-            _akshare_backfill(
-                Settings(),  # type: ignore[call-arg]
+        settings = Settings()  # type: ignore[call-arg]
+        run_with_engine(
+            settings.database_url,
+            lambda: _akshare_backfill(
+                settings,
                 _universe(universe),
                 day,
                 annual=annual,
@@ -685,8 +683,9 @@ def backfill(
         quarters=quarters,
     )
     settings = Settings()  # type: ignore[call-arg]
-    asyncio.run(
-        _backfill(
+    run_with_engine(
+        settings.database_url,
+        lambda: _backfill(
             settings,
             payload,
             dry_run=dry_run,

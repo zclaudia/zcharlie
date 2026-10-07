@@ -31,11 +31,9 @@ def _bootstrap() -> None:
     try:
         from investment_agent.config import Settings
         from investment_agent.logging import configure_logging
-        from investment_agent.storage.database import init_engine
 
         settings = Settings()  # type: ignore[call-arg]
         configure_logging(settings.log_level)
-        init_engine(settings.database_url)
     except Exception:
         # Allow --help invocations without full env configuration
         pass

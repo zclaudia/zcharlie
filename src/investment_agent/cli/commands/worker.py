@@ -1,6 +1,5 @@
 """Persistent queue worker commands."""
 
-import asyncio
 import os
 import socket
 
@@ -9,7 +8,7 @@ import typer
 from investment_agent.config import Settings
 from investment_agent.logging import configure_logging
 from investment_agent.research.worker import run_worker
-from investment_agent.storage.database import init_engine
+from investment_agent.storage.database import run_with_engine
 
 app = typer.Typer(help="Persistent queue worker commands")
 
@@ -46,13 +45,13 @@ def start(
 
     settings = Settings()  # type: ignore[call-arg]
     configure_logging(settings.log_level)
-    init_engine(settings.database_url)
     identity = worker_id or f"{socket.gethostname()}:{os.getpid()}"
     if len(identity) > 128:
         raise typer.BadParameter("must be at most 128 characters", param_hint="--worker-id")
     try:
-        asyncio.run(
-            run_worker(
+        run_with_engine(
+            settings.database_url,
+            lambda: run_worker(
                 settings=settings,
                 worker_id=identity,
                 poll_interval_seconds=poll_interval,
