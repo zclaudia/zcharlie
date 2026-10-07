@@ -7,7 +7,7 @@
 
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
-- 持久化：SQLite + Alembic（迁移 `012`）；制品目录 `data/research-runs/<run_id>/`
+- 持久化：SQLite + Alembic（迁移 `020`）；制品目录 `data/research-runs/<run_id>/`
 - 界面：同源 Web UI（`/app`，会话 Cookie 登录）+ CLI + HTTP API
 
 ## 快速开始（空环境到第一次研究）
@@ -346,10 +346,18 @@ ia snapshot backfill --universe CSI300 --status                                 
 ## 测试与门禁
 
 ```bash
-pytest -q -m "not network"  # 601 个测试（离线，fixture 全部脱敏）
+pytest -q -m "not network"  # 1219 个测试（离线，fixture 全部脱敏）
 ruff check .
 mypy src/investment_agent  # strict
 ```
+
+离线端到端 smoke（P1-F1，`tests/integration/test_funnel_e2e.py`，默认套件内，约 11 秒）：
+空库 `ia migrate up` 后经 worker 跑真实任务处理器——成分 / 行业（证监会 + 申万）同步、日线 / 财报 /
+分红采集、两年回补、东财汇总 → 模板筛选（每条命中理由回溯到快照行）→ 候选与 LLM 规则草稿 →
+HTTP 晋级（决策日志、自选股、iFinD 晋级核对请求、研究入队）→ 快照模式研究 → iFinD 核对写回 →
+`/health/data`；最后校验同一 `as_of` 重跑筛选逐字节一致、重跑采集不产生新版本、决策日志完整且不可改。
+只在数据源边界替换：合成 baostock / 申万 / 东财（`tests/integration/_funnel_support.py`，10 只股票覆盖
+银行、公用事业、周期、成长、亏损股、次新股）、respx 桩 LLM 与假 ifind-proxy；时间冻结，结果确定。
 
 CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认测试不访问
 网络、不使用真实 secrets。golden corpus（13 只不同特征 A 股）离线重放，
