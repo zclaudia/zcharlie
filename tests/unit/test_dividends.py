@@ -332,3 +332,14 @@ async def test_worker_runs_the_dividend_job_without_ifind(db_session, tmp_path):
     assert finished.metadata_json["completeness"]["collected"] == 2
     assert finished.metadata_json["events"] == 4
     assert list((tmp_path / "notifications").rglob("*.md")) == []
+
+
+@pytest.mark.network
+async def test_live_baostock_dividend_smoke() -> None:
+    client = BaostockMarketClient()
+    async with client.session():
+        icbc = await client.fetch_dividends("601398.SH", 2025)
+        mindray = await client.fetch_dividends("300760.SZ", 2025)
+    assert [str(e.cash_per_share) for e in icbc.events] == ["0.1434", "0.1646", "0.1414"]
+    assert icbc.duplicates == ("2025-01-07",)
+    assert mindray.combined == ("2025-05-29",)
