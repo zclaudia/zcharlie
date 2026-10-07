@@ -5,7 +5,7 @@
 
 **研究辅助，非投资建议。** 没有下单、模拟盘、自动调仓或任何券商连接路径。
 
-- 数据链路：`ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
+- 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
 - 持久化：SQLite + Alembic（迁移 `012`）；制品目录 `data/research-runs/<run_id>/`
 - 界面：同源 Web UI（`/app`，会话 Cookie 登录）+ CLI + HTTP API
@@ -60,7 +60,7 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 | `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>`、`draft --ticker --template [--as-of] [--now]` | 规则模板 / 实例校验与版本库、LLM 规则起草（见“规则与筛选”） |
 | `ia screen` | `run [--universe] [--as-of] [--now] [--rerun]`、`show <run_id> [--reasons]` | 周频模板筛选 |
 | `ia verify` | `status`、`request --ticker [--trigger] [--fields] [--period]`、`run [--now]` | iFinD 按需核对队列与预算（见“iFinD 按需核对”） |
-| `ia research` | `ifind <ticker>` | 单股同步研究（诊断入口，制品同 API 路径） |
+| `ia research` | `snapshot <ticker> [--as-of] [--industry]`、`ifind <ticker> --industry --report-year` | 单股同步研究：免费源快照（日常，无 iFinD 调用）/ iFinD 深度研究（计入预算）；制品同 API 路径 |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
 
 ## 快照采集
@@ -225,6 +225,25 @@ ia snapshot backfill --universe CSI300 --status                                 
   中断或失败后重新执行同一命令即续跑：已完成部分不动，`partial` / `failed` 的任务只以剩余标的重新入队
   （幂等键加 `:r<n>`）。`--now` 在当前进程依次执行所有排队的回补任务（无 worker 时使用）。
 
+## 单股研究：数据源模式（P1-B4 / B5）
+
+单股研究有两种数据源模式，评分内核与评分版本相同（v1.3），canonical 指标都由因子库计算（一份定义）：
+
+- **`snapshot`（默认）**：从时点快照库读 `load_snapshot_view(policy=TARGET_POOL)`，字段按来源登记表取值
+  （iFinD 已核对值 > 主来源 > 备用来源），不调用 iFinD。自选股 `provider` 为 `auto` / `snapshot` 时走此模式，
+  `POST /research/single-stock` 默认也是它；行业与报告年度可省略（用当日申万行业组、`as_of` 时已披露的最近年报）。
+  每个 canonical 字段的 `field_sources` 记录提供方与核对状态（`unverified` / `verified` / `conflict`，冲突进入
+  `provider_conflicts` 并要求复核）。快照库没有该股数据（例如不在目标池）时，运行以 `partial` 结束并投递
+  iFinD `missing` 核对请求；关键字段缺失（如资本支出 / 自由现金流）也投递同类请求，由核对任务在预算内执行。
+- **`ifind`**：手动深度研究（`ia research ifind`、API `provider=ifind`、自选股显式 `provider=ifind`），
+  每次 proxy 调用记入 iFinD 预算账本；需要行业与报告年度。golden corpus 仍以 iFinD fixture 逐字段重放（D3）。
+
+运行 metadata 与研究快照记录 `source_mode`。某只股票从 iFinD 切到快照后的第一次运行标记 `source_changed`：
+变化集保留全部差异但不计入重要变化，并单独发送一条通知说明"分数跳变可能源于数据源切换"。
+行业分类：用户填写的行业文字优先（等于行业组 id 时直接取该组，否则沿用旧关键词表）；未填写时用数据的
+申万（证监会兜底）行业组。字段映射、两种模式的偏差与已知差异见
+[`docs/product/observation-snapshot-mode.md`](docs/product/observation-snapshot-mode.md)。
+
 ## 规则与筛选
 
 - 模板文件 `config/rule_templates/*.yaml`（P1-C2，五个策略原型，`uncalibrated`）；`ia rules validate <file>`
@@ -282,7 +301,8 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /verification/requests?listing_id=&ticker=&status=&limit=` | iFinD 核对请求（只读）：状态、延后时间、核对一致 / 冲突字段 |
 
 批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
-只有 meaningful change 才生成一次 Markdown 通知，baseline 与噪声保持静默。
+只有 meaningful change（或数据源切换后的第一次运行）才生成一次 Markdown 通知，baseline 与噪声保持静默。
+快照模式的自选股刷新不需要 `IFIND_PROXY_API_KEY`；未配置时只有显式 `ifind` 的条目失败。
 
 ## 配置
 
@@ -322,7 +342,8 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 
 - 严格单用户；无组织、权限组或订阅体系。
 - SQLite 单机存储；并发写入成为瓶颈时才评估 PostgreSQL。
-- 目标池广度数据只有 baostock 一个来源（D6）；iFinD 经 Kimi 网关有 5 小时滚动额度，只用于观察池。
+- 目标池与观察池日常数据走免费源（baostock + 东财，D6 二次修订）；iFinD 经 Kimi 网关有 5 小时滚动额度，
+  只用于按需核对与手动深度研究。东财单股现金流量表尚未批量采集时，快照模式缺资本支出 / 自由现金流（需复核）。
 - 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天起调度日志与
   `/dashboard/today` 会给出警告，交易所公布次年安排后需补入 `config/calendars/a_share.yaml`。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
