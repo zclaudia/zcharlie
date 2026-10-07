@@ -201,6 +201,23 @@ ia snapshot backfill --universe CSI300 --status                                 
   ST 与逾期未披露标的全局剔除；每模板默认最多 20 个命中，按"阈值内距离"强度排序。
   `ia screen run --as-of 2026-09-30 --now` 当场执行，`ia screen show <run_id> --reasons` 查看理由。
 
+## 候选与决策日志（P1-D1～D3，迁移 `018`）
+
+- 候选 `candidate`：`open → promoted / dismissed / expired`，同一标的最多一条 `open`。
+  每次 `screen_run` 成功后，命中（`hit`，不含截断）自动建候选：已有 `open` 候选则合并来源；
+  已在自选股（启用）中、或 30 天内被忽略过的标的跳过（记入运行 metadata 的 `candidates` 段）。
+  候选默认 14 天过期：每日 07:00 扫描（`config/app.yaml` 的 `candidates:` 段），每次筛选开始时也扫描一次。
+  时长见 `CANDIDATE_EXPIRY_DAYS`、`CANDIDATE_DISMISS_COOLDOWN_DAYS`。
+- 新候选自动投递 `rule_draft` 任务（LLM 起草规则，幂等键 `rule_draft:{candidate_id}:{template}@{version}`），
+  payload 附最近 10 条驳回 / 忽略理由作为偏好输入；`draft_state`：`none / pending / ready / failed`。
+- 决策日志 `decision` 只追加、不可改删：`nominate`、`promote`、`dismiss`、`approve_rule`、`reject_rule`、
+  `edit_rule`、`expire`，与状态变化同一事务写入，并记录当时的筛选理由与因子值（含快照引用）。
+  `dismiss`、`reject_rule` 必填理由。
+- 晋级 `POST /candidates/{id}/promote`：（可选改参数 → 新版本）→ 批准规则为 `active`（退役旧 active）→
+  写入 / 启用自选股（行业取当日申万一级名称，缺失时用证监会名称；报告年度取已披露的最近年报）→ 候选 `promoted`，
+  以上一个事务；随后尽力投递 iFinD `promote` 核对与一次单股研究，失败只出现在响应 `warnings` 中。
+- 接口不返回 0～100 分数；模板 `calibration_status`（目前全部 `uncalibrated`）随候选与规则返回，界面需标注"未校准"。
+
 ## HTTP API（`X-API-Key` 或 Web 会话）
 
 | 端点 | 用途 |
@@ -214,6 +231,11 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化） |
 | `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
 | `GET /admin/llm-calls`、`/admin/llm-calls/cost` | LLM 调用审计 / 月度成本 |
+| `GET /candidates?status=&limit=&offset=`、`GET /candidates/{id}` | 候选分页列表（来源、最新理由、草稿状态）/ 详情（理由与快照引用、草稿规则、决策历史） |
+| `POST /candidates` | 手动提名 `{ticker, template_id?, note?}` |
+| `POST /candidates/{id}/dismiss`、`/promote` | 忽略 `{reason}` / 晋级 `{rule_instance_id?, params_override?, reason?}`（无可批准规则时 409） |
+| `GET /rules/{id}`、`PATCH /rules/{id}`、`POST /rules/{id}/reject` | 规则详情（含参数范围）/ 改参数（新版本）/ 驳回草稿 `{reason}` |
+| `GET /screen-runs/{id}` | 筛选运行摘要 + 各模板命中 |
 
 批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
 只有 meaningful change 才生成一次 Markdown 通知，baseline 与噪声保持静默。

@@ -7,6 +7,7 @@ from hashlib import sha256
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
+from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
@@ -158,3 +159,37 @@ def _child_idempotency_key(
         return None
     digest = sha256(batch_key.encode("utf-8")).hexdigest()[:32]
     return f"watchlist:{digest}:{listing_id}"
+
+
+async def enqueue_single_stock_research(
+    session: AsyncSession,
+    *,
+    listing_id: int,
+    ticker: str,
+    industry: str,
+    report_year: int,
+    as_of: date,
+    triggered_by: str,
+    idempotency_key: str | None = None,
+) -> tuple[PipelineRun, bool]:
+    """Queue one ``ifind_research`` run for a watchlist entry (same payload as
+    ``POST /research/single-stock``) and track it on the entry."""
+
+    payload: dict[str, object] = {
+        "ticker": ticker,
+        "industry": industry,
+        "report_year": report_year,
+        "as_of": as_of.isoformat(),
+    }
+    run, created = await PipelineRunRepository(session).enqueue(
+        kind="ifind_research",
+        idempotency_key=idempotency_key,
+        triggered_by=triggered_by,
+        listing_id=listing_id,
+        request_json=payload,
+    )
+    if run.status not in _TERMINAL_STATUSES:
+        await WatchlistRepository(session).mark_refresh_queued(
+            listing_id, run_id=run.id, status=run.status
+        )
+    return run, created
