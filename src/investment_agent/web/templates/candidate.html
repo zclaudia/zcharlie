@@ -3,18 +3,20 @@
 <div id="candidate-detail" class="data-region"
      data-endpoint="/candidates/{{ candidate_id }}"
      data-candidate-id="{{ candidate_id }}">
-  <section class="card">
+  <header class="page-head">
     <p class="small"><a href="/app/candidates">← 返回候选列表</a></p>
     <h1 id="candidate-title">候选 #{{ candidate_id }}</h1>
-    <p class="notice notice-warn calibration-banner">
-      基于 <span class="badge badge-uncalibrated">未校准</span> 模板：默认参数与起草的参数都是尚未回测的假设。
-      本页只用于研究优先级审阅，不是操作建议。
-    </p>
+  </header>
+  <section class="card">
     <div id="candidate-header" aria-live="polite">
       <p class="notice notice-loading" data-state="loading">正在加载…</p>
     </div>
     <div id="candidate-flash" aria-live="polite"></div>
   </section>
+  <p class="notice notice-warn calibration-banner">
+    基于 <span class="badge badge-uncalibrated">未校准</span> 模板：默认参数与起草的参数都是尚未回测的假设。
+    本页只用于研究优先级审阅，不是操作建议。
+  </p>
 
   <section class="card" aria-labelledby="candidate-reasons-title">
     <h2 id="candidate-reasons-title">触发理由</h2>
@@ -25,7 +27,7 @@
            aria-label="理由来源"></aside>
   </section>
 
-  <section class="card" aria-labelledby="candidate-rule-title">
+  <section class="card ai" aria-labelledby="candidate-rule-title">
     <h2 id="candidate-rule-title">规则草稿审阅</h2>
     <div id="candidate-rule">
       <p class="notice notice-loading" data-state="loading">正在加载…</p>

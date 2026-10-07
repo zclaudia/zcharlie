@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
+<header class="page-head">
   <h1>今日概览</h1>
-  <p class="muted">本周候选计数，以及待复核、失败、部分成功与重要变化的标的。</p>
-  <div id="dashboard-today" class="data-region"
-       data-endpoint="/dashboard/today"
-       data-empty-text="今日无待处理项。">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
-  </div>
-</section>
+  <p class="muted">本周候选、数据健康，以及失败、部分成功、待复核与重要变化的研究运行。</p>
+</header>
+<div id="dashboard-today" class="data-region"
+     data-endpoint="/dashboard/today"
+     data-empty-text="今日无待处理项。">
+  <p class="notice notice-loading" data-state="loading">正在加载…</p>
+</div>
 {% endblock %}

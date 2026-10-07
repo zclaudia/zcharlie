@@ -29,7 +29,9 @@ import {
   inRange,
   label,
   paramLabel,
+  parseParamName,
   parseRationale,
+  formatThreshold,
   PERIOD_KIND_LABELS,
   PROVIDER_LABELS,
   SOURCE_VERIFICATION_LABELS,
@@ -37,6 +39,7 @@ import {
   templateLabel,
 } from "./format.js";
 import { humanizeText } from "./research_format.js";
+import { aiStamp, kpi, legend, scale, timeline } from "./ui.js";
 
 export const CANDIDATE_REGIONS = new Set(["candidates-list", "candidate-detail"]);
 
@@ -138,27 +141,23 @@ function verificationText(request) {
 // ---- 今日概览：本周候选计数 --------------------------------------------
 
 export function candidatesBucket(counts) {
-  const card = el("div", { class: "card candidates-bucket" });
-  const heading = el("h2");
-  heading.appendChild(el("a", { href: "/app/candidates" }, "本周候选"));
+  const card = el("section", { class: "card candidates-bucket" });
+  const heading = el("div", { class: "card-head bucket-title" });
+  heading.appendChild(el("h2", {}, "本周候选"));
+  heading.appendChild(el("a", { href: "/app/candidates" }, "查看候选与规则草稿 →"));
   card.appendChild(heading);
-  const list = el("ul", { class: "bucket-counts" });
-  for (const [text, value] of [
-    ["待处理候选", counts.open],
-    ["草稿待审阅", counts.drafts_ready],
-    ["起草中", counts.drafting],
-    ["起草失败", counts.draft_failed],
-    ["iFinD 核对未完成", counts.verification_pending],
+  const grid = el("div", { class: "kpis" });
+  const number = (value) => (typeof value === "number" ? value : 0);
+  for (const [text, value, kind] of [
+    ["待处理候选", number(counts.open), ""],
+    ["草稿待审阅", number(counts.drafts_ready), number(counts.drafts_ready) ? "ai" : "zero"],
+    ["起草中", number(counts.drafting), number(counts.drafting) ? "" : "zero"],
+    ["起草失败", number(counts.draft_failed), number(counts.draft_failed) ? "attention" : "zero"],
+    ["iFinD 核对未完成", number(counts.verification_pending), number(counts.verification_pending) ? "" : "zero"],
   ]) {
-    const item = el("li");
-    item.appendChild(el("span", { class: "count" }, String(typeof value === "number" ? value : 0)));
-    item.appendChild(el("span", { class: "muted" }, text));
-    list.appendChild(item);
+    grid.appendChild(kpi(text, value, { href: "/app/candidates", kind }));
   }
-  card.appendChild(list);
-  const link = el("p");
-  link.appendChild(el("a", { href: "/app/candidates" }, "查看候选与规则草稿"));
-  card.appendChild(link);
+  card.appendChild(grid);
   return card;
 }
 
@@ -363,16 +362,42 @@ function showInspector(reason, context) {
   }
   const rest = Object.entries(ref).filter(([key]) => key !== "financial" && key !== "market");
   if (rest.length) {
-    inspector.appendChild(el("h4", {}, "其他引用"));
-    inspector.appendChild(
-      kvRows(rest.map(([key, value]) => [key, typeof value === "object" ? JSON.stringify(value) : value]))
-    );
+    inspector.appendChild(el("h4", {}, "计算口径"));
+    inspector.appendChild(kvRows(rest.map(([key, value]) => refRow(key, value))));
   }
   if (!periods.length && !market && !rest.length) {
     inspector.appendChild(el("p", { class: "notice notice-warn" }, "该理由没有快照引用（因子缺失或不适用）。"));
   }
   inspector.hidden = false;
   inspector.focus();
+}
+
+// snapshot_ref 中除财报 / 行情外的口径字段（分位窗口、派生来源等）。
+const REF_LABELS = Object.freeze({
+  column: "估值字段",
+  current: "当前值",
+  current_date: "当前值日期",
+  window: "统计窗口",
+  sessions: "窗口交易日",
+  valid_sessions: "有效交易日",
+  excluded_non_positive: "剔除非正值",
+  first_valid: "首个有效日",
+  years_covered: "覆盖年数",
+  basis: "口径",
+  field: "字段",
+  total_shares: "总股本来源",
+});
+
+function refRow(key, value) {
+  const name = label(REF_LABELS, key);
+  if (key === "column" || key === "field" || key === "basis") return [name, factorLabel(String(value))];
+  if (key === "window" && Array.isArray(value)) return [name, value.join(" – ")];
+  if (key === "current" && typeof value === "number") return [name, value.toFixed(2)];
+  if (value && typeof value === "object") {
+    const parts = [value.report_period && `报告期 ${value.report_period}`, value.available_from && `可得 ${value.available_from}`];
+    return [name, parts.filter(Boolean).join(" · ") || "—"];
+  }
+  return [name, value];
 }
 
 function kvRows(pairs) {
@@ -386,31 +411,98 @@ function kvRows(pairs) {
 
 function renderHeader(candidate) {
   const title = section("candidate-title");
-  if (title) title.textContent = `候选 ${candidate.ticker} ${candidate.name || ""}`.trim();
+  if (title) {
+    clear(title);
+    title.appendChild(document.createTextNode(`${candidate.name || "候选"} `));
+    title.appendChild(el("span", { class: "code" }, candidate.ticker));
+  }
   const node = section("candidate-header");
   if (!node) return;
-  const box = el("div");
+  const box = el("div", { class: "entity-head" });
+  const left = el("div");
   const line = el("p", { class: "candidate-states" });
   line.appendChild(chip(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
   if (candidate.status === "open") line.appendChild(draftChip(candidate));
   for (const ref of candidate.template_refs || []) line.appendChild(templateChip(ref));
   line.appendChild(calibrationBadge(candidate.calibration_status));
-  box.appendChild(line);
-  const dates = [`开启 ${formatDate(candidate.opened_at)}`, `到期 ${formatDate(candidate.expires_at)}`];
-  if (candidate.closed_at) dates.push(`关闭 ${formatDate(candidate.closed_at)}`);
-  box.appendChild(el("p", { class: "muted" }, dates.join(" · ")));
+  left.appendChild(line);
+  const meta = el("p", { class: "meta-row" });
+  const screen = candidate.latest_screen;
+  if (screen && screen.context) meta.appendChild(el("span", {}, `行业组 ${industryText(screen.context)}`));
   const sources = (candidate.sources || []).map((source) =>
     source.kind === "screen"
       ? `筛选 #${fmt(source.screen_run_id)}（${label(TEMPLATE_LABELS, source.template_id)}，数据日 ${fmt(source.as_of)}）`
       : `手动提名${source.template_id ? `（${label(TEMPLATE_LABELS, source.template_id)}）` : ""}`
   );
-  if (sources.length) box.appendChild(el("p", { class: "muted small" }, `来源：${sources.join("；")}`));
-  if (candidate.note) box.appendChild(el("p", {}, `备注：${candidate.note}`));
-  const research = el("p", { class: "small" });
-  research.appendChild(el("span", {}, "单股研究页："));
+  if (sources.length) meta.appendChild(el("span", {}, `来源：${sources.join("；")}`));
+  if (candidate.closed_at) meta.appendChild(el("span", {}, `关闭 ${formatDate(candidate.closed_at)}`));
+  const research = el("span");
+  research.appendChild(el("span", {}, "单股研究："));
   research.appendChild(stockLink(candidate.ticker));
-  box.appendChild(research);
+  meta.appendChild(research);
+  left.appendChild(meta);
+  if (candidate.note) left.appendChild(el("p", {}, `备注：${candidate.note}`));
+  box.appendChild(left);
+  if (candidate.status === "open") {
+    box.appendChild(timeline(candidate.opened_at, candidate.expires_at));
+  } else {
+    box.appendChild(el("p", { class: "faint" }, `开启 ${formatDate(candidate.opened_at)} · 到期 ${formatDate(candidate.expires_at)}`));
+  }
   sectionReady(node, box);
+}
+
+function isNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+// 一条理由的刻度条：满足区间着色、阈值竖线、实际值圆点；只画 API 给出的数。
+function reasonScale(reason) {
+  const unit = typeof reason.unit === "string" ? reason.unit : "";
+  if (!isNumber(reason.actual) || unit.startsWith("bool")) return null;
+  const bounds =
+    reason.op === "between" && Array.isArray(reason.threshold) ? reason.threshold.filter(isNumber) : [reason.threshold];
+  if (!bounds.length || !bounds.every(isNumber)) return null;
+  const percentile = unit.includes("(0,1]");
+  const values = [reason.actual, ...bounds];
+  const domain = percentile
+    ? [0, 1]
+    : [Math.min(0, ...values), Math.max(...values.map((value) => value * (value >= 0 ? 1.35 : 0.65)), 0) || 1];
+  const show = (value) => formatFactorValue(value, unit, { precise: false });
+  let zone = null;
+  if (reason.op === "between" && bounds.length === 2) zone = { from: bounds[0], to: bounds[1] };
+  else if (reason.op === ">=" || reason.op === ">") zone = { from: bounds[0], to: domain[1] };
+  else if (reason.op === "<=" || reason.op === "<") zone = { from: domain[0], to: bounds[0] };
+  return scale({
+    domain,
+    zones: zone ? [zone] : [],
+    thresholds: bounds.map((at) => ({ at, label: show(at) })),
+    markers: [{ at: reason.actual, title: `本股 ${formatFactorValue(reason.actual, unit)}` }],
+    ticks: percentile
+      ? [
+          { at: 0, label: "0" },
+          { at: 0.2 },
+          { at: 0.5, label: "50%" },
+          { at: 0.8 },
+          { at: 1, label: "100%" },
+        ]
+      : [],
+    label: formatReason(reason),
+  });
+}
+
+function reasonSource(reason, context) {
+  const ref = reason.snapshot_ref && typeof reason.snapshot_ref === "object" ? reason.snapshot_ref : {};
+  const parts = [];
+  const period = Array.isArray(ref.financial) && ref.financial.length ? ref.financial[0] : null;
+  if (period && period.report_period) parts.push(`报告期 ${period.report_period}`);
+  if (ref.market && ref.market.trade_date) parts.push(`交易日 ${ref.market.trade_date}`);
+  if (ref.current_date && ref.years_covered) parts.push(`分位窗口 ${fmt(ref.years_covered)} 年`);
+  const provider = context && context.provider;
+  if (provider) parts.push(label(PROVIDER_LABELS, provider));
+  const sources = period && period.sources && typeof period.sources === "object" ? Object.values(period.sources) : [];
+  if (sources.some((source) => source && source.verification === "verified")) parts.push("iFinD 已核对");
+  else if (sources.length) parts.push("未经 iFinD 核对");
+  return parts.join(" · ");
 }
 
 function renderReasons(candidate) {
@@ -425,47 +517,98 @@ function renderReasons(candidate) {
   for (const result of results) {
     const block = el("div", { class: "reason-block" });
     const heading = el("h3");
-    heading.appendChild(el("span", { title: result.template_ref }, `${templateLabel(result.template_ref)} `));
+    heading.appendChild(el("span", { title: result.template_ref }, templateLabel(result.template_ref)));
     heading.appendChild(calibrationBadge(result.calibration_status));
     block.appendChild(heading);
     block.appendChild(
       el(
         "p",
-        { class: "muted small" },
+        { class: "faint" },
         `筛选 #${result.screen_run_id} · 数据日 ${fmt(result.as_of)} · 来源 ${label(PROVIDER_LABELS, result.context && result.context.provider)} · 行业组 ${industryText(result.context)}`
       )
     );
-    const list = el("ul", { class: "reason-list" });
+    const list = el("ul", { class: "checklist" });
     for (const reason of result.reasons || []) {
-      const item = el("li");
+      const item = el("li", { class: "check-item" });
+      const mark =
+        reason.outcome === "met"
+          ? el("span", { class: "check-mark", "aria-label": "满足" }, "✓")
+          : reason.outcome === "not_applicable"
+            ? el("span", { class: "check-mark na", "aria-label": "不适用" }, "–")
+            : el("span", { class: "check-mark no", "aria-label": label(OUTCOME_LABELS, reason.outcome) }, "!");
+      item.appendChild(mark);
+      const main = el("div", { class: "check-main" });
       const button = el(
         "button",
         { type: "button", class: "reason-link", "aria-controls": "candidate-inspector" },
-        formatReason(reason)
+        factorLabel(reason.factor)
       );
       button.addEventListener("click", () => showInspector(reason, result.context));
-      item.appendChild(button);
-      if (reason.quality && reason.quality !== "ok") {
-        item.appendChild(chip(label(QUALITY_LABELS, reason.quality), "chip-warn"));
+      main.appendChild(button);
+      main.appendChild(document.createElement("br"));
+      main.appendChild(
+        el(
+          "span",
+          { class: "check-value" },
+          isNumber(reason.actual) || typeof reason.actual === "boolean"
+            ? formatFactorValue(reason.actual, reason.unit)
+            : label(OUTCOME_LABELS, reason.outcome)
+        )
+      );
+      main.appendChild(
+        el(
+          "span",
+          { class: "check-rule" },
+          reason.outcome === "not_applicable" ? "不适用，条件跳过" : `条件 ${formatThreshold(reason.op, reason.threshold, reason.unit)}`
+        )
+      );
+      const flags = el("span", { class: "check-flags" });
+      if (reason.quality && reason.quality !== "ok") flags.appendChild(chip(label(QUALITY_LABELS, reason.quality), "chip-warn"));
+      for (const flag of reason.flags || []) flags.appendChild(chip(label(FLAG_LABELS, flag) , "chip-warn"));
+      if (flags.children.length) main.appendChild(flags);
+      item.appendChild(main);
+      const meter = reasonScale(reason);
+      if (meter) {
+        const holder = el("div", { class: "check-scale" });
+        holder.appendChild(meter);
+        item.appendChild(holder);
       }
-      for (const flag of reason.flags || []) item.appendChild(chip(label(FLAG_LABELS, flag), "chip-warn"));
+      const source = reasonSource(reason, result.context);
+      if (source) item.appendChild(el("p", { class: "check-src" }, source));
       list.appendChild(item);
     }
     block.appendChild(list);
     box.appendChild(block);
   }
-  box.appendChild(el("p", { class: "muted small" }, "点击理由查看快照来源（报告期、可得日期、提供方、字段核对状态）。"));
+  box.appendChild(el("p", { class: "faint" }, "点击因子名查看快照来源（报告期、可得日期、提供方、字段核对状态）。"));
   sectionReady(node, box);
 }
 
-function conditionTree(group, params, units) {
+// 最新筛选中各因子的实际值（用于在区间条件旁标出"本股当前"）。
+function currentFactorValues(candidate) {
+  const map = new Map();
+  for (const result of candidate.screen_results || []) {
+    for (const reason of result.reasons || []) {
+      if (isNumber(reason.actual) && !map.has(reason.factor)) map.set(reason.factor, reason);
+    }
+  }
+  return map;
+}
+
+function conditionLeaf(condition, params, units, current) {
+  const { text, params: names } = formatCondition(condition, params, units);
+  const leaf = el("li", {}, text);
+  const now = current && current.get(condition.factor);
+  if (now) leaf.appendChild(el("span", { class: "cond-now" }, `本股 ${formatFactorValue(now.actual, now.unit)}`));
+  if (names.length) leaf.title = `参数：${names.map(paramLabel).join("、")}`;
+  return leaf;
+}
+
+function conditionTree(group, params, units, current) {
   const list = el("ul", { class: "condition-tree" });
   if (!group || typeof group !== "object") return list;
   if (group.factor) {
-    const { text, params: names } = formatCondition(group, params, units);
-    const item = el("li", {}, text);
-    if (names.length) item.appendChild(el("span", { class: "muted small" }, ` · 参数「${names.map(paramLabel).join("、")}」`));
-    list.appendChild(item);
+    list.appendChild(conditionLeaf(group, params, units, current));
     return list;
   }
   const mode = Array.isArray(group.all) ? "all" : "any";
@@ -475,12 +618,9 @@ function conditionTree(group, params, units) {
   const inner = el("ul", { class: "condition-tree" });
   for (const child of children) {
     if (child && child.factor) {
-      const { text, params: names } = formatCondition(child, params, units);
-      const leaf = el("li", {}, text);
-      if (names.length) leaf.appendChild(el("span", { class: "muted small" }, ` · 参数「${names.map(paramLabel).join("、")}」`));
-      inner.appendChild(leaf);
+      inner.appendChild(conditionLeaf(child, params, units, current));
     } else {
-      for (const nested of conditionTree(child, params, units).children) inner.appendChild(nested);
+      for (const nested of conditionTree(child, params, units, current).children) inner.appendChild(nested);
     }
   }
   item.appendChild(inner);
@@ -515,24 +655,60 @@ function invalidParams() {
   );
 }
 
-function paramRow(rule, name, rationale, editable) {
-  const row = el("tr");
-  const head = el("th", { scope: "row" });
-  head.appendChild(el("span", { class: "param-name" }, paramLabel(name)));
-  head.appendChild(el("code", { class: "param-id small muted" }, name));
-  row.appendChild(head);
-  const units = rule.factor_units || {};
-  const show = (value) => formatParamValue(name, value, units);
+// 参数行：中文名 + 标识符；刻度条（允许范围 / 默认 / 当前 / 本股值）；可编辑输入；起草理由。
+function paramRow(rule, name, rationale, editable, current) {
   const defaults = rule.template_params || {};
   const effective = (rule.effective_params || {})[name];
   const range = (rule.param_ranges || {})[name];
+  const units = rule.factor_units || {};
+  const show = (value) => formatParamValue(name, value, units);
   const overridden =
     Object.prototype.hasOwnProperty.call(rule.params || {}, name) && rule.params[name] !== defaults[name];
+  const byAi = String(rule.drafted_by || "").startsWith("llm:");
+  const row = el("li", { class: `param${overridden ? " changed" : ""}`, "data-param-row": name });
 
-  row.appendChild(el("td", { "data-label": "模板默认" }, show(defaults[name])));
-  const valueCell = el("td", { "data-label": "当前值" });
-  if (overridden) valueCell.appendChild(el("p", { class: "override" }, `${show(defaults[name])} → ${show(effective)}`));
-  const hint = el("span", { class: "range-hint small", id: `param-hint-${name}`, "aria-live": "polite" });
+  const head = el("div");
+  head.appendChild(el("span", { class: "param-name" }, paramLabel(name)));
+  head.appendChild(el("code", { class: "param-id" }, name));
+  const vals = el("div", { class: "param-vals" });
+  if (overridden) {
+    vals.appendChild(document.createTextNode(`默认 ${show(defaults[name])} → `));
+    vals.appendChild(el("span", { class: "new" }, `${byAi ? "AI 建议 " : ""}${show(effective)}`));
+  } else {
+    vals.appendChild(document.createTextNode(`默认 ${show(defaults[name])}`));
+  }
+  if (range) vals.appendChild(document.createTextNode(` · 允许 ${show(range.min)} – ${show(range.max)}`));
+  head.appendChild(vals);
+  row.appendChild(head);
+
+  const parsed = parseParamName(name);
+  const stock = parsed && current ? current.get(parsed.factor) : null;
+  if (range && isNumber(range.min) && isNumber(range.max)) {
+    const holder = el("div", { class: "param-scale" });
+    const markers = [];
+    if (stock && stock.actual >= range.min && stock.actual <= range.max) {
+      markers.push({ at: stock.actual, cls: "s-marker-hollow", title: `本股 ${formatFactorValue(stock.actual, stock.unit)}` });
+    }
+    if (isNumber(effective)) {
+      markers.push({ at: effective, cls: overridden && byAi ? "s-marker-ai" : "s-marker", title: `当前 ${show(effective)}` });
+    }
+    holder.appendChild(
+      scale({
+        domain: [range.min, range.max],
+        defaults: isNumber(defaults[name]) ? [defaults[name]] : [],
+        markers,
+        ticks: [
+          { at: range.min, label: show(range.min) },
+          { at: range.max, label: show(range.max) },
+        ],
+        compact: true,
+      })
+    );
+    row.appendChild(holder);
+  }
+
+  const edit = el("div", { class: "param-edit" });
+  const hint = el("span", { class: "range-hint", id: `param-hint-${name}`, "aria-live": "polite" });
   if (editable) {
     const input = el("input", {
       type: "number",
@@ -555,30 +731,29 @@ function paramRow(rule, name, rationale, editable) {
           ? `超出允许范围 ${show(range.min)} – ${show(range.max)}`
           : "请输入数字";
     });
-    valueCell.appendChild(input);
-  } else if (!overridden) {
-    valueCell.appendChild(el("span", {}, show(effective)));
+    edit.appendChild(input);
+    hint.textContent = show(effective);
+  } else {
+    hint.textContent = show(effective);
   }
-  if (editable) hint.textContent = show(effective);
-  valueCell.appendChild(hint);
-  row.appendChild(valueCell);
-  row.appendChild(el("td", { "data-label": "允许范围" }, range ? `${show(range.min)} – ${show(range.max)}` : "—"));
+  edit.appendChild(hint);
+  row.appendChild(edit);
 
-  const reasonCell = el("td", { "data-label": "起草理由" });
   const entry = rationale.params[name];
   if (entry && typeof entry === "object") {
-    reasonCell.appendChild(el("p", {}, `${entry.choice === "adjusted" ? "调整" : "保持默认"}：${humanizeText(fmt(entry.reason))}`));
+    const reason = el("div", { class: "param-reason" });
+    reason.appendChild(el("b", {}, entry.choice === "adjusted" ? "调整：" : "保持默认："));
+    reason.appendChild(document.createTextNode(humanizeText(fmt(entry.reason))));
     const cited = Array.isArray(entry.cited_factors) ? entry.cited_factors : [];
     if (cited.length) {
-      const chips = el("p", { class: "small" });
-      chips.appendChild(el("span", { class: "muted" }, "引用因子："));
+      const chips = el("div");
       for (const factor of cited) chips.appendChild(chip(factorLabel(factor), "chip-factor"));
-      reasonCell.appendChild(chips);
+      reason.appendChild(chips);
     }
-  } else {
-    reasonCell.textContent = overridden ? "（无逐项理由）" : "—";
+    row.appendChild(reason);
+  } else if (overridden) {
+    row.appendChild(el("div", { class: "param-reason" }, "（无逐项理由）"));
   }
-  row.appendChild(reasonCell);
   return row;
 }
 
@@ -593,17 +768,10 @@ function zoneParams(node) {
   return [...(node.all || []), ...(node.any || [])].flatMap(zoneParams);
 }
 
-function paramTable(rule, names, rationale, editable) {
-  const tableNode = el("table", { class: "param-table" });
-  const headRow = el("tr");
-  for (const text of ["参数", "模板默认", "当前值", "允许范围", "起草理由"]) {
-    headRow.appendChild(el("th", { scope: "col" }, text));
-  }
-  tableNode.appendChild(el("thead")).appendChild(headRow);
-  const body = el("tbody");
-  for (const name of names) body.appendChild(paramRow(rule, name, rationale, editable));
-  tableNode.appendChild(body);
-  return tableNode;
+function paramTable(rule, names, rationale, editable, current) {
+  const list = el("ul", { class: "param-list" });
+  for (const name of names) list.appendChild(paramRow(rule, name, rationale, editable, current));
+  return list;
 }
 
 function renderRule(candidate) {
@@ -631,19 +799,25 @@ function renderRule(candidate) {
     sectionReady(node, box);
     return;
   }
-  if (candidate.status === "open" && rule.status === "draft") {
-    box.appendChild(redraftButton(candidate, rule.template_ref));
-  }
 
   const editable = candidate.status === "open" && rule.status === "draft";
-  const heading = el("p", { class: "candidate-states" });
+  const current = currentFactorValues(candidate);
+  const byAi = String(rule.drafted_by || "").startsWith("llm:");
+  const heading = el("div", { class: "rule-head" });
+  if (byAi) heading.appendChild(aiStamp(`AI 草稿 · ${rule.drafted_by.slice(4)} · ${formatDateTime(rule.created_at)}`));
+  else heading.appendChild(chip(`起草：${fmt(rule.drafted_by)} · ${formatDateTime(rule.created_at)}`));
   heading.appendChild(chip(`规则 #${rule.rule_instance_id} v${rule.version}`));
   heading.appendChild(chip(label(RULE_STATUS_LABELS, rule.status), `rule-${rule.status}`));
   heading.appendChild(templateChip(rule.template_ref));
   heading.appendChild(calibrationBadge(rule.calibration_status));
+  if (candidate.status === "open" && rule.status === "draft") {
+    const redraft = redraftButton(candidate, rule.template_ref);
+    redraft.classList.add("redraft");
+    heading.appendChild(redraft);
+  }
   box.appendChild(heading);
   box.appendChild(
-    el("p", { class: "muted small" }, `${String(rule.drafted_by || "").startsWith("llm:") ? `AI 起草（${rule.drafted_by.slice(4)}）` : `起草：${fmt(rule.drafted_by)}`} · ${formatDateTime(rule.created_at)} · 范围 ${rule.scope === "candidate" ? "候选" : rule.scope === "holding" ? "持仓" : fmt(rule.scope)}`)
+    el("p", { class: "faint" }, `范围：${rule.scope === "candidate" ? "候选" : rule.scope === "holding" ? "持仓" : fmt(rule.scope)} · 区间条件按生效参数显示；灰字为本股最新筛选值。`)
   );
 
   const zones = rule.zones && typeof rule.zones === "object" ? rule.zones : {};
@@ -651,13 +825,14 @@ function renderRule(candidate) {
     (a, b) => (ZONE_ORDER.indexOf(a) + 1 || 99) - (ZONE_ORDER.indexOf(b) + 1 || 99)
   );
   if (names.length) {
-    box.appendChild(el("h3", {}, "区间条件（按生效参数）"));
+    const summary = el("div", { class: "zone-summary" });
     for (const zone of names) {
-      const block = el("div", { class: "zone-block" });
+      const block = el("div", { class: `zone-block zone-${zone}` });
       block.appendChild(el("h4", { title: zone }, label(ZONE_LABELS, zone)));
-      block.appendChild(conditionTree(zones[zone], rule.effective_params || {}, rule.factor_units || {}));
-      box.appendChild(block);
+      block.appendChild(conditionTree(zones[zone], rule.effective_params || {}, rule.factor_units || {}, current));
+      summary.appendChild(block);
     }
+    box.appendChild(summary);
   }
 
   const rationale = parseRationale(rule.draft_rationale);
@@ -670,33 +845,55 @@ function renderRule(candidate) {
       Object.prototype.hasOwnProperty.call(rule.params || {}, name) ||
       Object.prototype.hasOwnProperty.call(rationale.params, name)
   );
+  // 被覆盖的参数排在最前。
+  const changedFirst = (a, b) => {
+    const changed = (name) =>
+      Object.prototype.hasOwnProperty.call(rule.params || {}, name) &&
+      rule.params[name] !== (rule.template_params || {})[name];
+    return Number(changed(b)) - Number(changed(a));
+  };
+  primary.sort(changedFirst);
   const secondary = params.filter((name) => !primary.includes(name));
   if (primary.length) {
     box.appendChild(el("h3", {}, "参数"));
-    box.appendChild(paramTable(rule, primary, rationale, editable));
+    box.appendChild(
+      legend([
+        ["lg-def", "模板默认"],
+        ["lg-cur", "当前值"],
+        ["lg-ai", "AI 建议值"],
+        ["lg-stock", "本股最新值"],
+      ])
+    );
+    box.appendChild(paramTable(rule, primary, rationale, editable, current));
   }
   if (secondary.length) {
     const more = el("details", { class: "more-params" });
     more.appendChild(el("summary", {}, `其他模板参数（${secondary.length}，本规则的候选区间未引用）`));
-    more.appendChild(paramTable(rule, secondary, rationale, editable));
+    more.appendChild(paramTable(rule, secondary, rationale, editable, current));
     box.appendChild(more);
   }
   if (editable && params.length) {
+    const row = el("div", { class: "btn-row" });
     const save = el("button", { type: "button", class: "secondary", "data-action": "save-params" }, "保存参数修改");
     save.addEventListener("click", () => saveParams(candidate, rule, save));
-    box.appendChild(save);
+    row.appendChild(save);
+    box.appendChild(row);
   }
   box.appendChild(el("div", { id: "rule-issues", class: "issues", role: "alert" }));
 
-  if (rationale.overall || rationale.text) {
-    box.appendChild(el("h3", {}, "整体起草思路"));
-    box.appendChild(el("p", {}, humanizeText(rationale.overall || rationale.text)));
-  }
-  if (rationale.watch.length) {
-    box.appendChild(el("h3", {}, "后续复核点"));
-    const list = el("ul");
-    for (const point of rationale.watch) list.appendChild(el("li", {}, humanizeText(point)));
-    box.appendChild(list);
+  if (rationale.overall || rationale.text || rationale.watch.length) {
+    const notes = el("div", { class: "draft-notes" });
+    if (rationale.overall || rationale.text) {
+      notes.appendChild(el("h3", {}, "整体起草思路"));
+      notes.appendChild(el("p", {}, humanizeText(rationale.overall || rationale.text)));
+    }
+    if (rationale.watch.length) {
+      notes.appendChild(el("h3", {}, "后续复核点"));
+      const list = el("ul");
+      for (const point of rationale.watch) list.appendChild(el("li", {}, humanizeText(point)));
+      notes.appendChild(list);
+    }
+    box.appendChild(notes);
   }
   sectionReady(node, box);
 }
@@ -966,7 +1163,7 @@ function renderDecisions(candidate) {
     line.appendChild(el("span", { class: "muted" }, ` · ${decision.actor === "user" ? "用户" : decision.actor === "system" ? "系统" : fmt(decision.actor)}`));
     if (decision.rule_ref) line.appendChild(el("span", { class: "muted" }, ` · ${decision.rule_ref}`));
     item.appendChild(line);
-    if (decision.reason_text) item.appendChild(el("p", { class: "small" }, `理由：${decision.reason_text}`));
+    if (decision.reason_text) item.appendChild(el("p", { class: "small" }, `理由：${humanizeText(decision.reason_text).replace(/^screen hit:\s*/, "筛选命中：")}`));
     list.appendChild(item);
   }
   sectionReady(node, list);

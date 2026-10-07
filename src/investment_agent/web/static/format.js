@@ -180,7 +180,7 @@ export function formatFactorValue(value, unit, { precise = true } = {}) {
   return trimZeros(value.toFixed(4));
 }
 
-function formatThreshold(op, threshold, unit) {
+export function formatThreshold(op, threshold, unit) {
   if (op === "between" && Array.isArray(threshold) && threshold.length === 2) {
     const [low, high] = threshold;
     return `介于 ${formatFactorValue(low, unit, { precise: false })}–${formatFactorValue(high, unit, { precise: false })}`;
@@ -478,7 +478,9 @@ export function paramLabel(name) {
   const parsed = parseParamName(name);
   if (!parsed) return String(name ?? "—");
   const zone = parsed.zone === "screen" ? "筛选" : label(ZONE_LABELS, parsed.zone);
-  return `${zone} · ${factorLabel(parsed.factor)}${parsed.bound === "min" ? "下限" : "上限"}`;
+  const factor = factorLabel(parsed.factor);
+  const gap = /[A-Za-z)]$/.test(factor) ? " " : "";
+  return `${zone} · ${factor}${gap}${parsed.bound === "min" ? "下限" : "上限"}`;
 }
 
 // 参数取值按其因子的单位显示；units 来自 API 的 factor_units，缺省用 METRIC_UNITS。

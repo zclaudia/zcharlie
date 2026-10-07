@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
+<header class="page-head">
+  <h1>单股研究 <span class="code">{{ ticker }}</span></h1>
+  <p class="muted">确定性评分、关键指标、数据新鲜度与 AI 解释；结论在上，证据可展开。</p>
+</header>
 <section class="card">
-  <h1>单股研究 {{ ticker }}</h1>
-  <p class="muted">分数、因子、证据、缺失项与历史变化。</p>
   <div class="toolbar">
     <form id="stock-run-form" class="inline-form">
       <input name="industry" placeholder="行业（首次研究必填）" required>
@@ -11,7 +13,9 @@
     </form>
   </div>
   <div id="stock-run-result" class="data-region" aria-live="polite"></div>
-  <section id="stock-detail" class="data-region"></section>
+</section>
+<section id="stock-detail" class="data-region"></section>
+<div class="grid-2">
   <section class="card">
     <h2>自上次以来的变化</h2>
     <div id="stock-changes" class="data-region"
@@ -27,5 +31,5 @@
       <p class="notice notice-loading" data-state="loading">正在加载…</p>
     </div>
   </section>
-</section>
+</div>
 {% endblock %}

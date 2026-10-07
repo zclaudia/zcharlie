@@ -35,6 +35,7 @@ import {
   pathLabel,
   scoreFactorLabel,
 } from "./research_format.js";
+import { aiStamp, bar, ring } from "./ui.js";
 
 // ---- 今日概览 ---------------------------------------------------------
 
@@ -318,7 +319,11 @@ async function loadRuns(region, runs, { append = false } = {}) {
     return;
   }
   const loadMore = region.querySelector(".load-more");
-  for (const row of runs.map((run) => runRow(run))) body.appendChild(row);
+  const labels = [...existingTable.querySelectorAll("thead th")].map((th) => th.textContent);
+  for (const row of runs.map((run) => runRow(run))) {
+    [...row.children].forEach((cell, index) => labels[index] && cell.setAttribute("data-label", labels[index]));
+    body.appendChild(row);
+  }
   if (loadMore) {
     const fresh = el("button", { type: "button", class: "secondary load-more" }, "加载更多");
     fresh.addEventListener("click", () => {
@@ -409,30 +414,92 @@ function loadRunsPage(region, offset, { append = false, status } = {}) {
 
 // ---- 单股详情 ---------------------------------------------------------
 
-function scoreCard(item, scoreMeta) {
-  const card = el("div", { class: "card", "data-evidence-section": "evidence-score" });
-  card.appendChild(el("h2", {}, "确定性评分"));
-  card.appendChild(
-    kvTable([
-      ["策略分类", item.strategy_label],
-      ["投资分", `${fmtNumber(item.investment_score, 1)} / 100`],
-      ["业务分", `${fmtNumber(item.business_score, 1)} / 100`],
-      ["研究置信度", fmtNumber(item.research_confidence_score, 0)],
-      ["风险等级", label(RISK_LABELS, item.risk_level)],
-      ["估值水平", label(VALUATION_LABELS, item.valuation_level)],
-      ["工作流标签", item.suggestion_label || item.suggestion],
-      ["数据质量", typeof item.data_quality_score === "number" ? `${fmtNumber(item.data_quality_score * 100, 0)}%` : "—"],
-      ["评分版本", (scoreMeta && scoreMeta.scoring_version) || item.scoring_version],
-    ])
+// 字段来源：field_sources 按数据域分组（stock / market_data / financial_data）。
+function sourceOf(item, field) {
+  const sources = item.field_sources && typeof item.field_sources === "object" ? item.field_sources : {};
+  if (sources[field] && typeof sources[field] === "object" && "provider" in sources[field]) return sources[field];
+  for (const domain of Object.values(sources)) {
+    if (domain && typeof domain === "object" && domain[field] && typeof domain[field] === "object") return domain[field];
+  }
+  return null;
+}
+
+function verifyTag(source) {
+  if (!source) return null;
+  if (source.verification === "verified") return el("span", { class: "verify verify-ok", title: "iFinD 已核对" }, "已核对");
+  if (source.quality === "derived") return el("span", { class: "verify verify-derived", title: "由快照字段派生" }, "派生");
+  if (source.verification === "unverified") return el("span", { class: "verify verify-no", title: "免费源，未经 iFinD 核对" }, "未核对");
+  return null;
+}
+
+function fact(term, value) {
+  const node = el("div", { class: "fact" });
+  node.appendChild(el("dt", {}, term));
+  const dd = el("dd");
+  if (value instanceof Node) dd.appendChild(value);
+  else dd.textContent = fmt(value);
+  node.appendChild(dd);
+  return node;
+}
+
+// 分项按分值排序；最低两项且低于 60 标为"主要拖累"（只描述分项相对位置）。
+function rankedFactors(item) {
+  const factors = item.factor_scores || {};
+  const keys = Object.keys(factors).sort((a, b) => (factors[b] ?? -1) - (factors[a] ?? -1));
+  const drags = new Set(keys.filter((key) => typeof factors[key] === "number" && factors[key] < 60).slice(-2));
+  return { factors, keys, drags };
+}
+
+function verdictCard(item, scoreMeta, detail) {
+  const card = el("section", { class: "card", "data-evidence-section": "evidence-score" });
+  const head = el("div", { class: "verdict-head" });
+  head.appendChild(el("h2", {}, "研究结论"));
+  if (item.strategy_label) head.appendChild(el("span", { class: "badge accent" }, item.strategy_label));
+  if (item.suggestion_label || item.suggestion) {
+    head.appendChild(el("span", { class: "badge" }, item.suggestion_label || humanizeText(item.suggestion)));
+  }
+  if (item.needs_agent_review) head.appendChild(el("span", { class: "badge warn" }, "需人工复核"));
+  const run = el("span", { class: "faint" }, `运行 #${detail.run_id} · `);
+  run.appendChild(statusBadge(detail.status));
+  head.appendChild(run);
+  card.appendChild(head);
+
+  const body = el("div", { class: "verdict" });
+  body.appendChild(ring(item.investment_score, 100, { caption: "投资分 / 100" }));
+  const facts = el("dl", { class: "facts" });
+  facts.appendChild(fact("研究置信度", fmtNumber(item.research_confidence_score, 0)));
+  facts.appendChild(fact("风险等级", label(RISK_LABELS, item.risk_level)));
+  facts.appendChild(fact("估值水平", label(VALUATION_LABELS, item.valuation_level)));
+  facts.appendChild(fact("业务分", fmtNumber(item.business_score, 1)));
+  facts.appendChild(
+    fact("数据质量", typeof item.data_quality_score === "number" ? `${fmtNumber(item.data_quality_score * 100, 0)}%` : "—")
   );
+  facts.appendChild(fact("评分版本", (scoreMeta && scoreMeta.scoring_version) || item.scoring_version));
+  body.appendChild(facts);
+
+  const { factors, keys, drags } = rankedFactors(item);
+  if (keys.length) {
+    const line = el("p", { class: "verdict-line" });
+    const best = keys[0];
+    line.appendChild(document.createTextNode("最强分项："));
+    line.appendChild(el("b", {}, `${scoreFactorLabel(best)} ${fmtNumber(factors[best], 1)}`));
+    if (drags.size) {
+      line.appendChild(document.createTextNode("；主要拖累："));
+      line.appendChild(
+        el("b", {}, [...drags].map((key) => `${scoreFactorLabel(key)} ${fmtNumber(factors[key], 1)}`).join("、"))
+      );
+    }
+    line.appendChild(document.createTextNode("。"));
+    body.appendChild(line);
+  }
+  card.appendChild(body);
   return card;
 }
 
 function factorCard(item) {
-  const factors = item.factor_scores || {};
-  const card = el("div", { class: "card", "data-evidence-section": "evidence-factors" });
+  const card = el("section", { class: "card", "data-evidence-section": "evidence-factors" });
   card.appendChild(el("h2", {}, "分项评分"));
-  const keys = Object.keys(factors).sort((a, b) => (factors[b] ?? -1) - (factors[a] ?? -1));
+  const { factors, keys, drags } = rankedFactors(item);
   if (!keys.length) {
     card.appendChild(el("p", { class: "muted" }, "无分项评分。"));
     return card;
@@ -440,92 +507,106 @@ function factorCard(item) {
   const list = el("ul", { class: "score-bars" });
   for (const key of keys) {
     const value = factors[key];
-    const item = el("li", { title: key });
-    item.appendChild(el("span", { class: "score-bar-label" }, scoreFactorLabel(key)));
-    item.appendChild(
-      el("meter", {
-        class: "score-bar-meter",
-        min: 0,
-        max: 100,
-        value: typeof value === "number" ? Math.max(0, Math.min(100, value)) : 0,
-        "aria-label": scoreFactorLabel(key),
-      })
-    );
-    item.appendChild(el("span", { class: "score-bar-value" }, fmtNumber(value, 1)));
-    list.appendChild(item);
+    const row = el("li", { class: `score-bar${drags.has(key) ? " drag" : ""}`, title: key });
+    row.appendChild(el("span", { class: "score-bar-label" }, scoreFactorLabel(key)));
+    row.appendChild(bar(value));
+    row.appendChild(el("span", { class: "score-bar-value" }, fmtNumber(value, 1)));
+    if (drags.has(key)) row.appendChild(el("span", { class: "score-bar-tag" }, "主要拖累"));
+    list.appendChild(row);
   }
   card.appendChild(list);
   return card;
 }
 
-function metricsCard(item) {
-  const metrics = item.key_metrics || {};
-  const card = el("div", { class: "card", "data-evidence-section": "evidence-metrics" });
-  card.appendChild(el("h2", {}, "关键指标"));
-  const rows = Object.entries(metrics).map(([key, value]) => {
-    const tr = el("tr");
-    tr.appendChild(el("td", { title: key }, fieldLabel(key)));
-    tr.appendChild(el("td", { class: "num" }, formatFactorValue(value, METRIC_UNITS[key])));
-    return tr;
-  });
-  card.appendChild(table([{ label: "指标" }, { label: "数值" }], rows));
-  return card;
+function notApplicableFields(item) {
+  const flags = Array.isArray(item.quality_flags) ? item.quality_flags : [];
+  return [...new Set(flags.filter((flag) => flag.flag === "model_not_applicable").map((flag) => flag.field))];
 }
 
+function metricsCard(item) {
+  const metrics = item.key_metrics || {};
+  const card = el("section", { class: "card", "data-evidence-section": "evidence-metrics" });
+  const head = el("div", { class: "card-head" });
+  head.appendChild(el("h2", {}, "关键指标"));
+  head.appendChild(el("span", { class: "faint" }, "徽标：已核对 = iFinD 核对；未核对 = 免费源；派生 = 由快照计算"));
+  card.appendChild(head);
+  const grid = el("div", { class: "metrics" });
+  for (const [key, value] of Object.entries(metrics)) {
+    const tile = el("div", { class: `metric${value === null || value === undefined ? " na" : ""}`, title: key });
+    const top = el("div", { class: "metric-top" });
+    top.appendChild(el("span", {}, fieldLabel(key)));
+    const tag = verifyTag(sourceOf(item, key));
+    if (tag) top.appendChild(tag);
+    tile.appendChild(top);
+    tile.appendChild(
+      el("div", { class: "metric-value" }, value === null || value === undefined ? "缺失" : formatFactorValue(value, METRIC_UNITS[key]))
+    );
+    grid.appendChild(tile);
+  }
+  const model = item.selected_model_label || "当前模型";
+  for (const field of notApplicableFields(item)) {
+    if (field in metrics) continue;
+    const tile = el("div", { class: "metric na", title: field });
+    const top = el("div", { class: "metric-top" });
+    top.appendChild(el("span", {}, fieldLabel(field)));
+    tile.appendChild(top);
+    tile.appendChild(el("div", { class: "metric-value" }, "不适用"));
+    tile.appendChild(el("div", { class: "metric-note" }, `${model}不使用该字段，未参与评分`));
+    grid.appendChild(tile);
+  }
+  card.appendChild(grid);
+  return card;
+}
 
 // Freshness is judged per data kind: market data in exchange trading days,
 // financial data by report period, the rest by hours / days.
 function describeFreshness(block) {
-  const status = block.is_stale ? "过期" : "正常";
   if (block.age_trading_days !== undefined && block.age_trading_days !== null) {
-    return `${status}（${block.age_trading_days} 个交易日 / 上限 ${block.max_age_trading_days ?? block.max_age_days} 个交易日）`;
+    return `${block.age_trading_days} 个交易日前（上限 ${block.max_age_trading_days ?? block.max_age_days}）`;
   }
   if (block.basis === "report_period") {
     const period = block.report_period_end || block.report_year || "未知";
     const expected = block.expected_report_year ? `，应有 ${block.expected_report_year} 年报` : "";
-    return `${status}（报告期 ${period}${expected}）`;
+    return `报告期 ${period}${expected}`;
   }
   const hours = Number(block.age_hours);
-  const age = Number.isFinite(hours) && hours >= 48 ? `${fmtNumber(hours / 24, 1)} 天` : `${fmtNumber(block.age_hours, 1)} 小时`;
-  return `${status}（${age} / 上限 ${block.max_age_days} 天）`;
+  const age = Number.isFinite(hours) && hours >= 48 ? `${fmtNumber(hours / 24, 1)} 天前` : `${fmtNumber(block.age_hours, 0)} 小时前`;
+  return `${age}（上限 ${block.max_age_days} 天）`;
 }
 
 function qualityCard(item) {
-  const card = el("div", { class: "card", "data-evidence-section": "evidence-quality" });
-  card.appendChild(el("h2", {}, "数据质量"));
-  const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
+  const card = el("section", { class: "card", "data-evidence-section": "evidence-quality" });
+  card.appendChild(el("h2", {}, "数据新鲜度与质量"));
   if (item.needs_agent_review) {
     card.appendChild(el("p", { class: "notice notice-warn" }, "该标的已标记为需要人工复核。"));
   }
-  card.appendChild(kvTable([["缺失字段", missing.length ? missing.map(fieldLabel).join("、") : "无"]]));
+  const freshness = item.freshness || {};
+  const list = el("ul", { class: "fresh-list" });
+  for (const [name, block] of Object.entries(freshness)) {
+    const row = el("li");
+    const stale = block && typeof block === "object" ? Boolean(block.is_stale) : false;
+    row.appendChild(el("span", { class: `dot ${stale ? "dot-stale" : "dot-fresh"}`, "aria-hidden": "true" }));
+    row.appendChild(el("span", { class: "fresh-what" }, FRESHNESS_LABELS[name] || name));
+    row.appendChild(el("span", {}, stale ? "已过期" : "正常"));
+    row.appendChild(el("span", { class: "faint" }, block && typeof block === "object" ? describeFreshness(block) : fmt(block)));
+    list.appendChild(row);
+  }
+  if (list.children.length) card.appendChild(list);
+
+  const missing = Array.isArray(item.missing_fields) ? item.missing_fields : [];
   const flags = Array.isArray(item.quality_flags) ? item.quality_flags : [];
   // A field the selected model does not use is "not applicable", not missing:
   // show that once instead of the data layer's missing-field note.
-  const notApplicable = new Set(
-    flags.filter((flag) => flag.flag === "model_not_applicable").map((flag) => flag.field)
-  );
-  const reviewLines = [];
-  for (const field of notApplicable) {
-    reviewLines.push(`${fieldLabel(field)}：不适用于当前模型（不参与评分）`);
-  }
+  const notApplicable = new Set(notApplicableFields(item));
+  const notes = [`缺失字段：${missing.length ? missing.map(fieldLabel).join("、") : "无"}`];
+  for (const field of notApplicable) notes.push(`${fieldLabel(field)}：不适用于当前模型（不参与评分）`);
   for (const flag of flags) {
     if (flag.severity !== "review" || notApplicable.has(flag.field)) continue;
-    reviewLines.push(`${fieldLabel(flag.field)}：${label(QUALITY_FLAG_LABELS, flag.flag) || flag.message || "需复核"}`);
+    notes.push(`${fieldLabel(flag.field)}：${label(QUALITY_FLAG_LABELS, flag.flag) || flag.message || "需复核"}`);
   }
-  if (reviewLines.length) {
-    const list = el("ul");
-    for (const line of reviewLines) list.appendChild(el("li", {}, line));
-    card.appendChild(list);
-  }
-  const freshness = item.freshness || {};
-  const freshnessPairs = Object.entries(freshness).map(([name, block]) => [
-    FRESHNESS_LABELS[name] || name,
-    block && typeof block === "object" ? describeFreshness(block) : fmt(block),
-  ]);
-  if (freshnessPairs.length) {
-    card.appendChild(el("h3", {}, "数据新鲜度"));
-    card.appendChild(kvTable(freshnessPairs));
-  }
+  const noteList = el("ul", { class: "quality-notes" });
+  for (const note of notes) noteList.appendChild(el("li", {}, note));
+  card.appendChild(noteList);
   return card;
 }
 
@@ -544,8 +625,7 @@ function resolveEvidence(scoreItem, path) {
     }
   }
   const leaf = path.split(".").pop();
-  const sources = scoreItem.field_sources && typeof scoreItem.field_sources === "object" ? scoreItem.field_sources : {};
-  const provenance = sources[leaf] || sources[path] || null;
+  const provenance = sourceOf(scoreItem, leaf);
   return { path, value: node, provenance };
 }
 
@@ -602,13 +682,23 @@ function showEvidence(detailRegion, scoreItem, path) {
   }
 }
 
+const EXPLANATION_GROUPS = [
+  ["positive_evidence", "正面证据", "pos"],
+  ["negative_evidence", "负面证据", "neg"],
+  ["risk_factors", "风险因素", "risk"],
+  ["classification_rationale", "分类依据", "class"],
+  ["data_quality_notes", "数据质量说明", "quality"],
+];
+
 function explanationCard(detail, scoreItem, detailRegion) {
-  const card = el("div", {
+  const card = el("section", {
     class: "card explanation-card",
     "data-evidence-section": "evidence-explanation",
   });
-  card.appendChild(el("h2", {}, "AI 解释"));
-  card.appendChild(el("p", { class: "muted small" }, "由 LLM 根据上方确定性结果生成；点击引用标签可查看证据来源。"));
+  const head = el("div", { class: "card-head" });
+  head.appendChild(el("h2", {}, "AI 解释"));
+  head.appendChild(aiStamp("LLM 生成 · 只复述上方确定性结果"));
+  card.appendChild(head);
   const explanation = detail.result && detail.result.explanation;
   if (!explanation) {
     card.appendChild(
@@ -616,24 +706,20 @@ function explanationCard(detail, scoreItem, detailRegion) {
         "p",
         { class: "notice notice-warn" },
         detail.status === "partial"
-          ? "解释不可用：评分成功但解释生成失败（partial）。以上确定性结果仍然有效。"
+          ? "解释不可用：评分成功但解释生成失败（部分成功）。以上确定性结果仍然有效。"
           : "解释不可用。"
       )
     );
     return card;
   }
-  card.appendChild(el("p", { class: "explain-summary" }, humanizeText(explanation.summary || "")));
+  if (explanation.summary) card.appendChild(el("p", { class: "explain-summary" }, humanizeText(explanation.summary)));
   const broken = new Set();
-  const groups = [
-    ["分类依据", explanation.classification_rationale],
-    ["正面证据", explanation.positive_evidence],
-    ["负面证据", explanation.negative_evidence],
-    ["风险因素", explanation.risk_factors],
-    ["数据质量说明", explanation.data_quality_notes],
-  ];
-  for (const [title, claims] of groups) {
+  const groups = el("div", { class: "ev-groups" });
+  for (const [key, title, kind] of EXPLANATION_GROUPS) {
+    const claims = explanation[key];
     if (!Array.isArray(claims) || !claims.length) continue;
-    card.appendChild(el("h3", {}, title));
+    const group = el("div", { class: `ev-group ${kind}` });
+    group.appendChild(el("h3", {}, title));
     const list = el("ul");
     for (const claim of claims) {
       const li = el("li", {}, humanizeText(claim.text));
@@ -642,22 +728,30 @@ function explanationCard(detail, scoreItem, detailRegion) {
         const resolved = resolveEvidence(scoreItem, field);
         if (!resolved) broken.add(field);
         const value =
-          resolved && (typeof resolved.value === "number" || typeof resolved.value === "string" || typeof resolved.value === "boolean" || Array.isArray(resolved.value))
+          resolved && resolved.value !== null && (typeof resolved.value !== "object" || Array.isArray(resolved.value))
             ? ` ${formatPathValue(field, resolved.value)}`
             : "";
         const chip = el(
           "button",
-          { type: "button", class: "evidence-chip", "data-field-path": field, title: field },
+          { type: "button", class: "evidence-chip", "data-field-path": field, title: field, "aria-pressed": "false" },
           `${pathLabel(field)}${value}`
         );
-        chip.addEventListener("click", () => showEvidence(detailRegion, scoreItem, field));
+        chip.addEventListener("click", () => {
+          for (const other of detailRegion.querySelectorAll(".evidence-chip[aria-pressed='true']")) {
+            other.setAttribute("aria-pressed", "false");
+          }
+          chip.setAttribute("aria-pressed", "true");
+          showEvidence(detailRegion, scoreItem, field);
+        });
         chips.appendChild(chip);
       }
       li.appendChild(chips);
       list.appendChild(li);
     }
-    card.appendChild(list);
+    group.appendChild(list);
+    groups.appendChild(group);
   }
+  card.appendChild(groups);
   if (broken.size) {
     // 引用必须能定位到唯一字段；失效引用必须显式可见，不允许静默隐藏。
     card.appendChild(
@@ -670,12 +764,12 @@ function explanationCard(detail, scoreItem, detailRegion) {
   }
   if (Array.isArray(explanation.open_questions) && explanation.open_questions.length) {
     card.appendChild(el("h3", {}, "待核查问题"));
-    const list = el("ul");
+    const list = el("ul", { class: "open-questions" });
     for (const question of explanation.open_questions) list.appendChild(el("li", {}, humanizeText(question)));
     card.appendChild(list);
   }
   if (explanation.workflow_conclusion) {
-    card.appendChild(el("p", {}, `工作流结论：${humanizeText(explanation.workflow_conclusion)}`));
+    card.appendChild(el("p", { class: "faint" }, `工作流结论：${humanizeText(explanation.workflow_conclusion)}`));
   }
   return card;
 }
@@ -722,7 +816,6 @@ async function loadStockDetail(detailRegion, latestSnapshot) {
     const detail = await get(`/research/runs/${latestSnapshot.run_id}`);
     detailRegion.hidden = false;
     detailRegion.replaceChildren();
-    detailRegion.appendChild(el("h2", {}, `最新运行 #${detail.run_id}（${label(STATUS_LABELS, detail.status)}）`));
     const score = detail.result && detail.result.score;
     const scoreItem =
       score && Array.isArray(score.items) && score.items.length
@@ -736,12 +829,12 @@ async function loadStockDetail(detailRegion, latestSnapshot) {
       );
       return;
     }
-    detailRegion.appendChild(
-      scoreCard(scoreItem, detail.result.score.metadata)
-    );
-    detailRegion.appendChild(factorCard(scoreItem));
+    detailRegion.appendChild(verdictCard(scoreItem, detail.result.score.metadata, detail));
+    const pair = el("div", { class: "grid-2" });
+    pair.appendChild(factorCard(scoreItem));
+    pair.appendChild(qualityCard(scoreItem));
+    detailRegion.appendChild(pair);
     detailRegion.appendChild(metricsCard(scoreItem));
-    detailRegion.appendChild(qualityCard(scoreItem));
     const inspector = el("aside", {
       id: "evidence-inspector",
       class: "card evidence-inspector",

@@ -100,7 +100,10 @@ def test_renderer_consumes_only_versioned_read_models():
         assert endpoint in source, endpoint
 
 
-@pytest.mark.parametrize("module", ["api.js", "app.js", "dom.js", "format.js", "candidates.js", "health.js"])
+@pytest.mark.parametrize(
+    "module",
+    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js"],
+)
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")
     if node is None:

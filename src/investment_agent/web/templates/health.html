@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
+<header class="page-head">
   <h1>数据健康</h1>
   <p class="muted">采集任务的完整率与缺失清单、数据新鲜度、快照积累进度（P1 阶段退出指标）、历史回补、iFinD 预算与核对队列。只读汇总，不触发任何采集。</p>
+</header>
+<section class="card">
   <div id="data-health" class="data-region"
        data-endpoint="/health/data"
        aria-live="polite">

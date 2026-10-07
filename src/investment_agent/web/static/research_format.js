@@ -11,7 +11,10 @@ import {
   ZONE_LABELS,
   fieldLabel,
   formatFactorValue,
+  formatParamValue,
   label,
+  paramLabel,
+  parseParamName,
   templateLabel,
 } from "./format.js";
 
@@ -234,6 +237,10 @@ export function humanizeText(text) {
       const metricLike = path.startsWith("key_metrics.") || !path.includes(".");
       const value = Number(number);
       let shown;
+      const param = !path.includes(".") && !METRIC_UNITS[leaf] ? parseParamName(path) : null;
+      if (param && FIELD_LABELS[param.factor]) {
+        return `${paramLabel(path)}${sep.trim() === "=" ? " " : sep}${formatParamValue(path, value)}`;
+      }
       if (metricLike && METRIC_UNITS[leaf]) shown = formatFactorValue(value, METRIC_UNITS[leaf]);
       else if (path.includes(".")) shown = formatPathValue(path, value);
       else return whole;
@@ -254,9 +261,11 @@ export function humanizeText(text) {
     const labelled = pathLabel(path);
     return labelled === path ? path : labelled;
   });
-  out = out.replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b(?:roe|pe|pb|cheap|expensive|fair|monitor|industry|medium|banking|insurance|unverified|verified|true|false|severity|info|review|warnings|suggestion|verification|snapshot|direct|derived)\b/g, (word) =>
-    Object.prototype.hasOwnProperty.call(IDENT_LABELS, word) ? IDENT_LABELS[word] : word
-  );
+  out = out.replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b(?:roe|pe|pb|cheap|expensive|fair|monitor|industry|medium|banking|insurance|unverified|verified|true|false|severity|info|review|warnings|suggestion|verification|snapshot|direct|derived)\b/g, (word) => {
+    if (Object.prototype.hasOwnProperty.call(IDENT_LABELS, word)) return IDENT_LABELS[word];
+    const param = parseParamName(word);
+    return param && FIELD_LABELS[param.factor] ? paramLabel(word) : word;
+  });
   return out;
 }
 

@@ -6,6 +6,7 @@
 
 import { ApiError, get } from "./api.js";
 import { clear, el, errorText, fmt, stockLink } from "./dom.js";
+import { kpi } from "./ui.js";
 import {
   INDUSTRY_SYSTEM_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -634,28 +635,32 @@ async function loadHealth(region) {
 // ---- 今日概览的"数据健康"入口 -------------------------------------------------
 
 export function healthBucket(counts) {
-  const card = el("div", { class: "card health-bucket" });
-  const heading = el("h2");
-  heading.appendChild(el("a", { href: counts.link || "/app/health" }, "数据健康"));
+  const href = counts.link || "/app/health";
+  const card = el("section", { class: "card health-bucket" });
+  const heading = el("div", { class: "card-head bucket-title" });
+  heading.appendChild(el("h2", {}, "数据健康"));
+  heading.appendChild(el("a", { href }, "查看数据健康 →"));
   card.appendChild(heading);
-  const list = el("ul", { class: "bucket-counts" });
-  for (const [text, value] of [
-    ["错误", counts.errors],
-    ["警告", counts.warnings],
-    ["提示", counts.infos],
+  const grid = el("div", { class: "kpis" });
+  const number = (value) => (typeof value === "number" ? value : 0);
+  for (const [text, value, alert] of [
+    ["错误", number(counts.errors), true],
+    ["警告", number(counts.warnings), true],
+    ["提示", number(counts.infos), false],
   ]) {
-    const item = el("li");
-    item.appendChild(el("span", { class: "count" }, String(typeof value === "number" ? value : 0)));
-    item.appendChild(el("span", { class: "muted" }, text));
-    list.appendChild(item);
+    grid.appendChild(kpi(text, value, { href, kind: value ? (alert ? "attention" : "") : "zero" }));
   }
-  card.appendChild(list);
-  card.appendChild(
-    el("p", {}, accumulationText({ streak_weeks: counts.streak_weeks, target_weeks: counts.target_weeks }))
+  const weeks = kpi("快照积累", number(counts.streak_weeks), { href, suffix: `/ ${number(counts.target_weeks) || 8} 周` });
+  const progress = el("div", { class: "week-progress", "aria-hidden": "true" });
+  for (let index = 0; index < (number(counts.target_weeks) || 8); index += 1) {
+    progress.appendChild(el("i", { class: index < number(counts.streak_weeks) ? "on" : undefined }));
+  }
+  weeks.appendChild(progress);
+  weeks.appendChild(
+    el("div", { class: "faint" }, accumulationText({ streak_weeks: counts.streak_weeks, target_weeks: counts.target_weeks }))
   );
-  const link = el("p");
-  link.appendChild(el("a", { href: counts.link || "/app/health" }, "查看数据健康"));
-  card.appendChild(link);
+  grid.appendChild(weeks);
+  card.appendChild(grid);
   return card;
 }
 

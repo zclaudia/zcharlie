@@ -27,13 +27,21 @@ export function stockLink(ticker) {
   return el("a", { href: `/app/stocks/${encodeURIComponent(ticker)}` }, ticker);
 }
 
+// 窄屏下表格转为堆叠卡片：每个单元格带 data-label（列名）。
 export function table(headers, rows) {
-  const node = el("table");
+  const node = el("table", { class: "stack-table" });
   const headRow = el("tr");
   for (const header of headers) headRow.appendChild(el("th", { scope: "col" }, header.label));
   node.appendChild(el("thead")).appendChild(headRow);
   const body = el("tbody");
-  for (const row of rows) body.appendChild(row);
+  for (const row of rows) {
+    [...row.children].forEach((cell, index) => {
+      if (headers[index] && headers[index].label && !cell.hasAttribute("data-label")) {
+        cell.setAttribute("data-label", headers[index].label);
+      }
+    });
+    body.appendChild(row);
+  }
   node.appendChild(body);
   return node;
 }

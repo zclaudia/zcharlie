@@ -1,14 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="card">
+<header class="page-head">
   <h1>自选股</h1>
   <p class="muted">最新评分、置信度、数据新鲜度与变化时间。</p>
+</header>
+<section class="card">
   <div class="toolbar">
     <form id="watchlist-add-form" class="inline-form" data-endpoint="/watchlist" method="post">
       <input name="ticker" placeholder="代码，如 600406.SH" required>
       <input name="industry" placeholder="行业，如 电力设备" required>
       <input name="name" placeholder="名称（可选）">
-      <input name="report_year" type="number" min="1990" max="2100" value="2025" required>
+      <input name="report_year" type="number" min="1990" max="2100" value="2025" required aria-label="报告年度">
       <button type="submit" class="primary">添加</button>
     </form>
     <button id="watchlist-refresh-all" class="secondary"
