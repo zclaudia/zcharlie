@@ -114,54 +114,91 @@ async function loadDashboard(region, data) {
 // ---- 自选股 ----------------------------------------------------------
 
 async function loadWatchlist(region, items) {
+  const count = document.querySelector("#watchlist-count");
   if (!Array.isArray(items) || !items.length) {
+    if (count) count.textContent = "";
     renderRegion(region, "empty");
     return;
   }
+  if (count) {
+    const enabled = items.filter((item) => item.enabled).length;
+    count.textContent = `共 ${items.length} 只${enabled < items.length ? `，启用 ${enabled}` : ""}`;
+  }
+  const sorted = [...items].sort((a, b) => Number(b.enabled) - Number(a.enabled));
   const node = table(
     [
-      { label: "代码" },
-      { label: "名称" },
-      { label: "行业" },
+      { label: "股票" },
+      { label: "策略 / 行业" },
       { label: "投资分" },
       { label: "置信度" },
       { label: "数据新鲜度" },
-      { label: "变化时间" },
-      { label: "刷新状态" },
+      { label: "最近变化" },
+      { label: "刷新" },
       { label: "操作" },
     ],
-    items.map((item) => watchlistRow(region, item))
+    sorted.map((item) => watchlistRow(region, item))
   );
+  node.classList.add("watch-table");
   renderRegion(region, "ready", node);
 }
 
+function stockCell(ticker, name) {
+  const cell = el("td", { class: "stock-cell" });
+  const link = el("a", { href: `/app/stocks/${encodeURIComponent(ticker)}`, class: "stock-name" }, name || ticker);
+  cell.appendChild(link);
+  cell.appendChild(el("span", { class: "stock-code" }, ticker));
+  return cell;
+}
+
+function freshnessCell(latest) {
+  const cell = el("td");
+  if (!latest || latest.freshness_ok === null || latest.freshness_ok === undefined) {
+    cell.appendChild(el("span", { class: "faint" }, "—"));
+    return cell;
+  }
+  const box = el("span", { class: "fresh-inline" });
+  box.appendChild(el("span", { class: `dot ${latest.freshness_ok ? "dot-fresh" : "dot-stale"}`, "aria-hidden": "true" }));
+  box.appendChild(document.createTextNode(latest.freshness_ok ? "正常" : "已过期"));
+  cell.appendChild(box);
+  return cell;
+}
+
 function watchlistRow(region, item) {
-  const tr = el("tr");
-  const tickerCell = el("td");
   const latest = item.latest_research;
-  if (latest && latest.run_id) {
-    tickerCell.appendChild(stockLink(item.ticker));
+  const tr = el("tr", { class: item.enabled ? undefined : "row-disabled" });
+  const stock = stockCell(item.ticker, item.name);
+  if (!item.enabled) stock.appendChild(el("span", { class: "badge" }, "已停用"));
+  tr.appendChild(stock);
+
+  const strategy = el("td");
+  strategy.appendChild(el("span", {}, (latest && latest.strategy_label) || "—"));
+  strategy.appendChild(el("span", { class: "cell-sub" }, fmt(item.industry)));
+  tr.appendChild(strategy);
+
+  const score = el("td", { class: "score-cell" });
+  if (latest && typeof latest.investment_score === "number") {
+    score.appendChild(el("span", { class: "score-cell-value" }, fmtNumber(latest.investment_score, 1)));
+    score.appendChild(bar(latest.investment_score));
   } else {
-    tickerCell.appendChild(el("a", { href: `/app/stocks/${item.ticker}` }, item.ticker));
+    score.appendChild(el("span", { class: "faint" }, "未研究"));
   }
-  tr.appendChild(tickerCell);
-  tr.appendChild(el("td", {}, fmt(item.name)));
-  tr.appendChild(el("td", {}, fmt(item.industry)));
-  tr.appendChild(el("td", {}, fmtNumber(latest && latest.investment_score, 1)));
-  tr.appendChild(el("td", {}, fmtNumber(latest && latest.research_confidence_score, 1)));
-  const freshnessCell = el("td");
-  if (latest) {
-    freshnessCell.appendChild(
-      statusBadge(latest.freshness_ok === null || latest.freshness_ok === undefined ? "unknown" : latest.freshness_ok ? "ok" : "stale")
-    );
-  } else {
-    freshnessCell.textContent = "—";
+  tr.appendChild(score);
+  tr.appendChild(el("td", { class: "num" }, fmtNumber(latest && latest.research_confidence_score, 0)));
+  tr.appendChild(freshnessCell(latest));
+
+  const changed = el("td");
+  changed.appendChild(el("span", {}, latest && latest.changed_at ? formatDateTime(latest.changed_at) : "—"));
+  if (latest && latest.meaningful_change_count) {
+    changed.appendChild(el("span", { class: "cell-sub" }, `重要变化 ${latest.meaningful_change_count} 项`));
   }
-  tr.appendChild(freshnessCell);
-  tr.appendChild(el("td", {}, fmt(latest && latest.changed_at ? latest.changed_at.slice(0, 16).replace("T", " ") : "—")));
-  const statusCell = el("td");
-  statusCell.appendChild(statusBadge(item.last_refresh_status));
-  tr.appendChild(statusCell);
+  if (latest && latest.needs_agent_review) changed.appendChild(el("span", { class: "badge warn" }, "需复核"));
+  tr.appendChild(changed);
+
+  const refresh = el("td");
+  refresh.appendChild(statusBadge(item.last_refresh_status));
+  if (item.last_refreshed_at) refresh.appendChild(el("span", { class: "cell-sub" }, formatDateTime(item.last_refreshed_at)));
+  if (item.last_refresh_error) refresh.appendChild(errorText(item.last_refresh_error));
+  tr.appendChild(refresh);
 
   const actions = el("td", { class: "row-actions" });
   const toggle = el("button", { type: "button" }, item.enabled ? "停用" : "启用");
@@ -243,14 +280,19 @@ function wireRefreshAll(button) {
             el(
               "p",
               {},
-              `共 ${data.total} 只：新排队 ${data.created}，复用运行 ${data.reused_runs}，失败 ${data.failed}。逐项状态：`
+              `共 ${data.total} 只：新排队 ${data.created_runs}，复用运行 ${data.reused_runs}，失败 ${data.failed}。`
             )
           );
+          const list = el("ul", { class: "refresh-results" });
           for (const item of data.items || []) {
-            container.appendChild(
-              el("p", { class: `status status-${item.status}` }, `${item.ticker}：${label(STATUS_LABELS, item.status)}`)
-            );
+            const row = el("li");
+            row.appendChild(el("span", { class: "stock-code" }, fmt(item.ticker)));
+            row.appendChild(statusBadge(item.status));
+            if (item.run_id) row.appendChild(el("span", { class: "faint" }, `运行 #${item.run_id}${item.created ? "（新建）" : "（复用）"}`));
+            if (item.error) row.appendChild(errorText(item.error));
+            list.appendChild(row);
           }
+          container.appendChild(list);
           renderRegion(results, "ready", container);
         }
         const list = document.querySelector("#watchlist-list");
@@ -274,28 +316,33 @@ function runsQuery(offset, status) {
   return `/research/runs?${params.toString()}`;
 }
 
-function renderRunsTable(region, runs) {
-  const node = table(
-    [
-      { label: "ID" },
-      { label: "状态" },
-      { label: "阶段" },
-      { label: "尝试" },
-      { label: "开始时间" },
-      { label: "错误摘要" },
-      { label: "详情" },
-    ],
-    runs.map((run) => runRow(run))
-  );
-  const container = el("div");
-  container.appendChild(node);
-  const loadMore = el("button", { type: "button", class: "secondary load-more" }, "加载更多");
-  loadMore.addEventListener("click", () => {
-    const current = region.querySelectorAll("tbody tr").length;
+function runsLoadMore(region) {
+  const button = el("button", { type: "button", class: "secondary load-more" }, "加载更多");
+  button.addEventListener("click", () => {
+    const current = region.querySelectorAll("tbody tr[data-run-id]").length;
     const filter = document.querySelector("#runs-status-filter");
     loadRunsPage(region, current, { append: true, status: filter && filter.value });
   });
-  container.appendChild(loadMore);
+  return button;
+}
+
+const RUN_HEADERS = [
+  { label: "状态" },
+  { label: "运行" },
+  { label: "阶段" },
+  { label: "尝试" },
+  { label: "开始 / 耗时" },
+  { label: "详情" },
+];
+
+function renderRunsTable(region, runs) {
+  const node = table(RUN_HEADERS, []);
+  node.classList.add("runs-table");
+  const body = node.querySelector("tbody");
+  for (const run of runs) for (const row of runRows(run)) body.appendChild(row);
+  const container = el("div");
+  container.appendChild(node);
+  container.appendChild(runsLoadMore(region));
   return container;
 }
 
@@ -312,45 +359,53 @@ async function loadRuns(region, runs, { append = false } = {}) {
     region.querySelector(".load-more")?.remove();
     return;
   }
-  const existingTable = region.querySelector("table");
-  const body = existingTable && existingTable.querySelector("tbody");
+  const body = region.querySelector("table tbody");
   if (!body) {
     renderRegion(region, "ready", renderRunsTable(region, runs));
     return;
   }
-  const loadMore = region.querySelector(".load-more");
-  const labels = [...existingTable.querySelectorAll("thead th")].map((th) => th.textContent);
-  for (const row of runs.map((run) => runRow(run))) {
-    [...row.children].forEach((cell, index) => labels[index] && cell.setAttribute("data-label", labels[index]));
-    body.appendChild(row);
-  }
-  if (loadMore) {
-    const fresh = el("button", { type: "button", class: "secondary load-more" }, "加载更多");
-    fresh.addEventListener("click", () => {
-      const current = region.querySelectorAll("tbody tr").length;
-      const filter = document.querySelector("#runs-status-filter");
-      loadRunsPage(region, current, { append: true, status: filter && filter.value });
-    });
-    loadMore.replaceWith(fresh);
-  }
+  for (const run of runs) for (const row of runRows(run)) body.appendChild(row);
+  region.querySelector(".load-more")?.replaceWith(runsLoadMore(region));
 }
 
-function runRow(run) {
-  const tr = el("tr");
-  tr.appendChild(el("td", {}, String(run.run_id)));
-  const statusCell = el("td");
+function duration(startIso, endIso) {
+  const start = Date.parse(startIso);
+  const end = Date.parse(endIso);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "";
+  const seconds = Math.round((end - start) / 1000);
+  if (seconds < 60) return `${seconds} 秒`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} 分钟`;
+  return `${fmtNumber(seconds / 3600, 1)} 小时`;
+}
+
+// 一次运行 = 主行（data-run-id，分页按它计数）+ 可选的错误行。
+function runRows(run) {
+  const tr = el("tr", { "data-run-id": run.run_id });
+  const statusCell = el("td", { "data-label": "状态" });
   statusCell.appendChild(statusBadge(run.status));
   tr.appendChild(statusCell);
-  tr.appendChild(el("td", {}, label(RUN_STAGE_LABELS, run.stage)));
-  tr.appendChild(el("td", {}, `${run.attempt_count}/${run.max_attempts}`));
-  tr.appendChild(
-    el("td", {}, run.started_at ? run.started_at.slice(0, 19).replace("T", " ") : "—")
-  );
-  const errorCell = el("td", { class: "error-cell" });
-  errorCell.appendChild(errorText(run.error_summary));
-  tr.appendChild(errorCell);
 
-  const detailCell = el("td");
+  const what = el("td", { "data-label": "运行", class: "stock-cell" });
+  what.appendChild(el("span", { class: "stock-code" }, `#${run.run_id}`));
+  if (run.ticker) {
+    what.appendChild(el("a", { href: `/app/stocks/${encodeURIComponent(run.ticker)}`, class: "stock-name" }, run.company_name || run.ticker));
+    if (run.company_name) what.appendChild(el("span", { class: "stock-code" }, run.ticker));
+  } else {
+    what.appendChild(el("span", { class: "faint" }, "（未关联股票）"));
+  }
+  if (run.needs_agent_review) what.appendChild(el("span", { class: "badge warn" }, "需复核"));
+  if (run.meaningful_change_count) what.appendChild(el("span", { class: "badge accent" }, `重要变化 ${run.meaningful_change_count}`));
+  tr.appendChild(what);
+
+  tr.appendChild(el("td", { "data-label": "阶段" }, label(RUN_STAGE_LABELS, run.stage)));
+  tr.appendChild(el("td", { "data-label": "尝试", class: "num" }, `${run.attempt_count}/${run.max_attempts}`));
+  const when = el("td", { "data-label": "开始 / 耗时" });
+  when.appendChild(el("span", {}, formatDateTime(run.started_at)));
+  const took = duration(run.started_at, run.finished_at);
+  if (took) when.appendChild(el("span", { class: "cell-sub" }, `耗时 ${took}`));
+  tr.appendChild(when);
+
+  const detailCell = el("td", { "data-label": "详情" });
   const details = el("details");
   details.appendChild(el("summary", {}, "详情"));
   const detailBody = el("div", { class: "run-detail" });
@@ -361,36 +416,47 @@ function runRow(run) {
   details.appendChild(detailBody);
   detailCell.appendChild(details);
   tr.appendChild(detailCell);
-  return tr;
+
+  if (!run.error_summary) return [tr];
+  tr.classList.add("has-error");
+  const errorRow = el("tr", { class: "error-row" });
+  const errorCell = el("td", { colspan: RUN_HEADERS.length, class: "error-cell" });
+  errorCell.appendChild(errorText(run.error_summary));
+  errorRow.appendChild(errorCell);
+  return [tr, errorRow];
 }
 
 async function loadRunDetail(container, runId) {
   try {
     const detail = await get(`/research/runs/${runId}`);
     container.replaceChildren();
-    container.appendChild(
-      kvTable([
-        ["股票", detail.ticker],
-        ["执行进程", detail.worker_id],
-        ["开始时间", formatDateTime(detail.started_at)],
-        ["结束时间", formatDateTime(detail.finished_at)],
-        ["错误", detail.error_summary ? errorText(detail.error_summary).textContent : null],
-        ["工作流标签", detail.workflow_label],
-      ])
-    );
+    const list = el("dl", { class: "kv-list" });
+    for (const [key, value] of [
+      ["股票", detail.ticker],
+      ["执行进程", detail.worker_id],
+      ["开始时间", formatDateTime(detail.started_at)],
+      ["结束时间", formatDateTime(detail.finished_at)],
+      ["工作流标签", detail.workflow_label],
+    ]) {
+      list.appendChild(el("dt", {}, key));
+      list.appendChild(el("dd", {}, fmt(value)));
+    }
+    container.appendChild(list);
+    if (detail.error_summary) container.appendChild(errorText(detail.error_summary));
     const artifacts =
       detail.result && Array.isArray(detail.result.artifacts) ? detail.result.artifacts : [];
     if (artifacts.length) {
-      container.appendChild(el("h3", {}, "制品"));
+      container.appendChild(el("h4", {}, "制品"));
+      const links = el("p", { class: "artifact-links" });
       for (const artifact of artifacts) {
-        const link = el("a", { href: artifact.download_url }, artifact.name);
+        const link = el("a", { href: artifact.download_url, class: "chip" }, artifact.name);
         link.addEventListener("click", (event) => {
           event.preventDefault();
           download(artifact.download_url);
         });
-        container.appendChild(link);
-        container.appendChild(document.createTextNode(" "));
+        links.appendChild(link);
       }
+      container.appendChild(links);
     }
     container.dataset.loaded = "true";
   } catch (error) {

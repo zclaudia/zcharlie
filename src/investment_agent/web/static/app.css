@@ -708,7 +708,7 @@ meter::-webkit-meter-suboptimum-value { background: var(--c-aging); }
 meter::-webkit-meter-even-less-good-value { background: var(--c-warn); }
 meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--c-accent); }
 
-.collection-list, .backfill-list { display: grid; gap: var(--sp-3); }
+.collection-list, .backfill-list { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
 .collection-item, .backfill-item { border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3); min-width: 0; background: var(--c-surface-2); }
 .collection-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
 .collection-title { margin: 0; font-size: var(--fs-md); overflow-wrap: anywhere; }
@@ -761,4 +761,70 @@ meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--c-accent)
   }
   .kv-list { grid-template-columns: 1fr; }
   .kv-list dd { margin-bottom: var(--sp-1); }
+}
+
+/* ---- 自选股 / 运行中心：表格单元 ------------------------------------------------- */
+
+.card-head-action { margin-left: auto; }
+.card-head .faint + .card-head-action { margin-left: var(--sp-2); }
+.add-panel { margin: 0 0 var(--sp-3); }
+.add-panel > summary { color: var(--c-accent); font-size: var(--fs-sm); padding: var(--sp-1) 0; }
+.add-panel[open] > summary { margin-bottom: var(--sp-2); }
+.add-panel form { padding: var(--sp-3); border: 1px dashed var(--c-line-strong); border-radius: var(--r-md); background: var(--c-surface-2); }
+
+.stock-cell { min-width: 7rem; }
+.stock-name { display: block; font-weight: 600; color: var(--c-ink); text-decoration: none; }
+a.stock-name:hover { color: var(--c-accent); }
+.stock-code { display: block; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-ink-3); }
+.stock-cell .badge { margin: 2px 4px 0 0; }
+.cell-sub { display: block; font-size: var(--fs-xs); color: var(--c-ink-3); }
+.score-cell { min-width: 7rem; }
+.score-cell-value { font-weight: 700; font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+.score-cell svg { display: block; width: 100%; max-width: 8rem; height: 6px; margin-top: 3px; }
+.score-cell .b-track { fill: var(--c-track); }
+.score-cell .b-fill { fill: var(--c-bar); }
+.fresh-inline { display: inline-flex; align-items: center; gap: 6px; }
+.row-disabled td { color: var(--c-ink-3); }
+.row-disabled .stock-name { color: var(--c-ink-3); }
+.refresh-results { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; gap: 4px; }
+.refresh-results li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.refresh-results .stock-code { display: inline; }
+
+.runs-table tr.has-error td { border-bottom: 0; padding-bottom: 2px; }
+.runs-table tr.error-row td { padding-top: 0; }
+.runs-table tr.error-row:hover, .runs-table tr.has-error:hover { background: transparent; }
+.runs-table .stock-cell .stock-code:first-child { margin-bottom: 1px; }
+.artifact-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.artifact-links .chip { text-decoration: none; color: var(--c-accent); }
+
+/* ---- 数据健康 ---------------------------------------------------------------------- */
+
+.summary-meta { margin: calc(-1 * var(--sp-1)) 0 var(--sp-4); }
+.collection-ratio { margin: var(--sp-2) 0 0; }
+.collection-ratio-value { font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+.collection-ratio-value.below { color: var(--c-warn); }
+.trend { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.trend-cell {
+  font-size: 10.5px;
+  padding: 0 5px;
+  line-height: 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-line);
+  font-variant-numeric: tabular-nums;
+}
+.backfill-item h4, .collection-head h4 { margin: 0; font-size: var(--fs-md); color: var(--c-ink); }
+.collection-head .status { margin-left: auto; }
+.basis { margin-top: var(--sp-3); }
+.basis summary, .conflicts summary { color: var(--c-accent); font-size: var(--fs-sm); }
+.accumulation-headline .muted { font-size: var(--fs-sm); }
+.health-section .kpis { margin-bottom: var(--sp-2); }
+
+@media (max-width: 40rem) {
+  .runs-table tr.has-error { border-bottom: 0; padding-bottom: 0; }
+  .runs-table tr.error-row { padding-top: 0; }
+  .stack-table .stock-cell .stock-name, .stack-table .stock-cell .stock-code { display: inline; margin-right: 6px; }
+  .score-cell svg { display: inline-block; vertical-align: middle; width: 6rem; margin: 0 0 0 6px; }
+}
+@media (max-width: 40rem) {
+  .stack-table td.num { text-align: left; }
 }

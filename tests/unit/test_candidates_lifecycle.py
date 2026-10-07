@@ -478,13 +478,13 @@ async def test_rule_instance_lookup_ignores_old_drafts() -> None:
 
 
 def test_screen_context_gains_shenwan_industry_name() -> None:
-    from investment_agent.candidates.lifecycle import _context_with_industry_name
+    from investment_agent.candidates.lifecycle import context_with_industry_name
 
     stored = {"industry": {"system": "sw2021", "code": "220804", "group": "cyclical"}}
-    shown = _context_with_industry_name(stored)
+    shown = context_with_industry_name(stored)
     assert shown["industry"]["name"] == "钾肥"
     assert "name" not in stored["industry"]  # display only: the stored context is untouched
-    assert _context_with_industry_name({"industry": {"system": "csrc", "code": "C26"}}) == {
+    assert context_with_industry_name({"industry": {"system": "csrc", "code": "C26"}}) == {
         "industry": {"system": "csrc", "code": "C26"}
     }
-    assert _context_with_industry_name(None) == {}
+    assert context_with_industry_name(None) == {}

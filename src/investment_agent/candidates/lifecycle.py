@@ -141,16 +141,20 @@ def screen_result_snapshot(row: ScreenResultRecord) -> dict[str, Any]:
         "outcome": row.outcome,
         "rank": row.rank,
         "reasons": list(row.reasons or []),
-        "context": _context_with_industry_name(row.context),
+        "context": context_with_industry_name(row.context),
     }
 
 
-def _context_with_industry_name(context: Mapping[str, Any] | None) -> dict[str, Any]:
+def context_with_industry_name(context: Mapping[str, Any] | None) -> dict[str, Any]:
     """The stored screen context plus the Shenwan industry name (display only)."""
 
     result = dict(context or {})
     industry = result.get("industry")
-    if isinstance(industry, dict) and industry.get("system") == "sw2021" and not industry.get("name"):
+    if (
+        isinstance(industry, dict)
+        and industry.get("system") == "sw2021"
+        and not industry.get("name")
+    ):
         name = default_shenwan_directory().name_of(industry.get("code"))
         if name:
             result["industry"] = {**industry, "name": name}

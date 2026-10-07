@@ -46,6 +46,7 @@ from investment_agent.api.schemas.candidates import (
 from investment_agent.candidates.lifecycle import (
     CandidateError,
     CandidatePolicy,
+    context_with_industry_name,
     dismiss_candidate,
     effective_draft,
     latest_screen_results,
@@ -178,7 +179,7 @@ async def _screen_result_out(row: ScreenResultRecord, templates: _Templates) -> 
         outcome=row.outcome,
         rank=row.rank,
         reasons=_reasons(row.reasons),
-        context=dict(row.context or {}),
+        context=context_with_industry_name(row.context),
     )
 
 

@@ -164,7 +164,7 @@ function kvList(pairs) {
 }
 
 function statusChip(status) {
-  return el("span", { class: `chip run-${status || "none"}` }, label(RUN_STATUS_LABELS, status));
+  return el("span", { class: `status status-${status || "unknown"}` }, label(RUN_STATUS_LABELS, status));
 }
 
 function tickerNode(ticker) {
@@ -223,9 +223,11 @@ function renderWarnings(warnings) {
 function renderAccumulation(data) {
   const acc = data.accumulation;
   const box = el("div");
-  const head = el("p", { class: "accumulation-headline" });
-  head.appendChild(el("span", { class: "accumulation-count" }, accumulationText(acc)));
-  if (acc.reached) head.appendChild(el("span", { class: "chip run-success" }, "已达成"));
+  const head = el("div", { class: "accumulation-headline" });
+  const count = el("span", { class: "accumulation-count" }, String(acc.streak_weeks));
+  head.appendChild(count);
+  head.appendChild(el("span", { class: "muted" }, `/ ${acc.target_weeks} 周连续达标`));
+  if (acc.reached) head.appendChild(el("span", { class: "status status-success" }, "已达成"));
   box.appendChild(head);
   const progress = el("progress", {
     class: "accumulation-progress",
@@ -235,15 +237,6 @@ function renderAccumulation(data) {
   });
   progress.textContent = accumulationText(acc);
   box.appendChild(progress);
-  box.appendChild(
-    el(
-      "p",
-      { class: "muted small" },
-      `口径：${acc.universe_code} 日线快照（baostock，非回补）按交易日所在 ISO 周统计；` +
-        `一周至少有一个交易日的快照、且当周最低完整率不低于 ${percent(acc.threshold, 0)} 即为达标。` +
-        "无交易日的周与进行中的本周不计也不中断，其余未达标的周使连续周数归零。"
-    )
-  );
   box.appendChild(
     kvList([
       ["首个实时快照", acc.first_live_trade_date],
@@ -269,33 +262,50 @@ function renderAccumulation(data) {
   } else {
     box.appendChild(empty("尚无实时日线快照；计时从第一次日线采集开始。"));
   }
+  const basis = el("details", { class: "basis" });
+  basis.appendChild(el("summary", {}, "统计口径"));
+  basis.appendChild(
+    el(
+      "p",
+      { class: "muted small" },
+      `${acc.universe_code} 日线快照（baostock，非回补）按交易日所在 ISO 周统计；` +
+        `一周至少有一个交易日的快照、且当周最低完整率不低于 ${percent(acc.threshold, 0)} 即为达标。` +
+        "无交易日的周与进行中的本周不计也不中断，其余未达标的周使连续周数归零。"
+    )
+  );
+  box.appendChild(basis);
   return box;
+}
+
+function freshRow(what, ok, text, extra) {
+  const row = el("li");
+  row.appendChild(el("span", { class: `dot ${ok ? "dot-fresh" : "dot-stale"}`, "aria-hidden": "true" }));
+  row.appendChild(el("span", { class: "fresh-what" }, what));
+  row.appendChild(el("span", {}, text));
+  if (extra) row.appendChild(extra instanceof Node ? extra : el("span", { class: "faint" }, extra));
+  return row;
 }
 
 function renderFreshness(data) {
   const fresh = data.freshness;
   const market = fresh.market;
   const box = el("div");
-  box.appendChild(el("h3", {}, `日线（${market.universe_code}，baostock 不复权）`));
-  const lag =
-    market.lag_trading_days === null || market.lag_trading_days === undefined
-      ? "—"
-      : market.lag_trading_days === 0
-        ? "无落后"
-        : `落后 ${market.lag_trading_days} 个交易日`;
-  box.appendChild(
-    kvList([
-      ["最新日线", market.latest_trade_date],
-      ["应有交易日", market.expected_trade_date],
-      ["最近交易日", market.last_trading_day],
-      ["新鲜度", lag],
-      [
-        "最新日覆盖成分",
-        bar(market.members_at_latest, market.members, `${market.members_at_latest}/${market.members}`, data.threshold),
-      ],
-    ])
+  const list = el("ul", { class: "fresh-list" });
+  const lagKnown = market.lag_trading_days !== null && market.lag_trading_days !== undefined;
+  list.appendChild(
+    freshRow(
+      "日线",
+      lagKnown && market.lag_trading_days === 0,
+      !lagKnown ? "—" : market.lag_trading_days === 0 ? "无落后" : `落后 ${market.lag_trading_days} 个交易日`,
+      `最新 ${fmt(market.latest_trade_date)} · 应有 ${fmt(market.expected_trade_date)}`
+    )
   );
-  box.appendChild(el("h3", {}, "财报（baostock）"));
+  box.appendChild(list);
+  box.appendChild(el("h3", {}, `日线覆盖（${market.universe_code}，baostock 不复权）`));
+  box.appendChild(
+    bar(market.members_at_latest, market.members, `${market.members_at_latest}/${market.members} 成分`, data.threshold)
+  );
+  box.appendChild(el("h3", {}, "财报覆盖（baostock）"));
   if (fresh.financial.length) {
     box.appendChild(
       kvList(
@@ -336,18 +346,22 @@ function renderCollection(item, threshold) {
   head.appendChild(el("h3", { class: "collection-title" }, collectionTitle(item)));
   const run = item.last_run;
   if (run) head.appendChild(statusChip(run.status));
-  if (item.in_flight) head.appendChild(el("span", { class: "chip run-running" }, `${item.in_flight} 个排队/运行中`));
+  if (item.in_flight) head.appendChild(el("span", { class: "status status-running" }, `${item.in_flight} 个排队/运行中`));
   block.appendChild(head);
   if (!run) {
     block.appendChild(empty("尚无已结束的运行。"));
     return block;
   }
   const meta = el("p", { class: "collection-meta muted small" });
-  meta.textContent = `#${run.run_id} · 对象 ${fmt(run.subject)} · 结束 ${localTime(run.finished_at)}`;
+  meta.textContent = `#${run.run_id} · 数据日 ${fmt(run.subject)} · 结束于 ${localTime(run.finished_at)}`;
   block.appendChild(meta);
   if (typeof run.ratio === "number") {
+    const ratio = el("p", { class: "collection-ratio" });
+    ratio.appendChild(el("span", { class: `collection-ratio-value${run.ratio < threshold ? " below" : ""}` }, percent(run.ratio)));
+    ratio.appendChild(el("span", { class: "faint" }, ` 完整率 · ${fmt(run.collected)}/${fmt(run.expected)}`));
+    block.appendChild(ratio);
     block.appendChild(
-      bar(run.collected ?? 0, (run.expected ?? 0) - (run.missing_by_kind.pending || 0), `完整率 ${percent(run.ratio)}（${fmt(run.collected)}/${fmt(run.expected)}）`, threshold)
+      bar(run.collected ?? 0, (run.expected ?? 0) - (run.missing_by_kind.pending || 0), `${fmt(run.collected)}/${fmt(run.expected)}`, threshold)
     );
   }
   const missing = missingSummary(run.missing_by_kind);
@@ -364,11 +378,11 @@ function renderCollection(item, threshold) {
   }
   if (item.trend.length > 1) {
     const trend = el("p", { class: "trend small" });
-    trend.appendChild(el("span", { class: "muted" }, `近 ${item.trend.length} 次：`));
+    trend.appendChild(el("span", { class: "faint" }, `近 ${item.trend.length} 次`));
     for (const point of item.trend) {
       const text = typeof point.ratio === "number" ? percent(point.ratio) : label(RUN_STATUS_LABELS, point.status);
       trend.appendChild(
-        el("span", { class: `chip run-${point.status}`, title: `#${point.run_id} ${fmt(point.subject)}` }, text)
+        el("span", { class: `trend-cell run-${point.status}`, title: `#${point.run_id} ${fmt(point.subject)}：${text}` }, text)
       );
     }
     block.appendChild(trend);
@@ -403,7 +417,10 @@ function tickerList(title, tickers, total) {
 function renderUniverses(data) {
   const box = el("div");
   for (const universe of data.universes) {
-    box.appendChild(el("h3", {}, `${universe.code}：当前成员 ${universe.members} 只`));
+    const headline = el("p", { class: "accumulation-headline" });
+    headline.appendChild(el("span", { class: "accumulation-count" }, String(universe.members)));
+    headline.appendChild(el("span", { class: "muted" }, `只 · ${universe.code} 当前成员`));
+    box.appendChild(headline);
     const sync = universe.last_sync;
     if (sync) {
       box.appendChild(
@@ -463,11 +480,16 @@ function renderBackfill(data) {
   if (!backfill.as_of) {
     box.appendChild(empty(`${backfill.universe_code} 尚无历史回补计划。`));
   } else {
-    box.appendChild(el("p", { class: "muted small" }, `${backfill.universe_code} 回补计划 as of ${backfill.as_of}`));
+    box.appendChild(el("p", { class: "faint" }, `${backfill.universe_code} 回补计划 · 截至 ${backfill.as_of}`));
     const list = el("div", { class: "backfill-list" });
     for (const part of backfill.parts) {
       const item = el("div", { class: "backfill-item" });
-      item.appendChild(el("h4", {}, label(PART_LABELS, part.part)));
+      const partHead = el("div", { class: "collection-head" });
+      partHead.appendChild(el("h4", {}, label(PART_LABELS, part.part)));
+      partHead.appendChild(
+        el("span", { class: `status status-${part.done >= part.total ? "success" : part.failed ? "failed" : "running"}` }, part.done >= part.total ? "完成" : `${part.done}/${part.total}`)
+      );
+      item.appendChild(partHead);
       item.appendChild(bar(part.done, part.total, `${part.done}/${part.total}`, 1));
       const statuses = Object.entries(part.statuses)
         .map(([status, count]) => `${label(RUN_STATUS_LABELS, status)} ${count}`)
@@ -496,15 +518,18 @@ function renderVerification(data) {
   const verification = data.verification;
   const budget = verification.budget;
   const box = el("div");
-  box.appendChild(el("h3", {}, "iFinD 预算"));
+  const kpis = el("div", { class: "kpis" });
+  kpis.appendChild(
+    kpi(`iFinD 预算（${budget.window_hours} 小时滚动）`, budget.remaining, {
+      suffix: `/ ${budget.cap} 次`,
+      kind: budget.remaining > 0 ? "" : "attention",
+    })
+  );
+  kpis.appendChild(kpi("下次可用", budget.remaining > 0 ? "现在" : localTime(budget.next_free_at)));
+  kpis.appendChild(kpi("字段冲突", verification.conflicts_total, { kind: verification.conflicts_total ? "attention" : "zero" }));
+  box.appendChild(kpis);
   box.appendChild(
-    kvList([
-      [
-        `已用（${budget.window_hours} 小时滚动窗口）`,
-        bar(budget.remaining, budget.cap, `剩余 ${budget.remaining} / ${budget.cap} 次（已用 ${budget.used}）`, 0.1),
-      ],
-      ["下次可用", budget.remaining > 0 ? "现在" : localTime(budget.next_free_at)],
-    ])
+    bar(budget.remaining, budget.cap, `剩余 ${budget.remaining} / ${budget.cap} 次（已用 ${budget.used}）`, 0.1)
   );
   box.appendChild(el("h3", {}, "核对队列"));
   const statuses = Object.entries(verification.by_status);
@@ -527,7 +552,13 @@ function renderVerification(data) {
   if (!verification.conflicts.length) {
     box.appendChild(empty("近期没有数据源字段冲突。"));
   } else {
-    box.appendChild(
+    const conflicts = el("details", { class: "conflicts" });
+    const shown = verification.conflicts.length;
+    conflicts.appendChild(
+      el("summary", {}, `展开冲突清单${verification.conflicts_total > shown ? `（显示最近 ${shown} 条）` : ""}`)
+    );
+    box.appendChild(conflicts);
+    conflicts.appendChild(
       simpleTable(
         ["代码", "字段", "报告期", "来源", "时间"],
         verification.conflicts.map((item) => [
@@ -593,6 +624,59 @@ function renderStatus(region, state, message, retry) {
   }
 }
 
+// 顶部摘要：各分区一张 KPI 卡，点击跳到对应分区。
+function renderSummary(region, data) {
+  clear(region);
+  region.dataset.state = "ready";
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+  const errors = warnings.filter((warning) => warning.level === "error").length;
+  const warns = warnings.filter((warning) => warning.level === "warn").length;
+  const acc = data.accumulation;
+  const market = data.freshness && data.freshness.market;
+  const lag = market ? market.lag_trading_days : null;
+  const budget = data.verification && data.verification.budget;
+  const overdue = data.overdue ? data.overdue.open : 0;
+  const grid = el("div", { class: "kpis" });
+  grid.appendChild(
+    kpi("提醒", warnings.length, {
+      href: warnings.length ? "#health-warnings" : undefined,
+      suffix: warnings.length ? `错误 ${errors} · 警告 ${warns}` : "全部正常",
+      kind: errors || warns ? "attention" : "zero",
+    })
+  );
+  const weeks = kpi("快照积累", acc.streak_weeks, { href: "#health-accumulation", suffix: `/ ${acc.target_weeks} 周` });
+  const cells = el("div", { class: "week-progress", "aria-hidden": "true" });
+  for (let index = 0; index < acc.target_weeks; index += 1) {
+    cells.appendChild(el("i", { class: index < acc.streak_weeks ? "on" : undefined }));
+  }
+  weeks.appendChild(cells);
+  grid.appendChild(weeks);
+  grid.appendChild(
+    kpi("日线新鲜度", lag === null || lag === undefined ? "—" : lag === 0 ? "无落后" : `落后 ${lag} 日`, {
+      href: "#health-freshness",
+      kind: lag ? "attention" : "",
+    })
+  );
+  if (budget) {
+    grid.appendChild(
+      kpi("iFinD 预算剩余", budget.remaining, {
+        href: "#health-verification",
+        suffix: `/ ${budget.cap}`,
+        kind: budget.remaining > 0 ? "" : "attention",
+      })
+    );
+  }
+  grid.appendChild(kpi("逾期财报", overdue, { href: "#health-overdue", kind: overdue ? "attention" : "zero" }));
+  region.appendChild(grid);
+  region.appendChild(
+    el(
+      "p",
+      { class: "faint summary-meta" },
+      `生成于 ${localTime(data.generated_at)}（${data.as_of}） · 完整率阈值 ${percent(data.threshold, 0)} · 目标池 ${data.target_universe}`
+    )
+  );
+}
+
 async function loadHealth(region) {
   renderStatus(region, "loading");
   for (const body of sectionBodies()) body.closest("section")?.setAttribute("hidden", "");
@@ -622,11 +706,10 @@ async function loadHealth(region) {
     }
     body.closest("section")?.removeAttribute("hidden");
   }
-  renderStatus(
-    region,
-    "ready",
-    `生成于 ${localTime(data.generated_at)}（${data.as_of}），完整率阈值 ${percent(data.threshold, 0)}，目标池 ${data.target_universe}。`
-  );
+  renderSummary(region, data);
+  if (!Array.isArray(data.warnings) || !data.warnings.length) {
+    document.getElementById("health-warnings")?.setAttribute("hidden", "");
+  }
   if (globalThis.location.hash) {
     document.querySelector(globalThis.location.hash)?.scrollIntoView();
   }
