@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from investment_agent.config import Settings
+from investment_agent.factors.metrics import parse_number, return_stats
 from investment_agent.research import ifind_chain
 from investment_agent.research.ifind_chain import (
     CanonicalBundle,
@@ -12,7 +13,6 @@ from investment_agent.research.ifind_chain import (
     ResearchExplanation,
     ResearchPartialError,
     _artifact_dir_for_attempt,
-    _return_stats,
     parse_proxy_rows,
     run_ifind_research_chain,
     validate_explanation_fields,
@@ -40,7 +40,9 @@ def test_return_stats_are_deterministic():
         {"time": "20260103", "close": "9"},
     ]
 
-    total_return, volatility, drawdown = _return_stats(rows)
+    total_return, volatility, drawdown = return_stats(
+        (row["time"], parse_number(row["close"])) for row in rows
+    )
 
     assert total_return == -0.1
     assert volatility is not None and volatility > 0

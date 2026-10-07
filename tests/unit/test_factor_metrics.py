@@ -5,19 +5,26 @@ from datetime import date
 import pytest
 
 from investment_agent.factors import metrics
+from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.research import ifind_chain
 
 
-def test_ifind_chain_uses_the_factor_library_definitions():
-    assert ifind_chain._annualized_growth is metrics.annualized_growth
-    assert ifind_chain._roe_stability is metrics.roe_stability
-    assert ifind_chain._positive_multiple is metrics.positive_multiple
+def test_ifind_chain_reads_canonical_metrics_from_the_factor_library():
+    """P1-B4: no parallel metric code in the iFinD canonicalization."""
+
+    for name in (
+        "_annualized_growth",
+        "_roe_stability",
+        "_positive_multiple",
+        "_return_stats",
+        "_trim_to_one_year",
+        "return_stats",
+        "trim_to_window",
+    ):
+        assert not hasattr(ifind_chain, name), name
+    assert set(ifind_chain._OBSERVATION_FACTORS.values()) <= set(DEFAULT_REGISTRY.names())
     assert ifind_chain.ONE_YEAR_WINDOW_DAYS == metrics.ONE_YEAR_WINDOW_DAYS == 365
     assert ifind_chain.MIN_ONE_YEAR_SESSIONS == metrics.MIN_ONE_YEAR_SESSIONS == 200
-    assert ifind_chain.return_stats is metrics.return_stats
-    assert ifind_chain.trim_to_window is metrics.trim_to_window
-    assert ifind_chain._number is metrics.parse_number
-    assert ifind_chain._fraction is metrics.percent_to_fraction
 
 
 @pytest.mark.parametrize(

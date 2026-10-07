@@ -23,27 +23,15 @@ import httpx
 from pydantic import BaseModel, Field
 
 from investment_agent.config import Settings
-from investment_agent.factors.metrics import (
-    MIN_ONE_YEAR_SESSIONS,
-    ONE_YEAR_WINDOW_DAYS,
-    return_stats,
-    trim_to_window,
+from investment_agent.factors.catalog import DEFAULT_REGISTRY
+from investment_agent.factors.metrics import MIN_ONE_YEAR_SESSIONS, ONE_YEAR_WINDOW_DAYS
+from investment_agent.factors.registry import (
+    FLAG_NEGATIVE_BOOK_VALUE,
+    FLAG_NEGATIVE_EARNINGS,
+    FLAG_NON_POSITIVE_REVENUE,
+    FLAG_SHORT_HISTORY,
 )
-from investment_agent.factors.metrics import (
-    annualized_growth as _annualized_growth,
-)
-from investment_agent.factors.metrics import (
-    parse_number as _number,
-)
-from investment_agent.factors.metrics import (
-    percent_to_fraction as _fraction,
-)
-from investment_agent.factors.metrics import (
-    positive_multiple as _positive_multiple,
-)
-from investment_agent.factors.metrics import (
-    roe_stability as _roe_stability,
-)
+from investment_agent.factors.view import ifind_research_view
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.providers.errors import QuotaExhaustedError
 from investment_agent.research.contracts import (
@@ -61,6 +49,46 @@ from investment_agent.storage.repositories.research_snapshot import (
 )
 
 _TICKER_PATTERN = re.compile(r"^(?P<symbol>\d{6})\.(?P<market>SH|SZ|BJ)$")
+
+# Canonical metric -> factor that defines it on the observation (iFinD) view.
+_OBSERVATION_FACTORS: dict[str, str] = {
+    "pe": "pe_fy",
+    "pb": "pb_fy",
+    "ps": "ps_fy",
+    "return_1y": "return_1y",
+    "volatility_1y": "volatility_1y",
+    "max_drawdown_1y": "max_drawdown_1y",
+    "market_cap": "market_cap",
+    "roe": "roe",
+    "roe_stability": "roe_stability",
+    "gross_margin": "gross_margin",
+    "net_margin": "net_margin",
+    "debt_ratio": "debt_ratio",
+    "revenue_growth_3y": "revenue_growth_3y",
+    "net_profit_growth_3y": "net_profit_growth_3y",
+    "free_cash_flow": "free_cash_flow",
+}
+# (canonical multiple, FY per-share field, factor flag, quality-flag message)
+_NOT_MEANINGFUL_MULTIPLES: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "pe",
+        "eps_basic_fy",
+        FLAG_NEGATIVE_EARNINGS,
+        "PE not meaningful: FY{year} basic EPS {value} <= 0 (loss-making)",
+    ),
+    (
+        "pb",
+        "bvps_fy",
+        FLAG_NEGATIVE_BOOK_VALUE,
+        "PB not meaningful: FY{year} net assets per share {value} <= 0",
+    ),
+    (
+        "ps",
+        "revenue_ps_fy",
+        FLAG_NON_POSITIVE_REVENUE,
+        "PS not meaningful: FY{year} revenue per share {value} <= 0",
+    ),
+)
 
 
 @dataclass(frozen=True)
@@ -275,43 +303,18 @@ def _first_row(result: IfindProxyResult, name: str) -> dict[str, str]:
     return result.rows[0]
 
 
-def _optional_first_row(result: IfindProxyResult | None) -> dict[str, str] | None:
-    """Return the first row of a base/historical-period endpoint, or ``None``.
+def _latest_session(history_rows: list[dict[str, str]]) -> date:
+    """Date of the latest parseable session (the default one-year anchor)."""
 
-    Newly listed companies have no FY-3 statements or full profitability
-    history; those periods only feed derived metrics (growth, ROE stability)
-    which then become missing instead of aborting the whole bundle.
-    """
-
-    if result is None or not result.rows:
-        return None
-    return result.rows[0]
-
-
-def _row_date(row: dict[str, str]) -> date | None:
-    try:
-        return datetime.strptime(str(row.get("time", "")), "%Y%m%d").date()
-    except ValueError:
-        return None
-
-
-def _trim_to_one_year(
-    rows: list[dict[str, str]], anchor: date | None
-) -> list[dict[str, str]]:
-    """Keep only sessions in ``(anchor - 365d, anchor]``.
-
-    ``anchor`` defaults to the latest dated session. Rows whose date cannot be
-    parsed are dropped from the window.
-    """
-
-    return trim_to_window(
-        ((row_date, row) for row in rows if (row_date := _row_date(row)) is not None),
-        anchor,
-    )
-
-
-def _return_stats(rows: list[dict[str, str]]) -> tuple[float | None, float | None, float | None]:
-    return return_stats((str(row.get("time", "")), _number(row.get("close"))) for row in rows)
+    dates = []
+    for row in history_rows:
+        try:
+            dates.append(datetime.strptime(str(row.get("time", "")), "%Y%m%d").date())
+        except ValueError:
+            continue
+    if not dates:
+        raise ValueError("iFinD returned no dated daily price history")
+    return max(dates)
 
 
 def _source(
@@ -501,74 +504,49 @@ def canonicalize_ifind_results(
         raise ValueError("iFinD returned no daily price history")
     history_rows = sorted(history_rows, key=lambda row: str(row.get("time", "")))
     quote_at = _quote_timestamp(history_rows, retrieved_at)
-    latest_price = _number(history_rows[-1].get("close"))
-    total_shares = _number(info.get("ths_total_shares_stock"))
-    market_cap = (
-        latest_price * total_shares
-        if latest_price is not None and total_shares is not None
-        else None
-    )
-    one_year_rows = _trim_to_one_year(history_rows, as_of)
-    return_1y, volatility_1y, max_drawdown_1y = _return_stats(one_year_rows)
-    one_year_sessions = sum(
-        1
-        for row in one_year_rows
-        if (close := _number(row.get("close"))) is not None and close > 0
-    )
-    short_history = return_1y is not None and one_year_sessions < MIN_ONE_YEAR_SESSIONS
+    # Required endpoints of the latest fiscal year: fail hard when empty.
+    _first_row(results[f"profitability_{report_year}"], "profitability")
+    _first_row(results["income_latest"], "latest income statement")
+    _first_row(results["cash_latest"], "cash flow statement")
+    _first_row(results["capital_latest"], "capital structure")
 
-    profitability = _first_row(results[f"profitability_{report_year}"], "profitability")
-    eps = _number(profitability.get("ths_eps_basic_stock"))
-    book_value_per_share = _number(profitability.get("ths_nav_ps_stock"))
-    revenue_per_share = _number(profitability.get("ths_revenue_ps_stock"))
+    # Every derived metric comes from the factor library over an observation
+    # view of these rows (P1-B4; one definition per metric, decision D3).
+    view = ifind_research_view(
+        ticker=ticker,
+        as_of=as_of or _latest_session(history_rows),
+        report_year=report_year,
+        rows={name: result.rows for name, result in results.items()},
+    )
+    factors = {
+        name: DEFAULT_REGISTRY.get(name).compute(view, enforce_applicability=False)
+        for name in _OBSERVATION_FACTORS.values()
+    }
+
+    def factor(field: str) -> float | None:
+        return factors[_OBSERVATION_FACTORS[field]].value
+
+    latest_bar = view.latest_raw_bar()
+    latest_price = latest_bar.close if latest_bar is not None else None
+    latest = view.latest_annual()
+    assert latest is not None  # profitability_<report_year> is required above
+    market_cap = factor("market_cap")
+    returns = factors["return_1y"]
+    one_year_sessions = int(returns.inputs_ref.get("sessions", 0))
+    short_history = returns.value is not None and FLAG_SHORT_HISTORY in returns.flags
+
     # Valuation multiples are only meaningful over a positive denominator: a
     # loss-making year (EPS <= 0), negative book value or non-positive revenue
     # per share yields ``None`` plus a visible quality flag, never a negative
     # multiple that downstream thresholds would read as "cheap".
     not_meaningful: dict[str, tuple[str, str]] = {}
-    pe = _positive_multiple(latest_price, eps)
-    if eps is not None and eps <= 0:
-        not_meaningful["pe"] = (
-            "negative_earnings",
-            f"PE not meaningful: FY{report_year} basic EPS {eps:g} <= 0 (loss-making)",
-        )
-    pb = _positive_multiple(latest_price, book_value_per_share)
-    if book_value_per_share is not None and book_value_per_share <= 0:
-        not_meaningful["pb"] = (
-            "negative_book_value",
-            f"PB not meaningful: FY{report_year} net assets per share "
-            f"{book_value_per_share:g} <= 0",
-        )
-    ps = _positive_multiple(latest_price, revenue_per_share)
-    if revenue_per_share is not None and revenue_per_share <= 0:
-        not_meaningful["ps"] = (
-            "non_positive_revenue",
-            f"PS not meaningful: FY{report_year} revenue per share {revenue_per_share:g} <= 0",
-        )
-
-    income_latest = _first_row(results["income_latest"], "latest income statement")
-    income_base = _optional_first_row(results.get("income_base")) or {}
-    cash_latest = _first_row(results["cash_latest"], "cash flow statement")
-    capital_latest = _first_row(results["capital_latest"], "capital structure")
-    revenue = _number(income_latest.get("ths_operating_total_revenue_stock"))
-    base_revenue = _number(income_base.get("ths_operating_total_revenue_stock"))
-    net_profit = _number(income_latest.get("ths_np_atoopc_stock"))
-    base_net_profit = _number(income_base.get("ths_np_atoopc_stock"))
-    operating_cash_flow = _number(cash_latest.get("ths_ncf_from_oa_stock"))
-    capital_expenditure = _number(cash_latest.get("ths_cash_paid_for_assets_stock"))
-    free_cash_flow = (
-        operating_cash_flow - capital_expenditure
-        if operating_cash_flow is not None and capital_expenditure is not None
-        else None
-    )
-    roe_values: list[float | None] = []
-    for year in range(report_year - 3, report_year + 1):
-        if year == report_year:
-            row: dict[str, str] | None = profitability
-        else:
-            row = _optional_first_row(results.get(f"profitability_{year}"))
-        roe_values.append(None if row is None else _fraction(row.get("ths_roe_stock")))
-    roe_stability = _roe_stability(roe_values)
+    for field, per_share_field, flag, template in _NOT_MEANINGFUL_MULTIPLES:
+        per_share = latest.value(per_share_field)
+        if flag in factors[_OBSERVATION_FACTORS[field]].flags and per_share is not None:
+            not_meaningful[field] = (
+                flag,
+                template.format(year=report_year, value=f"{per_share:g}"),
+            )
 
     stock_fields = ("symbol", "name", "market", "industry", "market_cap")
     stock_item = _with_quality(
@@ -618,13 +596,13 @@ def canonicalize_ifind_results(
         {
             "symbol": symbol,
             "latest_price": latest_price,
-            "pe": None if pe is None else round(pe, 4),
-            "pb": None if pb is None else round(pb, 4),
-            "ps": None if ps is None else round(ps, 4),
+            "pe": factor("pe"),
+            "pb": factor("pb"),
+            "ps": factor("ps"),
             "dividend_yield": None,
-            "return_1y": return_1y,
-            "volatility_1y": volatility_1y,
-            "max_drawdown_1y": max_drawdown_1y,
+            "return_1y": factor("return_1y"),
+            "volatility_1y": factor("volatility_1y"),
+            "max_drawdown_1y": factor("max_drawdown_1y"),
             "market_cap": market_cap,
             "source": "ifind-proxy:history+financial-index",
             "updated_at": quote_at,
@@ -726,17 +704,17 @@ def canonicalize_ifind_results(
     financial_item = _with_quality(
         {
             "symbol": symbol,
-            "revenue": revenue,
-            "net_profit": net_profit,
-            "gross_margin": _fraction(profitability.get("ths_gross_selling_rate_stock")),
-            "net_margin": _fraction(profitability.get("ths_net_sales_rate_stock")),
-            "roe": _fraction(profitability.get("ths_roe_stock")),
-            "roe_stability": roe_stability,
-            "debt_ratio": _fraction(capital_latest.get("ths_asset_liab_ratio_stock")),
-            "operating_cash_flow": operating_cash_flow,
-            "free_cash_flow": free_cash_flow,
-            "revenue_growth_3y": _annualized_growth(revenue, base_revenue, 3),
-            "net_profit_growth_3y": _annualized_growth(net_profit, base_net_profit, 3),
+            "revenue": latest.value("revenue_total"),
+            "net_profit": latest.value("net_profit_parent"),
+            "gross_margin": factor("gross_margin"),
+            "net_margin": factor("net_margin"),
+            "roe": factor("roe"),
+            "roe_stability": factor("roe_stability"),
+            "debt_ratio": factor("debt_ratio"),
+            "operating_cash_flow": latest.value("operating_cash_flow"),
+            "free_cash_flow": factor("free_cash_flow"),
+            "revenue_growth_3y": factor("revenue_growth_3y"),
+            "net_profit_growth_3y": factor("net_profit_growth_3y"),
             "source": "ifind-proxy:financial-statements+financial-index",
             "updated_at": retrieved_at,
             "field_sources": {

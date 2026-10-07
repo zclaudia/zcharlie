@@ -1,9 +1,11 @@
 """Pure metric functions shared by every provider path (single definition).
 
-These are the only implementations of the derived metrics used both by the
-iFinD canonicalization (:mod:`investment_agent.research.ifind_chain`) and by
-the factor library; neither side keeps a copy. Behaviour is frozen by the
-golden corpus (decision D3): changing a formula here changes observation
+These are the only implementations of the derived metrics; the factor
+library (:mod:`investment_agent.factors.library`) calls them, and every
+research source mode reads canonical metrics from factor values (P1-B4: the
+iFinD canonicalization in :mod:`investment_agent.research.ifind_chain` builds
+an observation view, snapshot mode a target-pool view). Behaviour is frozen by
+the golden corpus (decision D3): changing a formula here changes observation
 scores and needs a scoring version bump.
 """
 
