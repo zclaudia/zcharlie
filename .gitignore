@@ -39,3 +39,6 @@ docs/superpowers/
 
 # Claude Code local worktrees
 .claude/worktrees/
+
+# Local dev app data copy (tools/dev.sh)
+.dev/
