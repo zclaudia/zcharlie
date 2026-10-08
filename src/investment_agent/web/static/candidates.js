@@ -3,7 +3,7 @@
 // 不展示 0～100 综合分或强度值；排序只用筛选名次与开启时间。
 // 所有 DOM 经 dom.js 构造（textContent / setAttribute），不写 HTML 字符串。
 
-import { ApiError, get, patch, post, renderRegion } from "./api.js";
+import { ApiError, get, lockWhileBusy, patch, post, renderRegion } from "./api.js";
 import { clear, el, fmt, stockLink } from "./dom.js";
 import {
   CALIBRATION_LABELS,
@@ -293,6 +293,70 @@ async function loadCandidateList(region) {
     if (redirectOn401(error)) return;
     renderError(region, error.message, () => loadCandidateList(region));
   }
+}
+
+// ---- 手动提名 ---------------------------------------------------------
+
+// "600900" -> "600900.SH"：6 开头沪市，0/3 深市，4/8/9 北交所；已带后缀的只转大写。
+export function normalizeTicker(raw) {
+  const text = String(raw || "").trim().toUpperCase();
+  if (/^\d{6}\.(SH|SZ|BJ)$/.test(text)) return text;
+  if (!/^\d{6}$/.test(text)) return null;
+  const exchange = { 6: "SH", 0: "SZ", 3: "SZ", 4: "BJ", 8: "BJ", 9: "BJ" }[text[0]];
+  return exchange ? `${text}.${exchange}` : null;
+}
+
+function nominateNotice(region, content, level = "") {
+  if (!region) return;
+  const node = typeof content === "string" ? el("p", { class: `notice ${level}`.trim() }, content) : content;
+  renderRegion(region, "ready", node);
+}
+
+function wireNominateForm(form, list) {
+  const select = form.querySelector('select[name="template_id"]');
+  if (select) {
+    for (const [id, name] of Object.entries(TEMPLATE_LABELS)) {
+      select.appendChild(el("option", { value: id }, name));
+    }
+  }
+  const result = section("candidate-nominate-result");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const ticker = normalizeTicker(data.get("ticker"));
+    if (!ticker) {
+      nominateNotice(result, "代码格式不对：填 6 位代码，或带 .SH / .SZ / .BJ 后缀。", "notice-error");
+      return;
+    }
+    const note = String(data.get("note") || "").trim();
+    const payload = { ticker, template_id: String(data.get("template_id") || "") || null };
+    if (note) payload.note = note;
+    const submit = form.querySelector('button[type="submit"]');
+    const promise = post("/candidates", payload, { idempotency: false })
+      .then((body) => {
+        form.reset();
+        const candidate = body.candidate;
+        const box = el("p", { class: "notice" });
+        box.appendChild(
+          document.createTextNode(
+            `${body.created ? "已提名" : "已有待处理候选，已追加手动来源："}${candidate.ticker} ${candidate.name || ""}`.trim()
+          )
+        );
+        box.appendChild(document.createTextNode(body.draft_run_id ? "，规则草稿起草中。 " : "。 "));
+        box.appendChild(el("a", { href: `/app/candidates/${encodeURIComponent(candidate.id)}` }, "查看候选"));
+        nominateNotice(result, box);
+        const statusFilter = section("candidates-status-filter");
+        if (statusFilter) statusFilter.value = "open";
+        if (list) loadCandidateList(list);
+      })
+      .catch((error) => {
+        if (redirectOn401(error)) return;
+        const conflict = error instanceof ApiError && error.status === 409;
+        nominateNotice(result, conflict ? `提名失败：${ticker} 已在自选股中，无需再提名。` : `提名失败：${error.message}`, "notice-error");
+      });
+    if (submit) lockWhileBusy(submit, promise);
+    await promise;
+  });
 }
 
 // ---- 候选详情 ---------------------------------------------------------
@@ -1282,5 +1346,7 @@ export function bootCandidates() {
     const templateFilter = section("candidates-template-filter");
     if (templateFilter) templateFilter.addEventListener("change", () => renderCandidateList(list));
   }
+  const nominateForm = section("candidate-nominate-form");
+  if (nominateForm) wireNominateForm(nominateForm, list);
   if (section("candidate-detail")) loadCandidateDetail();
 }

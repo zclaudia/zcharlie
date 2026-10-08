@@ -65,6 +65,8 @@ def test_candidates_list_shell(api_client) -> None:
         'data-endpoint="/candidates"',
         'id="candidates-status-filter"',
         'id="candidates-template-filter"',
+        'id="candidate-nominate-form"',
+        'name="template_id"',
         'aria-current="page"',
         "未校准",
         'data-state="loading"',
@@ -169,6 +171,24 @@ def test_modules_link_without_a_dom() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_nominate_form_normalizes_tickers() -> None:
+    node = _node()
+    uri = (STATIC / "candidates.js").resolve().as_uri()
+    script = (
+        f"const m = await import({json.dumps(uri)});\n"
+        "console.log(JSON.stringify(['600900', '000001', '300750', ' 830799 ', '600900.sh',"
+        " '600900.SH', '600900.HK', '12345', '700000', ''].map(m.normalizeTicker)));"
+    )
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == [
+        "600900.SH", "000001.SZ", "300750.SZ", "830799.BJ", "600900.SH",
+        "600900.SH", None, None, None, None,
+    ]
 
 
 # ---- formatter -------------------------------------------------------------
