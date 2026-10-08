@@ -62,3 +62,81 @@
 
 - 本机某交易日 15:10 后：`ia snapshot collect-close-quote --now` → 目标池约 300 只入库；`ia snapshot status` 可见 tencent 行；18:30 baostock 到达后 `series_as_of` 返回 baostock 版本；健康页显示两源日期。
 - 门禁三条通过；写"完成记录"。
+
+## 完成记录（2026-10-09）
+
+| Task | 提交 | 说明 |
+|---|---|---|
+| 1 腾讯报价客户端 | `ba5554b` feat(providers): Tencent batch close-quote client with PIT guards | `providers/tencent_quote.py`（源链与口径块、字段位、`to_tencent_code` / `from_tencent_code`、`closed_quote`、`TencentQuoteClient`），fixture `tests/fixtures/tencent/quotes_sample.txt`（真实响应）+ `quotes_edge_cases.txt`（构造），`tests/unit/test_tencent_quote.py` 16 例 |
+| 2 收盘快照任务 | `b2ee203` feat(snapshots): close_quote job writes Tencent same-day close with baostock-first read precedence | kind `close_quote` + `CloseQuotePayload(slot)`、`snapshots/close_quote.py`、handler / 调度 / 四处 cron 镜像、读取优先级、因子层 conflict、健康页两源日期、`ia snapshot collect-close-quote`、`tests/unit/test_close_quote_job.py` 14 例 |
+
+门禁：`ruff check .`、`mypy src`、`pytest -q -m "not network"` 全部通过；最终 **1394 passed, 6 deselected**（起点 1364，Task 1 后 1380）。`node --check health.js` 通过。
+
+### fixture
+
+- `quotes_sample.txt`：2026-10-09 06:46 CST 用计划给出的 curl 命令实取（`sh600519,sz000001,bj920748,sz000002`，
+  GBK → UTF-8 落盘），内容为 2026-10-08 收盘（600519 收 1255.79 / 开 1252.90 / 高 1258.00 / 低 1242.00 /
+  量 25168 手 / 额 314541 万元 / 换手 0.20% / PE 19.28，字段 30 = `20261008161457`）。字段 4 昨收 1258.62
+  等于 `field_sources.yaml` 已记录的 baostock 2026-09-30 收盘，作为价格口径的交叉校验。
+- 当天无停牌 / ST 样本，`quotes_edge_cases.txt` 由真实行**构造**：停牌（现价 0、量 0）、`*ST`、未收盘（14:35）
+  各一；测试不触网（respx）。
+
+### 与计划的偏差
+
+1. **分批与熔断的分工**。`fetch_close` 仍按 60 码切请求（61 只 → 2 次，respx 断言），但采集器自己按
+   `client.chunk_size` 分块逐次调用，使失败按请求隔离；任务级 `QuoteBreaker`（连续 3 次瞬态失败）按 01 的语义
+   `open_now("tencent")` 打开整个 provider，客户端 `record_failure` 只升级已打开的熔断器。全部请求失败且零入库
+   时 run 为 `failed`（与 baostock 采集器一致，worker 重试时撞上打开的熔断器即 `partial`）。
+2. **补采时段用独立 run**：同一幂等键只会返回 15:10 已完成的 run，因此 `CloseQuotePayload.slot="retry"` 使键带
+   `:retry` 后缀；调度任务 `close_quote` / `close_quote_retry` 各自入队，已有 baostock 或 tencent 当日行的标的跳过
+   （`baostock_present` / `already_present` 计入 collected）。
+3. **范围**：`close_quote_scope` = `scope_members`（目标池）∪ 启用的观察池 ∪ `status=open` 候选 ∪ `holding_item`，
+   去重；`scope="watchlist"` 只取用户池；用户池可为空，目标池为空仍抛 `SnapshotPreconditionError`。
+   `snapshots/scope.py` 仅放宽了 `scope_members` 的类型注解。
+4. **读取优先级**：`series_as_of(provider=None)` 改为按 `MARKET_PROVIDER_PRECEDENCE=("baostock","tencent")`
+   逐交易日取第一个存在的来源（未列出的 provider 排最后），`provider=` 也接受序列（限定来源 + 顺序）；新增
+   `series_by_provider` 返回每日每来源的最新版本。原先 `provider=None` = 任意来源取最大 version 的语义已被替换。
+5. **conflict 的落点**：因子视图（`TARGET_POOL`）改用 `market_precedence(registry)`（`close` 条目的
+   primary + fallback）读不复权序列，`resolve_market_bars` 把同日其它来源 `close` 差超 `tolerance`（0.001）记到
+   `Bar.conflicts`，`_bar_ref` 把 `provider` 与 `verification="conflict"` / `conflicts` 写进因子 `inputs_ref["market"]`
+   —— 复用的是 `FieldResolution` 的 conflict 结构，不是 run 元数据里的 `provider_conflict`，因此健康页「来源冲突」
+   区块暂不显示日线冲突（见后续）。`OBSERVATION` 仍只读 iFinD。
+6. **03 留下的 `BARS_PROVIDER`** 已切到优先级读取（`/market/{ticker}/bars` 的 `provider` 字段为
+   `"baostock,tencent"`），测试同步改为"同日 baostock 优先、仅有腾讯时补当日"。
+7. **`settings/loader.py` 未改**：`app_config_from` 整段传递 `schedule.snapshot`，`yaml_import_values` 按 SPECS 枚举，
+   新键自动镜像（`test_settings_registry` / `test_settings_store` 通过）。
+8. **字段取舍**：`amount` 按计划取字段 37（万元 ×1e4；字段 35 另有精确到元的成交额，未采用）；`pe_ttm` 写字段 39，
+   但登记表 `pe_ttm` 条目仍只有 baostock（未与 baostock peTTM 对照，不敢写 calibration）；字段 46 实测为 PB
+   （600519 6.25、000001 0.49）但按计划留空。停牌判定先看日期（早于 trade_date → `pending`），再看现价 0 且量 0 →
+   `trade_status=0`、OHLC = 昨收；`is_st` 取名称 `ST` / `*ST` 前缀；报价日期晚于 trade_date 但不晚于采集日 →
+   `no_data`（接口只提供最近一个交易日）。
+9. **登记表** `version` 升到 `2026-10-09.2`；新增 `open` / `high` / `low` / `volume` / `amount`，`close` / `turnover`
+   加 `fallback: [tencent]`、`tolerance: 0.001`，tencent 条目均带 `calibration`（2026-10-09 实取）。
+
+### 计划清单之外触碰的文件
+
+`snapshots/scope.py`（注解）、`factors/library.py`（`_bar_ref`）、`snapshots/notifications.py`（kind 标签 +
+完整度告警纳入 `close_quote`）、`web/static/health.js`（`KIND_LABELS` 加 `close_quote`，新鲜度区块加「收盘快照」行；
+守卫测试 `test_health_labels_cover_api_enums` 要求与 `COLLECTION_KINDS` 一致）、`tests/unit/_snapshot_support.py`
+（`runtime_for(close_quote=)`）、既有测试 `test_api_market_bars` / `test_cli_snapshot` / `test_field_sources` /
+`test_job_dispatch` / `test_settings_store` / `test_snapshot_schedule`、`tests/fixtures/tencent/quotes_edge_cases.txt`。
+
+### 本机验收
+
+- **未**对真实 `data/app.db` 执行任何命令。2026-10-09 07:14 CST（休市、开盘前，接口提供的是已结束的 2026-10-08
+  交易日）在 scratchpad 的临时 SQLite（`create_all` + 手工种 4 只 CSI300 成分 + 1 只观察池北交所股）上实网跑
+  `ia snapshot collect-close-quote --date 2026-10-08 --now`：run #1 success 5/5，5 行 `provider=tencent`
+  （600519 收 1255.79 / 量 2516800 / 额 3145410000 / 换手 0.002 / PE 19.28，920748 额 138670100），`provider_call`
+  一行 `tencent q ok ticker_count=5 run_id=1`，artifact `close-quote-2026-10-08-000.json`；`--retry --now` → run #2
+  success，无上游请求（全部 `already_present`）；`ia snapshot status` 显示 tencent 行。
+- 未做：15:10 对约 300 只目标池的实跑（需先 `universe_sync`）、浏览器查看健康页（只 `node --check` + 标签守卫测试）、
+  18:30 baostock 到达后的实时切换（离线由 `test_series_as_of_prefers_baostock_per_trade_date` /
+  `test_factor_view_marks_same_day_close_conflicts` 覆盖）。
+
+### 后续
+
+- 健康页「来源冲突」区块显示日线 `close` 冲突（目前只在因子 `inputs_ref` 中）。
+- 某交易日 18:30 后用 baostock 当日行校准腾讯字段 39（PE）与 46（PB），再给登记表 `pe_ttm` / `pb_mrq` 加 tencent 兜底。
+- `amount` 可改取字段 35 的精确元值（小盘股按万元取整时相对误差可接近 0.1%）。
+- `test_research_worker_robustness::test_worker_heartbeats_while_runner_executes` 在一次全量跑中超时失败（计时类，
+  单独与再次全量均通过），与本计划无关。
