@@ -8,9 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 COPY src/ src/
 # Editable install on purpose: the runtime image ships the same /app/src tree
-# (web templates/static are resolved relative to the source checkout and are
-# not declared as package data), so the code lives in the
-# image and compose no longer bind-mounts src/.
+# (web templates/static are resolved relative to the installed module), so
+# the code lives in the image and compose no longer bind-mounts src/.
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .
 

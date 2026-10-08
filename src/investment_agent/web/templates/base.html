@@ -5,11 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ page_title or "个人投资研究台" }}{% endblock %} · zcharlie</title>
+  <link rel="icon" type="image/png" sizes="16x16" href="/app/static/brand/icon-16.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/app/static/brand/icon-32.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/app/static/brand/icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/app/static/brand/icon-180.png">
   <link rel="stylesheet" href="/app/static/app.css">
 </head>
 <body>
   <header class="app-header">
-    <a class="brand" href="/app">zcharlie 研究台</a>
+    <a class="brand" href="/app">
+      <img class="brand-icon" src="/app/static/brand/icon-64.png" width="40" height="40" alt="">
+      <span>zcharlie 研究台</span>
+    </a>
     <nav class="app-nav" aria-label="主导航">
       <a href="/app" {% if active_nav == "overview" %}class="active" aria-current="page"{% endif %}>今日概览</a>
       <a href="/app/candidates" {% if active_nav == "candidates" %}class="active" aria-current="page"{% endif %}>候选</a>

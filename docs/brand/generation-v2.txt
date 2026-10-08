@@ -1,0 +1,28 @@
+zcharlie logo / icon v2
+Generation mode: built-in image_gen tool (imagegen skill).
+Concept: An open C research window containing three bold stock candlesticks, making the equity investing attribute immediately visible.
+Palette target: research blue #2357D9 from the existing app.css.
+Assets: zcharlie-logo-v2.png (transparent); zcharlie-icon-v2.png (blue square, white mark).
+Raster design masters. Prior version retained. No application UI changes.
+
+Final logo prompt:
+Use case: logo-brand
+Asset type: new primary logo symbol for zcharlie, a personal A-share equity investment research desk, also used as an application icon.
+Primary request: Design a distinctive financial-investment logo whose equity research purpose is immediately visible. The prior abstract letter-only logo felt like a generic software tool. This redesign must integrate stock-market candlesticks and a price-movement motif into a cohesive compact geometric mark, with a subtle Z identity. Prioritize clear investment meaning over forcing the letter.
+Subject: A restrained architectural open C-shaped observation frame containing exactly three bold simplified candlesticks with substantial rectangular bodies and short substantial wicks, their bodies arranged as a rising but slightly varied market sequence. The geometry of a strong angular price-path / Z-like diagonal is subtly suggested by the negative space between the candles, rather than adding a separate line floating over them. The frame has open right edges with precise angled cuts. A coherent well-balanced single brand symbol, not a chart screenshot.
+Color palette: existing product research blue #2357D9, one solid flat color only.
+Scene/backdrop: actual transparent background.
+Composition/framing: square, centered symbol occupying 66% of width and height, equal margins. Generous open negative space inside, all three candles clearly distinguishable at small sizes. Sophisticated original financial research identity.
+Style/medium: pristine vector-like flat geometry, professional boutique investment research brand, minimal and bold, restrained corner rounding, no texture.
+Text: none, symbol only.
+Constraints: Clearly recognizable as equity investing at first glance, bold simple silhouette for 32px app use. No money symbols, coins, rockets, bulls, robots, shields, tiny details, grids, axes, numbers, captions, labels, wordmarks, presentation sheet, mockups, shadows, gradients, 3D, watermark. One final logo only.
+
+Final application icon prompt:
+Use case: logo-brand.
+Asset type: zcharlie square app icon, version 2, equity investment research.
+Input image: the attached transparent blue logo is the exact silhouette reference.
+Primary request: Produce the matching app icon by rendering this exact open angular C-shaped frame containing exactly three bold ascending stock candlesticks in pure white on a solid full-bleed research-blue #2357D9 square. Preserve the three candlestick positions, their simple rectangular bodies and short wicks, C-frame proportions and beveled corners, generous clear gaps, and precise angled open right tips. Do not redesign the mark.
+Composition: optically centered symbol at about 63% of canvas width and height, equal generous margins, square 1:1.
+Style: flat pristine vector-like financial brand icon, sharply defined uniform fills and perfectly clean edges.
+Constraints: blue reaches all four edges with no rounded outer mask. No shadows, textures, gradients, lighting, extra lines, words, numbers, grid, mockup, decoration, watermark or 3D. One icon only.
+

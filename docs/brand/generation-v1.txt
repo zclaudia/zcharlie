@@ -1,0 +1,27 @@
+zcharlie logo / icon v1
+Generation mode: built-in image_gen tool (imagegen skill).
+Concept: Z + C / observation window. Research blue drawn from app.css (#2357D9).
+Assets: zcharlie-logo-v1.png (transparent); zcharlie-icon-v1.png (blue square, white mark).
+Raster design masters. No application UI changes.
+
+Initial design prompt:
+Use case: logo-brand
+Asset type: primary standalone logo symbol for zcharlie, a personal equity research desk, also intended for a small app icon.
+Primary request: Design one distinctive, exceptionally polished geometric logo mark combining a bold uppercase Z with an open observation-window / subtle C-shaped frame. Project values: evidence, patient observation, clarity, reproducibility. Existing product primary color is research blue #2357D9.
+Subject: A single compact coherent monogram, the Z clearly readable, the C / window implied by negative space or an open framing form. Choose very simple well-balanced geometry, broad solid strokes, crisp deliberate cuts, strong silhouette. The frame must feel part of the mark rather than a second emblem. A memorable original design with restrained architectural precision.
+Style/medium: Flat vector-like brand design, solid blue #2357D9 only, sharp professional edges and a few carefully chosen subtle rounded corners.
+Composition/framing: Square canvas, one centered symbol occupying about 68% of the width, generous equal transparent clear space, optically centered. No presentation sheet.
+Scene/backdrop: genuinely transparent background.
+Text: none. Symbol only.
+Constraints: immediately recognizable at 24 and 32 pixels; no thin strokes, no small decorative details. No stock charts, candlesticks, upward arrows, coins, robots, sparkles, gradients, shadows, 3D, mockups, captions, watermark, borders around canvas. Do not add a wordmark. Deliver a production-ready clean logo mark with actual alpha transparency.
+
+Final logo refinement prompt:
+Use case: logo-brand. Edit the attached zcharlie logo symbol. Preserve the exact visual idea, blue color, C-shaped observation frame wrapping a bold Z, overall square geometry and distinctive angled tips. Refine this into pristine professional flat logo artwork. Main correction: the gap between the bottom horizontal stroke of the Z and the bottom horizontal stroke of the surrounding C must be generously widened to match the clear gap above the Z, at least 65 pixels in this approximately 1254px composition, so the two do not touch or create ragged fragments at small sizes. Keep all edges perfectly smooth and intentional, all fills a uniform solid research blue #2357D9, no texture, no shadows, no gradient, no scattered semi-transparent debris. Optical centering with about 18% equal margins all around. Deliver just one clean symbol with a genuinely transparent background, no text.
+
+Final application icon prompt:
+Use case: logo-brand
+Asset type: square application icon master for zcharlie.
+Input image: the attached blue C-and-Z monogram is the approved design reference. Preserve its exact silhouette, distinctive C-shaped frame, inner bold Z, angled right tips, rounded left corners, and clear gaps above and below the Z.
+Primary request: Create its corresponding polished app icon. Render the same symbol in pure white centered on a full-bleed solid research-blue #2357D9 square background. The white symbol must have perfectly smooth clean edges and uniform solid fill, no debris or texture. Keep the generous gaps between Z and C clean and symmetrical so the glyph reads at small sizes. Mark occupies about 62% of canvas width and height, with visually equal clear margins.
+Constraints: square 1:1 composition. Blue background reaches all four canvas edges; no rounded outer mask because the platform will mask the icon itself. Pure flat colors. No gradients, shadows, shine, 3D, lettering, wordmark, borders, presentation mockups or extra symbols. One final icon only.
+

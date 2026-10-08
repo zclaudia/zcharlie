@@ -1,3 +1,5 @@
+<img src="src/investment_agent/web/static/brand/icon-180.png" alt="zcharlie Logo" width="96" height="96">
+
 # zcharlie — 个人 A 股研究台
 
 单用户、研究辅助型的个人投资研究系统：持续收集自选 A 股的证据、计算可复现的
