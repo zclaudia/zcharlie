@@ -57,6 +57,30 @@ def test_backup_skips_symlinks_and_is_private(tmp_path):
     assert verified.returncode == 0, verified.stderr
 
 
+def test_backup_reads_database_outside_data_dir(tmp_path):
+    data_dir = tmp_path / "data"
+    (data_dir / "research-runs" / "1").mkdir(parents=True)
+    (data_dir / "research-runs" / "1" / "scores.json").write_text("{}")
+    db = tmp_path / "volume" / "app.db"
+    db.parent.mkdir()
+    with sqlite3.connect(db) as conn:
+        conn.execute("create table marker (v text)")
+        conn.execute("insert into marker values ('from-volume')")
+    output = tmp_path / "backup"
+
+    result = _run(
+        BACKUP, "--data-dir", str(data_dir), "--db", str(db), "--output", str(output)
+    )
+
+    assert result.returncode == 0, result.stderr
+    with sqlite3.connect(output / "app.db") as conn:
+        assert conn.execute("select v from marker").fetchone() == ("from-volume",)
+    assert (output / "research-runs" / "1" / "scores.json").is_file()
+    manifest = json.loads((output / "manifest.json").read_text())
+    assert manifest["source_db"] == str(db.resolve())
+    assert _run(VERIFY, "--backup-dir", str(output)).returncode == 0
+
+
 def test_verify_rejects_paths_outside_backup_dir(tmp_path):
     backup_dir = tmp_path / "backup"
     backup_dir.mkdir()

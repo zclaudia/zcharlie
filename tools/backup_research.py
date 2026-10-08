@@ -4,6 +4,9 @@ Usage::
 
     .venv/bin/python tools/backup_research.py --data-dir ./data --output ~/backups/2026-10-06
 
+``--db`` points at a database kept outside ``DATA_DIR`` (e.g. the Docker
+named volume ``/app/db/app.db``); it defaults to ``<data-dir>/app.db``.
+
 Produces ``<output>/app.db`` (consistent SQLite backup), copies
 ``research-runs/`` and ``notifications/`` next to it, and writes a
 ``manifest.json`` recording every file's size and SHA-256 for offline
@@ -60,12 +63,13 @@ def _ignore_symlinks(directory: str, names: list[str]) -> set[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, default=Path("./data"))
+    parser.add_argument("--db", type=Path, default=None)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     data_dir = args.data_dir.resolve()
     output = args.output.resolve()
-    db_source = data_dir / "app.db"
+    db_source = args.db.resolve() if args.db is not None else data_dir / "app.db"
     if not db_source.is_file():
         print(f"database not found: {db_source}", file=sys.stderr)
         return 2
@@ -105,6 +109,7 @@ def main() -> int:
         "schema": "zcharlie-backup-manifest.v1",
         "created_at_iso": datetime.now().isoformat(),
         "source_data_dir": str(data_dir),
+        "source_db": str(db_source),
         "files": entries,
     }
     (output / "manifest.json").write_text(

@@ -36,6 +36,25 @@ docker compose stop          # Compose 部署
 说明：SQLite 的在线备份 API 本身可产出一致快照，但制品目录按文件复制，
 因此先停止写入才能保证"数据库引用的制品 == 备份里的制品"。
 
+### 数据库在 Docker 卷中（macOS + colima 推荐）
+
+Docker 部署在 macOS（colima / Docker Desktop）上时，`./data` 经 virtiofs 挂载，
+宿主机进程看不到虚拟机内的 SQLite 文件锁：宿主机上的 `sqlite3` 或本机 `ia`
+可能把自己当作最后一个 WAL 连接，删除容器正在使用的 `-wal`/`-shm`，之后所有查询报
+`disk I/O error`。因此建议把数据库放进具名卷（如挂到 `/app/db`，并设
+`DATABASE_URL=sqlite+aiosqlite:////app/db/app.db`），制品与通知仍留在 `./data`。
+此时查询与备份都在容器内进行，`--db` 指定数据库位置：
+
+```bash
+docker compose exec -T api sqlite3 /app/db/app.db
+
+docker compose stop
+docker compose run --rm --no-deps -v ./tools:/app/tools:ro -v ~/backups:/backups api \
+  python tools/backup_research.py --data-dir /app/data --db /app/db/app.db \
+  --output /backups/$(date +%F)
+docker compose start
+```
+
 ## 3. 恢复步骤
 
 ```bash
