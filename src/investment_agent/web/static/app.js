@@ -13,6 +13,7 @@ import {
 } from "./api.js";
 import { CANDIDATE_REGIONS, bootCandidates, candidatesBucket } from "./candidates.js";
 import { HEALTH_REGIONS, bootHealth, healthBucket } from "./health.js";
+import { SETTINGS_REGIONS, bootSettings } from "./settings.js";
 import { el, errorText, fmt, fmtNumber, kvTable, statusBadge, stockLink, table } from "./dom.js";
 import {
   FRESHNESS_LABELS,
@@ -992,7 +993,7 @@ function wireStockRunForm(form) {
 function boot() {
   for (const region of document.querySelectorAll(".data-region[data-endpoint]")) {
     const id = region.id;
-    if (CANDIDATE_REGIONS.has(id) || HEALTH_REGIONS.has(id)) continue;
+    if (CANDIDATE_REGIONS.has(id) || HEALTH_REGIONS.has(id) || SETTINGS_REGIONS.has(id)) continue;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
     else if (id === "watchlist-list") loadRegion(region, { render: loadWatchlist });
     else if (id === "runs-list") loadRunsPage(region, 0);
@@ -1018,6 +1019,7 @@ function boot() {
 
   bootCandidates();
   bootHealth();
+  bootSettings();
 }
 
 if (document.readyState === "loading") {

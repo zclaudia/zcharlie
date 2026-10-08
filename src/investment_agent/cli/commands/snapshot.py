@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import socket
+from collections.abc import Awaitable, Callable
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,8 +16,9 @@ from rich import print as rprint
 from rich.table import Table
 
 from investment_agent.clock import shanghai_today
-from investment_agent.config import Settings, SnapshotScheduleConfig, load_app_yaml
+from investment_agent.config import Settings
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
+from investment_agent.settings.loader import load_runtime, load_settings
 from investment_agent.snapshots.jobs import (
     AKSHARE_FINANCIAL_PARTS,
     INDUSTRY_SYSTEMS,
@@ -37,7 +39,7 @@ from investment_agent.snapshots.jobs import (
     UniverseSyncPayload,
     enqueue_snapshot_job,
 )
-from investment_agent.storage.database import run_with_engine
+from investment_agent.storage.database import run_with_engine, session_scope
 
 if TYPE_CHECKING:
     from investment_agent.snapshots.backfill import (
@@ -61,7 +63,10 @@ _SCOPE_HELP = (
     "universe (members of --universe) or watchlist (enabled watchlist items); "
     "default: universe for baostock, watchlist for ifind"
 )
-_CONFIG_HELP = "App config providing snapshot.universes (the target pool)"
+_CONFIG_HELP = (
+    "App config; its snapshot.universes is the target pool only until the settings "
+    "import ran (afterwards: the schedule.snapshot.universes setting)"
+)
 
 
 def _date(value: str | None, name: str) -> date:
@@ -129,18 +134,32 @@ def _systems(values: list[str] | None) -> tuple[IndustrySystem, ...]:
     return tuple(item for item in INDUSTRY_SYSTEMS if item in chosen)
 
 
-def target_pool_universes(config_path: Path) -> tuple[IndexCode, ...]:
-    """``snapshot.universes`` from the app config (scheduler's target pool)."""
+async def target_pool_universes(settings: Settings, config_path: Path) -> tuple[IndexCode, ...]:
+    """The scheduler's target pool: the ``schedule.snapshot.universes`` setting
+    (``snapshot.universes`` of ``config_path`` before the settings import)."""
 
-    snapshot = load_app_yaml(config_path).snapshot or SnapshotScheduleConfig()
-    return tuple(sorted({_universe(code) for code in snapshot.universes}))
+    async with session_scope() as session:
+        runtime = await load_runtime(session, settings, config_path)
+    return tuple(sorted({_universe(code) for code in runtime.schedule.snapshot.universes}))
 
 
-async def _submit(settings: Settings, payload: SnapshotPayload, *, now: bool) -> None:
+async def _loaded[T](bootstrap: Settings, main: Callable[[Settings], Awaitable[T]]) -> T:
+    """``main`` with the effective settings (runtime layer read from the DB)."""
+
+    return await main(await load_settings(base=bootstrap))
+
+
+PayloadFactory = Callable[[Settings], Awaitable[SnapshotPayload]]
+
+
+async def _submit(
+    settings: Settings, payload: SnapshotPayload | PayloadFactory, *, now: bool
+) -> None:
     from investment_agent.research.worker import ResearchWorker
     from investment_agent.snapshots.handlers import snapshot_job_handlers
-    from investment_agent.storage.database import session_scope
 
+    if callable(payload):
+        payload = await payload(settings)
     async with session_scope() as session:
         run, created = await enqueue_snapshot_job(session, payload, triggered_by="cli")
         run_id, kind, status, key = run.id, run.kind, run.status, run.idempotency_key
@@ -180,9 +199,12 @@ def _print_completeness(metadata: dict[str, object], error: str | None) -> None:
         rprint(f"Error: {error}")
 
 
-def _run(payload: SnapshotPayload, now: bool) -> None:
-    settings = Settings()  # type: ignore[call-arg]
-    run_with_engine(settings.database_url, lambda: _submit(settings, payload, now=now))
+def _run(payload: SnapshotPayload | PayloadFactory, now: bool) -> None:
+    bootstrap = Settings()  # type: ignore[call-arg]
+    run_with_engine(
+        bootstrap.database_url,
+        lambda: _loaded(bootstrap, lambda settings: _submit(settings, payload, now=now)),
+    )
 
 
 _NOW_HELP = "Also execute the job in this process (debugging) instead of leaving it to the worker"
@@ -233,19 +255,17 @@ def sync_industry(
     systems = _systems(system)
     if all_market and universe:
         raise typer.BadParameter("--all-market excludes --universe", param_hint="--all-market")
-    codes: tuple[IndexCode, ...]
-    if all_market:
-        codes = ()
-    elif universe:
-        codes = tuple(sorted({_universe(code) for code in universe}))
-    else:
-        codes = target_pool_universes(config)
-    _run(
-        IndustrySyncPayload(
-            as_of=_date(as_of, "--as-of"), universe_codes=codes, systems=systems
-        ),
-        now,
-    )
+    day = _date(as_of, "--as-of")
+    if all_market or universe:
+        codes = tuple(sorted({_universe(code) for code in universe or []}))
+        _run(IndustrySyncPayload(as_of=day, universe_codes=codes, systems=systems), now)
+        return
+
+    async def target_pool(settings: Settings) -> SnapshotPayload:
+        codes = await target_pool_universes(settings, config)
+        return IndustrySyncPayload(as_of=day, universe_codes=codes, systems=systems)
+
+    _run(target_pool, now)
 
 
 @app.command("collect-market")
@@ -657,21 +677,25 @@ def backfill(
         raise typer.BadParameter(
             "--with-cash-flow only applies to --provider akshare", param_hint="--with-cash-flow"
         )
+    bootstrap = Settings()  # type: ignore[call-arg]
     if chosen == "akshare":
-        settings = Settings()  # type: ignore[call-arg]
+        code = _universe(universe)
         run_with_engine(
-            settings.database_url,
-            lambda: _akshare_backfill(
-                settings,
-                _universe(universe),
-                day,
-                annual=annual,
-                quarters=quarters,
-                with_cash_flow=with_cash_flow,
-                dry_run=dry_run,
-                show_status=show_status,
-                now=now,
-            )
+            bootstrap.database_url,
+            lambda: _loaded(
+                bootstrap,
+                lambda settings: _akshare_backfill(
+                    settings,
+                    code,
+                    day,
+                    annual=annual,
+                    quarters=quarters,
+                    with_cash_flow=with_cash_flow,
+                    dry_run=dry_run,
+                    show_status=show_status,
+                    now=now,
+                ),
+            ),
         )
         return
     payload = SnapshotBackfillPayload(
@@ -682,15 +706,17 @@ def backfill(
         annual_years=annual,
         quarters=quarters,
     )
-    settings = Settings()  # type: ignore[call-arg]
     run_with_engine(
-        settings.database_url,
-        lambda: _backfill(
-            settings,
-            payload,
-            dry_run=dry_run,
-            show_status=show_status,
-            as_of_given=as_of is not None,
-            now=now,
-        )
+        bootstrap.database_url,
+        lambda: _loaded(
+            bootstrap,
+            lambda settings: _backfill(
+                settings,
+                payload,
+                dry_run=dry_run,
+                show_status=show_status,
+                as_of_given=as_of is not None,
+                now=now,
+            ),
+        ),
     )

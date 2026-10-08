@@ -21,8 +21,8 @@ pip install -e ".[dev]"
 
 # 2. 配置
 cp .env.example .env
-# 编辑 .env：API_KEY、IFIND_PROXY_URL/IFIND_PROXY_API_KEY（数据网关）、
-# LLM_TIER3_*（解释模型，任何 OpenAI 兼容端点均可）
+# 编辑 .env：API_KEY、SETTINGS_ENCRYPTION_KEY（启动层）；
+# 数据网关与 LLM 等运行时配置启动后在 /app/settings 里填写（也可先写在 .env 里，首次启动导入）
 
 # 3. 建库（alembic 迁移，尊重 DATABASE_URL）
 ia migrate up
@@ -145,7 +145,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
   （`openssl s_client` 查 AIA 地址 → 下载 → 转 PEM）替换。
 - 原始响应落盘到 `DATA_DIR/snapshot-runs/<run>/attempt-<n>/`，`raw_ref` 指向该文件。
 - `--now` 在当前进程立即执行（调试用）；`ia snapshot status` 查看各类任务最近运行与完整率。
-  调度配置见 `config/app.yaml` 的 `snapshot:` 段；日线 18:30 基于 baostock 晚间更新，需在正常交易日实测确认。
+  调度在设置页「调度 · 快照」（默认值来自 `config/app.yaml` 的 `snapshot:` 段）；日线 18:30 基于 baostock 晚间更新，需在正常交易日实测确认。
 
 ### 东财财务采集（P1-A11，AkShare）
 
@@ -201,7 +201,7 @@ iFinD 只在固定触发时调用（D6 二次修订）：`promote`（晋级前�
   （`provider = ifind`），与观察端按登记表实际取用的免费源值比较（登记表容差）：新版本财务行带
   `fields.verification = {字段: "verified" | "conflict"}`，因子视图对 `verified` 字段取 iFinD 值，
   `conflict` 字段仍取免费源并标记冲突；关键字段冲突发 `action_required` 通知。
-- **调度**（`config/app.yaml` 的 `verification:` 段，标准 crontab）：每 30 分钟有到期请求时入队一次
+- **调度**（设置页「调度 · 核对」，标准 crontab）：每 30 分钟有到期请求时入队一次
   `ifind_verify`（按时间槽幂等）；每周日 21:00 按 ISO 周固定种子从观察池抽 10 只投递 `calibration`。
 
 ```bash
@@ -268,7 +268,7 @@ ia snapshot backfill --universe CSI300 --status                                 
   离线校验（未知因子、op/值类型、自由文本、参数越界、区间名、行业组，错误一次性汇总），
   `ia rules sync` 按内容哈希入库（`rule_template`，内容变化即升版本，旧版本不改）。
 - 规则实例（`rule_instance`）：`draft → active → retired`，每次修改生成新版本，批准时退役上一 active 版本。
-- 周筛选任务 `screen_run`（每周日 20:00，`config/app.yaml` 的 `screen:` 段）：先同步模板，再对目标池按时点计算因子、
+- 周筛选任务 `screen_run`（每周日 20:00，设置页「调度 · 筛选」）：先同步模板，再对目标池按时点计算因子、
   运行全部模板的 `screen` 条件，结果写入 `screen_result`（命中 / 截断 / 未命中 / 跳过 / 剔除，附结构化理由）。
   ST 与逾期未披露标的全局剔除；每模板默认最多 20 个命中，按"阈值内距离"强度排序。
   `ia screen run --as-of 2026-09-30 --now` 当场执行，`ia screen show <run_id> --reasons` 查看理由。
@@ -286,8 +286,8 @@ ia snapshot backfill --universe CSI300 --status                                 
 - 候选 `candidate`：`open → promoted / dismissed / expired`，同一标的最多一条 `open`。
   每次 `screen_run` 成功后，命中（`hit`，不含截断）自动建候选：已有 `open` 候选则合并来源；
   已在自选股（启用）中、或 30 天内被忽略过的标的跳过（记入运行 metadata 的 `candidates` 段）。
-  候选默认 14 天过期：每日 07:00 扫描（`config/app.yaml` 的 `candidates:` 段），每次筛选开始时也扫描一次。
-  时长见 `CANDIDATE_EXPIRY_DAYS`、`CANDIDATE_DISMISS_COOLDOWN_DAYS`。
+  候选默认 14 天过期：每日 07:00 扫描（设置页「调度 · 候选」），每次筛选开始时也扫描一次。
+  时长在设置页「候选」组调整。
 - 新候选自动投递 `rule_draft` 任务（LLM 起草规则，幂等键 `rule_draft:{candidate_id}:{template}@{version}`），
   payload 附最近 10 条驳回 / 忽略理由作为偏好输入；`draft_state`：`none / pending / ready / failed`。
 - 决策日志 `decision` 只追加、不可改删：`nominate`、`promote`、`dismiss`、`approve_rule`、`reject_rule`、
@@ -325,16 +325,22 @@ ia snapshot backfill --universe CSI300 --status                                 
 
 ## 配置
 
-`.env`：`API_KEY`、`DATABASE_URL`（默认 `sqlite+aiosqlite:///./data/app.db`）、
-`DATA_DIR`、`IFIND_PROXY_URL` / `IFIND_PROXY_API_KEY`、
-`IFIND_COLLECT_RATE_PER_MINUTE`、`IFIND_COLLECT_BATCH_RETRIES`、`SNAPSHOT_COMPLETENESS_THRESHOLD`、
-`AKSHARE_MIN_INTERVAL_SECONDS`（默认 1）、
-`IFIND_BUDGET_PER_5H`（默认 150）、`IFIND_BUDGET_WINDOW_HOURS`（默认 5）、`IFIND_VERIFY_MAX_REQUESTS`（默认 30）、
-`LLM_TIER3_*`、`LLM_REQUEST_TIMEOUT_SECONDS`（默认 120）、
-`LLM_TIER3_THINKING` / `LLM_RULE_DRAFT_THINKING`（`auto` 不发送；`disabled` 关闭推理，规则起草约快 4 倍）、
-`WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_SESSION_SECRET`、`WEB_COOKIE_SECURE`、
-`WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
-`LOG_LEVEL`。调度见 `config/app.yaml`；交易日历见
+配置分两层（设计见 [`docs/product/settings-plan.md`](docs/product/settings-plan.md)）：
+
+- **启动层（`.env`，Web 只读展示）**：`APP_ENV`、`LOG_LEVEL`、`DATA_DIR`、`DATABASE_URL`、
+  `API_KEY`、`WEB_SESSION_SECRET`、`WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_COOKIE_SECURE`、
+  `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
+  `SETTINGS_ENCRYPTION_KEY`（加密存库的 API key；与数据库分开保管，丢失后需重新填写密钥）。
+- **运行时层（数据库，`/app/settings` 或 `ia settings` 管理）**：LLM（地址、模型、key、推理开关、超时）、
+  iFinD 网关、采集节流、核对预算、候选过期 / 冷却天数，以及全部调度（cron、目标池、`hit_cap`、
+  `calibration_count`）。每项的范围、默认值与说明见设置页。修改无需重启：API 下一请求、
+  worker 下一个任务、scheduler 60 秒内重新排期（不补跑错过的触发）。
+
+首次启动 api / worker / scheduler 时（需先 `ia migrate up`），`.env` 中显式写出的运行时项与
+`config/app.yaml` 的调度段会一次性导入数据库；此后以数据库为准，`.env` / `app.yaml` 里的这些值
+被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
+`LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
+交易日历路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），日历见
 `config/calendars/a_share.yaml`（未知年份 fail-closed）。
 
 评分成功但解释失败时运行以 `partial` 收尾：确定性分数与制品保留，

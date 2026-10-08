@@ -14,6 +14,10 @@ from investment_agent.domain.protocols import CompletionResult
 from investment_agent.llm.tracking import record_llm_call
 
 
+class LLMNotConfiguredError(RuntimeError):
+    """The tier's API key is empty: there is no point calling the endpoint."""
+
+
 class OpenAICompatibleClient:
     def __init__(
         self,
@@ -22,6 +26,11 @@ class OpenAICompatibleClient:
         config: LLMTierConfig,
         session: AsyncSession,
     ) -> None:
+        if not config.api_key.strip():
+            raise LLMNotConfiguredError(
+                f"LLM {tier_name} API key is not configured: set llm_tier3_api_key in the "
+                "settings page (大模型 -> API Key) or with `ia settings set llm_tier3_api_key`"
+            )
         self.tier_name = tier_name
         self._config = config
         self._session = session

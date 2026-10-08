@@ -88,3 +88,6 @@ DATABASE_URL=sqlite+aiosqlite:///restored/data/app.db .venv/bin/ia migrate curre
   下载端点会按"manifest 路径必须位于该 run 目录内"的安全规则拒绝——
   因此恢复时必须保持 `DATA_DIR` 与备份来源一致的相对结构（见第 3 节）。
 - 不备份 LLM 调用成本之外的秘密；`.env` 不在备份范围，请妥善保管。
+- 运行时配置（含加密的 LLM / iFinD key，表 `app_setting*`）随数据库一起备份；解密需要
+  `.env` 中的 `SETTINGS_ENCRYPTION_KEY`。恢复到新环境时若该主密钥丢失，非密钥配置照常可用，
+  密钥项在设置页显示「无法解密」，重新填写即可。

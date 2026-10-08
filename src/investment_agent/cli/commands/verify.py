@@ -13,6 +13,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from investment_agent.config import Settings
+from investment_agent.settings.loader import load_settings
 from investment_agent.storage.database import run_with_engine
 
 app = typer.Typer(help="iFinD on-demand verification queue and budget ledger")
@@ -36,7 +37,7 @@ def _period(value: str | None) -> date | None:
 def status() -> None:
     """Budget used / remaining in the rolling window and the queue by status and trigger."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    bootstrap = Settings()  # type: ignore[call-arg]
 
     async def load() -> None:
         from sqlalchemy import func, select
@@ -46,6 +47,7 @@ def status() -> None:
         from investment_agent.verification.budget import as_utc, budget_status
         from investment_agent.verification.queue import count_due, queue_summary
 
+        settings = await load_settings(base=bootstrap)
         now = datetime.now(UTC)
         window = timedelta(hours=settings.ifind_budget_window_hours)
         async with session_scope() as session:
@@ -76,7 +78,7 @@ def status() -> None:
         rprint(table)
         rprint(f"Due now: {due}")
 
-    run_with_engine(settings.database_url, load)
+    run_with_engine(bootstrap.database_url, load)
 
 
 @app.command("request")
@@ -137,7 +139,7 @@ def run(
 ) -> None:
     """Enqueue one ifind_verify run (calls iFinD within the budget)."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    bootstrap = Settings()  # type: ignore[call-arg]
 
     async def submit() -> None:
         from investment_agent.research.worker import ResearchWorker
@@ -154,6 +156,7 @@ def run(
         rprint(f"[green]Queued[/green] ifind_verify run #{run_id}")
         if not now:
             return
+        settings = await load_settings(base=bootstrap)
         worker = ResearchWorker(
             settings=settings,
             worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
@@ -168,4 +171,4 @@ def run(
                 rprint(f"Summary: {escape(finished.error_summary)}")
             typer.echo(json.dumps(finished.metadata_json, ensure_ascii=False, indent=1, default=str))
 
-    run_with_engine(settings.database_url, submit)
+    run_with_engine(bootstrap.database_url, submit)

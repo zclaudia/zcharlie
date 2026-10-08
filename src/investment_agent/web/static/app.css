@@ -738,6 +738,42 @@ meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--c-accent)
 .run-queued, .run-running, .week-in_progress { color: var(--c-ink-2); }
 .week-no_trading { color: var(--c-ink-3); }
 
+/* ---- Settings page -------------------------------------------------------- */
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.setting-list { display: grid; gap: 0; }
+.setting { padding: var(--sp-3) 0; border-top: 1px solid var(--c-line); min-width: 0; }
+.setting:first-child { border-top: 0; }
+.setting.dirty { border-left: 3px solid var(--c-ai); padding-left: var(--sp-3); }
+.setting-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
+.setting-head .badge { margin: 0; }
+.setting-label { font-weight: 600; margin-right: var(--sp-1); }
+.setting-help { margin: 2px 0 var(--sp-2); }
+.setting input[type="text"], .setting input[type="url"], .setting input[type="password"] { width: min(100%, 28rem); }
+.setting input[type="number"] { width: 10rem; font-variant-numeric: tabular-nums; }
+.setting-meta { margin: var(--sp-1) 0 0; }
+.setting-warning { margin: 2px 0 0; color: var(--c-warn); }
+.setting-multi { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); }
+.setting-check { display: inline-flex; align-items: center; gap: 4px; }
+.setting-secret { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.secret-status { font-size: var(--fs-sm); color: var(--c-ink-2); }
+.secret-status.is-error { color: var(--c-warn); }
+button.small-button { padding: 2px 10px; font-size: var(--fs-sm); }
+.badge.apply-live { background: var(--c-accent-soft); color: var(--c-accent); }
+.badge.apply-reschedule { background: var(--c-ai-soft); color: var(--c-ai); }
+.setting-issues { color: var(--c-warn); font-size: var(--fs-sm); }
+.settings-test { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-2); }
+.settings-test-result { font-size: var(--fs-sm); color: var(--c-ink-2); overflow-wrap: anywhere; }
+.settings-test-result.is-ok { color: var(--c-accent); }
+.settings-test-result.is-error { color: var(--c-warn); }
+.settings-savebar { position: sticky; bottom: var(--sp-2); z-index: 5; border-color: var(--c-line-strong); }
+.settings-savebar[hidden] { display: none; }
+.settings-savebar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.settings-savebar-row input { flex: 1 1 12rem; min-width: 0; }
+.settings-dirty-count { font-weight: 600; color: var(--c-ink-2); }
+.settings-dirty-count.has-dirty { color: var(--c-ai); }
+.setting-history-value { overflow-wrap: anywhere; max-width: 16rem; }
+
 /* ---- 宽屏 ------------------------------------------------------------------------ */
 
 @media (min-width: 48rem) {

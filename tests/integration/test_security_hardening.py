@@ -222,6 +222,7 @@ def test_templates_have_no_inline_script_or_style(api_client):
         "/app/stocks/600519.SH",
         "/app/candidates",
         "/app/candidates/1",
+        "/app/settings",
         "/app/login",
     ):
         html = api_client.get(path).text

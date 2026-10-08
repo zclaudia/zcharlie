@@ -42,7 +42,9 @@ class Settings(BaseSettings):
 
     # Tier 3: research explanation model (any OpenAI-compatible endpoint).
     llm_tier3_base_url: str = "https://api.openai.com/v1"
-    llm_tier3_api_key: str
+    # Runtime setting: once stored in the DB (settings UI / ``ia settings``)
+    # it may be dropped from env; an empty key fails at the first LLM call.
+    llm_tier3_api_key: str = ""
     llm_tier3_model: str = "gpt-5"
     llm_tier3_thinking: ThinkingMode = "auto"
     # Rule drafting picks parameters within template ranges and is validated
@@ -89,6 +91,12 @@ class Settings(BaseSettings):
     # Public origin (e.g. "https://research.example.com") accepted by the CSRF
     # origin check when a reverse proxy rewrites the Host header.
     web_public_origin: str = ""
+
+    # Fernet master key for the secret runtime settings stored in the DB
+    # (``investment_agent.settings``). Deliberately separate from API_KEY /
+    # WEB_SESSION_SECRET (rotating those must not lose stored secrets) and
+    # kept out of DATA_DIR (same volume as the DB and its backups).
+    settings_encryption_key: str = ""
 
     @model_validator(mode="after")
     def _validate_api_key(self) -> Self:

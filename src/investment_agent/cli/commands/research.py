@@ -17,15 +17,16 @@ def run_ifind_research(
     industry: str = typer.Option(..., help="Canonical industry used by classification"),
     report_year: int = typer.Option(..., min=1990, help="Latest complete annual report year"),
     as_of: str = typer.Option(date.today().isoformat(), help="Research date (YYYY-MM-DD)"),
-    proxy_url: str = typer.Option(
-        "http://127.0.0.1:7100",
+    proxy_url: str | None = typer.Option(
+        None,
         envvar="IFIND_PROXY_URL",
-        help="iFinD proxy base URL",
+        help="iFinD proxy base URL (default: the ifind_proxy_url setting)",
+        show_default=False,
     ),
     proxy_api_key: str | None = typer.Option(
         None,
         envvar="IFIND_PROXY_API_KEY",
-        help="iFinD proxy API key (prefer environment variable)",
+        help="iFinD proxy API key (default: the ifind_proxy_api_key setting)",
         show_default=False,
     ),
     explanation_model: str | None = typer.Option(
@@ -52,17 +53,13 @@ def run_ifind_research(
 
     from investment_agent.config import Settings
     from investment_agent.research.ifind_chain import (
+        ResearchChainResult,
         ResearchPartialError,
         run_ifind_research_chain,
     )
+    from investment_agent.settings.loader import load_settings
     from investment_agent.storage.database import run_with_engine
 
-    key = proxy_api_key or os.getenv("PROXY_API_KEY", "")
-    if not key:
-        raise typer.BadParameter(
-            "set IFIND_PROXY_API_KEY or pass --proxy-api-key",
-            param_hint="--proxy-api-key",
-        )
     if idempotency_key is not None and (
         not idempotency_key.strip() or len(idempotency_key) > 128
     ):
@@ -70,24 +67,33 @@ def run_ifind_research(
             "must contain 1 to 128 characters",
             param_hint="--idempotency-key",
         )
-    settings = Settings()  # type: ignore[call-arg]
-    if explanation_model:
-        settings = settings.model_copy(update={"llm_tier3_model": explanation_model})
-    try:
-        result = run_with_engine(
-            settings.database_url,
-            lambda: run_ifind_research_chain(
-                settings=settings,
-                proxy_url=proxy_url,
-                proxy_api_key=key,
-                ticker=ticker,
-                industry=industry,
-                report_year=report_year,
-                as_of=date.fromisoformat(as_of),
-                output_root=output_root,
-                idempotency_key=idempotency_key,
+    bootstrap = Settings()  # type: ignore[call-arg]
+
+    async def main() -> ResearchChainResult:
+        settings = await load_settings(base=bootstrap)
+        if explanation_model:
+            settings = settings.model_copy(update={"llm_tier3_model": explanation_model})
+        key = proxy_api_key or os.getenv("PROXY_API_KEY", "") or settings.ifind_proxy_api_key
+        if not key:
+            raise typer.BadParameter(
+                "configure ifind_proxy_api_key (settings page / `ia settings set`), "
+                "set IFIND_PROXY_API_KEY or pass --proxy-api-key",
+                param_hint="--proxy-api-key",
             )
+        return await run_ifind_research_chain(
+            settings=settings,
+            proxy_url=proxy_url or settings.ifind_proxy_url,
+            proxy_api_key=key,
+            ticker=ticker,
+            industry=industry,
+            report_year=report_year,
+            as_of=date.fromisoformat(as_of),
+            output_root=output_root,
+            idempotency_key=idempotency_key,
         )
+
+    try:
+        result = run_with_engine(bootstrap.database_url, main)
     except ResearchPartialError as exc:
         rprint(f"[yellow]ResearchRun {exc.run_id} partial[/yellow]: {exc.reason}")
         raise typer.Exit(code=2) from exc
@@ -130,28 +136,31 @@ def run_snapshot_research(
 
     from investment_agent.config import Settings
     from investment_agent.research.ifind_chain import (
+        ResearchChainResult,
         ResearchPartialError,
         run_ifind_research_chain,
     )
+    from investment_agent.settings.loader import load_settings
     from investment_agent.storage.database import run_with_engine
 
-    settings = Settings()  # type: ignore[call-arg]
-    try:
-        result = run_with_engine(
-            settings.database_url,
-            lambda: run_ifind_research_chain(
-                settings=settings,
-                proxy_url="",
-                proxy_api_key="",
-                ticker=ticker.upper(),
-                industry=industry,
-                report_year=report_year,
-                as_of=date.fromisoformat(as_of),
-                output_root=output_root,
-                idempotency_key=idempotency_key,
-                source_mode="snapshot",
-            )
+    bootstrap = Settings()  # type: ignore[call-arg]
+
+    async def main() -> ResearchChainResult:
+        return await run_ifind_research_chain(
+            settings=await load_settings(base=bootstrap),
+            proxy_url="",
+            proxy_api_key="",
+            ticker=ticker.upper(),
+            industry=industry,
+            report_year=report_year,
+            as_of=date.fromisoformat(as_of),
+            output_root=output_root,
+            idempotency_key=idempotency_key,
+            source_mode="snapshot",
         )
+
+    try:
+        result = run_with_engine(bootstrap.database_url, main)
     except ResearchPartialError as exc:
         rprint(f"[yellow]ResearchRun {exc.run_id} partial[/yellow]: {exc.reason}")
         raise typer.Exit(code=2) from exc

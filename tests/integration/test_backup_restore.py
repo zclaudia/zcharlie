@@ -202,7 +202,7 @@ def test_backup_verify_tamper_and_restore_drill(tmp_path: Path, drill_env: dict[
         timeout=120,
     )
     assert current.returncode == 0
-    assert "020 (head)" in current.stdout
+    assert "021 (head)" in current.stdout
 
     check = subprocess.run(
         [

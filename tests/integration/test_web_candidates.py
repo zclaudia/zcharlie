@@ -110,13 +110,19 @@ def test_candidate_detail_rejects_invalid_id(api_client, bad: str) -> None:
 
 def test_nav_links_candidates_on_every_page(api_client) -> None:
     _login(api_client)
-    for path in ("/app", "/app/watchlist", "/app/runs", "/app/candidates", "/app/candidates/1"):
+    for path in (
+        "/app", "/app/watchlist", "/app/runs", "/app/candidates", "/app/candidates/1",
+        "/app/settings",
+    ):
         assert 'href="/app/candidates"' in api_client.get(path).text, path
 
 
 def test_pages_load_only_same_origin_module_scripts(api_client) -> None:
     _login(api_client)
-    for path in ("/app", "/app/candidates", "/app/candidates/1", "/app/health", "/app/login"):
+    for path in (
+        "/app", "/app/candidates", "/app/candidates/1", "/app/health", "/app/settings",
+        "/app/login",
+    ):
         html = api_client.get(path).text
         assert "<style" not in html and " style=" not in html, path
         sources = re.findall(r"<script\b([^>]*)>", html)

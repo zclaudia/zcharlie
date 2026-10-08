@@ -5,6 +5,12 @@ the snapshot collectors, ``screen_run``, ``rule_draft`` and ``ifind_verify``), k
 claim's heartbeat fresh, fences all lifecycle updates with the claim's lease,
 and settles failures through the shared retry policy. Kind-specific behaviour lives in
 :class:`~investment_agent.jobs.base.JobHandler` implementations.
+
+Runtime settings (settings-plan §4.4): before each claim the worker compares
+the settings store revision (one indexed single-row read); when it moved, it
+reloads its settings and rebuilds the default handlers (token bucket
+included), so a change saved in the UI applies from the next job on.
+Injected ``handlers`` are never rebuilt.
 """
 
 from __future__ import annotations
@@ -40,6 +46,7 @@ from investment_agent.research.ifind_chain import (
 from investment_agent.research.retry_policy import is_transient_error
 from investment_agent.rules.drafting import RuleDraftHandler
 from investment_agent.rules.screen_job import ScreenRunHandler
+from investment_agent.settings.loader import import_and_load, load_settings, store_for
 from investment_agent.snapshots.handlers import snapshot_job_handlers
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
@@ -218,32 +225,67 @@ class ResearchWorker:
         heartbeat_interval_seconds: float = 30.0,
         handlers: Sequence[JobHandler] | None = None,
         kinds: Collection[str] | None = None,
+        settings_revision: int | None = None,
     ) -> None:
+        """``settings_revision`` is the store revision ``settings`` was loaded at;
+        when omitted, the first claim records the current one (no reload)."""
+
         self.settings = settings
         self.worker_id = worker_id
         self.runner = runner
         self.retry_base_delay_seconds = retry_base_delay_seconds
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
-        registry = {
-            handler.kind: handler
-            for handler in (
-                handlers
-                if handlers is not None
-                else default_job_handlers(settings, runner=runner)
-            )
-        }
-        if kinds is not None:
-            unknown = sorted(set(kinds) - registry.keys())
+        # A reload overlays the stored runtime layer onto these settings
+        # (every runtime field is replaced, so they may be loaded ones).
+        self._base_settings = settings
+        self._kinds = kinds
+        self._reloads_settings = handlers is None
+        self._settings_revision = settings_revision
+        self.handlers: dict[str, JobHandler] = self._registry(
+            handlers if handlers is not None else default_job_handlers(settings, runner=runner)
+        )
+
+    def _registry(self, handlers: Sequence[JobHandler]) -> dict[str, JobHandler]:
+        registry = {handler.kind: handler for handler in handlers}
+        if self._kinds is not None:
+            unknown = sorted(set(self._kinds) - registry.keys())
             if unknown:
                 raise ValueError(f"no handler registered for job kinds: {unknown}")
-            registry = {kind: handler for kind, handler in registry.items() if kind in kinds}
+            registry = {
+                kind: handler for kind, handler in registry.items() if kind in self._kinds
+            }
         if not registry:
             raise ValueError("a worker needs at least one job handler")
-        self.handlers: dict[str, JobHandler] = registry
+        return registry
 
     @property
     def kinds(self) -> list[str]:
         return list(self.handlers)
+
+    async def refresh_settings(self, session: AsyncSession) -> bool:
+        """Reload settings and rebuild the default handlers if the store changed.
+
+        Returns whether a reload happened. Costs one ``revision`` read when
+        nothing changed; a no-op for a worker with injected handlers.
+        """
+
+        if not self._reloads_settings:
+            return False
+        revision = await store_for(session, self._base_settings).revision()
+        if self._settings_revision is None or revision == self._settings_revision:
+            self._settings_revision = revision
+            return False
+        settings = await load_settings(session, base=self._base_settings)
+        self.handlers = self._registry(default_job_handlers(settings, runner=self.runner))
+        self.settings = settings
+        log.info(
+            "worker.settings_reloaded",
+            worker_id=self.worker_id,
+            revision=revision,
+            previous_revision=self._settings_revision,
+        )
+        self._settings_revision = revision
+        return True
 
     async def recover_stale(self, *, stale_after_seconds: float) -> tuple[list[int], list[int]]:
         now = datetime.now(UTC)
@@ -270,6 +312,7 @@ class ResearchWorker:
         """Claim and run one job; ``run_id`` claims that specific queued run."""
 
         async with session_scope() as session:
+            await self.refresh_settings(session)
             run = await PipelineRunRepository(session).claim_next(
                 worker_id=self.worker_id,
                 kinds=self.kinds,
@@ -540,8 +583,10 @@ async def run_worker(
     """
 
     if worker is None:
+        settings, revision = await import_and_load(settings)
         worker = ResearchWorker(
             settings=settings,
+            settings_revision=revision,
             worker_id=worker_id,
             heartbeat_interval_seconds=(
                 heartbeat_interval_seconds
