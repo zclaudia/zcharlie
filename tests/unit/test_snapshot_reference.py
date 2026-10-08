@@ -16,6 +16,7 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.industry import IndustryRepository
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+from investment_agent.storage.repositories.stock_directory import StockDirectoryRepository
 from investment_agent.storage.repositories.universe import UniverseRepository
 from tests.unit._snapshot_support import FakeProxy, handlers_for, settings_for
 
@@ -50,6 +51,10 @@ class FakeBaostockBackend:
         self.members = members
         self.update_date = update_date
         self.industries = industries
+        # query_all_stock answer: the members plus an index row to filter out;
+        # ``None`` makes the call blow up (directory refresh must stay best effort).
+        self.directory: dict[str, str] | None = dict(members)
+        self.directory_days: list[str] = []
 
     def login(self) -> _Status:
         return _Status()
@@ -65,6 +70,14 @@ class FakeBaostockBackend:
 
     query_sz50_stocks = query_hs300_stocks
     query_zz500_stocks = query_hs300_stocks
+
+    def query_all_stock(self, day: str = "") -> _Result:
+        self.directory_days.append(day)
+        if self.directory is None:
+            raise RuntimeError("directory unavailable")
+        rows = [[code, "1", name] for code, name in self.directory.items()]
+        rows.append(["sh.000300", "1", "沪深300指数"])
+        return _Result(["code", "tradeStatus", "code_name"], rows)
 
     def query_stock_industry(self, code: str = "", date: str = "") -> _Result:
         return _Result(
@@ -117,6 +130,21 @@ async def test_universe_sync_applies_members_with_names_and_notifies(db_session,
         await session.refresh(listing, ["company"])
         assert listing.company.canonical_name == "贵州茅台"
     assert [m.ticker for m in members] == ["000001.SZ", "600519.SH"]
+    # The stock directory is refreshed right after (mrd-intake D4): the day
+    # comes from the runtime clock (2026-10-06 Asia/Shanghai), the index row is dropped.
+    assert backend.directory_days == ["2026-10-06"]
+    assert first.metadata_json["directory"] == {
+        "as_of": "2026-10-06",
+        "provider": "baostock",
+        "provider_rows": 2,
+        "total": 2,
+        "added": 2,
+        "changed": 0,
+        "delisted": 0,
+    }
+    async with session_scope() as session:
+        entry = await StockDirectoryRepository(session).get("600519.SH")
+        assert entry is not None and entry.pinyin_initials == "gzmt"
     notes = list((tmp_path / "notifications").rglob("snapshot_universe_sync_*.md"))
     assert len(notes) == 1
     text = notes[0].read_text()
@@ -124,14 +152,31 @@ async def test_universe_sync_applies_members_with_names_and_notifies(db_session,
 
     # Next snapshot: one member swapped -> removed/added recorded.
     backend.members = {"sh.600519": "贵州茅台", "sz.300750": "宁德时代"}
+    backend.directory = dict(backend.members)
     backend.update_date = "2026-10-06"
     second = await _run_job(
         tmp_path, UniverseSyncPayload(universe_code="CSI300", as_of=date(2026, 10, 6)), backend
     )
     assert second.metadata_json["added"] == ["300750.SZ"]
     assert second.metadata_json["removed"] == ["000001.SZ"]
+    directory = second.metadata_json["directory"]
+    assert (directory["added"], directory["delisted"], directory["total"]) == (1, 1, 3)
     raw_ref = second.metadata_json["raw_ref"]
     assert (tmp_path / raw_ref).is_file()
+
+
+async def test_directory_failure_does_not_fail_the_universe_sync(db_session, tmp_path):
+    del db_session
+    backend = FakeBaostockBackend({"sh.600519": "贵州茅台"}, "2026-10-05", {})
+    backend.directory = None
+    run = await _run_job(
+        tmp_path, UniverseSyncPayload(universe_code="CSI300", as_of=date(2026, 10, 5)), backend
+    )
+    assert run.status == "success"
+    assert run.metadata_json["added"] == ["600519.SH"]
+    assert run.metadata_json["directory"]["error"].startswith("RuntimeError: directory unavailable")
+    async with session_scope() as session:
+        assert await StockDirectoryRepository(session).freshness() == (None, 0)
 
 
 async def test_unchanged_universe_sync_does_not_notify(db_session, tmp_path):

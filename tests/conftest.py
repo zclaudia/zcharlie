@@ -15,6 +15,7 @@ from investment_agent.storage.models import (  # noqa: F401
     reference,
     relationship,
     rules,
+    stock_directory,
     user_domain,
     verification,
 )

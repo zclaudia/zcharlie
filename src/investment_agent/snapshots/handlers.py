@@ -19,6 +19,7 @@ from typing import Literal
 
 import structlog
 
+from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.config import Settings
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
@@ -217,6 +218,7 @@ class SnapshotJobHandler(BaseJobHandler):
                 client=self.runtime.reference_factory(),
                 artifacts=artifacts,
                 lease=lease,
+                today=self.runtime.clock().astimezone(SHANGHAI_TZ).date(),
             )
             return _Result("success", metadata)
         if self.kind == INDUSTRY_SYNC:

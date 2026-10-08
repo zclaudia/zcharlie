@@ -76,6 +76,7 @@ from investment_agent.storage.models.pit_snapshot import (
 from investment_agent.storage.models.reference import Listing, UniverseMembership
 from investment_agent.storage.models.verification import VerificationRequest
 from investment_agent.storage.repositories.provider_call import ProviderCallRepository
+from investment_agent.storage.repositories.stock_directory import StockDirectoryRepository
 from investment_agent.verification.budget import budget_status
 
 TARGET_WEEKS = 8
@@ -106,6 +107,8 @@ _FINANCIAL_PERIODS_SHOWN = 2
 _RECENT_STOP = timedelta(hours=24)
 _PROVIDER_WINDOW = timedelta(hours=24)
 _RECENT_CONFLICT = timedelta(days=7)
+DIRECTORY_STALE_DAYS = 14
+"""The directory is refreshed weekly; older than two weeks is a warning."""
 _UNIVERSE_SYNC_STALE_DAYS = 14
 _INDUSTRY_SYNC_STALE_DAYS = 40
 _MARKET_LAG_ERROR = 3
@@ -182,11 +185,25 @@ class DividendFreshness(BaseModel):
     coverage: float | None
 
 
+class DirectoryHealth(BaseModel):
+    """Local stock directory (mrd-intake D4) behind ``GET /stocks/search``."""
+
+    synced_on: date | None
+    """Trading day of the last ``query_all_stock`` answer; ``None`` before the first sync."""
+    total: int
+    """Rows in ``stock_directory`` (``delisted`` ones included)."""
+    age_days: int | None
+    """``today - synced_on``; a warning past :data:`DIRECTORY_STALE_DAYS`."""
+
+
 class Freshness(BaseModel):
     market: MarketFreshness
     financial: list[PeriodCoverage]
     """baostock financial periods of the current members, newest first."""
     dividend: DividendFreshness
+    directory: DirectoryHealth = Field(
+        default_factory=lambda: DirectoryHealth(synced_on=None, total=0, age_days=None)
+    )
 
 
 class MembershipChange(BaseModel):
@@ -774,6 +791,15 @@ async def dividend_freshness(
         covered=covered,
         members=members,
         coverage=round(covered / members, 4) if members else None,
+    )
+
+
+async def directory_freshness(session: AsyncSession, *, today: date) -> DirectoryHealth:
+    synced_on, total = await StockDirectoryRepository(session).freshness()
+    return DirectoryHealth(
+        synced_on=synced_on,
+        total=total,
+        age_days=(today - synced_on).days if synced_on is not None else None,
     )
 
 
@@ -1467,6 +1493,29 @@ def derive_warnings(
                 section="overdue",
             )
         )
+    directory = freshness.directory
+    if directory.synced_on is None:
+        warnings.append(
+            HealthWarning(
+                code="directory_missing",
+                level="info",
+                message="股票字典尚未同步（随每周成分同步刷新）；名称 / 拼音搜索暂不可用。",
+                section="freshness",
+            )
+        )
+    elif directory.age_days is not None and directory.age_days > DIRECTORY_STALE_DAYS:
+        warnings.append(
+            HealthWarning(
+                code="directory_stale",
+                level="warn",
+                message=(
+                    f"股票字典上次同步于 {directory.synced_on.isoformat()}"
+                    f"（{directory.age_days} 天前），超过 {DIRECTORY_STALE_DAYS} 天；"
+                    "新上市或更名的标的搜不到。"
+                ),
+                section="freshness",
+            )
+        )
     for upstream in providers:
         if upstream.open_until is not None and upstream.open_until > now:
             until = upstream.open_until.astimezone(SHANGHAI_TZ).strftime("%H:%M:%S")
@@ -1562,6 +1611,7 @@ async def build_data_health(
         ),
         financial=await financial_freshness(session, target_members),
         dividend=await dividend_freshness(session, target_members, today.year),
+        directory=await directory_freshness(session, today=today),
     )
     accumulation = compute_accumulation(
         await live_market_snapshots(session, target),
@@ -1640,7 +1690,9 @@ async def build_data_health(
 
 __all__ = [
     "TARGET_WEEKS",
+    "DIRECTORY_STALE_DAYS",
     "DataHealth",
+    "DirectoryHealth",
     "HealthSettings",
     "HealthWarning",
     "LiveSnapshot",

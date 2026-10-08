@@ -337,6 +337,24 @@ class SyntheticBaostock:
         ]
         return _Result(fields, rows)
 
+    def query_all_stock(self, day: str = "") -> _Result:
+        """Every security listed on ``day`` (mrd-intake D4): the pool stocks plus
+        an index row the directory sync must drop; empty on weekends and after
+        the last synthetic trade day, like the real answer for a non-trading day."""
+
+        self._count("query_all_stock")
+        asked = _date(day) if day else shanghai_today()
+        fields = ["code", "tradeStatus", "code_name"]
+        if asked.weekday() >= 5 or asked > LAST_TRADE_DAY:
+            return _Result(fields, [])
+        rows = [
+            [profile.code, "1", profile.name]
+            for profile in sorted(self.profiles.values(), key=lambda p: p.code)
+            if profile.ipo <= asked
+        ]
+        rows.append(["sh.000300", "1", "沪深300指数"])
+        return _Result(fields, rows)
+
     def query_stock_basic(self, code: str = "", code_name: str = "") -> _Result:
         self._count("query_stock_basic")
         fields = ["code", "code_name", "ipoDate", "outDate", "type", "status"]

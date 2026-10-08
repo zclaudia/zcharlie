@@ -12,6 +12,8 @@ process-wide lock and a single login for the whole block, every query inside
 it skips its own login/logout, and a transient failure re-logs in before the
 retry. The market / financial queries live in the sibling module
 :mod:`investment_agent.providers.baostock_market`, which reuses this client.
+:meth:`BaostockReferenceClient.fetch_all_stocks` (``query_all_stock``) feeds
+the local stock directory (mrd-intake D4).
 
 Point-in-time rules (see ``docs/product/funnel-design.md`` 15.1):
 
@@ -73,6 +75,10 @@ _TRANSIENT_CODE_PREFIX = "10002"
 _BAOSTOCK_CODE = re.compile(r"^(?P<exchange>sh|sz|bj)\.(?P<symbol>\d{6})$")
 _CANONICAL_TICKER = re.compile(r"^(?P<symbol>\d{6})\.(?P<suffix>SH|SZ|BJ)$")
 _CSRC_INDUSTRY = re.compile(r"^(?P<code>[A-Z]\d{2})(?P<name>\S.*)$")
+# ``query_all_stock`` lists every security (indices ``sh.000``, funds ``sh.5`` /
+# ``sz.1``, Shenzhen indices ``sz.399``); these prefixes are the A-share stocks (main board, STAR,
+# ChiNext, BSE - baostock answers no ``bj.`` rows as of 2026-10, kept for later).
+_STOCK_CODE_PREFIXES = ("sh.6", "sz.00", "sz.30", "bj.")
 
 # One baostock session per process: the library keeps its socket and user id
 # in module globals, so every login/query/logout sequence must be serialized.
@@ -116,6 +122,8 @@ class BaostockBackend(Protocol):
     def query_zz500_stocks(self, date: str = "") -> BaostockResultSet: ...
 
     def query_stock_industry(self, code: str = "", date: str = "") -> BaostockResultSet: ...
+
+    def query_all_stock(self, day: str = "") -> BaostockResultSet: ...
 
 
 def load_default_backend() -> BaostockBackend:
@@ -168,6 +176,13 @@ def to_baostock_code(ticker: str) -> str:
     if match is None:
         raise ValueError(f"not a canonical A-share ticker: {ticker!r}")
     return f"{match.group('suffix').lower()}.{match.group('symbol')}"
+
+
+def is_stock_code(baostock_code: str) -> bool:
+    """``sh.600519`` -> True; indices (``sh.000001``) and funds (``sh.510300``) -> False."""
+
+    code = baostock_code.strip().lower()
+    return code.startswith(_STOCK_CODE_PREFIXES) and _BAOSTOCK_CODE.fullmatch(code) is not None
 
 
 def parse_csrc_industry(raw: str) -> tuple[str | None, str | None]:
@@ -234,6 +249,36 @@ class IndustrySnapshot:
 
     def by_ticker(self) -> dict[str, IndustryEntry]:
         return {entry.ticker: entry for entry in self.entries}
+
+
+@dataclass(frozen=True)
+class DirectoryEntry:
+    ticker: str
+    name: str
+    trading: bool
+    """baostock ``tradeStatus`` ``1``; ``0`` = suspended on ``as_of``."""
+
+
+@dataclass(frozen=True)
+class DirectorySnapshot:
+    """Every A-share stock listed on ``as_of`` (``query_all_stock``).
+
+    The answer carries no date: ``as_of`` is the requested day, which the PIT
+    guard keeps on or before the capture date. baostock answers an empty list
+    for a non-trading day and for today before the open; that is an empty
+    snapshot, not an error (callers step back to the previous trading day).
+    """
+
+    as_of: date
+    entries: tuple[DirectoryEntry, ...]
+    """Sorted by ticker; indices / funds already filtered out."""
+    captured_at: datetime
+    raw_rows: tuple[Mapping[str, str], ...] = field(repr=False)
+    source: str = PROVIDER
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.entries
 
 
 # --------------------------------------------------------------------------- #
@@ -414,6 +459,52 @@ class BaostockReferenceClient:
             as_of=as_of,
             effective_date=effective_date,
             entries=tuple(entries),
+            captured_at=captured_at,
+            raw_rows=raw.rows,
+        )
+
+    async def fetch_all_stocks(self, day: date) -> DirectorySnapshot:
+        """All A-share stocks listed on ``day`` (stocks only; see :func:`is_stock_code`)."""
+
+        operation = "query_all_stock"
+        capture_date = self._now().astimezone(SHANGHAI_TZ).date()
+        if day > capture_date:
+            raise LookaheadDataError(
+                f"baostock {operation} day {day.isoformat()} is after the capture date "
+                f"{capture_date.isoformat()}",
+                provider=PROVIDER,
+            )
+        day_text = day.isoformat()
+
+        def query(backend: BaostockBackend) -> BaostockResultSet:
+            return backend.query_all_stock(day=day_text)
+
+        raw = await self._run(operation, query)
+        captured_at = self._now()
+        entries: dict[str, DirectoryEntry] = {}
+        for row in raw.rows:
+            code = row.get("code", "")
+            if not is_stock_code(code):
+                continue
+            ticker = _row_ticker(row, operation=operation)
+            status = row.get("tradeStatus", "").strip()
+            if status not in ("0", "1"):
+                raise ProviderDataError(
+                    f"baostock {operation} returned an invalid tradeStatus {status!r} for {code}",
+                    provider=PROVIDER,
+                )
+            entries[ticker] = DirectoryEntry(
+                ticker=ticker, name=row.get("code_name", "").strip(), trading=status == "1"
+            )
+        log.info(
+            "baostock_directory_fetched",
+            as_of=day_text,
+            rows=len(raw.rows),
+            stocks=len(entries),
+        )
+        return DirectorySnapshot(
+            as_of=day,
+            entries=tuple(entries[ticker] for ticker in sorted(entries)),
             captured_at=captured_at,
             raw_rows=raw.rows,
         )

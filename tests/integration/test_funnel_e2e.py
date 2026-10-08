@@ -105,6 +105,7 @@ from investment_agent.verification.job import (
     enqueue_verify_run,
 )
 from tests.integration._funnel_support import (
+    LAST_TRADE_DAY,
     PROFILE_BY_TICKER,
     PROFILES,
     StubLLM,
@@ -273,7 +274,7 @@ async def test_offline_funnel_end_to_end(funnel_env: Settings) -> None:
             head = (
                 await session.execute(text("SELECT version_num FROM alembic_version"))
             ).scalar_one()
-        assert head == "022", head
+        assert head == "023", head
         # Build the app before freezing time: FastAPI resolves the routes'
         # ``datetime`` annotations when they are registered.
         api = TestClient(create_app())
@@ -701,6 +702,9 @@ def _health(api: TestClient) -> None:
     assert accumulation["latest_live_trade_date"] == AS_OF.isoformat()
     market = body["freshness"]["market"]
     assert (market["members_at_latest"], market["lag_trading_days"]) == (len(PROFILES), 0)
+    # The universe sync refreshed the stock directory (D4) from the last trade day.
+    directory = body["freshness"]["directory"]
+    assert (directory["synced_on"], directory["total"]) == (LAST_TRADE_DAY.isoformat(), len(PROFILES))
     collections = {item["key"]: item for item in body["collections"]}
     assert {
         "universe_sync:baostock:CSI300",

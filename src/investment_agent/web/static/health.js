@@ -331,6 +331,16 @@ function renderFreshness(data) {
       "腾讯批量报价，15:10 写入当日收盘；日线到达后读取以 baostock 为准"
     )
   );
+  const directory = fresh.directory || {};
+  const dirAge = typeof directory.age_days === "number" ? directory.age_days : null;
+  list.appendChild(
+    freshRow(
+      "股票字典",
+      directory.synced_on ? dirAge !== null && dirAge <= 14 : false,
+      directory.synced_on ? `同步于 ${fmt(directory.synced_on)}${dirAge !== null ? `（${dirAge} 天前）` : ""}` : "尚未同步",
+      `${directory.total || 0} 只；随每周成分同步刷新，供代码 / 名称 / 拼音搜索`
+    )
+  );
   box.appendChild(list);
   box.appendChild(el("h3", {}, `日线覆盖（${market.universe_code}，baostock 不复权）`));
   box.appendChild(

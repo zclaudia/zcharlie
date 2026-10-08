@@ -34,6 +34,8 @@ dependencies = [
 
     # Reference data (index constituents, CSRC industries)
     "baostock>=0.9.4",
+    # Stock directory search (mrd-intake D4): pinyin initials of listing names
+    "pypinyin>=0.50",
     # Shenwan 2021 industries (P1-A9); scraper wrapper, pinned to a minor version
     "akshare>=1.19.1,<1.20",
     "certifi",

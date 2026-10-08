@@ -14,6 +14,7 @@ from investment_agent.providers.baostock_reference import (
     BaostockError,
     BaostockReferenceClient,
     BaostockTransientError,
+    is_stock_code,
     parse_csrc_industry,
     to_baostock_code,
     to_canonical_ticker,
@@ -92,6 +93,9 @@ class FakeBaostock:
 
     def query_zz500_stocks(self, date: str = "") -> _ReplayResult:
         return self._replay("query_zz500_stocks", {"date": date})
+
+    def query_all_stock(self, day: str = "") -> _ReplayResult:
+        return self._replay("query_all_stock", {"day": day})
 
     def query_stock_industry(self, code: str = "", date: str = "") -> _ReplayResult:
         if code:
@@ -194,6 +198,72 @@ async def test_other_indexes(index_code: str, size: int) -> None:
     )
     assert len(snapshot.members) == size
     assert snapshot.effective_date == date(2026, 9, 28)
+
+
+# --------------------------------------------------------------------------- #
+# Stock directory (query_all_stock, mrd-intake D4)
+# --------------------------------------------------------------------------- #
+
+# The all_stock fixture was captured on 2026-10-09 07:22 Asia/Shanghai.
+DIRECTORY_CAPTURE_TIME = datetime(2026, 10, 8, 23, 30, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("code", "stock"),
+    [
+        ("sh.600519", True),
+        ("sh.688981", True),
+        ("sz.000001", True),
+        ("sz.002594", True),
+        ("sz.300750", True),
+        ("bj.830799", True),
+        ("sh.000001", False),  # index
+        ("sh.510300", False),  # ETF
+        ("sz.159915", False),  # ETF
+        ("sz.399001", False),  # index
+        ("sh.60051", False),
+        ("600519.SH", False),
+    ],
+)
+def test_is_stock_code(code: str, stock: bool) -> None:
+    assert is_stock_code(code) is stock
+
+
+async def test_fetch_all_stocks_filters_indices_and_funds_and_maps_status() -> None:
+    backend = FakeBaostock()
+    client = _client(backend, now=DIRECTORY_CAPTURE_TIME)
+    snapshot = await client.fetch_all_stocks(date(2026, 10, 8))
+
+    assert snapshot.as_of == date(2026, 10, 8)
+    assert snapshot.source == "baostock"
+    assert snapshot.captured_at == DIRECTORY_CAPTURE_TIME
+    assert len(snapshot.raw_rows) == 37  # every row the fixture holds
+    tickers = [entry.ticker for entry in snapshot.entries]
+    assert tickers == sorted(tickers)
+    assert len(tickers) == 29
+    assert "000001.SH" not in tickers and "510300.SH" not in tickers
+    assert "159915.SZ" not in tickers and "399001.SZ" not in tickers
+    by_ticker = {entry.ticker: entry for entry in snapshot.entries}
+    assert by_ticker["600519.SH"].name == "贵州茅台" and by_ticker["600519.SH"].trading
+    assert by_ticker["600053.SH"].name == "*ST九鼎"
+    assert by_ticker["600293.SH"].trading is False  # tradeStatus 0
+    assert by_ticker["688496.SH"].trading is False
+    assert by_ticker["000002.SZ"].name == "万科A"
+    assert backend.calls == ["login", "query_all_stock", "logout"]
+
+
+async def test_fetch_all_stocks_non_trading_day_is_empty() -> None:
+    snapshot = await _client(FakeBaostock(), now=DIRECTORY_CAPTURE_TIME).fetch_all_stocks(
+        date(2026, 10, 9)
+    )
+    assert snapshot.is_empty and snapshot.entries == ()
+
+
+async def test_fetch_all_stocks_rejects_a_future_day() -> None:
+    backend = FakeBaostock()
+    with pytest.raises(LookaheadDataError):
+        await _client(backend, now=DIRECTORY_CAPTURE_TIME).fetch_all_stocks(date(2026, 10, 10))
+    assert backend.calls == []  # guarded before any upstream call
 
 
 async def test_pre_publication_constituents_are_empty_not_error() -> None:

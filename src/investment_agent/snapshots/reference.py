@@ -1,23 +1,30 @@
 """``universe_sync`` / ``industry_sync``: reference data -> PIT tables.
 
 Constituents and CSRC industries come from baostock; Shenwan 2021
-industries (``sw2021``, P1-A9) from AkShare via :mod:`.shenwan`.
+industries (``sw2021``, P1-A9) from AkShare via :mod:`.shenwan`. A successful
+``universe_sync`` also refreshes the local stock directory (mrd-intake D4,
+:mod:`.directory`); a directory failure is a warning in the run metadata and
+never changes the universe sync's own status.
 """
 
 from __future__ import annotations
 
+from contextlib import AbstractAsyncContextManager
 from datetime import date
 from typing import Protocol
 
 import structlog
 
+from investment_agent.clock import shanghai_today
 from investment_agent.providers.baostock_reference import (
     ConstituentSnapshot,
+    DirectorySnapshot,
     IndexCode,
     IndustrySnapshot,
 )
 from investment_agent.providers.errors import ProviderError, ProviderTransientError
 from investment_agent.snapshots.collect import ArtifactWriter, fence_writes
+from investment_agent.snapshots.directory import sync_directory
 from investment_agent.snapshots.jobs import IndustrySyncPayload, UniverseSyncPayload
 from investment_agent.snapshots.shenwan import (
     ShenwanClient,
@@ -43,6 +50,10 @@ class ReferenceClient(Protocol):
 
     async def fetch_industry(self, as_of: date, symbol: str | None = None) -> IndustrySnapshot: ...
 
+    def session(self) -> AbstractAsyncContextManager[None]: ...
+
+    async def fetch_all_stocks(self, day: date) -> DirectorySnapshot: ...
+
 
 async def sync_universe(
     payload: UniverseSyncPayload,
@@ -50,7 +61,14 @@ async def sync_universe(
     client: ReferenceClient,
     artifacts: ArtifactWriter,
     lease: RunLease | None,
+    today: date | None = None,
 ) -> dict[str, object]:
+    """Apply the constituent snapshot, then refresh the stock directory.
+
+    ``today`` (Asia/Shanghai, default: now) is the day the directory refresh
+    starts from; it steps back to the latest trading day by itself.
+    """
+
     snapshot = await client.fetch_constituents(payload.universe_code, payload.as_of)
     raw_ref = artifacts.write(
         f"constituents-{payload.universe_code}-{payload.as_of.isoformat()}",
@@ -67,7 +85,7 @@ async def sync_universe(
         diff = await UniverseRepository(session).apply_constituent_snapshot(
             payload.universe_code, snapshot
         )
-    return {
+    metadata: dict[str, object] = {
         "universe_code": payload.universe_code,
         "as_of": payload.as_of.isoformat(),
         "effective_date": diff.effective_date.isoformat() if diff.effective_date else None,
@@ -77,6 +95,24 @@ async def sync_universe(
         "changed": diff.changed,
         "raw_ref": raw_ref,
     }
+    metadata["directory"] = await _refresh_directory(
+        client, lease, today=today or shanghai_today()
+    )
+    return metadata
+
+
+async def _refresh_directory(
+    client: ReferenceClient, lease: RunLease | None, *, today: date
+) -> dict[str, object]:
+    """Best-effort directory refresh; any failure is reported, never raised."""
+
+    try:
+        async with session_scope() as session:
+            await fence_writes(session, lease)
+            return await sync_directory(session, client, today=today)
+    except Exception as exc:  # the universe sync itself succeeded
+        log.warning("directory_sync_failed", error=str(exc), exc_info=exc)
+        return {"error": f"{type(exc).__name__}: {exc}"}
 
 
 async def sync_industry(

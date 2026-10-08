@@ -156,7 +156,7 @@ async def test_live_snapshots_exclude_backfill_watchlist_failed_and_empty_runs(d
 async def test_empty_database_is_quiet(db_session) -> None:
     health = await build_data_health(db_session, health_settings(), now=NOW, today=TODAY)
     assert {w.level for w in health.warnings} <= {"info"}
-    assert _codes(health) == {"market_never_collected", "universe_never_synced"}
+    assert _codes(health) == {"market_never_collected", "universe_never_synced", "directory_missing"}
     assert health.collections == []
     assert health.accumulation.streak_weeks == 0
     assert health.backfill.as_of is None and health.backfill.parts == []
