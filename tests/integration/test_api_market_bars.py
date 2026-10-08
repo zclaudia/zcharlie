@@ -74,7 +74,7 @@ async def test_bars_default_window_and_order(api_client):
     assert response.status_code == 200
     body = response.json()
     assert body["ticker"] == "600519.SH"
-    assert body["provider"] == "baostock"
+    assert body["provider"] == "baostock,tencent"  # D2 precedence (plan 02)
     assert datetime.fromisoformat(body["as_of"]).tzinfo is not None
     bars = body["bars"]
     assert len(bars) == 120
@@ -91,40 +91,38 @@ async def test_bars_default_window_and_order(api_client):
     assert len(everything["bars"]) == SEEDED_BARS
 
 
-async def test_bars_filter_rows_captured_after_as_of_and_other_providers(api_client):
+async def test_bars_filter_rows_captured_after_as_of_and_prefer_baostock(api_client):
     listing_id = await _seed("600519.SH", 1000)
     today = shanghai_today()
-    async with session_scope() as session:
-        repo = MarketSnapshotRepository(session)
-        value = Decimal(5)
-        # A live row whose capture lies in the future is not knowledge yet.
-        await repo.insert(
-            listing_id=listing_id,
-            trade_date=today,
-            open=value,
-            high=value,
-            low=value,
-            close=value,
-            volume=Decimal(100),
-            provider="baostock",
-            captured_at=datetime.now(UTC) + timedelta(days=1),
-        )
-        # Another provider's bar for the same day is ignored by the pinned series.
-        await repo.insert(
-            listing_id=listing_id,
-            trade_date=today,
-            open=value,
-            high=value,
-            low=value,
-            close=value,
-            volume=Decimal(100),
-            provider="tencent",
-            captured_at=datetime.now(UTC) - timedelta(minutes=5),
-        )
+    yesterday = _weekdays_back(1)[0]
+
+    async def insert(day, close, provider, captured):
+        async with session_scope() as session:
+            value = Decimal(close)
+            await MarketSnapshotRepository(session).insert(
+                listing_id=listing_id,
+                trade_date=day,
+                open=value,
+                high=value,
+                low=value,
+                close=value,
+                volume=Decimal(100),
+                provider=provider,
+                captured_at=captured,
+            )
+
+    # A live row whose capture lies in the future is not knowledge yet.
+    await insert(today, 5, "baostock", datetime.now(UTC) + timedelta(days=1))
+    # The Tencent close quote already stored for today fills the day (D2).
+    await insert(today, 7, "tencent", datetime.now(UTC) - timedelta(minutes=5))
+    # Yesterday has both sources: the baostock bar wins over the Tencent quote.
+    await insert(yesterday, 9, "tencent", datetime.now(UTC) - timedelta(hours=2))
 
     body = api_client.get("/market/600519.SH/bars?days=20", headers=H).json()
     assert len(body["bars"]) == 20
-    assert body["bars"][-1]["trade_date"] == _weekdays_back(1)[0].isoformat()
+    assert body["bars"][-1] == {"trade_date": today.isoformat(), "close": 7.0}
+    assert body["bars"][-2]["trade_date"] == yesterday.isoformat()
+    assert body["bars"][-2]["close"] == 1000 + SEEDED_BARS - 1  # baostock, not 9.0
     assert all(bar["close"] != 5.0 for bar in body["bars"])
 
 
@@ -134,7 +132,7 @@ async def test_bars_empty_when_no_snapshots(api_client):
     body = api_client.get("/market/300750.SZ/bars", headers=H).json()
     assert body == {
         "ticker": "300750.SZ",
-        "provider": "baostock",
+        "provider": "baostock,tencent",
         "as_of": body["as_of"],
         "bars": [],
     }

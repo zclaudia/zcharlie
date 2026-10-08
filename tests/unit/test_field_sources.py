@@ -127,7 +127,7 @@ def test_free_providers():
 
 def test_registry_definitions_name_units_and_key_fields_are_calibrated():
     registry = default_field_sources()
-    assert registry.version == "2026-10-09.1"
+    assert registry.version == "2026-10-09.2"
     for source in registry:
         assert any(word in source.definition for word in UNIT_WORDS), source.name
     checked = date(2026, 10, 6)
@@ -162,6 +162,7 @@ def test_new_provider_entries_need_a_calibration_record():
     document = _document()
     close = document["fields"]["close"]
     close["fallback"] = ["tencent"]
+    close.pop("calibration", None)  # the shipped entry carries the tencent record
     with pytest.raises(FieldSourceError, match="calibration"):
         parse_field_sources(document)
     close["calibration"] = {

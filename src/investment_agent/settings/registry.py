@@ -128,6 +128,8 @@ class SnapshotSchedule(SnapshotScheduleConfig):
         "universe_sync_cron",
         "industry_sync_cron",
         "market_snapshot_cron",
+        "close_quote_cron",
+        "close_quote_retry_cron",
         "financial_weekly_cron",
         "financial_deadline_cron",
     )(_check_cron)
@@ -288,6 +290,16 @@ SPECS: tuple[SettingSpec, ...] = (
     _yaml(
         "schedule.snapshot.market_snapshot_cron", "行情快照 cron",
         _CRON_HELP + "仅在交易日执行。", ("snapshot", "market_snapshot_cron"),
+    ),
+    _yaml(
+        "schedule.snapshot.close_quote_cron", "收盘快照 cron",
+        _CRON_HELP + "仅在交易日执行；腾讯批量报价写入当日收盘价（15:00 后）。",
+        ("snapshot", "close_quote_cron"),
+    ),
+    _yaml(
+        "schedule.snapshot.close_quote_retry_cron", "收盘快照补采 cron",
+        _CRON_HELP + "仅在交易日执行；补采 15:10 仍未收盘 / 未报价的标的。",
+        ("snapshot", "close_quote_retry_cron"),
     ),
     _yaml(
         "schedule.snapshot.financial_weekly_cron", "财务周采 cron", _CRON_HELP,

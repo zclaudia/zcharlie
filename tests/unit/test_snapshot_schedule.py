@@ -182,6 +182,8 @@ def test_build_scheduler_registers_snapshot_jobs(monkeypatch):
         "snapshot_universe_sync",
         "snapshot_industry_sync",
         "snapshot_market_snapshot",
+        "snapshot_close_quote",
+        "snapshot_close_quote_retry",
         "snapshot_financial_weekly",
     }
     market = jobs["snapshot_market_snapshot"]
@@ -246,13 +248,19 @@ async def test_startup_catches_up_snapshot_jobs_that_fired_today(db_session):
         scheduler=SchedulerConfig(a_share_calendar_path=CALENDAR_PATH),
         snapshot=SnapshotScheduleConfig(),
     )
-    # Wednesday 2026-09-30 19:30 Asia/Shanghai: market (18:30), the gated
-    # 08:00 industry and 19:00 deadline jobs already fired today;
-    # Monday/Saturday jobs did not.
+    # Wednesday 2026-09-30 19:30 Asia/Shanghai: market (18:30), the close
+    # quote (15:10) and its retry (16:00), the gated 08:00 industry and 19:00
+    # deadline jobs already fired today; Monday/Saturday jobs did not.
     caught = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 30, 11, 30, tzinfo=UTC))
-    assert set(caught) == {"industry_sync", "market_snapshot", "financial_deadline"}
+    assert set(caught) == {
+        "industry_sync", "market_snapshot", "close_quote", "close_quote_retry", "financial_deadline",
+    }
     runs = await _runs()
-    assert [run.kind for run in runs] == ["market_snapshot"]
+    assert [run.kind for run in runs] == ["market_snapshot", "close_quote", "close_quote"]
+    assert [run.idempotency_key for run in runs[1:]] == [
+        "close_quote:tencent:CSI300:2026-09-30",
+        "close_quote:tencent:CSI300:2026-09-30:retry",
+    ]
 
     early = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 29, 23, 0, tzinfo=UTC))
     assert early == []  # 07:00 Shanghai: nothing has fired yet

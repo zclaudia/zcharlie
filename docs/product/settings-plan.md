@@ -53,7 +53,7 @@
 | verification | `ifind_budget_per_5h` `ifind_budget_window_hours` `ifind_verify_max_requests` | 现有默认 | next_job | env |
 | candidates | `candidate_expiry_days` `candidate_dismiss_cooldown_days` | 14 / 30 | live | env |
 | schedule | `watchlist_refresh_cron` / `_timezone` | yaml | reschedule | app.yaml |
-| schedule | `snapshot.*`（universes、timezone、5 个 cron） | yaml | reschedule | app.yaml |
+| schedule | `snapshot.*`（universes、timezone、7 个 cron，含 `close_quote_cron` 15:10 / `close_quote_retry_cron` 16:00 的腾讯收盘快照） | yaml | reschedule | app.yaml |
 | schedule | `screen.*`（universes、timezone、cron、hit_cap） | yaml | reschedule | app.yaml |
 | schedule | `candidates.expiry_sweep_cron` / timezone | yaml | reschedule | app.yaml |
 | schedule | `verification.*`（timezone、2 个 cron、calibration_count） | yaml | reschedule | app.yaml |

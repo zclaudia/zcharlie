@@ -4,17 +4,40 @@ Rows written by the historical backfill (P1-A4) carry ``is_backfill=True``:
 they are captured years after their trade date, so readers decide whether
 their knowledge time comes from ``captured_at`` (strict) or from the trade
 date itself (prices are never restated) - see :meth:`series_as_of`.
+
+Two live sources can hold the same trade date (mrd-intake B2, decision D2):
+the Tencent close quote stored at 15:10 and the baostock bar stored in the
+evening. :data:`MARKET_PROVIDER_PRECEDENCE` decides which one a reader that
+does not pin a provider gets: baostock whenever it is there, Tencent only
+for a day baostock has not delivered yet.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 
 from investment_agent.storage.models.pit_snapshot import MARKET_ADJUST_KINDS, MarketSnapshot
 from investment_agent.storage.repositories.base import Repository
 from investment_agent.storage.repositories.pit import to_utc
+
+MARKET_PROVIDER_PRECEDENCE: tuple[str, ...] = ("baostock", "tencent")
+"""Provider order for a trade date held by several sources (``provider=None``
+reads): the first listed provider present wins; providers not listed rank
+after all of them (``config/field_sources.yaml`` ``close`` mirrors this)."""
+
+
+def preferred_row(
+    rows: Mapping[str, MarketSnapshot], precedence: Sequence[str] = MARKET_PROVIDER_PRECEDENCE
+) -> MarketSnapshot:
+    """The row of the highest-ranked provider (ties: latest version, then name)."""
+
+    rank = {name: index for index, name in enumerate(precedence)}
+    fallback = len(precedence)
+    return min(
+        rows.values(), key=lambda row: (rank.get(row.provider, fallback), -row.version, row.provider)
+    )
 
 
 class MarketSnapshotRepository(Repository[MarketSnapshot]):
@@ -92,12 +115,16 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
         as_of_captured: datetime,
         *,
         adjust: str = "none",
-        provider: str | None = None,
+        provider: str | Sequence[str] | None = None,
         include_backfill: bool = True,
     ) -> list[MarketSnapshot]:
         """Latest version per trade date in ``[start, end]`` known at ``as_of_captured``.
 
-        ``provider`` restricts the series to one source (``None`` = any).
+        ``provider``: a name restricts the series to that source; a sequence
+        restricts it to those sources **in precedence order** (the first one
+        present on a trade date wins, then the latest version); ``None``
+        takes every source, ranked by :data:`MARKET_PROVIDER_PRECEDENCE`
+        (unlisted providers after the listed ones).
 
         Knowledge time follows :meth:`FinancialSnapshotRepository.latest_available`:
         live rows count from their ``captured_at``. Backfilled rows
@@ -109,20 +136,24 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
         ``captured_at <= as_of_captured`` rule to every row.
         """
 
-        cutoff = to_utc(as_of_captured)
-        known = MarketSnapshot.captured_at <= cutoff
-        knowledge = (
-            or_(known, MarketSnapshot.is_backfill.is_(True)) if include_backfill else known
-        )
+        if not isinstance(provider, str):
+            precedence = MARKET_PROVIDER_PRECEDENCE if provider is None else tuple(provider)
+            by_date = await self.series_by_provider(
+                listing_id,
+                start,
+                end,
+                as_of_captured,
+                adjust=adjust,
+                providers=None if provider is None else precedence,
+                include_backfill=include_backfill,
+            )
+            return [
+                preferred_row(rows, precedence) for _, rows in sorted(by_date.items())
+            ]
         conditions = [
-            MarketSnapshot.listing_id == listing_id,
-            MarketSnapshot.adjust == adjust,
-            MarketSnapshot.trade_date >= start,
-            MarketSnapshot.trade_date <= end,
-            knowledge,
+            *self._window(listing_id, start, end, as_of_captured, adjust, include_backfill),
+            MarketSnapshot.provider == provider,
         ]
-        if provider is not None:
-            conditions.append(MarketSnapshot.provider == provider)
         latest = (
             select(
                 MarketSnapshot.trade_date.label("trade_date"),
@@ -146,6 +177,81 @@ class MarketSnapshotRepository(Repository[MarketSnapshot]):
             .order_by(MarketSnapshot.trade_date)
         )
         return list((await self.session.execute(stmt)).scalars().all())
+
+    @staticmethod
+    def _window(
+        listing_id: int,
+        start: date,
+        end: date,
+        as_of_captured: datetime,
+        adjust: str,
+        include_backfill: bool,
+    ) -> list[ColumnElement[bool]]:
+        cutoff = to_utc(as_of_captured)
+        known = MarketSnapshot.captured_at <= cutoff
+        knowledge = (
+            or_(known, MarketSnapshot.is_backfill.is_(True)) if include_backfill else known
+        )
+        return [
+            MarketSnapshot.listing_id == listing_id,
+            MarketSnapshot.adjust == adjust,
+            MarketSnapshot.trade_date >= start,
+            MarketSnapshot.trade_date <= end,
+            knowledge,
+        ]
+
+    async def series_by_provider(
+        self,
+        listing_id: int,
+        start: date,
+        end: date,
+        as_of_captured: datetime,
+        *,
+        adjust: str = "none",
+        providers: Sequence[str] | None = None,
+        include_backfill: bool = True,
+    ) -> dict[date, dict[str, MarketSnapshot]]:
+        """Latest version per trade date **and provider** known at ``as_of_captured``.
+
+        The cross-source view behind :meth:`series_as_of` (precedence) and
+        the factor layer's same-day close comparison (decision D2: a baostock
+        / Tencent close differing beyond the registry tolerance is a
+        ``conflict``). ``providers`` limits the sources (``None`` = all).
+        """
+
+        conditions = self._window(listing_id, start, end, as_of_captured, adjust, include_backfill)
+        if providers is not None:
+            if not providers:
+                return {}
+            conditions.append(MarketSnapshot.provider.in_(list(providers)))
+        latest = (
+            select(
+                MarketSnapshot.trade_date.label("trade_date"),
+                MarketSnapshot.provider.label("provider"),
+                func.max(MarketSnapshot.version).label("version"),
+            )
+            .where(*conditions)
+            .group_by(MarketSnapshot.trade_date, MarketSnapshot.provider)
+            .subquery()
+        )
+        stmt = (
+            select(MarketSnapshot)
+            .join(
+                latest,
+                (MarketSnapshot.trade_date == latest.c.trade_date)
+                & (MarketSnapshot.provider == latest.c.provider)
+                & (MarketSnapshot.version == latest.c.version),
+            )
+            .where(
+                MarketSnapshot.listing_id == listing_id,
+                MarketSnapshot.adjust == adjust,
+            )
+            .order_by(MarketSnapshot.trade_date, MarketSnapshot.provider)
+        )
+        result: dict[date, dict[str, MarketSnapshot]] = {}
+        for row in (await self.session.execute(stmt)).scalars().all():
+            result.setdefault(row.trade_date, {})[row.provider] = row
+        return result
 
     async def latest_trade_dates(
         self, listing_ids: Sequence[int], *, adjust: str, provider: str | None = None

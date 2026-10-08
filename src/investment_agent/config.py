@@ -161,6 +161,10 @@ class SnapshotScheduleConfig(BaseModel):
     # baostock publishes the day's bars in the evening; 18:30 is a margin over
     # the observed availability (re-verify on a normal trading day).
     market_snapshot_cron: str | None = "30 18 * * 1-5"
+    # Tencent same-day close (mrd-intake B2) right after the 15:00 close, and
+    # a retry for listings still pending (feed lag, late quotes) at 16:00.
+    close_quote_cron: str | None = "10 15 * * 1-5"
+    close_quote_retry_cron: str | None = "0 16 * * 1-5"
     financial_weekly_cron: str | None = "0 9 * * 6"
     # Also runs the overdue-report scan; evening, so deadline-day reports
     # have reached baostock.
@@ -180,6 +184,8 @@ class SnapshotScheduleConfig(BaseModel):
             "universe_sync": self.universe_sync_cron,
             "industry_sync": self.industry_sync_cron,
             "market_snapshot": self.market_snapshot_cron,
+            "close_quote": self.close_quote_cron,
+            "close_quote_retry": self.close_quote_retry_cron,
             "financial_weekly": self.financial_weekly_cron,
             "financial_deadline": self.financial_deadline_cron,
         }

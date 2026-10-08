@@ -111,7 +111,14 @@ def _ref(
 
 
 def _bar_ref(bar: Bar) -> dict[str, Any]:
-    return {"trade_date": bar.trade_date.isoformat(), "ref": bar.ref}
+    ref: dict[str, Any] = {"trade_date": bar.trade_date.isoformat(), "ref": bar.ref}
+    if bar.provider is not None:
+        ref["provider"] = bar.provider
+    if bar.conflicts:
+        # D2: another source's same-day close beyond the registry tolerance.
+        ref["verification"] = "conflict"
+        ref["conflicts"] = [dict(item) for item in bar.conflicts]
+    return ref
 
 
 # --------------------------------------------------------------------------- #

@@ -36,7 +36,15 @@
 #              2.1 / 2.2 live checks of 2026-10-06). Required for any provider
 #              other than baostock / akshare (a new source never enters
 #              uncalibrated); optional for those two.
-version: "2026-10-09.1"
+#
+# market table (mrd-intake B2, decision D2): the Tencent close quote
+# (provider `tencent`, stored at 15:10) is the fallback of the baostock bar
+# for the same trade date; readers take baostock once it is there, and a
+# same-day `close` differing by more than `tolerance` (0.1 %) is a `conflict`
+# in the factor view. Tencent calibration: qt.gtimg.cn live 2026-10-09 06:46
+# CST (2026-10-08 close of 600519 / 000001 / 920748 / 000002; recorded in
+# tests/fixtures/tencent/quotes_sample.txt).
+version: "2026-10-09.2"
 default_tolerance: 0.02
 
 fields:
@@ -207,15 +215,78 @@ fields:
     formula: "revenue_total / total_shares"
     definition: "revenue per share of the fiscal year, CNY/share"
 
-  # -- daily bars (market_snapshot, baostock) ------------------------------- #
+  # -- daily bars (market_snapshot: baostock, tencent close quote fallback) - #
   close:
     table: market
     primary: baostock
-    definition: "close, CNY/share; adjust=none raw, adjust=backward 后复权"
+    fallback: [tencent]
+    tolerance: 0.001
+    definition: "close, CNY/share; adjust=none raw, adjust=backward 后复权 (tencent: raw only)"
     calibration:
       baostock:
         checked_on: 2026-10-06
         method: "query_history_k_data_plus live: 600519 close 1258.62 on 2026-09-30 equals iFinD"
+      tencent:
+        checked_on: 2026-10-09
+        method: >-
+          qt.gtimg.cn live: field 3 is the last price in CNY/share (600519 1255.79 on
+          2026-10-08 after the close); field 4 (previous close) 1258.62 equals the
+          baostock 2026-09-30 close
+  open:
+    table: market
+    primary: baostock
+    fallback: [tencent]
+    tolerance: 0.001
+    definition: "open, CNY/share (adjust=none)"
+    calibration:
+      tencent:
+        checked_on: 2026-10-09
+        method: "qt.gtimg.cn live: field 5 open in CNY/share (600519 1252.90 on 2026-10-08)"
+  high:
+    table: market
+    primary: baostock
+    fallback: [tencent]
+    tolerance: 0.001
+    definition: "day high, CNY/share (adjust=none)"
+    calibration:
+      tencent:
+        checked_on: 2026-10-09
+        method: "qt.gtimg.cn live: field 33 high in CNY/share (600519 1258.00 on 2026-10-08)"
+  low:
+    table: market
+    primary: baostock
+    fallback: [tencent]
+    tolerance: 0.001
+    definition: "day low, CNY/share (adjust=none)"
+    calibration:
+      tencent:
+        checked_on: 2026-10-09
+        method: "qt.gtimg.cn live: field 34 low in CNY/share (600519 1242.00 on 2026-10-08)"
+  volume:
+    table: market
+    primary: baostock
+    fallback: [tencent]
+    tolerance: 0.001
+    definition: "volume, shares (baostock volume; tencent field 6 in 手 x 100)"
+    calibration:
+      tencent:
+        checked_on: 2026-10-09
+        method: >-
+          qt.gtimg.cn live: field 6 is lots of 100 shares (600519 25168 手 on 2026-10-08;
+          field 35 price/volume/amount repeats it), stored x 100
+  amount:
+    table: market
+    primary: baostock
+    fallback: [tencent]
+    tolerance: 0.001
+    definition: "turnover amount, CNY (baostock amount; tencent field 37 in 万元 x 1e4)"
+    calibration:
+      tencent:
+        checked_on: 2026-10-09
+        method: >-
+          qt.gtimg.cn live: field 37 is 万元 (600519 314541 on 2026-10-08 while field 35
+          carries the exact 3145413157 CNY), stored x 10000; rounding to 1 万元 keeps the
+          relative error far below the tolerance for CSI 300 turnover
   pe_ttm:
     table: market
     primary: baostock
@@ -231,7 +302,15 @@ fields:
   turnover:
     table: market
     primary: baostock
+    fallback: [tencent]
+    tolerance: 0.001
     definition: "turn percent / 100, fraction of float shares traded"
+    calibration:
+      tencent:
+        checked_on: 2026-10-09
+        method: >-
+          qt.gtimg.cn live: field 38 is a percent (600519 0.20 on 2026-10-08, 000001 0.76),
+          stored / 100 like the baostock turn
   is_st:
     table: market
     primary: baostock

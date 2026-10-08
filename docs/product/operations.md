@@ -50,6 +50,8 @@
 | 成分同步 `universe_sync` | 周一 08:00 | — | 有进出时发 `info` 通知 |
 | 行业同步 `industry_sync` | 每天 08:00 | 当月首个交易日 | 证监会 + 申万 |
 | 日线快照 `market_snapshot` | 周一至周五 18:30 | 交易日 | baostock；发布时间待节后首个交易日确认 |
+| 收盘快照 `close_quote` | 周一至周五 15:10 | 交易日 | 腾讯批量报价写入当日收盘（目标池 + 观察池 + 候选 + 持仓，`provider=tencent`）；cron 键 `snapshot.close_quote_cron` |
+| 收盘快照补采 | 周一至周五 16:00 | 交易日 | 同日第二次运行，只补 15:10 仍未收盘 / 未报价的标的；`snapshot.close_quote_retry_cron`。18:30 baostock 到达后读取以 baostock 为准，同日收盘价差超 0.1% 记 `conflict` |
 | 自选股研究刷新 | 周一至周五 19:30 | 交易日 | snapshot 模式，读取当天快照 |
 | 财报快照（周） | 周六 09:00 | — | baostock + 东财按期汇总；披露季内加东财现金流量表 |
 | 财报快照（截止日） | 每天 19:00 | 4/30、8/31、10/31 后首个交易日 | 同时检测逾期披露 |
@@ -67,6 +69,7 @@
   - 「快照积累 X / 8 周」是 P1 阶段退出指标：连续 8 个完整周（每周每个交易日日线完整率 ≥
     `SNAPSHOT_COMPLETENESS_THRESHOLD`，默认 0.95）；无交易日的周不计也不中断。
   - 采集完整率、缺失清单、新鲜度、回补进度、iFinD 预算与核对队列、来源冲突、逾期披露。
+    新鲜度区块同时显示 baostock 日线与腾讯收盘快照的最新日期；`market_stale` 仍只看 baostock。
   - 「上游调用」：每个免费数据源（baostock / AkShare）最近 24 小时的调用 / 失败 / 熔断拒绝次数与熔断状态，
     来自 `provider_call` 台账（见 4.1）。
   - 警告级别 warn / error 同时显示在首页。

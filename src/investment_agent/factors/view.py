@@ -83,12 +83,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.factors.field_sources import (
+    MARKET_ANCHOR_FIELD,
     VERIFIER,
     FieldSource,
     FieldSourceRegistry,
     Formula,
     Verification,
     default_field_sources,
+    market_precedence,
     relative_difference,
 )
 from investment_agent.factors.industry_groups import (
@@ -111,7 +113,10 @@ from investment_agent.storage.models.pit_snapshot import (
 from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.industry import IndustryRepository
 from investment_agent.storage.repositories.listing import ListingRepository
-from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
+from investment_agent.storage.repositories.market_snapshot import (
+    MarketSnapshotRepository,
+    preferred_row,
+)
 from investment_agent.storage.repositories.pit import end_of_business_day_utc
 from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
 
@@ -224,7 +229,8 @@ def factor_fields(provider: str, stored: Mapping[str, object]) -> dict[str, floa
 
 @dataclass(frozen=True)
 class Bar:
-    """One daily bar. Valuation / status columns are baostock-only."""
+    """One daily bar. Valuation / status columns are baostock-only (``pe_ttm``
+    and ``turnover`` also come with a Tencent close quote)."""
 
     trade_date: date
     close: float
@@ -237,6 +243,10 @@ class Bar:
     total_shares: float | None = None
     """iFinD rows only (baostock market cap uses financial total shares)."""
     ref: str | None = None
+    provider: str | None = None
+    """Source of this bar when read through the market precedence (D2)."""
+    conflicts: tuple[Mapping[str, Any], ...] = ()
+    """Other sources' same-day closes beyond the ``close`` tolerance (D2)."""
 
 
 @dataclass(frozen=True)
@@ -690,7 +700,9 @@ def _decimal(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
-def _bar_from_row(row: MarketSnapshot) -> Bar:
+def _bar_from_row(
+    row: MarketSnapshot, *, conflicts: Sequence[Mapping[str, Any]] = ()
+) -> Bar:
     return Bar(
         trade_date=row.trade_date,
         close=float(row.close),
@@ -702,7 +714,45 @@ def _bar_from_row(row: MarketSnapshot) -> Bar:
         is_st=row.is_st,
         total_shares=_decimal(row.total_shares),
         ref=f"market_snapshot:{row.id}",
+        provider=row.provider,
+        conflicts=tuple(dict(item) for item in conflicts),
     )
+
+
+def resolve_market_bars(
+    by_date: Mapping[date, Mapping[str, MarketSnapshot]],
+    precedence: Sequence[str],
+    *,
+    tolerance: float,
+) -> list[Bar]:
+    """Bars across providers (D2): the first source in ``precedence`` present on a
+    trade date wins; another source's close beyond ``tolerance`` is a conflict
+    on the bar (the registry's ``close`` tolerance, 0.1 % for Tencent)."""
+
+    bars: list[Bar] = []
+    for trade_date in sorted(by_date):
+        rows = by_date[trade_date]
+        chosen = preferred_row(rows, precedence)
+        close = float(chosen.close)
+        conflicts: list[dict[str, Any]] = []
+        for provider, row in sorted(rows.items()):
+            if provider == chosen.provider:
+                continue
+            other = float(row.close)
+            difference = relative_difference(close, other)
+            if difference > tolerance:
+                conflicts.append(
+                    {
+                        "field": "close",
+                        "provider": provider,
+                        "value": other,
+                        "ref": f"market_snapshot:{row.id}",
+                        "relative_difference": round(difference, 6),
+                        "tolerance": tolerance,
+                    }
+                )
+        bars.append(_bar_from_row(chosen, conflicts=conflicts))
+    return bars
 
 
 async def _market_series(
@@ -918,15 +968,37 @@ async def load_snapshot_view(
         if shenwan is not None
         else None
     )
-    raw_rows = await _market_series(
-        session,
-        listing.id,
-        as_of - timedelta(days=PRICE_HISTORY_DAYS),
-        as_of,
-        knowledge_cutoff,
-        adjust="none",
-        provider=policy.provider,
-    )
+    registry = field_sources or default_field_sources()
+    if policy.resolves:
+        # D2: baostock first, the Tencent same-day close until it arrives;
+        # a same-day close beyond the registry tolerance is a conflict.
+        precedence = market_precedence(registry)
+        raw_bars = resolve_market_bars(
+            await MarketSnapshotRepository(session).series_by_provider(
+                listing.id,
+                as_of - timedelta(days=PRICE_HISTORY_DAYS),
+                as_of,
+                knowledge_cutoff,
+                adjust="none",
+                providers=precedence,
+                include_backfill=True,
+            ),
+            precedence,
+            tolerance=registry.tolerance(MARKET_ANCHOR_FIELD),
+        )
+    else:
+        raw_bars = [
+            _bar_from_row(row)
+            for row in await _market_series(
+                session,
+                listing.id,
+                as_of - timedelta(days=PRICE_HISTORY_DAYS),
+                as_of,
+                knowledge_cutoff,
+                adjust="none",
+                provider=policy.provider,
+            )
+        ]
     adjusted_rows = await _market_series(
         session,
         listing.id,
@@ -951,7 +1023,7 @@ async def load_snapshot_view(
         policy=policy,
         industry_code=industry.code if industry else None,
         industry_name=industry.name if industry else None,
-        raw_bars=[_bar_from_row(row) for row in raw_rows],
+        raw_bars=raw_bars,
         adjusted_bars=[_bar_from_row(row) for row in adjusted_rows],
         periods=_financial_periods(financial_rows, policy, field_sources),
         overdue_periods=[record.report_period for record in overdue],

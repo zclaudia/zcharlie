@@ -16,6 +16,12 @@ backfill runs (rows ``is_backfill``; scope = every member since the period).
 Dividends (F2 / Q2): ``dividend_snapshot`` collects baostock dividend events
 (``query_dividend_data``, by ex-date year) for the payload's scope; the
 weekly financial schedule enqueues it for the current and previous year.
+
+Close quotes (mrd-intake B2): ``close_quote`` stores the same-day close of the
+target pool, the watchlist, open candidates and holdings from the Tencent
+batch quote feed (``provider="tencent"``) at 15:10, hours before the baostock
+bars; readers prefer baostock once it is there (decision D2). The 16:00
+``slot="retry"`` run re-collects what was still ``pending`` at 15:10.
 """
 
 from __future__ import annotations
@@ -39,6 +45,7 @@ MARKET_SNAPSHOT = "market_snapshot"
 FINANCIAL_SNAPSHOT = "financial_snapshot"
 SNAPSHOT_BACKFILL = "snapshot_backfill"
 DIVIDEND_SNAPSHOT = "dividend_snapshot"
+CLOSE_QUOTE = "close_quote"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
@@ -46,11 +53,14 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     FINANCIAL_SNAPSHOT,
     SNAPSHOT_BACKFILL,
     DIVIDEND_SNAPSHOT,
+    CLOSE_QUOTE,
 )
 
-SnapshotProvider = Literal["baostock", "ifind", "akshare"]
+SnapshotProvider = Literal["baostock", "ifind", "akshare", "tencent"]
 SnapshotScope = Literal["universe", "watchlist"]
-SNAPSHOT_PROVIDERS: tuple[SnapshotProvider, ...] = ("baostock", "ifind", "akshare")
+SNAPSHOT_PROVIDERS: tuple[SnapshotProvider, ...] = ("baostock", "ifind", "akshare", "tencent")
+CloseQuoteSlot = Literal["close", "retry"]
+CLOSE_QUOTE_SLOTS: tuple[CloseQuoteSlot, ...] = ("close", "retry")
 AkshareFinancialPart = Literal["summary", "cash_flow"]
 AKSHARE_FINANCIAL_PARTS: tuple[AkshareFinancialPart, ...] = ("summary", "cash_flow")
 SNAPSHOT_SCOPES: tuple[SnapshotScope, ...] = ("universe", "watchlist")
@@ -139,6 +149,8 @@ class MarketSnapshotPayload(_CollectionPayload):
     def _market_provider(self) -> Self:
         if self.provider == "akshare":
             raise ValueError("AkShare (Eastmoney) collects financials only, not daily bars")
+        if self.provider == "tencent":
+            raise ValueError("Tencent serves the close_quote job only, not daily bar history")
         return self
 
 
@@ -168,6 +180,8 @@ class FinancialSnapshotPayload(_CollectionPayload):
 
     @model_validator(mode="after")
     def _akshare_options(self) -> Self:
+        if self.provider == "tencent":
+            raise ValueError("Tencent serves the close_quote job only, not financials")
         if self.provider != "akshare":
             if self.part is not None or self.extra_periods or self.backfill:
                 raise ValueError("part / extra_periods / backfill are AkShare options")
@@ -208,6 +222,26 @@ class DividendSnapshotPayload(_CollectionPayload):
         if any(year < 1990 or year > self.as_of.year + 1 for year in years):
             raise ValueError(f"dividend years out of range: {sorted(years)}")
         object.__setattr__(self, "years", tuple(sorted(set(years))))
+        return self
+
+
+class CloseQuotePayload(_CollectionPayload):
+    """Same-day close of the scope (plus watchlist, open candidates and holdings).
+
+    ``scope="universe"`` covers the target pool and the user's pools;
+    ``scope="watchlist"`` only the user's pools. ``slot`` tells the 15:10
+    collection from the 16:00 retry (same date, separate run; listings
+    already stored by either run - or by baostock - are skipped).
+    """
+
+    provider: SnapshotProvider = "tencent"
+    trade_date: date
+    slot: CloseQuoteSlot = "close"
+
+    @model_validator(mode="after")
+    def _close_quote_provider(self) -> Self:
+        if self.provider != "tencent":
+            raise ValueError("close quotes are collected from tencent only")
         return self
 
 
@@ -264,6 +298,7 @@ SnapshotPayload = (
     | FinancialSnapshotPayload
     | SnapshotBackfillPayload
     | DividendSnapshotPayload
+    | CloseQuotePayload
 )
 
 PAYLOAD_MODELS: dict[str, type[_Payload]] = {
@@ -273,6 +308,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     FINANCIAL_SNAPSHOT: FinancialSnapshotPayload,
     SNAPSHOT_BACKFILL: SnapshotBackfillPayload,
     DIVIDEND_SNAPSHOT: DividendSnapshotPayload,
+    CLOSE_QUOTE: CloseQuotePayload,
 }
 
 
@@ -310,6 +346,9 @@ def idempotency_key(payload: SnapshotPayload) -> str:
         return (
             f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
         )
+    if isinstance(payload, CloseQuotePayload):
+        key = f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
+        return key if payload.slot == "close" else f"{key}:{payload.slot}"
     key = (
         f"{kind}:{payload.provider}:{payload.scope_label}:"
         f"{payload.report_period.isoformat()}:{payload.as_of.isoformat()}"

@@ -5,6 +5,8 @@
 | universe_sync        | Mon 08:00            | none (trading-day agnostic)                  |
 | industry_sync        | daily 08:00          | first trading day of the month               |
 | market_snapshot      | Mon-Fri 18:30        | trading day                                  |
+| close_quote          | Mon-Fri 15:10        | trading day                                  |
+| close_quote_retry    | Mon-Fri 16:00        | trading day                                  |
 | financial_weekly     | Sat 09:00            | none                                         |
 | financial_deadline   | daily 19:00          | first trading day after 04-30 / 08-31 / 10-31 |
 
@@ -29,6 +31,12 @@ disclosure-season windows :data:`CASH_FLOW_WINDOWS` only (~1.4 h for CSI 300).
 Dividends (F2 / Q2): ``financial_weekly`` also enqueues one baostock
 ``dividend_snapshot`` per universe for the current and the previous ex-date
 year (~600 queries for CSI 300, a few minutes).
+
+Close quotes (mrd-intake B2): ``close_quote`` enqueues one Tencent
+``close_quote`` job per universe at 15:10 of a trading day (the target pool
+plus the watchlist, open candidates and holdings; ~6 requests for CSI 300);
+``close_quote_retry`` enqueues the ``slot="retry"`` run of the same date at
+16:00 for listings that were still ``pending`` at 15:10.
 """
 
 from __future__ import annotations
@@ -45,6 +53,7 @@ from investment_agent.scheduler.trading_calendar import TradingCalendar
 from investment_agent.snapshots.disclosure import statutory_deadline
 from investment_agent.snapshots.jobs import (
     INDUSTRY_SYSTEMS,
+    CloseQuotePayload,
     DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
@@ -61,6 +70,8 @@ SnapshotScheduleJob = Literal[
     "universe_sync",
     "industry_sync",
     "market_snapshot",
+    "close_quote",
+    "close_quote_retry",
     "financial_weekly",
     "financial_deadline",
 ]
@@ -68,6 +79,8 @@ SNAPSHOT_SCHEDULE_JOBS: tuple[SnapshotScheduleJob, ...] = (
     "universe_sync",
     "industry_sync",
     "market_snapshot",
+    "close_quote",
+    "close_quote_retry",
     "financial_weekly",
     "financial_deadline",
 )
@@ -195,6 +208,19 @@ def snapshot_payloads(
         return [
             MarketSnapshotPayload(
                 provider="baostock", scope="universe", universe_code=code, trade_date=today
+            )
+            for code in codes
+        ]
+    if job in ("close_quote", "close_quote_retry"):
+        if not calendar.is_trading_day(today):
+            return []
+        return [
+            CloseQuotePayload(
+                provider="tencent",
+                scope="universe",
+                universe_code=code,
+                trade_date=today,
+                slot="close" if job == "close_quote" else "retry",
             )
             for code in codes
         ]

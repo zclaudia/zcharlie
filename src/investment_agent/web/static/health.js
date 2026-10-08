@@ -26,6 +26,7 @@ export const KIND_LABELS = Object.freeze({
   universe_sync: "成分同步",
   industry_sync: "行业同步",
   market_snapshot: "日线快照",
+  close_quote: "收盘快照",
   financial_snapshot: "财报快照",
   dividend_snapshot: "分红快照",
 });
@@ -320,6 +321,14 @@ function renderFreshness(data) {
       lagKnown && market.lag_trading_days === 0,
       !lagKnown ? "—" : market.lag_trading_days === 0 ? "无落后" : `落后 ${market.lag_trading_days} 个交易日`,
       `最新 ${fmt(market.latest_trade_date)} · 应有 ${fmt(market.expected_trade_date)}`
+    )
+  );
+  list.appendChild(
+    freshRow(
+      "收盘快照",
+      Boolean(market.latest_close_quote_date) && market.latest_close_quote_date === market.last_trading_day,
+      market.latest_close_quote_date ? `最新 ${fmt(market.latest_close_quote_date)}` : "尚无",
+      "腾讯批量报价，15:10 写入当日收盘；日线到达后读取以 baostock 为准"
     )
   );
   box.appendChild(list);

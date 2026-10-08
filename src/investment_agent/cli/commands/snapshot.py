@@ -27,6 +27,7 @@ from investment_agent.snapshots.jobs import (
     SNAPSHOT_PROVIDERS,
     SNAPSHOT_SCOPES,
     AkshareFinancialPart,
+    CloseQuotePayload,
     DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
@@ -53,7 +54,8 @@ app = typer.Typer(help="Point-in-time snapshot collection (universe, industry, m
 _UNIVERSE_HELP = f"Universe code: {', '.join(INDEX_CODES)}"
 _PROVIDER_HELP = (
     "Data source: baostock (target pool breadth, default), ifind (watchlist only; "
-    "spends the iFinD gateway quota) or akshare (Eastmoney financials only)"
+    "spends the iFinD gateway quota) or akshare (Eastmoney financials only); "
+    "tencent serves collect-close-quote only"
 )
 _PART_HELP = (
     "akshare only: summary (whole-market period summaries, default) or cash_flow "
@@ -290,6 +292,38 @@ def collect_market(
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc), param_hint="--provider") from exc
+    _run(payload, now)
+
+
+@app.command("collect-close-quote")
+def collect_close_quote(
+    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    scope: str | None = typer.Option(
+        None,
+        help="universe (members of --universe plus watchlist / candidates / holdings, "
+        "default) or watchlist (the user's pools only)",
+    ),
+    trade_date: str | None = typer.Option(
+        None, "--date", help="Trade date (YYYY-MM-DD, default today in Asia/Shanghai)"
+    ),
+    retry: bool = typer.Option(
+        False, "--retry", help="The 16:00 retry slot (separate run; stored listings are skipped)"
+    ),
+    now: bool = typer.Option(False, "--now", help=_NOW_HELP),
+) -> None:
+    """Enqueue the Tencent same-day close (15:10 close quote) for the scope's listings."""
+
+    _, chosen_scope, code = _routing("tencent", scope, universe)
+    try:
+        payload = CloseQuotePayload(
+            provider="tencent",
+            scope=chosen_scope,
+            universe_code=code,
+            trade_date=_date(trade_date, "--date"),
+            slot="retry" if retry else "close",
+        )
+    except ValidationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--date") from exc
     _run(payload, now)
 
 

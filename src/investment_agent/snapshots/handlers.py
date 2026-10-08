@@ -5,6 +5,7 @@
 (target pool), ``ifind`` -> the iFinD batch collectors (watchlist only),
 ``akshare`` (financials only) -> :mod:`investment_agent.snapshots.eastmoney`.
 ``dividend_snapshot`` (baostock only) -> :mod:`investment_agent.snapshots.dividends`.
+``close_quote`` (tencent only) -> :mod:`investment_agent.snapshots.close_quote`.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ from investment_agent.providers.ledger import (
     circuit_ledger_hook,
     provider_ledger_hook,
 )
+from investment_agent.providers.tencent_quote import TencentQuoteClient
 from investment_agent.research.ifind_chain import IfindProxyClient
 from investment_agent.snapshots.backfill import BackfillClient, run_backfill_part
 from investment_agent.snapshots.breadth import (
@@ -38,6 +40,7 @@ from investment_agent.snapshots.breadth import (
     collect_baostock_financial,
     collect_baostock_market,
 )
+from investment_agent.snapshots.close_quote import CloseQuoteClient, collect_close_quotes
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
     CollectionReport,
@@ -51,6 +54,7 @@ from investment_agent.snapshots.eastmoney import (
 )
 from investment_agent.snapshots.financial import collect_financial_snapshot
 from investment_agent.snapshots.jobs import (
+    CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
@@ -58,6 +62,7 @@ from investment_agent.snapshots.jobs import (
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     UNIVERSE_SYNC,
+    CloseQuotePayload,
     DividendSnapshotPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
@@ -86,6 +91,7 @@ BackfillFactory = Callable[[], BackfillClient]
 ShenwanFactory = Callable[[], ShenwanClient]
 EastmoneyFactory = Callable[[], EastmoneyCollectorClient]
 DividendFactory = Callable[[], DividendClient]
+CloseQuoteFactory = Callable[[], CloseQuoteClient]
 
 
 def _utc_now() -> datetime:
@@ -109,6 +115,7 @@ class SnapshotRuntime:
     shenwan_factory: ShenwanFactory = AkshareShenwanClient
     eastmoney_factory: EastmoneyFactory = AkshareEastmoneyClient
     dividend_factory: DividendFactory = BaostockMarketClient
+    close_quote_factory: CloseQuoteFactory = TencentQuoteClient
     circuit: CircuitBreaker = field(default_factory=lambda: CircuitBreaker(_utc_now))
     """Process-wide provider circuit breaker (A1): one per worker, shared by
     every client the factories build and by the collectors' own breakers."""
@@ -151,6 +158,7 @@ def default_runtime(settings: Settings) -> SnapshotRuntime:
             circuit=circuit,
             on_call=on_call,
         ),
+        close_quote_factory=lambda: TencentQuoteClient(_utc_now, circuit=circuit, on_call=on_call),
         circuit=circuit,
     )
 
@@ -251,6 +259,16 @@ class SnapshotJobHandler(BaseJobHandler):
                 artifacts=artifacts,
                 lease=lease,
                 now=self.runtime.clock,
+            )
+            return await self._settle(report, job.run_id, lease)
+        if self.kind == CLOSE_QUOTE:
+            report = await collect_close_quotes(
+                CloseQuotePayload.model_validate(request),
+                client=self.runtime.close_quote_factory(),
+                artifacts=artifacts,
+                lease=lease,
+                now=self.runtime.clock,
+                circuit=self.runtime.circuit,
             )
             return await self._settle(report, job.run_id, lease)
         if self.kind == MARKET_SNAPSHOT:

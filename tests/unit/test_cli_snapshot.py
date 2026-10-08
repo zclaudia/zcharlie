@@ -51,7 +51,7 @@ def test_snapshot_help_lists_commands():
     result = CliRunner().invoke(app, ["snapshot", "--help"])
     assert result.exit_code == 0
     for command in ("sync-universe", "sync-industry", "collect-market", "collect-financial",
-                    "status"):
+                    "collect-close-quote", "status"):
         assert command in result.output
 
 
@@ -65,6 +65,9 @@ def test_cli_enqueues_each_kind_idempotently(cli_db):
         ["snapshot", "collect-market", "--universe", "CSI300", "--date", "2026-09-30"],
         ["snapshot", "collect-financial", "--universe", "CSI300", "--period", "2026-06-30",
          "--as-of", "2026-10-06"],
+        ["snapshot", "collect-close-quote", "--universe", "CSI300", "--date", "2026-09-30"],
+        ["snapshot", "collect-close-quote", "--universe", "CSI300", "--date", "2026-09-30",
+         "--retry"],
     ]
     for command in commands:
         result = runner.invoke(app, command)
@@ -72,6 +75,9 @@ def test_cli_enqueues_each_kind_idempotently(cli_db):
         assert "Queued" in result.output
     again = runner.invoke(app, commands[2])
     assert again.exit_code == 0 and "Existing" in again.output
+    close_quotes = [run for run in _runs(cli_db) if run.kind == "close_quote"]
+    assert all(run.request_json["provider"] == "tencent" for run in close_quotes)
+    assert [run.request_json["slot"] for run in close_quotes] == ["close", "retry"]
 
     runs = _runs(cli_db)
     assert [(run.kind, run.idempotency_key, run.status) for run in runs] == [
@@ -83,6 +89,8 @@ def test_cli_enqueues_each_kind_idempotently(cli_db):
             "financial_snapshot:baostock:CSI300:2026-06-30:2026-10-06",
             "queued",
         ),
+        ("close_quote", "close_quote:tencent:CSI300:2026-09-30", "queued"),
+        ("close_quote", "close_quote:tencent:CSI300:2026-09-30:retry", "queued"),
     ]
     assert runs[2].request_json == {
         "provider": "baostock",

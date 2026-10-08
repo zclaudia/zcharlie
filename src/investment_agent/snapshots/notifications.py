@@ -19,6 +19,7 @@ from investment_agent.domain.protocols import Notifier, RenderedContent
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.snapshots.collect import PROVIDER_STOP_REASON, QUOTA_STOP_REASON
 from investment_agent.snapshots.jobs import (
+    CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
     FINANCIAL_SNAPSHOT,
     MARKET_SNAPSHOT,
@@ -38,6 +39,7 @@ _KIND_LABELS = {
     "financial_snapshot": "财报快照",
     "snapshot_backfill": "历史回补",
     "dividend_snapshot": "分红快照",
+    "close_quote": "收盘快照",
 }
 _MAX_LISTED = 30
 
@@ -54,7 +56,7 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
         return None
     if run.status == "failed":
         return "action_required"
-    if run.kind in {MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT, DIVIDEND_SNAPSHOT}:
+    if run.kind in {MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT, DIVIDEND_SNAPSHOT, CLOSE_QUOTE}:
         if (run.metadata_json or {}).get("stop_reason") in {
             QUOTA_STOP_REASON,
             PROVIDER_STOP_REASON,

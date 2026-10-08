@@ -57,6 +57,7 @@ from investment_agent.scheduler.trading_calendar import (
 from investment_agent.snapshots.backfill import backfill_status
 from investment_agent.snapshots.collect import PROVIDER_STOP_REASON, QUOTA_STOP_REASON
 from investment_agent.snapshots.jobs import (
+    CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
@@ -84,6 +85,7 @@ COLLECTION_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
+    CLOSE_QUOTE,
     FINANCIAL_SNAPSHOT,
     DIVIDEND_SNAPSHOT,
 )
@@ -156,6 +158,9 @@ class MarketFreshness(BaseModel):
     latest_trade_date: date | None
     """Latest baostock raw (unadjusted) bar stored for any current member."""
     members_at_latest: int
+    latest_close_quote_date: date | None = None
+    """Latest Tencent close quote (mrd-intake B2) stored for any current member;
+    informational only - ``market_stale`` still judges the baostock bars."""
     last_trading_day: date | None
     """Latest trading day on or before today (calendar)."""
     expected_trade_date: date | None
@@ -650,6 +655,30 @@ async def current_member_ids(session: AsyncSession, universe_code: str, today: d
     return sorted(set((await session.execute(stmt)).scalars().all()))
 
 
+async def _latest_member_bar(
+    session: AsyncSession, universe_code: str, member_ids: Sequence[int], *, provider: str
+) -> date | None:
+    """Latest raw bar of ``provider`` stored for any of the members."""
+
+    inner = (
+        select(MarketSnapshot.trade_date)
+        .where(
+            MarketSnapshot.listing_id == UniverseMembership.listing_id,
+            MarketSnapshot.provider == provider,
+            MarketSnapshot.adjust == "none",
+        )
+        .order_by(MarketSnapshot.trade_date.desc())
+        .limit(1)
+        .correlate(UniverseMembership)
+        .scalar_subquery()
+    )
+    stmt = select(func.max(inner)).where(
+        UniverseMembership.universe_code == universe_code,
+        UniverseMembership.listing_id.in_(member_ids),
+    )
+    return _date((await session.execute(stmt)).scalar_one_or_none())
+
+
 async def market_freshness(
     session: AsyncSession,
     universe_code: str,
@@ -659,25 +688,13 @@ async def market_freshness(
     calendar: TradingCalendar | None,
 ) -> MarketFreshness:
     latest: date | None = None
+    latest_close_quote: date | None = None
     at_latest = 0
     if member_ids:
-        inner = (
-            select(MarketSnapshot.trade_date)
-            .where(
-                MarketSnapshot.listing_id == UniverseMembership.listing_id,
-                MarketSnapshot.provider == "baostock",
-                MarketSnapshot.adjust == "none",
-            )
-            .order_by(MarketSnapshot.trade_date.desc())
-            .limit(1)
-            .correlate(UniverseMembership)
-            .scalar_subquery()
+        latest = await _latest_member_bar(session, universe_code, member_ids, provider="baostock")
+        latest_close_quote = await _latest_member_bar(
+            session, universe_code, member_ids, provider="tencent"
         )
-        stmt = select(func.max(inner)).where(
-            UniverseMembership.universe_code == universe_code,
-            UniverseMembership.listing_id.in_(member_ids),
-        )
-        latest = _date((await session.execute(stmt)).scalar_one_or_none())
         if latest is not None:
             at_latest = int(
                 (
@@ -701,6 +718,7 @@ async def market_freshness(
         members=len(member_ids),
         latest_trade_date=latest,
         members_at_latest=at_latest,
+        latest_close_quote_date=latest_close_quote,
         last_trading_day=last_trading,
         expected_trade_date=expected,
         lag_trading_days=lag,
@@ -1179,6 +1197,7 @@ _KIND_LABELS = {
     UNIVERSE_SYNC: "成分同步",
     INDUSTRY_SYNC: "行业同步",
     MARKET_SNAPSHOT: "日线快照",
+    CLOSE_QUOTE: "收盘快照",
     FINANCIAL_SNAPSHOT: "财报快照",
     DIVIDEND_SNAPSHOT: "分红快照",
 }

@@ -359,6 +359,27 @@ def parse_field_sources(document: Any) -> FieldSourceRegistry:
     return FieldSourceRegistry(version=version, fields=fields, default_tolerance=default_tolerance)
 
 
+MARKET_ANCHOR_FIELD = "close"
+"""The market entry whose ``primary`` / ``fallback`` order every bar read follows."""
+
+
+def market_precedence(
+    registry: FieldSourceRegistry, field_name: str = MARKET_ANCHOR_FIELD
+) -> tuple[str, ...]:
+    """Provider order for market bars (mrd-intake B2): ``primary`` then ``fallback``.
+
+    Readers pass it to ``MarketSnapshotRepository.series_as_of`` /
+    ``series_by_provider``: a trade date held by several of these sources is
+    served by the first one present; a close differing beyond the entry's
+    ``tolerance`` from the chosen one is a ``conflict`` on the bar.
+    """
+
+    source = registry.require(field_name)
+    if source.table != "market":
+        raise FieldSourceError(f"{field_name!r} is not a market field (table {source.table})")
+    return source.order
+
+
 def load_field_sources(path: Path | str | None = None) -> FieldSourceRegistry:
     target = Path(path) if path is not None else DEFAULT_FIELD_SOURCES_PATH
     return parse_field_sources(yaml.safe_load(target.read_text(encoding="utf-8")))

@@ -244,6 +244,7 @@ def runtime_for(
     shenwan: Any = None,
     eastmoney: Any = None,
     dividend: Any = None,
+    close_quote: Any = None,
     clock: Callable[[], datetime] = lambda: CAPTURED_AT,
 ) -> SnapshotRuntime:
     from tests.unit._eastmoney_fake import fake_client as fake_eastmoney_client
@@ -263,6 +264,8 @@ def runtime_for(
         # offline: Eastmoney answers replay tests/fixtures/eastmoney
         eastmoney_factory=(lambda: eastmoney) if eastmoney is not None else fake_eastmoney_client,
         dividend_factory=(lambda: dividend or baostock),  # type: ignore[arg-type,return-value]
+        # offline: the Tencent close quote comes from a fake / respx-backed client
+        close_quote_factory=(lambda: close_quote) if close_quote is not None else (lambda: None),  # type: ignore[arg-type,return-value]
     )
 
 

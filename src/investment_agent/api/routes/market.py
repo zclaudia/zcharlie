@@ -1,8 +1,10 @@
 """/market endpoints: read-only daily bars for the browser sparkline (B3 / D7).
 
 Only existing snapshots are read; nothing is captured here. The series is the
-uncorrected (``adjust="none"``) baostock version, as decided in D7; the
-provider stays pinned until the 02 close-quote plan widens the read side.
+uncorrected (``adjust="none"``) bar in the registry's provider precedence
+(decision D2, ``config/field_sources.yaml`` ``close``): baostock whenever it
+holds the day, else the Tencent close quote stored at 15:10, so the sparkline
+shows today's close the same afternoon.
 """
 
 import re
@@ -14,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from investment_agent.api.auth import verify_api_key_or_session
 from investment_agent.api.schemas.market import MarketBar, MarketBarsOut
 from investment_agent.clock import shanghai_today
+from investment_agent.factors.field_sources import default_field_sources, market_precedence
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
@@ -26,7 +29,9 @@ router = APIRouter(
 
 # Same shape the /app/stocks/{ticker} page accepts.
 _TICKER = re.compile(r"\d{6}\.(SH|SZ|BJ)")
-BARS_PROVIDER = "baostock"
+BARS_PROVIDERS: tuple[str, ...] = market_precedence(default_field_sources())
+"""Provider precedence of the series (``baostock`` first, then ``tencent``)."""
+BARS_PROVIDER = ",".join(BARS_PROVIDERS)
 BARS_ADJUST = "none"
 # Trading days make up roughly 68% of calendar days; the lookback window is
 # generous so ``days`` trading days always fit, then the tail is sliced.
@@ -63,7 +68,7 @@ async def market_bars(
             end,
             as_of,
             adjust=BARS_ADJUST,
-            provider=BARS_PROVIDER,
+            provider=BARS_PROVIDERS,
         )
     bars = [MarketBar(trade_date=row.trade_date, close=float(row.close)) for row in rows[-days:]]
     return MarketBarsOut(ticker=normalized, provider=BARS_PROVIDER, as_of=as_of, bars=bars)
