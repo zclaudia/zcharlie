@@ -34,6 +34,12 @@
   --c-bar: #3b6be0;
   --c-bar-weak: #9fb3df;
 
+  /* 日线迷你图：只表达价格方向（A 股红涨绿跌），不表达好坏 */
+  --c-spark-up: #c8402f;
+  --c-spark-down: #1f8f5a;
+  --c-spark-flat: #8a94a3;
+  --c-spark-band: #2357d9;
+
   --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
   --r-sm: 4px; --r-md: 8px; --r-lg: 12px; --r-pill: 999px;
   --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-num: 26px;
@@ -65,6 +71,7 @@
     --c-ai: #d09cf0; --c-ai-soft: #33223f;
     --c-fresh: #7aa2ff; --c-aging: #e0a050; --c-stale: #6d7684;
     --c-track: #262d39; --c-zone: #2a3d68; --c-bar: #6f97f5; --c-bar-weak: #46587f;
+    --c-spark-up: #f0766a; --c-spark-down: #4fc08a; --c-spark-flat: #7c8694; --c-spark-band: #7aa2ff;
     --shadow-card: none;
   }
 }
@@ -873,6 +880,23 @@ a.stock-name:hover { color: var(--c-accent); }
 .score-cell .b-track { fill: var(--c-track); }
 .score-cell .b-fill { fill: var(--c-bar); }
 .fresh-inline { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---- 日线迷你图（B3）：尺寸由 svg 的 width/height 属性给出，这里只管颜色与线宽 ---- */
+.spark { display: inline-block; vertical-align: middle; overflow: visible; color: var(--c-spark-flat); }
+.spark-up { color: var(--c-spark-up); }
+.spark-down { color: var(--c-spark-down); }
+.spark-line { fill: none; stroke: currentColor; stroke-width: 1.5px; stroke-linejoin: round; stroke-linecap: round; }
+.spark-last { fill: none; stroke: currentColor; stroke-width: 5px; stroke-linecap: round; }
+.spark-band { fill: var(--c-spark-band); opacity: 0.14; }
+.spark-empty, .spark-pending { min-width: 120px; height: 32px; line-height: 32px; text-align: center; color: var(--c-ink-3); font-size: var(--fs-xs); }
+.spark-pending { background: var(--c-track); border-radius: var(--r-sm); opacity: 0.5; }
+.spark-cell { min-width: 8rem; }
+.spark-cell .spark { display: block; }
+.candidate-head .spark-slot { margin-left: auto; align-self: center; }
+.spark-host { min-height: 80px; }
+.spark-host .spark { display: block; width: 100%; }
+.spark-host .spark-empty, .spark-host .spark-pending { height: 80px; line-height: 80px; }
+.spark-card .card-head { margin-bottom: var(--sp-2); }
 .row-disabled td { color: var(--c-ink-3); }
 .row-disabled .stock-name { color: var(--c-ink-3); }
 .refresh-results { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; gap: 4px; }

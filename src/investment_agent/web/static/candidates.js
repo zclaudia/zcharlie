@@ -39,12 +39,13 @@ import {
   templateLabel,
 } from "./format.js";
 import { humanizeText } from "./research_format.js";
-import { aiStamp, kpi, legend, scale, timeline } from "./ui.js";
+import { aiStamp, fillSparklines, kpi, legend, scale, timeline } from "./ui.js";
 
 export const CANDIDATE_REGIONS = new Set(["candidates-list", "candidate-detail"]);
 
 const LIST_LIMIT = 100;
 const TOP_REASONS = 3;
+const SPARK_DAYS = 120;
 const UNFINISHED_VERIFICATION = new Set(["pending", "deferred", "running"]);
 const ZONE_ORDER = ["buy_zone", "drop", "add", "trim", "exit_review"];
 
@@ -198,6 +199,10 @@ function candidateItem(candidate) {
   if (candidate.status !== "open") {
     head.appendChild(chip(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
   }
+  // 右上角日线迷你图（B3）：先占位，列表渲染后异步替换。
+  head.appendChild(
+    el("span", { class: "spark spark-pending spark-slot", "data-spark": candidate.ticker, "aria-hidden": "true" })
+  );
   item.appendChild(head);
 
   const screen = candidate.latest_screen;
@@ -250,6 +255,10 @@ function renderCandidateList(region) {
   const container = el("div", { class: "candidate-list" });
   for (const candidate of items) container.appendChild(candidateItem(candidate));
   renderRegion(region, "ready", container);
+  fillSparklines(
+    container.querySelectorAll("[data-spark]"),
+    (ticker) => get(`/market/${encodeURIComponent(ticker)}/bars?days=${SPARK_DAYS}`)
+  );
 }
 
 function refreshTemplateOptions() {

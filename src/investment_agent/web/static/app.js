@@ -36,7 +36,7 @@ import {
   pathLabel,
   scoreFactorLabel,
 } from "./research_format.js";
-import { aiStamp, bar, ring } from "./ui.js";
+import { aiStamp, bar, fillSparklines, ring } from "./ui.js";
 
 // ---- 今日概览 ---------------------------------------------------------
 
@@ -114,6 +114,24 @@ async function loadDashboard(region, data) {
 
 // ---- 自选股 ----------------------------------------------------------
 
+// 日线迷你图（B3）：占位先渲染，再按行异步替换；只画收盘价，不评判。
+const SPARK_DAYS = 120;
+const STOCK_SPARK_DAYS = 240;
+
+function loadBars(ticker, days) {
+  return get(`/market/${encodeURIComponent(ticker)}/bars?days=${days}`);
+}
+
+function sparkSlot(ticker, cls = "spark-slot") {
+  return el("span", { class: `spark spark-pending ${cls}`.trim(), "data-spark": ticker, "aria-hidden": "true" });
+}
+
+function mountSparklines(root, days, options) {
+  const targets = root.querySelectorAll("[data-spark]");
+  if (!targets.length) return Promise.resolve();
+  return fillSparklines(targets, (ticker) => loadBars(ticker, days), options);
+}
+
 async function loadWatchlist(region, items) {
   const count = document.querySelector("#watchlist-count");
   if (!Array.isArray(items) || !items.length) {
@@ -129,6 +147,7 @@ async function loadWatchlist(region, items) {
   const node = table(
     [
       { label: "股票" },
+      { label: `近 ${SPARK_DAYS} 日` },
       { label: "策略 / 行业" },
       { label: "投资分" },
       { label: "置信度" },
@@ -141,6 +160,7 @@ async function loadWatchlist(region, items) {
   );
   node.classList.add("watch-table");
   renderRegion(region, "ready", node);
+  mountSparklines(node, SPARK_DAYS);
 }
 
 function stockCell(ticker, name) {
@@ -170,6 +190,10 @@ function watchlistRow(region, item) {
   const stock = stockCell(item.ticker, item.name);
   if (!item.enabled) stock.appendChild(el("span", { class: "badge" }, "已停用"));
   tr.appendChild(stock);
+
+  const spark = el("td", { class: "spark-cell" });
+  spark.appendChild(sparkSlot(item.ticker));
+  tr.appendChild(spark);
 
   const strategy = el("td");
   strategy.appendChild(el("span", {}, (latest && latest.strategy_label) || "—"));
@@ -874,7 +898,19 @@ async function loadStockHistory(region, snapshots) {
   return snapshots[0];
 }
 
+// 股票页顶部：240 日收盘曲线，与研究快照无关（无快照也画）。
+function loadStockSpark() {
+  const host = document.querySelector("#stock-spark");
+  if (!host || host.dataset.sparkMounted) return;
+  host.dataset.sparkMounted = "1";
+  const ticker = host.getAttribute("data-ticker");
+  if (!ticker) return;
+  host.replaceChildren(sparkSlot(ticker, "spark-slot-stock"));
+  mountSparklines(host, STOCK_SPARK_DAYS, { width: "100%", height: 80 });
+}
+
 async function loadStockDetail(detailRegion, latestSnapshot) {
+  loadStockSpark();
   if (!latestSnapshot) {
     detailRegion.hidden = true;
     return;
@@ -1000,7 +1036,7 @@ function boot() {
     else if (id === "stock-history")
       loadRegion(region, { render: (node, data) => loadStockHistory(node, data).then((latest) => {
         const detailRegion = document.querySelector("#stock-detail");
-        if (detailRegion && latest) loadStockDetail(detailRegion, latest);
+        if (detailRegion) loadStockDetail(detailRegion, latest);
       }) });
     else loadRegion(region);
   }

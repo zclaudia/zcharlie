@@ -5,6 +5,7 @@ these tests pin that contract (region ids, endpoints, four-state hooks) and
 keep the shipped JS modules parseable.
 """
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -42,6 +43,9 @@ def test_stock_page_declares_history_and_change_regions(api_client):
     html = api_client.get("/app/stocks/600406.SH").text
     assert 'id="stock-history"' in html
     assert 'data-endpoint="/research/stocks/600406.SH/history"' in html
+    # Sparkline host (plan 03 / B3): app.js fills it from /market/{ticker}/bars.
+    assert 'id="stock-spark"' in html
+    assert 'data-ticker="600406.SH"' in html
 
 
 def test_runs_page_declares_status_filter_and_list_region(api_client):
@@ -99,6 +103,77 @@ def test_renderer_consumes_only_versioned_read_models():
     # itself only references these endpoints directly.
     for endpoint in ("/watchlist", "/watchlist/refresh", "/research/runs"):
         assert endpoint in source, endpoint
+
+
+def test_sparkline_component_and_mounts():
+    """ui.js owns the SVG sparkline; app.js and candidates.js feed it from /market/."""
+
+    ui = (WEB_STATIC / "ui.js").read_text(encoding="utf-8")
+    assert "export function sparkline" in ui
+    assert "export async function fillSparklines" in ui
+    for marker in ('viewBox: `0 0 ${SPARK_W} ${SPARK_H}`', 'preserveAspectRatio: "none"', "non-scaling-stroke", "spark-band", "spark-last", "spark-empty"):
+        assert marker in ui, marker
+    for module in ("app.js", "candidates.js"):
+        source = (WEB_STATIC / module).read_text(encoding="utf-8")
+        assert "/market/" in source, module
+        assert "fillSparklines" in source, module
+
+
+def test_sparkline_builds_expected_svg_structure():
+    """Render ``sparkline`` in node against a minimal fake DOM and inspect the tree."""
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+        return
+    uri = (WEB_STATIC / "ui.js").resolve().as_uri()
+    script = f"const MODULE_URI = {json.dumps(uri)};\n" + """
+    class Node {
+      constructor(tag) { this.tag = tag; this.attrs = {}; this.children = []; this.textContent = undefined; }
+      setAttribute(k, v) { this.attrs[k] = v; }
+      appendChild(c) { this.children.push(c); return c; }
+    }
+    globalThis.document = {
+      createElement: (tag) => new Node(tag),
+      createElementNS: (_ns, tag) => new Node(tag),
+    };
+    const { sparkline } = await import(MODULE_URI);
+    const bars = [{trade_date: "2026-01-01", close: 10}, {trade_date: "2026-01-02", close: 12}, {trade_date: "2026-01-03", close: 11}];
+    const up = sparkline(bars, { bands: [{ from: 10.5, to: 11.5, kind: "watch" }] });
+    const down = sparkline([3, 2, 1], { width: 200, height: 80 });
+    const empty = sparkline([{ close: 1 }]);
+    console.log(JSON.stringify({ up, down, empty }));
+    """
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    up = out["up"]
+    assert up["tag"] == "svg"
+    assert up["attrs"]["class"] == "spark spark-up"
+    assert up["attrs"]["viewBox"] == "0 0 100 30"
+    assert up["attrs"]["preserveAspectRatio"] == "none"
+    assert up["attrs"]["aria-hidden"] == "true"
+    assert (up["attrs"]["width"], up["attrs"]["height"]) == ("120", "32")
+    band, line, last = up["children"]
+    assert band["tag"] == "rect" and band["attrs"]["class"] == "spark-band spark-band-watch"
+    assert line["tag"] == "polyline"
+    assert line["attrs"]["class"] == "spark-line"
+    assert line["attrs"]["vector-effect"] == "non-scaling-stroke"
+    points = line["attrs"]["points"].split(" ")
+    assert len(points) == 3
+    assert points[0] == "0.00,28.50"  # min close sits at the bottom (minus padding)
+    assert points[1] == "50.00,1.50"  # max close at the top
+    assert points[-1].startswith("100.00,")
+    assert last["tag"] == "circle" and last["attrs"]["class"] == "spark-last"
+    assert last["attrs"]["cx"] == "100.00" and last["attrs"]["cy"] == points[-1].split(",")[1]
+    down = out["down"]
+    assert down["attrs"]["class"] == "spark spark-down"
+    assert (down["attrs"]["width"], down["attrs"]["height"]) == ("200", "80")
+    assert [child["tag"] for child in down["children"]] == ["polyline", "circle"]
+    empty = out["empty"]
+    assert empty["tag"] == "span" and empty["attrs"]["class"] == "spark spark-empty"
 
 
 @pytest.mark.parametrize(

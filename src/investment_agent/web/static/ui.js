@@ -145,6 +145,101 @@ export function timeline(startIso, endIso, now = new Date()) {
   return box;
 }
 
+// 日线迷你图（B3 / D7）：points 为 [{trade_date, close}]（或纯数值），只画给出的收盘价，不评判。
+// viewBox 固定 0–100 × 0–30、preserveAspectRatio="none"，线宽靠 non-scaling-stroke 保持像素宽度；
+// 末点用零半径描边圆（同样不随拉伸变形）。首尾比较给出 spark-up / spark-down / spark-flat。
+// bands: [{from, to, kind}] 为价格区间的水平矩形（P2 区间带占位），kind 决定 class。
+const SPARK_W = 100;
+const SPARK_H = 30;
+const SPARK_PAD = 1.5;
+
+function sparkCloses(points) {
+  return (Array.isArray(points) ? points : [])
+    .map((point) => (typeof point === "number" ? point : point && point.close))
+    .filter((value) => typeof value === "number" && Number.isFinite(value));
+}
+
+export function sparkline(points, { width = 120, height = 32, bands = [] } = {}) {
+  const closes = sparkCloses(points);
+  if (closes.length < 2) return el("span", { class: "spark spark-empty", "aria-hidden": "true" }, "—");
+  let min = Infinity;
+  let max = -Infinity;
+  for (const value of closes) {
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  const span = max === min ? 1 : max - min;
+  const x = (index) => ((index / (closes.length - 1)) * SPARK_W).toFixed(2);
+  const y = (value) => (SPARK_H - SPARK_PAD - (clamp01((value - min) / span) * (SPARK_H - 2 * SPARK_PAD))).toFixed(2);
+  const first = closes[0];
+  const last = closes[closes.length - 1];
+  const trend = last > first ? "spark-up" : last < first ? "spark-down" : "spark-flat";
+  const root = svg("svg", {
+    class: `spark ${trend}`,
+    viewBox: `0 0 ${SPARK_W} ${SPARK_H}`,
+    preserveAspectRatio: "none",
+    width,
+    height,
+    "aria-hidden": "true",
+  });
+  for (const band of bands) {
+    if (!band || typeof band.from !== "number" || typeof band.to !== "number") continue;
+    const top = parseFloat(y(Math.max(band.from, band.to)));
+    const bottom = parseFloat(y(Math.min(band.from, band.to)));
+    if (!(bottom > top)) continue;
+    const kind = String(band.kind || "range").replace(/[^a-z0-9_-]/gi, "");
+    root.appendChild(
+      svg("rect", {
+        class: `spark-band spark-band-${kind}`,
+        x: 0,
+        y: top.toFixed(2),
+        width: SPARK_W,
+        height: (bottom - top).toFixed(2),
+      })
+    );
+  }
+  root.appendChild(
+    svg("polyline", {
+      class: "spark-line",
+      points: closes.map((value, index) => `${x(index)},${y(value)}`).join(" "),
+      fill: "none",
+      "vector-effect": "non-scaling-stroke",
+    })
+  );
+  root.appendChild(
+    svg("circle", {
+      class: "spark-last",
+      cx: x(closes.length - 1),
+      cy: y(last),
+      r: 0.01,
+      "vector-effect": "non-scaling-stroke",
+    })
+  );
+  return root;
+}
+
+// 把页面里的占位（带 data-spark="<ticker>"）异步换成迷你图；load(ticker) 由调用方给出
+// （本模块不发请求），并发上限 limit，顺序无关；失败或无数据时留下 spark-empty。
+export async function fillSparklines(targets, load, { width = 120, height = 32, bands = [], limit = 6 } = {}) {
+  const queue = [...targets];
+  async function worker() {
+    while (queue.length) {
+      const node = queue.shift();
+      const ticker = node.getAttribute("data-spark");
+      let bars = [];
+      try {
+        const data = ticker ? await load(ticker) : null;
+        bars = data && Array.isArray(data.bars) ? data.bars : [];
+      } catch {
+        bars = [];
+      }
+      if (!node.isConnected) continue;
+      node.replaceWith(sparkline(bars, { width, height, bands }));
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, limit) }, worker));
+}
+
 export function aiStamp(text) {
   return el("span", { class: "ai-stamp" }, text);
 }
