@@ -35,6 +35,7 @@ from investment_agent.settings.registry import (
     RuntimeSettings,
     defaults,
     flatten,
+    input_spec,
     unflatten,
 )
 from investment_agent.storage.models.app_settings import (
@@ -304,7 +305,8 @@ class SettingsStore:
         """Every registered key with its current value, default and metadata.
 
         Secrets never carry their value: ``{"configured", "hint",
-        "decrypt_error"}`` instead.
+        "decrypt_error"}`` instead. ``input`` is the editing hint of
+        ``registry.input_spec`` (type, bounds, options).
         """
 
         state = await self.state()
@@ -321,6 +323,7 @@ class SettingsStore:
                 "source": spec.source,
                 "secret": spec.secret,
                 "stored": spec.key in state.stored_keys,
+                "input": input_spec(spec),
             }
             if spec.secret:
                 status = state.secrets[spec.key]

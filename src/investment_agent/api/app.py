@@ -124,6 +124,9 @@ def _register_protected_routes(app: FastAPI) -> None:
         verification,
         watchlist,
     )
+    from investment_agent.api.routes import (
+        settings as settings_routes,
+    )
 
     app.include_router(research.router)
     app.include_router(dashboard.router)
@@ -131,5 +134,6 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(watchlist.router)
     app.include_router(admin.router)
     app.include_router(verification.router)
+    app.include_router(settings_routes.router)
     for router in candidates.routers:
         app.include_router(router)

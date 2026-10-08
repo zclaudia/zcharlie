@@ -26,10 +26,12 @@ timezone and cron checks. Crons are parsed the way the scheduler parses them
 """
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, get_args, get_origin
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import annotated_types
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
+from pydantic.fields import FieldInfo
 
 from investment_agent.config import (
     CandidateScheduleConfig,
@@ -365,3 +367,70 @@ def unflatten(flat: dict[str, Any]) -> dict[str, Any]:
 
 def defaults() -> dict[str, Any]:
     return flatten(RuntimeSettings())
+
+
+def _field_info(spec: SettingSpec) -> FieldInfo:
+    model: type[BaseModel] = RuntimeSettings
+    *parents, leaf = spec.path
+    for part in parents:
+        annotation = model.model_fields[part].annotation
+        assert isinstance(annotation, type) and issubclass(annotation, BaseModel)
+        model = annotation
+    return model.model_fields[leaf]
+
+
+def input_spec(spec: SettingSpec) -> dict[str, Any]:
+    """How a UI should edit ``spec``: input type, bounds, options, nullability.
+
+    ``type`` is one of ``secret`` / ``select`` / ``multi`` / ``int`` /
+    ``float`` / ``cron`` / ``timezone`` / ``url`` / ``text``. Bounds mirror the
+    pydantic constraints (``min`` / ``max`` inclusive unless ``*_exclusive``).
+    """
+
+    info = _field_info(spec)
+    annotation = info.annotation
+    args = get_args(annotation)
+    nullable = type(None) in args
+    if nullable:
+        annotation = next(arg for arg in args if arg is not type(None))
+    meta: dict[str, Any] = {"nullable": nullable}
+    if spec.secret:
+        meta["type"] = "secret"
+    elif get_origin(annotation) is Literal:
+        meta.update(type="select", options=list(get_args(annotation)))
+    elif get_origin(annotation) is list:
+        from investment_agent.providers.baostock_reference import INDEX_CODES
+
+        meta.update(type="multi", options=list(INDEX_CODES))
+        for item in info.metadata:
+            if isinstance(item, annotated_types.MinLen):
+                meta["min_items"] = item.min_length
+    elif annotation in (int, float):
+        meta["type"] = annotation.__name__
+        for item in info.metadata:
+            if isinstance(item, annotated_types.Gt):
+                meta.update(min=item.gt, min_exclusive=True)
+            elif isinstance(item, annotated_types.Ge):
+                meta.update(min=item.ge, min_exclusive=False)
+            elif isinstance(item, annotated_types.Lt):
+                meta.update(max=item.lt, max_exclusive=True)
+            elif isinstance(item, annotated_types.Le):
+                meta.update(max=item.le, max_exclusive=False)
+    elif spec.key.endswith("cron"):
+        meta["type"] = "cron"
+    elif spec.key.endswith("timezone"):
+        meta["type"] = "timezone"
+    elif spec.key.endswith("_url"):
+        meta["type"] = "url"
+    else:
+        meta["type"] = "text"
+    return meta
+
+
+def cron_timezone_key(spec: SettingSpec) -> str | None:
+    """The timezone key of a schedule cron's section (``None`` for other keys)."""
+
+    if spec.yaml_path is None or not spec.key.endswith("cron"):
+        return None
+    section = spec.path[1]
+    return f"schedule.{section}.timezone"
