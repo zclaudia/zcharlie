@@ -1,8 +1,11 @@
 """APScheduler-based runner: A-share watchlist refresh + PIT snapshot collection.
 
 Runs in its own process (`ia scheduler start` or Docker service).
-Reads cron + timezone from config/app.yaml (``scheduler``, ``snapshot``,
-``screen``, ``candidates`` and ``verification``).
+Cron + timezone come from the runtime settings store (``schedule.*`` keys,
+imported once from config/app.yaml); the trading calendar path stays in
+app.yaml (``scheduler.a_share_calendar_path``). The store revision is polled
+every ``SETTINGS_POLL_SECONDS``: on a change every managed job is removed and
+rebuilt from the new schedule (start-up catch-up checks do not re-run).
 The scheduler only enqueues; the worker executes the jobs. The one exception
 is the daily candidate expiry sweep: a few row updates, run in-process.
 """
@@ -23,7 +26,6 @@ from investment_agent.config import (
     Settings,
     SnapshotScheduleConfig,
     VerificationScheduleConfig,
-    load_app_yaml,
 )
 from investment_agent.logging import configure_logging
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
@@ -41,9 +43,17 @@ from investment_agent.scheduler.trading_calendar import (
     calendar_coverage,
     load_trading_calendar,
 )
+from investment_agent.settings.loader import (
+    ensure_imported,
+    load_app_config,
+    load_settings,
+    store_for,
+)
 from investment_agent.storage.database import engine_lifespan, session_scope
 
 log = structlog.get_logger(__name__)
+
+SETTINGS_POLL_SECONDS = 60.0
 
 # A job that misses its fire time (process busy, host asleep, short restart)
 # still runs if the scheduler notices within this window; queued misfires of
@@ -113,11 +123,14 @@ def _parse_cron(cron_expr: str, *, timezone: str | None = None) -> CronTrigger:
 
 async def _enqueue_scheduled_watchlist_refresh(
     *,
-    settings: Settings,
+    settings: Settings | None = None,
     calendar: TradingCalendar,
     trading_date: date,
 ) -> int | None:
-    """Queue one idempotent daily batch, or skip a reviewed non-trading day."""
+    """Queue one idempotent daily batch, or skip a reviewed non-trading day.
+
+    ``settings`` defaults to the effective ones, read only on a trading day.
+    """
 
     if not calendar.is_trading_day(trading_date):
         log.info(
@@ -126,6 +139,8 @@ async def _enqueue_scheduled_watchlist_refresh(
             reason="non_trading_day",
         )
         return None
+    if settings is None:
+        settings = await load_settings()
     async with session_scope() as session:
         outcomes = await enqueue_watchlist_refresh(
             session,
@@ -402,13 +417,11 @@ async def _startup_watchlist_check(app_config: AppYamlConfig, now: datetime) -> 
 
 
 async def _run_watchlist_refresh_job(calendar_path: str) -> None:
-    settings = Settings()  # type: ignore[call-arg]
     try:
         calendar = load_trading_calendar(Path(calendar_path))
         trading_date = datetime.now(ZoneInfo(calendar.timezone)).date()
         log_calendar_coverage(calendar, trading_date)
         created = await _enqueue_scheduled_watchlist_refresh(
-            settings=settings,
             calendar=calendar,
             trading_date=trading_date,
         )
@@ -441,8 +454,15 @@ def build_scheduler(
     settings inside their own process-local execution context.
     """
     _ = settings  # reserved for future
+    sched = AsyncIOScheduler(timezone=app_config.scheduler.watchlist_refresh_timezone)
+    add_jobs(sched, app_config)
+    return sched
+
+
+def add_jobs(sched: AsyncIOScheduler, app_config: AppYamlConfig) -> list[str]:
+    """Register every job whose cron is configured; returns their ids."""
+
     scheduler_cfg = app_config.scheduler
-    sched = AsyncIOScheduler(timezone=scheduler_cfg.watchlist_refresh_timezone)
     watchlist_cron = scheduler_cfg.watchlist_refresh_cron
     if watchlist_cron is not None:
         sched.add_job(
@@ -501,7 +521,61 @@ def build_scheduler(
             replace_existing=True,
             **_JOB_DEFAULTS,
         )
-    return sched
+    return [job.id for job in sched.get_jobs()]
+
+
+def _job_summary(sched: AsyncIOScheduler) -> dict[str, str | None]:
+    """``{job id: next run time}`` for logging (``None`` while not started)."""
+
+    return {
+        job.id: (
+            job.next_run_time.isoformat()
+            if getattr(job, "next_run_time", None) is not None
+            else None
+        )
+        for job in sched.get_jobs()
+    }
+
+
+def reschedule(sched: AsyncIOScheduler, app_config: AppYamlConfig, *, revision: int) -> None:
+    """Replace every job with the ones ``app_config`` defines (settings changed)."""
+
+    sched.remove_all_jobs()
+    add_jobs(sched, app_config)
+    log.info("scheduler.rescheduled", revision=revision, jobs=_job_summary(sched))
+
+
+async def _read_revision(settings: Settings) -> int:
+    async with session_scope() as session:
+        return await store_for(session, settings).revision()
+
+
+async def watch_settings(
+    sched: AsyncIOScheduler,
+    settings: Settings,
+    app_config_path: Path,
+    *,
+    revision: int,
+    poll_seconds: float = SETTINGS_POLL_SECONDS,
+) -> None:
+    """Poll the settings revision forever; reschedule when it moves.
+
+    A failed poll or rebuild (database hiccup, a schedule the scheduler cannot
+    parse) is logged and keeps the current jobs; the next poll retries.
+    """
+
+    while True:
+        await asyncio.sleep(poll_seconds)
+        try:
+            current = await _read_revision(settings)
+            if current == revision:
+                continue
+            async with session_scope() as session:
+                app_config, current = await load_app_config(session, settings, app_config_path)
+            reschedule(sched, app_config, revision=current)
+            revision = current
+        except Exception:
+            log.exception("scheduler.reschedule_failed", revision=revision)
 
 
 async def _startup_verification_check(app_config: AppYamlConfig, now: datetime) -> None:
@@ -543,15 +617,25 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
         await _run_scheduler(settings, app_config_path)
 
 
-async def _run_scheduler(settings: Settings, app_config_path: str) -> None:
-    cfg = load_app_yaml(Path(app_config_path))
+async def _run_scheduler(
+    settings: Settings,
+    app_config_path: str,
+    *,
+    poll_seconds: float = SETTINGS_POLL_SECONDS,
+) -> None:
+    config_path = Path(app_config_path)
+    async with session_scope() as session:
+        await ensure_imported(session, settings, config_path)
+    async with session_scope() as session:
+        cfg, revision = await load_app_config(session, settings, config_path)
     sched = build_scheduler(settings=settings, app_config=cfg)
     sched.start()
     log.info(
         "scheduler.started",
+        revision=revision,
         watchlist_cron=cfg.scheduler.watchlist_refresh_cron,
         watchlist_tz=cfg.scheduler.watchlist_refresh_timezone,
-        snapshot_jobs=[job.id for job in sched.get_jobs() if job.id.startswith("snapshot_")],
+        jobs=_job_summary(sched),
     )
     started_at = datetime.now(ZoneInfo("UTC"))
     await _startup_watchlist_check(cfg, started_at)
@@ -560,9 +644,10 @@ async def _run_scheduler(settings: Settings, app_config_path: str) -> None:
     if _candidate_trigger(cfg.candidates) is not None:
         await run_candidate_expiry_job()
     await _startup_verification_check(cfg, started_at)
-    stop_event = asyncio.Event()
     try:
-        await stop_event.wait()
+        await watch_settings(
+            sched, settings, config_path, revision=revision, poll_seconds=poll_seconds
+        )
     except (KeyboardInterrupt, asyncio.CancelledError):
         log.info("scheduler.stopping")
         sched.shutdown(wait=False)
