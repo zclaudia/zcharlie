@@ -1,3 +1,7 @@
+# Schedules below are DEFAULTS FOR THE FIRST IMPORT ONLY: on first start they
+# are copied into the database and then managed at /app/settings (or with
+# `ia settings`); later edits here are ignored. `scheduler.a_share_calendar_path`
+# is still read from this file. See docs/product/settings-plan.md.
 scheduler:
   # Watchlist research reads the snapshot store (P1-B5, source mode
   # "snapshot"), so it runs after the evening baostock market snapshot

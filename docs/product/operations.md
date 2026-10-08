@@ -22,11 +22,13 @@
 
 ## 2. 首次部署
 
-1. 配置 `.env`（见 README「配置」）。最少需要：
+1. 配置 `.env` 启动层（见 README「配置」）：
    - `API_KEY`（生产环境 ≥ 32 字符）；
-   - `IFIND_PROXY_URL`、`IFIND_PROXY_API_KEY`（与 ifind-proxy 的 `PROXY_API_KEY` 一致）；
-   - `LLM_TIER3_*`（规则起草与解释，默认模型 deepseek-v4-flash）。
-2. 迁移：`ia migrate up`。
+   - `SETTINGS_ENCRYPTION_KEY`（加密数据库中的 API key；与数据库备份分开保管）。
+2. 迁移：`ia migrate up`（必须在启动 api 之前，否则日志出现 `settings.import_failed`）。
+   启动后在 `/app/settings` 填写并「测试连接」：
+   - iFinD 网关地址与 key（与 ifind-proxy 的 `PROXY_API_KEY` 一致）；
+   - LLM 地址 / 模型 / key（规则起草与解释，默认模型 deepseek-v4-flash）。
 3. 历史回补（全部可中断续跑；**务必显式指定 `--as-of`**，否则过零点再跑会按新日期重新规划）：
 
    ```bash
@@ -75,10 +77,10 @@
 |---|---|---|
 | 日线落后 ≥ 1 个交易日 | baostock 未更新或任务失败 | 看健康页对应任务的缺失清单；手动补采 `ia snapshot collect-market --universe CSI300 --date <D> --now` |
 | iFinD 核对显示「已延后」 | 5 小时窗口预算用尽 | 正常现象，窗口滚动后自动继续；`ia verify status` 查看下次可用时间 |
-| 通知「iFinD 额度已用尽」 | Kimi 网关 5 小时额度（可能与日常 Kimi 使用共用） | 无需操作；当前批次停止，下个窗口自动续采。频繁出现时调低 `IFIND_BUDGET_PER_5H` |
+| 通知「iFinD 额度已用尽」 | Kimi 网关 5 小时额度（可能与日常 Kimi 使用共用） | 无需操作；当前批次停止，下个窗口自动续采。频繁出现时在设置页调低「iFinD 5 小时预算」 |
 | 东财采集 `partial`（`provider_unavailable`） | 东财接口连续失败 | 下次调度自动重试；持续失败时检查 AkShare 版本与接口列名（列名变化会直接报错） |
 | 逾期披露通知 | 过法定截止日仍未见该期报告 | 人工关注；该股票在筛选中被排除，补披露后自动解除 |
-| 规则草稿一直「起草中」 | 未配置 `LLM_TIER3_*` 或 worker 未运行 | 配置后重启 worker；候选页可点「重新起草」 |
+| 规则草稿一直「起草中」 | 设置页未配置 LLM key 或 worker 未运行 | 在设置页填写并测试连接（worker 下个任务生效）；候选页可点「重新起草」 |
 | 回补中断 | 进程退出或网络错误 | 用**相同的 `--as-of`** 重跑同一命令，已完成部分自动跳过 |
 | 运行卡在 running | 进程被杀 | worker 启动与运行中会定期回收超过心跳超时的任务 |
 
