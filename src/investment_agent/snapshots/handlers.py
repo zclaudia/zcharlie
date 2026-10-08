@@ -26,6 +26,11 @@ from investment_agent.providers.akshare_shenwan import AkshareShenwanClient
 from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient
 from investment_agent.providers.circuit import CircuitBreaker
+from investment_agent.providers.ledger import (
+    CURRENT_RUN_ID,
+    circuit_ledger_hook,
+    provider_ledger_hook,
+)
 from investment_agent.research.ifind_chain import IfindProxyClient
 from investment_agent.snapshots.backfill import BackfillClient, run_backfill_part
 from investment_agent.snapshots.breadth import (
@@ -124,21 +129,27 @@ def default_runtime(settings: Settings) -> SnapshotRuntime:
             on_call=ledger_hook(source="snapshot"),
         )
 
-    circuit = CircuitBreaker(_utc_now)
+    # A1 / A2: one circuit breaker per worker; every free-provider client
+    # reports its calls to the provider_call ledger (best effort), the
+    # breaker's state changes land there too (endpoint "circuit").
+    circuit = CircuitBreaker(_utc_now, on_change=circuit_ledger_hook())
+    on_call = provider_ledger_hook(source="snapshot")
 
     def baostock_factory() -> BaostockMarketClient:
-        return BaostockMarketClient(circuit=circuit)
+        return BaostockMarketClient(circuit=circuit, on_call=on_call)
 
     return SnapshotRuntime(
         settings=settings,
         limiter=AsyncRateLimiter(settings.ifind_collect_rate_per_minute),
         proxy_factory=proxy_factory,
-        reference_factory=lambda: BaostockReferenceClient(circuit=circuit),
+        reference_factory=lambda: BaostockReferenceClient(circuit=circuit, on_call=on_call),
         baostock_factory=baostock_factory,
         backfill_factory=baostock_factory,
         dividend_factory=baostock_factory,
         eastmoney_factory=lambda: AkshareEastmoneyClient(
-            min_interval_seconds=settings.akshare_min_interval_seconds, circuit=circuit
+            min_interval_seconds=settings.akshare_min_interval_seconds,
+            circuit=circuit,
+            on_call=on_call,
         ),
         circuit=circuit,
     )
@@ -166,7 +177,11 @@ class SnapshotJobHandler(BaseJobHandler):
         )
 
         async def work() -> _Result:
-            return await self._collect(job, artifacts)
+            token = CURRENT_RUN_ID.set(job.run_id)  # attributes provider_call rows
+            try:
+                return await self._collect(job, artifacts)
+            finally:
+                CURRENT_RUN_ID.reset(token)
 
         result = await ctx.run_with_heartbeat(job.lease, work)
         async with session_scope() as session:

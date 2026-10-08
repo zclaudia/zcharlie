@@ -24,6 +24,7 @@ SECTIONS = (
     "backfill",
     "verification",
     "overdue",
+    "providers",
 )
 
 

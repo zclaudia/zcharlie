@@ -1,5 +1,6 @@
 // 数据健康页（P1-E2）：快照积累进度、数据新鲜度、各采集任务完整率与缺失清单、
-// 成分与行业同步、历史回补、iFinD 预算与核对队列、字段冲突、逾期财报。
+// 成分与行业同步、历史回补、iFinD 预算与核对队列、字段冲突、逾期财报、
+// 上游调用（各免费数据源 24 小时调用 / 失败次数与熔断状态）。
 // 只渲染 GET /health/data 的确定性结果；不打分、不给操作判断。
 // 所有 DOM 经 dom.js 构造（textContent / setAttribute），不写 HTML 字符串；
 // 进度条用原生 <meter> / <progress>，不写内联样式。
@@ -74,6 +75,14 @@ const SECTION_LABELS = Object.freeze({
   backfill: "历史回补",
   verification: "iFinD 核对",
   overdue: "逾期财报",
+  providers: "上游调用",
+});
+
+export const PROVIDER_LABELS = Object.freeze({
+  baostock: "baostock",
+  akshare: "AkShare（东财）",
+  tencent: "腾讯行情",
+  ifind: "iFinD",
 });
 
 export const STOP_LABELS = Object.freeze({
@@ -125,6 +134,19 @@ export function missingSummary(byKind) {
 export function accumulationText(accumulation) {
   if (!accumulation) return "快照积累 — 周";
   return `快照积累 ${accumulation.streak_weeks} / ${accumulation.target_weeks} 周`;
+}
+
+// 上游数据源状态：熔断中（含到期时刻）/ 最近失败 / 正常。
+export function providerStatus(item, now = Date.now()) {
+  if (!item || typeof item !== "object") return { kind: "unknown", text: "—" };
+  const until = item.open_until ? new Date(item.open_until).getTime() : Number.NaN;
+  if (Number.isFinite(until) && until > now) {
+    return { kind: "open", text: `熔断中，至 ${localTime(item.open_until)}` };
+  }
+  if (item.failed_24h) {
+    return { kind: "failed", text: `最近失败 ${localTime(item.last_error_at)}` };
+  }
+  return { kind: "ok", text: item.calls_24h ? "正常" : "24 小时内无调用" };
 }
 
 // ---- DOM 小件 ---------------------------------------------------------------
@@ -591,6 +613,43 @@ function renderOverdue(data) {
   return box;
 }
 
+function renderProviders(data) {
+  const providers = Array.isArray(data.providers) ? data.providers : [];
+  const box = el("div");
+  if (!providers.length) {
+    box.appendChild(empty("24 小时内没有上游调用记录。"));
+    return box;
+  }
+  box.appendChild(
+    simpleTable(
+      ["数据源", "24h 调用", "失败", "熔断拒绝", "状态", "最近错误"],
+      providers.map((item) => {
+        const status = providerStatus(item);
+        return [
+          label(PROVIDER_LABELS, item.provider),
+          String(item.calls_24h),
+          String(item.failed_24h),
+          String(item.skipped_24h ?? 0),
+          el("span", { class: `status status-provider-${status.kind}` }, status.text),
+          item.last_error ? `${item.last_error}（${localTime(item.last_error_at)}）` : "—",
+        ];
+      })
+    )
+  );
+  const basis = el("details", { class: "basis" });
+  basis.appendChild(el("summary", {}, "统计口径"));
+  basis.appendChild(
+    el(
+      "p",
+      { class: "muted small" },
+      "按 provider_call 台账统计最近 24 小时：一次逻辑调用（含客户端内部重试）记一行；" +
+        "熔断器打开后窗口内的调用不打上游，记为“熔断拒绝”；窗口 5 秒起按 5s / 15s / 45s / 2 分 / 5 分递增，成功即复位。"
+    )
+  );
+  box.appendChild(basis);
+  return box;
+}
+
 const RENDERERS = Object.freeze({
   warnings: (data) => renderWarnings(Array.isArray(data.warnings) ? data.warnings : []),
   accumulation: renderAccumulation,
@@ -601,6 +660,7 @@ const RENDERERS = Object.freeze({
   backfill: renderBackfill,
   verification: renderVerification,
   overdue: renderOverdue,
+  providers: renderProviders,
 });
 
 // ---- 装配 -------------------------------------------------------------------

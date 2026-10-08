@@ -12,6 +12,10 @@ provider or changes the database:
   ``financial_snapshot`` / ``dividend_coverage`` - freshness and coverage of
   the current target-pool members;
 * ``ifind_call_ledger`` / ``verification_request`` - iFinD budget and queue;
+* ``provider_call`` - upstream calls / failures of the free providers in the
+  last 24 hours and whether their circuit breaker is open (A2; the breaker's
+  in-memory state is passed in by the worker when available, the API process
+  falls back to the breaker's own ``circuit`` ledger rows);
 * ``report_overdue`` - open overdue reports.
 
 Accumulation (P1 exit metric "快照连续积累 ≥ 8 周且完整率达标"). Live market
@@ -43,7 +47,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.domain.a_share import format_listing_ticker
+from investment_agent.providers.circuit import CircuitStatus
 from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
     UnknownTradingCalendarYearError,
@@ -68,6 +74,7 @@ from investment_agent.storage.models.pit_snapshot import (
 )
 from investment_agent.storage.models.reference import Listing, UniverseMembership
 from investment_agent.storage.models.verification import VerificationRequest
+from investment_agent.storage.repositories.provider_call import ProviderCallRepository
 from investment_agent.verification.budget import budget_status
 
 TARGET_WEEKS = 8
@@ -95,6 +102,7 @@ _VERIFICATION_SCAN = 50
 _WEEKS_SHOWN = 12
 _FINANCIAL_PERIODS_SHOWN = 2
 _RECENT_STOP = timedelta(hours=24)
+_PROVIDER_WINDOW = timedelta(hours=24)
 _RECENT_CONFLICT = timedelta(days=7)
 _UNIVERSE_SYNC_STALE_DAYS = 14
 _INDUSTRY_SYNC_STALE_DAYS = 40
@@ -326,6 +334,22 @@ class OverdueHealth(BaseModel):
     items: list[OverdueItem]
 
 
+class ProviderHealth(BaseModel):
+    """Upstream calls of one free provider in the last 24 hours (A2)."""
+
+    provider: str
+    calls_24h: int
+    failed_24h: int
+    skipped_24h: int
+    """Calls refused by the open circuit (``skipped_open`` rows)."""
+    open_until: datetime | None
+    """Circuit open until this moment (``None`` when closed / unknown)."""
+    last_error_at: datetime | None
+    last_error: str | None
+    last_open_at: datetime | None
+    """When the circuit last opened (ledger ``circuit`` row or breaker state)."""
+
+
 class DataHealth(BaseModel):
     generated_at: datetime
     as_of: date
@@ -340,6 +364,7 @@ class DataHealth(BaseModel):
     backfill: BackfillHealth
     verification: VerificationHealth
     overdue: OverdueHealth
+    providers: list[ProviderHealth] = Field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -350,6 +375,10 @@ class HealthSettings:
     budget_window: timedelta
     calendar: TradingCalendar | None
     calendar_warnings: tuple[HealthWarning, ...] = ()
+    circuit_states: tuple[CircuitStatus, ...] = ()
+    """The worker's circuit breaker snapshot (``CircuitBreaker.snapshot().values()``)
+    when the caller has it; the API process passes nothing and the ledger's
+    ``circuit`` rows stand in."""
 
 
 # --------------------------------------------------------------------------- #
@@ -1155,6 +1184,70 @@ _KIND_LABELS = {
 }
 
 
+async def provider_health(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    circuit_states: Sequence[CircuitStatus] = (),
+) -> list[ProviderHealth]:
+    """24-hour ledger counts per provider merged with the breaker state (A2)."""
+
+    stats = {
+        stat.provider: stat
+        for stat in await ProviderCallRepository(session).summary(now - _PROVIDER_WINDOW)
+    }
+    by_provider: dict[str, list[CircuitStatus]] = {}
+    for status in circuit_states:
+        by_provider.setdefault(status.provider, []).append(status)
+    items: list[ProviderHealth] = []
+    for provider in sorted(set(stats) | set(by_provider)):
+        stat = stats.get(provider)
+        states = by_provider.get(provider, [])
+        open_entries = [state for state in states if state.is_open(now)]
+        open_until = max(state.open_until for state in open_entries) if open_entries else None  # type: ignore[type-var]
+        last_open_at = (
+            max((state.last_failure_at for state in open_entries if state.last_failure_at), default=None)
+            if open_entries
+            else None
+        )
+        failed_states = [state for state in states if state.last_failure_at is not None]
+        newest_state = (
+            max(failed_states, key=lambda state: state.last_failure_at or now)
+            if failed_states
+            else None
+        )
+        if open_until is None and stat is not None and stat.last_open_until is not None:
+            # No breaker in this process: trust the ledger's last "opened" row.
+            if stat.last_open_until > now:
+                open_until = stat.last_open_until
+            last_open_at = stat.last_open_at
+        last_error_at: datetime | None
+        last_error: str | None
+        if newest_state is not None and (
+            stat is None
+            or stat.last_error_at is None
+            or (newest_state.last_failure_at or now) >= stat.last_error_at
+        ):
+            last_error_at = newest_state.last_failure_at
+            last_error = f"{newest_state.endpoint}: {newest_state.last_error}"
+        else:
+            last_error_at = stat.last_error_at if stat is not None else None
+            last_error = stat.last_error if stat is not None else None
+        items.append(
+            ProviderHealth(
+                provider=provider,
+                calls_24h=stat.calls if stat is not None else 0,
+                failed_24h=stat.failed if stat is not None else 0,
+                skipped_24h=stat.skipped if stat is not None else 0,
+                open_until=open_until,
+                last_error_at=last_error_at,
+                last_error=last_error,
+                last_open_at=last_open_at,
+            )
+        )
+    return items
+
+
 def collection_label(item: CollectionHealth) -> str:
     label = _KIND_LABELS.get(item.kind, item.kind)
     extra = " ".join(part for part in (item.provider, item.part, item.scope) if part)
@@ -1174,6 +1267,7 @@ def derive_warnings(
     verification: VerificationHealth,
     overdue: OverdueHealth,
     calendar_warnings: Sequence[HealthWarning] = (),
+    providers: Sequence[ProviderHealth] = (),
 ) -> list[HealthWarning]:
     """Rules (see README "数据健康"); ``error`` > ``warn`` > ``info`` in the output order."""
 
@@ -1354,6 +1448,21 @@ def derive_warnings(
                 section="overdue",
             )
         )
+    for upstream in providers:
+        if upstream.open_until is not None and upstream.open_until > now:
+            until = upstream.open_until.astimezone(SHANGHAI_TZ).strftime("%H:%M:%S")
+            warnings.append(
+                HealthWarning(
+                    code="provider_circuit_open",
+                    level="warn",
+                    message=(
+                        f"{upstream.provider} 熔断中，至 {until}（24 小时内调用 "
+                        f"{upstream.calls_24h} 次，失败 {upstream.failed_24h} 次）；"
+                        "窗口内的采集任务会直接 partial，窗口过后自动试探。"
+                    ),
+                    section="providers",
+                )
+            )
     rank = {"error": 0, "warn": 1, "info": 2}
     return sorted(warnings, key=lambda item: rank[item.level])
 
@@ -1477,6 +1586,7 @@ async def build_data_health(
         akshare_runs=akshare_runs,
     )
     overdue = await overdue_health(session)
+    providers = await provider_health(session, now=now, circuit_states=config.circuit_states)
     warnings = derive_warnings(
         now=now,
         threshold=config.threshold,
@@ -1489,6 +1599,7 @@ async def build_data_health(
         verification=verification,
         overdue=overdue,
         calendar_warnings=config.calendar_warnings,
+        providers=providers,
     )
     return DataHealth(
         generated_at=now,
@@ -1504,6 +1615,7 @@ async def build_data_health(
         backfill=backfill,
         verification=verification,
         overdue=overdue,
+        providers=providers,
     )
 
 
@@ -1513,7 +1625,9 @@ __all__ = [
     "HealthSettings",
     "HealthWarning",
     "LiveSnapshot",
+    "ProviderHealth",
     "build_data_health",
     "compute_accumulation",
     "derive_warnings",
+    "provider_health",
 ]

@@ -2,7 +2,7 @@
 {% block content %}
 <header class="page-head">
   <h1>数据健康</h1>
-  <p class="muted">采集完整率、数据新鲜度、快照积累（P1 阶段退出指标）、历史回补与 iFinD 核对。只读汇总，不触发任何采集。</p>
+  <p class="muted">采集完整率、数据新鲜度、快照积累（P1 阶段退出指标）、历史回补、iFinD 核对与上游调用。只读汇总，不触发任何采集。</p>
 </header>
 <div id="data-health" class="data-region"
      data-endpoint="/health/data"
@@ -48,5 +48,9 @@
 <section id="health-overdue" class="card health-section" hidden>
   <h2>逾期财报</h2>
   <div data-health-section="overdue"></div>
+</section>
+<section id="health-providers" class="card health-section" hidden>
+  <h2>上游调用</h2>
+  <div data-health-section="providers"></div>
 </section>
 {% endblock %}

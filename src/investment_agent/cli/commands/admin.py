@@ -1,6 +1,6 @@
-"""admin sub-commands: cost summary, db migrate."""
+"""admin sub-commands: cost summary, db migrate, provider-call ledger prune."""
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import typer
@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from investment_agent.config import Settings
 from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.ops import LLMCall
+from investment_agent.storage.repositories.provider_call import ProviderCallRepository
 
 app = typer.Typer(help="Admin commands")
 _console = Console()
@@ -75,3 +76,23 @@ def db_migrate() -> None:
     """Run alembic upgrade head."""
     import subprocess
     subprocess.run(["alembic", "upgrade", "head"], check=True)
+
+
+@app.command("prune-provider-calls")
+def prune_provider_calls(
+    days: int = typer.Option(90, min=1, help="Keep provider_call rows younger than this many days"),
+) -> None:
+    """Delete ``provider_call`` ledger rows older than ``--days`` (default 90)."""
+
+    before = datetime.now(UTC) - timedelta(days=days)
+
+    async def _run() -> int:
+        async with session_scope() as session:
+            return await ProviderCallRepository(session).prune(before=before)
+
+    settings = Settings()  # type: ignore[call-arg]
+    removed = run_with_engine(settings.database_url, _run)
+    _console.print(
+        f"Removed {removed} provider_call rows older than {days} days "
+        f"(before {before.isoformat(timespec='seconds')})."
+    )

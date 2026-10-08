@@ -2,7 +2,11 @@
 
 Read-only: snapshot run completeness, freshness, accumulation toward the P1
 exit metric, backfill progress, iFinD budget / queue / conflicts, overdue
-reports and derived warnings (see :mod:`investment_agent.snapshots.health`).
+reports, per-provider upstream call counters (``providers``: 24-hour calls /
+failures from the ``provider_call`` ledger and the circuit-breaker state - the
+API process has no breaker in memory, so "熔断中" comes from the ledger's
+``circuit`` rows) and derived warnings (see
+:mod:`investment_agent.snapshots.health`).
 Auth: ``X-API-Key`` or the web session. No secrets or raw provider bodies
 are returned. ``/healthz`` stays the unauthenticated liveness probe.
 """

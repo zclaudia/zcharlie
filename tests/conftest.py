@@ -11,6 +11,7 @@ from investment_agent.storage.models import (  # noqa: F401
     market_data,
     ops,
     pit_snapshot,
+    provider_call,
     reference,
     relationship,
     rules,

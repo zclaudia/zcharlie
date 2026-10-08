@@ -96,7 +96,9 @@ from investment_agent.providers.errors import (
     ProviderDataError,
     ProviderError,
     ProviderTransientError,
+    ProviderUnavailableError,
 )
+from investment_agent.providers.ledger import CallOutcome, ProviderCallEvent, ProviderCallHook
 
 log = structlog.get_logger(__name__)
 
@@ -688,6 +690,7 @@ class AkshareEastmoneyClient:
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         monotonic: Callable[[], float] = time.monotonic,
         circuit: CircuitBreaker | None = None,
+        on_call: ProviderCallHook | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
@@ -695,6 +698,7 @@ class AkshareEastmoneyClient:
             raise ValueError("min_interval_seconds must be >= 0")
         self._backend = backend
         self._circuit = circuit
+        self._on_call = on_call
         self._clock = clock
         self.min_interval_seconds = min_interval_seconds
         self._timeout_seconds = timeout_seconds
@@ -733,7 +737,9 @@ class AkshareEastmoneyClient:
         backend = self._resolve_backend()
         symbol = to_eastmoney_symbol(ticker)
         table = await self._call(
-            f"{CASH_FLOW_ENDPOINT}({symbol})", partial(backend.cash_flow_table, symbol)
+            f"{CASH_FLOW_ENDPOINT}({symbol})",
+            partial(backend.cash_flow_table, symbol),
+            ticker_count=1,
         )
         if table is None or not table.rows:
             return None
@@ -759,29 +765,57 @@ class AkshareEastmoneyClient:
                 await self._sleep(wait)
         self._last_call = self._monotonic()
 
-    async def _call[T](self, operation: str, call: Callable[[], T]) -> T:
+    async def _call[T](
+        self, operation: str, call: Callable[[], T], *, ticker_count: int = 0
+    ) -> T:
         """One logical call: throttled, retried on transient errors, circuit-guarded.
 
         The circuit breaker is consulted once per logical call (before the
         first attempt) and told the final outcome once, so in-call retries
         stay as they are and the breaker counts calls that failed for good.
+        ``on_call`` (the provider ledger) gets one event per logical call:
+        ``ok`` / ``transient`` / ``terminal`` / ``skipped_open``.
         """
 
         if self._lock is None:
             self._lock = asyncio.Lock()
         endpoint = operation.split("(", 1)[0]
         async with self._lock:
-            if self._circuit is not None:
-                self._circuit.check(PROVIDER, endpoint)
+            started = self._monotonic()
+            outcome: CallOutcome = "terminal"
             try:
+                if self._circuit is not None:
+                    self._circuit.check(PROVIDER, endpoint)
                 result = await self._attempts(operation, call)
+            except ProviderUnavailableError:
+                outcome = "skipped_open"
+                raise
             except BaseException as exc:
+                outcome = "transient" if isinstance(exc, ProviderTransientError) else "terminal"
                 if self._circuit is not None:
                     self._circuit.record_failure(PROVIDER, endpoint, exc)
                 raise
-            if self._circuit is not None:
-                self._circuit.record_success(PROVIDER, endpoint)
-            return result
+            else:
+                outcome = "ok"
+                if self._circuit is not None:
+                    self._circuit.record_success(PROVIDER, endpoint)
+                return result
+            finally:
+                await self._report(endpoint, outcome, started, ticker_count)
+
+    async def _report(
+        self, endpoint: str, outcome: CallOutcome, started: float, ticker_count: int
+    ) -> None:
+        if self._on_call is None:
+            return
+        duration_ms = (
+            None
+            if outcome == "skipped_open"
+            else max(int((self._monotonic() - started) * 1000), 0)
+        )
+        await self._on_call(
+            ProviderCallEvent(PROVIDER, endpoint, outcome, duration_ms, ticker_count)
+        )
 
     async def _attempts[T](self, operation: str, call: Callable[[], T]) -> T:
         attempt = 0

@@ -544,7 +544,7 @@ class BaostockMarketClient(BaostockReferenceClient):
                 adjustflag=flag,
             )
 
-        raw = await self._run(KDATA_OPERATION, query)
+        raw = await self._run(KDATA_OPERATION, query, ticker_count=1)
         captured_at = self._now()
         capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
 
@@ -613,7 +613,7 @@ class BaostockMarketClient(BaostockReferenceClient):
                 def query(backend: BaostockBackend, method: str = method) -> BaostockResultSet:
                     return getattr(backend, method)(code=code, year=year, quarter=quarter)  # type: ignore[no-any-return]
 
-                raw = await self._run(method, query)
+                raw = await self._run(method, query, ticker_count=1)
                 if len(raw.rows) > 1:
                     raise ProviderDataError(
                         f"baostock {method} returned {len(raw.rows)} rows for "
@@ -693,7 +693,7 @@ class BaostockMarketClient(BaostockReferenceClient):
                 code=code, year=str(year), yearType=DIVIDEND_YEAR_TYPE
             )
 
-        raw = await self._run(DIVIDEND_OPERATION, query)
+        raw = await self._run(DIVIDEND_OPERATION, query, ticker_count=1)
         captured_at = self._now()
         capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
         for row in raw.rows:
@@ -739,7 +739,7 @@ class BaostockMarketClient(BaostockReferenceClient):
             data_backend: BaostockDataBackend = backend  # type: ignore[assignment]
             return data_backend.query_stock_basic(code=code)
 
-        raw = await self._run(STOCK_BASIC_OPERATION, query)
+        raw = await self._run(STOCK_BASIC_OPERATION, query, ticker_count=1)
         if not raw.rows:
             return None
         if len(raw.rows) > 1:

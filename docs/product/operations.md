@@ -67,7 +67,21 @@
   - 「快照积累 X / 8 周」是 P1 阶段退出指标：连续 8 个完整周（每周每个交易日日线完整率 ≥
     `SNAPSHOT_COMPLETENESS_THRESHOLD`，默认 0.95）；无交易日的周不计也不中断。
   - 采集完整率、缺失清单、新鲜度、回补进度、iFinD 预算与核对队列、来源冲突、逾期披露。
+  - 「上游调用」：每个免费数据源（baostock / AkShare）最近 24 小时的调用 / 失败 / 熔断拒绝次数与熔断状态，
+    来自 `provider_call` 台账（见 4.1）。
   - 警告级别 warn / error 同时显示在首页。
+
+### 4.1 上游熔断与调用台账
+
+- **熔断器**（worker 进程内存，重启清零）：采集任务自身的连续失败断路器（baostock 连续 5 次瞬态失败、
+  东财连续 3 次失败）触发时，把该数据源整体置为"熔断中"，窗口 5 秒起按 5s / 15s / 45s / 2 分 / 5 分递增；
+  窗口内所有该源的任务**不打上游**，直接以 `provider_unavailable` 结束为 `partial`，窗口过后第一次调用试探，
+  成功即复位、再失败则进入下一档。瞬态失败才计数；列名变化等终态错误不开熔断。
+- **调用台账** `provider_call`：每次逻辑调用（含客户端内部重试）一行，`outcome` 为
+  `ok` / `transient` / `terminal` / `skipped_open`（被熔断拒绝）；熔断器每次打开也记一行
+  （`endpoint = circuit`，`duration_ms` 为窗口长度），API 进程据此显示"熔断中，至 …"。
+  iFinD 预算台账 `ifind_call_ledger` 不变。
+- **保留 90 天**：`ia admin prune-provider-calls [--days 90]`，建议每月跑一次。
 - **候选页** `/app/candidates`：周日筛选后审阅新候选与规则草稿。
 - **通知**：目前以 Markdown 写入 `DATA_DIR/notifications/`；`action_required` 需要人工处理。
 
@@ -78,7 +92,7 @@
 | 日线落后 ≥ 1 个交易日 | baostock 未更新或任务失败 | 看健康页对应任务的缺失清单；手动补采 `ia snapshot collect-market --universe CSI300 --date <D> --now` |
 | iFinD 核对显示「已延后」 | 5 小时窗口预算用尽 | 正常现象，窗口滚动后自动继续；`ia verify status` 查看下次可用时间 |
 | 通知「iFinD 额度已用尽」 | Kimi 网关 5 小时额度（可能与日常 Kimi 使用共用） | 无需操作；当前批次停止，下个窗口自动续采。频繁出现时在设置页调低「iFinD 5 小时预算」 |
-| 东财采集 `partial`（`provider_unavailable`） | 东财接口连续失败 | 下次调度自动重试；持续失败时检查 AkShare 版本与接口列名（列名变化会直接报错） |
+| 东财采集 `partial`（`provider_unavailable`） | 东财接口连续失败，或该源仍在熔断窗口内（健康页「上游调用」显示熔断至何时） | 下次调度自动重试；持续失败时检查 AkShare 版本与接口列名（列名变化会直接报错） |
 | 逾期披露通知 | 过法定截止日仍未见该期报告 | 人工关注；该股票在筛选中被排除，补披露后自动解除 |
 | 规则草稿一直「起草中」 | 设置页未配置 LLM key 或 worker 未运行 | 在设置页填写并测试连接（worker 下个任务生效）；候选页可点「重新起草」 |
 | 回补中断 | 进程退出或网络错误 | 用**相同的 `--as-of`** 重跑同一命令，已完成部分自动跳过 |

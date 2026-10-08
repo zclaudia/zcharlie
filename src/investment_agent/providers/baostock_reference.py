@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import re
 import threading
+import time
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -46,7 +47,9 @@ from investment_agent.providers.errors import (
     ProviderDataError,
     ProviderError,
     ProviderTransientError,
+    ProviderUnavailableError,
 )
+from investment_agent.providers.ledger import CallOutcome, ProviderCallEvent, ProviderCallHook
 
 log = structlog.get_logger(__name__)
 
@@ -260,6 +263,7 @@ class BaostockReferenceClient:
         max_attempts: int = 3,
         retry_backoff_seconds: float = 2.0,
         circuit: CircuitBreaker | None = None,
+        on_call: ProviderCallHook | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
@@ -269,6 +273,7 @@ class BaostockReferenceClient:
         self._max_attempts = max_attempts
         self._retry_backoff_seconds = retry_backoff_seconds
         self._circuit = circuit
+        self._on_call = on_call
         self._session_depth = 0
 
     # -- session ----------------------------------------------------------- #
@@ -430,6 +435,8 @@ class BaostockReferenceClient:
         self,
         operation: str,
         query: Callable[[BaostockBackend], BaostockResultSet],
+        *,
+        ticker_count: int = 0,
     ) -> _RawResult:
         backend = self._resolve_backend()
         if self._session_depth:
@@ -437,9 +444,13 @@ class BaostockReferenceClient:
                 operation,
                 lambda: _locked_query(backend, operation, query),
                 relogin=lambda: _relogin(backend),
+                ticker_count=ticker_count,
             )
         return await self._with_retries(
-            operation, lambda: _session_query(backend, operation, query), relogin=None
+            operation,
+            lambda: _session_query(backend, operation, query),
+            relogin=None,
+            ticker_count=ticker_count,
         )
 
     async def _with_retries[T](
@@ -448,25 +459,45 @@ class BaostockReferenceClient:
         call: Callable[[], T],
         *,
         relogin: Callable[[], None] | None,
+        ticker_count: int = 0,
     ) -> T:
         """Run blocking ``call`` in a thread with a timeout and transient retries.
 
         The circuit breaker (when wired) is checked once before the first
         attempt and told the final outcome once: in-call retries are unchanged
-        and the breaker counts logical calls that failed for good.
+        and the breaker counts logical calls that failed for good. ``on_call``
+        (the provider ledger) gets one event per logical call.
         """
 
-        if self._circuit is not None:
-            self._circuit.check(PROVIDER, operation)
+        started = time.monotonic()
+        outcome: CallOutcome = "terminal"
         try:
+            if self._circuit is not None:
+                self._circuit.check(PROVIDER, operation)
             result = await self._attempts(operation, call, relogin=relogin)
+        except ProviderUnavailableError:
+            outcome = "skipped_open"
+            raise
         except BaseException as exc:
+            outcome = "transient" if isinstance(exc, ProviderTransientError) else "terminal"
             if self._circuit is not None:
                 self._circuit.record_failure(PROVIDER, operation, exc)
             raise
-        if self._circuit is not None:
-            self._circuit.record_success(PROVIDER, operation)
-        return result
+        else:
+            outcome = "ok"
+            if self._circuit is not None:
+                self._circuit.record_success(PROVIDER, operation)
+            return result
+        finally:
+            if self._on_call is not None:
+                duration_ms = (
+                    None
+                    if outcome == "skipped_open"
+                    else max(int((time.monotonic() - started) * 1000), 0)
+                )
+                await self._on_call(
+                    ProviderCallEvent(PROVIDER, operation, outcome, duration_ms, ticker_count)
+                )
 
     async def _attempts[T](
         self,

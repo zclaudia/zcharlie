@@ -42,6 +42,7 @@ TOP_LEVEL = {
     "backfill",
     "verification",
     "overdue",
+    "providers",
 }
 
 
