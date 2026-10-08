@@ -54,3 +54,35 @@
 
 - 本机 `ia api serve` 后打开 `/app/watchlist`：每行出现迷你图；`/app/stocks/600519.SH` 顶部出现 240 日曲线；控制台无 CSP 报错。
 - 门禁三条通过；写"完成记录"。
+
+## 完成记录（2026-10-09）
+
+- 提交：`0ae821f` feat(api): GET /market/{ticker}/bars for sparkline rendering（Task 1）；
+  `02e74d3` feat(web): SVG sparkline on watchlist rows, candidate cards and stock page（Task 2）。
+- 门禁：ruff / mypy 通过；`pytest -m "not network"` 1364 passed（Task 1 后 1362，基线 1349）。
+- 本机验收：临时 SQLite（独立 DATA_DIR / DATABASE_URL，未碰 `data/app.db`）种 3 只股票各 260 根 baostock 日线，
+  `ia api serve --port 8765` 后在内置浏览器查看：`/app/watchlist` 每行出现 120 日迷你图（红涨绿跌），
+  `/app/stocks/600519.SH` 与无研究快照的 `/app/stocks/300750.SZ` 顶部均出现 240 日曲线（高 80），
+  手动提名的候选卡右上角出现迷你图；窄屏堆叠布局正常；控制台无 CSP 或其他报错。
+
+### 偏离与说明
+
+- 接口 `ticker` 不合法返回 422（而非 404），与 `days` 越界一致；大小写不敏感（`600519.sh` 可用）。
+- 取数窗口：`end = shanghai_today()`，`start = end − (days×2 + 30) 天`，再取 `series_as_of` 结果的尾部 `days` 根；
+  provider 固定 `baostock`、`adjust="none"`，按计划不走优先级。
+- 页面不发请求的 `ui.js` 新增了 `fillSparklines(targets, load, {width, height, bands, limit = 6})`：
+  读 `[data-spark="<ticker>"]` 占位、并发上限 6、失败 / 无数据留 `span.spark-empty`；`load(ticker)` 由 `app.js` /
+  `candidates.js` 注入（它们各自保留 `/market/<ticker>/bars?days=` 字面量，满足契约），因此没有新建 JS 文件。
+- 末点 `circle.spark-last` 用半径 0.01 + `vector-effect="non-scaling-stroke"` 的 5px 描边画成圆点，
+  避免 `preserveAspectRatio="none"` 拉伸成椭圆；首尾相等时 class 为 `spark-flat`。
+- `app.css` 原无红涨绿跌变量（文件头明确"不用红绿表达好坏"），新增 `--c-spark-up / --c-spark-down / --c-spark-flat /
+  --c-spark-band`（含暗色值），只表达价格方向。`.spark` 尺寸由 svg 的 `width` / `height` 属性给出，股票页传 `width: "100%"`。
+- 股票页迷你图与研究快照无关：`loadStockDetail` 先挂载迷你图再处理快照；`boot` 里改为只要存在 `#stock-detail`
+  就调用 `loadStockDetail(region, latest)`（latest 为 null 时原有分支仅隐藏详情区），无快照的股票也能看到曲线。
+  `stock.html` 的 `#stock-spark` 带 `data-ticker`，放在研究表单下方独立卡片内。
+- 契约测试除源码标记外，增加了用 node 假 `document` 渲染 `sparkline()` 并断言 SVG 结构（class、viewBox、
+  points 坐标、band / polyline / circle 顺序、空占位）的用例。
+
+### 计划清单之外触碰的文件
+
+- 无。未改 `api/routes/watchlist.py`、`health.*`、`test_web_candidates.py` 或其他子计划文件。
