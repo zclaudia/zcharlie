@@ -12,6 +12,8 @@ from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.field_sources import (
     DEFAULT_FIELD_SOURCES_PATH,
     FREE_PROVIDERS,
+    UNIT_WORDS,
+    Calibration,
     FieldSourceError,
     default_field_sources,
     parse_field_sources,
@@ -116,6 +118,90 @@ def test_free_providers():
     assert {"baostock", "akshare"} == FREE_PROVIDERS
     assert relative_difference(100.0, 98.0) == pytest.approx(0.02)
     assert relative_difference(0.0, 0.0) == 0.0
+
+
+# --------------------------------------------------------------------------- #
+# Calibration records and unit check (mrd-intake A3)
+# --------------------------------------------------------------------------- #
+
+
+def test_registry_definitions_name_units_and_key_fields_are_calibrated():
+    registry = default_field_sources()
+    assert registry.version == "2026-10-09.1"
+    for source in registry:
+        assert any(word in source.definition for word in UNIT_WORDS), source.name
+    checked = date(2026, 10, 6)
+    for source in registry:
+        if not source.key:
+            continue
+        record = source.calibration.get(source.primary)
+        assert record is not None, f"{source.name}: primary {source.primary} has no calibration"
+        assert record.checked_on == checked and record.method
+    debt = registry.require("debt_ratio")
+    assert set(debt.calibration) == {"baostock", "akshare"}
+    assert "percent" in debt.calibration["akshare"].method
+    assert debt.calibration["baostock"].note == "see sanity.baostock"
+    assert registry.require("close").calibration["baostock"] == Calibration(
+        checked_on=checked,
+        method="query_history_k_data_plus live: 600519 close 1258.62 on 2026-09-30 equals iFinD",
+    )
+    assert registry.require("gross_margin").calibration == {}
+
+
+def test_validation_requires_a_unit_word_in_the_definition():
+    document = _document()
+    document["fields"]["roe"]["definition"] = "return on equity, period-to-date"
+    with pytest.raises(FieldSourceError, match="must name the unit"):
+        parse_field_sources(document)
+    document = _document()
+    document["fields"]["roe"]["definition"] = "return on equity, %"
+    assert parse_field_sources(document).require("roe").definition == "return on equity, %"
+
+
+def test_new_provider_entries_need_a_calibration_record():
+    document = _document()
+    close = document["fields"]["close"]
+    close["fallback"] = ["tencent"]
+    with pytest.raises(FieldSourceError, match="calibration"):
+        parse_field_sources(document)
+    close["calibration"] = {
+        "tencent": {
+            "checked_on": "2026-10-09",
+            "method": "qt.gtimg.cn live: field 3 is the close in CNY after 15:00",
+            "note": "amount is 万元",
+        }
+    }
+    source = parse_field_sources(document).require("close")
+    assert source.order == ("baostock", "tencent")
+    assert source.calibration["tencent"].checked_on == date(2026, 10, 9)
+    assert source.calibration["tencent"].note == "amount is 万元"
+    # a record alone does not legitimise iFinD or a malformed name
+    close["fallback"] = ["ifind"]
+    close["calibration"] = {"ifind": {"checked_on": "2026-10-09", "method": "x"}}
+    with pytest.raises(FieldSourceError, match="iFinD only verifies"):
+        parse_field_sources(document)
+    close["fallback"] = ["Wind-EDB"]
+    close["calibration"] = {"Wind-EDB": {"checked_on": "2026-10-09", "method": "x"}}
+    with pytest.raises(FieldSourceError, match="unknown source"):
+        parse_field_sources(document)
+
+
+@pytest.mark.parametrize(
+    ("calibration", "message"),
+    [
+        ({"akshare": {"checked_on": "2026-10-06", "method": "x"}}, "not a source"),
+        ({"baostock": {"method": "x"}}, "checked_on is required"),
+        ({"baostock": {"checked_on": "yesterday", "method": "x"}}, "ISO date"),
+        ({"baostock": {"checked_on": "2026-10-06"}}, "method is required"),
+        ({"baostock": {"checked_on": "2026-10-06", "method": "x", "by": "me"}}, "expected checked_on"),
+        ("2026-10-06", "expected a mapping"),
+    ],
+)
+def test_validation_rejects_bad_calibration_records(calibration, message):
+    document = _document()
+    document["fields"]["roe"]["calibration"] = calibration
+    with pytest.raises(FieldSourceError, match=message):
+        parse_field_sources(document)
 
 
 # --------------------------------------------------------------------------- #

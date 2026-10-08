@@ -23,14 +23,20 @@
 #              | dividend (dividend_event rows, baostock query_dividend_data)
 #   primary    baostock | akshare | derived
 #   fallback   ordered list of baostock | akshare (default [])
-#   definition 口径 (unit and meaning)
+#   definition 口径 (unit and meaning); must name the unit: one of
+#              fraction | CNY | 元 | 万元 | % | shares | days | ratio | flag
 #   tolerance  relative tolerance for cross-source comparison (default 0.02)
 #   key        critical field: a conflict or a gap triggers iFinD verification
 #   sanity     per provider: {min, max, reason}; a value outside is a provider
 #              defect, not data
 #   approx     per provider: true when that source only approximates the field
 #   formula    derived fields only: "<field> <op> <field>", op in + - * /
-version: "2026-10-07.2"
+#   calibration per provider: {checked_on: date, method, note} - when and how
+#              the unit / meaning was checked against a live answer (p1-plan
+#              2.1 / 2.2 live checks of 2026-10-06). Required for any provider
+#              other than baostock / akshare (a new source never enters
+#              uncalibrated); optional for those two.
+version: "2026-10-09.1"
 default_tolerance: 0.02
 
 fields:
@@ -40,6 +46,12 @@ fields:
     primary: baostock
     definition: "ROE on average equity (baostock roeAvg), fraction, period-to-date"
     key: true
+    calibration:
+      baostock:
+        checked_on: 2026-10-06
+        method: >-
+          query_profit_data live (600519 et al.): fraction values and pubDate
+          semantics (FY2025 2026-04-17, 2026H1 2026-08-15) checked by hand
   gross_margin:
     table: financial
     primary: baostock
@@ -53,11 +65,19 @@ fields:
     primary: baostock
     definition: "EPS, trailing twelve months (epsTTM), CNY/share"
     key: true
+    calibration:
+      baostock:
+        checked_on: 2026-10-06
+        method: "query_profit_data live: epsTTM in CNY per share, cross-read with iFinD"
   total_shares:
     table: financial
     primary: baostock
     definition: "total shares (totalShare), effective from pubDate"
     key: true
+    calibration:
+      baostock:
+        checked_on: 2026-10-06
+        method: "query_profit_data live: totalShare is a share count (not 万股)"
 
   # -- balance sheet ------------------------------------------------------- #
   debt_ratio:
@@ -74,6 +94,16 @@ fields:
         reason: >-
           baostock liabilityToAsset arrives scaled by 1/100 on some annual rows
           (FY2024 100%, 2025Q3 99.8%, FY2025 49.5% of rows; e.g. 600519 FY2024 0.0019)
+    calibration:
+      baostock:
+        checked_on: 2026-10-06
+        method: "query_balance_data live: liabilityToAsset fraction; 1/100 scaling defect found"
+        note: "see sanity.baostock"
+      akshare:
+        checked_on: 2026-10-06
+        method: >-
+          stock_zcfz_em live (akshare 1.19.1): 资产负债率 is percent, equals
+          负债-总负债 / 资产-总资产 x 100 on all 5243 FY2024 rows; stored / 100
   total_equity:
     table: financial
     primary: akshare
@@ -87,6 +117,12 @@ fields:
       net profit attributable to the parent (归母净利润), CNY, period-to-date
       (stock_lrb_em 净利润 = PARENT_NETPROFIT)
     key: true
+    calibration:
+      akshare:
+        checked_on: 2026-10-06
+        method: >-
+          stock_lrb_em live (akshare 1.19.1): 净利润 in CNY equals PARENT_NETPROFIT
+          (600519 FY2024 86.23 bn, 601318 126.6 bn), not net profit incl. minority
   net_profit_total:
     table: financial
     primary: baostock
@@ -96,6 +132,10 @@ fields:
     primary: akshare
     definition: "total operating revenue (营业总收入, stock_lrb_em), CNY, period-to-date"
     key: true
+    calibration:
+      akshare:
+        checked_on: 2026-10-06
+        method: "stock_lrb_em live: 营业总收入 in CNY (600519 FY2024 174.1 bn); banks report 营业收入"
   revenue_main:
     table: financial
     primary: baostock
@@ -113,6 +153,16 @@ fields:
     key: true
     approx:
       baostock: true
+    calibration:
+      akshare:
+        checked_on: 2026-10-06
+        method: >-
+          stock_xjll_em 经营性现金流-现金流量净额 and the per-stock statement's
+          NETCASH_OPERATE live, both CNY (600519 FY2024 92.46 bn)
+      baostock:
+        checked_on: 2026-10-06
+        method: "query_cash_flow_data live: CFOToNP is a ratio; CFOToNP x netProfit approximates CNY"
+        note: "approximation, never raises a conflict"
   capital_expenditure:
     table: financial
     primary: akshare
@@ -120,11 +170,21 @@ fields:
       cash paid for fixed / intangible / other long-term assets
       (CONSTRUCT_LONG_ASSET, Eastmoney per-stock cash-flow statement), CNY, period-to-date
     key: true
+    calibration:
+      akshare:
+        checked_on: 2026-10-06
+        method: >-
+          stock_cash_flow_sheet_by_report_em live (600519, 601318, 601398, 600030):
+          CONSTRUCT_LONG_ASSET in CNY, NOTICE_DATE / UPDATE_DATE present
   free_cash_flow:
     table: financial
     primary: akshare
     definition: "NETCASH_OPERATE - CONSTRUCT_LONG_ASSET, CNY, period-to-date"
     key: true
+    calibration:
+      akshare:
+        checked_on: 2026-10-06
+        method: "derived in the client from the two CNY columns above (same statement row)"
 
   # -- fiscal-year per-share values (observation multiples pe_fy / pb_fy / ps_fy)
   eps_basic_fy:
@@ -139,31 +199,35 @@ fields:
     primary: derived
     formula: "total_equity / total_shares"
     definition: >-
-      approximates net assets per share (iFinD ths_nav_ps_stock is parent equity;
-      total_equity includes minority interests)
+      approximates net assets per share, CNY/share (iFinD ths_nav_ps_stock is
+      parent equity; total_equity includes minority interests)
   revenue_ps_fy:
     table: derived
     primary: derived
     formula: "revenue_total / total_shares"
-    definition: "revenue per share of the fiscal year"
+    definition: "revenue per share of the fiscal year, CNY/share"
 
   # -- daily bars (market_snapshot, baostock) ------------------------------- #
   close:
     table: market
     primary: baostock
     definition: "close, CNY/share; adjust=none raw, adjust=backward 后复权"
+    calibration:
+      baostock:
+        checked_on: 2026-10-06
+        method: "query_history_k_data_plus live: 600519 close 1258.62 on 2026-09-30 equals iFinD"
   pe_ttm:
     table: market
     primary: baostock
-    definition: "close / TTM EPS (peTTM), times"
+    definition: "close / TTM EPS (peTTM), ratio (times)"
   pb_mrq:
     table: market
     primary: baostock
-    definition: "close / latest-quarter BVPS (pbMRQ), times"
+    definition: "close / latest-quarter BVPS (pbMRQ), ratio (times)"
   ps_ttm:
     table: market
     primary: baostock
-    definition: "close / TTM revenue per share (psTTM), times"
+    definition: "close / TTM revenue per share (psTTM), ratio (times)"
   turnover:
     table: market
     primary: baostock
@@ -171,17 +235,17 @@ fields:
   is_st:
     table: market
     primary: baostock
-    definition: "1 when ST / *ST"
+    definition: "flag: 1 when ST / *ST"
   trade_status:
     table: market
     primary: baostock
-    definition: "1 trading, 0 suspended"
+    definition: "flag: 1 trading, 0 suspended"
 
   # -- disclosure ---------------------------------------------------------- #
   report_overdue:
     table: report_overdue
     primary: baostock
-    definition: "periodic report past its statutory deadline without a baostock pubDate"
+    definition: "flag: periodic report past its statutory deadline without a baostock pubDate"
 
   # -- dividends (dividend_event, F2 / Q2) ------------------------------------ #
   cash_dividend_per_share:

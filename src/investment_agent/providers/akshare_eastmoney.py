@@ -36,6 +36,39 @@ canonical field             source                               unit
 ``free_cash_flow``          NETCASH_OPERATE - CONSTRUCT_LONG_ASSET  CNY
 ==========================  ===================================  =====================
 
+源链与口径 (source chain and units; calibration records live in
+``config/field_sources.yaml``, p1-plan 2.2 live checks of 2026-10-06):
+
+* Chain: akshare 1.19.1 -> Eastmoney ``datacenter-web`` (summaries:
+  ``RPT_DMSK_FN_INCOME`` / ``RPT_DMSK_FN_CASHFLOW`` / ``RPT_DMSK_FN_BALANCE``
+  reports) and the F10 cash-flow statement
+  (``emweb.securities.eastmoney.com`` ``RPT_F10_FINANCE_GCASHFLOW``). Both
+  are unofficial public endpoints: columns and names may change without
+  notice, which is why :data:`SUMMARY_COLUMNS` / :data:`CASH_FLOW_COLUMNS`
+  lock them and any drift stops the collector.
+* Units: every amount of every endpoint is **CNY (元)** - never 万元 or 亿元
+  (600519 FY2024 净利润 86 228 146 421.62). The only non-CNY column used is
+  ``stock_zcfz_em`` 资产负债率, a **percent** stored ``/ 100``. Share counts
+  are not served here (``total_shares`` comes from baostock). Compare:
+  baostock amounts are CNY too; the Tencent quote feed (B1) reports 成交额
+  in **万元** and volume in 手.
+* Dates: ``NOTICE_DATE`` = original disclosure of that period's report;
+  ``UPDATE_DATE`` = last restatement (a later report overwriting the
+  comparatives); the summaries' 公告日期 = latest notice touching the row.
+  None of them is a point-in-time guarantee: values are the latest
+  restated figures, so ``available_from`` is taken from the baostock
+  ``pubDate`` when present.
+* Throttle: one call at a time, >= 1 s apart (``min_interval_seconds``);
+  the summaries take 6-9 s per endpoint, the per-stock statement 16-24 s.
+  20 consecutive statement calls (324 s) were not rate-limited.
+* Overlap with baostock (cross-checked after each summary capture, see
+  :mod:`investment_agent.snapshots.eastmoney`): ``debt_ratio`` (same
+  meaning, both fractions after the ``/ 100``), ``operating_cash_flow``
+  (baostock only approximates it as ``CFOToNP x netProfit``),
+  ``net_profit_parent`` vs baostock ``netProfit`` (parent vs incl. minority:
+  **not** comparable), ``revenue_total`` vs baostock ``MBRevenue`` (total vs
+  main business: not comparable).
+
 Dates. The summaries' 公告日期 is the **latest** notice that touched the
 row, not the original disclosure: 600519 FY2024 shows 2026-04-17 (the FY2025
 annual report, which restated the comparatives). The per-stock statement has

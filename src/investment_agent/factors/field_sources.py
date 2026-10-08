@@ -10,6 +10,13 @@ per-provider ``sanity`` rules / ``approx`` markers. The factor view
 
 iFinD is never ``primary`` nor ``fallback`` (decision D6 rev 2): it only
 verifies values on demand (P1-A13). Validation rejects such a registry.
+
+Calibration (mrd-intake A3). Every ``definition`` must name its unit (one of
+:data:`UNIT_WORDS`); a provider entry may carry ``calibration.<provider>``
+(``checked_on`` / ``method`` / ``note``: when and how the unit and meaning were
+checked against a live answer). A provider outside :data:`FREE_PROVIDERS`
+(``derived`` aside) is accepted only with such a record, so a new source can
+never enter the registry uncalibrated.
 """
 
 from __future__ import annotations
@@ -18,6 +25,7 @@ import math
 import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -33,9 +41,17 @@ FIELD_TABLES: frozenset[str] = frozenset(
     {"financial", "derived", "market", "report_overdue", "dividend"}
 )
 FREE_PROVIDERS: frozenset[str] = frozenset({"baostock", "akshare"})
+"""Established free sources; their entries may omit ``calibration``."""
 VERIFIER = "ifind"
 DERIVED = "derived"
 DEFAULT_TOLERANCE = 0.02
+
+UNIT_WORDS: tuple[str, ...] = (
+    "fraction", "CNY", "元", "万元", "%", "shares", "days", "ratio", "flag",
+)
+"""A ``definition`` must contain one of these (``flag`` = 0/1 indicator)."""
+
+_PROVIDER_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 Verification = Literal["unverified", "verified", "conflict"]
 
@@ -60,6 +76,15 @@ class SanityRule:
         if self.maximum is not None and value > self.maximum:
             return f"above plausible maximum {self.maximum}"
         return None
+
+
+@dataclass(frozen=True)
+class Calibration:
+    """When and how a provider's unit / meaning of a field was checked live."""
+
+    checked_on: date
+    method: str
+    note: str = ""
 
 
 @dataclass(frozen=True)
@@ -99,6 +124,7 @@ class FieldSource:
     sanity: Mapping[str, SanityRule] = field(default_factory=dict)
     approx: frozenset[str] = frozenset()
     formula: Formula | None = None
+    calibration: Mapping[str, Calibration] = field(default_factory=dict)
 
     @property
     def order(self) -> tuple[str, ...]:
@@ -164,6 +190,41 @@ def _number(value: Any, where: str) -> float:
     return float(value)
 
 
+def _date(value: Any, where: str) -> date:
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value)
+        except ValueError:
+            pass
+    raise FieldSourceError(f"{where}: expected an ISO date, got {value!r}")
+
+
+def _parse_calibration(raw: Any, sources: set[str], where: str) -> dict[str, Calibration]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise FieldSourceError(f"{where}: expected a mapping provider -> record")
+    records: dict[str, Calibration] = {}
+    for provider, record in raw.items():
+        if provider not in sources:
+            raise FieldSourceError(f"{where}.{provider}: not a source of this field")
+        if not isinstance(record, dict) or not set(record) <= {"checked_on", "method", "note"}:
+            raise FieldSourceError(f"{where}.{provider}: expected checked_on / method / note")
+        if "checked_on" not in record:
+            raise FieldSourceError(f"{where}.{provider}.checked_on is required")
+        method = record.get("method")
+        if not isinstance(method, str) or not method.strip():
+            raise FieldSourceError(f"{where}.{provider}.method is required")
+        records[str(provider)] = Calibration(
+            checked_on=_date(record["checked_on"], f"{where}.{provider}.checked_on"),
+            method=" ".join(method.split()),
+            note=" ".join(str(record.get("note", "")).split()),
+        )
+    return records
+
+
 def _provider_list(value: Any, where: str) -> tuple[str, ...]:
     if value is None:
         return ()
@@ -178,7 +239,7 @@ def _parse_field(name: str, raw: Any, default_tolerance: float) -> FieldSource:
         raise FieldSourceError(f"{where}: expected a mapping")
     unknown = set(raw) - {
         "table", "primary", "fallback", "definition", "tolerance", "key", "sanity",
-        "approx", "formula",
+        "approx", "formula", "calibration",
     }
     if unknown:
         raise FieldSourceError(f"{where}: unknown keys {sorted(unknown)}")
@@ -193,12 +254,24 @@ def _parse_field(name: str, raw: Any, default_tolerance: float) -> FieldSource:
         raise FieldSourceError(
             f"{where}: iFinD only verifies (P1-A13); it cannot be a primary or fallback source"
         )
-    allowed = FREE_PROVIDERS | {DERIVED} if table == "derived" else FREE_PROVIDERS
-    for provider in (primary, *fallback):
-        if provider not in allowed:
-            raise FieldSourceError(f"{where}: unknown source {provider!r}")
     if len(set((primary, *fallback))) != 1 + len(fallback):
         raise FieldSourceError(f"{where}: a source is listed twice")
+    sources = set((primary, *fallback))
+    raw_calibration = raw.get("calibration")
+    declared = set(raw_calibration) if isinstance(raw_calibration, dict) else set()
+    allowed = FREE_PROVIDERS | {DERIVED} if table == "derived" else FREE_PROVIDERS
+    for provider in (primary, *fallback):
+        if provider in allowed:
+            continue
+        if provider == DERIVED or not _PROVIDER_NAME.fullmatch(provider):
+            raise FieldSourceError(f"{where}: unknown source {provider!r}")
+        if provider not in declared:
+            raise FieldSourceError(
+                f"{where}: unknown source {provider!r}; a provider outside "
+                f"{sorted(FREE_PROVIDERS)} needs a calibration record "
+                f"(calibration.{provider}: checked_on / method / note)"
+            )
+    calibration = _parse_calibration(raw_calibration, sources, f"{where}.calibration")
     formula: Formula | None = None
     if primary == DERIVED:
         text = raw.get("formula")
@@ -211,13 +284,16 @@ def _parse_field(name: str, raw: Any, default_tolerance: float) -> FieldSource:
     definition = raw.get("definition")
     if not isinstance(definition, str) or not definition.strip():
         raise FieldSourceError(f"{where}.definition (口径) is required")
+    if not any(word in definition for word in UNIT_WORDS):
+        raise FieldSourceError(
+            f"{where}.definition must name the unit (one of {list(UNIT_WORDS)})"
+        )
     tolerance = _number(raw.get("tolerance", default_tolerance), f"{where}.tolerance")
     if not 0 < tolerance <= 1:
         raise FieldSourceError(f"{where}.tolerance must be in (0, 1]")
     key = raw.get("key", False)
     if not isinstance(key, bool):
         raise FieldSourceError(f"{where}.key must be a boolean")
-    sources = set((primary, *fallback))
     sanity: dict[str, SanityRule] = {}
     for provider, rule in (raw.get("sanity") or {}).items():
         if provider not in sources:
@@ -250,6 +326,7 @@ def _parse_field(name: str, raw: Any, default_tolerance: float) -> FieldSource:
         sanity=sanity,
         approx=frozenset(provider for provider, flag in approx_raw.items() if flag),
         formula=formula,
+        calibration=calibration,
     )
 
 
