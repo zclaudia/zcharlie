@@ -3,7 +3,7 @@
 状态：Accepted（2026-10-06；替代 [`delivery-roadmap.md`](delivery-roadmap.md) 中的 V1/V2；
 [`engineering-baseline.md`](engineering-baseline.md) 已按第 14 节修订）
 
-日期：2026-10-06（第 2 版，按产品愿景修订）
+日期：2026-10-06（第 2 版，按产品愿景修订）；2026-10-09 补充第 12 节 P2 / P4 数据源准备与 15.3
 
 适用范围：`zcharlie` 的下一阶段产品形态。本文不以现有实现为出发点，
 只在第 12 节说明与现有代码的映射关系。
@@ -329,6 +329,20 @@ notify: { add: info, trim: info, exit_review: action_required }
 退出条件：同一快照对的区间事件可复现；每只持仓都有 active 规则；
 推送渠道连续 4 周稳定；每条通知可回溯到规则版本与触发值。
 
+**数据源准备（2026-10-09 补充，源自对开源项目 [marketingdashboard](https://github.com/theBigGavin/marketingdashboard) 的调研，详见 15.3）**：
+
+| 项 | 内容 | 服务的 P2 功能 | 成本 |
+|---|---|---|---|
+| 当日收盘价 | 腾讯 `qt.gtimg.cn` 批量报价（60 码/批，免 Key，收盘即有当日价），补 baostock 日线发布滞后 | 区间检测的日频判定（`buy_zone` / `add` / `trim`） | 低 |
+| 上游容错 | provider 级失败退避 + 负缓存（5s → 15s → 45s → 2min）与多源回退链（东财 → 新浪 → 腾讯）；mrd 2026-09-29 记录过东财 push2 全族 TLS 断连，我们的 AkShare 东财报表走同一批接口 | 推送渠道"连续 4 周稳定"的退出条件 | 中 |
+| 口径记录 | 在 `field_sources.yaml` 注释里记录各源的单位口径与实测校准日期（mrd `moneyflow.cjs` 文件头的写法） | 通知可回溯到触发值 | 低 |
+| 日线迷你图 | 手写 SVG sparkline（无图表库，满足 CSP），候选 / 观察卡片叠加区间带 | 观察端展示 | 低 |
+| 股票搜索 | 新浪 `suggest3` / 东财 `searchadapter` 联想（支持拼音） | 持仓录入、自选股添加 | 低 |
+| 上游计数 | `/health/data` 增加每个 provider 的上游调用 / 失败 / 429 计数（mrd `/api/stats`） | 运维 | 低 |
+
+约束：实时报价与其他非官方接口一样须带采集时间戳落 PIT 快照，不得绕过 `LookaheadDataError` 校验；
+这些接口随时可能变更或断连，只做增量能力，不作为唯一来源。
+
 ### P3 · 回测与校准
 
 - 基于积累快照与时点成分的回测框架：候选分桶、各区间事件的远期收益分布。
@@ -346,6 +360,14 @@ notify: { add: info, trim: info, exit_review: action_required }
 - 行业相对强弱与主题层，作为筛选的补充维度。
 
 退出条件：至少一类披露完成"抽取 → 确认 → 入账 → 在复核页可见"全链路。
+
+**数据源准备（2026-10-09 补充，同上调研）**：
+
+| 项 | 内容 | 服务的 P4 功能 | 成本 |
+|---|---|---|---|
+| 东财财报族 | datacenter `RPT_PUBLIC_OP_PREDICT`（业绩预告，含预增 / 预减 / 扭亏等类型）、`RPT_LICO_FN_CPD`（披露日历与已披露家数）、emweb F10 `BusinessAnalysis`（主营构成） | 公告 / 财报接入；业绩预告与披露日是天然的 `info` 级通知事件；主营构成供证据抽取 Agent | 中 |
+| 只读 MCP | 以只读 MCP Server 暴露 watchlist / 候选 / 快照 / 规则 / 证据给 Claude Desktop（mrd 同进程 5 工具的做法），不违反第 11 节 LLM 边界 | 复核与复盘时的交互查询 | 低 |
+| 7×24 快讯 | 见闻 / 新浪直播流按观察池代码与关键词过滤高亮 | 证据来源之一；需先评估资讯源条款与噪音 | 中 |
 
 ## 13. 与现有实现的映射
 
@@ -442,6 +464,19 @@ iFinD 只在晋级前、关键字段冲突、免费源缺失、退出复核和�
 6. **ifind-proxy 临时文件泄漏**：每次调用以 `NamedTemporaryFile(delete=False)` 创建文件且从不删除，
    批量采集前需修复。
 7. **候选过期时长、通知去重窗口**：使用中调整。
+
+### 15.3 开源项目调研：marketingdashboard（2026-10-09）
+
+[theBigGavin/marketingdashboard](https://github.com/theBigGavin/marketingdashboard)（MIT）是实时看盘驾驶舱：
+React 19 + 手写 SVG，零依赖 Node http 服务聚合腾讯 / 新浪 / 东财 / 见闻等免 Key 公开接口，
+纯内存 TTL 缓存，无数据库，无 LLM 推理。与本设计（日频快照 + 规则漏斗）形态正交，
+可借鉴的是数据源工程与上游容错经验，已分别记入第 12 节 P2 / P4 的"数据源准备"。
+引入计划见 [`mrd-intake-plan.md`](mrd-intake-plan.md)。
+
+明确不借鉴：5 秒轮询架构、无数据库设计、浏览器直连兜底、整体换 React、AI 用量面板、TV / iOS 端。
+
+备用方案：mrd 对 TLS 指纹敏感的上游走 fetch → curl 双通道并支持代理环境变量；
+若东财开始拦截 python requests 指纹，等价方案是 `curl_cffi`，当前不引入。
 
 ## 16. 风险
 
