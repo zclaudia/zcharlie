@@ -216,6 +216,33 @@ input, select, textarea {
   max-width: 100%;
 }
 textarea { width: 100%; }
+/* Own chevron (CSP forbids data: URIs): the native arrow hugs the right edge. */
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--c-ink-2) 50%),
+    linear-gradient(135deg, var(--c-ink-2) 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+/* Chromium: open the list below the control instead of over it. */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { background-image: none; padding-right: 10px; align-items: center; }
+  select::picker-icon { color: var(--c-ink-3); font-size: 0.7em; line-height: 1; align-self: center; transition: none; margin-left: auto; }
+  ::picker(select) {
+    border: 1px solid var(--c-line-strong);
+    border-radius: var(--r-md);
+    background: var(--c-surface);
+    padding: 4px;
+    margin-top: 4px;
+  }
+  select option { padding: 6px 10px; border-radius: var(--r-md); }
+  select option:checked { background: var(--c-accent-soft); }
+  select option:hover { background: var(--c-surface-2); }
+}
 input[aria-invalid="true"] { border-color: var(--c-warn); box-shadow: 0 0 0 2px var(--c-warn-soft); }
 
 button {
@@ -769,7 +796,19 @@ button.small-button { padding: 2px 10px; font-size: var(--fs-sm); }
 .settings-test-result { font-size: var(--fs-sm); color: var(--c-ink-2); overflow-wrap: anywhere; }
 .settings-test-result.is-ok { color: var(--c-accent); }
 .settings-test-result.is-error { color: var(--c-warn); }
-.settings-savebar { position: sticky; bottom: var(--sp-2); z-index: 5; border-color: var(--c-line-strong); }
+/* Floating bar: always reachable at the bottom of the viewport. */
+.settings-savebar {
+  position: fixed;
+  bottom: var(--sp-3);
+  left: max(var(--sp-4), calc((100vw - 1120px) / 2 + var(--sp-4)));
+  right: max(var(--sp-4), calc((100vw - 1120px) / 2 + var(--sp-4)));
+  z-index: 20;
+  margin: 0;
+  border-color: var(--c-line-strong);
+  box-shadow: 0 6px 24px rgba(16, 24, 40, 0.18);
+}
+.app-main:has(.settings-savebar:not([hidden])) { padding-bottom: 7rem; }
+.settings-savebar #settings-save-result:empty { display: none; }
 .settings-savebar[hidden] { display: none; }
 .settings-savebar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
 .settings-savebar-row input { flex: 1 1 12rem; min-width: 0; }
