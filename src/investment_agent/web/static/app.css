@@ -868,6 +868,26 @@ button.small-button { padding: 2px 10px; font-size: var(--fs-sm); }
 .add-panel[open] > summary { margin-bottom: var(--sp-2); }
 .add-panel form { padding: var(--sp-3); border: 1px dashed var(--c-line-strong); border-radius: var(--r-md); background: var(--c-surface-2); }
 
+/* ---- 股票搜索下拉（combobox.js）：容器相对定位，列表绝对定位盖在表单上 ------------ */
+
+.combo { position: relative; flex: 1 1 14rem; min-width: 0; }
+.combo > input { width: 100%; }
+.combo-list {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20;
+  margin: 0; padding: 4px 0; list-style: none;
+  background: var(--c-surface); border: 1px solid var(--c-line-strong); border-radius: var(--r-md);
+  box-shadow: 0 6px 18px rgba(20, 30, 50, 0.12);
+  max-height: 18rem; overflow-y: auto;
+}
+.combo-list[hidden] { display: none; }
+.combo-list li { display: flex; gap: var(--sp-2); align-items: baseline; flex-wrap: wrap; padding: 6px 10px; font-size: var(--fs-sm); cursor: pointer; }
+.combo-list li.is-active, .combo-list li[role="option"]:hover { background: var(--c-accent-soft); }
+.combo-ticker { font-family: var(--font-mono); color: var(--c-ink-2); }
+.combo-name { font-weight: 600; color: var(--c-ink); }
+.combo-tag { font-size: var(--fs-xs); color: var(--c-ink-3); border: 1px solid var(--c-line); border-radius: var(--r-pill); padding: 0 6px; }
+.combo-tag-warn { color: var(--c-warn); border-color: var(--c-warn); }
+.combo-empty { color: var(--c-ink-3); cursor: default; }
+
 .stock-cell { min-width: 7rem; }
 .stock-name { display: block; font-weight: 600; color: var(--c-ink); text-decoration: none; }
 a.stock-name:hover { color: var(--c-accent); }

@@ -12,6 +12,7 @@ import {
   renderRegion,
 } from "./api.js";
 import { CANDIDATE_REGIONS, bootCandidates, candidatesBucket } from "./candidates.js";
+import { attachCombobox } from "./combobox.js";
 import { HEALTH_REGIONS, bootHealth, healthBucket } from "./health.js";
 import { SETTINGS_REGIONS, bootSettings } from "./settings.js";
 import { el, errorText, fmt, fmtNumber, kvTable, statusBadge, stockLink, table } from "./dom.js";
@@ -270,6 +271,17 @@ async function removeWatchlistItem(region, item, button) {
 }
 
 function wireWatchlistForm(form) {
+  // 代码框是股票搜索下拉（代码 / 名称 / 拼音首字母）：选中回填 ticker 并自动填名称；
+  // 提交时 ticker 的校验规则不变（服务端 WatchlistAdd）。
+  const tickerInput = form.querySelector('input[name="ticker"]');
+  const nameInput = form.querySelector('input[name="name"]');
+  if (tickerInput) {
+    attachCombobox(tickerInput, {
+      onSelect: (item) => {
+        if (nameInput && item.name) nameInput.value = item.name;
+      },
+    });
+  }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const submit = form.querySelector('button[type="submit"]');

@@ -176,9 +176,109 @@ def test_sparkline_builds_expected_svg_structure():
     assert empty["tag"] == "span" and empty["attrs"]["class"] == "spark spark-empty"
 
 
+def test_combobox_component_and_mounts():
+    """combobox.js owns the search dropdown; the watchlist add form and the
+    candidate nomination form attach it to their ticker inputs (plan 05 / D4)."""
+
+    combobox = (WEB_STATIC / "combobox.js").read_text(encoding="utf-8")
+    assert "export function attachCombobox" in combobox
+    assert "/stocks/search?q=" in combobox
+    for marker in ('role: "listbox"', 'role: "option"', '"ArrowDown"', '"ArrowUp"', '"Enter"', '"Escape"', "DEBOUNCE_MS = 200"):
+        assert marker in combobox, marker
+    for module in ("app.js", "candidates.js"):
+        source = (WEB_STATIC / module).read_text(encoding="utf-8")
+        assert 'from "./combobox.js"' in source, module
+        assert "attachCombobox(" in source, module
+    css = (WEB_STATIC / "app.css").read_text(encoding="utf-8")
+    assert ".combo-list" in css and ".combo-list[hidden]" in css
+
+
+def test_combobox_searches_renders_and_selects_with_the_keyboard():
+    """Drive ``attachCombobox`` in node over a tiny fake DOM: debounce, listbox
+    rendering, arrow keys, Enter selection (ticker + onSelect) and Escape."""
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+        return
+    uri = (WEB_STATIC / "combobox.js").resolve().as_uri()
+    script = f"const MODULE_URI = {json.dumps(uri)};\n" + """
+    class Node {
+      constructor(tag) { this.tag = tag; this.attrs = {}; this.children = []; this.listeners = {}; this.parentNode = null; this.hidden = false; this.value = ""; this.form = null; this.textContent = undefined; this.classes = new Set(); }
+      get classList() { const c = this.classes; return { add: (x) => c.add(x), remove: (x) => c.delete(x), contains: (x) => c.has(x) }; }
+      setAttribute(k, v) { this.attrs[k] = String(v); }
+      getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+      removeAttribute(k) { delete this.attrs[k]; }
+      appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+      insertBefore(c, ref) { c.parentNode = this; const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, c); return c; }
+      replaceChildren() { this.children = []; }
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }
+      removeEventListener(t, f) { this.listeners[t] = (this.listeners[t] || []).filter((g) => g !== f); }
+      dispatch(t, event = {}) { event.target ||= this; event.preventDefault ||= () => { event.prevented = true; }; for (const f of this.listeners[t] || []) f(event); return event; }
+    }
+    globalThis.document = { createElement: (tag) => new Node(tag) };
+    const { attachCombobox } = await import(MODULE_URI);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const form = new Node("form");
+    const input = new Node("input"); input.name = "ticker"; input.form = form;
+    form.appendChild(input);
+    const queries = []; const selected = [];
+    const fetch = async (q) => { queries.push(q); return q === "zzz" ? [] : [
+      { ticker: "600519.SH", name: "贵州茅台", status: "listed", in_universe: true, on_watchlist: false },
+      { ticker: "600518.SH", name: "ST康美", status: "delisted", in_universe: false, on_watchlist: true },
+    ]; };
+    attachCombobox(input, { fetch, onSelect: (item) => selected.push(item.ticker) });
+    const host = form.children[0];
+    const list = host.children[1];
+    const out = { hostClass: host.attrs.class, inputRole: input.attrs.role, listRole: list.attrs.role, controls: input.attrs["aria-controls"] === list.attrs.id, hiddenAtStart: list.hidden };
+    input.value = "g"; input.dispatch("input");
+    input.value = "gz"; input.dispatch("input");
+    await sleep(80);
+    out.noQueryBeforeDebounce = queries.length;
+    await sleep(220);
+    out.queries = [...queries];
+    out.options = list.children.map((li) => ({ role: li.attrs.role, index: li.attrs["data-index"], text: li.children.map((c) => `${c.attrs.class}:${c.textContent}`) }));
+    out.expanded = input.attrs["aria-expanded"];
+    const down = input.dispatch("keydown", { key: "ArrowDown" });
+    out.activeAfterDown = [list.children[0].classes.has("is-active"), list.children[0].attrs["aria-selected"], input.attrs["aria-activedescendant"], down.prevented];
+    input.dispatch("keydown", { key: "ArrowDown" });
+    input.dispatch("keydown", { key: "ArrowUp" });
+    const enter = input.dispatch("keydown", { key: "Enter" });
+    out.afterEnter = { value: input.value, selected: [...selected], hidden: list.hidden, prevented: enter.prevented, expanded: input.attrs["aria-expanded"] };
+    input.value = "zzz"; input.dispatch("input"); await sleep(300);
+    out.empty = list.children.map((li) => [li.attrs.class, li.textContent]);
+    const enterEmpty = input.dispatch("keydown", { key: "Enter" });
+    out.enterOnEmptyPrevented = Boolean(enterEmpty.prevented);
+    input.dispatch("keydown", { key: "Escape" });
+    out.hiddenAfterEscape = list.hidden;
+    input.value = ""; input.dispatch("input"); await sleep(300);
+    out.queriesAfterBlank = queries.length;
+    console.log(JSON.stringify(out));
+    """
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout)
+    assert out["hostClass"] == "combo" and out["inputRole"] == "combobox" and out["listRole"] == "listbox"
+    assert out["controls"] is True and out["hiddenAtStart"] is True
+    assert out["noQueryBeforeDebounce"] == 0  # debounced: nothing fired at 80 ms
+    assert out["queries"] == ["gz"]  # only the settled value was searched
+    assert out["expanded"] == "true"
+    assert [o["role"] for o in out["options"]] == ["option", "option"]
+    assert out["options"][0]["text"] == ["combo-ticker:600519.SH", "combo-name:贵州茅台", "combo-tag:目标池"]
+    assert out["options"][1]["text"] == ["combo-ticker:600518.SH", "combo-name:ST康美", "combo-tag combo-tag-warn:退市", "combo-tag:自选"]
+    assert out["activeAfterDown"] == [True, "true", "ticker-1-listbox-0", True]
+    assert out["afterEnter"] == {"value": "600519.SH", "selected": ["600519.SH"], "hidden": True, "prevented": True, "expanded": "false"}
+    assert out["empty"] == [["combo-empty", "无匹配；可直接输入代码。"]]
+    assert out["enterOnEmptyPrevented"] is False  # a plain Enter still submits the form
+    assert out["hiddenAfterEscape"] is True
+    assert out["queriesAfterBlank"] == 2  # "gz", "zzz"; a blank value never searches
+
+
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js"],
+    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")

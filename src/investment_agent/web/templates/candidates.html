@@ -12,7 +12,7 @@
   <details class="add-panel">
     <summary>＋ 手动提名</summary>
     <form id="candidate-nominate-form" class="inline-form" data-endpoint="/candidates" method="post">
-      <input name="ticker" placeholder="代码，如 600900 或 600900.SH" required aria-label="代码"
+      <input name="ticker" placeholder="代码 / 名称 / 拼音首字母，如 600900 或 cjdl" required aria-label="代码" autocomplete="off"
              pattern="\d{6}(\.(SH|SZ|BJ|sh|sz|bj))?">
       <select name="template_id" required aria-label="起草模板">
         <option value="">选择起草模板…</option>

@@ -4,6 +4,7 @@
 // 所有 DOM 经 dom.js 构造（textContent / setAttribute），不写 HTML 字符串。
 
 import { ApiError, get, lockWhileBusy, patch, post, renderRegion } from "./api.js";
+import { attachCombobox } from "./combobox.js";
 import { clear, el, fmt, stockLink } from "./dom.js";
 import {
   CALIBRATION_LABELS,
@@ -322,6 +323,9 @@ function nominateNotice(region, content, level = "") {
 }
 
 function wireNominateForm(form, list) {
+  // 代码框接股票搜索下拉：选中回填 600519.SH 形式的 ticker；normalizeTicker 仍兜底。
+  const tickerInput = form.querySelector('input[name="ticker"]');
+  if (tickerInput) attachCombobox(tickerInput);
   const select = form.querySelector('select[name="template_id"]');
   if (select) {
     for (const [id, name] of Object.entries(TEMPLATE_LABELS)) {
