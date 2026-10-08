@@ -64,6 +64,7 @@ def test_every_page_carries_states_disclaimer_and_noscript(api_client):
         "/app/candidates",
         "/app/candidates/1",
         "/app/health",
+        "/app/settings",
     ]
     for path in pages:
         html = api_client.get(path).text
@@ -102,7 +103,7 @@ def test_renderer_consumes_only_versioned_read_models():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js"],
+    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")

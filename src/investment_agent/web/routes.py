@@ -260,3 +260,8 @@ async def candidate_page(request: Request, candidate_id: str) -> HTMLResponse:
         active_nav="candidates",
         candidate_id=int(candidate_id),
     )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request) -> HTMLResponse:
+    return _render("settings.html", request, page_title="设置", active_nav="settings")

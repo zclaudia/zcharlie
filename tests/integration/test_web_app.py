@@ -142,6 +142,7 @@ def test_api_key_never_appears_in_web_pages(api_client):
         "/app/stocks/600406.SH",
         "/app/candidates",
         "/app/candidates/1",
+        "/app/settings",
         "/app/login",
     ):
         response = api_client.get(path)

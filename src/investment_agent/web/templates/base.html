@@ -16,6 +16,7 @@
       <a href="/app/watchlist" {% if active_nav == "watchlist" %}class="active" aria-current="page"{% endif %}>自选股</a>
       <a href="/app/runs" {% if active_nav == "runs" %}class="active" aria-current="page"{% endif %}>运行中心</a>
       <a href="/app/health" {% if active_nav == "health" %}class="active" aria-current="page"{% endif %}>数据健康</a>
+      <a href="/app/settings" {% if active_nav == "settings" %}class="active" aria-current="page"{% endif %}>设置</a>
       <form method="post" action="/app/logout" class="logout-form">
         <button type="submit" class="link-button">退出</button>
       </form>
