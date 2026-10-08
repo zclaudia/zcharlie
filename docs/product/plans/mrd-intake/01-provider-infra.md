@@ -74,3 +74,28 @@
 
 - 本机：把 `AkshareEastmoneyClient` 指向不可达地址跑一次 `ia snapshot collect-financial --provider akshare --now`：第一次 `partial`（reason `provider_unavailable`），再跑一次应在 1 秒内 `partial`；`/health/data` 的 `providers` 里 akshare 显示熔断中。
 - 门禁三条通过；在本文件末尾写"完成记录"（哈希、测试数、实测输出摘要）。
+
+## 完成记录（2026-10-09）
+
+| Task | 提交 | 说明 |
+|---|---|---|
+| 1 熔断器 | `3247042` feat(providers): cross-run circuit breaker with exponential backoff and negative cache | `providers/circuit.py`、`ProviderUnavailableError`、三处客户端接入（baostock 两个客户端共用 `BaostockReferenceClient._with_retries`）、breadth / eastmoney 断路器触发时 `open_now`、`SnapshotRuntime.circuit` |
+| 2 台账与健康页 | `2a03230` feat(health): provider call ledger and per-provider upstream counters on /health/data | 迁移 `022`、`providers/ledger.py`、`ProviderHealth` + `DataHealth.providers`、`health.js`「上游调用」区块、`ia admin prune-provider-calls` |
+| 3 口径记录 | `e594485` docs(field-sources): calibration records and unit check for provider entries | `field_sources.yaml` `2026-10-09.1`（10 个关键字段的 `calibration`）、单位词校验、`akshare_eastmoney.py` 源链与口径说明块 |
+
+门禁：`ruff check .`、`mypy src`、`pytest -q -m "not network"` 全部通过；最终 **1349 passed, 6 deselected**（起点 1313）。`node --check health.js` 通过。
+
+### 与计划的偏差
+
+1. **熔断器的触发条件**（Task 1）。计划原文"`record_failure(exc)`（仅瞬态错误计数）"按字面实现时，客户端每次瞬态失败都会立刻打开 5 秒窗口，同一任务内下一只股票（1 秒节流后）就撞上 `ProviderUnavailableError`，`FailureBreaker` / `TransientBreaker` 永远到不了阈值，且目标池 300 只日线会因一次偶发失败整体 `partial`（1 失败 + 299 `stopped`，周完整率归零）。实现改为：**任务级断路器触发时 `open_now` 打开整个 provider（`provider:*`），客户端的 `record_failure` 只对已打开过的熔断器做退避升级**（半开试探再失败 → 下一档），成功即复位；终态错误任何时候不计。这与计划"现有 breaker 触发时同步把熔断器打开"的表述一致，退避序列 5s→15s→45s→2min→5min 不变。
+2. **`baostock_market.py`** 在 Task 1 没有改动（重试循环在父类 `BaostockReferenceClient`，`circuit` 参数随构造函数继承）；Task 2 只为按股查询加了 `ticker_count=1`。
+3. **文件清单之外的改动**（为通过门禁所必需）：`alembic/env.py`、`tests/conftest.py` 登记新模型 `provider_call`；`web/templates/health.html` 新增「上游调用」section（`health.js` 按 `data-health-section` 渲染）；`tests/integration/test_web_health.py`、`test_api_data_health.py` 的区块 / 顶层键清单加 `providers`；`tests/integration/test_backup_restore.py`、`test_funnel_e2e.py` 硬编码的 alembic head `021` → `022`。
+4. **`run_id` 归属**：客户端工厂无参数，台账钩子通过 `providers/ledger.py::CURRENT_RUN_ID`（ContextVar，由 `SnapshotJobHandler.execute` 设置）取当前运行号，而不是给每个工厂传 `run_id`。
+5. **熔断状态变化入账**：只在 `opened` 时写一行（`endpoint=circuit`、`outcome=skipped_open`、`duration_ms`=窗口长度），`closed` 不写（否则会被算进调用数）；API 进程据此推算"熔断至"。被拒绝的调用本身由客户端 `on_call` 以真实 endpoint 记 `skipped_open`。
+6. **单位词列表**加了 `flag`（0/1 指示字段 `is_st` / `trade_status` / `report_overdue` 没有计划列表中的单位）；`pe_ttm` 等三项改写为 `ratio (times)`，`bvps_fy` / `revenue_ps_fy` 补 `CNY/share`。
+7. **新 provider 的接受规则**：`FREE_PROVIDERS` 仍为 baostock / akshare；其它名字（如 02 子计划的 `tencent`）**带 `calibration` 记录即可进入登记表**，不带则 `FieldSourceError`（消息同时含 "unknown source" 与 "calibration"）；`ifind` 与非法名字即使带记录也拒绝。
+8. **本机验收未执行**：没有在本机把客户端指向不可达地址跑真实 `ia snapshot collect-financial`；同一场景由 `tests/unit/test_provider_circuit.py::test_failure_breaker_opens_the_circuit_and_the_next_run_is_partial_at_once` 离线覆盖（第一次 3 连败 `partial`，第二次 0 次上游调用、全部 `stopped`）。
+
+### 后续
+- 02 子计划接 `TencentQuoteClient(circuit=, on_call=)` 时直接复用 `SnapshotRuntime.circuit` 与 `provider_ledger_hook`；`field_sources.yaml` 的 tencent 条目须带 `calibration`。
+- worker 侧若要把内存熔断状态喂给健康页，传 `HealthSettings(circuit_states=tuple(runtime.circuit.snapshot().values()))`。
