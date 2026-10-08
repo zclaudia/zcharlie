@@ -6,6 +6,7 @@ import pytest_asyncio
 from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models import (  # noqa: F401
     analysis,
+    app_settings,
     candidates,
     market_data,
     ops,

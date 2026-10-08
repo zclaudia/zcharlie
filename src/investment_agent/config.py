@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     # origin check when a reverse proxy rewrites the Host header.
     web_public_origin: str = ""
 
+    # Fernet master key for the secret runtime settings stored in the DB
+    # (``investment_agent.settings``). Deliberately separate from API_KEY /
+    # WEB_SESSION_SECRET (rotating those must not lose stored secrets) and
+    # kept out of DATA_DIR (same volume as the DB and its backups).
+    settings_encryption_key: str = ""
+
     @model_validator(mode="after")
     def _validate_api_key(self) -> Self:
         global _weak_key_warned
