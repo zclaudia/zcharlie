@@ -42,6 +42,15 @@ def _uncached_structlog_loggers():
 
 
 @pytest.fixture(autouse=True)
+def _no_dotenv(monkeypatch):
+    """Never read the checkout's ``.env``: tests set the env they need explicitly."""
+
+    from investment_agent.config import Settings
+
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_akshare(request, monkeypatch):
     """Offline tests must never reach AkShare (swsresearch.com / legulegu.com /
     eastmoney.com)."""
