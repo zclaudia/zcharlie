@@ -46,6 +46,8 @@ from investment_agent.providers.baostock_market import (
     QuarterlyFinancials,
     quarter_of,
 )
+from investment_agent.providers.circuit import CircuitBreaker
+from investment_agent.providers.errors import ProviderUnavailableError
 from investment_agent.research.retry_policy import is_transient_error
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
@@ -89,11 +91,17 @@ class BaostockCollectorClient(Protocol):
 
 @dataclass
 class TransientBreaker:
-    """Stops calling baostock after consecutive transient failures."""
+    """Stops calling baostock after consecutive transient failures.
+
+    When it trips, the cross-run :class:`CircuitBreaker` (if wired) opens for
+    the whole provider, so the next baostock job fails fast with ``partial``
+    instead of walking into the same outage.
+    """
 
     limit: int = MAX_CONSECUTIVE_TRANSIENT
     consecutive: int = 0
     reason: str | None = None
+    circuit: CircuitBreaker | None = None
 
     def success(self) -> None:
         self.consecutive = 0
@@ -108,6 +116,8 @@ class TransientBreaker:
                 f"skipped: baostock unavailable after {self.consecutive} consecutive "
                 f"transient failures ({error_reason(exc)})"
             )
+            if self.circuit is not None:
+                self.circuit.open_now(BAOSTOCK_PROVIDER, exc)
 
 
 @dataclass
@@ -122,6 +132,16 @@ class _Flags:
             "st_count": len(self.st),
             "st": sorted(self.st)[:_MAX_LISTED_FLAGS],
         }
+
+
+def _untouched(completeness: Completeness) -> list[str]:
+    """Expected tickers neither collected nor explained yet (in expected order)."""
+
+    return [
+        ticker
+        for ticker in completeness.expected
+        if ticker not in completeness.collected and ticker not in completeness.missing
+    ]
 
 
 def next_start(last_stored: date | None, trade_date: date) -> date:
@@ -198,6 +218,7 @@ async def collect_baostock_market(
     artifacts: ArtifactWriter,
     lease: RunLease | None,
     now: Callable[[], datetime],
+    circuit: CircuitBreaker | None = None,
 ) -> CollectionReport:
     if payload.provider != BAOSTOCK_PROVIDER:
         raise ValueError(f"baostock market collector got provider {payload.provider!r}")
@@ -219,76 +240,87 @@ async def collect_baostock_market(
     rows_inserted = dict.fromkeys(SERIES, 0)
     skipped_rows: dict[str, list[str]] = {}
     flags = _Flags()
-    breaker = TransientBreaker()
+    breaker = TransientBreaker(circuit=circuit)
     queries = 0
+    members = list(listing_by_ticker.items())
 
-    async with client.session():
-        for ticker, listing_id in listing_by_ticker.items():
-            if breaker.reason is not None:
-                completeness.mark_missing(ticker, "failed", breaker.reason)
-                continue
-            plan = {
-                adjust: start
-                for adjust in SERIES
-                if (start := next_start(last[adjust].get(listing_id), trade_date)) <= trade_date
-            }
-            if not plan:
-                continue  # already up to date
-            try:
-                fetched: dict[AdjustKind, DailyBarSeries] = {}
-                for adjust, start in plan.items():
-                    queries += 1
-                    fetched[adjust] = await client.fetch_daily_bars(
-                        ticker, start, trade_date, adjust
-                    )
-                ref = write_daily_artifact(
-                    artifacts, f"daily-{ticker}-{trade_date.isoformat()}", ticker, fetched
-                )
-                async with session_scope() as session:
-                    await fence_writes(session, lease)
-                    market = MarketSnapshotRepository(session)
-                    for adjust, series in fetched.items():
-                        rows_inserted[adjust] += await store_daily_bars(
-                            market, listing_id=listing_id, series=series, raw_ref=ref
+    try:
+        async with client.session():
+            for position, (ticker, listing_id) in enumerate(members):
+                if breaker.reason is not None:
+                    completeness.mark_missing(ticker, "failed", breaker.reason)
+                    continue
+                plan = {
+                    adjust: start
+                    for adjust in SERIES
+                    if (start := next_start(last[adjust].get(listing_id), trade_date)) <= trade_date
+                }
+                if not plan:
+                    continue  # already up to date
+                try:
+                    fetched: dict[AdjustKind, DailyBarSeries] = {}
+                    for adjust, start in plan.items():
+                        queries += 1
+                        fetched[adjust] = await client.fetch_daily_bars(
+                            ticker, start, trade_date, adjust
                         )
-            except LeaseLostError:
-                raise
-            except Exception as exc:
-                reason = error_reason(exc)
-                report.record_failure(exc)
-                breaker.failure(exc)
-                log.warning("snapshot.baostock_market.failed", ticker=ticker, error=reason)
-                completeness.mark_missing(ticker, "failed", reason)
-                continue
-            breaker.success()
-            for adjust, series in fetched.items():
-                if series.skipped:
-                    skipped_rows.setdefault(ticker, []).extend(
-                        f"{adjust}:{day}" for day in series.skipped
+                    ref = write_daily_artifact(
+                        artifacts, f"daily-{ticker}-{trade_date.isoformat()}", ticker, fetched
                     )
-                if series.bars:
-                    newest = series.bars[-1].trade_date
-                    current = last[adjust].get(listing_id)
-                    if current is None or newest > current:
-                        last[adjust][listing_id] = newest
-            raw_series = fetched.get("none")
-            today = (
-                next((bar for bar in raw_series.bars if bar.trade_date == trade_date), None)
-                if raw_series is not None
-                else None
-            )
-            if today is not None and today.suspended:
-                flags.suspended.append(ticker)
-            if today is not None and today.is_st:
-                flags.st.append(ticker)
+                    async with session_scope() as session:
+                        await fence_writes(session, lease)
+                        market = MarketSnapshotRepository(session)
+                        for adjust, series in fetched.items():
+                            rows_inserted[adjust] += await store_daily_bars(
+                                market, listing_id=listing_id, series=series, raw_ref=ref
+                            )
+                except LeaseLostError:
+                    raise
+                except ProviderUnavailableError as exc:
+                    # Circuit open (negative cache): nothing was called; stop here.
+                    report.stop_for_provider(
+                        exc, [name for name, _ in members[position:]], failures=exc.fail_count
+                    )
+                    break
+                except Exception as exc:
+                    reason = error_reason(exc)
+                    report.record_failure(exc)
+                    breaker.failure(exc)
+                    log.warning("snapshot.baostock_market.failed", ticker=ticker, error=reason)
+                    completeness.mark_missing(ticker, "failed", reason)
+                    continue
+                breaker.success()
+                for adjust, series in fetched.items():
+                    if series.skipped:
+                        skipped_rows.setdefault(ticker, []).extend(
+                            f"{adjust}:{day}" for day in series.skipped
+                        )
+                    if series.bars:
+                        newest = series.bars[-1].trade_date
+                        current = last[adjust].get(listing_id)
+                        if current is None or newest > current:
+                            last[adjust][listing_id] = newest
+                raw_series = fetched.get("none")
+                today = (
+                    next((bar for bar in raw_series.bars if bar.trade_date == trade_date), None)
+                    if raw_series is not None
+                    else None
+                )
+                if today is not None and today.suspended:
+                    flags.suspended.append(ticker)
+                if today is not None and today.is_st:
+                    flags.st.append(ticker)
 
+    except ProviderUnavailableError as exc:
+        # The circuit refused the baostock login: nothing was called.
+        report.stop_for_provider(exc, _untouched(completeness), failures=exc.fail_count)
     for ticker, listing_id in listing_by_ticker.items():
         if all(
             (stored := last[adjust].get(listing_id)) is not None and stored >= trade_date
             for adjust in SERIES
         ):
             completeness.mark_collected(ticker)
-        else:
+        elif ticker not in completeness.missing:  # failed / stopped keep their reason
             completeness.mark_missing(
                 ticker,
                 "no_data",
@@ -388,6 +420,7 @@ async def collect_baostock_financial(
     lease: RunLease | None,
     now: Callable[[], datetime],
     run_id: int | None = None,
+    circuit: CircuitBreaker | None = None,
 ) -> CollectionReport:
     if payload.provider != BAOSTOCK_PROVIDER:
         raise ValueError(f"baostock financial collector got provider {payload.provider!r}")
@@ -410,52 +443,59 @@ async def collect_baostock_financial(
         else:
             todo.append(ticker)
 
-    breaker = TransientBreaker()
+    breaker = TransientBreaker(circuit=circuit)
     stored: dict[str, str] = {}
     resolved: list[str] = []
-    async with client.session():
-        for ticker in todo:
-            if breaker.reason is not None:
-                completeness.mark_missing(ticker, "failed", breaker.reason)
-                continue
-            listing_id = listing_by_ticker[ticker]
-            try:
-                record = await client.fetch_quarterly_financials(ticker, year, quarter)
-                if record is None:
-                    completeness.mark_missing(
-                        ticker, "pending", f"{report_period.isoformat()} not yet disclosed"
-                    )
-                    breaker.success()
+    try:
+        async with client.session():
+            for position, ticker in enumerate(todo):
+                if breaker.reason is not None:
+                    completeness.mark_missing(ticker, "failed", breaker.reason)
                     continue
-                ref = write_financial_artifact(artifacts, record)
-                async with session_scope() as session:
-                    await fence_writes(session, lease)
-                    await store_financial(
-                        FinancialSnapshotRepository(session),
-                        listing_id=listing_id,
-                        record=record,
-                        raw_ref=ref,
-                    )
-                    if await ReportOverdueRepository(session).resolve(
-                        listing_id=listing_id,
-                        report_period=report_period,
-                        resolved_on=record.pub_date,
-                        run_id=run_id,
-                    ):
-                        resolved.append(ticker)
-            except LeaseLostError:
-                raise
-            except Exception as exc:
-                reason = error_reason(exc)
-                report.record_failure(exc)
-                breaker.failure(exc)
-                log.warning("snapshot.baostock_financial.failed", ticker=ticker, error=reason)
-                completeness.mark_missing(ticker, "failed", reason)
-                continue
-            breaker.success()
-            completeness.mark_collected(ticker)
-            stored[ticker] = record.pub_date.isoformat()
+                listing_id = listing_by_ticker[ticker]
+                try:
+                    record = await client.fetch_quarterly_financials(ticker, year, quarter)
+                    if record is None:
+                        completeness.mark_missing(
+                            ticker, "pending", f"{report_period.isoformat()} not yet disclosed"
+                        )
+                        breaker.success()
+                        continue
+                    ref = write_financial_artifact(artifacts, record)
+                    async with session_scope() as session:
+                        await fence_writes(session, lease)
+                        await store_financial(
+                            FinancialSnapshotRepository(session),
+                            listing_id=listing_id,
+                            record=record,
+                            raw_ref=ref,
+                        )
+                        if await ReportOverdueRepository(session).resolve(
+                            listing_id=listing_id,
+                            report_period=report_period,
+                            resolved_on=record.pub_date,
+                            run_id=run_id,
+                        ):
+                            resolved.append(ticker)
+                except LeaseLostError:
+                    raise
+                except ProviderUnavailableError as exc:
+                    report.stop_for_provider(exc, todo[position:], failures=exc.fail_count)
+                    break
+                except Exception as exc:
+                    reason = error_reason(exc)
+                    report.record_failure(exc)
+                    breaker.failure(exc)
+                    log.warning("snapshot.baostock_financial.failed", ticker=ticker, error=reason)
+                    completeness.mark_missing(ticker, "failed", reason)
+                    continue
+                breaker.success()
+                completeness.mark_collected(ticker)
+                stored[ticker] = record.pub_date.isoformat()
 
+    except ProviderUnavailableError as exc:
+        # The circuit refused the baostock login: nothing was called.
+        report.stop_for_provider(exc, _untouched(completeness), failures=exc.fail_count)
     overdue = await _detect_overdue(
         payload,
         completeness=completeness,

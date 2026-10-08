@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 
 class ProviderError(RuntimeError):
     """A provider call failed; terminal unless a subclass says otherwise."""
@@ -20,6 +22,31 @@ class ProviderError(RuntimeError):
 
 class ProviderTransientError(ProviderError):
     """Network / session / timeout failure that is worth retrying later."""
+
+
+class ProviderUnavailableError(ProviderTransientError):
+    """The circuit breaker is open for ``provider:endpoint``: no call was made.
+
+    Raised by :class:`investment_agent.providers.circuit.CircuitBreaker` while
+    the negative cache of a provider endpoint is active (``open_until``).
+    Transient by nature - the next scheduled run retries once the window
+    closes - but collectors stop the current job for that provider instead of
+    walking every remaining ticker into the same closed door.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str,
+        open_until: datetime,
+        endpoint: str = "",
+        fail_count: int = 0,
+    ) -> None:
+        super().__init__(message, provider=provider, error_code="circuit_open")
+        self.open_until = open_until
+        self.endpoint = endpoint
+        self.fail_count = fail_count
 
 
 class ProviderDataError(ProviderError):

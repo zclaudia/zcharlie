@@ -78,6 +78,8 @@ from investment_agent.providers.akshare_eastmoney import (
     PeriodSummary,
 )
 from investment_agent.providers.baostock_reference import IndexCode
+from investment_agent.providers.circuit import CircuitBreaker
+from investment_agent.providers.errors import ProviderUnavailableError
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
     CollectionReport,
@@ -184,11 +186,16 @@ async def enqueue_verification(
 
 @dataclass
 class FailureBreaker:
-    """Stops the job after :data:`MAX_CONSECUTIVE_FAILURES` consecutive failed calls."""
+    """Stops the job after :data:`MAX_CONSECUTIVE_FAILURES` consecutive failed calls.
+
+    When it trips, the cross-run :class:`CircuitBreaker` (if wired) opens for
+    the whole provider, so the next AkShare job fails fast with ``partial``.
+    """
 
     limit: int = MAX_CONSECUTIVE_FAILURES
     consecutive: int = 0
     last_error: BaseException | None = None
+    circuit: CircuitBreaker | None = None
 
     def success(self) -> None:
         self.consecutive = 0
@@ -198,7 +205,11 @@ class FailureBreaker:
 
         self.consecutive += 1
         self.last_error = exc
-        return self.consecutive >= self.limit
+        if self.consecutive < self.limit:
+            return False
+        if self.consecutive == self.limit and self.circuit is not None:
+            self.circuit.open_now(AKSHARE_PROVIDER, exc)
+        return True
 
 
 @dataclass
@@ -443,6 +454,7 @@ async def collect_akshare_financial(
     now: Callable[[], datetime],
     run_id: int | None = None,
     registry: FieldSourceRegistry | None = None,
+    circuit: CircuitBreaker | None = None,
 ) -> CollectionReport:
     if payload.provider != AKSHARE_PROVIDER:
         raise ValueError(f"AkShare financial collector got provider {payload.provider!r}")
@@ -452,7 +464,7 @@ async def collect_akshare_financial(
     if payload.part == "cash_flow":
         return await _collect_cash_flow(
             payload, listing_by_ticker, client=client, artifacts=artifacts, lease=lease,
-            run_id=run_id,
+            run_id=run_id, circuit=circuit,
         )
     return await _collect_summary(
         payload,
@@ -498,6 +510,11 @@ async def _collect_summary(
         summaries = await client.fetch_period_summaries(period)
     except LeaseLostError:
         raise
+    except ProviderUnavailableError as exc:
+        # Circuit open (negative cache): nothing was called; the run is partial.
+        report.stop_for_provider(exc, sorted(listing_by_ticker), failures=exc.fail_count)
+        report.metadata = {**_base_metadata(payload, client), "endpoints": list(SUMMARY_ENDPOINTS)}
+        return report
     except Exception as exc:
         reason = error_reason(exc)
         report.record_failure(exc)
@@ -657,6 +674,7 @@ async def _collect_cash_flow(
     artifacts: ArtifactWriter,
     lease: RunLease | None,
     run_id: int | None,
+    circuit: CircuitBreaker | None = None,
 ) -> CollectionReport:
     del run_id
     periods = payload.periods
@@ -679,7 +697,7 @@ async def _collect_cash_flow(
         else:
             todo.append(ticker)
 
-    breaker = FailureBreaker()
+    breaker = FailureBreaker(circuit=circuit)
     stored = unchanged_count = restated = 0
     partial_periods: dict[str, list[str]] = {}
     for position, ticker in enumerate(todo):
@@ -688,6 +706,10 @@ async def _collect_cash_flow(
             statement = await client.fetch_cash_flow_statement(ticker)
         except LeaseLostError:
             raise
+        except ProviderUnavailableError as exc:
+            # Circuit open (negative cache): nothing was called; stop here.
+            report.stop_for_provider(exc, todo[position:], failures=exc.fail_count)
+            break
         except Exception as exc:
             reason = error_reason(exc)
             report.record_failure(exc)

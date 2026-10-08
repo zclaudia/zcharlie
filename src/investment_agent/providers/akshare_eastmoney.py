@@ -90,6 +90,7 @@ from investment_agent.providers.akshare_shenwan import (
     _table,
     to_canonical_ticker,
 )
+from investment_agent.providers.circuit import CircuitBreaker
 from investment_agent.providers.errors import (
     LookaheadDataError,
     ProviderDataError,
@@ -686,12 +687,14 @@ class AkshareEastmoneyClient:
         retry_backoff_seconds: float = 5.0,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        circuit: CircuitBreaker | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
         if min_interval_seconds < 0:
             raise ValueError("min_interval_seconds must be >= 0")
         self._backend = backend
+        self._circuit = circuit
         self._clock = clock
         self.min_interval_seconds = min_interval_seconds
         self._timeout_seconds = timeout_seconds
@@ -757,34 +760,55 @@ class AkshareEastmoneyClient:
         self._last_call = self._monotonic()
 
     async def _call[T](self, operation: str, call: Callable[[], T]) -> T:
+        """One logical call: throttled, retried on transient errors, circuit-guarded.
+
+        The circuit breaker is consulted once per logical call (before the
+        first attempt) and told the final outcome once, so in-call retries
+        stay as they are and the breaker counts calls that failed for good.
+        """
+
         if self._lock is None:
             self._lock = asyncio.Lock()
+        endpoint = operation.split("(", 1)[0]
         async with self._lock:
-            attempt = 0
-            while True:
-                attempt += 1
-                await self._throttle()
-                self.calls += 1
-                try:
-                    return await asyncio.wait_for(
-                        asyncio.to_thread(call), timeout=self._timeout_seconds
-                    )
-                except TimeoutError as exc:
-                    error: EastmoneyTransientError = EastmoneyTransientError(
-                        f"akshare {operation} timed out after {self._timeout_seconds}s",
-                        provider=PROVIDER,
-                    )
-                    error.__cause__ = exc
-                except EastmoneyTransientError as exc:
-                    error = exc
-                finally:
-                    self._last_call = self._monotonic()
-                if attempt >= self._max_attempts:
-                    raise error
-                log.warning(
-                    "akshare_transient_retry",
-                    operation=operation,
-                    attempt=attempt,
-                    error=str(error),
+            if self._circuit is not None:
+                self._circuit.check(PROVIDER, endpoint)
+            try:
+                result = await self._attempts(operation, call)
+            except BaseException as exc:
+                if self._circuit is not None:
+                    self._circuit.record_failure(PROVIDER, endpoint, exc)
+                raise
+            if self._circuit is not None:
+                self._circuit.record_success(PROVIDER, endpoint)
+            return result
+
+    async def _attempts[T](self, operation: str, call: Callable[[], T]) -> T:
+        attempt = 0
+        while True:
+            attempt += 1
+            await self._throttle()
+            self.calls += 1
+            try:
+                return await asyncio.wait_for(
+                    asyncio.to_thread(call), timeout=self._timeout_seconds
                 )
-                await self._sleep(self._retry_backoff_seconds * attempt)
+            except TimeoutError as exc:
+                error: EastmoneyTransientError = EastmoneyTransientError(
+                    f"akshare {operation} timed out after {self._timeout_seconds}s",
+                    provider=PROVIDER,
+                )
+                error.__cause__ = exc
+            except EastmoneyTransientError as exc:
+                error = exc
+            finally:
+                self._last_call = self._monotonic()
+            if attempt >= self._max_attempts:
+                raise error
+            log.warning(
+                "akshare_transient_retry",
+                operation=operation,
+                attempt=attempt,
+                error=str(error),
+            )
+            await self._sleep(self._retry_backoff_seconds * attempt)

@@ -40,6 +40,7 @@ from typing import Literal, Protocol, cast
 import structlog
 
 from investment_agent.clock import SHANGHAI_TZ
+from investment_agent.providers.circuit import CircuitBreaker
 from investment_agent.providers.errors import (
     LookaheadDataError,
     ProviderDataError,
@@ -258,6 +259,7 @@ class BaostockReferenceClient:
         timeout_seconds: float = 180.0,
         max_attempts: int = 3,
         retry_backoff_seconds: float = 2.0,
+        circuit: CircuitBreaker | None = None,
     ) -> None:
         if max_attempts < 1:
             raise ValueError("max_attempts must be >= 1")
@@ -266,6 +268,7 @@ class BaostockReferenceClient:
         self._timeout_seconds = timeout_seconds
         self._max_attempts = max_attempts
         self._retry_backoff_seconds = retry_backoff_seconds
+        self._circuit = circuit
         self._session_depth = 0
 
     # -- session ----------------------------------------------------------- #
@@ -446,8 +449,32 @@ class BaostockReferenceClient:
         *,
         relogin: Callable[[], None] | None,
     ) -> T:
-        """Run blocking ``call`` in a thread with a timeout and transient retries."""
+        """Run blocking ``call`` in a thread with a timeout and transient retries.
 
+        The circuit breaker (when wired) is checked once before the first
+        attempt and told the final outcome once: in-call retries are unchanged
+        and the breaker counts logical calls that failed for good.
+        """
+
+        if self._circuit is not None:
+            self._circuit.check(PROVIDER, operation)
+        try:
+            result = await self._attempts(operation, call, relogin=relogin)
+        except BaseException as exc:
+            if self._circuit is not None:
+                self._circuit.record_failure(PROVIDER, operation, exc)
+            raise
+        if self._circuit is not None:
+            self._circuit.record_success(PROVIDER, operation)
+        return result
+
+    async def _attempts[T](
+        self,
+        operation: str,
+        call: Callable[[], T],
+        *,
+        relogin: Callable[[], None] | None,
+    ) -> T:
         attempt = 0
         while True:
             attempt += 1

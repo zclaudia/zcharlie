@@ -25,6 +25,7 @@ from investment_agent.providers.akshare_eastmoney import AkshareEastmoneyClient
 from investment_agent.providers.akshare_shenwan import AkshareShenwanClient
 from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient
+from investment_agent.providers.circuit import CircuitBreaker
 from investment_agent.research.ifind_chain import IfindProxyClient
 from investment_agent.snapshots.backfill import BackfillClient, run_backfill_part
 from investment_agent.snapshots.breadth import (
@@ -103,6 +104,9 @@ class SnapshotRuntime:
     shenwan_factory: ShenwanFactory = AkshareShenwanClient
     eastmoney_factory: EastmoneyFactory = AkshareEastmoneyClient
     dividend_factory: DividendFactory = BaostockMarketClient
+    circuit: CircuitBreaker = field(default_factory=lambda: CircuitBreaker(_utc_now))
+    """Process-wide provider circuit breaker (A1): one per worker, shared by
+    every client the factories build and by the collectors' own breakers."""
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
@@ -120,14 +124,23 @@ def default_runtime(settings: Settings) -> SnapshotRuntime:
             on_call=ledger_hook(source="snapshot"),
         )
 
+    circuit = CircuitBreaker(_utc_now)
+
+    def baostock_factory() -> BaostockMarketClient:
+        return BaostockMarketClient(circuit=circuit)
+
     return SnapshotRuntime(
         settings=settings,
         limiter=AsyncRateLimiter(settings.ifind_collect_rate_per_minute),
         proxy_factory=proxy_factory,
-        reference_factory=BaostockReferenceClient,
+        reference_factory=lambda: BaostockReferenceClient(circuit=circuit),
+        baostock_factory=baostock_factory,
+        backfill_factory=baostock_factory,
+        dividend_factory=baostock_factory,
         eastmoney_factory=lambda: AkshareEastmoneyClient(
-            min_interval_seconds=settings.akshare_min_interval_seconds
+            min_interval_seconds=settings.akshare_min_interval_seconds, circuit=circuit
         ),
+        circuit=circuit,
     )
 
 
@@ -234,6 +247,7 @@ class SnapshotJobHandler(BaseJobHandler):
                     artifacts=artifacts,
                     lease=lease,
                     now=self.runtime.clock,
+                    circuit=self.runtime.circuit,
                 )
             else:
                 async with self.runtime.proxy_factory() as client:
@@ -255,6 +269,7 @@ class SnapshotJobHandler(BaseJobHandler):
                 lease=lease,
                 now=self.runtime.clock,
                 run_id=job.run_id,
+                circuit=self.runtime.circuit,
             )
         elif financial_payload.provider == "baostock":
             report = await collect_baostock_financial(
@@ -264,6 +279,7 @@ class SnapshotJobHandler(BaseJobHandler):
                 lease=lease,
                 now=self.runtime.clock,
                 run_id=job.run_id,
+                circuit=self.runtime.circuit,
             )
         else:
             async with self.runtime.proxy_factory() as client:
