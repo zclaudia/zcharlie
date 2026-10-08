@@ -4,13 +4,17 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+import structlog
 from fastapi import FastAPI
 
 from investment_agent.api.routes import health
 from investment_agent.api.throttle import AuthFailureThrottle
 from investment_agent.config import Settings
 from investment_agent.logging import configure_logging
-from investment_agent.storage.database import engine_lifespan
+from investment_agent.settings.loader import ensure_imported
+from investment_agent.storage.database import engine_lifespan, session_scope
+
+log = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
@@ -18,6 +22,15 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()  # type: ignore[call-arg]
     configure_logging(settings.log_level)
     async with engine_lifespan(settings.database_url):
+        # One-time import of env / app.yaml runtime values (a no-op afterwards;
+        # concurrent API / worker / scheduler start-ups import exactly once).
+        # A failure (typically a schema not yet migrated) must not take the
+        # liveness probe down: it is logged and requests needing settings fail.
+        try:
+            async with session_scope() as session:
+                await ensure_imported(session, settings)
+        except Exception:
+            log.exception("settings.import_failed", hint="run `ia migrate up`")
         yield
 
 

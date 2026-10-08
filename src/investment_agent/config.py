@@ -42,7 +42,9 @@ class Settings(BaseSettings):
 
     # Tier 3: research explanation model (any OpenAI-compatible endpoint).
     llm_tier3_base_url: str = "https://api.openai.com/v1"
-    llm_tier3_api_key: str
+    # Runtime setting: once stored in the DB (settings UI / ``ia settings``)
+    # it may be dropped from env; an empty key fails at the first LLM call.
+    llm_tier3_api_key: str = ""
     llm_tier3_model: str = "gpt-5"
     llm_tier3_thinking: ThinkingMode = "auto"
     # Rule drafting picks parameters within template ranges and is validated

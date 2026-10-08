@@ -208,7 +208,7 @@ def draft(
         day = date.fromisoformat(as_of) if as_of else shanghai_today()
     except ValueError as exc:
         raise typer.BadParameter("expected YYYY-MM-DD", param_hint="--as-of") from exc
-    settings = Settings()  # type: ignore[call-arg]
+    bootstrap = Settings()  # type: ignore[call-arg]
 
     async def submit() -> int:
         import os
@@ -262,6 +262,9 @@ def draft(
         if status != "queued":
             rprint(f"Run #{run_id} is {status}; nothing to run inline")
             return 0
+        from investment_agent.settings.loader import load_settings
+
+        settings = await load_settings(base=bootstrap)
         worker = ResearchWorker(
             settings=settings,
             worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
@@ -288,6 +291,6 @@ def draft(
 
     from investment_agent.storage.database import run_with_engine
 
-    code = run_with_engine(settings.database_url, submit)
+    code = run_with_engine(bootstrap.database_url, submit)
     if code:
         raise typer.Exit(code=code)

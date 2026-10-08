@@ -23,8 +23,9 @@ from investment_agent.api.routes.dashboard import (
     calendar_warnings,
 )
 from investment_agent.clock import today_in
-from investment_agent.config import Settings, SnapshotScheduleConfig, load_app_yaml
+from investment_agent.config import Settings, SnapshotScheduleConfig
 from investment_agent.scheduler.trading_calendar import TradingCalendar, load_trading_calendar
+from investment_agent.settings.loader import load_runtime
 from investment_agent.snapshots.health import (
     DataHealth,
     HealthSettings,
@@ -44,13 +45,17 @@ log = structlog.get_logger(__name__)
 _TIMEZONE = "Asia/Shanghai"
 
 
-def _snapshot_universes() -> tuple[str, ...]:
+async def _snapshot_universes(session: AsyncSession, settings: Settings) -> tuple[str, ...]:
+    """The snapshot target pool from the runtime schedule (settings store)."""
+
     try:
-        snapshot = load_app_yaml(_APP_CONFIG_PATH).snapshot
+        snapshot: SnapshotScheduleConfig = (
+            await load_runtime(session, settings, _APP_CONFIG_PATH)
+        ).schedule.snapshot
     except Exception:
-        snapshot = None
-    universes = (snapshot or SnapshotScheduleConfig()).universes
-    return tuple(dict.fromkeys(universes))
+        log.warning("data_health.schedule_unavailable")
+        snapshot = SnapshotScheduleConfig()
+    return tuple(dict.fromkeys(snapshot.universes))
 
 
 def _calendar() -> TradingCalendar | None:
@@ -61,7 +66,12 @@ def _calendar() -> TradingCalendar | None:
         return None
 
 
-def health_settings(settings: Settings, *, include_calendar_warnings: bool = True) -> HealthSettings:
+def health_settings(
+    settings: Settings,
+    *,
+    universes: tuple[str, ...],
+    include_calendar_warnings: bool = True,
+) -> HealthSettings:
     warnings: tuple[HealthWarning, ...] = ()
     if include_calendar_warnings:
         warnings = tuple(
@@ -71,7 +81,7 @@ def health_settings(settings: Settings, *, include_calendar_warnings: bool = Tru
             for item in calendar_warnings()
         )
     return HealthSettings(
-        universes=_snapshot_universes(),
+        universes=universes,
         threshold=settings.snapshot_completeness_threshold,
         budget_cap=settings.ifind_budget_per_5h,
         budget_window=timedelta(hours=settings.ifind_budget_window_hours),
@@ -85,7 +95,11 @@ async def compute_data_health(
 ) -> DataHealth:
     return await build_data_health(
         session,
-        health_settings(settings, include_calendar_warnings=include_calendar_warnings),
+        health_settings(
+            settings,
+            universes=await _snapshot_universes(session, settings),
+            include_calendar_warnings=include_calendar_warnings,
+        ),
         now=datetime.now(UTC),
         today=today_in(_TIMEZONE),
     )

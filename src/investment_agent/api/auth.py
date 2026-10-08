@@ -9,6 +9,11 @@ preflight, which this app never grants). ``Origin: null`` and unparseable
 origins count as cross-origin.
 
 Wrong API keys (header or login form) are throttled per client IP.
+
+Two settings dependencies: ``get_bootstrap_settings`` (env only) for the auth
+checks, which need just the bootstrap layer (``API_KEY``, ``WEB_*``) and must
+not depend on the database; ``get_settings`` for route handlers, with the
+runtime layer read from the DB per request (settings-plan §4.4).
 """
 
 import secrets
@@ -19,6 +24,7 @@ from starlette.datastructures import URL
 
 from investment_agent.api.throttle import AuthFailureThrottle
 from investment_agent.config import Settings
+from investment_agent.settings.loader import load_settings
 from investment_agent.web.session import SESSION_COOKIE_NAME, session_is_valid
 
 STATE_CHANGING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -28,8 +34,14 @@ FETCH_MARKER_VALUE = "fetch"
 _default_throttle = AuthFailureThrottle()
 
 
-def get_settings() -> Settings:
+def get_bootstrap_settings() -> Settings:
     return Settings()  # type: ignore[call-arg]
+
+
+async def get_settings() -> Settings:
+    """Effective settings: env bootstrap + runtime values stored in the DB."""
+
+    return await load_settings()
 
 
 def api_key_matches(candidate: str | None, expected: str) -> bool:
@@ -84,7 +96,7 @@ def check_presented_api_key(request: Request, presented: str, expected: str) -> 
 
 async def verify_api_key(
     request: Request,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_bootstrap_settings)],
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> None:
     if x_api_key is None:
@@ -158,7 +170,7 @@ def cookie_request_is_same_origin(request: Request, settings: Settings) -> bool:
 
 async def verify_api_key_or_session(
     request: Request,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_bootstrap_settings)],
     x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
 ) -> None:
     """Accept the API key header or a valid same-origin browser session."""

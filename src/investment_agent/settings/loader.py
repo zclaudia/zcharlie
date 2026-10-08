@@ -14,17 +14,33 @@ deployment without the master key keeps working until the secret is saved.
 ``ensure_imported()`` runs the import: runtime keys explicitly set in env
 (``Settings.model_fields_set``: process env or ``.env``) plus the schedule
 values written in ``config/app.yaml``.
+
+``load_runtime()`` / ``load_app_config()`` give the schedule the scheduler,
+``ia snapshot`` and the health pages use: the stored one, or before the
+import the values the import would store (so behaviour does not change when
+the import runs). ``a_share_calendar_path`` always comes from app.yaml.
 """
 
 from pathlib import Path
 from typing import Any
 
 import structlog
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.config import Settings, load_app_yaml
+from investment_agent.config import AppYamlConfig, SchedulerConfig, Settings, load_app_yaml
 from investment_agent.settings.crypto import EncryptionKeyError
-from investment_agent.settings.registry import ENV_KEYS, SECRET_KEYS, SPECS, flatten
+from investment_agent.settings.registry import (
+    ENV_KEYS,
+    SECRET_KEYS,
+    SPECS,
+    SPECS_BY_KEY,
+    RuntimeSettings,
+    ScheduleSettings,
+    defaults,
+    flatten,
+    unflatten,
+)
 from investment_agent.settings.store import SettingsStore, SettingsValidationError
 from investment_agent.storage.database import session_scope
 
@@ -176,3 +192,88 @@ async def warn_env_drift(store: SettingsStore, settings: Settings) -> list[str]:
             "or `ia settings set`, and remove them from env",
         )
     return drift
+
+
+def import_preview(settings: Settings, app_yaml_path: Path = DEFAULT_APP_YAML) -> RuntimeSettings:
+    """The runtime settings the import would store (defaults for invalid values)."""
+
+    flat = defaults()
+    flat.update(env_import_values(settings))
+    flat.update(yaml_import_values(app_yaml_path))
+    try:
+        return RuntimeSettings.model_validate(unflatten(flat))
+    except ValidationError as exc:
+        invalid = {
+            key
+            for error in exc.errors()
+            if (key := ".".join(str(part) for part in error["loc"])) in SPECS_BY_KEY
+        }
+        if not invalid:
+            raise
+        fallback = defaults()
+        flat.update({key: fallback[key] for key in invalid})
+        return RuntimeSettings.model_validate(unflatten(flat))
+
+
+async def load_runtime(
+    session: AsyncSession, settings: Settings, app_yaml_path: Path = DEFAULT_APP_YAML
+) -> RuntimeSettings:
+    """The stored runtime layer; before the import, ``import_preview()``."""
+
+    store = store_for(session, settings)
+    if await store.imported_at() is None:
+        return import_preview(settings, app_yaml_path)
+    return await store.load()
+
+
+def calendar_path(app_yaml_path: Path = DEFAULT_APP_YAML) -> str:
+    """``scheduler.a_share_calendar_path`` from app.yaml (its default when absent)."""
+
+    if app_yaml_path.exists():
+        return load_app_yaml(app_yaml_path).scheduler.a_share_calendar_path
+    return str(SchedulerConfig.model_fields["a_share_calendar_path"].default)
+
+
+def app_config_from(schedule: ScheduleSettings, *, calendar: str) -> AppYamlConfig:
+    """The runtime schedule in the ``AppYamlConfig`` shape the scheduler builds from.
+
+    Every section is present; a disabled job has a ``None`` cron.
+    """
+
+    return AppYamlConfig(
+        scheduler=SchedulerConfig(
+            watchlist_refresh_cron=schedule.watchlist.cron,
+            watchlist_refresh_timezone=schedule.watchlist.timezone,
+            a_share_calendar_path=calendar,
+        ),
+        snapshot=schedule.snapshot,
+        screen=schedule.screen,
+        candidates=schedule.candidates,
+        verification=schedule.verification,
+    )
+
+
+async def load_app_config(
+    session: AsyncSession, settings: Settings, app_yaml_path: Path = DEFAULT_APP_YAML
+) -> tuple[AppYamlConfig, int]:
+    """Runtime schedule as ``AppYamlConfig`` plus the store revision it was read at."""
+
+    revision = await store_for(session, settings).revision()
+    runtime = await load_runtime(session, settings, app_yaml_path)
+    return app_config_from(runtime.schedule, calendar=calendar_path(app_yaml_path)), revision
+
+
+async def import_and_load(
+    settings: Settings, app_yaml_path: Path = DEFAULT_APP_YAML
+) -> tuple[Settings, int]:
+    """Process start-up: run the one-time import, then load settings and revision.
+
+    The import commits in its own session; the read is one transaction, so
+    the returned settings match the returned revision.
+    """
+
+    async with session_scope() as session:
+        await ensure_imported(session, settings, app_yaml_path)
+    async with session_scope() as session:
+        revision = await store_for(session, settings).revision()
+        return await load_settings(session, base=settings), revision

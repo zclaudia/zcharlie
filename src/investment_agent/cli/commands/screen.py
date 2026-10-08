@@ -15,6 +15,7 @@ from rich.table import Table
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
+from investment_agent.settings.loader import load_settings
 from investment_agent.storage.database import run_with_engine
 
 app = typer.Typer(help="Weekly template screen over a target pool (screen_run)")
@@ -70,7 +71,7 @@ def run(
     key = screen_idempotency_key(payload)
     if rerun:
         key = f"{key}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
-    settings = Settings()  # type: ignore[call-arg]
+    bootstrap = Settings()  # type: ignore[call-arg]
 
     async def submit() -> None:
         from investment_agent.candidates.lifecycle import CandidatePolicy
@@ -91,6 +92,7 @@ def run(
         if status != "queued":
             rprint(f"Run #{run_id} is {status}; nothing to run inline")
             return
+        settings = await load_settings(base=bootstrap)
         worker = ResearchWorker(
             settings=settings,
             worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
@@ -107,7 +109,7 @@ def run(
                 rprint(f"Error: {escape(finished.error_summary)}")
             _print_summary(finished.metadata_json)
 
-    run_with_engine(settings.database_url, submit)
+    run_with_engine(bootstrap.database_url, submit)
 
 
 def _print_summary(metadata: dict[str, object]) -> None:

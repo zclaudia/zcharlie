@@ -23,7 +23,7 @@ from investment_agent.api.auth import (
     api_key_matches,
     client_key,
     get_auth_throttle,
-    get_settings,
+    get_bootstrap_settings,
     is_same_origin,
 )
 from investment_agent.config import Settings
@@ -56,7 +56,7 @@ def register_web(app: Any) -> None:
 
 
 async def require_same_origin(
-    request: Request, settings: Annotated[Settings, Depends(get_settings)]
+    request: Request, settings: Annotated[Settings, Depends(get_bootstrap_settings)]
 ) -> None:
     """Reject cross-origin state-changing UI requests (CSRF defence in depth)."""
 
@@ -89,7 +89,7 @@ class WebSessionMiddleware:
             and path not in _SESSION_EXEMPT_PATHS
         )
         if needs_auth:
-            settings = get_settings()
+            settings = get_bootstrap_settings()
             token = request.cookies.get(SESSION_COOKIE_NAME, "")
             if not session_is_valid(token, settings):
                 response = _redirect_to_login()
@@ -128,7 +128,7 @@ async def login_page(request: Request, error: str | None = None) -> HTMLResponse
 )
 async def login(
     request: Request,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_bootstrap_settings)],
     api_key: Annotated[str, Form(alias="api_key")],
     next_url: Annotated[str, Form(alias="next")] = "/app",
 ) -> Any:
@@ -176,7 +176,7 @@ def _is_safe_next(next_url: str) -> bool:
 
 @router.post("/logout", dependencies=[Depends(require_same_origin)])
 async def logout(
-    request: Request, settings: Annotated[Settings, Depends(get_settings)]
+    request: Request, settings: Annotated[Settings, Depends(get_bootstrap_settings)]
 ) -> RedirectResponse:
     """POST-only logout; revokes every outstanding session server-side.
 
