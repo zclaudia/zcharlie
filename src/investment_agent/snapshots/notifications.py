@@ -1,6 +1,9 @@
 """Notifications for finished snapshot runs (via the notifier abstraction).
 
-* ``info`` - a universe sync changed index membership;
+* ``info`` - a universe sync changed index membership, or an earnings-event
+  run found new 业绩预告 of watchlist / candidate / holding listings
+  (``new_forecasts``) or appointed disclosures within the next three trading
+  days (``upcoming_disclosures``);
 * ``action_required`` - a snapshot run failed, a market / financial run
   finished below the completeness threshold, or it stopped because the iFinD
   quota ran out (``stop_reason="quota"``), or it stopped because AkShare
@@ -72,6 +75,8 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
         ratio = completeness.get("ratio") if completeness else None
         if isinstance(ratio, int | float) and ratio < threshold:
             return "action_required"
+        if run.kind == EARNINGS_EVENT and (_new_forecasts(run) or _upcoming_disclosures(run)):
+            return "info"
         return None
     if run.kind == UNIVERSE_SYNC and (run.metadata_json or {}).get("changed"):
         return "info"
@@ -85,6 +90,49 @@ def _overdue(run: PipelineRun) -> dict[str, Any]:
 
 def _overdue_detected(run: PipelineRun) -> list[str]:
     return _tickers(_overdue(run).get("detected"))
+
+
+def _items(run: PipelineRun, key: str) -> list[dict[str, Any]]:
+    value = (run.metadata_json or {}).get(key)
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _new_forecasts(run: PipelineRun) -> list[dict[str, Any]]:
+    return _items(run, "new_forecasts")
+
+
+def _upcoming_disclosures(run: PipelineRun) -> list[dict[str, Any]]:
+    return _items(run, "upcoming_disclosures")
+
+
+def _cny(value: object) -> str:
+    """CNY amount in 亿元 / 万元 (``-`` when unknown)."""
+
+    if not isinstance(value, int | float):
+        return "-"
+    if abs(value) >= 1e8:
+        return f"{value / 1e8:,.2f} 亿元"
+    return f"{value / 1e4:,.0f} 万元"
+
+
+def _pct(value: object) -> str:
+    return f"{value * 100:+.1f}%" if isinstance(value, int | float) else "-"
+
+
+def _range(low: object, high: object, render: Any) -> str:
+    if low == high or high is None:
+        return str(render(low))
+    if low is None:
+        return str(render(high))
+    return f"{render(low)} ~ {render(high)}"
+
+
+_POOL_LABELS = {"watchlist": "观察池", "candidate": "候选", "holding": "持仓"}
+
+
+def _pools(value: object) -> str:
+    names = [_POOL_LABELS.get(str(item), str(item)) for item in value] if isinstance(value, list) else []
+    return " / ".join(names) or "-"
 
 
 def _tickers(value: object) -> list[str]:
@@ -140,6 +188,33 @@ def render_snapshot_notification(run: PipelineRun, level: Level, *, threshold: f
         lines.append(f"- 生效日期：{metadata.get('effective_date')}")
         lines.append(f"- 调入（{len(added)}）：{', '.join(added) or '无'}")
         lines.append(f"- 调出（{len(removed)}）：{', '.join(removed) or '无'}")
+    forecasts = _new_forecasts(run)
+    if forecasts:
+        lines += ["", f"## 新业绩预告（{len(forecasts)}）", ""]
+        for item in forecasts[:_MAX_LISTED]:
+            lines.append(
+                f"- {item.get('ticker')} {item.get('name') or ''}（{_pools(item.get('pools'))}）· "
+                f"{item.get('forecast_type')} · {item.get('indicator') or '净利润'} "
+                f"{_range(item.get('profit_low'), item.get('profit_high'), _cny)} · "
+                f"同比 {_range(item.get('yoy_low'), item.get('yoy_high'), _pct)} · "
+                f"公告 {item.get('notice_date')} · 报告期 {item.get('report_period')} · "
+                f"来源 `{item.get('raw_ref')}`"
+            )
+        if len(forecasts) > _MAX_LISTED:
+            lines.append(f"- ……另有 {len(forecasts) - _MAX_LISTED} 条，见运行元数据")
+    upcoming = _upcoming_disclosures(run)
+    if upcoming:
+        lines += ["", f"## 预约披露临近（{len(upcoming)}）", ""]
+        for item in upcoming[:_MAX_LISTED]:
+            ahead = item.get("trading_days_ahead")
+            when = f"{ahead} 个交易日后" if isinstance(ahead, int) and ahead > 0 else "下一交易日前"
+            lines.append(
+                f"- {item.get('ticker')} {item.get('name') or ''}（{_pools(item.get('pools'))}）· "
+                f"预约 {item.get('scheduled_date')}（{when}）· 报告期 {item.get('report_period')} · "
+                f"来源 `{item.get('raw_ref')}`"
+            )
+        if len(upcoming) > _MAX_LISTED:
+            lines.append(f"- ……另有 {len(upcoming) - _MAX_LISTED} 条，见运行元数据")
     detected = _overdue_detected(run)
     if detected:
         overdue = _overdue(run)
