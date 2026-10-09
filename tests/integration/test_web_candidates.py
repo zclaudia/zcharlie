@@ -90,6 +90,7 @@ def test_candidate_detail_shell(api_client) -> None:
         'id="candidate-inspector"',
         'id="candidate-rule"',
         'id="candidate-actions"',
+        'id="candidate-segments"',
         'id="candidate-verification"',
         'id="candidate-decisions"',
         "未校准",

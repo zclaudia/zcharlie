@@ -360,3 +360,41 @@ async def test_screen_run_summary(api_client) -> None:
             await session.execute(select(PipelineRun).where(PipelineRun.kind == "rule_draft"))
         ).scalar_one()
     assert api_client.get(f"/screen-runs/{other.id}", headers=KEY).status_code == 404
+
+
+async def test_detail_lists_latest_business_segments_as_facts(api_client) -> None:
+    from datetime import UTC, date, datetime
+
+    from investment_agent.storage.repositories.earnings_events import (
+        EarningsEventRepository,
+        segment_row,
+    )
+
+    ids = await seed_promotable()
+    before = api_client.get(f"/candidates/{ids['candidate_id']}", headers=KEY).json()
+    assert before["segments"] == []
+    async with session_scope() as session:
+        await EarningsEventRepository(session).insert_segments(
+            listing_id=ids["listing_id"], report_period=date(2026, 6, 30),
+            rows=[
+                segment_row(kind="product", name="其他系列酒", revenue=12_934_186_511.82,
+                            profit=9_518_391_021.24, margin=0.73591, share=0.142599),
+                segment_row(kind="product", name="茅台酒", revenue=77_724_437_925.48,
+                            profit=71_723_553_696.78, margin=0.922793, share=0.856909),
+                segment_row(kind="region", name="国内", revenue=89_666_168_740.29,
+                            profit=80_277_721_856.79, margin=0.895296, share=0.988566),
+            ],
+            provider="akshare", captured_at=datetime(2026, 8, 20, 11, tzinfo=UTC), raw_ref="raw",
+        )
+    detail = api_client.get(f"/candidates/{ids['candidate_id']}", headers=KEY).json()
+    assert [item["name"] for item in detail["segments"]] == ["茅台酒", "其他系列酒"]
+    moutai = detail["segments"][0]
+    assert moutai == {
+        "report_period": "2026-06-30", "kind": "product", "name": "茅台酒",
+        "revenue": 77724437925.48, "share": 0.856909, "margin": 0.922793,
+        "profit": 71723553696.78,
+    }
+    assert not {"score", "strength"} & _keys(detail)
+    # The list endpoint stays unchanged (no segments on summaries).
+    [item] = api_client.get("/candidates?status=open", headers=KEY).json()["items"]
+    assert "segments" not in item

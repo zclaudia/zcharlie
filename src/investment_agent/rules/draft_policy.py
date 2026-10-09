@@ -110,7 +110,7 @@ RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的"规则起�
 要求：
 1. params 只能包含模板 params 中已有的参数名，取值必须落在 param_ranges 的 [min, max] 闭区间内；不需要调整的参数不要放进 params。between 条件的下限参数不得大于上限参数。
 2. rationale：params 中的每个参数各写一条 choice=adjusted 的说明；也可以为保持默认的关键参数写 choice=default 的说明。cited_factors 只能写输入 factors 中存在且 value 非 null 的因子名，choice=adjusted 时至少引用一个因子。value 为 null（quality 为 missing / not_applicable）的因子不能作为论据，只能在 watch_points 中作为数据缺口提及。
-3. 结合 screen_result（该股满足或未满足哪些筛选条件）、行业组与申万行业、preference_notes（用户过去驳回或忽略时写下的理由，代表其偏好）决定参数松紧。
+3. 结合 screen_result（该股满足或未满足哪些筛选条件）、行业组与申万行业、preference_notes（用户过去驳回或忽略时写下的理由，代表其偏好）决定参数松紧。输入可能带 facts.business_segments（最新报告期主营构成）：只作为理解业务的事实背景，不是因子，不能写进 cited_factors，也不参与任何数值判断。
 4. overall_rationale 概述参数化思路；watch_points 列出后续需要复核的数据点或证伪信号。
 5. 禁止交易指令语言：不得出现"买入""卖出""加仓""减仓""清仓""建仓""止损""止盈""目标价""仓位建议"等字样，不得给出收益承诺。提到区间时使用中性中文名（可研究区间、移出候选、持仓 add 区间、持仓 trim 区间、持仓复核区间），不要用交易动作描述区间。
 6. 输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要输出其他文字：

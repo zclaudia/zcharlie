@@ -41,6 +41,7 @@ from investment_agent.api.schemas.candidates import (
     ScreenResultOut,
     ScreenRunOut,
     ScreenTemplateOut,
+    SegmentOut,
     WatchlistEntryOut,
 )
 from investment_agent.candidates.lifecycle import (
@@ -313,6 +314,25 @@ async def _candidate_summary(
     return CandidateSummaryOut(**fields)
 
 
+async def _segments_out(session: AsyncSession, candidate: CandidateRecord) -> list[SegmentOut]:
+    """Latest 主营构成 of the listing (facts; the same loader as the drafting prompt)."""
+
+    from investment_agent.rules.drafting import load_segments
+
+    return [
+        SegmentOut(
+            report_period=item.report_period,
+            kind=item.kind,
+            name=item.name,
+            revenue=item.revenue,
+            share=item.share,
+            margin=item.margin,
+            profit=item.profit,
+        )
+        for item in await load_segments(session, candidate.ticker, shanghai_today())
+    ]
+
+
 async def _candidate_detail(session: AsyncSession, candidate: CandidateRecord) -> CandidateDetailOut:
     templates = _Templates(session)
     fields, results, draft = await _summary_parts(session, candidate, templates)
@@ -322,6 +342,7 @@ async def _candidate_detail(session: AsyncSession, candidate: CandidateRecord) -
         screen_results=[await _screen_result_out(row, templates) for row in results],
         draft_rule_detail=await _rule_detail(draft, templates) if draft is not None else None,
         decisions=[_decision_out(item) for item in decisions],
+        segments=await _segments_out(session, candidate),
     )
 
 

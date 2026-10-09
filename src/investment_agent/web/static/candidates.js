@@ -5,7 +5,7 @@
 
 import { ApiError, get, lockWhileBusy, patch, post, renderRegion } from "./api.js";
 import { attachCombobox } from "./combobox.js";
-import { clear, el, fmt, stockLink } from "./dom.js";
+import { clear, el, fmt, stockLink, table } from "./dom.js";
 import {
   CALIBRATION_LABELS,
   CANDIDATE_STATUS_LABELS,
@@ -1246,6 +1246,54 @@ function renderDecisions(candidate) {
   sectionReady(node, list);
 }
 
+// ---- 主营构成（事实背景，不参与筛选与规则）---------------------------------
+
+const SEGMENT_KIND_LABELS = Object.freeze({ product: "按产品", industry: "按行业", region: "按地区" });
+
+function cny(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  if (Math.abs(value) >= 1e8) return `${(value / 1e8).toLocaleString("zh-CN", { maximumFractionDigits: 2 })} 亿元`;
+  return `${(value / 1e4).toLocaleString("zh-CN", { maximumFractionDigits: 0 })} 万元`;
+}
+
+function ratio(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+export function segmentRows(segments) {
+  return segments.map((item) => {
+    const row = el("tr");
+    row.appendChild(el("td", {}, item.name || "—"));
+    row.appendChild(el("td", { class: "num" }, cny(item.revenue)));
+    row.appendChild(el("td", { class: "num" }, ratio(item.share)));
+    row.appendChild(el("td", { class: "num" }, ratio(item.margin)));
+    return row;
+  });
+}
+
+function renderSegments(candidate) {
+  const node = section("candidate-segments");
+  if (!node) return;
+  const segments = Array.isArray(candidate.segments) ? candidate.segments : [];
+  if (!segments.length) {
+    renderRegion(node, "empty", "暂无主营构成数据（披露季内每周采集）。");
+    return;
+  }
+  const box = el("div");
+  const head = segments[0];
+  box.appendChild(
+    el("p", { class: "meta-row" }, `报告期 ${fmt(head.report_period)} · ${label(SEGMENT_KIND_LABELS, head.kind)}`)
+  );
+  box.appendChild(
+    table(
+      [{ label: "构成" }, { label: "收入" }, { label: "收入占比" }, { label: "毛利率" }],
+      segmentRows(segments)
+    )
+  );
+  sectionReady(node, box);
+}
+
 function verificationItem(request) {
   const item = el("li", { class: "verification-item" });
   const line = el("p");
@@ -1329,6 +1377,7 @@ async function loadCandidateDetail() {
     renderReasons(candidate);
     renderRule(candidate);
     renderActions(candidate);
+    renderSegments(candidate);
     renderDecisions(candidate);
     await loadVerification(candidate);
   } catch (error) {
@@ -1341,7 +1390,7 @@ async function loadCandidateDetail() {
         error instanceof ApiError && error.status === 404 ? null : () => loadCandidateDetail()
       );
     }
-    for (const id of ["candidate-reasons", "candidate-rule", "candidate-actions", "candidate-verification", "candidate-decisions"]) {
+    for (const id of ["candidate-reasons", "candidate-rule", "candidate-actions", "candidate-segments", "candidate-verification", "candidate-decisions"]) {
       const node = section(id);
       if (node) renderRegion(node, "empty", "—");
     }

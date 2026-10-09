@@ -55,9 +55,9 @@ from __future__ import annotations
 import importlib
 import inspect
 import json
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, time
 from typing import Any, Literal
 
 import structlog
@@ -153,15 +153,80 @@ class RuleDraftInputError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class Segment:
+    """One 主营构成 line of the latest report period (mrd-intake C3; a fact, not a factor)."""
+
+    report_period: date
+    kind: str
+    name: str
+    revenue: float | None
+    """CNY."""
+    share: float | None
+    """Fraction of main-business revenue."""
+    margin: float | None
+    """Gross margin, fraction."""
+    profit: float | None = None
+
+
+MAX_SEGMENTS = 5
+"""Top segments by revenue of the latest period handed to the drafting prompt."""
+
+
+@dataclass(frozen=True)
 class StockContext:
     """Point-in-time factor values and industry classification of one stock."""
 
     factors: Mapping[str, FactorValue]
     industry: Mapping[str, Any] = field(default_factory=dict)
+    segments: tuple[Segment, ...] = ()
+    """Latest-period 主营构成, revenue top :data:`MAX_SEGMENTS`; empty when unknown."""
 
 
-async def load_stock_context(session: AsyncSession, ticker: str, as_of: date) -> StockContext:
-    """Every registered factor on ``as_of`` plus industry group and Shenwan chain."""
+SegmentLoader = Callable[[AsyncSession, str, date], Awaitable[tuple[Segment, ...]]]
+
+
+async def load_segments(session: AsyncSession, ticker: str, as_of: date) -> tuple[Segment, ...]:
+    """Top :data:`MAX_SEGMENTS` 主营构成 lines of the latest period public on ``as_of``.
+
+    Point in time: only captures made by the end of ``as_of`` (Asia/Shanghai)
+    and report periods ending on or before ``as_of``.
+    """
+
+    from investment_agent.clock import SHANGHAI_TZ
+    from investment_agent.storage.repositories.earnings_events import EarningsEventRepository
+
+    listing = await ListingRepository(session).get_a_share_listing(ticker)
+    if listing is None:
+        return ()
+    known_by = datetime.combine(as_of, time.max, tzinfo=SHANGHAI_TZ)
+    latest = await EarningsEventRepository(session).latest_segments(
+        listing.id, as_of=as_of, known_by=known_by
+    )
+    if latest is None:
+        return ()
+    return tuple(
+        Segment(
+            report_period=latest.report_period,
+            kind=latest.kind,
+            name=row.name,
+            revenue=None if row.revenue is None else float(row.revenue),
+            share=None if row.share is None else float(row.share),
+            margin=None if row.margin is None else float(row.margin),
+            profit=None if row.profit is None else float(row.profit),
+        )
+        for row in latest.rows[:MAX_SEGMENTS]
+    )
+
+
+async def load_stock_context(
+    session: AsyncSession,
+    ticker: str,
+    as_of: date,
+    *,
+    segment_loader: SegmentLoader = load_segments,
+) -> StockContext:
+    """Every registered factor on ``as_of`` plus industry group, Shenwan chain and
+    the latest 主营构成 (facts only)."""
 
     from investment_agent.providers.shenwan_directory import default_shenwan_directory
 
@@ -183,7 +248,11 @@ async def load_stock_context(session: AsyncSession, ticker: str, as_of: date) ->
                 for item in directory.chain(view.sw_code)
             ],
         }
-    return StockContext(factors=DEFAULT_REGISTRY.compute_all(view), industry=industry)
+    return StockContext(
+        factors=DEFAULT_REGISTRY.compute_all(view),
+        industry=industry,
+        segments=await segment_loader(session, ticker, as_of),
+    )
 
 
 StockLoader = Callable[[AsyncSession, str, date], Awaitable[StockContext]]
@@ -214,6 +283,31 @@ def factor_input(
             entry["description"] = meta.description
         result[name] = entry
     return result
+
+
+def segments_input(segments: Sequence[Segment]) -> dict[str, Any] | None:
+    """The ``facts.business_segments`` paragraph of the prompt (``None`` without data)."""
+
+    if not segments:
+        return None
+    head = segments[0]
+    return {
+        "report_period": head.report_period.isoformat(),
+        "kind": head.kind,
+        "note": (
+            "最新报告期主营构成（东方财富，按收入前 5；收入单位 CNY，占比与毛利率为小数）。"
+            "仅作事实背景，不是因子，不能作为 cited_factors。"
+        ),
+        "items": [
+            {
+                "name": item.name,
+                "revenue": _number(item.revenue),
+                "share": _number(item.share),
+                "margin": _number(item.margin),
+            }
+            for item in segments[:MAX_SEGMENTS]
+        ],
+    }
 
 
 def template_input(template: RuleTemplate) -> dict[str, Any]:
@@ -250,7 +344,7 @@ def build_draft_input(
 
     notes = [note.strip()[:MAX_NOTE_CHARS] for note in payload.preference_notes if note.strip()]
     group = stock.industry.get("group")
-    return {
+    message: dict[str, Any] = {
         "task": "rule_draft",
         "scope": DRAFT_SCOPE,
         "stock": {
@@ -264,6 +358,11 @@ def build_draft_input(
         "screen_result": dict(screen) if screen is not None else None,
         "preference_notes": notes[-MAX_PREFERENCE_NOTES:],
     }
+    facts = segments_input(stock.segments)
+    if facts is not None:
+        # Facts paragraph (mrd-intake C3): descriptive only, never a scoring input.
+        message["facts"] = {"business_segments": facts}
+    return message
 
 
 async def screen_context(

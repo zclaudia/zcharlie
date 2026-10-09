@@ -163,11 +163,28 @@ class CandidatePageOut(BaseModel):
     offset: int
 
 
+class SegmentOut(BaseModel):
+    """One 主营构成 line (mrd-intake C3): a fact shown on the detail page, never ranked."""
+
+    report_period: date
+    kind: str
+    name: str
+    revenue: float | None
+    """CNY."""
+    share: float | None
+    """Fraction of main-business revenue."""
+    margin: float | None
+    """Gross margin, fraction."""
+    profit: float | None = None
+
+
 class CandidateDetailOut(CandidateSummaryOut):
     screen_results: list[ScreenResultOut]
     """Newest screen result per template among the sources."""
     draft_rule_detail: RuleDetailOut | None
     decisions: list[DecisionOut]
+    segments: list[SegmentOut] = Field(default_factory=list)
+    """Latest-period 主营构成 (revenue top 5); empty when not collected."""
 
 
 class CandidateNominateRequest(BaseModel):

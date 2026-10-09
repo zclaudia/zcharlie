@@ -687,11 +687,122 @@ def test_load_stock_context_from_a_snapshot_view(monkeypatch) -> None:
     async def fake_view(session, ticker, as_of, **_: object):  # noqa: ANN001, ANN202
         return baostock_view("600519", as_of)
 
+    async def no_segments(session, ticker, as_of):  # noqa: ANN001, ANN202
+        return ()
+
     monkeypatch.setattr(drafting, "load_snapshot_view", fake_view)
-    stock = asyncio.run(drafting.load_stock_context(None, "600519.SH", AS_OF))  # type: ignore[arg-type]
+    stock = asyncio.run(
+        drafting.load_stock_context(None, "600519.SH", AS_OF, segment_loader=no_segments)  # type: ignore[arg-type]
+    )
+    assert stock.segments == ()
     assert set(stock.factors) == set(DEFAULT_REGISTRY.names())
     assert stock.industry["group"] == "consumer"
     assert stock.industry["csrc"]["code"] == "C15"
     assert stock.factors["roe"].value is not None
     rendered = drafting.factor_input(stock.factors)
     assert rendered["roe"]["unit"] == "fraction" and rendered["roe"]["quality"] in {"ok", "approx"}
+
+
+# --------------------------------------------------------------------------- #
+# Business segments in the facts paragraph (mrd-intake C3)
+# --------------------------------------------------------------------------- #
+
+
+def _segments() -> tuple[drafting.Segment, ...]:
+    return tuple(
+        drafting.Segment(
+            report_period=date(2026, 6, 30), kind="product", name=name,
+            revenue=revenue, share=share, margin=margin, profit=None,
+        )
+        for name, revenue, share, margin in (
+            ("茅台酒", 77_724_437_925.48, 0.856909, 0.922793),
+            ("其他系列酒", 12_934_186_511.82, 0.142599, 0.73591),
+            ("其他(补充)", 44_636_527.18, 0.000492, -0.278837),
+        )
+    )
+
+
+def test_draft_input_carries_segments_as_facts_or_omits_them(draft_db) -> None:
+    templates = draft_db
+    payload = _payload("600519.SH", templates)
+    template = templates[STOCKS["600519.SH"]["template"]]
+    stock = asyncio.run(stub_loader(None, "600519.SH", AS_OF))
+    without = drafting.build_draft_input(payload=payload, template=template, stock=stock, screen=None)
+    assert "facts" not in without
+    with_segments = drafting.StockContext(
+        factors=stock.factors, industry=stock.industry, segments=_segments()
+    )
+    message = drafting.build_draft_input(
+        payload=payload, template=template, stock=with_segments, screen=None
+    )
+    facts = message["facts"]["business_segments"]
+    assert facts["report_period"] == "2026-06-30" and facts["kind"] == "product"
+    assert [item["name"] for item in facts["items"]] == ["茅台酒", "其他系列酒", "其他(补充)"]
+    assert facts["items"][0] == {
+        "name": "茅台酒", "revenue": 77724400000.0, "share": 0.856909, "margin": 0.922793,
+    }
+    assert "不是因子" in facts["note"]
+    # The paragraph is outside factors: nothing there can be cited.
+    assert "茅台酒" not in json.dumps(message["factors"], ensure_ascii=False)
+    assert {**message, "facts": None} | {"facts": None} == {**without, "facts": None}
+    # At most five lines even when more segments are known.
+    many = _segments() * 3
+    rendered = drafting.segments_input(many)
+    assert rendered is not None and len(rendered["items"]) == drafting.MAX_SEGMENTS
+    assert drafting.segments_input(()) is None
+    assert "facts.business_segments" in drafting.system_prompt()
+
+
+def test_load_segments_reads_the_latest_period_point_in_time(draft_db) -> None:
+    from datetime import UTC, datetime
+
+    from investment_agent.storage.repositories.earnings_events import (
+        EarningsEventRepository,
+        segment_row,
+    )
+
+    async def seed() -> None:
+        async with session_scope() as session:
+            listing = await ListingRepository(session).ensure_a_share_listing("600519.SH")
+            repository = EarningsEventRepository(session)
+            for period, captured in (
+                (date(2025, 12, 31), datetime(2026, 4, 20, 11, tzinfo=UTC)),
+                (date(2026, 6, 30), datetime(2026, 8, 20, 11, tzinfo=UTC)),
+            ):
+                rows = [
+                    segment_row(kind="region", name="国内", revenue=9e10, profit=8e10, margin=0.9,
+                                share=0.99),
+                    segment_row(kind="product", name="其他系列酒", revenue=1.2e10, profit=9e9,
+                                margin=0.73, share=0.14),
+                    segment_row(kind="product", name="茅台酒", revenue=7.7e10, profit=7.1e10,
+                                margin=0.92, share=0.85),
+                ]
+                await repository.insert_segments(
+                    listing_id=listing.id, report_period=period, rows=rows, provider="akshare",
+                    captured_at=captured, raw_ref=f"raw-{period.isoformat()}",
+                )
+
+    async def load(as_of: date) -> tuple[drafting.Segment, ...]:
+        async with session_scope() as session:
+            return await drafting.load_segments(session, "600519.SH", as_of)
+
+    asyncio.run(seed())
+    latest = asyncio.run(load(date(2026, 9, 30)))
+    assert [(item.report_period, item.kind, item.name) for item in latest] == [
+        (date(2026, 6, 30), "product", "茅台酒"), (date(2026, 6, 30), "product", "其他系列酒"),
+    ]
+    assert latest[0].revenue == 7.7e10 and latest[0].share == 0.85 and latest[0].margin == 0.92
+    # Before the 2026H1 capture only FY2025 was known; before any capture nothing.
+    assert {item.report_period for item in asyncio.run(load(date(2026, 7, 31)))} == {
+        date(2025, 12, 31)
+    }
+    assert asyncio.run(load(date(2026, 3, 1))) == ()
+    assert asyncio.run(load_for("000001.SZ")) == ()  # listing unknown: no facts
+
+
+def load_for(ticker: str):  # noqa: ANN201
+    async def run() -> tuple[drafting.Segment, ...]:
+        async with session_scope() as session:
+            return await drafting.load_segments(session, ticker, date(2026, 9, 30))
+
+    return run()
