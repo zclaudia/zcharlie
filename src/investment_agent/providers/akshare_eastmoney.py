@@ -126,9 +126,12 @@ CST, akshare 1.19.1, fixtures ``tests/fixtures/eastmoney/stock_yjyg_em_*`` /
   主营利润 in CNY, 收入比例 / 毛利率 fractions; 分类类型 按产品分类 /
   按行业分类 / 按地区分类 (akshare maps ``MAINOP_TYPE`` 2 / 1 / 3).
 
-Point in time: a notice date / actual disclosure date after the capture
-date raises :class:`LookaheadDataError`; an appointment date is forward
-looking by nature and may be in the future.
+Point in time: a forecast row whose notice date is after the capture date
+is deferred (not returned, listed in ``ForecastPeriod.deferred``): Eastmoney
+dates notices released in the evening with the next day, and the row is
+picked up by the first capture on or after its notice date. An actual
+disclosure date after the capture date raises :class:`LookaheadDataError`;
+an appointment date is forward looking by nature and may be in the future.
 """
 
 from __future__ import annotations
@@ -938,6 +941,8 @@ class ForecastPeriod:
     skipped_symbols: tuple[str, ...] = ()
     skipped_indicators: int = 0
     """Rows of other indicators (EPS, revenue) that were not kept."""
+    deferred: tuple[tuple[str, date], ...] = ()
+    """(ticker, notice date) of rows dated after the capture date (kept for later)."""
     raw: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
 
     def raw_rows_for(self, tickers: Sequence[str]) -> list[dict[str, Any]]:
@@ -961,6 +966,7 @@ def parse_earnings_forecasts(
     capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
     skipped: set[str] = set()
     skipped_indicators = 0
+    deferred: set[tuple[str, date]] = set()
     candidates: dict[tuple[str, date], dict[str, EarningsForecast]] = {}
     for row in table.rows:
         symbol = _symbol_text(row.get("SECURITY_CODE"))
@@ -977,11 +983,10 @@ def parse_earnings_forecasts(
             )
         notice = _required_day(row.get("NOTICE_DATE"), field_name="NOTICE_DATE")
         if notice > capture_date:
-            raise LookaheadDataError(
-                f"akshare {operation}: {ticker} notice date {notice.isoformat()} is after "
-                f"the capture date {capture_date.isoformat()}",
-                provider=PROVIDER,
-            )
+            # Not known "as of" this capture yet: never stored early, never fatal for
+            # the rest of the market answer (see module doc).
+            deferred.add((ticker, notice))
+            continue
         code = str(row.get("PREDICT_FINANCE_CODE") or "").strip()
         if code not in FORECAST_INDICATOR_CODES:
             skipped_indicators += 1
@@ -1012,6 +1017,13 @@ def parse_earnings_forecasts(
         forecasts.setdefault(ticker, []).append(chosen)
     if skipped:
         log.info("eastmoney_symbols_skipped", count=len(skipped), sample=sorted(skipped)[:10])
+    if deferred:
+        log.info(
+            "eastmoney_forecasts_deferred",
+            count=len(deferred),
+            capture_date=capture_date.isoformat(),
+            sample=[f"{ticker} {day.isoformat()}" for ticker, day in sorted(deferred)[:10]],
+        )
     return ForecastPeriod(
         report_period=report_period,
         captured_at=captured_at,
@@ -1021,6 +1033,7 @@ def parse_earnings_forecasts(
         },
         skipped_symbols=tuple(sorted(skipped)),
         skipped_indicators=skipped_indicators,
+        deferred=tuple(sorted(deferred)),
         raw=table.rows,
     )
 

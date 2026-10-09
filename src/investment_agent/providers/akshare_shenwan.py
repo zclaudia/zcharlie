@@ -249,6 +249,10 @@ def _json_value(value: Any) -> Any:
 
     if value is None:
         return None
+    # pandas NaT subclasses datetime and its isoformat() returns the string "NaT"
+    # (no exception), so it must be recognised before the datetime branch.
+    if type(value).__name__ in {"NaTType", "NAType"}:
+        return None
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, date):
@@ -256,12 +260,7 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, float) and value != value:  # NaN
         return None
     if hasattr(value, "isoformat"):  # pandas Timestamp
-        try:
-            return value.isoformat()
-        except ValueError:  # NaT
-            return None
-    if type(value).__name__ in {"NaTType", "NAType"}:
-        return None
+        return value.isoformat()
     if hasattr(value, "item"):  # numpy scalar
         return _json_value(value.item())
     return value

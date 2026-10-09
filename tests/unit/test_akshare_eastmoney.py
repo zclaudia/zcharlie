@@ -22,6 +22,7 @@ from investment_agent.providers.akshare_eastmoney import (
     RawTable,
     _EastmoneyRequests,
     _NoData,
+    _table,
     normalize_forecast_type,
     parse_business_segments,
     parse_cash_flow_statement,
@@ -342,10 +343,18 @@ def test_forecast_schema_and_lookahead_guards():
         )
     with pytest.raises(EastmoneySchemaError, match="asked for 2026-09-30"):
         parse_earnings_forecasts(table, report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT)
-    with pytest.raises(LookaheadDataError, match="notice date 2026-08-19"):
-        parse_earnings_forecasts(
-            table, report_period=H1_2026, captured_at=datetime(2026, 8, 18, 12, tzinfo=UTC)
-        )
+    # A notice dated after the capture date is deferred row by row (Eastmoney dates
+    # evening releases with the next day): the rest of the market answer is kept.
+    early = parse_earnings_forecasts(
+        table, report_period=H1_2026, captured_at=datetime(2026, 8, 18, 12, tzinfo=UTC)
+    )
+    assert early.deferred and all(day > date(2026, 8, 18) for _ticker, day in early.deferred)
+    assert all(
+        item.notice_date <= date(2026, 8, 18)
+        for items in early.forecasts.values()
+        for item in items
+    )
+    assert early.forecasts  # earlier notices survive
     missing_type = tuple({**row, "PREDICT_TYPE": None} for row in table.rows)
     parsed = parse_earnings_forecasts(
         RawTable(table.columns, missing_type), report_period=H1_2026, captured_at=EVENTS_CAPTURED_AT
@@ -361,6 +370,32 @@ def test_forecast_schema_and_lookahead_guards():
         RawTable(table.columns, tagged), report_period=H1_2026, captured_at=EVENTS_CAPTURED_AT
     )
     assert parsed.forecasts["600030.SH"][0].forecast_type == "扭亏"
+
+
+def test_one_next_day_notice_does_not_fail_the_market_answer():
+    # 2026-10-09 19:00 CST: 600176.SH carried NOTICE_DATE 2026-10-10 and the whole
+    # CSI300 run failed with LookaheadDataError. Now only that row waits.
+    table = forecast_table()
+    template = next(row for row in table.rows if row["SECURITY_CODE"] == "600030")
+    tomorrow = {
+        **template, "SECURITY_CODE": "600176", "SECURITY_NAME_ABBR": "中国巨石",
+        "NOTICE_DATE": "2026-10-10 00:00:00",
+    }
+    captured = datetime(2026, 10, 9, 11, tzinfo=UTC)  # 19:00 CST
+    parsed = parse_earnings_forecasts(
+        RawTable(table.columns, (*table.rows, tomorrow)), report_period=H1_2026,
+        captured_at=captured,
+    )
+    assert ("600176.SH", date(2026, 10, 10)) in parsed.deferred
+    assert "600176.SH" not in parsed.forecasts
+    assert "600030.SH" in parsed.forecasts
+    # The next capture on the notice date stores it.
+    later = parse_earnings_forecasts(
+        RawTable(table.columns, (*table.rows, tomorrow)), report_period=H1_2026,
+        captured_at=datetime(2026, 10, 12, 11, tzinfo=UTC),
+    )
+    assert later.forecasts["600176.SH"][0].notice_date == date(2026, 10, 10)
+    assert later.deferred == ()
 
 
 async def test_undisclosed_forecast_period_is_empty():
@@ -381,6 +416,26 @@ async def test_disclosure_schedule_takes_the_latest_change():
     earlier = result.appointments["600661.SH"]
     assert earlier.scheduled_date == date(2026, 10, 20) < earlier.first_date
     assert result.raw_rows_for(["600519.SH"])[0]["首次预约时间"].startswith("2026-10-31")
+
+
+def test_disclosure_schedule_from_a_frame_with_nat_change_dates():
+    # 2026-10-09: stock_yysj_em returns pandas NaT for "no change"; NaT subclasses
+    # datetime and isoformat() gives "NaT", which used to fail every row.
+    pd = pytest.importorskip("pandas")
+    table = schedule_table()
+    date_columns = [column for column in table.columns if "时间" in column or "日期" in column]
+    frame = pd.DataFrame(list(table.rows), columns=list(table.columns))
+    for column in date_columns:
+        frame[column] = pd.to_datetime(frame[column])  # None -> NaT, as akshare returns
+    assert frame["一次变更日期"].isna().any()
+    parsed = parse_disclosure_schedule(
+        _table(frame), report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT
+    )
+    assert len(parsed.appointments) == 14
+    unchanged = parsed.appointments["002107.SZ"]
+    assert unchanged.changes == () and unchanged.actual_date is None
+    assert unchanged.scheduled_date == unchanged.first_date == date(2026, 10, 10)
+    assert parsed.appointments["300633.SZ"].changes == (date(2026, 10, 29),)
 
 
 def test_disclosure_schedule_guards():

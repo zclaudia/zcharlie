@@ -309,13 +309,15 @@ async def test_forecasts_are_stored_once_and_new_pool_forecasts_are_listed(db_se
 async def test_forecast_lookahead_and_undisclosed_period(db_session, tmp_path):
     del db_session
     await _seed_pools()
-    # Captured before the 2026-08-19 notice of 600187 (in the market answer): the
-    # provider refuses the answer, the run fails (worker retry) and nothing is stored.
+    # Captured before the 2026-08-19 notice of 600187 (in the market answer): that row
+    # is deferred, everything dated up to the capture date is stored, the run succeeds.
     early = _client(clock=datetime(2026, 8, 18, 12, tzinfo=UTC))
     report = await _collect(_payload("forecast"), tmp_path, early)
-    assert report.status == "failed"
-    assert "LookaheadDataError" in report.completeness.missing["600030.SH"][1]
-    assert await _rows(EarningsForecastRecord) == []
+    assert report.status == "success"
+    assert report.metadata["deferred_count"] > 0
+    assert all(item["notice_date"] > "2026-08-18" for item in report.metadata["deferred"])
+    stored = await _rows(EarningsForecastRecord)
+    assert all(row.notice_date <= date(2026, 8, 18) for row in stored)
     # A period nobody has forecast yet: success with nothing stored.
     report = await _collect(_payload("forecast", report_period=Q3_2026), tmp_path)
     assert report.status == "success"

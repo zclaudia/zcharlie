@@ -341,6 +341,11 @@ async def _collect_forecasts(
         "new_forecasts": new_in_pools[:_MAX_LISTED],
         "new_forecast_count": len(new_in_pools),
         "skipped_indicators": answer.skipped_indicators,
+        "deferred_count": len(answer.deferred),
+        "deferred": [
+            {"ticker": ticker, "notice_date": day.isoformat()}
+            for ticker, day in answer.deferred[:_MAX_LISTED]
+        ],
         "units": (
             "profit_low / profit_high in CNY (yuan); yoy_low / yoy_high fractions "
             "(ADD_AMP_LOWER / ADD_AMP_UPPER percent / 100); indicator names the net-profit line"
