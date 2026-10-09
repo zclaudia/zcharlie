@@ -34,8 +34,9 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
   const latest = el("div", { class: "pc-latest" });
   const tabs = el("div", { class: "pc-tabs", role: "group", "aria-label": "时间区间" });
   const stage = el("div", { class: "pc-stage" });
+  const axis = el("div", { class: "pc-axis", "aria-hidden": "true" });
   head.append(latest, tabs);
-  host.replaceChildren(head, stage);
+  host.replaceChildren(head, stage, axis);
   host.removeAttribute("aria-hidden");
 
   const buttons = PRICE_RANGES.map((range) => {
@@ -58,7 +59,25 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
     if (title) title.textContent = `近 ${days} 个交易日收盘价`;
   }
 
+  function drawAxis(bars) {
+    const n = bars.length;
+    const count = Math.min(n, host.clientWidth < 520 ? 3 : 5);
+    const long = new Date(bars[n - 1].trade_date) - new Date(bars[0].trade_date) > 300 * 86400000;
+    const ticks = [];
+    for (let k = 0; k < count; k += 1) {
+      const i = count === 1 ? 0 : Math.round((k / (count - 1)) * (n - 1));
+      const date = bars[i].trade_date;
+      const tick = el("span", { class: "pc-tick" }, long ? date.slice(0, 7) : date.slice(5));
+      tick.style.left = `${n === 1 ? 0 : (i / (n - 1)) * 100}%`;
+      if (k === 0) tick.classList.add("pc-tick-first");
+      else if (k === count - 1) tick.classList.add("pc-tick-last");
+      ticks.push(tick);
+    }
+    axis.replaceChildren(...ticks);
+  }
+
   function showEmpty(text) {
+    axis.replaceChildren();
     latest.replaceChildren();
     stage.replaceChildren(el("p", { class: "faint" }, text));
   }
@@ -105,6 +124,7 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
     lastDot.style.left = "100%";
     lastDot.style.top = `${(py(last.close) / H) * 100}%`;
     stage.replaceChildren(root, cross, dot, lastDot, tip);
+    drawAxis(bars);
 
     function show(event) {
       const rect = stage.getBoundingClientRect();

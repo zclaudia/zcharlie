@@ -1010,3 +1010,8 @@ a.stock-name:hover { color: var(--c-accent); }
 .alert-link { flex: none; font-size: var(--fs-sm); white-space: nowrap; }
 .alerts-more { display: block; margin: var(--sp-1) 0 0; padding: 2px 0; border: 0; background: none; color: var(--c-accent); font-size: var(--fs-sm); cursor: pointer; }
 .health-warnings .alerts { margin: 6px 0; }
+
+.pc-axis { position: relative; height: 1.4rem; margin-top: 2px; border-top: 1px solid var(--c-line); }
+.pc-tick { position: absolute; top: 4px; transform: translateX(-50%); font-size: var(--fs-xs); color: var(--c-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pc-tick-first { transform: none; }
+.pc-tick-last { transform: translateX(-100%); }
