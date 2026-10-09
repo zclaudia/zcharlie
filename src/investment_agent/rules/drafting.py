@@ -334,7 +334,15 @@ def template_input(template: RuleTemplate) -> dict[str, Any]:
                 "holding_zones",
                 "params",
                 "param_ranges",
+                "param_meta",
+                "thesis",
+                "fits",
+                "avoids",
+                "risks",
+                "falsification",
+                "horizon",
             )
+            if key in data
         },
     }
 

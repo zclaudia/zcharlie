@@ -17,6 +17,17 @@ factor existence, op/value agreement, parameter ranges, zone names, industry
 groups - live in :mod:`investment_agent.rules.validation`, which aggregates
 every problem into one typed error.
 
+**Authoring metadata (template format v3).** Templates also carry what used
+to live in YAML comments, so the UI and the drafting agent can read it:
+strategy notes (``thesis``, ``fits``, ``avoids``, ``risks``,
+``falsification``, ``horizon``, ``examples``), per-condition ``label`` /
+``why`` / ``data_note``, and per-parameter ``label`` / ``help``
+(``param_meta``). A template file may write a parameter as
+``{default, range: [min, max], label, help}``; it is split into ``params`` /
+``param_ranges`` / ``param_meta`` on load, so the stored canonical form keeps
+the two flat maps every consumer reads. Unset metadata is ``None`` and is
+dropped from the canonical form, so a template without it hashes as before.
+
 **Canonical form.** :func:`canonical_definition` dumps a model with sorted
 keys, ``all`` / ``any`` aliases, ``None`` fields dropped and every non-bool
 number as a float (``20`` and ``20.0`` are the same rule). Its SHA-256
@@ -85,6 +96,12 @@ class Condition(_Model):
     factor: str
     op: str
     value: ConditionValue
+    label: str | None = None
+    """Short Chinese name of what the condition tests (e.g. 竞争优势)."""
+    why: str | None = None
+    """Why the condition is in the rule."""
+    data_note: str | None = None
+    """Known data caveat (proxy field, provider-only factor ...)."""
 
 
 def _node_kind(raw: Any) -> str:
@@ -130,6 +147,51 @@ class ParamRange(_Model):
     max: float
 
 
+class ParamMeta(_Model):
+    label: str
+    help: str | None = None
+
+
+class TemplateExample(_Model):
+    ticker: str
+    note: str | None = None
+
+
+def _split_param_specs(data: Any) -> Any:
+    """``params: {name: {default, range, label, help}}`` -> the flat maps."""
+
+    if not isinstance(data, Mapping):
+        return data
+    params = data.get("params")
+    if not isinstance(params, Mapping) or not any(isinstance(v, Mapping) for v in params.values()):
+        return data
+    if not all(isinstance(v, Mapping) for v in params.values()):
+        raise ValueError("params must be all numbers or all {default, range, label} mappings")
+    if data.get("param_ranges") or data.get("param_meta"):
+        raise ValueError(
+            "param_ranges / param_meta must not be given when params use the "
+            "{default, range, label} form"
+        )
+    defaults: dict[str, Any] = {}
+    ranges: dict[str, Any] = {}
+    meta: dict[str, Any] = {}
+    for name, spec in params.items():
+        unknown = set(spec) - {"default", "range", "label", "help"}
+        if unknown:
+            raise ValueError(f"params.{name}: unknown keys {sorted(unknown)}")
+        if "default" not in spec:
+            raise ValueError(f"params.{name}: missing 'default'")
+        defaults[name] = spec["default"]
+        bounds = spec.get("range")
+        if bounds is not None:
+            if not isinstance(bounds, list | tuple) or len(bounds) != 2:
+                raise ValueError(f"params.{name}.range must be [min, max]")
+            ranges[name] = {"min": bounds[0], "max": bounds[1]}
+        if spec.get("label") is not None or spec.get("help") is not None:
+            meta[name] = {"label": spec.get("label") or "", "help": spec.get("help")}
+    return {**data, "params": defaults, "param_ranges": ranges, "param_meta": meta or None}
+
+
 class RuleTemplate(_Model):
     """Template layer (funnel design 5.1): one strategy archetype."""
 
@@ -145,6 +207,20 @@ class RuleTemplate(_Model):
     params: dict[str, float] = Field(default_factory=dict)
     param_ranges: dict[str, ParamRange] = Field(default_factory=dict)
     calibration_status: CalibrationStatus = "uncalibrated"
+    param_meta: dict[str, ParamMeta] | None = None
+    # Strategy notes (authoring metadata; see module docstring).
+    thesis: str | None = None
+    fits: list[str] | None = None
+    avoids: list[str] | None = None
+    risks: list[str] | None = None
+    falsification: str | None = None
+    horizon: str | None = None
+    examples: list[TemplateExample] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _param_specs(cls, data: Any) -> Any:
+        return _split_param_specs(data)
 
     @property
     def ref(self) -> str:

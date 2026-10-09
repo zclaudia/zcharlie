@@ -1,28 +1,20 @@
-# 红利蓝筹 (dividend blue chip) - template v2 (user review P1-F2, 2026-10-07).
+# 红利蓝筹 (dividend blue chip) - template v2 (user review P1-F2, 2026-10-07);
+# format v3 (2026-10-09): strategy notes, condition labels and parameter
+# labels moved out of comments into fields.
 #
 # Source archetype: research_kernel classify_stock "dividend_blue_chip"
 # (dividend industries 公用事业/银行/运营商/电力/高速, market cap >= 3000亿,
 # dividend yield >= 2.5%, positive FCF) and its scoring weights (FCF 25,
 # dividend yield 20, ROE stability 20, debt 15, valuation 15, growth 5).
 #
-# "Able and willing to pay" = regulated / bank industry groups + scale +
-# stable ROE + non-shrinking profit + low volatility + a trailing dividend
-# yield floor; "cheap" = the 5-year PB percentile (banks are valued on PB;
-# their PE percentiles are distorted by shrinking earnings).
-#
 # v2 (review 2026-10-07):
 # * Q1: groups stay utility + banking (no insurance / broker).
-# * Q2: `dividend_yield_ttm >= $dividend_yield_min` (trailing 365-day
-#   pre-tax cash dividends / close, baostock dividend events). Default 3.0%
-#   (archetype 2.5%; utility median 3.6%, bank median 4.8% on 2026-09-30).
-#   drop gains a yield floor (`dividend_yield_ttm < $drop_dividend_yield_max`,
-#   2%): the dividend thesis is gone. buy_zone stays PB-only: for a stable
-#   payout a low PB percentile already means a high yield vs its own history.
-# * Q6: ROE is bounded above (`roe between [$roe_min, $roe_max]`, 40%).
+# * Q2: trailing dividend yield floor, default 3.0% (archetype 2.5%; utility
+#   median 3.6%, bank median 4.8% on 2026-09-30); drop gains a 2% yield
+#   floor. buy_zone stays PB-only.
+# * Q6: ROE is bounded above (40%).
 # * Q7: airports / ports are utility now (600009, 600018, 601018 reach this
 #   template).
-#
-# debt_ratio is not_applicable for banks; it stays in exit_review only.
 id: dividend_blue_chip
 name: 红利蓝筹
 description: >-
@@ -31,92 +23,110 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [utility, banking]
 
+thesis: >-
+  规模大、盈利稳定、持续分红的公用事业与银行，在 PB 处于自身 5 年区间
+  下半部时，以股息为主要回报来源。
+fits:
+  - 电力、高速、机场港口等受监管的公用事业
+  - 盈利稳定、分红持续的银行
+avoids:
+  - 保险、券商（评审 Q1 未纳入）
+  - 利润持续萎缩、分红难以为继的公司
+risks:
+  - 利润下滑导致分红削减
+  - 利率上行压低红利资产估值
+  - 银行的 PE 分位会被利润萎缩扭曲，因此估值只看 PB
+falsification: 盈利跌破下限、利润明显萎缩或负债率失控，说明分红能力与意愿不再可靠。
+horizon: 3 年以上
+
 screen:
   all:
-    # Scale: blue chips only (archetype used 3000亿 as a fit bonus; 1000亿
-    # keeps mid-size regional utilities and city banks in view).
-    - {factor: market_cap, op: ">=", value: "$market_cap_min"}
-    # Profitability floor: banks' median ROE is ~9%, utilities ~10%; capped
-    # against equity-base artefacts (review Q6).
-    - {factor: roe, op: between, value: ["$roe_min", "$roe_max"]}
-    # Payout capacity proxy: 4 annual ROEs with low dispersion.
-    - {factor: roe_stability, op: ">=", value: "$roe_stability_min"}
-    # Earnings must not be shrinking (dividend sustainability proxy).
-    - {factor: net_profit_growth_3y, op: ">=", value: "$profit_growth_min"}
-    # Defensive price behaviour.
-    - {factor: volatility_1y, op: "<=", value: "$volatility_max"}
-    # Shareholder return: trailing 365-day cash dividend yield (review Q2).
-    - {factor: dividend_yield_ttm, op: ">=", value: "$dividend_yield_min"}
-    # Valuation: lower part of the stock's own 5-year PB range.
-    - {factor: pb_percentile_5y, op: "<=", value: "$pb_pct_max"}
+    - factor: market_cap
+      op: ">="
+      value: "$market_cap_min"
+      label: 蓝筹规模
+      why: 原型以 3000 亿为加分项；1000 亿可以保留中型地方公用事业与城商行。
+    - factor: roe
+      op: between
+      value: ["$roe_min", "$roe_max"]
+      label: 盈利底线
+      why: 银行 ROE 中位数约 9%，公用事业约 10%；上限防净资产塌缩造成的虚高（评审 Q6）。
+    - factor: roe_stability
+      op: ">="
+      value: "$roe_stability_min"
+      label: 派息能力
+      why: 4 个年度 ROE 波动小，作为持续派息能力的代理。
+    - factor: net_profit_growth_3y
+      op: ">="
+      value: "$profit_growth_min"
+      label: 利润不萎缩
+      why: 分红可持续性的代理。
+    - factor: volatility_1y
+      op: "<="
+      value: "$volatility_max"
+      label: 走势稳健
+      why: 防御型的价格表现。
+    - factor: dividend_yield_ttm
+      op: ">="
+      value: "$dividend_yield_min"
+      label: 股息率
+      why: 股东回报：近 365 天税前现金分红 / 收盘价（评审 Q2）。
+      data_note: 来自 baostock 分红事件。
+    - factor: pb_percentile_5y
+      op: "<="
+      value: "$pb_pct_max"
+      label: 估值不贵
+      why: 处于自身 5 年 PB 区间下半部；银行按 PB 估值。
 
 candidate_zones:
   buy_zone:
     all:
-      # Actionable when PB sits in the bottom third of its 5-year range.
-      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max"}
+      - factor: pb_percentile_5y
+        op: "<="
+        value: "$buy_pb_pct_max"
+        label: PB 进入低位
+        why: PB 落在自身 5 年区间下三分之一；分红稳定时低 PB 分位即意味着相对高股息。
   drop:
     any:
-      # Valuation has normalised: no longer a value entry.
-      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min"}
-      # Profitability broke below the floor.
-      - {factor: roe, op: "<", value: "$drop_roe_max"}
-      # Earnings started shrinking materially.
-      - {factor: net_profit_growth_3y, op: "<", value: -0.10}
-      # The dividend thesis is gone: trailing yield below the floor.
-      - {factor: dividend_yield_ttm, op: "<", value: "$drop_dividend_yield_max"}
+      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min", label: 估值已修复}
+      - {factor: roe, op: "<", value: "$drop_roe_max", label: 盈利跌破底线}
+      - {factor: net_profit_growth_3y, op: "<", value: -0.10, label: 利润明显萎缩}
+      - {factor: dividend_yield_ttm, op: "<", value: "$drop_dividend_yield_max", label: 股息率过低, why: 红利逻辑不再成立。}
 
 holding_zones:
   add:
     all:
-      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max"}
-      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max", label: PB 低位}
+      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: P2 仓位因子，P1 不执行}
   trim:
     any:
-      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min"}
-      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
+      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min", label: 估值高位}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: P2 仓位因子，P1 不执行}
   exit_review:
     any:
-      # Falsification: profitability or earnings trend broken.
-      - {factor: roe, op: "<", value: "$exit_roe_max"}
-      - {factor: net_profit_growth_3y, op: "<", value: -0.15}
-      # Leverage blow-out (non-financials only; banks: not_applicable).
-      - {factor: debt_ratio, op: ">", value: 0.85}
+      - {factor: roe, op: "<", value: "$exit_roe_max", label: 盈利恶化, why: 证伪：盈利能力被打破。}
+      - {factor: net_profit_growth_3y, op: "<", value: -0.15, label: 利润大幅萎缩, why: 证伪：利润趋势被打破。}
+      - {factor: debt_ratio, op: ">", value: 0.85, label: 负债过高, why: 杠杆失控。, data_note: 银行不适用（not_applicable），只对非金融企业生效。}
 
 params:
-  market_cap_min: 1.0e+11
-  roe_min: 0.08
-  roe_max: 0.40
-  roe_stability_min: 0.80
-  profit_growth_min: -0.05
-  volatility_max: 0.30
-  dividend_yield_min: 0.030
-  pb_pct_max: 0.50
-  buy_pb_pct_max: 0.30
-  drop_pb_pct_min: 0.80
-  drop_roe_max: 0.06
-  drop_dividend_yield_max: 0.020
-  add_pb_pct_max: 0.20
-  add_weight_max: 0.10
-  trim_pb_pct_min: 0.90
-  trim_weight_min: 0.15
-  exit_roe_max: 0.05
-
-param_ranges:
-  market_cap_min: {min: 3.0e+10, max: 5.0e+11}
-  roe_min: {min: 0.05, max: 0.15}
-  roe_max: {min: 0.25, max: 0.60}
-  roe_stability_min: {min: 0.50, max: 0.95}
-  profit_growth_min: {min: -0.15, max: 0.05}
-  volatility_max: {min: 0.20, max: 0.45}
-  dividend_yield_min: {min: 0.020, max: 0.050}
-  pb_pct_max: {min: 0.20, max: 0.80}
-  buy_pb_pct_max: {min: 0.05, max: 0.50}
-  drop_pb_pct_min: {min: 0.60, max: 0.95}
-  drop_roe_max: {min: 0.03, max: 0.10}
-  drop_dividend_yield_max: {min: 0.010, max: 0.030}
-  add_pb_pct_max: {min: 0.05, max: 0.40}
-  add_weight_max: {min: 0.02, max: 0.20}
-  trim_pb_pct_min: {min: 0.70, max: 0.99}
-  trim_weight_min: {min: 0.08, max: 0.30}
-  exit_roe_max: {min: 0.02, max: 0.08}
+  market_cap_min: {default: 1.0e+11, range: [3.0e+10, 5.0e+11], label: 市值下限}
+  roe_min: {default: 0.08, range: [0.05, 0.15], label: ROE 下限}
+  roe_max: {default: 0.40, range: [0.25, 0.60], label: ROE 上限, help: 防净资产塌缩造成的虚高。}
+  roe_stability_min: {default: 0.80, range: [0.50, 0.95], label: ROE 稳定性下限}
+  profit_growth_min: {default: -0.05, range: [-0.15, 0.05], label: 3 年利润增速下限}
+  volatility_max: {default: 0.30, range: [0.20, 0.45], label: 年化波动率上限}
+  dividend_yield_min:
+    default: 0.030
+    range: [0.020, 0.050]
+    label: 股息率下限
+    help: 原型 2.5%；2026-09-30 公用事业中位数 3.6%，银行 4.8%。
+  pb_pct_max: {default: 0.50, range: [0.20, 0.80], label: PB 5 年分位上限}
+  buy_pb_pct_max: {default: 0.30, range: [0.05, 0.50], label: 可研究区间 PB 分位上限}
+  drop_pb_pct_min: {default: 0.80, range: [0.60, 0.95], label: 移出候选 PB 分位}
+  drop_roe_max: {default: 0.06, range: [0.03, 0.10], label: 移出候选 ROE}
+  drop_dividend_yield_max: {default: 0.020, range: [0.010, 0.030], label: 移出候选股息率}
+  add_pb_pct_max: {default: 0.20, range: [0.05, 0.40], label: 持仓 add 区间 PB 分位上限}
+  add_weight_max: {default: 0.10, range: [0.02, 0.20], label: 持仓 add 区间仓位上限}
+  trim_pb_pct_min: {default: 0.90, range: [0.70, 0.99], label: 持仓 trim 区间 PB 分位}
+  trim_weight_min: {default: 0.15, range: [0.08, 0.30], label: 持仓 trim 区间仓位}
+  exit_roe_max: {default: 0.05, range: [0.02, 0.08], label: 复核 ROE 线}

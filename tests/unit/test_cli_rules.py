@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 
 from investment_agent.storage.database import init_engine
 from investment_agent.storage.models.base import Base
-from tests.unit._rules_support import instance_data, template_data
+from tests.unit._rules_support import documented_template_data, instance_data, template_data
 
 
 @pytest.fixture
@@ -43,10 +43,17 @@ def _write(path: Path, data: dict[str, object]) -> Path:
 def test_validate_template_file(tmp_path: Path) -> None:
     from investment_agent.cli.main import app
 
-    good = _write(tmp_path / "good.yaml", template_data())
+    good = _write(tmp_path / "good.yaml", documented_template_data())
     result = CliRunner().invoke(app, ["rules", "validate", str(good)])
     assert result.exit_code == 0, result.output
     assert "Valid template" in result.output
+
+    # The authoring lint: a template without notes or labels fails validate.
+    bare = _write(tmp_path / "bare.yaml", template_data())
+    result = CliRunner().invoke(app, ["rules", "validate", str(bare)])
+    assert result.exit_code == 1
+    assert "doc_missing" in result.output
+    assert "label_missing" in result.output
 
     data = template_data()
     data["holding_zones"]["sell"] = {"any": [{"factor": "roe", "op": "<", "value": "low"}]}

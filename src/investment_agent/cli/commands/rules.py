@@ -49,7 +49,7 @@ def validate(
     try:
         raw = read_rule_file(file)
         if "template_ref" not in raw:
-            template = load_template_file(file)
+            template = load_template_file(file, require_docs=True)
             rprint(f"[green]Valid template[/green] {template.id} ({template.name})")
             return
         instance_template = _run(lambda: _stored_template(str(raw["template_ref"])))

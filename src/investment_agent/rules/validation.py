@@ -26,8 +26,19 @@ code                        meaning
 ``empty_applicable_groups`` no applicable group
 ``template_ref_mismatch``   instance ``template_ref`` is not ``<id>@<version>``
                             of the template it is validated against
-``invalid_symbol``          instance symbol is not a canonical A-share ticker
+``invalid_symbol``          instance symbol / template example ticker is not
+                            a canonical A-share ticker
+``doc_missing``             authoring: template lacks ``thesis`` /
+                            ``falsification``
+``label_missing``           authoring: a template condition or parameter has
+                            no ``label``
 ==========================  ==================================================
+
+**Authoring checks.** ``doc_missing`` / ``label_missing`` apply only with
+``require_docs=True``: ``ia rules validate`` and the unit test over
+``config/rule_templates``. Runtime loading (template sync before the weekly
+screen) does not enforce them, and stored versions written before the
+metadata existed stay valid.
 
 **Pending factors.** Position factors (``position_weight``, ``gain_vs_cost``,
 ``holding_days``) come from holding snapshots in P2. Templates may already
@@ -76,6 +87,8 @@ IssueCode = Literal[
     "empty_applicable_groups",
     "template_ref_mismatch",
     "invalid_symbol",
+    "doc_missing",
+    "label_missing",
 ]
 
 PENDING_FACTORS: frozenset[str] = frozenset({"position_weight", "gain_vs_cost", "holding_days"})
@@ -165,6 +178,17 @@ class _Checker:
                 self.group(child, child_path, allow_pending=allow_pending, depth=depth + 1)
             else:
                 self.condition(child, child_path, allow_pending=allow_pending)
+
+    def labels(self, group: ConditionGroup, path: str) -> None:
+        """Authoring: every condition in a template tree names what it tests."""
+
+        node_path = f"{path}.{group.mode}"
+        for index, child in enumerate(group.children):
+            child_path = f"{node_path}[{index}]"
+            if isinstance(child, ConditionGroup):
+                self.labels(child, child_path)
+            elif not (child.label and child.label.strip()):
+                self.add("label_missing", child_path, f"condition on {child.factor!r} has no label")
 
     def condition(self, condition: Condition, path: str, *, allow_pending: bool) -> None:
         factor = condition.factor
@@ -276,7 +300,28 @@ def _zones(
                 checker.add("zone_missing", f"{path}.{name}", f"zone {name!r} is not defined")
 
 
-def check_template(template: RuleTemplate, context: RuleContext | None = None) -> list[RuleIssue]:
+def _check_docs(checker: _Checker, template: RuleTemplate) -> None:
+    for name in ("thesis", "falsification"):
+        value = getattr(template, name)
+        if not (value and value.strip()):
+            checker.add("doc_missing", name, f"template has no {name}")
+    meta = template.param_meta or {}
+    for name in sorted(template.params):
+        entry = meta.get(name)
+        if entry is None or not entry.label.strip():
+            checker.add("label_missing", f"params.{name}", "parameter has no label")
+    checker.labels(template.screen, "screen")
+    for path, zones in (
+        ("candidate_zones", template.candidate_zones),
+        ("holding_zones", template.holding_zones),
+    ):
+        for name in sorted(zones):
+            checker.labels(zones[name], f"{path}.{name}")
+
+
+def check_template(
+    template: RuleTemplate, context: RuleContext | None = None, *, require_docs: bool = False
+) -> list[RuleIssue]:
     ctx = context or default_context()
     checker = _Checker(ctx, template.params)
     if not template.applicable_groups:
@@ -304,6 +349,15 @@ def check_template(template: RuleTemplate, context: RuleContext | None = None) -
             )
     for name in sorted(set(template.param_ranges) - set(template.params)):
         checker.add("param_undefined", f"param_ranges.{name}", "range for an undefined param")
+    for name in sorted(set(template.param_meta or {}) - set(template.params)):
+        checker.add("param_undefined", f"param_meta.{name}", "metadata for an undefined param")
+    for index, example in enumerate(template.examples or []):
+        if parse_a_share_ticker(example.ticker) is None:
+            checker.add(
+                "invalid_symbol", f"examples[{index}].ticker", f"{example.ticker!r} is not like 600519.SH"
+            )
+    if require_docs:
+        _check_docs(checker, template)
     checker.group(template.screen, "screen", allow_pending=False)
     _zones(checker, template.candidate_zones, "candidate", "candidate_zones", require_all=True)
     _zones(checker, template.holding_zones, "holding", "holding_zones", require_all=True)
@@ -346,13 +400,17 @@ def _schema_issues(exc: ValidationError) -> list[RuleIssue]:
 
 
 def parse_template(
-    data: Mapping[str, Any], *, context: RuleContext | None = None, source: str | None = None
+    data: Mapping[str, Any],
+    *,
+    context: RuleContext | None = None,
+    source: str | None = None,
+    require_docs: bool = False,
 ) -> RuleTemplate:
     try:
         template = RuleTemplate.model_validate(data)
     except ValidationError as exc:
         raise RuleValidationError(_schema_issues(exc), source=source) from exc
-    issues = check_template(template, context)
+    issues = check_template(template, context, require_docs=require_docs)
     if issues:
         raise RuleValidationError(issues, source=source)
     return template

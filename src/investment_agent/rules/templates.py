@@ -36,8 +36,16 @@ def read_rule_file(path: Path) -> dict[str, Any]:
     return raw
 
 
-def load_template_file(path: Path, *, context: RuleContext | None = None) -> RuleTemplate:
-    return parse_template(read_rule_file(path), context=context, source=str(path))
+def load_template_file(
+    path: Path, *, context: RuleContext | None = None, require_docs: bool = False
+) -> RuleTemplate:
+    """A template file. ``require_docs`` adds the authoring lint (docs and
+    labels; ``ia rules validate``); runtime loading leaves it off so a missing
+    label never blocks the weekly screen."""
+
+    return parse_template(
+        read_rule_file(path), context=context, source=str(path), require_docs=require_docs
+    )
 
 
 def template_files(directory: Path | None = None) -> list[Path]:

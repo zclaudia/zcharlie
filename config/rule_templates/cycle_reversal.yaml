@@ -1,4 +1,6 @@
-# 周期反转 (cycle reversal) - template v2 (user review P1-F2, 2026-10-07).
+# 周期反转 (cycle reversal) - template v2 (user review P1-F2, 2026-10-07);
+# format v3 (2026-10-09): strategy notes, condition labels and parameter
+# labels moved out of comments into fields.
 #
 # Source archetype: research_kernel classify_stock "cycle_reversal" (cycle
 # industries 有色/煤炭/石油/化工/钢铁/航运/能源/矿, 1y max drawdown >= 30%,
@@ -6,17 +8,9 @@
 # 30 = drawdown, cost advantage 25 = ROE, resource reserve 20 = profit
 # growth, balance sheet 15, valuation 10).
 #
-# The screen looks for cyclicals that have been sold off and are cheap
-# against their own 5-year PB history while still earning a positive ROE
-# (cost leaders survive the trough). debt_ratio (balance sheet) stays in
-# drop / exit_review only (balance-sheet stress is a reason to leave, not a
-# screen criterion of the archetype).
-#
-# v2 (review Q6): ROE is bounded above (`roe between [$roe_min, $roe_max]`,
-# default 40%). An ROE far above any cyclical's trough earnings comes from a
-# collapsed equity base after losses (v1 hit 600221 海航控股 at 52.5%), not
-# from a cost advantage. Q7 moved airports / ports to `utility`, so 600009
-# 上海机场 no longer reaches this template.
+# v2 (review Q6): ROE is bounded above (default 40%); v1 hit 600221 海航控股
+# at 52.5% from a collapsed equity base. Q7 moved airports / ports to
+# `utility`, so 600009 上海机场 no longer reaches this template.
 id: cycle_reversal
 name: 周期反转
 description: >-
@@ -25,79 +19,88 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [cyclical]
 
+thesis: >-
+  周期股深度下跌、PB 处在自身 5 年区间低位，而低谷期仍能盈利的成本领先者，
+  在周期回升时有估值修复空间。
+fits:
+  - 有色、煤炭、化工、钢铁、航运等周期行业中的龙头或低成本企业
+avoids:
+  - 低谷期已亏损、靠融资续命的公司
+  - 市值过小、抗风险能力弱的公司
+  - 因亏损导致净资产塌缩、ROE 虚高的公司
+risks:
+  - 周期底部持续时间超预期
+  - 行业供给格局变化，低成本优势消失
+  - 资产负债表在低谷期恶化
+falsification: 转为亏损、负债率过高，或持有超过两年周期仍未回升，说明反转逻辑不成立。
+horizon: 1-3 年（一个周期）
+
 screen:
   all:
-    # Cycle position: a deep sell-off in the last year (archetype: >= 30%).
-    - {factor: max_drawdown_1y, op: ">=", value: "$drawdown_min"}
-    # Cheap vs own cycle history; PB rather than PE (trough earnings
-    # distort PE).
-    - {factor: pb_percentile_5y, op: "<=", value: "$pb_pct_max"}
-    # Cost advantage: still profitable at the trough; an ROE above the cap
-    # signals a shrunken equity base, not a cost leader (review Q6).
-    - {factor: roe, op: between, value: ["$roe_min", "$roe_max"]}
-    # Survivors only: avoid the smallest, most fragile names.
-    - {factor: market_cap, op: ">=", value: "$market_cap_min"}
+    - factor: max_drawdown_1y
+      op: ">="
+      value: "$drawdown_min"
+      label: 周期位置
+      why: 近一年深度下跌（原型 ≥ 30%）。
+    - factor: pb_percentile_5y
+      op: "<="
+      value: "$pb_pct_max"
+      label: 估值低位
+      why: 相对自身周期历史便宜；用 PB 而非 PE，因为低谷盈利会扭曲 PE。
+    - factor: roe
+      op: between
+      value: ["$roe_min", "$roe_max"]
+      label: 成本优势
+      why: 低谷期仍盈利；ROE 超过上限通常是净资产塌缩，不是成本领先（评审 Q6）。
+    - factor: market_cap
+      op: ">="
+      value: "$market_cap_min"
+      label: 规模门槛
+      why: 只看能熬过低谷的幸存者，排除最小、最脆弱的公司。
 
 candidate_zones:
   buy_zone:
     all:
-      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max"}
+      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max", label: PB 进入低位}
   drop:
     any:
-      # The re-rating happened (or the stock left the trough).
-      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min"}
-      # Losses: no longer a cost-advantaged survivor.
-      - {factor: roe, op: "<", value: 0.0}
-      # Balance sheet stress (missing never triggers).
-      - {factor: debt_ratio, op: ">", value: "$drop_debt_ratio_min"}
+      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min", label: 估值已修复, why: 已重估或离开低谷。}
+      - {factor: roe, op: "<", value: 0.0, label: 转为亏损, why: 不再是低谷期的成本领先者。}
+      - {factor: debt_ratio, op: ">", value: "$drop_debt_ratio_min", label: 负债压力, why: 资产负债表承压；数据缺失时不触发。}
 
 holding_zones:
   add:
     all:
-      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max"}
-      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max", label: PB 低位}
+      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: P2 仓位因子，P1 不执行}
   trim:
     any:
-      # Cyclicals are trimmed into strength: valuation back at the top.
-      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min"}
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min"}      # P2 factor
-      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
+      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min", label: 估值回到高位, why: 周期股在强势时减持。}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: P2 仓位因子，P1 不执行}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: P2 仓位因子，P1 不执行}
   exit_review:
     any:
-      - {factor: roe, op: "<", value: "$exit_roe_max"}
-      - {factor: debt_ratio, op: ">", value: 0.85}
-      - {factor: holding_days, op: ">", value: "$exit_holding_days_min"}  # P2: thesis time-box
+      - {factor: roe, op: "<", value: "$exit_roe_max", label: 亏损扩大, why: 证伪：成本优势不在。}
+      - {factor: debt_ratio, op: ">", value: 0.85, label: 负债过高, why: 证伪：资产负债表无法支撑等待。}
+      - {factor: holding_days, op: ">", value: "$exit_holding_days_min", label: 持有超时, why: 反转逻辑的时间上限。, data_note: P2 仓位因子，P1 不执行}
 
 params:
-  drawdown_min: 0.30
-  pb_pct_max: 0.30
-  roe_min: 0.05
-  roe_max: 0.40
-  market_cap_min: 5.0e+10
-  buy_pb_pct_max: 0.15
-  drop_pb_pct_min: 0.60
-  drop_debt_ratio_min: 0.80
-  add_pb_pct_max: 0.10
-  add_weight_max: 0.06
-  trim_pb_pct_min: 0.80
-  trim_gain_min: 0.60
-  trim_weight_min: 0.10
-  exit_roe_max: -0.02
-  exit_holding_days_min: 730
-
-param_ranges:
-  drawdown_min: {min: 0.20, max: 0.60}
-  pb_pct_max: {min: 0.10, max: 0.50}
-  roe_min: {min: 0.0, max: 0.12}
-  roe_max: {min: 0.25, max: 0.60}
-  market_cap_min: {min: 2.0e+10, max: 2.0e+11}
-  buy_pb_pct_max: {min: 0.05, max: 0.30}
-  drop_pb_pct_min: {min: 0.40, max: 0.90}
-  drop_debt_ratio_min: {min: 0.65, max: 0.95}
-  add_pb_pct_max: {min: 0.02, max: 0.25}
-  add_weight_max: {min: 0.02, max: 0.15}
-  trim_pb_pct_min: {min: 0.60, max: 0.98}
-  trim_gain_min: {min: 0.20, max: 2.00}
-  trim_weight_min: {min: 0.05, max: 0.25}
-  exit_roe_max: {min: -0.10, max: 0.05}
-  exit_holding_days_min: {min: 180, max: 1460}
+  drawdown_min: {default: 0.30, range: [0.20, 0.60], label: 近一年最大回撤下限}
+  pb_pct_max: {default: 0.30, range: [0.10, 0.50], label: PB 5 年分位上限}
+  roe_min: {default: 0.05, range: [0.0, 0.12], label: ROE 下限}
+  roe_max:
+    default: 0.40
+    range: [0.25, 0.60]
+    label: ROE 上限
+    help: 远高于周期股低谷盈利的 ROE 多来自亏损后净资产塌缩。
+  market_cap_min: {default: 5.0e+10, range: [2.0e+10, 2.0e+11], label: 市值下限}
+  buy_pb_pct_max: {default: 0.15, range: [0.05, 0.30], label: 可研究区间 PB 分位上限}
+  drop_pb_pct_min: {default: 0.60, range: [0.40, 0.90], label: 移出候选 PB 分位}
+  drop_debt_ratio_min: {default: 0.80, range: [0.65, 0.95], label: 移出候选负债率}
+  add_pb_pct_max: {default: 0.10, range: [0.02, 0.25], label: 持仓 add 区间 PB 分位上限}
+  add_weight_max: {default: 0.06, range: [0.02, 0.15], label: 持仓 add 区间仓位上限}
+  trim_pb_pct_min: {default: 0.80, range: [0.60, 0.98], label: 持仓 trim 区间 PB 分位}
+  trim_gain_min: {default: 0.60, range: [0.20, 2.00], label: 持仓 trim 区间浮盈}
+  trim_weight_min: {default: 0.10, range: [0.05, 0.25], label: 持仓 trim 区间仓位}
+  exit_roe_max: {default: -0.02, range: [-0.10, 0.05], label: 复核 ROE 线}
+  exit_holding_days_min: {default: 730, range: [180, 1460], label: 复核持有天数}

@@ -69,6 +69,44 @@ def template_data(**overrides: Any) -> dict[str, Any]:
     return result
 
 
+def _label_tree(node: Any) -> None:
+    for key in ("all", "any"):
+        for child in node.get(key) or []:
+            if "factor" in child:
+                child.setdefault("label", f"{child['factor']} 条件")
+            else:
+                _label_tree(child)
+
+
+def documented_template_data(**overrides: Any) -> dict[str, Any]:
+    """:func:`template_data` in the v3 authoring form: strategy notes,
+    condition labels and ``{default, range, label}`` parameters."""
+
+    data = template_data()
+    _label_tree(data["screen"])
+    for zones in (data["candidate_zones"], data["holding_zones"]):
+        for zone in zones.values():
+            _label_tree(zone)
+    ranges = data.pop("param_ranges")
+    data["params"] = {
+        name: {
+            "default": default,
+            "range": [ranges[name]["min"], ranges[name]["max"]],
+            "label": f"{name} 标签",
+        }
+        for name, default in data["params"].items()
+    }
+    data.update(
+        thesis="高 ROE、估值不贵的消费公司。",
+        falsification="ROE 跌破复核线。",
+        fits=["品牌消费"],
+        risks=["需求下滑"],
+        examples=[{"ticker": "600519.SH", "note": "测试"}],
+    )
+    data.update(copy.deepcopy(overrides))
+    return data
+
+
 def instance_data(**overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {
         "template_ref": "quality_test@1",

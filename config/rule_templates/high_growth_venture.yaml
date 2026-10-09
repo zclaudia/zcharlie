@@ -1,16 +1,13 @@
-# 高成长风险投资 (high-growth venture) - template v1, kept unchanged by the user review
-# (P1-F2, 2026-10-07: Q5 keeps revenue growth >= 25%; no ROE screen, so no Q6 cap).
+# 高成长风险投资 (high-growth venture) - template v1, kept unchanged by the
+# user review (P1-F2, 2026-10-07: Q5 keeps revenue growth >= 25%; no ROE
+# screen, so no Q6 cap); format v3 (2026-10-09): strategy notes, condition
+# labels and parameter labels moved out of comments into fields.
 #
 # Source archetype: research_kernel classify_stock "high_growth_venture"
 # (venture industries 半导体/AI/机器人/创新药/计算机/电子, 3y revenue growth
 # >= 30%, market cap < 1000亿; always needs review) and its scoring
 # weights (TAM 30 = revenue growth, technical barrier 25 = ROE, team 20,
 # commercialization 15 = profit growth, cash reserve 10 = debt ratio).
-#
-# PE-based factors are missing for loss-makers (negative_earnings), which
-# is common here, so valuation uses the PB percentile. Profit growth is
-# not required (commercialisation may lag); gross margin stands in for the
-# technical barrier. Highest-risk template: position caps are tighter.
 id: high_growth_venture
 name: 高成长风险投资
 description: >-
@@ -19,72 +16,83 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [venture, growth_manufacturing, healthcare]
 
+thesis: >-
+  收入高速增长、毛利率高（技术壁垒）的中小市值科技与医药公司，
+  在估值不处于自身 5 年高位时有高成长带来的上行空间。
+fits:
+  - 软件、互联网、电子与设备、创新药等成长赛道的中小市值公司
+  - 尚未盈利或商业化滞后、但收入快速放量的公司
+avoids:
+  - 已是超大市值的公司
+  - 收入增长来自并购或一次性项目的公司
+risks:
+  - 风险最高的模板，持仓区间的仓位上限比其他模板更紧
+  - 亏损公司没有 PE 类因子（negative_earnings），估值只看 PB
+  - 增长失速时估值回落剧烈
+falsification: 收入增长停滞、毛利率（技术壁垒）被侵蚀或负债率过高，说明成长逻辑不成立。
+horizon: 1-3 年，需频繁复核
+
 screen:
   all:
-    # TAM / traction (archetype: 3y revenue CAGR >= 30%).
-    - {factor: revenue_growth_3y, op: ">=", value: "$revenue_growth_min"}
-    # Technical barrier proxy.
-    - {factor: gross_margin, op: ">=", value: "$gross_margin_min"}
-    # Venture profile: not yet a mega cap (archetype: < 1000亿).
-    - {factor: market_cap, op: "<=", value: "$market_cap_max"}
-    # Not buying at the top of the stock's own PB range.
-    - {factor: pb_percentile_5y, op: "<=", value: "$pb_pct_max"}
+    - factor: revenue_growth_3y
+      op: ">="
+      value: "$revenue_growth_min"
+      label: 高速增长
+      why: 市场空间与增长势头（原型 3 年营收复合增速 ≥ 30%，评审 Q5 保持 25%）。
+    - factor: gross_margin
+      op: ">="
+      value: "$gross_margin_min"
+      label: 技术壁垒
+      why: 毛利率作为技术壁垒的代理。
+    - factor: market_cap
+      op: "<="
+      value: "$market_cap_max"
+      label: 中小市值
+      why: 风险投资画像：尚未成为超大市值（原型 < 1000 亿）。
+    - factor: pb_percentile_5y
+      op: "<="
+      value: "$pb_pct_max"
+      label: 估值不在高位
+      why: 不在自身 PB 区间顶部买入。
+      data_note: 亏损公司 PE 类因子缺失，因此用 PB 分位。
 
 candidate_zones:
   buy_zone:
     all:
-      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max"}
+      - {factor: pb_percentile_5y, op: "<=", value: "$buy_pb_pct_max", label: PB 进入低位}
   drop:
     any:
-      - {factor: revenue_growth_3y, op: "<", value: "$drop_revenue_growth_max"}
-      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min"}
+      - {factor: revenue_growth_3y, op: "<", value: "$drop_revenue_growth_max", label: 增长失速}
+      - {factor: pb_percentile_5y, op: ">", value: "$drop_pb_pct_min", label: 估值过高}
 
 holding_zones:
   add:
     all:
-      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max"}
-      - {factor: position_weight, op: "<", value: "$add_weight_max"}   # P2 factor
+      - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max", label: PB 低位}
+      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: P2 仓位因子，P1 不执行}
   trim:
     any:
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min"}      # P2 factor
-      - {factor: position_weight, op: ">", value: "$trim_weight_min"}  # P2 factor
-      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min"}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: P2 仓位因子，P1 不执行}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: P2 仓位因子，P1 不执行}
+      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min", label: 估值高位}
   exit_review:
     any:
-      # Falsification: growth stalls or the margin (barrier) erodes.
-      - {factor: revenue_growth_3y, op: "<", value: "$exit_revenue_growth_max"}
-      - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max"}
-      # Cash reserve proxy (missing never triggers).
-      - {factor: debt_ratio, op: ">", value: 0.70}
+      - {factor: revenue_growth_3y, op: "<", value: "$exit_revenue_growth_max", label: 增长停滞, why: 证伪：成长不再。}
+      - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max", label: 毛利率被侵蚀, why: 证伪：技术壁垒消失。}
+      - {factor: debt_ratio, op: ">", value: 0.70, label: 负债过高, why: 现金储备的代理；数据缺失时不触发。}
 
 params:
-  revenue_growth_min: 0.25
-  gross_margin_min: 0.30
-  market_cap_max: 1.0e+11
-  pb_pct_max: 0.70
-  buy_pb_pct_max: 0.40
-  drop_revenue_growth_max: 0.10
-  drop_pb_pct_min: 0.90
-  add_pb_pct_max: 0.30
-  add_weight_max: 0.04
-  trim_gain_min: 1.00
-  trim_weight_min: 0.08
-  trim_pb_pct_min: 0.95
-  exit_revenue_growth_max: 0.05
-  exit_gross_margin_max: 0.20
-
-param_ranges:
-  revenue_growth_min: {min: 0.15, max: 0.50}
-  gross_margin_min: {min: 0.15, max: 0.60}
-  market_cap_max: {min: 3.0e+10, max: 3.0e+11}
-  pb_pct_max: {min: 0.30, max: 0.90}
-  buy_pb_pct_max: {min: 0.10, max: 0.60}
-  drop_revenue_growth_max: {min: 0.0, max: 0.20}
-  drop_pb_pct_min: {min: 0.70, max: 0.99}
-  add_pb_pct_max: {min: 0.05, max: 0.50}
-  add_weight_max: {min: 0.01, max: 0.10}
-  trim_gain_min: {min: 0.30, max: 3.00}
-  trim_weight_min: {min: 0.04, max: 0.15}
-  trim_pb_pct_min: {min: 0.80, max: 0.99}
-  exit_revenue_growth_max: {min: -0.10, max: 0.15}
-  exit_gross_margin_max: {min: 0.10, max: 0.40}
+  revenue_growth_min: {default: 0.25, range: [0.15, 0.50], label: 3 年营收增速下限}
+  gross_margin_min: {default: 0.30, range: [0.15, 0.60], label: 毛利率下限}
+  market_cap_max: {default: 1.0e+11, range: [3.0e+10, 3.0e+11], label: 市值上限}
+  pb_pct_max: {default: 0.70, range: [0.30, 0.90], label: PB 5 年分位上限}
+  buy_pb_pct_max: {default: 0.40, range: [0.10, 0.60], label: 可研究区间 PB 分位上限}
+  drop_revenue_growth_max: {default: 0.10, range: [0.0, 0.20], label: 移出候选营收增速}
+  drop_pb_pct_min: {default: 0.90, range: [0.70, 0.99], label: 移出候选 PB 分位}
+  add_pb_pct_max: {default: 0.30, range: [0.05, 0.50], label: 持仓 add 区间 PB 分位上限}
+  add_weight_max: {default: 0.04, range: [0.01, 0.10], label: 持仓 add 区间仓位上限, help: 风险最高的模板，仓位上限更紧。}
+  trim_gain_min: {default: 1.00, range: [0.30, 3.00], label: 持仓 trim 区间浮盈}
+  trim_weight_min: {default: 0.08, range: [0.04, 0.15], label: 持仓 trim 区间仓位}
+  trim_pb_pct_min: {default: 0.95, range: [0.80, 0.99], label: 持仓 trim 区间 PB 分位}
+  exit_revenue_growth_max: {default: 0.05, range: [-0.10, 0.15], label: 复核营收增速线}
+  exit_gross_margin_max: {default: 0.20, range: [0.10, 0.40], label: 复核毛利率线}

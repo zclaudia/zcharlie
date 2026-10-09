@@ -7,6 +7,10 @@
 
 **研究辅助，非投资建议。** 没有下单、模拟盘、自动调仓或任何券商连接路径。
 
+下一阶段设计（尚未实现）：[个人投资 Agent](docs/product/investor-agent-design.md)将产品扩展为
+自主研究、候选发现、买卖与仓位意见、持续复核和复盘；真实交易仍由用户决定和执行。
+实现方案与阶段验收见[技术设计与交付计划](docs/product/investor-agent-architecture.md)。本 README 其余内容描述当前已交付能力。
+
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
 - 持久化：SQLite + Alembic（迁移 `020`）；制品目录 `data/research-runs/<run_id>/`
@@ -265,8 +269,13 @@ ia snapshot backfill --universe CSI300 --status                                 
 
 ## 规则与筛选
 
-- 模板文件 `config/rule_templates/*.yaml`（P1-C2，五个策略原型，`uncalibrated`）；`ia rules validate <file>`
-  离线校验（未知因子、op/值类型、自由文本、参数越界、区间名、行业组，错误一次性汇总），
+- 模板文件 `config/rule_templates/*.yaml`（P1-C2，五个策略原型，`uncalibrated`）。格式 v3 把原先写在注释里的内容变成字段：
+  策略说明 `thesis` / `fits` / `avoids` / `risks` / `falsification` / `horizon` / `examples`，
+  每条条件的 `label` / `why` / `data_note`，参数写成 `{default, range: [min, max], label, help}`
+  （入库时仍拆成 `params` / `param_ranges` / `param_meta`）。`ia rules validate <file>`
+  离线校验（未知因子、op/值类型、自由文本、参数越界、区间名、行业组，错误一次性汇总；
+  另含编写检查：缺 `thesis` / `falsification` 报 `doc_missing`，条件或参数缺 `label` 报 `label_missing`，
+  周筛选的运行时加载不做编写检查），
   `ia rules sync` 按内容哈希入库（`rule_template`，内容变化即升版本，旧版本不改）。
 - 规则实例（`rule_instance`）：`draft → active → retired`，每次修改生成新版本，批准时退役上一 active 版本。
 - 周筛选任务 `screen_run`（每周日 20:00，设置页「调度 · 筛选」）：先同步模板，再对目标池按时点计算因子、
@@ -400,6 +409,8 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 
 ## 文档
 
+- 下一阶段个人投资 Agent 产品设计：[`docs/product/investor-agent-design.md`](docs/product/investor-agent-design.md)
+- 个人投资 Agent 技术设计与交付计划：[`docs/product/investor-agent-architecture.md`](docs/product/investor-agent-architecture.md)
 - 产品与工程基线：[`docs/product/engineering-baseline.md`](docs/product/engineering-baseline.md)
 - 交付路线：[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md)
 - MVP 收口计划：[`docs/product/mvp-completion-plan.md`](docs/product/mvp-completion-plan.md)
