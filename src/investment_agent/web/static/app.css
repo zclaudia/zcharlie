@@ -1015,3 +1015,9 @@ a.stock-name:hover { color: var(--c-accent); }
 .pc-tick { position: absolute; top: 4px; transform: translateX(-50%); font-size: var(--fs-xs); color: var(--c-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pc-tick-first { transform: none; }
 .pc-tick-last { transform: translateX(-100%); }
+.pc-plot { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--sp-2); }
+.pc-yaxis { position: relative; min-width: 3.2rem; }
+.pc-ytick { position: absolute; right: 0; transform: translateY(-50%); font-size: var(--fs-xs); color: var(--c-ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pc-ytick-first { transform: none; }
+.pc-ytick-last { transform: translateY(-100%); }
+.pc-grid { stroke: var(--c-line); stroke-width: 1px; stroke-dasharray: 3 4; }

@@ -35,8 +35,11 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
   const tabs = el("div", { class: "pc-tabs", role: "group", "aria-label": "时间区间" });
   const stage = el("div", { class: "pc-stage" });
   const axis = el("div", { class: "pc-axis", "aria-hidden": "true" });
+  const yaxis = el("div", { class: "pc-yaxis", "aria-hidden": "true" });
+  const plot = el("div", { class: "pc-plot" });
+  plot.append(yaxis, stage, el("div"), axis);
   head.append(latest, tabs);
-  host.replaceChildren(head, stage, axis);
+  host.replaceChildren(head, plot);
   host.removeAttribute("aria-hidden");
 
   const buttons = PRICE_RANGES.map((range) => {
@@ -78,6 +81,7 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
 
   function showEmpty(text) {
     axis.replaceChildren();
+    yaxis.replaceChildren();
     latest.replaceChildren();
     stage.replaceChildren(el("p", { class: "faint" }, text));
   }
@@ -109,6 +113,23 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
       role: "img",
       "aria-label": `${ticker} 近 ${n} 个交易日收盘价曲线`,
     });
+    const yTicks = [];
+    for (let k = 0; k < 4; k += 1) {
+      const value = max - ((max - min) * k) / 3;
+      yTicks.push(value);
+      root.appendChild(
+        svg("line", { class: "pc-grid", x1: 0, x2: W, y1: py(value).toFixed(1), y2: py(value).toFixed(1), "vector-effect": "non-scaling-stroke" })
+      );
+    }
+    yaxis.replaceChildren(
+      ...yTicks.map((value, k) => {
+        const tick = el("span", { class: "pc-ytick" }, price(value));
+        tick.style.top = `${(py(value) / H) * 100}%`;
+        if (k === 0) tick.classList.add("pc-ytick-first");
+        else if (k === yTicks.length - 1) tick.classList.add("pc-ytick-last");
+        return tick;
+      })
+    );
     root.appendChild(
       svg("polyline", {
         class: "pc-line",
