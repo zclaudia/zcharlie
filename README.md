@@ -80,6 +80,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `ia verify` | `status`、`request --ticker [--trigger] [--fields] [--period]`、`run [--now]` | iFinD 按需核对队列与预算（见“iFinD 按需核对”） |
 | `ia research` | `snapshot <ticker> [--as-of] [--industry]`、`ifind <ticker> --industry --report-year` | 单股同步研究：免费源快照（日常，无 iFinD 调用）/ iFinD 深度研究（计入预算）；制品同 API 路径 |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
+| `ia mcp` | `serve [--project-dir]`、`tools` | 只读 MCP server（stdio）与工具清单（见「MCP 只读接入」） |
 
 ## 快照采集
 
@@ -322,6 +323,13 @@ ia snapshot backfill --universe CSI300 --status                                 
 批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
 只有 meaningful change（或数据源切换后的第一次运行）才生成一次 Markdown 通知，baseline 与噪声保持静默。
 快照模式的自选股刷新不需要 `IFIND_PROXY_API_KEY`；未配置时只有显式 `ifind` 的条目失败。
+
+## MCP 只读接入
+
+`ia mcp serve` 以 stdio 向 Claude Desktop 等 MCP 客户端暴露只读工具：自选股、单股时点快照（因子层字段、
+行业、最新日线与报告期、主营构成）、日线、候选与规则、财报事件、数据健康与股票搜索（`ia mcp tools` 列清单，
+资源 `zcharlie://health`）。SQLite 以 `mode=ro` 打开，没有写工具，不加载 LLM、不入队任务；
+Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](docs/product/operations.md)「MCP 只读接入」。
 
 ## 配置
 

@@ -115,7 +115,41 @@
   已生效的个股规则不会被自动改写。模板阈值变更须先回测（P3）。
 - **测试 fixture 重录**：`tools/capture_baostock_fixtures.py`、`tools/capture_golden_fixtures.py`。
 
-## 7. 已知限制
+## 7. MCP 只读接入（D5）
+
+`ia mcp serve` 把本机数据库以 **只读** 方式暴露给 Claude Desktop 等 MCP 客户端（stdio，不开 HTTP 端口）。
+工具清单 `ia mcp tools`：`list_watchlist`、`get_stock_snapshot`、`get_bars`、`list_candidates`、
+`get_candidate`、`get_rule`、`list_earnings_events`、`get_data_health`、`search_stocks`；资源 `zcharlie://health`。
+返回与同名 HTTP 接口字段一致，带 `captured_at` / `provider` / `as_of`。
+
+`claude_desktop_config.json`（macOS：`~/Library/Application Support/Claude/`）片段，路径换成本机 checkout：
+
+```json
+{
+  "mcpServers": {
+    "zcharlie": {
+      "command": "/path/to/zcharlie/.venv/bin/ia",
+      "args": ["mcp", "serve", "--project-dir", "/path/to/zcharlie"],
+      "env": {
+        "API_KEY": "<同 .env>",
+        "DATABASE_URL": "sqlite+aiosqlite:////path/to/zcharlie/data/app.db"
+      }
+    }
+  }
+}
+```
+
+- `--project-dir` 让进程切到 checkout（MCP 客户端不设置工作目录）：`.env`、`config/app.yaml`、交易日历与相对路径的
+  `DATABASE_URL` 都从这里解析；`.env` 已有 `API_KEY` / `DATABASE_URL` 时 `env` 可留空。
+  Docker 部署时数据库在容器卷内，MCP 进程需在宿主机能读到同一文件（或用 `docker compose cp` 取只读副本）。
+- 边界：SQLite 以 `mode=ro` URI 打开并设 `PRAGMA query_only`，没有任何写工具；不加载 LLM 客户端、不入队任务、
+  不推送通知；非 SQLite 的 `DATABASE_URL` 直接拒绝启动。只读连接仍会与 api / worker 共享 WAL 的 `-shm` / `-wal` 文件，
+  这是 SQLite 的正常行为，数据库文件本身不会被改动。
+- 日志走 stderr（Claude Desktop 的 `mcp-server-zcharlie.log`），stdout 只有 JSON-RPC。
+- 验证：重启 Claude Desktop 后，工具面板出现 9 个 `zcharlie` 工具；让助手「列出自选股」「取 600519.SH 最近 120 日收盘」。
+  本机离线自检：把 `initialize` / `tools/list` 的 JSON-RPC 行通过管道送入 `ia mcp serve`。
+
+## 8. 已知限制
 
 - 目标池目前只有沪深 300；baostock 成分只覆盖沪深 300、上证 50、中证 500。
 - 模板全部为 `uncalibrated`，回测校准在 P3。
