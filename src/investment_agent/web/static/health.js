@@ -7,7 +7,7 @@
 
 import { ApiError, get } from "./api.js";
 import { clear, el, errorText, fmt, stockLink } from "./dom.js";
-import { kpi } from "./ui.js";
+import { alertList, kpi } from "./ui.js";
 import {
   INDUSTRY_SYSTEM_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -230,19 +230,22 @@ function renderWarnings(warnings) {
     box.appendChild(el("p", { class: "notice" }, "当前没有数据健康提醒。"));
     return box;
   }
-  for (const warning of warnings) {
-    const level = ["error", "warn"].includes(warning.level) ? warning.level : "info";
-    const notice = el("p", {
-      class: level === "info" ? "notice" : `notice notice-${level}`,
-      role: level === "info" ? null : "alert",
-    });
-    notice.appendChild(el("strong", {}, `${label(LEVEL_LABELS, level)}：`));
-    notice.appendChild(document.createTextNode(fmt(warning.message)));
-    if (warning.section && SECTION_LABELS[warning.section]) {
-      notice.appendChild(document.createTextNode(" "));
-      notice.appendChild(el("a", { href: `#health-${warning.section}` }, `查看${SECTION_LABELS[warning.section]}`));
-    }
-    box.appendChild(notice);
+  const alerts = warnings.filter((warning) => ["error", "warn"].includes(warning.level));
+  if (alerts.length) {
+    box.appendChild(
+      alertList(
+        alerts.map((warning) => ({
+          level: warning.level,
+          message: fmt(warning.message),
+          link: warning.section && SECTION_LABELS[warning.section] ? `#health-${warning.section}` : null,
+          linkText: warning.section && SECTION_LABELS[warning.section] ? `查看${SECTION_LABELS[warning.section]} →` : null,
+        })),
+        { title: "数据健康提醒" }
+      )
+    );
+  }
+  for (const warning of warnings.filter((item) => !["error", "warn"].includes(item.level))) {
+    box.appendChild(el("p", { class: "notice" }, `${label(LEVEL_LABELS, "info")}：${fmt(warning.message)}`));
   }
   return box;
 }

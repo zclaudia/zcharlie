@@ -37,7 +37,7 @@ import {
   pathLabel,
   scoreFactorLabel,
 } from "./research_format.js";
-import { aiStamp, bar, fillSparklines, ring } from "./ui.js";
+import { aiStamp, alertList, bar, fillSparklines, ring } from "./ui.js";
 import { mountPriceChart } from "./pricechart.js";
 
 // ---- 今日概览 ---------------------------------------------------------
@@ -97,14 +97,17 @@ async function loadDashboard(region, data) {
   if (!sections.length && !warnings.length) {
     container.appendChild(el("p", { class: "notice" }, "今日无待处理的研究运行。"));
   }
-  for (const warning of warnings) {
-    const level = warning.level === "error" ? "error" : "warn";
-    const notice = el("p", { class: `notice notice-${level}`, role: "alert" }, fmt(warning.message));
-    if (typeof warning.link === "string" && warning.link.startsWith("/app/")) {
-      notice.appendChild(document.createTextNode(" "));
-      notice.appendChild(el("a", { href: warning.link }, "查看数据健康"));
-    }
-    container.appendChild(notice);
+  if (warnings.length) {
+    container.appendChild(
+      alertList(
+        warnings.map((warning) => ({
+          level: warning.level === "error" ? "error" : "warn",
+          message: fmt(warning.message),
+          link: typeof warning.link === "string" && warning.link.startsWith("/app/") ? warning.link : null,
+          linkText: "查看数据健康 →",
+        }))
+      )
+    );
   }
   for (const [title, bucket] of sections) {
     container.appendChild(

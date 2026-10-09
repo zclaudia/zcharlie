@@ -992,3 +992,21 @@ a.stock-name:hover { color: var(--c-accent); }
 .pc-tip.pc-tip-left { transform: translateX(calc(-100% - 10px)); }
 .pc-tip-close { font-weight: 700; font-variant-numeric: tabular-nums; }
 .pc-tip-date { color: var(--c-ink-3); }
+
+/* ---- 提醒列表：一张卡收纳 warn / error，色彩只落在小圆点与计数上 ---- */
+.alerts { margin: var(--sp-2) 0; padding: var(--sp-2) var(--sp-3); background: var(--c-surface); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+.alerts-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding-bottom: var(--sp-1); }
+.alerts-count { font-size: var(--fs-xs); padding: 1px 8px; border-radius: 999px; }
+.alerts-count-error, .alerts-count-warn { color: var(--c-warn); background: var(--c-warn-soft); }
+.alerts-list { list-style: none; margin: 0; padding: 0; }
+.alert-row { display: flex; align-items: flex-start; gap: var(--sp-2); padding: var(--sp-2) 0; border-top: 1px solid var(--c-line); }
+.alert-row[hidden] { display: none; }
+.alert-dot { flex: none; width: 8px; height: 8px; margin-top: 0.55em; border-radius: 50%; background: var(--c-warn); }
+.alert-error .alert-dot { background: #d92d20; box-shadow: 0 0 0 3px color-mix(in srgb, #d92d20 18%, transparent); }
+.alert-body { flex: 1 1 auto; min-width: 0; }
+.alert-title { font-weight: 600; overflow-wrap: anywhere; }
+.alert-detail { margin-top: 2px; font-size: var(--fs-sm); color: var(--c-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.alert-detail.is-open { white-space: normal; overflow-wrap: anywhere; }
+.alert-link { flex: none; font-size: var(--fs-sm); white-space: nowrap; }
+.alerts-more { display: block; margin: var(--sp-1) 0 0; padding: 2px 0; border: 0; background: none; color: var(--c-accent); font-size: var(--fs-sm); cursor: pointer; }
+.health-warnings .alerts { margin: 6px 0; }

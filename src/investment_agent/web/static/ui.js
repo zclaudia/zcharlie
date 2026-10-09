@@ -281,3 +281,65 @@ export function fractionDomain(values, base = [0, 1]) {
   const pad = (max - min) * 0.04;
   return [min === base[0] ? min : min - pad, max === base[1] ? max : max + pad];
 }
+
+// 提醒列表：一张卡片收纳全部 warn / error，替代逐条整行色块。
+// items: [{level: "error"|"warn", message, link?, linkText?}]；错误在前，默认只露 3 条。
+// 消息按第一个"："拆成标题与细节，细节默认单行省略，点击展开。
+const ALERT_VISIBLE = 3;
+
+function splitAlert(message) {
+  const text = String(message ?? "");
+  const match = /[：:]\s*/.exec(text);
+  if (!match || match.index < 4 || match.index + match[0].length >= text.length) return [text, ""];
+  return [text.slice(0, match.index), text.slice(match.index + match[0].length)];
+}
+
+export function alertList(items, { title = "需要关注" } = {}) {
+  const sorted = [...items].sort((a, b) => (a.level === "error" ? 0 : 1) - (b.level === "error" ? 0 : 1));
+  const errors = sorted.filter((item) => item.level === "error").length;
+  const box = el("section", { class: "alerts", "aria-label": title });
+  const head = el("div", { class: "alerts-head" });
+  head.appendChild(el("strong", {}, title));
+  if (errors) head.appendChild(el("span", { class: "alerts-count alerts-count-error" }, `${errors} 个错误`));
+  if (sorted.length - errors) head.appendChild(el("span", { class: "alerts-count alerts-count-warn" }, `${sorted.length - errors} 个提醒`));
+  box.appendChild(head);
+  const list = el("ul", { class: "alerts-list" });
+  const rows = sorted.map((item, index) => {
+    const row = el("li", { class: `alert-row alert-${item.level === "error" ? "error" : "warn"}`, role: "alert" });
+    row.appendChild(el("span", { class: "alert-dot", "aria-hidden": "true" }));
+    const body = el("div", { class: "alert-body" });
+    const [heading, detail] = splitAlert(item.message);
+    body.appendChild(el("div", { class: "alert-title" }, heading));
+    if (detail) {
+      const detailNode = el("div", { class: "alert-detail", title: "点击展开 / 收起", tabindex: "0" }, detail);
+      const toggle = () => detailNode.classList.toggle("is-open");
+      detailNode.addEventListener("click", toggle);
+      detailNode.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle();
+        }
+      });
+      body.appendChild(detailNode);
+    }
+    row.appendChild(body);
+    if (item.link) row.appendChild(el("a", { class: "alert-link", href: item.link }, item.linkText || "详情 →"));
+    if (index >= ALERT_VISIBLE) row.hidden = true;
+    list.appendChild(row);
+    return row;
+  });
+  box.appendChild(list);
+  if (rows.length > ALERT_VISIBLE) {
+    const more = el("button", { type: "button", class: "alerts-more", "aria-expanded": "false" }, `展开其余 ${rows.length - ALERT_VISIBLE} 条`);
+    more.addEventListener("click", () => {
+      const open = more.getAttribute("aria-expanded") !== "true";
+      rows.forEach((row, index) => {
+        if (index >= ALERT_VISIBLE) row.hidden = !open;
+      });
+      more.setAttribute("aria-expanded", open ? "true" : "false");
+      more.textContent = open ? "收起" : `展开其余 ${rows.length - ALERT_VISIBLE} 条`;
+    });
+    box.appendChild(more);
+  }
+  return box;
+}
