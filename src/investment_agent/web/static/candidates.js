@@ -40,6 +40,7 @@ import {
   templateLabel,
 } from "./format.js";
 import { humanizeText } from "./research_format.js";
+import { mountPriceChart } from "./pricechart.js";
 import { aiStamp, fillSparklines, kpi, legend, scale, timeline } from "./ui.js";
 
 export const CANDIDATE_REGIONS = new Set(["candidates-list", "candidate-detail"]);
@@ -1374,6 +1375,12 @@ async function loadCandidateDetail() {
     const candidate = await get(`/candidates/${encodeURIComponent(id)}`);
     detailState.candidate = candidate;
     renderHeader(candidate);
+    const chartHost = section("candidate-price-chart");
+    if (chartHost) {
+      mountPriceChart(chartHost, candidate.ticker, (ticker, days) => get(`/market/${encodeURIComponent(ticker)}/bars?days=${days}`), {
+        title: section("candidate-price-title"),
+      });
+    }
     renderReasons(candidate);
     renderRule(candidate);
     renderActions(candidate);

@@ -38,6 +38,7 @@ import {
   scoreFactorLabel,
 } from "./research_format.js";
 import { aiStamp, bar, fillSparklines, ring } from "./ui.js";
+import { mountPriceChart } from "./pricechart.js";
 
 // ---- 今日概览 ---------------------------------------------------------
 
@@ -117,7 +118,6 @@ async function loadDashboard(region, data) {
 
 // 日线迷你图（B3）：占位先渲染，再按行异步替换；只画收盘价，不评判。
 const SPARK_DAYS = 120;
-const STOCK_SPARK_DAYS = 240;
 
 function loadBars(ticker, days) {
   return get(`/market/${encodeURIComponent(ticker)}/bars?days=${days}`);
@@ -910,15 +910,14 @@ async function loadStockHistory(region, snapshots) {
   return snapshots[0];
 }
 
-// 股票页顶部：240 日收盘曲线，与研究快照无关（无快照也画）。
+// 股票页顶部：收盘价曲线（区间可选），与研究快照无关（无快照也画）。
 function loadStockSpark() {
   const host = document.querySelector("#stock-spark");
   if (!host || host.dataset.sparkMounted) return;
   host.dataset.sparkMounted = "1";
   const ticker = host.getAttribute("data-ticker");
   if (!ticker) return;
-  host.replaceChildren(sparkSlot(ticker, "spark-slot-stock"));
-  mountSparklines(host, STOCK_SPARK_DAYS, { width: "100%", height: 80 });
+  mountPriceChart(host, ticker, loadBars, { title: document.querySelector("#stock-spark-title") });
 }
 
 async function loadStockDetail(detailRegion, latestSnapshot) {

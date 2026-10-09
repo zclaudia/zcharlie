@@ -44,7 +44,7 @@ _WINDOW_SLACK_DAYS = 30
 @router.get("/{ticker}/bars", response_model=MarketBarsOut)
 async def market_bars(
     ticker: str,
-    days: Annotated[int, Query(ge=20, le=400)] = 120,
+    days: Annotated[int, Query(ge=20, le=1000)] = 120,
 ) -> MarketBarsOut:
     """Last ``days`` closes known now (oldest first); empty when nothing is stored."""
 

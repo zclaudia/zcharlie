@@ -61,7 +61,7 @@ def test_bars_reject_non_a_share_tickers(api_client, bad: str):
     assert api_client.get(f"/market/{bad}/bars", headers=H).status_code == 422
 
 
-@pytest.mark.parametrize("days", [0, 19, 401, -1])
+@pytest.mark.parametrize("days", [0, 19, 1001, -1])
 def test_bars_days_is_bounded(api_client, days: int):
     assert api_client.get(f"/market/600519.SH/bars?days={days}", headers=H).status_code == 422
 
