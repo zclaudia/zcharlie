@@ -181,6 +181,31 @@ def test_modules_link_without_a_dom(module: str) -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_timestamps_display_in_beijing_time() -> None:
+    inputs = [
+        "2026-10-09T16:09:43Z",  # UTC -> next day, 00:09
+        "2026-10-09T11:30:00.071583",  # naive values are UTC (SQLite drops the zone)
+        "2026-10-09 11:30:00",
+        "2026-10-09T08:00:00+08:00",  # already Beijing
+        "2026-10-07",  # a trading / data day is a date, never shifted
+        "",
+        "garbage",
+    ]
+    script = (
+        f"const inputs = {json.dumps(inputs)};\n"
+        "console.log(JSON.stringify(inputs.map((v) => [f.formatDateTime(v), f.formatDate(v)])));"
+    )
+    assert _run_format(script) == [
+        ["2026-10-10 00:09", "2026-10-10"],
+        ["2026-10-09 19:30", "2026-10-09"],
+        ["2026-10-09 19:30", "2026-10-09"],
+        ["2026-10-09 08:00", "2026-10-09"],
+        ["2026-10-07", "2026-10-07"],
+        ["—", "—"],
+        ["garbage", "garbage"],
+    ]
+
+
 def test_nominate_form_normalizes_tickers() -> None:
     node = _node()
     uri = (STATIC / "candidates.js").resolve().as_uri()

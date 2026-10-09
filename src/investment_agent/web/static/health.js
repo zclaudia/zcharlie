@@ -13,6 +13,7 @@ import {
   VERIFICATION_STATUS_LABELS,
   VERIFICATION_TRIGGER_LABELS,
   fieldLabel,
+  formatDateTime,
   humanizeDetail,
   label,
 } from "./format.js";
@@ -20,7 +21,6 @@ import {
 export const HEALTH_REGIONS = new Set(["data-health"]);
 
 const ENDPOINT = "/health/data";
-const TIMEZONE = "Asia/Shanghai";
 
 export const KIND_LABELS = Object.freeze({
   universe_sync: "成分同步",
@@ -105,19 +105,7 @@ export function percent(value, digits = 1) {
 
 export function localTime(value) {
   if (typeof value !== "string" || !value) return "—";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  const parts = new Intl.DateTimeFormat("zh-CN", {
-    timeZone: TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(parsed);
-  const pick = (type) => (parts.find((part) => part.type === type) || {}).value || "";
-  return `${pick("year")}-${pick("month")}-${pick("day")} ${pick("hour")}:${pick("minute")}`;
+  return formatDateTime(value);
 }
 
 export function collectionTitle(item) {

@@ -2,6 +2,7 @@
 // 只把已给出的数值画出来，不计算、不评判。
 
 import { el } from "./dom.js";
+import { formatDate } from "./format.js";
 
 // SVG 命名空间（是标识符不是网络地址；拼接以免触发"JS 不含外部 URL"的守卫）。
 const SVG_NS = ["http:", "", "www.w3.org", "2000", "svg"].join("/");
@@ -139,8 +140,8 @@ export function timeline(startIso, endIso, now = new Date()) {
   }
   box.appendChild(root);
   const ends = el("div", { class: "timeline-ends" });
-  ends.appendChild(el("span", {}, `开启 ${String(startIso).slice(0, 10)}`));
-  ends.appendChild(el("span", {}, `到期 ${String(endIso).slice(0, 10)}`));
+  ends.appendChild(el("span", {}, `开启 ${formatDate(String(startIso))}`));
+  ends.appendChild(el("span", {}, `到期 ${formatDate(String(endIso))}`));
   box.appendChild(ends);
   return box;
 }

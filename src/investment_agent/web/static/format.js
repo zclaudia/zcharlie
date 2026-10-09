@@ -237,14 +237,41 @@ export function formatCondition(condition, params, units) {
   };
 }
 
+// 时间一律按北京时间显示。后端时间戳以 UTC 存储：带 Z / 偏移的按其换算，
+// 不带时区的（SQLite 取回的 naive 值）按 UTC 解释；纯日期（交易日、数据日）原样返回，不做换算。
+export const DISPLAY_TIMEZONE = "Asia/Shanghai";
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const HAS_ZONE = /(Z|[+-]\d{2}(:?\d{2})?)$/i;
+const BEIJING_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: DISPLAY_TIMEZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+// "2026-10-09T16:09:43Z" -> {date: "2026-10-10", time: "00:09"}；无法解析返回 null。
+function beijingParts(value) {
+  if (typeof value !== "string" || !value || DATE_ONLY.test(value)) return null;
+  const text = value.trim().replace(" ", "T");
+  const parsed = new Date(HAS_ZONE.test(text) ? text : `${text}Z`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const parts = Object.fromEntries(BEIJING_FORMAT.formatToParts(parsed).map((part) => [part.type, part.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
 export function formatDate(value) {
   if (typeof value !== "string" || !value) return "—";
-  return value.slice(0, 10);
+  const parts = beijingParts(value);
+  return parts ? parts.date : value.slice(0, 10);
 }
 
 export function formatDateTime(value) {
   if (typeof value !== "string" || !value) return "—";
-  return value.slice(0, 16).replace("T", " ");
+  const parts = beijingParts(value);
+  return parts ? `${parts.date} ${parts.time}` : value.slice(0, 16).replace("T", " ");
 }
 
 // 草稿理由：起草 Agent 存 JSON（逐参数理由 / 整体思路 / 复核点）；
