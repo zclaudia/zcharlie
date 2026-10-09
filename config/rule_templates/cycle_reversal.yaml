@@ -19,9 +19,7 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [cyclical]
 
-thesis: >-
-  周期股深度下跌、PB 处在自身 5 年区间低位，而低谷期仍能盈利的成本领先者，
-  在周期回升时有估值修复空间。
+thesis: 周期股深度下跌、PB 处在自身 5 年区间低位，而低谷期仍能盈利的成本领先者，在周期回升时有估值修复空间。
 fits:
   - 有色、煤炭、化工、钢铁、航运等周期行业中的龙头或低成本企业
 avoids:

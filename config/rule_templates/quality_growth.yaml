@@ -19,9 +19,7 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [growth_manufacturing, consumer, healthcare]
 
-thesis: >-
-  高且稳定的 ROE 代表竞争优势，叠加持续的收入与利润增长，长期复利；
-  估值不在自身 5 年区间高位时值得研究。
+thesis: 高且稳定的 ROE 代表竞争优势，叠加持续的收入与利润增长，长期复利；估值不在自身 5 年区间高位时值得研究。
 fits:
   - 制造、消费、医药中有护城河的成长型公司
   - 轻资产、高分红但 ROE 长期稳定的品牌型公司

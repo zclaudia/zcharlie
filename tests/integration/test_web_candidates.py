@@ -163,14 +163,15 @@ def test_ui_has_no_trading_language_or_scores() -> None:
     for name, text in texts.items():
         for word in TRADING_WORDS:
             assert word not in text, (name, word)
-    for name in ("candidates.js", "format.js", "health.js"):
+    for name in ("candidates.js", "format.js", "health.js", "templates.js"):
         source = texts[name]
         assert "score" not in source and "strength" not in source, name
 
 
-def test_modules_link_without_a_dom() -> None:
+@pytest.mark.parametrize("module", ["candidates.js", "templates.js", "pricechart.js"])
+def test_modules_link_without_a_dom(module: str) -> None:
     node = _node()
-    uri = (STATIC / "candidates.js").resolve().as_uri()
+    uri = (STATIC / module).resolve().as_uri()
     result = subprocess.run(
         [node, "--input-type=module", "-e", f"await import({json.dumps(uri)});"],
         capture_output=True,

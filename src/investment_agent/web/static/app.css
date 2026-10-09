@@ -1038,3 +1038,36 @@ a.stock-name:hover { color: var(--c-accent); }
 .price-chg { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
 .price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px var(--sp-3); margin-top: var(--sp-1); font-size: var(--fs-sm); }
 .price-cell { display: flex; justify-content: space-between; gap: var(--sp-2); }
+
+/* ---- 规则模板页（只读） ---- */
+.tpl-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.tpl-card { border: 1px solid var(--c-line); border-radius: var(--r-lg); padding: var(--sp-3) var(--sp-4); background: var(--c-surface); display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.tpl-card:hover { border-color: var(--c-line-strong); }
+.tpl-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
+.tpl-card-head h2 { margin: 0; font-size: var(--fs-lg); }
+.tpl-card-head h2 a { color: var(--c-ink); text-decoration: none; }
+.tpl-card-head h2 a:hover { color: var(--c-accent); }
+.tpl-thesis { margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.tpl-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0; }
+.tpl-chips .chip, .tpl-chips .badge { margin: 0; }
+.tpl-stats { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin: auto 0 0; }
+.tpl-lead { font-size: var(--fs-md, 1.05rem); line-height: 1.7; margin: 0 0 var(--sp-3); }
+.tpl-notes-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); margin-bottom: var(--sp-3); }
+.tpl-notes h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); color: var(--c-ink-2); }
+.tpl-notes ul { margin: 0; padding-left: 1.2em; }
+.tpl-notes li { margin: 2px 0; }
+.tpl-falsify { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--c-warn); background: var(--c-warn-soft); border-radius: var(--r-md); margin-bottom: var(--sp-2); }
+.tpl-conds { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
+.tpl-cond { padding: var(--sp-2) 0; border-top: 1px solid var(--c-line); }
+.tpl-cond:first-child { border-top: 0; }
+.tpl-cond-group > .tpl-conds { margin-left: var(--sp-4); }
+.tpl-cond-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.tpl-cond-text { font-variant-numeric: tabular-nums; }
+.tpl-param-ref { font-size: var(--fs-xs); color: var(--c-ink-3); background: var(--c-surface-2); padding: 0 6px; border-radius: var(--r-sm); }
+.tpl-cond-why { margin: 2px 0 0; color: var(--c-ink-2); font-size: var(--fs-sm); }
+.tpl-cond-note { margin: 2px 0 0; color: var(--c-warn); font-size: var(--fs-xs); }
+.tpl-zone + .tpl-zone { margin-top: var(--sp-3); }
+.tpl-zone h3 { margin: 0; font-size: var(--fs-md, 1rem); }
+.tpl-params td code { display: block; }
+.tpl-params .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.is-current td { background: var(--c-surface-2); }

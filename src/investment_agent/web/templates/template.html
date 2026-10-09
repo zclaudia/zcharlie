@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <p class="small"><a href="/app/templates">← 返回模板列表</a></p>
+  <h1 id="template-title">模板 {{ template_id }}</h1>
+</header>
+<div id="template-detail" class="data-region" data-template-id="{{ template_id }}" aria-live="polite">
+  <p class="notice notice-loading" data-state="loading">正在加载…</p>
+</div>
+{% endblock %}

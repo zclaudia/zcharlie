@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <h1>规则模板</h1>
+  <p class="muted">每个模板是一种策略原型：投资逻辑、进入候选的筛选条件、候选与持仓区间，以及参数的默认值和允许范围。本页只读，显示周筛选实际使用的已入库版本。</p>
+</header>
+<p class="notice notice-warn calibration-banner">
+  <span class="badge badge-uncalibrated">未校准</span> 的模板，默认参数尚未经回测校准，只是假设。
+  模板定义在 <code>config/rule_templates/*.yaml</code>，修改后经 <code>ia rules validate</code> 校验、同步入库后生效。
+</p>
+<div id="templates-list" class="data-region" aria-live="polite">
+  <p class="notice notice-loading" data-state="loading">正在加载…</p>
+</div>
+{% endblock %}

@@ -269,6 +269,30 @@ async def candidate_page(request: Request, candidate_id: str) -> HTMLResponse:
     )
 
 
+@router.get("/templates", response_class=HTMLResponse)
+async def templates_page(request: Request) -> HTMLResponse:
+    return _render("templates.html", request, page_title="规则模板", active_nav="templates")
+
+
+@router.get("/templates/{template_id}", response_class=HTMLResponse)
+async def template_page(request: Request, template_id: str) -> HTMLResponse:
+    if re.fullmatch(r"[a-z][a-z0-9_]{1,63}", template_id) is None:
+        return _render(
+            "error.html",
+            request,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            page_title="无效模板",
+            message=f"不是有效的模板 id：{template_id}",
+        )
+    return _render(
+        "template.html",
+        request,
+        page_title=f"模板 {template_id}",
+        active_nav="templates",
+        template_id=template_id,
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return _render("settings.html", request, page_title="设置", active_nav="settings")

@@ -23,9 +23,7 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [utility, banking]
 
-thesis: >-
-  规模大、盈利稳定、持续分红的公用事业与银行，在 PB 处于自身 5 年区间
-  下半部时，以股息为主要回报来源。
+thesis: 规模大、盈利稳定、持续分红的公用事业与银行，在 PB 处于自身 5 年区间下半部时，以股息为主要回报来源。
 fits:
   - 电力、高速、机场港口等受监管的公用事业
   - 盈利稳定、分红持续的银行

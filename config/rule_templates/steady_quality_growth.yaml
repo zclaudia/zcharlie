@@ -21,9 +21,7 @@ description: >-
 calibration_status: uncalibrated
 applicable_groups: [growth_manufacturing, consumer, healthcare, utility]
 
-thesis: >-
-  盈利持续稳定、中速增长、负债适中、股价波动低的公司，
-  在估值处于自身 5 年区间中低位时，以稳健复利为主要回报。
+thesis: 盈利持续稳定、中速增长、负债适中、股价波动低的公司，在估值处于自身 5 年区间中低位时，以稳健复利为主要回报。
 fits:
   - 消费、医药、制造、公用事业中经营稳定的成熟型公司
 avoids:

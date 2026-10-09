@@ -177,6 +177,7 @@ export function formatFactorValue(value, unit, { precise = true } = {}) {
     return `${fixed(value, 0, false)} 元`;
   }
   if (kind === "CNY/share") return `${fixed(value, 2, !precise)} 元`;
+  if (kind === "days") return `${fixed(value, 0, false)} 天`;
   return trimZeros(value.toFixed(4));
 }
 

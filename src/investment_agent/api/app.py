@@ -122,6 +122,7 @@ def _register_protected_routes(app: FastAPI) -> None:
         data_health,
         market,
         research,
+        rule_templates,
         stocks,
         verification,
         watchlist,
@@ -139,5 +140,6 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(admin.router)
     app.include_router(verification.router)
     app.include_router(settings_routes.router)
+    app.include_router(rule_templates.router)
     for router in candidates.routers:
         app.include_router(router)
