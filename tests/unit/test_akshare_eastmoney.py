@@ -449,10 +449,14 @@ def test_disclosure_schedule_guards():
         {**row, "实际披露时间": "2026-10-12T00:00:00"} if row["股票代码"] == "002107" else row
         for row in table.rows
     )
-    with pytest.raises(LookaheadDataError, match="actual disclosure 2026-10-12"):
-        parse_disclosure_schedule(
-            RawTable(table.columns, published), report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT
-        )
+    # Live 2026-10-09: 002107.SZ published that evening with 实际披露时间 2026-10-10. The
+    # appointment is kept without the actual date (deferred), the rest of the answer too.
+    early = parse_disclosure_schedule(
+        RawTable(table.columns, published), report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT
+    )
+    assert early.appointments["002107.SZ"].actual_date is None
+    assert early.deferred_actual == (("002107.SZ", date(2026, 10, 12)),)
+    assert len(early.appointments) == 14
     parsed = parse_disclosure_schedule(
         RawTable(table.columns, published), report_period=Q3_2026,
         captured_at=datetime(2026, 10, 12, 11, tzinfo=UTC),

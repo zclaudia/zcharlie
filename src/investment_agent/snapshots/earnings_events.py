@@ -488,6 +488,11 @@ async def _collect_schedule(
         "upcoming_disclosures": upcoming[:_MAX_LISTED],
         "upcoming_count": len(upcoming),
         "report_overdue_reconcile": reconcile,
+        "deferred_actual_count": len(answer.deferred_actual),
+        "deferred_actual": [
+            {"ticker": ticker, "actual_date": day.isoformat()}
+            for ticker, day in answer.deferred_actual[:_MAX_LISTED]
+        ],
         "run_id": run_id,
     }
     return report

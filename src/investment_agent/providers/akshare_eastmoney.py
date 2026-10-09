@@ -130,8 +130,10 @@ Point in time: a forecast row whose notice date is after the capture date
 is deferred (not returned, listed in ``ForecastPeriod.deferred``): Eastmoney
 dates notices released in the evening with the next day, and the row is
 picked up by the first capture on or after its notice date. An actual
-disclosure date after the capture date raises :class:`LookaheadDataError`;
-an appointment date is forward looking by nature and may be in the future.
+disclosure date after the capture date is treated the same way: the
+appointment is kept without it (``actual_date=None``, listed in
+``SchedulePeriod.deferred_actual``) and a later capture records it. An
+appointment date is forward looking by nature and may be in the future.
 """
 
 from __future__ import annotations
@@ -1060,6 +1062,8 @@ class SchedulePeriod:
     """Canonical ticker -> appointment."""
     skipped_symbols: tuple[str, ...] = ()
     duplicates: int = 0
+    deferred_actual: tuple[tuple[str, date], ...] = ()
+    """(ticker, actual date) of disclosures dated after the capture date (kept for later)."""
     raw: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
 
     def raw_rows_for(self, tickers: Sequence[str]) -> list[dict[str, Any]]:
@@ -1078,6 +1082,7 @@ def parse_disclosure_schedule(
     appointments: dict[str, DisclosureAppointment] = {}
     skipped: set[str] = set()
     duplicates = 0
+    deferred_actual: list[tuple[str, date]] = []
     for row in table.rows:
         symbol = _symbol_text(row.get("股票代码"))
         ticker = to_canonical_ticker(symbol)
@@ -1095,11 +1100,9 @@ def parse_disclosure_schedule(
         )
         actual = _day(row.get("实际披露时间"), field_name="实际披露时间")
         if actual is not None and actual > capture_date:
-            raise LookaheadDataError(
-                f"akshare {operation}: {ticker} actual disclosure {actual.isoformat()} is after "
-                f"the capture date {capture_date.isoformat()}",
-                provider=PROVIDER,
-            )
+            # Released this evening, dated tomorrow: not disclosed "as of" this capture.
+            deferred_actual.append((ticker, actual))
+            actual = None
         appointments[ticker] = DisclosureAppointment(
             ticker=ticker,
             name=str(row.get("股票简称") or ""),
@@ -1117,6 +1120,7 @@ def parse_disclosure_schedule(
         appointments=dict(sorted(appointments.items())),
         skipped_symbols=tuple(sorted(skipped)),
         duplicates=duplicates,
+        deferred_actual=tuple(sorted(deferred_actual)),
         raw=table.rows,
     )
 
