@@ -1126,6 +1126,9 @@ function requireReason(target, actionName) {
 function renderActions(candidate) {
   const node = section("candidate-actions");
   if (!node) return;
+  // 待处理时整张卡浮在视口底部（同设置页保存条）；已关闭则回到文档流。
+  const card = node.closest("section");
+  if (card) card.classList.toggle("floating-bar", candidate.status === "open");
   if (candidate.status !== "open") {
     renderRegion(node, "empty", `候选${label(CANDIDATE_STATUS_LABELS, candidate.status)}，无需处理。`);
     return;
@@ -1133,10 +1136,15 @@ function renderActions(candidate) {
   const rule = candidate.draft_rule_detail;
   const draftReady = Boolean(rule && rule.status === "draft");
   const box = el("div");
-  const field = el("div", { class: "field" });
-  field.appendChild(el("label", { for: "candidate-reason" }, "理由（忽略候选、驳回草稿必填；晋级可选）"));
-  field.appendChild(el("textarea", { id: "candidate-reason", rows: "3", maxlength: "2000" }));
-  box.appendChild(field);
+  const row = el("div", { class: "floating-bar-row" });
+  row.appendChild(
+    el("input", {
+      id: "candidate-reason",
+      maxlength: "2000",
+      placeholder: "理由（忽略候选、驳回草稿必填；晋级可选）",
+      "aria-label": "处理理由",
+    })
+  );
   const feedback = el("div", { id: "candidate-action-issues", class: "issues", role: "alert" });
 
   const buttons = el("div", { class: "toolbar" });
@@ -1216,7 +1224,8 @@ function renderActions(candidate) {
   buttons.appendChild(promote);
   buttons.appendChild(reject);
   buttons.appendChild(dismiss);
-  box.appendChild(buttons);
+  row.appendChild(buttons);
+  box.appendChild(row);
   if (!draftReady) {
     box.appendChild(el("p", { class: "muted small" }, "没有可审阅的规则草稿：晋级需要先批准一份草稿。"));
   }

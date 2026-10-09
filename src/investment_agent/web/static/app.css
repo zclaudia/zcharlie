@@ -804,7 +804,7 @@ button.small-button { padding: 2px 10px; font-size: var(--fs-sm); }
 .settings-test-result.is-ok { color: var(--c-accent); }
 .settings-test-result.is-error { color: var(--c-warn); }
 /* Floating bar: always reachable at the bottom of the viewport. */
-.settings-savebar {
+.settings-savebar, .floating-bar {
   position: fixed;
   bottom: var(--sp-3);
   left: max(var(--sp-4), calc((100vw - 1120px) / 2 + var(--sp-4)));
@@ -814,7 +814,12 @@ button.small-button { padding: 2px 10px; font-size: var(--fs-sm); }
   border-color: var(--c-line-strong);
   box-shadow: 0 6px 24px rgba(16, 24, 40, 0.18);
 }
-.app-main:has(.settings-savebar:not([hidden])) { padding-bottom: 7rem; }
+.app-main:has(.settings-savebar:not([hidden])), .app-main:has(.floating-bar) { padding-bottom: 7rem; }
+.floating-bar > h2 { display: none; }
+.floating-bar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.floating-bar-row input { flex: 1 1 14rem; min-width: 0; }
+.floating-bar .toolbar { margin: 0; }
+.floating-bar .notice, .floating-bar .small { margin: var(--sp-1) 0 0; }
 .settings-savebar #settings-save-result:empty { display: none; }
 .settings-savebar[hidden] { display: none; }
 .settings-savebar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
