@@ -411,6 +411,7 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 
 - 下一阶段个人投资 Agent 产品设计：[`docs/product/investor-agent-design.md`](docs/product/investor-agent-design.md)
 - 个人投资 Agent 技术设计与交付计划：[`docs/product/investor-agent-architecture.md`](docs/product/investor-agent-architecture.md)
+- 个人投资 Agent 界面 mockup：[`docs/product/investor-agent-ui-mockup.html`](docs/product/investor-agent-ui-mockup.html)
 - 产品与工程基线：[`docs/product/engineering-baseline.md`](docs/product/engineering-baseline.md)
 - 交付路线：[`docs/product/delivery-roadmap.md`](docs/product/delivery-roadmap.md)
 - MVP 收口计划：[`docs/product/mvp-completion-plan.md`](docs/product/mvp-completion-plan.md)
