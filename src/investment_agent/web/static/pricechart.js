@@ -8,6 +8,8 @@ const W = 1000;
 const H = 200;
 const PAD = 6;
 export const PRICE_RANGES = [
+  { label: "7日", days: 7 },
+  { label: "30日", days: 30 },
   { label: "60日", days: 60 },
   { label: "120日", days: 120 },
   { label: "240日", days: 240 },
