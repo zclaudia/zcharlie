@@ -188,6 +188,7 @@ function topReasons(screen) {
 
 function candidateItem(candidate) {
   const item = el("article", { class: "candidate-item", "data-candidate-id": candidate.id });
+  const main = el("div", { class: "candidate-main" });
   const head = el("header", { class: "candidate-head" });
   const title = el("h2", { class: "candidate-title" });
   title.appendChild(
@@ -201,11 +202,14 @@ function candidateItem(candidate) {
   if (candidate.status !== "open") {
     head.appendChild(chip(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
   }
-  // 右上角日线迷你图（B3）：先占位，列表渲染后异步替换。
-  head.appendChild(
-    el("span", { class: "spark spark-pending spark-slot", "data-spark": candidate.ticker, "aria-hidden": "true" })
-  );
-  item.appendChild(head);
+  const refs = Array.isArray(candidate.template_refs) ? candidate.template_refs : [];
+  if (refs.length) {
+    for (const ref of refs) head.appendChild(templateChip(ref));
+  } else {
+    head.appendChild(chip("手动提名", "chip-template"));
+  }
+  head.appendChild(calibrationBadge(candidate.calibration_status));
+  main.appendChild(head);
 
   const screen = candidate.latest_screen;
   const meta = el("p", { class: "candidate-meta muted" });
@@ -213,34 +217,50 @@ function candidateItem(candidate) {
   meta.appendChild(
     el("span", {}, `开启 ${formatDate(candidate.opened_at)} · 到期 ${formatDate(candidate.expires_at)}`)
   );
-  item.appendChild(meta);
+  main.appendChild(meta);
 
-  const templates = el("p", { class: "candidate-templates" });
-  const refs = Array.isArray(candidate.template_refs) ? candidate.template_refs : [];
-  if (refs.length) {
-    for (const ref of refs) templates.appendChild(templateChip(ref));
-  } else {
-    templates.appendChild(chip("手动提名", "chip-template"));
-  }
-  templates.appendChild(calibrationBadge(candidate.calibration_status));
-  item.appendChild(templates);
-
+  // 入选理由放在最显眼的位置：带标题与命中计数的色块。
   const reasons = topReasons(screen);
+  const block = el("div", { class: "candidate-why" });
+  const allReasons = screen && Array.isArray(screen.reasons) ? screen.reasons : [];
+  const met = allReasons.filter((reason) => reason.outcome === "met").length;
+  const whyHead = el("p", { class: "candidate-why-head" });
+  whyHead.appendChild(el("strong", {}, "入选理由"));
+  if (allReasons.length) whyHead.appendChild(el("span", { class: "faint" }, `命中 ${met}/${allReasons.length} 项`));
+  block.appendChild(whyHead);
   if (reasons.length) {
     const list = el("ul", { class: "reason-list" });
     for (const reason of reasons) list.appendChild(el("li", {}, formatReason(reason)));
-    item.appendChild(list);
+    block.appendChild(list);
+    if (allReasons.length > reasons.length) {
+      block.appendChild(
+        el(
+          "a",
+          { class: "candidate-why-more small", href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
+          `另有 ${allReasons.length - reasons.length} 项，查看详情 →`
+        )
+      );
+    }
   } else {
-    item.appendChild(el("p", { class: "muted" }, "无筛选理由（手动提名）。"));
+    block.appendChild(el("p", { class: "muted" }, "无筛选理由（手动提名）。"));
   }
+  main.appendChild(block);
+  item.appendChild(main);
 
+  // 右侧栏：放大的日线 + 草稿 / 核对状态，避免右半边留白。
+  const aside = el("aside", { class: "candidate-aside" });
+  aside.appendChild(
+    el("span", { class: "spark spark-pending spark-slot spark-slot-wide", "data-spark": candidate.ticker, "aria-hidden": "true" })
+  );
+  aside.appendChild(el("p", { class: "faint small candidate-aside-cap" }, `近 ${SPARK_DAYS} 个交易日收盘`));
   const states = el("p", { class: "candidate-states" });
   if (candidate.status === "open") states.appendChild(draftChip(candidate));
   const request = listState.verifications.get(candidate.listing_id);
   states.appendChild(
     chip(verificationText(request), request && UNFINISHED_VERIFICATION.has(request.status) ? "chip-pending" : "")
   );
-  item.appendChild(states);
+  aside.appendChild(states);
+  item.appendChild(aside);
   return item;
 }
 
@@ -259,7 +279,8 @@ function renderCandidateList(region) {
   renderRegion(region, "ready", container);
   fillSparklines(
     container.querySelectorAll("[data-spark]"),
-    (ticker) => get(`/market/${encodeURIComponent(ticker)}/bars?days=${SPARK_DAYS}`)
+    (ticker) => get(`/market/${encodeURIComponent(ticker)}/bars?days=${SPARK_DAYS}`),
+    { width: "100%", height: 72 }
   );
 }
 
