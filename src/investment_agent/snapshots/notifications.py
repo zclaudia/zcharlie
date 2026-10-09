@@ -21,6 +21,7 @@ from investment_agent.snapshots.collect import PROVIDER_STOP_REASON, QUOTA_STOP_
 from investment_agent.snapshots.jobs import (
     CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
+    EARNINGS_EVENT,
     FINANCIAL_SNAPSHOT,
     MARKET_SNAPSHOT,
     SNAPSHOT_KINDS,
@@ -40,6 +41,7 @@ _KIND_LABELS = {
     "snapshot_backfill": "历史回补",
     "dividend_snapshot": "分红快照",
     "close_quote": "收盘快照",
+    "earnings_event": "财报事件",
 }
 _MAX_LISTED = 30
 
@@ -56,7 +58,9 @@ def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
         return None
     if run.status == "failed":
         return "action_required"
-    if run.kind in {MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT, DIVIDEND_SNAPSHOT, CLOSE_QUOTE}:
+    if run.kind in {
+        MARKET_SNAPSHOT, FINANCIAL_SNAPSHOT, DIVIDEND_SNAPSHOT, CLOSE_QUOTE, EARNINGS_EVENT,
+    }:
         if (run.metadata_json or {}).get("stop_reason") in {
             QUOTA_STOP_REASON,
             PROVIDER_STOP_REASON,

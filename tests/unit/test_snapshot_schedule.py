@@ -185,6 +185,7 @@ def test_build_scheduler_registers_snapshot_jobs(monkeypatch):
         "snapshot_close_quote",
         "snapshot_close_quote_retry",
         "snapshot_financial_weekly",
+        "snapshot_earnings_event",
     }
     market = jobs["snapshot_market_snapshot"]
     assert market.misfire_grace_time == runner.MISFIRE_GRACE_SECONDS
@@ -253,7 +254,8 @@ async def test_startup_catches_up_snapshot_jobs_that_fired_today(db_session):
     # deadline jobs already fired today; Monday/Saturday jobs did not.
     caught = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 30, 11, 30, tzinfo=UTC))
     assert set(caught) == {
-        "industry_sync", "market_snapshot", "close_quote", "close_quote_retry", "financial_deadline",
+        "industry_sync", "market_snapshot", "close_quote", "close_quote_retry",
+        "financial_deadline", "earnings_event",
     }
     runs = await _runs()
     assert [run.kind for run in runs] == ["market_snapshot", "close_quote", "close_quote"]

@@ -74,8 +74,17 @@ def test_registry_content_matches_the_coverage_table():
     assert registry.require("revenue_total").fallback == ()
     assert registry.require("eps_basic_fy").formula is not None
     assert {s.table for s in registry} == {
-        "financial", "derived", "market", "report_overdue", "dividend"
+        "financial", "derived", "market", "report_overdue", "dividend", "earnings"
     }
+    # Earnings events (mrd-intake C1) are facts for notifications / drafting: akshare
+    # only, each with a live calibration record.
+    earnings = registry.by_table("earnings")
+    assert {s.name for s in earnings} >= {
+        "forecast_profit_low", "forecast_yoy_high", "segment_revenue", "segment_margin",
+    }
+    for source in earnings:
+        assert source.primary == "akshare" and source.fallback == (), source.name
+        assert "akshare" in source.calibration, source.name
 
 
 @pytest.mark.parametrize(
@@ -127,7 +136,7 @@ def test_free_providers():
 
 def test_registry_definitions_name_units_and_key_fields_are_calibrated():
     registry = default_field_sources()
-    assert registry.version == "2026-10-09.2"
+    assert registry.version == "2026-10-09.3"
     for source in registry:
         assert any(word in source.definition for word in UNIT_WORDS), source.name
     checked = date(2026, 10, 6)

@@ -127,6 +127,7 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "snapshot_backfill",
         "dividend_snapshot",
         "close_quote",
+        "earnings_event",
         "screen_run",
         "rule_draft",
         "ifind_verify",

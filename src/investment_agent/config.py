@@ -169,6 +169,9 @@ class SnapshotScheduleConfig(BaseModel):
     # Also runs the overdue-report scan; evening, so deadline-day reports
     # have reached baostock.
     financial_deadline_cron: str | None = "0 19 * * *"
+    # Eastmoney earnings events (mrd-intake C2): gated to trading days inside
+    # the disclosure-season months (January / April / July / October).
+    earnings_event_cron: str | None = "0 19 * * 1-5"
 
     @model_validator(mode="after")
     def _known_universes(self) -> Self:
@@ -188,6 +191,7 @@ class SnapshotScheduleConfig(BaseModel):
             "close_quote_retry": self.close_quote_retry_cron,
             "financial_weekly": self.financial_weekly_cron,
             "financial_deadline": self.financial_deadline_cron,
+            "earnings_event": self.earnings_event_cron,
         }
 
 

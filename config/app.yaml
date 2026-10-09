@@ -32,6 +32,10 @@ snapshot:
   # gated: first trading day after 04-30/08-31/10-31; also flags overdue
   # reports (report_overdue). Evening, so deadline-day reports reach baostock.
   financial_deadline_cron: "0 19 * * *"
+  # gated: trading day inside the disclosure-season months (1 / 4 / 7 / 10).
+  # Eastmoney 业绩预告 + 预约披露时间 daily (target pool + watchlist +
+  # candidates + holdings); 主营构成 of the user's pools once a week.
+  earnings_event_cron: "0 19 * * 1-5"
 
 # Weekly template screen (P1-C3): one screen_run per universe; the worker
 # syncs config/rule_templates, screens the target pool and stores

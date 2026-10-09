@@ -8,6 +8,7 @@ from investment_agent.storage.models import (  # noqa: F401
     analysis,
     app_settings,
     candidates,
+    earnings_events,
     market_data,
     ops,
     pit_snapshot,

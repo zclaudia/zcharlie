@@ -36,9 +36,9 @@ DEFAULT_FIELD_SOURCES_PATH = (
     Path(__file__).resolve().parents[3] / "config" / "field_sources.yaml"
 )
 
-FieldTable = Literal["financial", "derived", "market", "report_overdue", "dividend"]
+FieldTable = Literal["financial", "derived", "market", "report_overdue", "dividend", "earnings"]
 FIELD_TABLES: frozenset[str] = frozenset(
-    {"financial", "derived", "market", "report_overdue", "dividend"}
+    {"financial", "derived", "market", "report_overdue", "dividend", "earnings"}
 )
 FREE_PROVIDERS: frozenset[str] = frozenset({"baostock", "akshare"})
 """Established free sources; their entries may omit ``calibration``."""

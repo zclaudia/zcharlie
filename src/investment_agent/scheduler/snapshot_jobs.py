@@ -9,6 +9,7 @@
 | close_quote_retry    | Mon-Fri 16:00        | trading day                                  |
 | financial_weekly     | Sat 09:00            | none                                         |
 | financial_deadline   | daily 19:00          | first trading day after 04-30 / 08-31 / 10-31 |
+| earnings_event       | Mon-Fri 19:00        | trading day in Jan / Apr / Jul / Oct           |
 
 Each fire enqueues one job per configured universe (industry: one job for
 the union, syncing both CSRC via baostock and Shenwan 2021 via AkShare) with the default per-date idempotency key, so a misfire catch-up
@@ -37,6 +38,14 @@ Close quotes (mrd-intake B2): ``close_quote`` enqueues one Tencent
 plus the watchlist, open candidates and holdings; ~6 requests for CSI 300);
 ``close_quote_retry`` enqueues the ``slot="retry"`` run of the same date at
 16:00 for listings that were still ``pending`` at 15:10.
+
+Earnings events (mrd-intake C2): ``earnings_event`` fires every trading day
+at 19:00 inside :data:`EARNINGS_WINDOWS` (the whole months of January,
+April, July and October, the disclosure seasons) and enqueues, per universe,
+the Eastmoney 业绩预告 (``part="forecast"``) and 预约披露时间
+(``part="schedule"``) of the latest ended report period; on the first
+trading day of each week it adds the 主营构成 job (``part="segments"``,
+user's pools only, one call per listing).
 """
 
 from __future__ import annotations
@@ -55,6 +64,8 @@ from investment_agent.snapshots.jobs import (
     INDUSTRY_SYSTEMS,
     CloseQuotePayload,
     DividendSnapshotPayload,
+    EarningsEventPart,
+    EarningsEventPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
@@ -74,6 +85,7 @@ SnapshotScheduleJob = Literal[
     "close_quote_retry",
     "financial_weekly",
     "financial_deadline",
+    "earnings_event",
 ]
 SNAPSHOT_SCHEDULE_JOBS: tuple[SnapshotScheduleJob, ...] = (
     "universe_sync",
@@ -83,6 +95,7 @@ SNAPSHOT_SCHEDULE_JOBS: tuple[SnapshotScheduleJob, ...] = (
     "close_quote_retry",
     "financial_weekly",
     "financial_deadline",
+    "earnings_event",
 )
 # Jobs whose gate does not consult the trading calendar.
 CALENDAR_FREE_JOBS = frozenset({"universe_sync", "financial_weekly"})
@@ -97,6 +110,15 @@ CASH_FLOW_WINDOWS: tuple[tuple[tuple[int, int], tuple[int, int]], ...] = (
     ((4, 15), (5, 15)),
     ((8, 15), (9, 15)),
     ((10, 15), (11, 15)),
+)
+# Disclosure-season months ((month, day) inclusive) in which the daily
+# Eastmoney earnings-event job runs (mrd-intake C2): forecasts and
+# appointment dates move inside these months.
+EARNINGS_WINDOWS: tuple[tuple[tuple[int, int], tuple[int, int]], ...] = (
+    ((1, 1), (1, 31)),
+    ((4, 1), (4, 30)),
+    ((7, 1), (7, 31)),
+    ((10, 1), (10, 31)),
 )
 
 
@@ -143,6 +165,17 @@ def is_first_trading_day_after(calendar: TradingCalendar, day: date, anchor: dat
     if day <= anchor or not calendar.is_trading_day(day):
         return False
     cursor = anchor + timedelta(days=1)
+    while cursor < day:
+        if calendar.is_trading_day(cursor):
+            return False
+        cursor += timedelta(days=1)
+    return True
+
+
+def is_first_trading_day_of_week(calendar: TradingCalendar, day: date) -> bool:
+    if not calendar.is_trading_day(day):
+        return False
+    cursor = day - timedelta(days=day.weekday())
     while cursor < day:
         if calendar.is_trading_day(cursor):
             return False
@@ -226,6 +259,8 @@ def snapshot_payloads(
         ]
     if job == "financial_deadline":
         return _financial(codes, today) if is_financial_deadline_trigger(calendar, today) else []
+    if job == "earnings_event":
+        return _earnings_events(codes, today, calendar)
     raise ValueError(f"unknown snapshot schedule job: {job!r}")
 
 
@@ -290,6 +325,42 @@ def _akshare_cash_flow(codes: Sequence[IndexCode], today: date) -> list[Snapshot
             as_of=today,
         )
         for code in codes
+    ]
+
+
+def in_earnings_window(day: date) -> bool:
+    """Whether ``day`` is inside a disclosure-season month (:data:`EARNINGS_WINDOWS`)."""
+
+    key = (day.month, day.day)
+    return any(start <= key <= end for start, end in EARNINGS_WINDOWS)
+
+
+def earnings_report_period(today: date) -> date:
+    """The latest quarter end before ``today`` (the period being disclosed)."""
+
+    return _recent_periods(today, count=1)[0]
+
+
+def _earnings_events(
+    codes: Sequence[IndexCode], today: date, calendar: TradingCalendar
+) -> list[SnapshotPayload]:
+    if not in_earnings_window(today) or not calendar.is_trading_day(today):
+        return []
+    period = earnings_report_period(today)
+    parts: list[EarningsEventPart] = ["forecast", "schedule"]
+    if is_first_trading_day_of_week(calendar, today):
+        parts.append("segments")
+    return [
+        EarningsEventPayload(
+            provider="akshare",
+            part=part,
+            scope="universe",
+            universe_code=code,
+            report_period=period,
+            as_of=today,
+        )
+        for code in codes
+        for part in parts
     ]
 
 

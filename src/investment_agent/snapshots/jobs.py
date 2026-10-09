@@ -22,6 +22,13 @@ target pool, the watchlist, open candidates and holdings from the Tencent
 batch quote feed (``provider="tencent"``) at 15:10, hours before the baostock
 bars; readers prefer baostock once it is there (decision D2). The 16:00
 ``slot="retry"`` run re-collects what was still ``pending`` at 15:10.
+
+Earnings events (mrd-intake C1 / C2): ``earnings_event`` collects Eastmoney
+(``provider="akshare"``) 业绩预告 (``part="forecast"``) and 预约披露时间
+(``part="schedule"``) of one ``report_period`` for the target pool plus the
+user's pools, and 主营构成 (``part="segments"``) of the user's pools only
+(per-stock calls); scheduled every trading day at 19:00 inside the
+disclosure-season months (segments once a week).
 """
 
 from __future__ import annotations
@@ -46,6 +53,7 @@ FINANCIAL_SNAPSHOT = "financial_snapshot"
 SNAPSHOT_BACKFILL = "snapshot_backfill"
 DIVIDEND_SNAPSHOT = "dividend_snapshot"
 CLOSE_QUOTE = "close_quote"
+EARNINGS_EVENT = "earnings_event"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
@@ -54,6 +62,7 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     SNAPSHOT_BACKFILL,
     DIVIDEND_SNAPSHOT,
     CLOSE_QUOTE,
+    EARNINGS_EVENT,
 )
 
 SnapshotProvider = Literal["baostock", "ifind", "akshare", "tencent"]
@@ -63,6 +72,8 @@ CloseQuoteSlot = Literal["close", "retry"]
 CLOSE_QUOTE_SLOTS: tuple[CloseQuoteSlot, ...] = ("close", "retry")
 AkshareFinancialPart = Literal["summary", "cash_flow"]
 AKSHARE_FINANCIAL_PARTS: tuple[AkshareFinancialPart, ...] = ("summary", "cash_flow")
+EarningsEventPart = Literal["forecast", "schedule", "segments"]
+EARNINGS_EVENT_PARTS: tuple[EarningsEventPart, ...] = ("forecast", "schedule", "segments")
 SNAPSHOT_SCOPES: tuple[SnapshotScope, ...] = ("universe", "watchlist")
 WATCHLIST_SCOPE_LABEL = "watchlist"
 
@@ -245,6 +256,35 @@ class CloseQuotePayload(_CollectionPayload):
         return self
 
 
+class EarningsEventPayload(_CollectionPayload):
+    """Eastmoney earnings events of one report period (mrd-intake C1).
+
+    ``forecast`` / ``schedule`` are whole-market calls filtered to the scope
+    (``universe``: target pool + enabled watchlist + open candidates +
+    holdings; ``watchlist``: the user's pools only). ``segments`` walks the
+    user's pools one listing at a time whatever the scope says (the
+    ``universe_code`` only names the run). ``as_of`` is the membership date
+    and the day the job was scheduled for.
+    """
+
+    provider: SnapshotProvider = "akshare"
+    part: EarningsEventPart
+    report_period: date
+    as_of: date
+
+    @field_validator("report_period")
+    @classmethod
+    def _quarter_end(cls, value: date) -> date:
+        period_kind(value)
+        return value
+
+    @model_validator(mode="after")
+    def _earnings_provider(self) -> Self:
+        if self.provider != "akshare":
+            raise ValueError("earnings events are collected from akshare (Eastmoney) only")
+        return self
+
+
 BackfillPart = Literal["membership", "industry", "prices", "financials", "dividends"]
 BACKFILL_PARTS: tuple[BackfillPart, ...] = (
     "membership",
@@ -299,6 +339,7 @@ SnapshotPayload = (
     | SnapshotBackfillPayload
     | DividendSnapshotPayload
     | CloseQuotePayload
+    | EarningsEventPayload
 )
 
 PAYLOAD_MODELS: dict[str, type[_Payload]] = {
@@ -309,6 +350,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     SNAPSHOT_BACKFILL: SnapshotBackfillPayload,
     DIVIDEND_SNAPSHOT: DividendSnapshotPayload,
     CLOSE_QUOTE: CloseQuotePayload,
+    EARNINGS_EVENT: EarningsEventPayload,
 }
 
 
@@ -349,6 +391,11 @@ def idempotency_key(payload: SnapshotPayload) -> str:
     if isinstance(payload, CloseQuotePayload):
         key = f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
         return key if payload.slot == "close" else f"{key}:{payload.slot}"
+    if isinstance(payload, EarningsEventPayload):
+        return (
+            f"{kind}:{payload.provider}:{payload.scope_label}:"
+            f"{payload.report_period.isoformat()}:{payload.as_of.isoformat()}:{payload.part}"
+        )
     key = (
         f"{kind}:{payload.provider}:{payload.scope_label}:"
         f"{payload.report_period.isoformat()}:{payload.as_of.isoformat()}"

@@ -51,7 +51,7 @@ def test_snapshot_help_lists_commands():
     result = CliRunner().invoke(app, ["snapshot", "--help"])
     assert result.exit_code == 0
     for command in ("sync-universe", "sync-industry", "collect-market", "collect-financial",
-                    "collect-close-quote", "status"):
+                    "collect-close-quote", "collect-earnings-events", "status"):
         assert command in result.output
 
 

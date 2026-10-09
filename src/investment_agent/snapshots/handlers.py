@@ -6,6 +6,7 @@
 ``akshare`` (financials only) -> :mod:`investment_agent.snapshots.eastmoney`.
 ``dividend_snapshot`` (baostock only) -> :mod:`investment_agent.snapshots.dividends`.
 ``close_quote`` (tencent only) -> :mod:`investment_agent.snapshots.close_quote`.
+``earnings_event`` (akshare only) -> :mod:`investment_agent.snapshots.earnings_events`.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal
 
 import structlog
@@ -35,6 +37,7 @@ from investment_agent.providers.ledger import (
 )
 from investment_agent.providers.tencent_quote import TencentQuoteClient
 from investment_agent.research.ifind_chain import IfindProxyClient
+from investment_agent.scheduler.trading_calendar import TradingCalendar, load_trading_calendar
 from investment_agent.snapshots.backfill import BackfillClient, run_backfill_part
 from investment_agent.snapshots.breadth import (
     BaostockCollectorClient,
@@ -49,6 +52,10 @@ from investment_agent.snapshots.collect import (
     ProxyClient,
 )
 from investment_agent.snapshots.dividends import DividendClient, collect_baostock_dividends
+from investment_agent.snapshots.earnings_events import (
+    EarningsEventClient,
+    collect_earnings_events,
+)
 from investment_agent.snapshots.eastmoney import (
     EastmoneyCollectorClient,
     collect_akshare_financial,
@@ -57,6 +64,7 @@ from investment_agent.snapshots.financial import collect_financial_snapshot
 from investment_agent.snapshots.jobs import (
     CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
+    EARNINGS_EVENT,
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
@@ -65,6 +73,7 @@ from investment_agent.snapshots.jobs import (
     UNIVERSE_SYNC,
     CloseQuotePayload,
     DividendSnapshotPayload,
+    EarningsEventPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
@@ -93,10 +102,24 @@ ShenwanFactory = Callable[[], ShenwanClient]
 EastmoneyFactory = Callable[[], EastmoneyCollectorClient]
 DividendFactory = Callable[[], DividendClient]
 CloseQuoteFactory = Callable[[], CloseQuoteClient]
+EarningsEventFactory = Callable[[], EarningsEventClient]
+CalendarFactory = Callable[[], TradingCalendar | None]
 
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def default_calendar() -> TradingCalendar | None:
+    """The A-share trading calendar of ``app.yaml`` (``None`` when unavailable)."""
+
+    from investment_agent.settings.loader import calendar_path
+
+    try:
+        return load_trading_calendar(Path(calendar_path()))
+    except Exception:
+        log.warning("snapshot.calendar_unavailable", exc_info=True)
+        return None
 
 
 @dataclass
@@ -117,12 +140,25 @@ class SnapshotRuntime:
     eastmoney_factory: EastmoneyFactory = AkshareEastmoneyClient
     dividend_factory: DividendFactory = BaostockMarketClient
     close_quote_factory: CloseQuoteFactory = TencentQuoteClient
+    earnings_factory: EarningsEventFactory | None = None
+    """Eastmoney earnings events; ``None`` = the ``eastmoney_factory`` client."""
+    calendar_factory: CalendarFactory = default_calendar
     circuit: CircuitBreaker = field(default_factory=lambda: CircuitBreaker(_utc_now))
     """Process-wide provider circuit breaker (A1): one per worker, shared by
     every client the factories build and by the collectors' own breakers."""
 
     def file_notifier(self) -> FileNotifier:
         return self.notifier or FileNotifier(self.settings.data_dir / "notifications")
+
+    def earnings_client(self) -> EarningsEventClient:
+        """The earnings-event client: ``earnings_factory``, else the Eastmoney client."""
+
+        if self.earnings_factory is not None:
+            return self.earnings_factory()
+        client = self.eastmoney_factory()
+        if not isinstance(client, AkshareEastmoneyClient):
+            raise TypeError("earnings events need an AkshareEastmoneyClient or earnings_factory")
+        return client
 
 
 def default_runtime(settings: Settings) -> SnapshotRuntime:
@@ -261,6 +297,18 @@ class SnapshotJobHandler(BaseJobHandler):
                 artifacts=artifacts,
                 lease=lease,
                 now=self.runtime.clock,
+            )
+            return await self._settle(report, job.run_id, lease)
+        if self.kind == EARNINGS_EVENT:
+            report = await collect_earnings_events(
+                EarningsEventPayload.model_validate(request),
+                client=self.runtime.earnings_client(),
+                artifacts=artifacts,
+                lease=lease,
+                now=self.runtime.clock,
+                circuit=self.runtime.circuit,
+                calendar=self.runtime.calendar_factory(),
+                run_id=job.run_id,
             )
             return await self._settle(report, job.run_id, lease)
         if self.kind == CLOSE_QUOTE:

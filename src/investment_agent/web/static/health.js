@@ -29,11 +29,15 @@ export const KIND_LABELS = Object.freeze({
   close_quote: "收盘快照",
   financial_snapshot: "财报快照",
   dividend_snapshot: "分红快照",
+  earnings_event: "财报事件",
 });
 
 export const PART_LABELS = Object.freeze({
   summary: "按期汇总",
   cash_flow: "单股现金流",
+  forecast: "业绩预告",
+  schedule: "预约披露",
+  segments: "主营构成",
   membership: "成分历史",
   industry: "行业历史",
   prices: "日线",

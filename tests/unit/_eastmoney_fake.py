@@ -27,6 +27,7 @@ from investment_agent.providers.akshare_eastmoney import (
     RawTable,
     SummaryEndpoint,
 )
+from investment_agent.providers.circuit import CircuitBreaker
 
 FIXTURE_DIR = Path(__file__).parents[1] / "fixtures" / "eastmoney"
 CAPTURED_AT = datetime(2026, 10, 7, 8, 0, tzinfo=UTC)
@@ -161,6 +162,7 @@ def fake_client(
     min_interval_seconds: float = 0.0,
     sleep: NoSleep | None = None,
     max_attempts: int = 2,
+    circuit: CircuitBreaker | None = None,
 ) -> AkshareEastmoneyClient:
     return AkshareEastmoneyClient(
         backend or FakeEastmoneyBackend(),
@@ -169,4 +171,5 @@ def fake_client(
         sleep=sleep or NoSleep(),
         max_attempts=max_attempts,
         retry_backoff_seconds=0.0,
+        circuit=circuit,
     )

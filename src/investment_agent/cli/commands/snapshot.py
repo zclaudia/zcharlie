@@ -21,6 +21,7 @@ from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
 from investment_agent.settings.loader import load_runtime, load_settings
 from investment_agent.snapshots.jobs import (
     AKSHARE_FINANCIAL_PARTS,
+    EARNINGS_EVENT_PARTS,
     INDUSTRY_SYSTEMS,
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
@@ -29,6 +30,8 @@ from investment_agent.snapshots.jobs import (
     AkshareFinancialPart,
     CloseQuotePayload,
     DividendSnapshotPayload,
+    EarningsEventPart,
+    EarningsEventPayload,
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     IndustrySystem,
@@ -78,6 +81,28 @@ def _date(value: str | None, name: str) -> date:
         return date.fromisoformat(value)
     except ValueError as exc:
         raise typer.BadParameter("expected YYYY-MM-DD", param_hint=name) from exc
+
+
+def _period(value: str | None, name: str, *, default: date) -> date:
+    """``YYYY-MM-DD`` or the Eastmoney ``YYYYMMDD`` spelling; ``default`` when absent."""
+
+    if value is None:
+        return default
+    text = value.strip()
+    if re.fullmatch(r"\d{8}", text):
+        text = f"{text[:4]}-{text[4:6]}-{text[6:]}"
+    try:
+        return date.fromisoformat(text)
+    except ValueError as exc:
+        raise typer.BadParameter("expected YYYY-MM-DD or YYYYMMDD", param_hint=name) from exc
+
+
+def _earnings_part(value: str) -> EarningsEventPart:
+    part = value.strip().lower()
+    for item in EARNINGS_EVENT_PARTS:
+        if item == part:
+            return item
+    raise typer.BadParameter(" | ".join(EARNINGS_EVENT_PARTS), param_hint="--part")
 
 
 def _universe(value: str) -> IndexCode:
@@ -324,6 +349,46 @@ def collect_close_quote(
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc), param_hint="--date") from exc
+    _run(payload, now)
+
+
+@app.command("collect-earnings-events")
+def collect_earnings_events(
+    part: str = typer.Option(
+        ...,
+        help="forecast (业绩预告) | schedule (预约披露时间) | segments (主营构成, user pools only)",
+    ),
+    period: str | None = typer.Option(
+        None,
+        help="Report period (YYYY-MM-DD or YYYYMMDD, e.g. 20250930); default: the latest "
+        "quarter end before --as-of",
+    ),
+    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    scope: str | None = typer.Option(
+        None,
+        help="universe (members of --universe plus watchlist / candidates / holdings, "
+        "default) or watchlist (the user's pools only); segments always use the user's pools",
+    ),
+    as_of: str | None = typer.Option(None, help="Membership date (YYYY-MM-DD, default today)"),
+    now: bool = typer.Option(False, "--now", help=_NOW_HELP),
+) -> None:
+    """Enqueue Eastmoney earnings events (forecasts, disclosure schedule, segments)."""
+
+    from investment_agent.scheduler.snapshot_jobs import earnings_report_period
+
+    _, chosen_scope, code = _routing("akshare", scope, universe)
+    membership = _date(as_of, "--as-of")
+    try:
+        payload = EarningsEventPayload(
+            provider="akshare",
+            part=_earnings_part(part),
+            scope=chosen_scope,
+            universe_code=code,
+            report_period=_period(period, "--period", default=earnings_report_period(membership)),
+            as_of=membership,
+        )
+    except ValidationError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--period") from exc
     _run(payload, now)
 
 

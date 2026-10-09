@@ -132,6 +132,7 @@ class SnapshotSchedule(SnapshotScheduleConfig):
         "close_quote_retry_cron",
         "financial_weekly_cron",
         "financial_deadline_cron",
+        "earnings_event_cron",
     )(_check_cron)
 
 
@@ -309,6 +310,11 @@ SPECS: tuple[SettingSpec, ...] = (
         "schedule.snapshot.financial_deadline_cron", "披露截止后财务采集 cron",
         _CRON_HELP + "仅在披露截止日后的首个交易日执行，并检查逾期报告。",
         ("snapshot", "financial_deadline_cron"),
+    ),
+    _yaml(
+        "schedule.snapshot.earnings_event_cron", "财报事件采集 cron",
+        _CRON_HELP + "仅在 1 / 4 / 7 / 10 月的交易日执行；东方财富业绩预告与预约披露时间每日、主营构成每周。",
+        ("snapshot", "earnings_event_cron"),
     ),
     _yaml(
         "schedule.screen.universes", "筛选股票池", "每周模板筛选的指数成分股池。",

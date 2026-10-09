@@ -241,6 +241,7 @@ def test_yaml_import_values(tmp_path) -> None:
         "schedule.snapshot.close_quote_retry_cron": None,
         "schedule.snapshot.financial_weekly_cron": None,
         "schedule.snapshot.financial_deadline_cron": None,
+        "schedule.snapshot.earnings_event_cron": None,
         "schedule.candidates.expiry_sweep_cron": None,
         "schedule.verification.dispatch_cron": None,
         "schedule.verification.calibration_cron": None,

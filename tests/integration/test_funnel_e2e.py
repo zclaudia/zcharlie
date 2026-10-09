@@ -274,7 +274,7 @@ async def test_offline_funnel_end_to_end(funnel_env: Settings) -> None:
             head = (
                 await session.execute(text("SELECT version_num FROM alembic_version"))
             ).scalar_one()
-        assert head == "023", head
+        assert head == "024", head
         # Build the app before freezing time: FastAPI resolves the routes'
         # ``datetime`` annotations when they are registered.
         api = TestClient(create_app())

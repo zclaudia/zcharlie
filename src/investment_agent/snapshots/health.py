@@ -59,6 +59,7 @@ from investment_agent.snapshots.collect import PROVIDER_STOP_REASON, QUOTA_STOP_
 from investment_agent.snapshots.jobs import (
     CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
+    EARNINGS_EVENT,
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
     INDUSTRY_SYSTEMS,
@@ -89,6 +90,7 @@ COLLECTION_KINDS: tuple[str, ...] = (
     CLOSE_QUOTE,
     FINANCIAL_SNAPSHOT,
     DIVIDEND_SNAPSHOT,
+    EARNINGS_EVENT,
 )
 TERMINAL_STATUSES = frozenset({"success", "partial", "failed"})
 COUNTED_STATUSES = ("success", "partial")
@@ -512,6 +514,8 @@ class LightRun:
     def part(self) -> str | None:
         if self.kind == FINANCIAL_SNAPSHOT and self.provider == "akshare":
             return str(self.request.get("part") or "summary")
+        if self.kind == EARNINGS_EVENT:
+            return str(self.request.get("part") or "forecast")
         if self.kind == INDUSTRY_SYNC:
             systems = self.request.get("systems")
             if isinstance(systems, list) and systems:
@@ -1226,6 +1230,7 @@ _KIND_LABELS = {
     CLOSE_QUOTE: "收盘快照",
     FINANCIAL_SNAPSHOT: "财报快照",
     DIVIDEND_SNAPSHOT: "分红快照",
+    EARNINGS_EVENT: "财报事件",
 }
 
 
