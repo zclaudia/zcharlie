@@ -4,6 +4,7 @@ import typer
 
 from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import api as api_cmd
+from investment_agent.cli.commands import mcp as mcp_cmd
 from investment_agent.cli.commands import migrate as migrate_cmd
 from investment_agent.cli.commands import research as research_cmd
 from investment_agent.cli.commands import rules as rules_cmd
@@ -26,6 +27,7 @@ app.add_typer(rules_cmd.app, name="rules", help="Rule templates and instances")
 app.add_typer(screen_cmd.app, name="screen", help="Weekly template screen")
 app.add_typer(verify_cmd.app, name="verify", help="iFinD on-demand verification (P1-A13)")
 app.add_typer(settings_cmd.app, name="settings", help="Runtime settings stored in the database")
+app.add_typer(mcp_cmd.app, name="mcp", help="Read-only MCP server (stdio)")
 
 
 @app.callback()

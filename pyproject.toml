@@ -43,6 +43,8 @@ dependencies = [
     # LLM
     "openai>=1.30,<3",
     "pydantic-ai>=1.0.0",
+    # Read-only MCP server (mrd-intake D5; 2.x API: mcp.server.mcpserver.MCPServer)
+    "mcp>=2,<3",
 
     # Logging
     "structlog>=24.1",
