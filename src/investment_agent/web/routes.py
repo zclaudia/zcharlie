@@ -47,12 +47,19 @@ def register_web(app: Any) -> None:
     """Attach the web router, session guard and static assets to the app."""
 
     app.add_middleware(WebSessionMiddleware)
+    app.add_api_route("/", _root_redirect, methods=["GET"], include_in_schema=False)
     app.include_router(router)
     app.mount(
         "/app/static",
         StaticFiles(directory=str(WEB_DIR / "static")),
         name="web_static",
     )
+
+
+async def _root_redirect() -> RedirectResponse:
+    """Send bare-host visitors to the web UI (the session guard handles login)."""
+
+    return RedirectResponse(url="/app", status_code=status.HTTP_302_FOUND)
 
 
 async def require_same_origin(

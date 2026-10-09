@@ -22,6 +22,12 @@ def test_app_root_redirects_unauthenticated_to_login(api_client):
     assert response.url.path == "/app/login"
 
 
+def test_bare_root_redirects_to_app(api_client):
+    response = api_client.get("/", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/app"
+
+
 def test_login_page_renders_disclaimer_and_password_form(api_client):
     response = api_client.get("/app/login")
     assert response.status_code == 200
