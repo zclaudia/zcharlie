@@ -96,6 +96,39 @@ capture date (Asia/Shanghai) raises :class:`LookaheadDataError`.
 Throttle: calls are serialized and spaced at least ``min_interval_seconds``
 (default 1 s) apart. ``akshare`` is imported lazily inside
 :class:`AkshareEastmoneyBackend`, so offline tests never import it.
+
+Earnings events (mrd-intake C1, decision D3; verified live 2026-10-09 07:46
+CST, akshare 1.19.1, fixtures ``tests/fixtures/eastmoney/stock_yjyg_em_*`` /
+``stock_yysj_em_*`` / ``stock_zygc_em_*``):
+
+* :meth:`AkshareEastmoneyClient.fetch_earnings_forecasts` - ``stock_yjyg_em``
+  (业绩预告, whole market for one report period, ~2 s / 10 pages for 2026H1).
+  AkShare renames the datacenter columns by position and drops the forecast
+  range (``PREDICT_AMT_LOWER`` / ``PREDICT_AMT_UPPER``, ``ADD_AMP_LOWER`` /
+  ``ADD_AMP_UPPER``), keeping only the midpoints (预测数值 = ``FORECAST_JZ``,
+  业绩变动幅度 = ``INCREASE_JZ``). The backend therefore keeps the
+  ``RPT_PUBLIC_OP_NEWPREDICT`` rows the function paged through (seen by the
+  requests shim) and the parser reads the range from them; the DataFrame
+  columns (:data:`FORECAST_COLUMNS`) and the row keys
+  (:data:`FORECAST_RAW_COLUMNS`) are both locked. Amounts are CNY (yuan;
+  600030 2026H1 归母净利润 23.343 bn), ``ADD_AMP_*`` are percent -> ÷ 100.
+  One row per (listing, notice, indicator): 归母净利润 (code 004) is kept,
+  扣非净利润 (005) only when 004 is absent; EPS (003) / revenue rows are
+  not stored. ``PREDICT_TYPE`` is one of the ten 预告类型 or ``不确定``;
+  :func:`normalize_forecast_type` falls back to the summary text.
+* :meth:`AkshareEastmoneyClient.fetch_disclosure_schedule` - ``stock_yysj_em``
+  (预约披露时间, 沪深A股 for one period, ~2 s / 11 pages; Beijing exchange
+  listings are excluded by the site's filter). ``scheduled_date`` = the
+  latest 变更日期 when one exists, else 首次预约时间; ``actual_date`` =
+  实际披露时间 (null until published).
+* :meth:`AkshareEastmoneyClient.fetch_business_segments` - ``stock_zygc_em``
+  (主营构成 of one listing, all periods, 0.1 s). 主营收入 / 主营成本 /
+  主营利润 in CNY, 收入比例 / 毛利率 fractions; 分类类型 按产品分类 /
+  按行业分类 / 按地区分类 (akshare maps ``MAINOP_TYPE`` 2 / 1 / 3).
+
+Point in time: a notice date / actual disclosure date after the capture
+date raises :class:`LookaheadDataError`; an appointment date is forward
+looking by nature and may be in the future.
 """
 
 from __future__ import annotations
@@ -222,10 +255,72 @@ CASH_FLOW_KEPT_COLUMNS: tuple[str, ...] = (
 DEBT_RATIO_CHECK_SHARE = 0.95
 DEBT_RATIO_CHECK_POINTS = 0.5
 
+# -- earnings events (mrd-intake C1) ---------------------------------------- #
+FORECAST_ENDPOINT = "stock_yjyg_em"
+SCHEDULE_ENDPOINT = "stock_yysj_em"
+SEGMENT_ENDPOINT = "stock_zygc_em"
+SCHEDULE_SYMBOL = "沪深A股"
+"""``stock_yysj_em`` market filter (A shares of both exchanges; no Beijing)."""
+
+# akshare 1.19.1 DataFrame columns (positional rename inside stock_yjyg_em,
+# explicit renames in the other two). Locked like SUMMARY_COLUMNS.
+FORECAST_COLUMNS: tuple[str, ...] = (
+    "序号", "股票代码", "股票简称", "预测指标", "业绩变动", "预测数值", "业绩变动幅度",
+    "业绩变动原因", "预告类型", "上年同期值", "公告日期",
+)
+# Datacenter (RPT_PUBLIC_OP_NEWPREDICT) keys the forecast parser needs; the
+# backend keeps these rows because akshare's frame drops the range columns.
+FORECAST_RAW_COLUMNS = frozenset(
+    {
+        "SECURITY_CODE",
+        "SECURITY_NAME_ABBR",
+        "NOTICE_DATE",
+        "REPORT_DATE",
+        "PREDICT_FINANCE_CODE",
+        "PREDICT_FINANCE",
+        "PREDICT_AMT_LOWER",
+        "PREDICT_AMT_UPPER",
+        "ADD_AMP_LOWER",
+        "ADD_AMP_UPPER",
+        "PREDICT_CONTENT",
+        "PREDICT_TYPE",
+    }
+)
+# Indicators stored, in order of preference (one forecast row per notice).
+FORECAST_INDICATOR_CODES: tuple[str, ...] = ("004", "005")
+FORECAST_INDICATOR_NAMES: dict[str, str] = {
+    "004": "归属于上市公司股东的净利润",
+    "005": "扣除非经常性损益后的净利润",
+}
+SCHEDULE_COLUMNS: tuple[str, ...] = (
+    "序号", "股票代码", "股票简称", "首次预约时间", "一次变更日期", "二次变更日期",
+    "三次变更日期", "实际披露时间",
+)
+SCHEDULE_CHANGE_COLUMNS: tuple[str, ...] = ("一次变更日期", "二次变更日期", "三次变更日期")
+SEGMENT_COLUMNS: tuple[str, ...] = (
+    "股票代码", "报告日期", "分类类型", "主营构成", "主营收入", "收入比例", "主营成本",
+    "成本比例", "主营利润", "利润比例", "毛利率",
+)
+SegmentKind = Literal["product", "industry", "region"]
+SEGMENT_KINDS: dict[str, SegmentKind] = {
+    "按产品分类": "product",
+    "按行业分类": "industry",
+    "按地区分类": "region",
+}
+# The ten 预告类型 of the Eastmoney datacenter plus 不确定; the order is the
+# summary-text fallback order (first match wins).
+FORECAST_TYPES: tuple[str, ...] = (
+    "预增", "预减", "扭亏", "首亏", "略增", "略减", "减亏", "增亏", "续盈", "续亏",
+)
+FORECAST_TYPE_UNKNOWN = "不确定"
+_BUSINESS_ANALYSIS_PATH = "BusinessAnalysis/PageAjax"
+
 # AkShare modules whose module-level ``requests`` is patched during a call.
 _AKSHARE_MODULES = (
     "akshare.stock_feature.stock_report_em",
     "akshare.stock_feature.stock_three_report_em",
+    "akshare.stock_feature.stock_yjyg_em",
+    "akshare.stock_fundamental.stock_zygc",
 )
 _PATCH_LOCK = threading.Lock()
 _F10_INDEX_PATH = "NewFinanceAnalysis/Index"
@@ -271,10 +366,15 @@ def to_eastmoney_symbol(ticker: str) -> str:
 # --------------------------------------------------------------------------- #
 
 
+RowSink = list[dict[str, Any]]
+"""Datacenter rows (``result.data`` of every page) collected during one call."""
+
+
 class _Response:
-    def __init__(self, real: Any, url: str) -> None:
+    def __init__(self, real: Any, url: str, sink: RowSink | None = None) -> None:
         self._real = real
         self._url = url
+        self._sink = sink
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._real, name)
@@ -302,15 +402,28 @@ class _Response:
             # datacenter-web: {"result": null, "success": false, "message": "返回数据为空",
             # "code": 9201} for a period nobody has disclosed yet.
             raise _NoData(str(payload.get("message") or "no data"))
+        if (
+            _BUSINESS_ANALYSIS_PATH in self._url
+            and isinstance(payload, dict)
+            and not payload.get("zygcfx")
+        ):
+            # F10 主营构成 page of an unknown symbol: an empty section.
+            raise _NoData(f"Eastmoney F10 has no business analysis for {self._url}")
+        if self._sink is not None and isinstance(payload, dict):
+            result = payload.get("result")
+            data = result.get("data") if isinstance(result, dict) else None
+            if isinstance(data, list):
+                self._sink.extend(row for row in data if isinstance(row, dict))
         return payload
 
 
 class _EastmoneyRequests:
     """Stand-in for the ``requests`` module inside the patched AkShare modules."""
 
-    def __init__(self, real: ModuleType, *, timeout: float) -> None:
+    def __init__(self, real: ModuleType, *, timeout: float, sink: RowSink | None = None) -> None:
         self._real = real
         self._timeout = timeout
+        self._sink = sink
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._real, name)
@@ -333,18 +446,25 @@ class _EastmoneyRequests:
             )
         if status >= 400:
             raise EastmoneyError(f"HTTP {status} from {url}", provider=PROVIDER, error_code=str(status))
-        return _Response(response, url)
+        return _Response(response, url, self._sink)
 
 
 @contextmanager
-def eastmoney_requests(modules: Sequence[ModuleType], *, timeout: float = 30.0) -> Iterator[None]:
-    """Route ``requests.get`` of ``modules`` through :class:`_EastmoneyRequests`."""
+def eastmoney_requests(
+    modules: Sequence[ModuleType], *, timeout: float = 30.0, sink: RowSink | None = None
+) -> Iterator[None]:
+    """Route ``requests.get`` of ``modules`` through :class:`_EastmoneyRequests`.
+
+    ``sink`` collects the datacenter rows (``result.data``) of every page
+    answered during the call (the forecast backend keeps them).
+    """
 
     with _PATCH_LOCK:
         originals = [(module, module.__dict__["requests"]) for module in modules]
         try:
             for module, real in originals:
-                setattr(module, "requests", _EastmoneyRequests(real, timeout=timeout))  # noqa: B010
+                shim = _EastmoneyRequests(real, timeout=timeout, sink=sink)
+                setattr(module, "requests", shim)  # noqa: B010
             yield
         finally:
             for module, real in originals:
@@ -365,6 +485,20 @@ class EastmoneyBackend(Protocol):
         """``symbol`` as ``SH600519``; ``None`` for an unknown symbol."""
         ...
 
+    def forecast_table(self, period: str) -> RawTable | None:
+        """``stock_yjyg_em(date=period)``: ``columns`` = akshare's DataFrame columns,
+        ``rows`` = the datacenter rows (raw keys) the call paged through; ``None``
+        when nobody has forecast the period."""
+        ...
+
+    def schedule_table(self, period: str) -> RawTable | None:
+        """``stock_yysj_em(symbol=沪深A股, date=period)``; ``None`` without rows."""
+        ...
+
+    def segment_table(self, symbol: str) -> RawTable | None:
+        """``stock_zygc_em(symbol)``; ``None`` for an unknown symbol."""
+        ...
+
 
 class AkshareEastmoneyBackend:
     """Calls AkShare inside :func:`eastmoney_requests` (blocking; run in a thread)."""
@@ -372,14 +506,16 @@ class AkshareEastmoneyBackend:
     def __init__(self, *, http_timeout: float = 30.0) -> None:
         self._http_timeout = http_timeout
 
-    def _call(self, func_name: str, **kwargs: Any) -> RawTable | None:
+    def _call(
+        self, func_name: str, *, sink: RowSink | None = None, **kwargs: Any
+    ) -> RawTable | None:
         import importlib
 
         import akshare
 
         modules = [importlib.import_module(name) for name in _AKSHARE_MODULES]
         func = getattr(akshare, func_name)
-        with eastmoney_requests(modules, timeout=self._http_timeout):
+        with eastmoney_requests(modules, timeout=self._http_timeout, sink=sink):
             try:
                 frame = func(**kwargs)
             except _NoData as exc:
@@ -407,6 +543,35 @@ class AkshareEastmoneyBackend:
             columns=table.columns,
             rows=tuple({column: row.get(column) for column in kept} for row in table.rows),
         )
+
+    def forecast_table(self, period: str) -> RawTable | None:
+        rows: RowSink = []
+        table = self._call(FORECAST_ENDPOINT, sink=rows, date=period)
+        if table is None:
+            return None
+        # akshare requests page 1 twice (once for the page count): drop repeats.
+        unique: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            unique.setdefault(
+                "|".join(
+                    str(row.get(key))
+                    for key in ("SECURITY_CODE", "NOTICE_DATE", "REPORT_DATE", "PREDICT_FINANCE_CODE")
+                ),
+                row,
+            )
+        if len(unique) != len(table.rows):
+            raise EastmoneySchemaError(
+                f"akshare {FORECAST_ENDPOINT}: {len(table.rows)} frame rows but "
+                f"{len(unique)} distinct datacenter rows were paged through",
+                provider=PROVIDER,
+            )
+        return RawTable(columns=table.columns, rows=tuple(unique.values()))
+
+    def schedule_table(self, period: str) -> RawTable | None:
+        return self._call(SCHEDULE_ENDPOINT, symbol=SCHEDULE_SYMBOL, date=period)
+
+    def segment_table(self, symbol: str) -> RawTable | None:
+        return self._call(SEGMENT_ENDPOINT, symbol=symbol)
 
 
 # --------------------------------------------------------------------------- #
@@ -700,6 +865,332 @@ def parse_cash_flow_statement(
 
 
 # --------------------------------------------------------------------------- #
+# Earnings events (mrd-intake C1): forecasts, disclosure schedule, segments
+# --------------------------------------------------------------------------- #
+
+
+def normalize_forecast_type(raw: Any, content: Any) -> str:
+    """One of :data:`FORECAST_TYPES` or ``不确定``.
+
+    ``PREDICT_TYPE`` is taken when it is a known type; otherwise the summary
+    text (``PREDICT_CONTENT``) is scanned in :data:`FORECAST_TYPES` order.
+    """
+
+    text = str(raw).strip() if raw is not None else ""
+    if text in FORECAST_TYPES or text == FORECAST_TYPE_UNKNOWN:
+        return text
+    summary = str(content or "")
+    for name in FORECAST_TYPES:
+        if name in summary:
+            return name
+    return FORECAST_TYPE_UNKNOWN
+
+
+def _required_day(raw: Any, *, field_name: str) -> date:
+    day = _day(raw, field_name=field_name)
+    if day is None:
+        raise EastmoneySchemaError(f"missing {field_name}", provider=PROVIDER)
+    return day
+
+
+def _check_frame_columns(table: RawTable, expected: tuple[str, ...], *, operation: str) -> None:
+    if tuple(table.columns) != expected:
+        missing = sorted(set(expected) - set(table.columns))
+        extra = sorted(set(table.columns) - set(expected))
+        raise EastmoneySchemaError(
+            f"akshare {operation} columns changed (missing {missing}, unexpected {extra}); "
+            f"got {list(table.columns)}",
+            provider=PROVIDER,
+        )
+
+
+@dataclass(frozen=True)
+class EarningsForecast:
+    ticker: str
+    name: str
+    report_period: date
+    notice_date: date
+    forecast_type: str
+    """Normalized (:func:`normalize_forecast_type`)."""
+    forecast_type_raw: str | None
+    indicator_code: str
+    indicator: str
+    profit_low: float | None
+    """CNY (yuan)."""
+    profit_high: float | None
+    yoy_low: float | None
+    """Fraction (``ADD_AMP_LOWER`` percent / 100)."""
+    yoy_high: float | None
+    content: str
+    """预告摘要 (``PREDICT_CONTENT``)."""
+
+    @property
+    def key(self) -> tuple[str, date, date]:
+        return (self.ticker, self.report_period, self.notice_date)
+
+
+@dataclass(frozen=True)
+class ForecastPeriod:
+    report_period: date
+    captured_at: datetime
+    forecasts: Mapping[str, tuple[EarningsForecast, ...]]
+    """Canonical ticker -> forecasts (one per notice date, newest first)."""
+    skipped_symbols: tuple[str, ...] = ()
+    skipped_indicators: int = 0
+    """Rows of other indicators (EPS, revenue) that were not kept."""
+    raw: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+
+    def raw_rows_for(self, tickers: Sequence[str]) -> list[dict[str, Any]]:
+        codes = {ticker.split(".")[0] for ticker in tickers}
+        return [dict(row) for row in self.raw if _symbol_text(row.get("SECURITY_CODE")) in codes]
+
+
+def parse_earnings_forecasts(
+    table: RawTable, *, report_period: date, captured_at: datetime
+) -> ForecastPeriod:
+    """Validate a ``stock_yjyg_em`` answer and keep one row per listing and notice (pure)."""
+
+    operation = FORECAST_ENDPOINT
+    _check_frame_columns(table, FORECAST_COLUMNS, operation=operation)
+    if table.rows:
+        missing = FORECAST_RAW_COLUMNS - set(table.rows[0])
+        if missing:
+            raise EastmoneySchemaError(
+                f"akshare {operation} datacenter rows lack {sorted(missing)}", provider=PROVIDER
+            )
+    capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
+    skipped: set[str] = set()
+    skipped_indicators = 0
+    candidates: dict[tuple[str, date], dict[str, EarningsForecast]] = {}
+    for row in table.rows:
+        symbol = _symbol_text(row.get("SECURITY_CODE"))
+        ticker = to_canonical_ticker(symbol)
+        if ticker is None:
+            skipped.add(symbol)
+            continue
+        period = _required_day(row.get("REPORT_DATE"), field_name="REPORT_DATE")
+        if period != report_period:
+            raise EastmoneySchemaError(
+                f"akshare {operation}: asked for {report_period.isoformat()}, got a row of "
+                f"{period.isoformat()} ({ticker})",
+                provider=PROVIDER,
+            )
+        notice = _required_day(row.get("NOTICE_DATE"), field_name="NOTICE_DATE")
+        if notice > capture_date:
+            raise LookaheadDataError(
+                f"akshare {operation}: {ticker} notice date {notice.isoformat()} is after "
+                f"the capture date {capture_date.isoformat()}",
+                provider=PROVIDER,
+            )
+        code = str(row.get("PREDICT_FINANCE_CODE") or "").strip()
+        if code not in FORECAST_INDICATOR_CODES:
+            skipped_indicators += 1
+            continue
+        content = str(row.get("PREDICT_CONTENT") or "")
+        raw_type = row.get("PREDICT_TYPE")
+        yoy_low = _number(row.get("ADD_AMP_LOWER"))
+        yoy_high = _number(row.get("ADD_AMP_UPPER"))
+        forecast = EarningsForecast(
+            ticker=ticker,
+            name=str(row.get("SECURITY_NAME_ABBR") or ""),
+            report_period=period,
+            notice_date=notice,
+            forecast_type=normalize_forecast_type(raw_type, content),
+            forecast_type_raw=str(raw_type) if raw_type else None,
+            indicator_code=code,
+            indicator=str(row.get("PREDICT_FINANCE") or FORECAST_INDICATOR_NAMES[code]),
+            profit_low=_number(row.get("PREDICT_AMT_LOWER")),
+            profit_high=_number(row.get("PREDICT_AMT_UPPER")),
+            yoy_low=yoy_low / 100.0 if yoy_low is not None else None,
+            yoy_high=yoy_high / 100.0 if yoy_high is not None else None,
+            content=content,
+        )
+        candidates.setdefault((ticker, notice), {})[code] = forecast
+    forecasts: dict[str, list[EarningsForecast]] = {}
+    for (ticker, _notice), by_code in candidates.items():
+        chosen = next(by_code[code] for code in FORECAST_INDICATOR_CODES if code in by_code)
+        forecasts.setdefault(ticker, []).append(chosen)
+    if skipped:
+        log.info("eastmoney_symbols_skipped", count=len(skipped), sample=sorted(skipped)[:10])
+    return ForecastPeriod(
+        report_period=report_period,
+        captured_at=captured_at,
+        forecasts={
+            ticker: tuple(sorted(items, key=lambda item: item.notice_date, reverse=True))
+            for ticker, items in sorted(forecasts.items())
+        },
+        skipped_symbols=tuple(sorted(skipped)),
+        skipped_indicators=skipped_indicators,
+        raw=table.rows,
+    )
+
+
+@dataclass(frozen=True)
+class DisclosureAppointment:
+    ticker: str
+    name: str
+    report_period: date
+    first_date: date
+    """首次预约时间."""
+    scheduled_date: date
+    """The latest 变更日期, else the first appointment."""
+    actual_date: date | None
+    """实际披露时间 (``None`` until published)."""
+    changes: tuple[date, ...] = ()
+
+
+@dataclass(frozen=True)
+class SchedulePeriod:
+    report_period: date
+    captured_at: datetime
+    appointments: Mapping[str, DisclosureAppointment]
+    """Canonical ticker -> appointment."""
+    skipped_symbols: tuple[str, ...] = ()
+    duplicates: int = 0
+    raw: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+
+    def raw_rows_for(self, tickers: Sequence[str]) -> list[dict[str, Any]]:
+        codes = {ticker.split(".")[0] for ticker in tickers}
+        return [dict(row) for row in self.raw if _symbol_text(row.get("股票代码")) in codes]
+
+
+def parse_disclosure_schedule(
+    table: RawTable, *, report_period: date, captured_at: datetime
+) -> SchedulePeriod:
+    """Validate a ``stock_yysj_em`` answer: one appointment per listing (pure)."""
+
+    operation = SCHEDULE_ENDPOINT
+    _check_frame_columns(table, SCHEDULE_COLUMNS, operation=operation)
+    capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
+    appointments: dict[str, DisclosureAppointment] = {}
+    skipped: set[str] = set()
+    duplicates = 0
+    for row in table.rows:
+        symbol = _symbol_text(row.get("股票代码"))
+        ticker = to_canonical_ticker(symbol)
+        if ticker is None:
+            skipped.add(symbol)
+            continue
+        if ticker in appointments:
+            duplicates += 1
+            continue
+        first = _required_day(row.get("首次预约时间"), field_name="首次预约时间")
+        changes = tuple(
+            day
+            for column in SCHEDULE_CHANGE_COLUMNS
+            if (day := _day(row.get(column), field_name=column)) is not None
+        )
+        actual = _day(row.get("实际披露时间"), field_name="实际披露时间")
+        if actual is not None and actual > capture_date:
+            raise LookaheadDataError(
+                f"akshare {operation}: {ticker} actual disclosure {actual.isoformat()} is after "
+                f"the capture date {capture_date.isoformat()}",
+                provider=PROVIDER,
+            )
+        appointments[ticker] = DisclosureAppointment(
+            ticker=ticker,
+            name=str(row.get("股票简称") or ""),
+            report_period=report_period,
+            first_date=first,
+            scheduled_date=changes[-1] if changes else first,
+            actual_date=actual,
+            changes=changes,
+        )
+    if skipped:
+        log.info("eastmoney_symbols_skipped", count=len(skipped), sample=sorted(skipped)[:10])
+    return SchedulePeriod(
+        report_period=report_period,
+        captured_at=captured_at,
+        appointments=dict(sorted(appointments.items())),
+        skipped_symbols=tuple(sorted(skipped)),
+        duplicates=duplicates,
+        raw=table.rows,
+    )
+
+
+@dataclass(frozen=True)
+class BusinessSegment:
+    report_period: date
+    kind: SegmentKind
+    name: str
+    revenue: float | None
+    """CNY."""
+    share: float | None
+    """Fraction of main-business revenue."""
+    profit: float | None
+    """CNY."""
+    margin: float | None
+    """Gross margin, fraction."""
+
+
+@dataclass(frozen=True)
+class SegmentStatement:
+    ticker: str
+    captured_at: datetime
+    periods: Mapping[date, tuple[BusinessSegment, ...]]
+    """Report period -> segments (newest period first; rows in site order)."""
+    skipped_kinds: tuple[str, ...] = ()
+    raw_rows: tuple[Mapping[str, Any], ...] = field(default=(), repr=False)
+
+    def raw_rows_for(self, periods: Sequence[date]) -> list[dict[str, Any]]:
+        wanted = {period.isoformat() for period in periods}
+        return [dict(row) for row in self.raw_rows if str(row.get("报告日期") or "")[:10] in wanted]
+
+
+def parse_business_segments(
+    table: RawTable, *, ticker: str, captured_at: datetime
+) -> SegmentStatement:
+    """Validate a ``stock_zygc_em`` answer of one listing (pure)."""
+
+    operation = SEGMENT_ENDPOINT
+    _check_frame_columns(table, SEGMENT_COLUMNS, operation=operation)
+    capture_date = captured_at.astimezone(SHANGHAI_TZ).date()
+    code = ticker.split(".")[0]
+    periods: dict[date, list[BusinessSegment]] = {}
+    skipped: set[str] = set()
+    for row in table.rows:
+        security = _symbol_text(row.get("股票代码"))
+        if security != code:
+            raise EastmoneySchemaError(
+                f"akshare {operation}: asked for {ticker}, got a row of {security}",
+                provider=PROVIDER,
+            )
+        period = _required_day(row.get("报告日期"), field_name="报告日期")
+        if (period.month, period.day) not in _QUARTER_ENDS:
+            raise EastmoneySchemaError(
+                f"akshare {operation}: invalid 报告日期 {row.get('报告日期')!r}", provider=PROVIDER
+            )
+        if period > capture_date:
+            raise LookaheadDataError(
+                f"akshare {operation}: {ticker} report period {period.isoformat()} is after "
+                f"the capture date {capture_date.isoformat()}",
+                provider=PROVIDER,
+            )
+        kind = SEGMENT_KINDS.get(str(row.get("分类类型") or ""))
+        if kind is None:
+            skipped.add(str(row.get("分类类型")))
+            continue
+        periods.setdefault(period, []).append(
+            BusinessSegment(
+                report_period=period,
+                kind=kind,
+                name=str(row.get("主营构成") or "").strip(),
+                revenue=_number(row.get("主营收入")),
+                share=_number(row.get("收入比例")),
+                profit=_number(row.get("主营利润")),
+                margin=_number(row.get("毛利率")),
+            )
+        )
+    return SegmentStatement(
+        ticker=ticker,
+        captured_at=captured_at,
+        periods={period: tuple(items) for period, items in sorted(periods.items(), reverse=True)},
+        skipped_kinds=tuple(sorted(skipped)),
+        raw_rows=table.rows,
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Client
 # --------------------------------------------------------------------------- #
 
@@ -777,6 +1268,60 @@ class AkshareEastmoneyClient:
         if table is None or not table.rows:
             return None
         return parse_cash_flow_statement(table, ticker=ticker, captured_at=self._now())
+
+    async def fetch_earnings_forecasts(self, report_period: date) -> ForecastPeriod:
+        """Whole-market 业绩预告 of ``report_period`` (one call, paged inside akshare)."""
+
+        backend = self._resolve_backend()
+        period = report_period.strftime("%Y%m%d")
+        table = await self._call(
+            f"{FORECAST_ENDPOINT}({period})", partial(backend.forecast_table, period)
+        )
+        captured_at = self._now()
+        if table is None:
+            return ForecastPeriod(report_period=report_period, captured_at=captured_at, forecasts={})
+        result = parse_earnings_forecasts(table, report_period=report_period, captured_at=captured_at)
+        log.info(
+            "eastmoney_forecasts_fetched",
+            report_period=report_period.isoformat(),
+            listings=len(result.forecasts),
+        )
+        return result
+
+    async def fetch_disclosure_schedule(self, report_period: date) -> SchedulePeriod:
+        """沪深A股 预约披露时间 of ``report_period`` (one call)."""
+
+        backend = self._resolve_backend()
+        period = report_period.strftime("%Y%m%d")
+        table = await self._call(
+            f"{SCHEDULE_ENDPOINT}({period})", partial(backend.schedule_table, period)
+        )
+        captured_at = self._now()
+        if table is None:
+            return SchedulePeriod(
+                report_period=report_period, captured_at=captured_at, appointments={}
+            )
+        result = parse_disclosure_schedule(
+            table, report_period=report_period, captured_at=captured_at
+        )
+        log.info(
+            "eastmoney_schedule_fetched",
+            report_period=report_period.isoformat(),
+            listings=len(result.appointments),
+        )
+        return result
+
+    async def fetch_business_segments(self, ticker: str) -> SegmentStatement | None:
+        """主营构成 of one listing (every period); ``None`` for an unknown symbol."""
+
+        backend = self._resolve_backend()
+        symbol = to_eastmoney_symbol(ticker)
+        table = await self._call(
+            f"{SEGMENT_ENDPOINT}({symbol})", partial(backend.segment_table, symbol), ticker_count=1
+        )
+        if table is None or not table.rows:
+            return None
+        return parse_business_segments(table, ticker=ticker, captured_at=self._now())
 
     # -- plumbing ---------------------------------------------------------- #
 

@@ -9,6 +9,11 @@ from types import SimpleNamespace
 import pytest
 
 from investment_agent.providers.akshare_eastmoney import (
+    FORECAST_COLUMNS,
+    FORECAST_RAW_COLUMNS,
+    FORECAST_TYPES,
+    SCHEDULE_COLUMNS,
+    SEGMENT_COLUMNS,
     SUMMARY_COLUMNS,
     AkshareEastmoneyClient,
     EastmoneyError,
@@ -17,17 +22,26 @@ from investment_agent.providers.akshare_eastmoney import (
     RawTable,
     _EastmoneyRequests,
     _NoData,
+    normalize_forecast_type,
+    parse_business_segments,
     parse_cash_flow_statement,
+    parse_disclosure_schedule,
+    parse_earnings_forecasts,
     parse_period_summaries,
     to_eastmoney_symbol,
 )
 from investment_agent.providers.errors import LookaheadDataError
 from tests.unit._eastmoney_fake import (
     CAPTURED_AT,
+    EVENTS_CAPTURED_AT,
     FakeEastmoneyBackend,
     NoSleep,
     cash_flow_table,
     fake_client,
+    forecast_frame_rows,
+    forecast_table,
+    schedule_table,
+    segment_table,
     summary_table,
 )
 
@@ -239,6 +253,221 @@ def test_requests_shim_classifies_answers():
         _ = _EastmoneyRequests(fake_get(text="<html></html>"), timeout=5).get(f10).text
     page = '<input id="hidctype" value="4">'
     assert _EastmoneyRequests(fake_get(text=page), timeout=5).get(f10).text == page
+
+
+# --------------------------------------------------------------------------- #
+# Earnings events (mrd-intake C1): forecasts, disclosure schedule, segments
+# --------------------------------------------------------------------------- #
+
+Q3_2026 = date(2026, 9, 30)
+
+
+def _events_client(backend: FakeEastmoneyBackend | None = None) -> AkshareEastmoneyClient:
+    return fake_client(backend, clock=EVENTS_CAPTURED_AT)
+
+
+def test_event_fixture_columns_are_the_locked_columns():
+    table = forecast_table()
+    assert table.columns == FORECAST_COLUMNS
+    assert set(table.rows[0]) >= FORECAST_RAW_COLUMNS
+    assert schedule_table().columns == SCHEDULE_COLUMNS
+    assert segment_table("SH600519").columns == SEGMENT_COLUMNS
+    # akshare's frame keeps the midpoints of the range the backend keeps.
+    by_key = {
+        (row["SECURITY_CODE"], row["PREDICT_FINANCE_CODE"], row["NOTICE_DATE"][:10]): row
+        for row in table.rows
+    }
+    for frame_row in forecast_frame_rows():
+        raw = by_key[(frame_row["股票代码"], _code_of(frame_row["预测指标"]), frame_row["公告日期"][:10])]
+        if raw["PREDICT_AMT_LOWER"] is not None and raw["PREDICT_AMT_UPPER"] is not None:
+            midpoint = (raw["PREDICT_AMT_LOWER"] + raw["PREDICT_AMT_UPPER"]) / 2
+            assert frame_row["预测数值"] == pytest.approx(midpoint, rel=1e-6)
+        assert frame_row["预告类型"] == raw["PREDICT_TYPE"]
+
+
+def _code_of(indicator: str) -> str:
+    return {
+        "归属于上市公司股东的净利润": "004",
+        "扣除非经常性损益后的净利润": "005",
+        "每股收益": "003",
+        "营业收入": "006",
+        "扣除后营业收入": "008",
+        "净利润": "002",
+        "主营业务收入": "001",
+    }[indicator]
+
+
+async def test_forecasts_keep_one_row_per_notice_with_the_range_in_cny_and_fractions():
+    result = await _events_client().fetch_earnings_forecasts(H1_2026)
+    assert result.captured_at == EVENTS_CAPTURED_AT
+    assert set(result.forecasts) >= {"600030.SH", "000002.SZ", "002107.SZ", "920081.BJ"}
+    (citic,) = result.forecasts["600030.SH"]
+    assert citic.indicator_code == "004" and citic.notice_date == date(2026, 7, 11)
+    assert citic.forecast_type == "预增" and citic.profit_low == citic.profit_high == 23_343_000_000
+    assert citic.yoy_low == pytest.approx(0.7015) and citic.yoy_high == pytest.approx(0.7015)
+    (vanke,) = result.forecasts["000002.SZ"]
+    assert (vanke.forecast_type, vanke.profit_low, vanke.profit_high) == ("增亏", -15e9, -12e9)
+    assert vanke.yoy_low == pytest.approx(-0.2556) and vanke.yoy_high == pytest.approx(-0.0045)
+    assert "亏损" in vanke.content
+    # 301583 only forecast EPS and 扣非净利润: the 扣非 row is kept as the fallback indicator.
+    (fallback,) = result.forecasts["301583.SZ"]
+    assert fallback.indicator_code == "005"
+    assert result.skipped_indicators > 0
+    assert {item.forecast_type for items in result.forecasts.values() for item in items} == {
+        *FORECAST_TYPES, "不确定",
+    }
+    rows = result.raw_rows_for(["600030.SH"])
+    assert {row["PREDICT_FINANCE_CODE"] for row in rows} == {"004", "005"}
+
+
+def test_forecast_type_normalisation_falls_back_to_the_summary_text():
+    assert normalize_forecast_type("预增", "") == "预增"
+    assert normalize_forecast_type("不确定", "预计净利润变动") == "不确定"
+    assert normalize_forecast_type(None, "预计2026年1-6月净利润扭亏为盈") == "扭亏"
+    assert normalize_forecast_type("", "净利润预计略减并且减亏") == "略减"  # FORECAST_TYPES order
+    assert normalize_forecast_type("new type", "无法判断") == "不确定"
+
+
+def test_forecast_schema_and_lookahead_guards():
+    table = forecast_table()
+    with pytest.raises(EastmoneySchemaError, match="columns changed"):
+        parse_earnings_forecasts(
+            RawTable(table.columns[:-1], table.rows), report_period=H1_2026,
+            captured_at=EVENTS_CAPTURED_AT,
+        )
+    stripped = tuple({k: v for k, v in row.items() if k != "PREDICT_AMT_LOWER"} for row in table.rows)
+    with pytest.raises(EastmoneySchemaError, match="PREDICT_AMT_LOWER"):
+        parse_earnings_forecasts(
+            RawTable(table.columns, stripped), report_period=H1_2026, captured_at=EVENTS_CAPTURED_AT
+        )
+    with pytest.raises(EastmoneySchemaError, match="asked for 2026-09-30"):
+        parse_earnings_forecasts(table, report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT)
+    with pytest.raises(LookaheadDataError, match="notice date 2026-08-19"):
+        parse_earnings_forecasts(
+            table, report_period=H1_2026, captured_at=datetime(2026, 8, 18, 12, tzinfo=UTC)
+        )
+    missing_type = tuple({**row, "PREDICT_TYPE": None} for row in table.rows)
+    parsed = parse_earnings_forecasts(
+        RawTable(table.columns, missing_type), report_period=H1_2026, captured_at=EVENTS_CAPTURED_AT
+    )
+    # Without PREDICT_TYPE the summary text decides; a plain "盈利 … 同比增长" text has no
+    # type word, so it is 不确定 (the raw value is kept as None).
+    (citic,) = parsed.forecasts["600030.SH"]
+    assert citic.forecast_type == "不确定" and citic.forecast_type_raw is None
+    tagged = tuple(
+        {**row, "PREDICT_TYPE": None, "PREDICT_CONTENT": "预计净利润扭亏为盈"} for row in table.rows
+    )
+    parsed = parse_earnings_forecasts(
+        RawTable(table.columns, tagged), report_period=H1_2026, captured_at=EVENTS_CAPTURED_AT
+    )
+    assert parsed.forecasts["600030.SH"][0].forecast_type == "扭亏"
+
+
+async def test_undisclosed_forecast_period_is_empty():
+    result = await _events_client().fetch_earnings_forecasts(Q3_2026)
+    assert result.forecasts == {} and result.report_period == Q3_2026
+
+
+async def test_disclosure_schedule_takes_the_latest_change():
+    result = await _events_client().fetch_disclosure_schedule(Q3_2026)
+    assert len(result.appointments) == 14 and result.duplicates == 0
+    first = result.appointments["002107.SZ"]
+    assert (first.first_date, first.scheduled_date, first.actual_date) == (
+        date(2026, 10, 10), date(2026, 10, 10), None,
+    )
+    moved = result.appointments["300633.SZ"]
+    assert moved.first_date == date(2026, 10, 22) and moved.scheduled_date == date(2026, 10, 29)
+    assert moved.changes == (date(2026, 10, 29),)
+    earlier = result.appointments["600661.SH"]
+    assert earlier.scheduled_date == date(2026, 10, 20) < earlier.first_date
+    assert result.raw_rows_for(["600519.SH"])[0]["首次预约时间"].startswith("2026-10-31")
+
+
+def test_disclosure_schedule_guards():
+    table = schedule_table()
+    with pytest.raises(EastmoneySchemaError, match="columns changed"):
+        parse_disclosure_schedule(
+            RawTable((*table.columns, "extra"), table.rows), report_period=Q3_2026,
+            captured_at=EVENTS_CAPTURED_AT,
+        )
+    published = tuple(
+        {**row, "实际披露时间": "2026-10-12T00:00:00"} if row["股票代码"] == "002107" else row
+        for row in table.rows
+    )
+    with pytest.raises(LookaheadDataError, match="actual disclosure 2026-10-12"):
+        parse_disclosure_schedule(
+            RawTable(table.columns, published), report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT
+        )
+    parsed = parse_disclosure_schedule(
+        RawTable(table.columns, published), report_period=Q3_2026,
+        captured_at=datetime(2026, 10, 12, 11, tzinfo=UTC),
+    )
+    assert parsed.appointments["002107.SZ"].actual_date == date(2026, 10, 12)
+    duplicated = RawTable(table.columns, (*table.rows, table.rows[0]))
+    assert parse_disclosure_schedule(
+        duplicated, report_period=Q3_2026, captured_at=EVENTS_CAPTURED_AT
+    ).duplicates == 1
+
+
+async def test_business_segments_units_and_kinds():
+    statement = await _events_client().fetch_business_segments("600519.SH")
+    assert statement is not None and statement.captured_at == EVENTS_CAPTURED_AT
+    assert list(statement.periods)[:2] == [H1_2026, date(2025, 12, 31)]
+    latest = statement.periods[H1_2026]
+    products = [item for item in latest if item.kind == "product"]
+    assert [item.name for item in products] == ["茅台酒", "其他系列酒", "其他(补充)"]
+    moutai = products[0]
+    assert moutai.revenue == pytest.approx(77_724_437_925.48)
+    assert moutai.share == pytest.approx(0.856909) and moutai.margin == pytest.approx(0.922793)
+    assert moutai.profit == pytest.approx(71_723_553_696.78)
+    assert {item.kind for item in latest} == {"product", "region"}
+    assert statement.raw_rows_for([H1_2026])[0]["主营构成"] == "茅台酒"
+    assert await _events_client().fetch_business_segments("999999.SH") is None
+
+
+def test_business_segment_guards():
+    table = segment_table("SH600519")
+    with pytest.raises(EastmoneySchemaError, match="got a row of 600519"):
+        parse_business_segments(table, ticker="000001.SZ", captured_at=EVENTS_CAPTURED_AT)
+    with pytest.raises(EastmoneySchemaError, match="columns changed"):
+        parse_business_segments(
+            RawTable(table.columns[1:], table.rows), ticker="600519.SH",
+            captured_at=EVENTS_CAPTURED_AT,
+        )
+    with pytest.raises(LookaheadDataError, match="report period 2026-06-30"):
+        parse_business_segments(
+            table, ticker="600519.SH", captured_at=datetime(2026, 6, 1, tzinfo=UTC)
+        )
+    odd = tuple({**row, "分类类型": None} if row["主营构成"] == "国内" else row for row in table.rows)
+    parsed = parse_business_segments(
+        RawTable(table.columns, odd), ticker="600519.SH", captured_at=EVENTS_CAPTURED_AT
+    )
+    assert parsed.skipped_kinds == ("None",)
+    assert "国内" not in {item.name for item in parsed.periods[H1_2026]}
+
+
+def test_requests_shim_collects_datacenter_rows_and_empty_business_analysis():
+    class Exceptions:
+        RequestException = OSError
+        ConnectionError = ConnectionError
+        Timeout = TimeoutError
+
+    def fake(payload):
+        return SimpleNamespace(
+            get=lambda url, *a, **k: SimpleNamespace(status_code=200, json=lambda: payload, text=""),
+            exceptions=Exceptions,
+        )
+
+    sink: list[dict[str, object]] = []
+    url = "https://datacenter.eastmoney.com/securities/api/data/v1/get"
+    shim = _EastmoneyRequests(
+        fake({"result": {"pages": 1, "data": [{"SECURITY_CODE": "600519"}]}}), timeout=5, sink=sink
+    )
+    shim.get(url).json()
+    assert sink == [{"SECURITY_CODE": "600519"}]
+    f10 = "https://emweb.securities.eastmoney.com/PC_HSF10/BusinessAnalysis/PageAjax"
+    with pytest.raises(_NoData):
+        _EastmoneyRequests(fake({"zyfw": [], "zygcfx": [], "jyps": []}), timeout=5).get(f10).json()
 
 
 @pytest.mark.network
