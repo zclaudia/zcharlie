@@ -52,10 +52,12 @@ the evening (decision D2: baostock first, Tencent as the fallback).
   or the day has not been quoted yet) and the collector tries again later.
   A quote dated after the trade date (but not after the capture date) is
   ``missing``: the feed only serves the latest session.
-* Suspension: a last price of 0 with volume 0 on the trade date means the
-  stock did not trade (mrd ``sources/tencent.cjs``): the bar is stored like
-  baostock stores suspended days (``trade_status=0``, OHLC = previous
-  close, volume / amount 0).
+* Suspension: volume 0 on the trade date, or the status flag ``S`` in
+  field 40, means the stock did not trade. Live rows of a suspended stock
+  (601059.SH on 2026-10-09) carry the previous close as the last price,
+  open / high / low 0, volume 0 and ``S``; a last price of 0 also occurs.
+  The bar is stored like baostock stores suspended days (``trade_status=0``,
+  OHLC = previous close, volume / amount 0).
 * Errors: network / timeouts / HTTP 5xx and 429 ->
   :class:`ProviderTransientError`; other HTTP 4xx, undecodable or
   unparsable bodies -> :class:`ProviderDataError` (terminal: schema drift
@@ -113,6 +115,8 @@ _F_LOW = 34
 _F_AMOUNT = 37
 _F_TURNOVER = 38
 _F_PE = 39
+_F_STATUS = 40
+"""Trading status flag: ``S`` = suspended (停牌); empty while trading."""
 _MIN_FIELDS = 44
 """A row needs at least this many fields for every position read here."""
 
@@ -302,8 +306,9 @@ def closed_quote(
     price = _decimal(row, _F_PRICE, ticker=ticker)
     prev_close = _decimal(row, _F_PREV_CLOSE, ticker=ticker)
     volume_lots = _decimal(row, _F_VOLUME, ticker=ticker)
-    if price == 0 and volume_lots == 0:
-        # No trade on the day (suspended): store it the way baostock does.
+    if volume_lots == 0 or row[_F_STATUS].strip().upper() == "S":
+        # No trade on the day (suspended): store it the way baostock does. The last
+        # price is the previous close (or 0), so it must not decide on its own.
         return ClosedQuote(
             ticker=ticker,
             trade_date=trade_date,

@@ -35,6 +35,9 @@ from investment_agent.providers.tencent_quote import (
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "tencent"
 SAMPLE = (FIXTURES / "quotes_sample.txt").read_text(encoding="utf-8")
 EDGE_CASES = (FIXTURES / "quotes_edge_cases.txt").read_text(encoding="utf-8")
+# Live row of a suspended stock (601059.SH, 2026-10-09 15:35 CST, run 235): last price =
+# previous close, open / high / low 0, volume 0, status flag "S" in field 40.
+SUSPENDED_LIVE = (FIXTURES / "quotes_suspended_live.txt").read_text(encoding="utf-8")
 TRADE_DATE = date(2026, 10, 8)
 # 16:20 Asia/Shanghai on the trade date (after the 15:00 close).
 CAPTURED_AT = datetime(2026, 10, 8, 8, 20, tzinfo=UTC)
@@ -243,6 +246,26 @@ async def test_missing_codes_and_sessions_already_gone():
     batch = await _client().fetch_close(["600519.SH"], date(2026, 9, 30))
     assert batch.quotes == {}
     assert batch.missing["600519.SH"].startswith("feed already serves 2026-10-08")
+
+
+def test_live_suspended_row_keeps_the_previous_close_as_last_price():
+    rows = parse_quote_lines(SUSPENDED_LIVE)
+    day = date(2026, 10, 9)
+    halted = closed_quote("601059.SH", rows["sh601059"], trade_date=day, capture_date=day)
+    assert halted.suspended and halted.trade_status == 0
+    assert (halted.open, halted.high, halted.low, halted.close) == (Decimal("15.56"),) * 4
+    assert halted.volume_shares == 0 and halted.amount_cny == 0 and halted.turnover == 0
+
+
+def test_volume_zero_or_status_flag_alone_marks_a_suspension():
+    rows = parse_quote_lines(SUSPENDED_LIVE)
+    day = date(2026, 10, 9)
+    flag_only = list(rows["sh601059"])
+    flag_only[6] = "100"  # volume present, flag still "S"
+    assert closed_quote("601059.SH", flag_only, trade_date=day, capture_date=day).suspended
+    volume_only = list(rows["sh601059"])
+    volume_only[40] = ""
+    assert closed_quote("601059.SH", volume_only, trade_date=day, capture_date=day).suspended
 
 
 @respx.mock
