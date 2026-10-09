@@ -252,6 +252,7 @@ function candidateItem(candidate) {
   aside.appendChild(
     el("span", { class: "spark spark-pending spark-slot spark-slot-wide", "data-spark": candidate.ticker, "aria-hidden": "true" })
   );
+  aside.appendChild(el("div", { class: "candidate-price", "data-price-for": candidate.ticker }));
   aside.appendChild(el("p", { class: "faint small candidate-aside-cap" }, `近 ${SPARK_DAYS} 个交易日收盘`));
   const states = el("p", { class: "candidate-states" });
   if (candidate.status === "open") states.appendChild(draftChip(candidate));
@@ -262,6 +263,47 @@ function candidateItem(candidate) {
   aside.appendChild(states);
   item.appendChild(aside);
   return item;
+}
+
+function pctChange(from, to) {
+  return from ? ((to - from) / from) * 100 : null;
+}
+
+function pctNode(text, value) {
+  const cls = value > 0 ? "pc-up" : value < 0 ? "pc-down" : "pc-flat";
+  return el("span", { class: `price-chg ${cls}` }, value === null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`);
+}
+
+// 卡片右侧的价格摘要：最新收盘、日涨跌，以及 5 / 20 / 区间涨跌与距区间高点。
+function fillPriceSummary(root, ticker, bars) {
+  const closes = (Array.isArray(bars) ? bars : []).filter((bar) => bar && Number.isFinite(bar.close));
+  if (closes.length < 2) return;
+  const last = closes[closes.length - 1];
+  const back = (n) => closes[Math.max(0, closes.length - 1 - n)].close;
+  const high = Math.max(...closes.map((bar) => bar.close));
+  const periods = [
+    ["5日", pctChange(back(5), last.close)],
+    ["20日", pctChange(back(20), last.close)],
+    [`${closes.length}日`, pctChange(closes[0].close, last.close)],
+  ];
+  for (const host of root.querySelectorAll(`[data-price-for="${CSS.escape(ticker)}"]`)) {
+    const top = el("div", { class: "price-top" });
+    top.appendChild(el("span", { class: "price-last" }, last.close.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
+    top.appendChild(pctNode("", pctChange(back(1), last.close)));
+    top.appendChild(el("span", { class: "faint small" }, last.trade_date));
+    const grid = el("div", { class: "price-grid" });
+    for (const [text, value] of periods) {
+      const cell = el("span", { class: "price-cell" });
+      cell.appendChild(el("span", { class: "faint" }, text));
+      cell.appendChild(pctNode("", value));
+      grid.appendChild(cell);
+    }
+    const fromHigh = el("span", { class: "price-cell" });
+    fromHigh.appendChild(el("span", { class: "faint" }, "距高点"));
+    fromHigh.appendChild(pctNode("", pctChange(high, last.close)));
+    grid.appendChild(fromHigh);
+    host.replaceChildren(top, grid);
+  }
 }
 
 function renderCandidateList(region) {
@@ -279,7 +321,11 @@ function renderCandidateList(region) {
   renderRegion(region, "ready", container);
   fillSparklines(
     container.querySelectorAll("[data-spark]"),
-    (ticker) => get(`/market/${encodeURIComponent(ticker)}/bars?days=${SPARK_DAYS}`),
+    async (ticker) => {
+      const data = await get(`/market/${encodeURIComponent(ticker)}/bars?days=${SPARK_DAYS}`);
+      fillPriceSummary(container, ticker, data && data.bars);
+      return data;
+    },
     { width: "100%", height: 72 }
   );
 }

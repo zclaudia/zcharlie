@@ -1032,3 +1032,9 @@ a.stock-name:hover { color: var(--c-accent); }
 .pc-ytick-first { transform: none; }
 .pc-ytick-last { transform: translateY(-100%); }
 .pc-grid { stroke: var(--c-line); stroke-width: 1px; stroke-dasharray: 3 4; }
+.candidate-price:empty { display: none; }
+.price-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.price-last { font-size: var(--fs-xl, 1.4rem); font-weight: 700; font-variant-numeric: tabular-nums; }
+.price-chg { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+.price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px var(--sp-3); margin-top: var(--sp-1); font-size: var(--fs-sm); }
+.price-cell { display: flex; justify-content: space-between; gap: var(--sp-2); }
