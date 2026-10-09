@@ -43,18 +43,27 @@ async def search_stocks(
 ) -> list[StockSearchItem]:
     """Directory hits for ``q`` (blank -> ``[]``), at most ``limit``."""
 
+    async with session_scope() as session:
+        return await search_directory(session, settings, q, limit=limit)
+
+
+async def search_directory(
+    session: AsyncSession, settings: Settings, q: str, *, limit: int
+) -> list[StockSearchItem]:
+    """Directory hits for ``q`` with the target-pool / watchlist flags
+    (shared by the API and the MCP ``search_stocks`` tool)."""
+
     query = q.strip()
     if not query:
         return []
-    async with session_scope() as session:
-        rows = await StockDirectoryRepository(session).search(query, limit=limit)
-        if not rows:
-            return []
-        tickers = {row.ticker for row in rows}
-        universes = await _snapshot_universes(session, settings)
-        members = await UniverseRepository(session).members_as_of(universes[0], shanghai_today())
-        in_universe = {member.ticker for member in members} & tickers
-        on_watchlist = await _watchlist_tickers(session) & tickers
+    rows = await StockDirectoryRepository(session).search(query, limit=limit)
+    if not rows:
+        return []
+    tickers = {row.ticker for row in rows}
+    universes = await _snapshot_universes(session, settings)
+    members = await UniverseRepository(session).members_as_of(universes[0], shanghai_today())
+    in_universe = {member.ticker for member in members} & tickers
+    on_watchlist = await _watchlist_tickers(session) & tickers
     return [
         StockSearchItem(
             ticker=row.ticker,

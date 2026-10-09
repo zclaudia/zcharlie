@@ -48,7 +48,7 @@ router = APIRouter(
 async def list_watchlist() -> list[WatchlistItemOut]:
     async with session_scope() as session:
         items = await WatchlistRepository(session).list_all()
-        return [await _to_out(session, item) for item in items]
+        return [await watchlist_item_out(session, item) for item in items]
 
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)
@@ -148,7 +148,7 @@ async def add_watchlist(body: WatchlistAdd) -> WatchlistItemOut:
             report_year=report_year,
             enabled=body.enabled,
         )
-        return await _to_out(session, item)
+        return await watchlist_item_out(session, item)
 
 
 @router.post(
@@ -191,7 +191,10 @@ async def refresh_watchlist(
     )
 
 
-async def _to_out(session: AsyncSession, item: WatchlistItem) -> WatchlistItemOut:
+async def watchlist_item_out(session: AsyncSession, item: WatchlistItem) -> WatchlistItemOut:
+    """One watchlist row with its company name and newest research summary
+    (shared by ``GET /watchlist`` and the MCP ``list_watchlist`` tool)."""
+
     listing = await session.get(Listing, item.listing_id)
     if listing is None:
         raise ValueError(f"Listing {item.listing_id} not found")
@@ -315,7 +318,7 @@ async def update_watchlist_item(listing_id: int, body: WatchlistUpdate) -> Watch
                 status_code=404,
                 detail=f"No watchlist entry for listing_id={listing_id}",
             )
-        return await _to_out(session, item)
+        return await watchlist_item_out(session, item)
 
 
 @router.delete("/{listing_id}", status_code=204)

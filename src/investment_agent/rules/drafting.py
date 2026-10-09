@@ -69,7 +69,7 @@ from investment_agent.config import Settings
 from investment_agent.domain.protocols import LLMClient
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.registry import FactorRegistry, FactorValue
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view import SnapshotView, load_snapshot_view
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.rules.draft_policy import (
@@ -228,9 +228,19 @@ async def load_stock_context(
     """Every registered factor on ``as_of`` plus industry group, Shenwan chain and
     the latest 主营构成 (facts only)."""
 
+    view = await load_snapshot_view(session, ticker, as_of)
+    return StockContext(
+        factors=DEFAULT_REGISTRY.compute_all(view),
+        industry=industry_context(view),
+        segments=await segment_loader(session, ticker, as_of),
+    )
+
+
+def industry_context(view: SnapshotView) -> dict[str, Any]:
+    """Industry group, CSRC code and the Shenwan chain of a snapshot view."""
+
     from investment_agent.providers.shenwan_directory import default_shenwan_directory
 
-    view = await load_snapshot_view(session, ticker, as_of)
     industry: dict[str, Any] = {
         "group": view.industry_group,
         "groups_version": view.industry_groups_version,
@@ -248,11 +258,7 @@ async def load_stock_context(
                 for item in directory.chain(view.sw_code)
             ],
         }
-    return StockContext(
-        factors=DEFAULT_REGISTRY.compute_all(view),
-        industry=industry,
-        segments=await segment_loader(session, ticker, as_of),
-    )
+    return industry
 
 
 StockLoader = Callable[[AsyncSession, str, date], Awaitable[StockContext]]

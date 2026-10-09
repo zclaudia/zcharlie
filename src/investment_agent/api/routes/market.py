@@ -12,12 +12,14 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.auth import verify_api_key_or_session
 from investment_agent.api.schemas.market import MarketBar, MarketBarsOut
 from investment_agent.clock import shanghai_today
 from investment_agent.factors.field_sources import default_field_sources, market_precedence
 from investment_agent.storage.database import session_scope
+from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 
@@ -53,8 +55,6 @@ async def market_bars(
             detail=f"not a canonical A-share ticker: {ticker}",
         )
     as_of = datetime.now(UTC)
-    end = shanghai_today()
-    start = end - timedelta(days=days * _CALENDAR_DAYS_PER_BAR + _WINDOW_SLACK_DAYS)
     async with session_scope() as session:
         listing = await ListingRepository(session).get_a_share_listing(normalized)
         if listing is None:
@@ -62,13 +62,26 @@ async def market_bars(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Listing not found: {normalized}",
             )
-        rows = await MarketSnapshotRepository(session).series_as_of(
-            listing.id,
-            start,
-            end,
-            as_of,
-            adjust=BARS_ADJUST,
-            provider=BARS_PROVIDERS,
-        )
-    bars = [MarketBar(trade_date=row.trade_date, close=float(row.close)) for row in rows[-days:]]
+        rows = await load_bars(session, listing.id, days, as_of=as_of)
+    bars = [MarketBar(trade_date=row.trade_date, close=float(row.close)) for row in rows]
     return MarketBarsOut(ticker=normalized, provider=BARS_PROVIDER, as_of=as_of, bars=bars)
+
+
+async def load_bars(
+    session: AsyncSession, listing_id: int, days: int, *, as_of: datetime
+) -> list[MarketSnapshot]:
+    """The last ``days`` uncorrected bars of ``listing_id`` known at ``as_of``,
+    oldest first, in the registry's provider precedence (shared by the API
+    and the MCP ``get_bars`` tool)."""
+
+    end = shanghai_today()
+    start = end - timedelta(days=days * _CALENDAR_DAYS_PER_BAR + _WINDOW_SLACK_DAYS)
+    rows = await MarketSnapshotRepository(session).series_as_of(
+        listing_id,
+        start,
+        end,
+        as_of,
+        adjust=BARS_ADJUST,
+        provider=BARS_PROVIDERS,
+    )
+    return rows[-days:]

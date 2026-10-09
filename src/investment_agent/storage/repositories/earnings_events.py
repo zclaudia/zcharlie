@@ -125,7 +125,38 @@ class EarningsEventRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def recent_forecasts(
+        self, *, listing_id: int | None = None, limit: int
+    ) -> list[EarningsForecastRecord]:
+        """Newest forecasts (by notice date, then capture) across listings or of one."""
+
+        stmt = select(EarningsForecastRecord)
+        if listing_id is not None:
+            stmt = stmt.where(EarningsForecastRecord.listing_id == listing_id)
+        stmt = stmt.order_by(
+            EarningsForecastRecord.notice_date.desc(),
+            EarningsForecastRecord.captured_at.desc(),
+            EarningsForecastRecord.id.desc(),
+        ).limit(limit)
+        return list((await self.session.execute(stmt)).scalars().all())
+
     # -- disclosure schedule ------------------------------------------------ #
+
+    async def recent_schedules(
+        self, *, listing_id: int | None = None, limit: int
+    ) -> list[DisclosureScheduleRecord]:
+        """Newest schedule captures (by capture, then scheduled date) across
+        listings or of one; every capture of a listing / period is a row."""
+
+        stmt = select(DisclosureScheduleRecord)
+        if listing_id is not None:
+            stmt = stmt.where(DisclosureScheduleRecord.listing_id == listing_id)
+        stmt = stmt.order_by(
+            DisclosureScheduleRecord.captured_at.desc(),
+            DisclosureScheduleRecord.scheduled_date.desc(),
+            DisclosureScheduleRecord.id.desc(),
+        ).limit(limit)
+        return list((await self.session.execute(stmt)).scalars().all())
 
     async def latest_schedules(
         self, listing_ids: Sequence[int], report_period: date

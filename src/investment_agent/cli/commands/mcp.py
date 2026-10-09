@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
+from pathlib import Path
 
 import typer
 from rich import print as rprint
@@ -40,13 +42,26 @@ def _logs_to_stderr() -> None:
             handler.setStream(sys.stderr)
 
 
+_PROJECT_DIR_HELP = (
+    "Change into this directory first (the checkout): .env, config/app.yaml, the trading "
+    "calendar and a relative DATABASE_URL are resolved from the working directory, which "
+    "MCP clients such as Claude Desktop do not set"
+)
+
+
 @app.command("serve")
-def serve() -> None:
+def serve(
+    project_dir: Path | None = typer.Option(  # noqa: B008
+        None, "--project-dir", help=_PROJECT_DIR_HELP, exists=True, file_okay=False
+    ),
+) -> None:
     """Serve the read-only tools over stdio (the MCP client spawns this)."""
 
     import asyncio
 
     _logs_to_stderr()
+    if project_dir is not None:
+        os.chdir(project_dir)
     asyncio.run(_serve())
 
 

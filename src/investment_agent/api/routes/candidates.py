@@ -120,8 +120,8 @@ def _raise_http(exc: Exception) -> NoReturn:
 # --------------------------------------------------------------------------- #
 
 
-class _Templates:
-    """Per-request cache of template records."""
+class TemplateCache:
+    """Per-request cache of template records (also used by the MCP tools)."""
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
@@ -168,7 +168,7 @@ def _zone_factors(node: Any) -> list[str]:
     return []
 
 
-async def _screen_result_out(row: ScreenResultRecord, templates: _Templates) -> ScreenResultOut:
+async def _screen_result_out(row: ScreenResultRecord, templates: TemplateCache) -> ScreenResultOut:
     return ScreenResultOut(
         screen_result_id=row.id,
         screen_run_id=row.screen_run_id,
@@ -184,7 +184,7 @@ async def _screen_result_out(row: ScreenResultRecord, templates: _Templates) -> 
     )
 
 
-async def _rule_summary(rule: RuleInstanceRecord, templates: _Templates) -> RuleSummaryOut:
+async def _rule_summary(rule: RuleInstanceRecord, templates: TemplateCache) -> RuleSummaryOut:
     return RuleSummaryOut(
         rule_instance_id=rule.id,
         listing_id=rule.listing_id,
@@ -201,7 +201,7 @@ async def _rule_summary(rule: RuleInstanceRecord, templates: _Templates) -> Rule
     )
 
 
-async def _rule_detail(rule: RuleInstanceRecord, templates: _Templates) -> RuleDetailOut:
+async def rule_detail_out(rule: RuleInstanceRecord, templates: TemplateCache) -> RuleDetailOut:
     summary = await _rule_summary(rule, templates)
     record = await templates.get(rule.template_id, rule.template_version)
     template_params: dict[str, float] = {}
@@ -267,7 +267,7 @@ async def _company_name(session: AsyncSession, listing_id: int) -> str | None:
 
 
 async def _summary_parts(
-    session: AsyncSession, candidate: CandidateRecord, templates: _Templates
+    session: AsyncSession, candidate: CandidateRecord, templates: TemplateCache
 ) -> tuple[dict[str, Any], list[ScreenResultRecord], RuleInstanceRecord | None]:
     results = await latest_screen_results(session, candidate)
     draft_state, draft = await effective_draft(session, candidate)
@@ -307,8 +307,8 @@ async def _summary_parts(
     return fields, results, draft
 
 
-async def _candidate_summary(
-    session: AsyncSession, candidate: CandidateRecord, templates: _Templates
+async def candidate_summary_out(
+    session: AsyncSession, candidate: CandidateRecord, templates: TemplateCache
 ) -> CandidateSummaryOut:
     fields, _results, _draft = await _summary_parts(session, candidate, templates)
     return CandidateSummaryOut(**fields)
@@ -333,14 +333,14 @@ async def _segments_out(session: AsyncSession, candidate: CandidateRecord) -> li
     ]
 
 
-async def _candidate_detail(session: AsyncSession, candidate: CandidateRecord) -> CandidateDetailOut:
-    templates = _Templates(session)
+async def candidate_detail_out(session: AsyncSession, candidate: CandidateRecord) -> CandidateDetailOut:
+    templates = TemplateCache(session)
     fields, results, draft = await _summary_parts(session, candidate, templates)
     decisions = await DecisionRepository(session).for_candidate(candidate.id)
     return CandidateDetailOut(
         **fields,
         screen_results=[await _screen_result_out(row, templates) for row in results],
-        draft_rule_detail=await _rule_detail(draft, templates) if draft is not None else None,
+        draft_rule_detail=await rule_detail_out(draft, templates) if draft is not None else None,
         decisions=[_decision_out(item) for item in decisions],
         segments=await _segments_out(session, candidate),
     )
@@ -371,8 +371,8 @@ async def list_candidates(
         rows, total = await CandidateRepository(session).page(
             status=candidate_status, limit=limit, offset=offset
         )
-        templates = _Templates(session)
-        items = [await _candidate_summary(session, row, templates) for row in rows]
+        templates = TemplateCache(session)
+        items = [await candidate_summary_out(session, row, templates) for row in rows]
     return CandidatePageOut(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -380,7 +380,7 @@ async def list_candidates(
 async def get_candidate(candidate_id: int) -> CandidateDetailOut:
     async with session_scope() as session:
         candidate = await _required_candidate(session, candidate_id)
-        return await _candidate_detail(session, candidate)
+        return await candidate_detail_out(session, candidate)
 
 
 @candidates_router.post("", response_model=CandidateNominateOut, status_code=201)
@@ -398,7 +398,7 @@ async def nominate(
                 policy=CandidatePolicy.from_settings(settings),
                 as_of=shanghai_today(),
             )
-            detail = await _candidate_detail(session, outcome.candidate)
+            detail = await candidate_detail_out(session, outcome.candidate)
     except (CandidateError, ReasonRequiredError) as exc:
         _raise_http(exc)
     return CandidateNominateOut(
@@ -411,7 +411,7 @@ async def dismiss(candidate_id: int, body: ReasonRequest) -> CandidateDetailOut:
     try:
         async with session_scope() as session:
             candidate = await dismiss_candidate(session, candidate_id, reason=body.reason)
-            return await _candidate_detail(session, candidate)
+            return await candidate_detail_out(session, candidate)
     except (CandidateError, ReasonRequiredError) as exc:
         _raise_http(exc)
 
@@ -423,7 +423,7 @@ async def redraft(candidate_id: int, body: RedraftRequest) -> RedraftOut:
     try:
         async with session_scope() as session:
             run = await redraft_candidate(session, candidate_id, template_id=body.template_id)
-            candidate = await _candidate_detail(session, await open_candidate(session, candidate_id))
+            candidate = await candidate_detail_out(session, await open_candidate(session, candidate_id))
             return RedraftOut(candidate=candidate, draft_run_id=run.id)
     except CandidateError as exc:
         _raise_http(exc)
@@ -446,13 +446,13 @@ async def promote(
     except (CandidateError, RuleValidationError, ReasonRequiredError) as exc:
         _raise_http(exc)
     async with session_scope() as session:
-        templates = _Templates(session)
+        templates = TemplateCache(session)
         candidate = await _required_candidate(session, outcome.candidate.id)
         rule = await session.get(RuleInstanceRecord, outcome.rule.id)
         assert rule is not None
         item = outcome.watchlist_item
         return PromoteOut(
-            candidate=await _candidate_summary(session, candidate, templates),
+            candidate=await candidate_summary_out(session, candidate, templates),
             rule=await _rule_summary(rule, templates),
             retired_rule_instance_id=outcome.previous_active_id,
             watchlist=WatchlistEntryOut(
@@ -482,7 +482,7 @@ async def get_rule(rule_id: int) -> RuleDetailOut:
         rule = await session.get(RuleInstanceRecord, rule_id)
         if rule is None:
             raise HTTPException(status_code=404, detail=f"Rule {rule_id} not found")
-        return await _rule_detail(rule, _Templates(session))
+        return await rule_detail_out(rule, TemplateCache(session))
 
 
 @rules_router.patch("/{rule_id}", response_model=RuleDecisionOut)
@@ -493,7 +493,7 @@ async def patch_rule(rule_id: int, body: RulePatchRequest) -> RuleDecisionOut:
                 session, rule_id, dict(body.params), reason=body.reason
             )
             return RuleDecisionOut(
-                rule=await _rule_detail(rule, _Templates(session)),
+                rule=await rule_detail_out(rule, TemplateCache(session)),
                 decision=_decision_out(decision),
             )
     except (CandidateError, RuleValidationError) as exc:
@@ -506,7 +506,7 @@ async def reject(rule_id: int, body: ReasonRequest) -> RuleDecisionOut:
         async with session_scope() as session:
             rule, decision = await reject_rule(session, rule_id, reason=body.reason)
             return RuleDecisionOut(
-                rule=await _rule_detail(rule, _Templates(session)),
+                rule=await rule_detail_out(rule, TemplateCache(session)),
                 decision=_decision_out(decision),
             )
     except (CandidateError, ReasonRequiredError) as exc:
@@ -525,7 +525,7 @@ async def get_screen_run(run_id: int) -> ScreenRunOut:
         if run is None or run.kind != SCREEN_RUN:
             raise HTTPException(status_code=404, detail=f"Screen run {run_id} not found")
         rows = await screen_results(session, run_id)
-        templates = _Templates(session)
+        templates = TemplateCache(session)
         listing_ids = sorted({row.listing_id for row in rows if row.outcome == "hit"})
         open_candidates: dict[int, int] = {}
         if listing_ids:
