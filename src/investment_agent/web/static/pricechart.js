@@ -64,7 +64,8 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
 
   function drawAxis(bars) {
     const n = bars.length;
-    const count = Math.min(n, host.clientWidth < 520 ? 3 : 5);
+    // 点数很少（7日）时逐日标注，否则等分取 5 个（窄屏 3 个）。
+    const count = n <= 7 ? n : Math.min(n, host.clientWidth < 520 ? 3 : 5);
     const long = new Date(bars[n - 1].trade_date) - new Date(bars[0].trade_date) > 300 * 86400000;
     const ticks = [];
     for (let k = 0; k < count; k += 1) {
