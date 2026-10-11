@@ -44,7 +44,8 @@ dependencies = [
 
     # LLM
     "openai>=1.30,<3",
-    "pydantic-ai>=1.0.0",
+    "pydantic-ai==2.31.1",
+    "anyio>=4,<5",  # Shield final charge settlement from native cancellation scopes
     # Read-only MCP server (mrd-intake D5; 2.x API: mcp.server.mcpserver.MCPServer)
     "mcp>=2,<3",
 
@@ -65,6 +66,10 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "types-PyYAML",
+    "pypdf==6.20.0",
+]
+original-parsing = [
+    "pypdf==6.20.0",
 ]
 
 [project.scripts]
