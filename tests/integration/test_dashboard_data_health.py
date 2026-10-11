@@ -28,3 +28,20 @@ def test_dashboard_keeps_calendar_warnings_alongside_data_health(api_client) -> 
     assert [w["code"] for w in body["warnings"]] == ["calendar"]
     assert body["warnings"][0]["source"] == "calendar"
     assert body["data_health"]["errors"] == 0
+
+
+def test_dashboard_warns_about_a_calendar_candidate(api_client, tmp_path) -> None:
+    """The scheduled probe's candidate file surfaces until it is applied."""
+
+    candidates = tmp_path / "calendar_candidates"
+    candidates.mkdir()
+    (candidates / "a_share-2027.yaml").write_text("calendar_id: CN_A_SHARE\n", encoding="utf-8")
+
+    with freeze_time("2026-11-15T02:00:00Z", tick=True):
+        body = api_client.get("/dashboard/today", headers=KEY).json()
+
+    assert [w["code"] for w in body["warnings"]] == ["calendar_candidate", "calendar"]
+    candidate = body["warnings"][0]
+    assert candidate["source"] == "calendar" and candidate["level"] == "warn"
+    assert "a_share-2027.yaml" in candidate["message"]
+    assert "tools/refresh_trading_calendar.py --write" in candidate["message"]

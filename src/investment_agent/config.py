@@ -172,6 +172,10 @@ class SnapshotScheduleConfig(BaseModel):
     # Eastmoney earnings events (mrd-intake C2): gated to trading days inside
     # the disclosure-season months (January / April / July / October).
     earnings_event_cron: str | None = "0 19 * * 1-5"
+    # Dual-source check of the next unreviewed calendar year (ops "年度 /
+    # 不定期维护"). Weekly; the job only enqueues inside the calendar's
+    # 60-day expiry window, so it is a no-op for most of the year.
+    calendar_probe_cron: str | None = "0 8 * * 1"
 
     @model_validator(mode="after")
     def _known_universes(self) -> Self:

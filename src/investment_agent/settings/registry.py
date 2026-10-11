@@ -133,6 +133,7 @@ class SnapshotSchedule(SnapshotScheduleConfig):
         "financial_weekly_cron",
         "financial_deadline_cron",
         "earnings_event_cron",
+        "calendar_probe_cron",
     )(_check_cron)
 
 
@@ -315,6 +316,11 @@ SPECS: tuple[SettingSpec, ...] = (
         "schedule.snapshot.earnings_event_cron", "财报事件采集 cron",
         _CRON_HELP + "仅在 1 / 4 / 7 / 10 月的交易日执行；东方财富业绩预告与预约披露时间每日、主营构成每周。",
         ("snapshot", "earnings_event_cron"),
+    ),
+    _yaml(
+        "schedule.snapshot.calendar_probe_cron", "交易日历核对 cron",
+        _CRON_HELP + "仅在日历到期前 60 天内执行：双源核对下一年，一致时生成候选文件并通知。",
+        ("snapshot", "calendar_probe_cron"),
     ),
     _yaml(
         "schedule.screen.universes", "筛选股票池", "每周模板筛选的指数成分股池。",

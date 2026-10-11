@@ -186,12 +186,26 @@ def test_build_scheduler_registers_snapshot_jobs(monkeypatch):
         "snapshot_close_quote_retry",
         "snapshot_financial_weekly",
         "snapshot_earnings_event",
+        "calendar_probe",
     }
     market = jobs["snapshot_market_snapshot"]
     assert market.misfire_grace_time == runner.MISFIRE_GRACE_SECONDS
     assert market.coalesce is True
     assert str(market.trigger.timezone) == "Asia/Shanghai"
     assert market.args == ("market_snapshot",)
+
+    probe = jobs["calendar_probe"]
+    assert probe.kwargs == {"calendar_path": CALENDAR_PATH, "timezone": "Asia/Shanghai"}
+    assert str(probe.trigger.timezone) == "Asia/Shanghai"
+
+
+def test_build_scheduler_skips_a_disabled_calendar_probe(monkeypatch):
+    cfg = AppYamlConfig(
+        scheduler=SchedulerConfig(a_share_calendar_path=CALENDAR_PATH),
+        snapshot=SnapshotScheduleConfig(calendar_probe_cron=None),
+    )
+    sched = runner.build_scheduler(settings=_settings(monkeypatch), app_config=cfg)
+    assert "calendar_probe" not in {job.id for job in sched.get_jobs()}
 
 
 def test_build_scheduler_without_snapshot_section_has_no_snapshot_jobs(monkeypatch):

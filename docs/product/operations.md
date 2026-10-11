@@ -62,6 +62,7 @@
 | 候选过期清理 | 每天 07:00 | — | 默认 14 天过期 |
 | iFinD 核对派发 | 每 30 分钟 | 有到期请求时 | 受预算约束，不足时顺延 |
 | iFinD 抽样校准 | 周日 21:00 | — | 观察池随机 10 只（按 ISO 周确定） |
+| 交易日历核对 `calendar_probe` | 周一 08:00 | 日历到期前 60 天内 | 双源核对下一年，一致时写候选文件并发 `info` 通知；分歧发 `action_required`；未公布则静默跳过。cron 键 `snapshot.calendar_probe_cron` |
 
 调度器启动时会补跑当天已错过的任务；所有任务按日期幂等。
 
@@ -96,6 +97,8 @@
 |---|---|---|
 | 日线落后 ≥ 1 个交易日 | baostock 未更新或任务失败 | 看健康页对应任务的缺失清单；手动补采 `ia snapshot collect-market --universe CSI300 --date <D> --now` |
 | iFinD 核对显示「已延后」 | 5 小时窗口预算用尽 | 正常现象，窗口滚动后自动继续；`ia verify status` 查看下次可用时间 |
+| 交易日历候选已生成 | 周一核对发现下一年双源一致 | 核对候选文件（`DATA_DIR/calendar_candidates/a_share-<年>.yaml`）后运行 `python tools/refresh_trading_calendar.py --write` 并提交；健康页与今日概览同时给出提醒 |
+| 交易日历核对分歧 | baostock 与 Sina 对某天是否交易不一致 | 不写入任何文件；下周自动重试，也可手动 `python tools/refresh_trading_calendar.py` 看完整差异 |
 | 通知「iFinD 额度已用尽」 | Kimi 网关 5 小时额度（可能与日常 Kimi 使用共用） | 无需操作；当前批次停止，下个窗口自动续采。频繁出现时在设置页调低「iFinD 5 小时预算」 |
 | 东财采集 `partial`（`provider_unavailable`） | 东财接口连续失败，或该源仍在熔断窗口内（健康页「上游调用」显示熔断至何时） | 下次调度自动重试；持续失败时检查 AkShare 版本与接口列名（列名变化会直接报错） |
 | 财报事件缺采 / 补采上一季 | 披露季外不调度，或 worker 未运行 | `ia snapshot collect-earnings-events --part forecast\|schedule\|segments [--period 20250930] --now`；`--period` 缺省为最近一个已结束季度 |
@@ -106,13 +109,17 @@
 
 ## 6. 年度 / 不定期维护
 
-- **交易日历**：`python tools/refresh_trading_calendar.py` 用 baostock 与 AkShare/Sina 双源逐日核对
-  `config/calendars/a_share.yaml`；不加 `--write` 只打印差异、有漂移时返回 1（可作巡检）。
-  交易所公布次年休市安排后（通常 12 月）重跑并加 `--write`，核对差异后提交；写入时按年记录
-  核对来源与日期（`verified_by` / `verified_on`），两源必须全年覆盖且逐日一致，任何一年分歧即
-  整次拒绝写入（退出码 2）。次年公告发布时用 `--notice-url` / `--notice-title` /
-  `--notice-published-on` 同步更新 `source`。
-  到期前 60 天健康页与调度日志会提醒，未知年份的交易日门控任务会停止（fail-closed）。
+- **交易日历**：自 2026-10 起自动探测：`calendar_probe` 在日历到期前 60 天内每周一 08:00
+  双源核对下一年，一致时把候选写到 `DATA_DIR/calendar_candidates/a_share-<年>.yaml` 并发 `info`
+  通知（健康页与今日概览同时给出提醒），分歧时发 `action_required` 且不写任何文件。
+  **生效仍需人工一步**：核对候选差异后运行 `python tools/refresh_trading_calendar.py --write`
+  （重新双源核对并写入 `config/calendars/a_share.yaml`，同时清掉已生效候选）然后提交；
+  候选文件也可直接覆盖日历文件（两者等价，都是同一渲染）。写入按年记录核对来源与日期
+  （`verified_by` / `verified_on`），两源必须全年覆盖且逐日一致，任何一年分歧即整次拒绝写入。
+  次年公告发布时用 `--notice-url` / `--notice-title` / `--notice-published-on` 更新 `source`。
+  该任务可用设置页 `schedule.snapshot.calendar_probe_cron` 停用；不加 `--write` 手动运行工具
+  只打印差异（有漂移返回 1，可作巡检）。到期前 60 天健康页与调度日志会提醒，
+  未知年份的交易日门控任务会停止（fail-closed）。
 - **申万代码表**：`python tools/refresh_shenwan_directory.py` 查看差异，确认后加 `--write` 并提交。
 - **申万官网证书**：`src/investment_agent/providers/certs/swsresearch-intermediate.pem` 文件头写有刷新步骤；
   证书校验失败时申万同步会终止并提示更新证书。

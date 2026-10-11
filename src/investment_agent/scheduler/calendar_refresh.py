@@ -42,6 +42,9 @@ one week of margin absorbs a year-end holiday run.
 
 MAX_DATES_REPORTED = 8
 
+VERIFIED_BY: tuple[str, ...] = ("baostock", "akshare")
+"""Provenance recorded for a year both providers agreed on (akshare = Sina's table)."""
+
 
 def days_of_year(year: int) -> list[date]:
     day = date(year, 1, 1)

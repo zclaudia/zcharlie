@@ -29,6 +29,7 @@ from investment_agent.config import (
 )
 from investment_agent.logging import configure_logging
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
+from investment_agent.scheduler.calendar_refresh import refresh_years
 from investment_agent.scheduler.snapshot_jobs import (
     CALENDAR_FREE_JOBS,
     SNAPSHOT_SCHEDULE_JOBS,
@@ -49,6 +50,7 @@ from investment_agent.settings.loader import (
     load_settings,
     store_for,
 )
+from investment_agent.snapshots.jobs import CalendarProbePayload, enqueue_snapshot_job
 from investment_agent.storage.database import engine_lifespan, session_scope
 
 log = structlog.get_logger(__name__)
@@ -255,6 +257,52 @@ async def run_snapshot_schedule_job(
     return created
 
 
+async def run_calendar_probe_job(
+    *, calendar_path: str, timezone: str, today: date | None = None
+) -> int | None:
+    """One fire of the calendar probe: enqueue only inside the expiry window.
+
+    The probe itself (dual-source fetch, candidate file, notification) runs in
+    the worker; this gate keeps the database free of pointless runs for the
+    rest of the year. Idempotent per (year, probe date), so a restart catch-up
+    or a misfire never duplicates a probe.
+    """
+
+    local_today = today or datetime.now(ZoneInfo(timezone)).date()
+    try:
+        calendar = load_trading_calendar(Path(calendar_path))
+    except Exception:
+        log.exception("scheduler.calendar_probe.failed", calendar_path=calendar_path)
+        return None
+    coverage = log_calendar_coverage(calendar, local_today)
+    if not coverage.expiring_soon:
+        log.info(
+            "scheduler.calendar_probe.skipped",
+            today=local_today.isoformat(),
+            reason="outside_expiry_window",
+        )
+        return 0
+    year = refresh_years(calendar, today=local_today)[-1]
+    try:
+        async with session_scope() as session:
+            run, created = await enqueue_snapshot_job(
+                session,
+                CalendarProbePayload(as_of=local_today, year=year),
+                triggered_by="scheduler",
+            )
+    except Exception:
+        log.exception("scheduler.calendar_probe.enqueue_failed", year=year)
+        return None
+    log.info(
+        "scheduler.calendar_probe.queued",
+        run_id=run.id,
+        year=year,
+        key=run.idempotency_key,
+        created=created,
+    )
+    return int(created)
+
+
 async def run_screen_schedule_job(
     screen_cfg: ScreenScheduleConfig, *, today: date | None = None
 ) -> int | None:
@@ -387,6 +435,19 @@ async def _startup_snapshot_check(app_config: AppYamlConfig, now: datetime) -> l
             today=today,
         )
         caught_up.append(job)
+    if snapshot_cfg.calendar_probe_cron is not None:
+        probe_trigger = _parse_cron(
+            snapshot_cfg.calendar_probe_cron, timezone=snapshot_cfg.timezone
+        )
+        today = fired_today(now=now, trigger=probe_trigger)
+        if today is not None:
+            log.info("scheduler.calendar_probe.catch_up", today=today.isoformat())
+            await run_calendar_probe_job(
+                calendar_path=app_config.scheduler.a_share_calendar_path,
+                timezone=snapshot_cfg.timezone,
+                today=today,
+            )
+            caught_up.append("calendar_probe")
     return caught_up
 
 
@@ -488,6 +549,20 @@ def add_jobs(sched: AsyncIOScheduler, app_config: AppYamlConfig) -> list[str]:
                     "snapshot_cfg": snapshot_cfg,
                 },
                 id=f"snapshot_{job}",
+                replace_existing=True,
+                **_JOB_DEFAULTS,
+            )
+        if snapshot_cfg.calendar_probe_cron is not None:
+            sched.add_job(
+                run_calendar_probe_job,
+                trigger=_parse_cron(
+                    snapshot_cfg.calendar_probe_cron, timezone=snapshot_cfg.timezone
+                ),
+                kwargs={
+                    "calendar_path": scheduler_cfg.a_share_calendar_path,
+                    "timezone": snapshot_cfg.timezone,
+                },
+                id="calendar_probe",
                 replace_existing=True,
                 **_JOB_DEFAULTS,
             )

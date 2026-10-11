@@ -45,6 +45,7 @@ _KIND_LABELS = {
     "dividend_snapshot": "分红快照",
     "close_quote": "收盘快照",
     "earnings_event": "财报事件",
+    "calendar_probe": "交易日历核对",
 }
 _MAX_LISTED = 30
 

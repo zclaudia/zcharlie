@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -43,6 +44,7 @@ from investment_agent.providers.baostock_reference import (  # noqa: E402
 )
 from investment_agent.providers.errors import ProviderError  # noqa: E402
 from investment_agent.scheduler.calendar_refresh import (  # noqa: E402
+    VERIFIED_BY,
     parse_calendar_text,
     plan_refresh,
     refresh_years,
@@ -53,9 +55,7 @@ from investment_agent.scheduler.trading_calendar import (  # noqa: E402
     load_trading_calendar,
 )
 from investment_agent.settings.loader import calendar_path  # noqa: E402
-
-# The provenance ids recorded in the calendar file (``akshare`` = Sina's table).
-VERIFIED_BY = ("baostock", "akshare")
+from investment_agent.snapshots.calendar_probe import candidate_path  # noqa: E402
 
 
 def _apply_notice(
@@ -87,6 +87,18 @@ def _write_calendar(path: Path, proposed: TradingCalendar) -> str | None:
         return "refusing to write: the rendered file does not round-trip"
     path.write_text(text, encoding="utf-8")
     return None
+
+
+def _clear_applied_candidates(calendar: TradingCalendar, data_dir: Path) -> list[Path]:
+    """Drop probe candidates whose year the written calendar now covers."""
+
+    applied: list[Path] = []
+    for year in sorted(item.year for item in calendar.years):
+        candidate = candidate_path(data_dir, year)
+        if candidate.is_file():
+            candidate.unlink()
+            applied.append(candidate)
+    return applied
 
 
 def main(args: argparse.Namespace) -> int:
@@ -146,6 +158,8 @@ def main(args: argparse.Namespace) -> int:
         print(failure, file=sys.stderr)
         return 2
     print(f"wrote {path} - review the diff and commit it")
+    for candidate in _clear_applied_candidates(proposed, Path(args.data_dir)):
+        print(f"removed the applied candidate {candidate}")
     return 0
 
 
@@ -165,6 +179,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--calendar",
         default=calendar_path(REPO_ROOT / "config" / "app.yaml"),
         help="calendar file to refresh",
+    )
+    parser.add_argument(
+        "--data-dir",
+        default=os.environ.get("DATA_DIR", "data"),
+        help="runtime data dir holding calendar_candidates/ (default: $DATA_DIR or ./data)",
     )
     parser.add_argument("--notice-url", default=None, help="next announcement URL for source.url")
     parser.add_argument("--notice-title", default=None, help="next announcement title")

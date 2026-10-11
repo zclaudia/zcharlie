@@ -54,6 +54,9 @@ class ReferenceClient(Protocol):
 
     async def fetch_all_stocks(self, day: date) -> DirectorySnapshot: ...
 
+    async def fetch_trade_dates(self, start: date, end: date) -> dict[date, bool]: ...
+    """Day-by-day exchange calendar answers (used by the ``calendar_probe`` job)."""
+
 
 async def sync_universe(
     payload: UniverseSyncPayload,

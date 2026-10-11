@@ -36,6 +36,12 @@ snapshot:
   # Eastmoney 业绩预告 + 预约披露时间 daily (target pool + watchlist +
   # candidates + holdings); 主营构成 of the user's pools once a week.
   earnings_event_cron: "0 19 * * 1-5"
+  # Dual-source check of the next unreviewed calendar year (operations
+  # "年度 / 不定期维护"): fires weekly, but only enqueues while the calendar is
+  # inside its 60-day expiry window. An agreeing year becomes a candidate file
+  # under data/calendar_candidates/ plus a notification; applying stays manual
+  # (tools/refresh_trading_calendar.py --write + commit).
+  calendar_probe_cron: "0 8 * * 1"       # Monday 08:00
 
 # Weekly template screen (P1-C3): one screen_run per universe; the worker
 # syncs config/rule_templates, screens the target pool and stores

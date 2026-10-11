@@ -100,6 +100,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `industry_sync` | `ia snapshot sync-industry [--universe CSI300 \| --all-market] [--system sw2021\|csrc ...] [--as-of]` | 每月首个交易日 08:00 | 证监会行业（baostock，`system=csrc`）与申万 2021 行业（AkShare，`system=sw2021`）→ `industry_classification`，默认两者都同步（`--system` 可重复）；不带参数时默认配置的目标池（`snapshot.universes`），全市场需显式 `--all-market` |
 | `market_snapshot` | `ia snapshot collect-market [--provider baostock\|ifind] [--scope universe\|watchlist] [--universe CSI300] [--date]` | 交易日 18:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权；baostock 行附 `pe_ttm`、`pb_mrq`、`ps_ttm`、`turnover`、`trade_status`、`is_st` |
 | `financial_snapshot` | `ia snapshot collect-financial --period 2026-06-30 [--provider] [--scope] [--universe] [--as-of]` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 19:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采该数据源尚无该期的标的；截止日后顺带逾期检测 |
+| `calendar_probe` | —（`python tools/refresh_trading_calendar.py` 手动核对） | 每周一 08:00，仅日历到期前 60 天内 | 双源核对下一年交易日历：一致时写 `data/calendar_candidates/a_share-<年>.yaml` 并发 `info` 通知，分歧时 `action_required` 且不写文件；生效需人工 `--write` + 提交 |
 
 - **baostock（目标池）**：一次运行只登录一次，调用经进程级锁串行，无需令牌桶。每只股票每个序列从该数据源最后一个
   交易日 +1 增量取到 `--date`（无历史的从当日开始，深度历史由回补负责）。停牌日（`trade_status=0`，
@@ -396,10 +397,10 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - SQLite 单机存储；并发写入成为瓶颈时才评估 PostgreSQL。
 - 目标池与观察池日常数据走免费源（baostock + 东财，D6 二次修订）；iFinD 经 Kimi 网关有 5 小时滚动额度，
   只用于按需核对与手动深度研究。东财单股现金流量表尚未批量采集时，快照模式缺资本支出 / 自由现金流（需复核）。
-- 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天起调度日志与
-  `/dashboard/today` 会给出警告，交易所公布次年安排后用
-  `python tools/refresh_trading_calendar.py --write`（baostock + AkShare/Sina 双源核对）补入
-  `config/calendars/a_share.yaml` 并提交。
+- 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天内 `calendar_probe` 任务每周一
+  用 baostock + AkShare/Sina 双源核对下一年，一致时写入 `data/calendar_candidates/a_share-<年>.yaml`
+  并在健康页 / 今日概览 / 通知中提醒；核对差异后运行
+  `python tools/refresh_trading_calendar.py --write` 补入 `config/calendars/a_share.yaml` 并提交。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
   以沪深小盘替代并记录在
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。

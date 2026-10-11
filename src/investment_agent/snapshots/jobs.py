@@ -54,6 +54,7 @@ SNAPSHOT_BACKFILL = "snapshot_backfill"
 DIVIDEND_SNAPSHOT = "dividend_snapshot"
 CLOSE_QUOTE = "close_quote"
 EARNINGS_EVENT = "earnings_event"
+CALENDAR_PROBE = "calendar_probe"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
@@ -63,6 +64,7 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     DIVIDEND_SNAPSHOT,
     CLOSE_QUOTE,
     EARNINGS_EVENT,
+    CALENDAR_PROBE,
 )
 
 SnapshotProvider = Literal["baostock", "ifind", "akshare", "tencent"]
@@ -331,6 +333,21 @@ class SnapshotBackfillPayload(_Payload):
         return f"p{self.price_years}a{self.annual_years}q{self.quarters}"
 
 
+class CalendarProbePayload(_Payload):
+    """One dual-source check of the next unreviewed calendar year.
+
+    The scheduler enqueues one probe per week while the committed calendar is
+    inside its expiry window; the worker fetches baostock's day-by-day answers
+    and Sina's list (via AkShare) and records a candidate file only when both
+    agree on every trading day. Applying stays manual
+    (``tools/refresh_trading_calendar.py --write`` + commit): see
+    :mod:`investment_agent.snapshots.calendar_probe`.
+    """
+
+    as_of: date
+    year: int = Field(ge=2000, le=2200)
+
+
 SnapshotPayload = (
     UniverseSyncPayload
     | IndustrySyncPayload
@@ -340,6 +357,7 @@ SnapshotPayload = (
     | DividendSnapshotPayload
     | CloseQuotePayload
     | EarningsEventPayload
+    | CalendarProbePayload
 )
 
 PAYLOAD_MODELS: dict[str, type[_Payload]] = {
@@ -351,6 +369,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     DIVIDEND_SNAPSHOT: DividendSnapshotPayload,
     CLOSE_QUOTE: CloseQuotePayload,
     EARNINGS_EVENT: EarningsEventPayload,
+    CALENDAR_PROBE: CalendarProbePayload,
 }
 
 
@@ -365,6 +384,8 @@ def idempotency_key(payload: SnapshotPayload) -> str:
     """kind (+ provider) + scope + date (+ period): one run per scheduled slot."""
 
     kind = payload_kind(payload)
+    if isinstance(payload, CalendarProbePayload):
+        return f"{kind}:{payload.year}:{payload.as_of.isoformat()}"
     if isinstance(payload, UniverseSyncPayload):
         return f"{kind}:{payload.universe_code}:{payload.as_of.isoformat()}"
     if isinstance(payload, IndustrySyncPayload):

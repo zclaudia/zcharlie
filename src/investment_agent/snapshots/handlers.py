@@ -25,6 +25,7 @@ from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.config import Settings
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.providers.akshare_calendar import fetch_trading_days
 from investment_agent.providers.akshare_eastmoney import AkshareEastmoneyClient
 from investment_agent.providers.akshare_shenwan import AkshareShenwanClient
 from investment_agent.providers.baostock_market import BaostockMarketClient
@@ -44,6 +45,7 @@ from investment_agent.snapshots.breadth import (
     collect_baostock_financial,
     collect_baostock_market,
 )
+from investment_agent.snapshots.calendar_probe import collect_calendar_probe
 from investment_agent.snapshots.close_quote import CloseQuoteClient, collect_close_quotes
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
@@ -62,6 +64,7 @@ from investment_agent.snapshots.eastmoney import (
 )
 from investment_agent.snapshots.financial import collect_financial_snapshot
 from investment_agent.snapshots.jobs import (
+    CALENDAR_PROBE,
     CLOSE_QUOTE,
     DIVIDEND_SNAPSHOT,
     EARNINGS_EVENT,
@@ -71,6 +74,7 @@ from investment_agent.snapshots.jobs import (
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     UNIVERSE_SYNC,
+    CalendarProbePayload,
     CloseQuotePayload,
     DividendSnapshotPayload,
     EarningsEventPayload,
@@ -104,6 +108,14 @@ DividendFactory = Callable[[], DividendClient]
 CloseQuoteFactory = Callable[[], CloseQuoteClient]
 EarningsEventFactory = Callable[[], EarningsEventClient]
 CalendarFactory = Callable[[], TradingCalendar | None]
+SinaCalendarFactory = Callable[[], object | None]
+"""Backend for ``providers.akshare_calendar.fetch_trading_days`` (calendar probe)."""
+
+
+def default_sina_calendar() -> object:
+    from investment_agent.providers.akshare_calendar import load_default_backend
+
+    return load_default_backend()
 
 
 def _utc_now() -> datetime:
@@ -143,6 +155,7 @@ class SnapshotRuntime:
     earnings_factory: EarningsEventFactory | None = None
     """Eastmoney earnings events; ``None`` = the ``eastmoney_factory`` client."""
     calendar_factory: CalendarFactory = default_calendar
+    sina_calendar_factory: SinaCalendarFactory = default_sina_calendar
     circuit: CircuitBreaker = field(default_factory=lambda: CircuitBreaker(_utc_now))
     """Process-wide provider circuit breaker (A1): one per worker, shared by
     every client the factories build and by the collectors' own breakers."""
@@ -342,6 +355,19 @@ class SnapshotJobHandler(BaseJobHandler):
                         now=self.runtime.clock,
                     )
             return await self._settle(report, job.run_id, lease)
+        if self.kind == CALENDAR_PROBE:
+            probe = await collect_calendar_probe(
+                CalendarProbePayload.model_validate(request),
+                calendar=self.runtime.calendar_factory(),
+                reference_client=self.runtime.reference_factory(),
+                sina_backend=self.runtime.sina_calendar_factory(),
+                fetch_trading_days=fetch_trading_days,
+                data_dir=self.runtime.settings.data_dir,
+                notifier=self.runtime.file_notifier(),
+                run_id=job.run_id,
+                today=self.runtime.clock().astimezone(SHANGHAI_TZ).date(),
+            )
+            return _Result(probe.status, probe.metadata, probe.summary)
         assert self.kind == FINANCIAL_SNAPSHOT
         financial_payload = FinancialSnapshotPayload.model_validate(request)
         if financial_payload.provider == "akshare":

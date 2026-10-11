@@ -82,7 +82,7 @@ def health_settings(
             HealthWarning(
                 code=item.code, level=item.level, message=item.message, section="freshness"
             )
-            for item in calendar_warnings()
+            for item in calendar_warnings(data_dir=settings.data_dir)
         )
     return HealthSettings(
         universes=universes,

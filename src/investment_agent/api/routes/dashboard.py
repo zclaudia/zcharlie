@@ -167,25 +167,54 @@ def _calendar_path() -> Path:
         return Path(str(default))
 
 
-def calendar_warnings(calendar_path: Path | None = None) -> list[DashboardWarning]:
-    """Surface trading-calendar expiry before scheduled refreshes silently stop."""
+def calendar_candidates(data_dir: Path | None) -> list[Path]:
+    """Candidate calendars written by the scheduled probe, newest year last."""
 
+    if data_dir is None:
+        return []
+    directory = Path(data_dir) / "calendar_candidates"
+    return sorted(directory.glob("a_share-*.yaml")) if directory.is_dir() else []
+
+
+def calendar_warnings(
+    calendar_path: Path | None = None, *, data_dir: Path | None = None
+) -> list[DashboardWarning]:
+    """Surface trading-calendar expiry before scheduled refreshes silently stop.
+
+    A candidate written by the weekly ``calendar_probe`` job (dual-source
+    cross-check passed) gets its own warning: the refresh itself only needs
+    ``tools/refresh_trading_calendar.py --write`` plus a commit.
+    """
+
+    warnings: list[DashboardWarning] = []
+    for candidate in calendar_candidates(data_dir):
+        warnings.append(
+            DashboardWarning(
+                code="calendar_candidate",
+                level="warn",
+                message=(
+                    f"交易日历候选已生成：{candidate}（双源核对通过）。"
+                    "核对差异后运行 tools/refresh_trading_calendar.py --write 并提交。"
+                ),
+            )
+        )
     path = calendar_path or _calendar_path()
     try:
         calendar = load_trading_calendar(path)
     except Exception:
         log.exception("dashboard.calendar_unavailable", calendar_path=str(path))
-        return [
+        warnings.append(
             DashboardWarning(
                 code="calendar",
                 level="error",
-                message=f"无法读取交易日历 {path}，自选股定时刷新可能无法运行。",
+                message=f"无法读取交易日历 {path}，观察池定时刷新可能无法运行。",
             )
-        ]
+        )
+        return warnings
     coverage = calendar_coverage(calendar, today_in(calendar.timezone))
     if not coverage.expiring_soon:
-        return []
-    return [
+        return warnings
+    warnings.append(
         DashboardWarning(
             code="calendar",
             level="error" if coverage.expired else "warn",
@@ -195,7 +224,8 @@ def calendar_warnings(calendar_path: Path | None = None) -> list[DashboardWarnin
             ),
             days_remaining=coverage.days_remaining,
         )
-    ]
+    )
+    return warnings
 
 
 def _entry(
@@ -291,7 +321,7 @@ async def dashboard_today(
             needs_review=bucket("needs_review"),
             meaningful_changes=bucket("meaningful_changes"),
             generated_at=datetime.now(UTC),
-            warnings=calendar_warnings() + health_warnings,
+            warnings=calendar_warnings(data_dir=settings.data_dir) + health_warnings,
             candidates=await candidate_counts(session),
             data_health=health_counts,
         )
