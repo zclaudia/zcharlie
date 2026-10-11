@@ -1,0 +1,1944 @@
+{
+ "amount_note": "Amounts are the source's own figures in the source's unit (no display conversion). The six FY2024 amounts of the three HK companies are the values cross-checked against the issuers' reports in research/market-data-validation/remaining-validation.md section 1. Multi-year series and every scenario are rule-coverage inputs: series years other than FY2024 are the saved raw response values, not re-checked figures, and scenarios are constructed.",
+ "companies": {
+  "apple": {
+   "accounting_standard": "us_gaap",
+   "evidence": "research/market-data-validation/evidence/remaining-final-03/raw/us/AAPL/companyfacts.json",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from contracts with customers as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      "FY2022": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      "FY2023": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax",
+      "FY2024": "us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "365817000000",
+      "FY2022": "394328000000",
+      "FY2023": "383285000000",
+      "FY2024": "391035000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "net income as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:NetIncomeLoss",
+      "FY2022": "us-gaap:NetIncomeLoss",
+      "FY2023": "us-gaap:NetIncomeLoss",
+      "FY2024": "us-gaap:NetIncomeLoss"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "94680000000",
+      "FY2022": "99803000000",
+      "FY2023": "96995000000",
+      "FY2024": "93736000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+      "FY2022": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+      "FY2023": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+      "FY2024": "us-gaap:NetCashProvidedByUsedInOperatingActivities"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "104038000000",
+      "FY2022": "122151000000",
+      "FY2023": "110543000000",
+      "FY2024": "118254000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "capex_ppe",
+     "scale": 1,
+     "sign_convention": "capital expenditure",
+     "source_labels": {
+      "FY2021": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+      "FY2022": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+      "FY2023": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+      "FY2024": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "11085000000",
+      "FY2022": "10708000000",
+      "FY2023": "10959000000",
+      "FY2024": "9447000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_ordinary_shareholders",
+     "scale": 1,
+     "sign_convention": "net income as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:NetIncomeLoss",
+      "FY2022": "us-gaap:NetIncomeLoss",
+      "FY2023": "us-gaap:NetIncomeLoss",
+      "FY2024": "us-gaap:NetIncomeLoss"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "94680000000",
+      "FY2022": "99803000000",
+      "FY2023": "96995000000",
+      "FY2024": "93736000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "total shareholders' equity as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:StockholdersEquity",
+      "FY2022": "us-gaap:StockholdersEquity",
+      "FY2023": "us-gaap:StockholdersEquity",
+      "FY2024": "us-gaap:StockholdersEquity"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "63090000000",
+      "FY2022": "50672000000",
+      "FY2023": "62146000000",
+      "FY2024": "56950000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:Assets",
+      "FY2022": "us-gaap:Assets",
+      "FY2023": "us-gaap:Assets",
+      "FY2024": "us-gaap:Assets"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "351002000000",
+      "FY2022": "352755000000",
+      "FY2023": "352583000000",
+      "FY2024": "364980000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_liabilities",
+     "scale": 1,
+     "sign_convention": "total liabilities as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:Liabilities",
+      "FY2022": "us-gaap:Liabilities",
+      "FY2023": "us-gaap:Liabilities",
+      "FY2024": "us-gaap:Liabilities"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "287912000000",
+      "FY2022": "302083000000",
+      "FY2023": "290437000000",
+      "FY2024": "308030000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-09-25",
+     "label": "FY2021",
+     "start": "2020-09-27"
+    },
+    {
+     "end": "2022-09-24",
+     "label": "FY2022",
+     "start": "2021-09-26"
+    },
+    {
+     "end": "2023-09-30",
+     "label": "FY2023",
+     "start": "2022-09-25"
+    },
+    {
+     "end": "2024-09-28",
+     "label": "FY2024",
+     "start": "2023-10-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Apple Inc.",
+    "fiscal_year_end_note": "52/53 周制：财年结束于最接近 9 月最后一个周六（Submissions fiscalYearEnd=0926）",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "Values are the issuer's own saving from the saved company facts (the reported fiscal-year start/end are kept, including the 52/53-week boundaries); they were not re-checked against the filing in this round, so they carry verification=candidate. The issuer has no other equity instruments, so the single profit line is carried under both the parent and the ordinary-shareholders attribution; the two entries are the same source figure.",
+   "source": "sec.companyfacts.v1",
+   "source_published_date": null
+  },
+  "clp-holdings": {
+   "accounting_standard": "hkfrs",
+   "evidence": "research/market-data-validation/evidence/remaining-final-03/raw/native/00002/",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "营运收入",
+      "FY2022": "营运收入",
+      "FY2023": "营运收入",
+      "FY2024": "营运收入"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "83959000000",
+      "FY2022": "100662000000",
+      "FY2023": "87169000000",
+      "FY2024": "90964000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "profit attributable to parent shareholders as reported",
+     "source_labels": {
+      "FY2021": "股东应占溢利",
+      "FY2022": "股东应占溢利",
+      "FY2023": "股东应占溢利",
+      "FY2024": "股东应占溢利"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "8491000000",
+      "FY2022": "924000000",
+      "FY2023": "6655000000",
+      "FY2024": "11742000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "parent shareholders' equity as reported",
+     "source_labels": {
+      "FY2021": "股东权益",
+      "FY2022": "股东权益",
+      "FY2023": "股东权益",
+      "FY2024": "股东权益"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "113034000000",
+      "FY2022": "105498000000",
+      "FY2023": "102331000000",
+      "FY2024": "104055000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2021": "总资产",
+      "FY2022": "总资产",
+      "FY2023": "总资产",
+      "FY2024": "总资产"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "239809000000",
+      "FY2022": "236026000000",
+      "FY2023": "229051000000",
+      "FY2024": "233713000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_liabilities",
+     "scale": 1,
+     "sign_convention": "total liabilities as reported",
+     "source_labels": {
+      "FY2021": "总负债",
+      "FY2022": "总负债",
+      "FY2023": "总负债",
+      "FY2024": "总负债"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "113100000000",
+      "FY2022": "120332000000",
+      "FY2023": "116669000000",
+      "FY2024": "123595000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2021": "来自营运活动的现金流入净额",
+      "FY2022": "来自营运活动的现金流入净额",
+      "FY2023": "来自营运活动的现金流入净额",
+      "FY2024": "来自营运活动的现金流入净额"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "17806000000",
+      "FY2022": "12734000000",
+      "FY2023": "23567000000",
+      "FY2024": "23140000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "capex_ppe",
+     "scale": 1,
+     "sign_convention": "capital expenditure",
+     "source_labels": {
+      "FY2021": "购建固定资产",
+      "FY2022": "购建固定资产",
+      "FY2023": "资本开支",
+      "FY2024": "资本开支"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "12769000000",
+      "FY2022": "14891000000",
+      "FY2023": "11776000000",
+      "FY2024": "15076000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_ordinary_shareholders",
+     "scale": 1,
+     "sign_convention": "profit attributable to parent shareholders as reported",
+     "source_labels": {
+      "FY2021": "股东应占溢利",
+      "FY2022": "股东应占溢利",
+      "FY2023": "股东应占溢利",
+      "FY2024": "股东应占溢利"
+     },
+     "unit": "HKD",
+     "values": {
+      "FY2021": "8491000000",
+      "FY2022": "924000000",
+      "FY2023": "6655000000",
+      "FY2024": "11742000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "CLP Holdings Limited",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "HKD",
+    "report_currency": "HKD"
+   },
+   "note": "FY2024 amounts are the six values cross-checked against the issuer's own report (remaining-validation.md section 1); FY2021-FY2023 are the saved raw response values and were not re-checked against the report, so they carry verification=candidate. The issuer has no other equity instruments, so the single profit line is carried under both the parent and the ordinary-shareholders attribution; the two entries are the same source figure.",
+   "source": "eastmoney.hk.native.v1",
+   "source_published_date": "2025-02-24"
+  },
+  "hsbc-holdings": {
+   "accounting_standard": "ifrs",
+   "evidence": "research/market-data-validation/evidence/remaining-final-03/raw/native/00005/",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "revenue_net_credit",
+     "scale": 1,
+     "sign_convention": "revenue after expected credit losses as reported",
+     "source_labels": {
+      "FY2021": "经营收入总额",
+      "FY2022": "经营收入总额",
+      "FY2023": "经营收入总额",
+      "FY2024": "经营收入总额"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "50480000000",
+      "FY2022": "47036000000",
+      "FY2023": "62611000000",
+      "FY2024": "62440000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_ordinary_shareholders",
+     "scale": 1,
+     "sign_convention": "profit attributable to ordinary shareholders as reported",
+     "source_labels": {
+      "FY2021": "股东应占溢利",
+      "FY2022": "股东应占溢利",
+      "FY2023": "股东应占溢利",
+      "FY2024": "股东应占溢利"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "12607000000",
+      "FY2022": "14346000000",
+      "FY2023": "22432000000",
+      "FY2024": "22917000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "parent shareholders' equity as reported",
+     "source_labels": {
+      "FY2021": "归属于母公司股东权益",
+      "FY2022": "归属于母公司股东权益",
+      "FY2023": "归属于母公司股东权益",
+      "FY2024": "归属于母公司股东权益"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "198250000000",
+      "FY2022": "177833000000",
+      "FY2023": "185329000000",
+      "FY2024": "184973000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2021": "总资产",
+      "FY2022": "总资产",
+      "FY2023": "总资产",
+      "FY2024": "总资产"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "2957939000000",
+      "FY2022": "2949286000000",
+      "FY2023": "3038677000000",
+      "FY2024": "3017048000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_liabilities",
+     "scale": 1,
+     "sign_convention": "total liabilities as reported",
+     "source_labels": {
+      "FY2021": "总负债",
+      "FY2022": "总负债",
+      "FY2023": "总负债",
+      "FY2024": "总负债"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "2751162000000",
+      "FY2022": "2764089000000",
+      "FY2023": "2846067000000",
+      "FY2024": "2824775000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2021": "营业活动产生之现金浮额",
+      "FY2022": "营业活动产生之现金净额",
+      "FY2023": "营业活动产生之现金净额",
+      "FY2024": "营业活动产生之现金净额"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "104312000000",
+      "FY2022": "19355000000",
+      "FY2023": "39111000000",
+      "FY2024": "65305000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "capex_ppe",
+     "scale": 1,
+     "sign_convention": "net purchases and sales",
+     "source_labels": {
+      "FY2021": "购入及出售物业、机器及设备产生之现金流净额",
+      "FY2022": "购入及出售物业、机器及设备产生之现金流净额",
+      "FY2023": "购入及出售物业、机器及设备产生之现金流净额",
+      "FY2024": "购入及出售物业、机器及设备产生之现金流净额"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "1086000000",
+      "FY2022": "1284000000",
+      "FY2023": "1145000000",
+      "FY2024": "1344000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "HSBC Holdings plc",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": true,
+    "quote_currency": "HKD",
+    "report_currency": "USD"
+   },
+   "note": "FY2024 amounts are the six values cross-checked against the issuer's own report (remaining-validation.md section 1); FY2021-FY2023 are the saved raw response values and were not re-checked against the report, so they carry verification=candidate.",
+   "source": "eastmoney.hk.native.v1",
+   "source_published_date": "2025-02-19"
+  },
+  "jpmorgan-chase": {
+   "accounting_standard": "us_gaap",
+   "evidence": "research/market-data-validation/evidence/remaining-final-03/raw/us/JPM/companyfacts.json",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "GAAP net revenue as reported (the managed-basis figure is not substituted)",
+     "source_labels": {
+      "FY2021": "us-gaap:Revenues",
+      "FY2022": "us-gaap:Revenues",
+      "FY2023": "us-gaap:Revenues",
+      "FY2024": "us-gaap:Revenues"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "121649000000",
+      "FY2022": "128695000000",
+      "FY2023": "158104000000",
+      "FY2024": "177556000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "net income attributable to the parent as reported; the after-preferred-dividend figure was not verified",
+     "source_labels": {
+      "FY2021": "us-gaap:NetIncomeLoss",
+      "FY2022": "us-gaap:NetIncomeLoss",
+      "FY2023": "us-gaap:NetIncomeLoss",
+      "FY2024": "us-gaap:NetIncomeLoss"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "48334000000",
+      "FY2022": "37676000000",
+      "FY2023": "49552000000",
+      "FY2024": "58471000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+      "FY2022": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+      "FY2023": "us-gaap:NetCashProvidedByUsedInOperatingActivities",
+      "FY2024": "us-gaap:NetCashProvidedByUsedInOperatingActivities"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "78084000000",
+      "FY2022": "107119000000",
+      "FY2023": "12974000000",
+      "FY2024": "-42012000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "total shareholders' equity as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:StockholdersEquity",
+      "FY2022": "us-gaap:StockholdersEquity",
+      "FY2023": "us-gaap:StockholdersEquity",
+      "FY2024": "us-gaap:StockholdersEquity"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "294127000000",
+      "FY2022": "292332000000",
+      "FY2023": "327878000000",
+      "FY2024": "344758000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:Assets",
+      "FY2022": "us-gaap:Assets",
+      "FY2023": "us-gaap:Assets",
+      "FY2024": "us-gaap:Assets"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "3743567000000",
+      "FY2022": "3665743000000",
+      "FY2023": "3875393000000",
+      "FY2024": "4002814000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_liabilities",
+     "scale": 1,
+     "sign_convention": "total liabilities as reported",
+     "source_labels": {
+      "FY2021": "us-gaap:Liabilities",
+      "FY2022": "us-gaap:Liabilities",
+      "FY2023": "us-gaap:Liabilities",
+      "FY2024": "us-gaap:Liabilities"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "3449440000000",
+      "FY2022": "3373411000000",
+      "FY2023": "3547515000000",
+      "FY2024": "3658056000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "capex_ppe",
+     "missing_reason": "no capital-expenditure tag is present in the issuer's saved company facts",
+     "scale": 1,
+     "sign_convention": "capital expenditure",
+     "source_labels": {
+      "FY2021": "no tag mapped",
+      "FY2022": "no tag mapped",
+      "FY2023": "no tag mapped",
+      "FY2024": "no tag mapped"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": null,
+      "FY2022": null,
+      "FY2023": null,
+      "FY2024": null
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "JPMorgan Chase & Co.",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": true,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "Values are the issuer's own saving from the saved company facts (the reported fiscal-year start/end are kept, including the 52/53-week boundaries); they were not re-checked against the filing in this round, so they carry verification=candidate.",
+   "source": "sec.companyfacts.v1",
+   "source_published_date": null
+  },
+  "tencent-holdings": {
+   "accounting_standard": "ifrs",
+   "evidence": "research/market-data-validation/evidence/remaining-final-03/raw/native/00700/",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "营运收入",
+      "FY2022": "营运收入",
+      "FY2023": "营运收入",
+      "FY2024": "营运收入"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "560118000000",
+      "FY2022": "554552000000",
+      "FY2023": "609015000000",
+      "FY2024": "660257000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "profit attributable to parent shareholders as reported",
+     "source_labels": {
+      "FY2021": "股东应占溢利",
+      "FY2022": "股东应占溢利",
+      "FY2023": "股东应占溢利",
+      "FY2024": "股东应占溢利"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "224822000000",
+      "FY2022": "188243000000",
+      "FY2023": "115216000000",
+      "FY2024": "194073000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "parent shareholders' equity as reported",
+     "source_labels": {
+      "FY2021": "股东权益",
+      "FY2022": "股东权益",
+      "FY2023": "股东权益",
+      "FY2024": "股东权益"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "806299000000",
+      "FY2022": "721391000000",
+      "FY2023": "808591000000",
+      "FY2024": "973548000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2021": "总资产",
+      "FY2022": "总资产",
+      "FY2023": "总资产",
+      "FY2024": "总资产"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "1612364000000",
+      "FY2022": "1578131000000",
+      "FY2023": "1577246000000",
+      "FY2024": "1780995000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_liabilities",
+     "scale": 1,
+     "sign_convention": "total liabilities as reported",
+     "source_labels": {
+      "FY2021": "总负债",
+      "FY2022": "总负债",
+      "FY2023": "总负债",
+      "FY2024": "总负债"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "735671000000",
+      "FY2022": "795271000000",
+      "FY2023": "703565000000",
+      "FY2024": "727099000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2021": "经营活动所得现金流量净额",
+      "FY2022": "经营活动所得现金流量净额",
+      "FY2023": "经营活动所得现金流量净额",
+      "FY2024": "经营活动所得现金流量净额"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "175186000000",
+      "FY2022": "146091000000",
+      "FY2023": "221962000000",
+      "FY2024": "258521000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "capex_ppe",
+     "scale": 1,
+     "sign_convention": "prepayments incl. construction in progress / investment property",
+     "source_labels": {
+      "FY2021": "购买物业、设备及器材、在建工程与投资物业",
+      "FY2022": "购买物业、设备及器材、在建工程与投资物业",
+      "FY2023": "购买物业、设备及器材、在建工程与投资物业的付款╱预付款项",
+      "FY2024": "购买物业、设备及器材、在建工程与投资物业的付款╱预付款项"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "29302000000",
+      "FY2022": "22679000000",
+      "FY2023": "21008000000",
+      "FY2024": "62927000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_ordinary_shareholders",
+     "scale": 1,
+     "sign_convention": "profit attributable to parent shareholders as reported",
+     "source_labels": {
+      "FY2021": "股东应占溢利",
+      "FY2022": "股东应占溢利",
+      "FY2023": "股东应占溢利",
+      "FY2024": "股东应占溢利"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2021": "224822000000",
+      "FY2022": "188243000000",
+      "FY2023": "115216000000",
+      "FY2024": "194073000000"
+     },
+     "verified_years": [
+      "FY2024"
+     ]
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Tencent Holdings Limited",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "HKD",
+    "report_currency": "CNY"
+   },
+   "note": "FY2024 amounts are the six values cross-checked against the issuer's own report (remaining-validation.md section 1); FY2021-FY2023 are the saved raw response values and were not re-checked against the report, so they carry verification=candidate. The issuer has no other equity instruments, so the single profit line is carried under both the parent and the ordinary-shareholders attribution; the two entries are the same source figure.",
+   "source": "eastmoney.hk.native.v1",
+   "source_published_date": "2025-04-08"
+  },
+  "tsmc": {
+   "accounting_standard": "ifrs",
+   "evidence": "research/market-data-validation/evidence/remaining-final-03/raw/us/TSM/companyfacts.json",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:Revenue",
+      "FY2022": "ifrs-full:Revenue",
+      "FY2023": "ifrs-full:Revenue",
+      "FY2024": "ifrs-full:Revenue"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "1587415000000",
+      "FY2022": "2263891300000",
+      "FY2023": "2161735800000",
+      "FY2024": "2894307700000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "profit attributable to owners of the parent as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:ProfitLossAttributableToOwnersOfParent",
+      "FY2022": "ifrs-full:ProfitLossAttributableToOwnersOfParent",
+      "FY2023": "ifrs-full:ProfitLossAttributableToOwnersOfParent",
+      "FY2024": "ifrs-full:ProfitLossAttributableToOwnersOfParent"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "592359200000",
+      "FY2022": "992923400000",
+      "FY2023": "851740000000",
+      "FY2024": "1158380200000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:CashFlowsFromUsedInOperatingActivities",
+      "FY2022": "ifrs-full:CashFlowsFromUsedInOperatingActivities",
+      "FY2023": "ifrs-full:CashFlowsFromUsedInOperatingActivities",
+      "FY2024": "ifrs-full:CashFlowsFromUsedInOperatingActivities"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "1112160700000",
+      "FY2022": "1610599200000",
+      "FY2023": "1241967300000",
+      "FY2024": "1826177100000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "capex_ppe",
+     "scale": 1,
+     "sign_convention": "capital expenditure",
+     "source_labels": {
+      "FY2021": "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+      "FY2022": "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+      "FY2023": "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
+      "FY2024": "ifrs-full:PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "839195700000",
+      "FY2022": "1082672100000",
+      "FY2023": "949816800000",
+      "FY2024": "956006500000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_ordinary_shareholders",
+     "scale": 1,
+     "sign_convention": "profit attributable to owners of the parent as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:ProfitLossAttributableToOwnersOfParent",
+      "FY2022": "ifrs-full:ProfitLossAttributableToOwnersOfParent",
+      "FY2023": "ifrs-full:ProfitLossAttributableToOwnersOfParent",
+      "FY2024": "ifrs-full:ProfitLossAttributableToOwnersOfParent"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "592359200000",
+      "FY2022": "992923400000",
+      "FY2023": "851740000000",
+      "FY2024": "1158380200000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "equity attributable to owners of the parent as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:EquityAttributableToOwnersOfParent",
+      "FY2022": "ifrs-full:EquityAttributableToOwnersOfParent",
+      "FY2023": "ifrs-full:EquityAttributableToOwnersOfParent",
+      "FY2024": "ifrs-full:EquityAttributableToOwnersOfParent"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "2149259800000",
+      "FY2022": "2903019700000",
+      "FY2023": "3429522400000",
+      "FY2024": "4244266500000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:Assets",
+      "FY2022": "ifrs-full:Assets",
+      "FY2023": "ifrs-full:Assets",
+      "FY2024": "ifrs-full:Assets"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "3725302200000",
+      "FY2022": "4964459100000",
+      "FY2023": "5532196600000",
+      "FY2024": "6691764700000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_liabilities",
+     "scale": 1,
+     "sign_convention": "total liabilities as reported",
+     "source_labels": {
+      "FY2021": "ifrs-full:Liabilities",
+      "FY2022": "ifrs-full:Liabilities",
+      "FY2023": "ifrs-full:Liabilities",
+      "FY2024": "ifrs-full:Liabilities"
+     },
+     "unit": "TWD",
+     "values": {
+      "FY2021": "1573619700000",
+      "FY2022": "2046626700000",
+      "FY2023": "2078330100000",
+      "FY2024": "2412493100000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": "5",
+    "company_name": "Taiwan Semiconductor Manufacturing Company Limited",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": true,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "TWD"
+   },
+   "note": "Values are the issuer's own saving from the saved company facts (the reported fiscal-year start/end are kept, including the 52/53-week boundaries); they were not re-checked against the filing in this round, so they carry verification=candidate. The issuer has no other equity instruments, so the single profit line is carried under both the parent and the ordinary-shareholders attribution; the two entries are the same source figure.",
+   "source": "sec.companyfacts.v1",
+   "source_published_date": null
+  }
+ },
+ "fixture_version": 1,
+ "purpose": "Minimal fact sets for investment_agent.materials.metrics (plan 08).",
+ "scenarios": {
+  "cagr_52_53_weeks": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "100000000000",
+      "FY2022": "110000000000",
+      "FY2023": "120000000000",
+      "FY2024": "130000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2025-01-06",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the last fiscal year spans 371 days against 364 in the first year.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "cagr_length_jump": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "100000000000",
+      "FY2022": "110000000000",
+      "FY2023": "120000000000",
+      "FY2024": "130000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2025-02-04",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the last fiscal year spans 400 days against 364 in the first year.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "cagr_missing_year": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "100000000000",
+      "FY2022": "110000000000",
+      "FY2024": "130000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the FY2023 revenue fact is absent while the fiscal year stays in the list.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "cash_profit_parent_only": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "profit attributable to all parent equity holders as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2024": "1000000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2024": "2000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: only an all-parent profit exists, so the ordinary-shareholders ratio is not produced.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "cash_profit_parent_ordinary_scope": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "profit attributable to ordinary shareholders as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2024": "1000000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2024": "2000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the only profit fact is a parent-keyed figure that already carries equity_scope=ordinary_shareholders.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "currency_changed": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2023": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "90000000000",
+      "FY2022": "100000000000",
+      "FY2023": "120000000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "currency_override": "CNY",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "CNY",
+     "values": {
+      "FY2024": "130000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the FY2024 revenue is stated in CNY while the profile reports USD.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "debt_ratio_without_liabilities": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "instant",
+     "equity_scope": "total",
+     "metric": "total_assets",
+     "scale": 1,
+     "sign_convention": "total assets as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2024": "1000000000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "parent shareholders' equity as reported",
+     "source_labels": {
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2024": "200000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the balance sheet has assets and equity but no total liabilities.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "profit_turned_to_loss": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "ordinary_shareholders",
+     "metric": "profit_ordinary_shareholders",
+     "scale": 1,
+     "sign_convention": "profit attributable to ordinary shareholders as reported",
+     "source_labels": {
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2022": "800000000",
+      "FY2023": "1200000000",
+      "FY2024": "-450000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "operating_cash_flow",
+     "scale": 1,
+     "sign_convention": "net cash from operating activities as reported",
+     "source_labels": {
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2022": "1500000000",
+      "FY2023": "2000000000",
+      "FY2024": "1800000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: FY2023 profit is positive and FY2024 is negative.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "revenue_base_zero": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "revenue_operating",
+     "scale": 1,
+     "sign_convention": "revenue from operations as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "50000000000",
+      "FY2022": "52000000000",
+      "FY2023": "0",
+      "FY2024": "61000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: the FY2023 revenue is a true zero (a present value, not a missing one).",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  },
+  "roe_needs_n_plus_1": {
+   "accounting_standard": "us_gaap",
+   "evidence": "constructed in this task for rule coverage",
+   "facts": [
+    {
+     "basis": "annual",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "profit_parent",
+     "scale": 1,
+     "sign_convention": "profit attributable to parent shareholders as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "9000000000",
+      "FY2022": "9500000000",
+      "FY2023": "10000000000",
+      "FY2024": "11000000000"
+     },
+     "verified_years": []
+    },
+    {
+     "basis": "instant",
+     "equity_scope": "all_parent_equity_holders",
+     "metric": "equity_parent",
+     "scale": 1,
+     "sign_convention": "parent shareholders' equity as reported",
+     "source_labels": {
+      "FY2021": "constructed",
+      "FY2022": "constructed",
+      "FY2023": "constructed",
+      "FY2024": "constructed"
+     },
+     "unit": "USD",
+     "values": {
+      "FY2021": "100000000000",
+      "FY2022": "105000000000",
+      "FY2023": "110000000000",
+      "FY2024": "120000000000"
+     },
+     "verified_years": []
+    }
+   ],
+   "fiscal_years": [
+    {
+     "end": "2021-12-31",
+     "label": "FY2021",
+     "start": "2021-01-01"
+    },
+    {
+     "end": "2022-12-31",
+     "label": "FY2022",
+     "start": "2022-01-01"
+    },
+    {
+     "end": "2023-12-31",
+     "label": "FY2023",
+     "start": "2023-01-01"
+    },
+    {
+     "end": "2024-12-31",
+     "label": "FY2024",
+     "start": "2024-01-01"
+    }
+   ],
+   "identity": {
+    "ads_ratio": null,
+    "company_name": "Scenario (constructed)",
+    "fiscal_year_end_note": "12-31",
+    "is_ads": false,
+    "is_bank": false,
+    "quote_currency": "USD",
+    "report_currency": "USD"
+   },
+   "note": "constructed: four period-end equities but no equity at the end before the first year.",
+   "source": "scenario.constructed.v1",
+   "source_published_date": null
+  }
+ }
+}
