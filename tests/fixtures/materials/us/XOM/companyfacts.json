@@ -1,0 +1,334 @@
+{
+ "cik": 34088,
+ "entityName": "Exxon Mobil Corporation",
+ "facts": {
+  "us-gaap": {
+   "Revenues": {
+    "label": "Revenues",
+    "units": {
+     "USD": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 349585000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 349585000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "NetIncomeLoss": {
+    "label": "Net Income (Loss) Attributable to Parent",
+    "units": {
+     "USD": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 33680000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 33680000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18"
+      }
+     ]
+    }
+   },
+   "ProfitLoss": {
+    "label": "Net Income (Loss), Including Portion Attributable to Noncontrolling Interest",
+    "units": {
+     "USD": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 35063000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 35063000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "StockholdersEquity": {
+    "label": "Stockholders' Equity Attributable to Parent",
+    "units": {
+     "USD": [
+      {
+       "end": "2024-12-31",
+       "val": 263705000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "end": "2024-12-31",
+       "val": 263705000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024Q4I"
+      }
+     ]
+    }
+   },
+   "Assets": {
+    "label": "Assets",
+    "units": {
+     "USD": [
+      {
+       "end": "2024-12-31",
+       "val": 453475000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "end": "2024-12-31",
+       "val": 453475000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024Q4I"
+      }
+     ]
+    }
+   },
+   "Liabilities": {
+    "label": "Liabilities",
+    "units": {
+     "USD": [
+      {
+       "end": "2024-12-31",
+       "val": 182869000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "end": "2024-12-31",
+       "val": 182869000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024Q4I"
+      }
+     ]
+    }
+   },
+   "NetCashProvidedByUsedInOperatingActivities": {
+    "label": "Net Cash Provided by (Used in) Operating Activities",
+    "units": {
+     "USD": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 55022000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 55022000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "PaymentsToAcquirePropertyPlantAndEquipment": {
+    "label": "Payments to Acquire Property, Plant, and Equipment",
+    "units": {
+     "USD": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 24306000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 24306000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "EarningsPerShareBasic": {
+    "label": "Earnings Per Share, Basic",
+    "units": {
+     "USD/shares": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 7.84,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 7.84,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "EarningsPerShareDiluted": {
+    "label": "Earnings Per Share, Diluted",
+    "units": {
+     "USD/shares": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 7.84,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 7.84,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "WeightedAverageNumberOfSharesOutstandingBasic": {
+    "label": "Weighted Average Number of Shares Outstanding, Basic",
+    "units": {
+     "shares": [
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 4298000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "start": "2024-01-01",
+       "end": "2024-12-31",
+       "val": 4298000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18",
+       "frame": "CY2024"
+      }
+     ]
+    }
+   },
+   "CommonStockSharesOutstanding": {
+    "label": "Common Stock, Shares, Outstanding",
+    "units": {
+     "shares": [
+      {
+       "end": "2024-12-31",
+       "val": 4353000000,
+       "accn": "0000034088-25-000010",
+       "fy": 2024,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2025-02-19"
+      },
+      {
+       "end": "2024-12-31",
+       "val": 4353000000,
+       "accn": "0000034088-26-000045",
+       "fy": 2025,
+       "fp": "FY",
+       "form": "10-K",
+       "filed": "2026-02-18"
+      }
+     ]
+    }
+   }
+  }
+ }
+}

@@ -1,0 +1,85 @@
+{
+ "cik": "0000019617",
+ "name": "JPMORGAN CHASE & CO",
+ "entityType": "operating",
+ "sic": "6021",
+ "sicDescription": "National Commercial Banks",
+ "tickers": [
+  "JPM",
+  "JPM-PC",
+  "AMJB",
+  "JPM-PD",
+  "JPM-PJ",
+  "JPM-PK",
+  "JPM-PL",
+  "JPM-PM",
+  "VYLD"
+ ],
+ "exchanges": [
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE",
+  "NYSE"
+ ],
+ "fiscalYearEnd": "1231",
+ "category": "Large accelerated filer",
+ "ein": "132624428",
+ "flags": "",
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0001628280-26-054343",
+    "0001628280-26-008131"
+   ],
+   "filingDate": [
+    "2026-08-06",
+    "2026-02-13"
+   ],
+   "reportDate": [
+    "2026-06-30",
+    "2025-12-31"
+   ],
+   "acceptanceDateTime": [
+    "2026-08-07T00:19:03.000Z",
+    "2026-02-14T02:20:00.000Z"
+   ],
+   "form": [
+    "10-Q",
+    "10-K"
+   ],
+   "items": [
+    "",
+    ""
+   ],
+   "isXBRL": [
+    1,
+    1
+   ],
+   "size": [
+    50707093,
+    64896112
+   ],
+   "primaryDocument": [
+    "jpm-20260630.htm",
+    "jpm-20251231.htm"
+   ]
+  },
+  "files": [
+   {
+    "name": "CIK0000019617-submissions-007.json",
+    "filingFrom": "2025-02-11",
+    "filingTo": "2025-03-12"
+   },
+   {
+    "name": "CIK0000019617-submissions-035.json",
+    "filingFrom": "2022-02-03",
+    "filingTo": "2022-03-27"
+   }
+  ]
+ }
+}
