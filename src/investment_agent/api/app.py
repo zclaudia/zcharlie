@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from investment_agent.api.routes import health
 from investment_agent.api.throttle import AuthFailureThrottle
 from investment_agent.config import Settings
+from investment_agent.gateway.manager import GatewayManager
 from investment_agent.logging import configure_logging
 from investment_agent.settings.loader import ensure_imported
 from investment_agent.storage.database import engine_lifespan, session_scope
@@ -31,7 +32,14 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 await ensure_imported(session, settings)
         except Exception:
             log.exception("settings.import_failed", hint="run `ia migrate up`")
-        yield
+        # Mobile gateway link: follows the gateway_* runtime settings, idle when disabled.
+        gateway = GatewayManager(_app, base=settings)
+        _app.state.gateway = gateway
+        await gateway.start()
+        try:
+            yield
+        finally:
+            await gateway.stop()
 
 
 # CSP for the /app UI: templates and app.js use no inline scripts or styles.
@@ -121,6 +129,7 @@ def _register_protected_routes(app: FastAPI) -> None:
         candidates,
         dashboard,
         data_health,
+        gateway,
         market,
         research,
         rule_templates,
@@ -136,6 +145,7 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(dashboard.router)
     app.include_router(data_health.router)
     app.include_router(calendar.router)
+    app.include_router(gateway.router)
     app.include_router(market.router)
     app.include_router(stocks.router)
     app.include_router(watchlist.router)

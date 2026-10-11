@@ -152,3 +152,21 @@ def test_page_input_hints_match_the_api(api_client) -> None:
     # text / url / timezone share the text input; secrets are keyed on item.secret.
     for kind in types - {"text", "url", "timezone", "secret"}:
         assert f'"{kind}"' in source, kind
+
+
+def test_gateway_status_text() -> None:
+    out = _run_settings(
+        """
+const show = (status) => s.gatewayStatusText(status);
+console.log(JSON.stringify({
+  off: show({state: "disabled"}),
+  incomplete: show({state: "incomplete", detail: "未填写：注册凭证"}),
+  connecting: show({state: "connecting", detail: "AUTH_FAILED"}),
+  up: show({state: "connected", backend_id: "abc", namespace: "ns"}),
+}));
+"""
+    )
+    assert out["off"] == {"text": "未启用", "ok": False, "neutral": True}
+    assert out["incomplete"]["text"] == "已启用但配置不完整：未填写：注册凭证"
+    assert out["connecting"] == {"text": "连接中：AUTH_FAILED", "ok": False}
+    assert out["up"] == {"text": "已连接，服务 ID abc（命名空间 ns）", "ok": True}

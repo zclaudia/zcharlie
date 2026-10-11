@@ -1,11 +1,13 @@
 """Application configuration: env-based Settings + YAML config."""
 
 import logging
+import re
 from pathlib import Path
 from typing import Literal, Self
+from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _log = logging.getLogger(__name__)
@@ -27,6 +29,30 @@ class LLMTierConfig(BaseModel):
     """Reasoning toggle sent as ``thinking: {type: ...}`` (DeepSeek-style
     OpenAI-compatible extension). ``auto`` sends nothing, so endpoints that do
     not know the parameter are unaffected."""
+
+
+def validate_gateway_url(value: str) -> str:
+    """A zclaudia-gateway base URL, or ``""`` (unset)."""
+
+    value = value.strip()
+    if not value:
+        return value
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https", "ws", "wss") or not parts.hostname:
+        raise ValueError("gateway URL must start with http(s):// or ws(s):// and include a host")
+    return value.rstrip("/")
+
+
+_GATEWAY_ID = re.compile(r"[A-Za-z0-9._-]*")
+
+
+def validate_gateway_identifier(value: str) -> str:
+    """A gateway namespace / instance id: letters, digits, ``.``, ``_``, ``-``."""
+
+    value = value.strip()
+    if not _GATEWAY_ID.fullmatch(value):
+        raise ValueError("use only letters, digits, '.', '_' and '-'")
+    return value
 
 
 class Settings(BaseSettings):
@@ -81,6 +107,28 @@ class Settings(BaseSettings):
     # dismissed listing is not re-proposed by the screen within the cooldown.
     candidate_expiry_days: int = Field(default=14, ge=1, le=365)
     candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
+
+    # Mobile gateway (zclaudia-gateway, Protocol v4): the API registers itself as
+    # a Backend so a phone can reach it through the gateway's /api/proxy.
+    # ``gateway_credential`` is the enrollment token (zgb_...) issued by the
+    # gateway; ``gateway_namespace`` must match the one it was issued for.
+    gateway_enabled: bool = False
+    gateway_url: str = ""
+    gateway_credential: str = Field(default="", repr=False)
+    gateway_namespace: str = Field(default="", max_length=64)
+    # Stable per installation: with the namespace it fixes the backend's identity
+    # on the gateway (a changed id is a different backend to the phone).
+    gateway_instance_id: str = Field(default="zcharlie", min_length=1, max_length=64)
+
+    @field_validator("gateway_url")
+    @classmethod
+    def _valid_gateway_url(cls, value: str) -> str:
+        return validate_gateway_url(value)
+
+    @field_validator("gateway_namespace", "gateway_instance_id")
+    @classmethod
+    def _valid_gateway_identifier(cls, value: str) -> str:
+        return validate_gateway_identifier(value)
 
     # Browser web session for the same-origin /app UI.
     web_session_ttl_minutes: int = 720

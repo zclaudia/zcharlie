@@ -39,6 +39,8 @@ from investment_agent.config import (
     SnapshotScheduleConfig,
     ThinkingMode,
     VerificationScheduleConfig,
+    validate_gateway_identifier,
+    validate_gateway_url,
 )
 
 ApplyMode = Literal["live", "next_job", "reschedule"]
@@ -52,6 +54,7 @@ GROUPS: dict[str, str] = {
     "collection": "数据采集",
     "verification": "iFinD 核验",
     "candidates": "候选池",
+    "gateway": "手机网关",
     "schedule": "调度",
 }
 
@@ -196,6 +199,22 @@ class RuntimeSettings(BaseModel):
     candidate_expiry_days: int = Field(default=14, ge=1, le=365)
     candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
 
+    gateway_enabled: bool = False
+    gateway_url: str = ""
+    gateway_credential: str = Field(default="", repr=False)
+    gateway_namespace: str = Field(default="", max_length=64)
+    gateway_instance_id: str = Field(default="zcharlie", min_length=1, max_length=64)
+
+    @field_validator("gateway_url")
+    @classmethod
+    def _valid_gateway_url(cls, value: str) -> str:
+        return validate_gateway_url(value)
+
+    @field_validator("gateway_namespace", "gateway_instance_id")
+    @classmethod
+    def _valid_gateway_identifier(cls, value: str) -> str:
+        return validate_gateway_identifier(value)
+
     schedule: ScheduleSettings = Field(default_factory=ScheduleSettings)
 
 
@@ -267,6 +286,27 @@ SPECS: tuple[SettingSpec, ...] = (
     _env(
         "candidate_dismiss_cooldown_days", "candidates", "忽略冷却天数",
         "被忽略的股票在多少天内不再被筛选重新提名，0–365。", "live",
+    ),
+    _env(
+        "gateway_enabled", "gateway", "启用手机网关",
+        "让本服务作为 Backend 接入 zclaudia-gateway，手机经网关访问；保存后约 10 秒内自动连接 / 断开。",
+        "live",
+    ),
+    _env(
+        "gateway_url", "gateway", "网关地址",
+        "zclaudia-gateway 的公网地址，如 https://gateway.example.com。", "live",
+    ),
+    _env(
+        "gateway_credential", "gateway", "注册凭证",
+        "网关签发的 Backend 凭证（zgb_ 开头），加密保存，只写不读。", "live", secret=True,
+    ),
+    _env(
+        "gateway_namespace", "gateway", "命名空间",
+        "必须与凭证签发时的 namespace 一致；手机端只能看到同一命名空间的服务。", "live",
+    ),
+    _env(
+        "gateway_instance_id", "gateway", "实例标识",
+        "与命名空间一起决定本服务在网关上的固定身份；更换后手机需要重新发现。", "live",
     ),
     _yaml(
         "schedule.watchlist.cron", "观察池刷新 cron", _CRON_HELP,

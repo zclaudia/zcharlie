@@ -428,8 +428,51 @@ function connectionTest(group) {
   return row;
 }
 
+// 手机网关连接状态（GET /gateway/status）的一行文字与样式；纯函数，可在 node 中测试。
+export function gatewayStatusText(status) {
+  const detail = status.detail ? `：${status.detail}` : "";
+  switch (status.state) {
+    case "connected":
+      return { text: `已连接，服务 ID ${status.backend_id}（命名空间 ${status.namespace}）`, ok: true };
+    case "connecting":
+      return { text: `连接中${detail}`, ok: false };
+    case "incomplete":
+      return { text: `已启用但配置不完整${detail}`, ok: false };
+    case "error":
+      return { text: `读取配置失败${detail}`, ok: false };
+    default:
+      return { text: "未启用", ok: false, neutral: true };
+  }
+}
+
+function gatewayStatusLine() {
+  const line = el("p", { class: "notice notice-loading" }, "连接状态：读取中…");
+  get("/gateway/status")
+    .then((status) => {
+      const view = gatewayStatusText(status);
+      line.textContent = `连接状态：${view.text}`;
+      line.className = view.ok || view.neutral ? "notice" : "notice notice-warn";
+    })
+    .catch((error) => {
+      if (redirectOn401(error)) return;
+      line.className = "notice notice-warn";
+      line.textContent = `连接状态读取失败：${error.message}`;
+    });
+  return line;
+}
+
 function groupNotices(group) {
   const notices = [];
+  if (group.key === "gateway") {
+    notices.push(gatewayStatusLine());
+    notices.push(
+      el(
+        "p",
+        { class: "faint" },
+        "手机持网关签发的设备凭证访问；本服务的 API Key 只保存在这里，不会下发到手机。保存后约 10 秒内自动连接 / 断开 / 换凭证。"
+      )
+    );
+  }
   if (group.key === "llm") {
     const key = group.items.find((item) => item.key === "llm_tier3_api_key");
     if (key && key.decrypt_error) {

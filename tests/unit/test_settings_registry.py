@@ -28,7 +28,7 @@ from investment_agent.settings.registry import (
 
 def test_specs_are_unique_and_complete() -> None:
     assert len(SPECS_BY_KEY) == len(SPECS)
-    assert set(SECRET_KEYS) == {"llm_tier3_api_key", "ifind_proxy_api_key"}
+    assert set(SECRET_KEYS) == {"llm_tier3_api_key", "ifind_proxy_api_key", "gateway_credential"}
     for spec in SPECS:
         assert spec.group in GROUPS
         assert spec.label and spec.help
