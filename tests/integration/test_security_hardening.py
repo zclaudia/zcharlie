@@ -110,28 +110,45 @@ def test_cookie_post_with_cross_origin_and_marker_rejected(api_client):
 
 def test_cookie_delete_with_fetch_marker_passes_csrf(api_client):
     client = _session_client(api_client)
-    r = client.delete("/watchlist/999", headers={"X-Requested-With": "fetch"})
+    r = client.request(
+        "DELETE",
+        "/watchlist/999",
+        json={"reason": "csrf probe"},
+        headers={"X-Requested-With": "fetch"},
+    )
     assert r.status_code == 404
 
 
 def test_cookie_delete_with_matching_origin_passes_csrf(api_client):
     client = _session_client(api_client)
-    r = client.delete("/watchlist/999", headers={"Origin": "http://testserver"})
+    r = client.request(
+        "DELETE",
+        "/watchlist/999",
+        json={"reason": "csrf probe"},
+        headers={"Origin": "http://testserver"},
+    )
     assert r.status_code == 404
 
 
 def test_public_origin_setting_allows_proxy_origin(api_client, monkeypatch):
     monkeypatch.setenv("WEB_PUBLIC_ORIGIN", "https://research.example.com")
     client = _session_client(api_client)
-    r = client.delete("/watchlist/999", headers={"Origin": "https://research.example.com"})
+    r = client.request(
+        "DELETE",
+        "/watchlist/999",
+        json={"reason": "csrf probe"},
+        headers={"Origin": "https://research.example.com"},
+    )
     assert r.status_code == 404
     r = client.delete("/watchlist/999", headers={"Origin": "https://other.example.com"})
     assert r.status_code == 403
 
 
 def test_api_key_requests_skip_origin_check(api_client):
-    r = api_client.delete(
+    r = api_client.request(
+        "DELETE",
         "/watchlist/999",
+        json={"reason": "csrf probe"},
         headers={"X-API-Key": "secret", "Origin": "https://evil.example"},
     )
     assert r.status_code == 404

@@ -28,7 +28,7 @@ from investment_agent.settings.registry import (
 
 def test_specs_are_unique_and_complete() -> None:
     assert len(SPECS_BY_KEY) == len(SPECS)
-    assert set(SECRET_KEYS) == {"llm_tier3_api_key", "ifind_proxy_api_key", "gateway_credential"}
+    assert set(SECRET_KEYS) == {"llm_tier3_api_key", "ifind_proxy_api_key", "agent_api_key", "notification_webhook_url", "notification_webhook_token", "gateway_credential"}
     for spec in SPECS:
         assert spec.group in GROUPS
         assert spec.label and spec.help
@@ -59,6 +59,10 @@ def test_schedule_defaults_match_app_yaml_models() -> None:
     schedule = RuntimeSettings().schedule
     assert schedule.watchlist.cron == SchedulerConfig().watchlist_refresh_cron
     assert schedule.watchlist.timezone == SchedulerConfig().watchlist_refresh_timezone
+    assert schedule.portfolio.cron == SchedulerConfig().portfolio_valuation_cron
+    assert schedule.portfolio.timezone == SchedulerConfig().portfolio_valuation_timezone
+    assert schedule.zone_detection.cron == SchedulerConfig().zone_detection_cron
+    assert schedule.zone_detection.timezone == SchedulerConfig().zone_detection_timezone
     assert schedule.snapshot.model_dump() == SnapshotScheduleConfig().model_dump()
     assert schedule.screen.model_dump() == ScreenScheduleConfig().model_dump()
     assert schedule.candidates.model_dump() == CandidateScheduleConfig().model_dump()

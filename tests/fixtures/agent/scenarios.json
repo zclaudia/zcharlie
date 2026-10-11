@@ -1,0 +1,555 @@
+[
+  {
+    "id": "S01",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "形成有限公司观点，持续性待核",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "形成有限公司观点，持续性待核"
+      }
+    ],
+    "expected_invariants": [
+      "不虚构竞争优势"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "operating_cash_flow": "12000000",
+      "net_profit": "10000000",
+      "ratio": "1.2",
+      "durability": "unknown"
+    }
+  },
+  {
+    "id": "S02",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "关键证据缺失或冲突",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "关键证据缺失或冲突"
+      }
+    ],
+    "expected_invariants": [
+      "缩小范围或暂不判断",
+      "不因缺失机械看空"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "critical_field": null,
+      "unknown_reason": "missing",
+      "conflicting_values": [
+        "10000000",
+        "12000000"
+      ]
+    }
+  },
+  {
+    "id": "S03",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "同一材料配喜欢和讨厌表达",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "同一材料配喜欢和讨厌表达"
+      }
+    ],
+    "expected_invariants": [
+      "事实与方向保持一致"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "user_variants": [
+      "我喜欢公司甲",
+      "我讨厌公司甲"
+    ],
+    "inputs": {
+      "paired_material_hash": "same-frozen-materials",
+      "user_variants": [
+        "我喜欢公司甲",
+        "我讨厌公司甲"
+      ]
+    }
+  },
+  {
+    "id": "S04",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "仅价格变化",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "仅价格变化"
+      }
+    ],
+    "expected_invariants": [
+      "经营判断不随价格漂移"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "price_before": "10",
+      "price_after": "12",
+      "business_evidence_revision_before": 1,
+      "business_evidence_revision_after": 1
+    }
+  },
+  {
+    "id": "S05",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "下一财务期间出现关键反证",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "下一财务期间出现关键反证"
+      },
+      {
+        "sequence": 3,
+        "occurred_at": "2026-10-01T00:00:00+00:00",
+        "action": "new_period",
+        "net_profit": "16000000",
+        "operating_cash_flow": "2000000",
+        "ratio": "0.125"
+      },
+      {
+        "sequence": 4,
+        "occurred_at": "2026-10-01T00:00:00+00:00",
+        "action": "repeat_source_event_and_restart"
+      }
+    ],
+    "expected_invariants": [
+      "旧意见立即受限",
+      "保留决定与历史",
+      "单次变化提醒"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "initial_ratio": "1.2",
+      "review_threshold": "0.5",
+      "threshold_role": "test_research_condition",
+      "decision": "defer",
+      "source_event_id": "fictional-period-2026Q3"
+    }
+  },
+  {
+    "id": "S06",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "暂不采纳后重复查看",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "暂不采纳后重复查看"
+      }
+    ],
+    "expected_invariants": [
+      "defer 不产生成交",
+      "不重复劝说"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "decision": "defer",
+      "repeated_view_count": 2,
+      "portfolio_events_expected": 0
+    }
+  },
+  {
+    "id": "S07",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "同值错误主体与金额单位",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "同值错误主体与金额单位"
+      }
+    ],
+    "expected_invariants": [
+      "拒绝发布并定位字段"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "valid_subject_listing_id": 2,
+      "wrong_subject_listing_id": 3,
+      "valid_unit": "yuan",
+      "wrong_unit": "ten_thousand_yuan",
+      "same_numeric_value": "10000000"
+    }
+  },
+  {
+    "id": "S08",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "提交后回传前崩溃，重复消息",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "提交后回传前崩溃，重复消息"
+      }
+    ],
+    "expected_invariants": [
+      "同一动作只提交一次",
+      "同键异参冲突"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "operation_id": "00000000-0000-0000-0000-000000000020",
+      "client_message_id": "00000000-0000-0000-0000-00000000000a",
+      "crash_boundary": "domain_commit_before_tool_return"
+    }
+  },
+  {
+    "id": "S09",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "两个会话和后台竞争 revision",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "两个会话和后台竞争 revision"
+      }
+    ],
+    "expected_invariants": [
+      "旧 revision 不覆盖新观点",
+      "旧回答提示已有更新"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "case_id": "00000000-0000-0000-0000-000000000004",
+      "base_revisions": [
+        1,
+        1,
+        1
+      ],
+      "winner_revision": 2
+    }
+  },
+  {
+    "id": "S10",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "取消、预算耗尽与断线",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "取消、预算耗尽与断线"
+      }
+    ],
+    "expected_invariants": [
+      "停止后续调用与发布",
+      "断线不取消",
+      "已完成产物保留"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "variants": [
+        "cancel_requested",
+        "request_budget_exhausted",
+        "browser_disconnected"
+      ],
+      "saved_artifact": "calculation:13@1"
+    }
+  },
+  {
+    "id": "S14_preference",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "撤销明确偏好",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "撤销明确偏好"
+      }
+    ],
+    "expected_invariants": [
+      "旧消息和摘要不得重新提取偏好",
+      "在途任务检查记忆 revision"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "preference_text": "解释时少用术语",
+      "source_message_revision": 1,
+      "memory_revision_before": 1,
+      "memory_revision_after": 2,
+      "memory_status_after": "revoked"
+    }
+  },
+  {
+    "id": "S16",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "到期边界与续期并发",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "到期边界与续期并发"
+      }
+    ],
+    "expected_invariants": [
+      "仅仍有效且未受限的意见可续期",
+      "保留历史失效区间"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "valid_until": "2026-09-01T00:00:00Z",
+      "check_times": [
+        "2026-08-31T23:59:59Z",
+        "2026-09-01T00:00:00Z"
+      ],
+      "variants": [
+        "published",
+        "review_required",
+        "superseded"
+      ]
+    }
+  },
+  {
+    "id": "S17",
+    "as_of": "2026-08-01T00:00:00+00:00",
+    "company_names": [
+      "虚构公司甲",
+      "虚构公司乙"
+    ],
+    "input_refs": [
+      "evidence.json",
+      "company_view.json"
+    ],
+    "trigger": "局部追问、暂停、归档",
+    "events": [
+      {
+        "sequence": 1,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "load_fixed_inputs"
+      },
+      {
+        "sequence": 2,
+        "occurred_at": "2026-08-01T00:00:00+00:00",
+        "action": "局部追问、暂停、归档"
+      }
+    ],
+    "expected_invariants": [
+      "局部回答不替换全局观点",
+      "暂停阻止后台后续动作",
+      "用户归档不自动重开"
+    ],
+    "allowed_language_variation": "措辞可变化，事实、权限和引用不可变化",
+    "forbidden": [
+      "future_information",
+      "real_credentials"
+    ],
+    "inputs": {
+      "variants": [
+        "local_cash_conversion_question",
+        "pause_background",
+        "archive_by_user"
+      ],
+      "global_recommendation_id": "00000000-0000-0000-0000-000000000003"
+    }
+  }
+]

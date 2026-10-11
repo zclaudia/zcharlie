@@ -68,6 +68,8 @@ async def test_add_then_list_then_delete(api_client):
     assert body["provider"] == "auto"
     assert body["last_refresh_status"] == "never"
     assert body["note"] == "favorite"
+    # Non-A-share entries never draft rules (plan 1.5 scope).
+    assert body["rule"]["state"] == "none"
 
     # Same ticker again -> still 201, note updated
     r = api_client.post(
@@ -83,16 +85,28 @@ async def test_add_then_list_then_delete(api_client):
     assert len(rows) == 1
     assert rows[0]["note"] == "v2"
 
-    # Delete
-    r = api_client.delete(
+    # Delete without a reason -> 422 (the journal needs one)
+    r = api_client.request(
+        "DELETE",
         f"/watchlist/{listing_id}",
         headers={"X-API-Key": "secret"},
     )
-    assert r.status_code == 204
+    assert r.status_code == 422
+
+    # Delete
+    r = api_client.request(
+        "DELETE",
+        f"/watchlist/{listing_id}",
+        json={"reason": "不再跟踪"},
+        headers={"X-API-Key": "secret"},
+    )
+    assert r.status_code == 204, r.text
 
     # Delete again -> 404
-    r = api_client.delete(
+    r = api_client.request(
+        "DELETE",
         f"/watchlist/{listing_id}",
+        json={"reason": "不再跟踪"},
         headers={"X-API-Key": "secret"},
     )
     assert r.status_code == 404

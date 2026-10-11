@@ -12,6 +12,7 @@ from investment_agent.providers.baostock_reference import DirectoryEntry, Direct
 from investment_agent.providers.errors import ProviderDataError
 from investment_agent.snapshots.directory import (
     MAX_LOOKBACK_DAYS,
+    initialize_directory,
     pinyin_initials,
     sync_directory,
 )
@@ -158,6 +159,40 @@ async def test_sync_gives_up_after_the_lookback_window(db_session) -> None:
         await sync_directory(db_session, client, today=TODAY)
     assert len(client.asked) == MAX_LOOKBACK_DAYS + 1
     assert await StockDirectoryRepository(db_session).freshness() == (None, 0)
+
+
+async def test_initialize_empty_directory_once(db_session, monkeypatch) -> None:
+    from investment_agent.snapshots import directory
+
+    @asynccontextmanager
+    async def scope():
+        yield db_session
+
+    monkeypatch.setattr(directory, "session_scope", scope)
+    monkeypatch.setattr(directory, "shanghai_today", lambda: TODAY)
+    client = FakeDirectoryClient({TODAY: {"600547.SH": ("山东黄金", True)}})
+    await initialize_directory(client)
+    assert await StockDirectoryRepository(db_session).freshness() == (TODAY, 1)
+    assert client.asked == [TODAY]
+    await initialize_directory(client)
+    assert client.asked == [TODAY]  # Subsequent startup never fetches again.
+
+
+async def test_initialize_failure_leaves_empty_directory_and_logs(db_session, monkeypatch) -> None:
+    from structlog.testing import capture_logs
+
+    from investment_agent.snapshots import directory
+
+    @asynccontextmanager
+    async def scope():
+        yield db_session
+
+    monkeypatch.setattr(directory, "session_scope", scope)
+    monkeypatch.setattr(directory, "shanghai_today", lambda: TODAY)
+    with capture_logs() as logs:
+        await initialize_directory(FakeDirectoryClient({}))
+    assert await StockDirectoryRepository(db_session).freshness() == (None, 0)
+    assert any(entry["event"] == "directory_initialization_failed" for entry in logs)
 
 
 # ---- search ------------------------------------------------------------------

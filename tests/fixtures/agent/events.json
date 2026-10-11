@@ -1,0 +1,144 @@
+[
+  {
+    "schema_version": 1,
+    "event_id": 1,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "task_state",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "status": "running",
+      "cancel_requested": false
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 2,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "step_started",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "step_id": "00000000-0000-0000-0000-00000000000c",
+      "summary": "核查保存的财务字段"
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 3,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "tool_state",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "tool_call_id": "fixture-call",
+      "tool_name": "get_evidence",
+      "state": "completed",
+      "refs": [
+        {
+          "kind": "evidence",
+          "id": "00000000-0000-0000-0000-000000000001",
+          "revision": 1
+        }
+      ]
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 4,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "progress",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "summary": "已取得本期字段，持续性仍待核"
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 5,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "artifact_saved",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "ref": {
+        "kind": "calculation",
+        "id": "00000000-0000-0000-0000-00000000000d",
+        "revision": 1
+      }
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 6,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "publication_result",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "rule_version": "publication.v1",
+      "passed": [
+        "identity"
+      ],
+      "failures": [
+        "evidence_gate"
+      ],
+      "field_errors": {
+        "claims": "关键事实不足"
+      },
+      "semantic_review_ref": null
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 7,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "input_required",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "question": "你指的是公司甲还是公司乙？",
+      "fields": [
+        "listing_ref"
+      ],
+      "deadline": null
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 8,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "usage",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "cost": {
+        "value": null,
+        "unit": "yuan",
+        "currency": "CNY",
+        "unknown_reason": "fixture pricing unavailable"
+      }
+    }
+  },
+  {
+    "schema_version": 1,
+    "event_id": 9,
+    "task_id": "00000000-0000-0000-0000-00000000000b",
+    "attempt_id": "00000000-0000-0000-0000-00000000000e",
+    "type": "error",
+    "occurred_at": "2026-08-01T00:00:00+00:00",
+    "payload": {
+      "code": "revision_conflict",
+      "message": "已有更新，需重新核查",
+      "retryable": true,
+      "current_refs": [
+        {
+          "kind": "case",
+          "id": "00000000-0000-0000-0000-000000000004",
+          "revision": 2
+        }
+      ]
+    }
+  }
+]

@@ -5,20 +5,30 @@ import pytest_asyncio
 
 from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models import (  # noqa: F401
+    agent,
     analysis,
     app_settings,
     candidates,
+    disclosure,
+    discovery,
     earnings_events,
+    evidence,
+    investor,
     market_data,
+    monitoring,
     ops,
     pit_snapshot,
+    portfolio,
+    portfolio_plan,
     provider_call,
+    publication,
     reference,
     relationship,
     rules,
     stock_directory,
     user_domain,
     verification,
+    zones,
 )
 from investment_agent.storage.models.base import Base
 

@@ -168,6 +168,9 @@ async def test_screen_hit_opens_candidate_with_decision_and_draft_job() -> None:
         "as_of": "2026-09-27",
         "screen_result_id": hit_id,
         "preference_notes": expected_notes,
+        # The frozen shared-generation identity (plan 7.2 WP9): the run may
+        # store only while it is the slot's current request.
+        "draft_token": run.idempotency_key,
     }
 
 

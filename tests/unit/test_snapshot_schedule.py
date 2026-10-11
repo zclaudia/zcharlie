@@ -232,7 +232,7 @@ async def test_scheduled_market_job_enqueues_once_per_date(db_session):
         "market_snapshot", calendar_path=CALENDAR_PATH, snapshot_cfg=cfg, today=date(2026, 10, 1)
     )
     assert (created, again, holiday) == (2, 0, 0)
-    runs = await _runs()
+    runs = [run for run in await _runs() if run.kind == "market_snapshot"]
     assert [run.idempotency_key for run in runs] == [
         "market_snapshot:baostock:CSI300:2026-09-30",
         "market_snapshot:baostock:SSE50:2026-09-30",
@@ -242,6 +242,14 @@ async def test_scheduled_market_job_enqueues_once_per_date(db_session):
         for run in runs
     )
     assert all(run.triggered_by == "scheduler" and run.status == "queued" for run in runs)
+    # Ingested prices are a zone-detection input (WP8): one run per scope for
+    # the ingested day, keyed by the ingestion trigger.
+    zone_runs = [run for run in await _runs() if run.kind == "zone_detection"]
+    assert [run.idempotency_key for run in zone_runs] == [
+        "zone_detection:candidate:2026-09-30:market_snapshot",
+        "zone_detection:holding:2026-09-30:market_snapshot",
+    ]
+    assert all(run.status == "queued" for run in zone_runs)
 
 
 async def test_unknown_calendar_year_skips_gated_jobs_but_not_universe_sync(db_session):
@@ -271,12 +279,20 @@ async def test_startup_catches_up_snapshot_jobs_that_fired_today(db_session):
         "industry_sync", "market_snapshot", "close_quote", "close_quote_retry",
         "financial_deadline", "earnings_event",
     }
-    runs = await _runs()
+    runs = [run for run in await _runs() if run.kind != "zone_detection"]
     assert [run.kind for run in runs] == ["market_snapshot", "close_quote", "close_quote"]
     assert [run.idempotency_key for run in runs[1:]] == [
         "close_quote:tencent:CSI300:2026-09-30",
         "close_quote:tencent:CSI300:2026-09-30:retry",
     ]
+    # Each ingestion also queued the day's zone detection (WP8), idempotent per
+    # (scope, day, trigger).
+    zone_runs = [run for run in await _runs() if run.kind == "zone_detection"]
+    assert sorted(run.idempotency_key for run in zone_runs) == sorted(
+        f"zone_detection:{scope}:2026-09-30:{job}"
+        for job in ("close_quote", "close_quote_retry", "market_snapshot")
+        for scope in ("candidate", "holding")
+    )
 
     early = await runner._startup_snapshot_check(cfg, datetime(2026, 9, 29, 23, 0, tzinfo=UTC))
     assert early == []  # 07:00 Shanghai: nothing has fired yet

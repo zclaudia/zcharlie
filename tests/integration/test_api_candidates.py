@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import types
 from typing import Any
@@ -9,12 +10,13 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 
+from investment_agent.candidates.lifecycle import mark_draft_result
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.candidates import CandidateRecord, DecisionRecord
 from investment_agent.storage.models.rules import RuleInstanceRecord
 from investment_agent.web.session import SESSION_COOKIE_NAME
-from tests.unit._candidate_support import seed_promotable, seed_template
+from tests.unit._candidate_support import seed_draft, seed_promotable, seed_template
 
 KEY = {"X-API-Key": "secret"}
 
@@ -109,6 +111,8 @@ async def test_list_and_detail(api_client) -> None:
     assert item["draft_state"] == "ready"
     assert item["draft_rule"]["rule_instance_id"] == ids["draft_rule_id"]
     assert item["draft_rule"]["params"] == {"pe_pct_max": 0.25}
+    # Plain-text rationale passes through as the overall analysis.
+    assert item["draft_overall_rationale"] == "valuation in the lower quarter of its 5y range"
     latest = item["latest_screen"]
     assert latest["screen_result_id"] == ids["screen_result_id"]
     assert [r["factor"] for r in latest["reasons"]] == ["roe", "gross_margin"]
@@ -156,6 +160,48 @@ async def test_manual_nomination(api_client) -> None:
         "/candidates", json={"ticker": "600900.SH", "template_id": "unknown"}, headers=KEY
     )
     assert unknown.status_code == 422
+
+
+async def test_summary_extracts_llm_overall_rationale(api_client) -> None:
+    ids = await seed_promotable()
+    async with session_scope() as session:
+        rule = await session.get(RuleInstanceRecord, ids["draft_rule_id"])
+        rule.draft_rationale = json.dumps(
+            {
+                "params": {"pe_pct_max": {"reason": "估值分位低于默认门槛"}},
+                "overall_rationale": "盈利稳、估值中低位，仅下调成长下限。",
+                "watch_points": ["关注营收增速"],
+            },
+            ensure_ascii=False,
+        )
+    item = api_client.get("/candidates?status=open", headers=KEY).json()["items"][0]
+    assert item["draft_overall_rationale"] == "盈利稳、估值中低位，仅下调成长下限。"
+
+
+async def test_manual_candidate_summary_carries_draft_checks(api_client) -> None:
+    """A ready manual-nomination draft evaluates its candidate zones against the
+    stock's factors (screen-reason shape); without snapshot data it degrades to
+    an empty list instead of failing the summary."""
+
+    async with session_scope() as session:
+        await seed_template(session)
+    created = api_client.post(
+        "/candidates", json={"ticker": "600900.SH", "template_id": "cand_test"}, headers=KEY
+    ).json()
+    candidate_id = created["candidate"]["id"]
+    async with session_scope() as session:
+        rule = await seed_draft(session, ticker="600900.SH")
+        await mark_draft_result(candidate_id, rule_instance_id=rule.id, session=session)
+
+    page = api_client.get("/candidates?status=open", headers=KEY).json()
+    item = next(entry for entry in page["items"] if entry["id"] == candidate_id)
+    assert item["draft_state"] == "ready"
+    for check in item["draft_checks"]:
+        assert {"factor", "op", "threshold", "actual", "outcome"} <= set(check)
+        assert check["outcome"] in {"met", "not_met", "missing", "not_applicable"}
+        assert check["unit"] is not None or check["factor"] not in {"roe", "pe_percentile_5y"}
+    detail = api_client.get(f"/candidates/{candidate_id}", headers=KEY).json()
+    assert len(detail["draft_checks"]) == len(item["draft_checks"])
 
 
 async def test_redraft_queues_a_new_run_each_time(api_client) -> None:

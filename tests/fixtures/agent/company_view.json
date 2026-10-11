@@ -1,0 +1,114 @@
+{
+  "id": "00000000-0000-0000-0000-000000000003",
+  "schema_version": 1,
+  "revision": 1,
+  "created_at": "2026-08-01T00:00:00+00:00",
+  "actor": "fixture_application",
+  "origin_ref": null,
+  "scope": "company_view",
+  "case_ids": [
+    "00000000-0000-0000-0000-000000000004"
+  ],
+  "thesis_revision_refs": [
+    {
+      "kind": "thesis",
+      "id": "00000000-0000-0000-0000-000000000005",
+      "revision": 1
+    }
+  ],
+  "as_of": "2026-08-01T00:00:00+00:00",
+  "question_scope": "公司整体长期价值仍待研究",
+  "assessed_dimensions": [
+    {
+      "dimension": "business_demand",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    },
+    {
+      "dimension": "competition_durability",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    },
+    {
+      "dimension": "financial_cash",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    },
+    {
+      "dimension": "balance_sheet_allocation",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    },
+    {
+      "dimension": "price_expectations",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    },
+    {
+      "dimension": "downside_counter_case",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    },
+    {
+      "dimension": "portfolio_alternatives",
+      "status": "missing",
+      "applicable": true,
+      "reason": "尚缺材料"
+    }
+  ],
+  "sufficiency": "bounded",
+  "claims": [],
+  "counter_case": [
+    {
+      "type": "text",
+      "text": "现金转化可能不能持续"
+    }
+  ],
+  "assumptions": [],
+  "gaps": [
+    "竞争优势尚待取证"
+  ],
+  "conditions": [],
+  "valid_until": "2026-09-01T00:00:00+00:00",
+  "next_review_at": "2026-08-25T00:00:00+00:00",
+  "monitor_refs": [],
+  "dependency_refs": [
+    {
+      "ref": {
+        "kind": "evidence",
+        "id": "00000000-0000-0000-0000-000000000001",
+        "revision": 1
+      },
+      "materiality": "critical",
+      "fields": [
+        "value"
+      ]
+    }
+  ],
+  "mandate_revision_id": {
+    "kind": "mandate",
+    "id": "00000000-0000-0000-0000-000000000006",
+    "revision": 1
+  },
+  "method_revision_id": {
+    "kind": "method",
+    "id": "00000000-0000-0000-0000-000000000007",
+    "revision": 1
+  },
+  "provenance": [
+    {
+      "kind": "evidence",
+      "id": "00000000-0000-0000-0000-000000000001",
+      "revision": 1
+    }
+  ],
+  "business_view": "undetermined",
+  "price_view": "undetermined",
+  "conditional_actions": []
+}

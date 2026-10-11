@@ -122,7 +122,7 @@ def test_pages_load_only_same_origin_module_scripts(api_client) -> None:
     _login(api_client)
     for path in (
         "/app", "/app/candidates", "/app/candidates/1", "/app/health", "/app/settings",
-        "/app/login",
+        "/app/login", "/app/portfolio",
     ):
         html = api_client.get(path).text
         assert "<style" not in html and " style=" not in html, path
@@ -160,7 +160,15 @@ def test_js_imports_are_relative_and_exist() -> None:
 def test_ui_has_no_trading_language_or_scores() -> None:
     texts = {**_js_sources()}
     texts |= {path.name: path.read_text(encoding="utf-8") for path in TEMPLATES.glob("*.html")}
+    # Agent opinions use the AG12 domain semantics; this guard remains strict
+    # for every legacy page/module. Agent execution controls have a separate guard.
+    # AG24 records user-confirmed actual buy/sell facts; it never submits orders.
+    # The holding-pool page (portfolio.js / portfolio.html) is the ledger's user
+    # entry surface: it stores confirmed past facts (买入/卖出 wording is the
+    # user's own record of what already happened) and never submits an order.
     for name, text in texts.items():
+        if name in {"agent.js", "agent_views.js", "agent_portfolio.js", "agent.html", "portfolio.js", "portfolio.html"}:
+            continue
         for word in TRADING_WORDS:
             assert word not in text, (name, word)
     for name in ("candidates.js", "format.js", "health.js", "templates.js"):
@@ -168,7 +176,7 @@ def test_ui_has_no_trading_language_or_scores() -> None:
         assert "score" not in source and "strength" not in source, name
 
 
-@pytest.mark.parametrize("module", ["candidates.js", "templates.js", "pricechart.js"])
+@pytest.mark.parametrize("module", ["candidates.js", "templates.js", "pricechart.js", "watchlist.js", "portfolio.js"])
 def test_modules_link_without_a_dom(module: str) -> None:
     node = _node()
     uri = (STATIC / module).resolve().as_uri()
@@ -347,3 +355,11 @@ async def test_dashboard_candidates_bucket(api_client) -> None:
     counts = api_client.get("/dashboard/today", headers=KEY).json()["candidates"]
     assert counts["open"] == 1 and counts["drafts_ready"] == 1
     assert counts["verification_pending"] == 0
+
+
+def test_agent_opinion_modules_have_no_order_or_fake_execution_ui() -> None:
+    source = "\n".join((STATIC / name).read_text(encoding="utf-8") for name in ("agent.js", "agent_views.js"))
+    for forbidden in ("/orders", "/broker", "/trades", "成交成功", "下单成功", "委托已提交", "自动成交"):
+        assert forbidden not in source
+    assert "data.action_labels[action.action]" in source
+    assert "readStatus.textContent" in source and "sourceToken===sourceGeneration" in source

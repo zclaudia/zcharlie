@@ -297,7 +297,7 @@ def test_completion_seam_matches_candidate_lifecycle_signature() -> None:
 
     assert drafting._resolve_mark_draft_result() is lifecycle.mark_draft_result
     signature = inspect.signature(lifecycle.mark_draft_result)
-    signature.bind(1, rule_instance_id=2, failed=False, error=None)
+    signature.bind(1, rule_instance_id=2, failed=False, error=None, draft_token="run-token")
 
 
 def _settings() -> Settings:
@@ -528,12 +528,19 @@ def test_worker_job_success_and_partial_notify_the_candidate(draft_db, hook_call
             ).all()
             assert dict(calls) == {good_id: 1, bad_id: 2}
         assert hook_calls == [
-            {"candidate_id": 21, "rule_instance_id": rule_id, "failed": False, "error": None},
+            {
+                "candidate_id": 21,
+                "rule_instance_id": rule_id,
+                "failed": False,
+                "error": None,
+                "draft_token": None,
+            },
             {
                 "candidate_id": 22,
                 "rule_instance_id": None,
                 "failed": True,
                 "error": partial.error_summary,
+                "draft_token": None,
             },
         ]
 

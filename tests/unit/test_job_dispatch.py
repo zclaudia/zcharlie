@@ -119,6 +119,10 @@ def test_worker_rejects_unknown_kinds(tmp_path):
 def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
     worker = ResearchWorker(settings=_settings(tmp_path), worker_id="w")
     assert set(worker.kinds) == {
+        "agent_turn",
+        "agent_research",
+        "agent_review",
+        "agent_discovery",
         "ifind_research",
         "universe_sync",
         "industry_sync",
@@ -132,6 +136,8 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "screen_run",
         "rule_draft",
         "ifind_verify",
+        "portfolio_valuation",
+        "zone_detection",
     }
 
 

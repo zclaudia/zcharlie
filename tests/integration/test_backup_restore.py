@@ -109,6 +109,18 @@ async def main():
             explanation_json=None,
             artifact_manifest={{"scores": str(scores_path)}},
         )
+        from uuid import uuid4
+        from decimal import Decimal
+        from investment_agent.investor.common import ObjectRef
+        from investment_agent.portfolio.contracts import CreateAccount, AppendEvent, Balance, Holding
+        from investment_agent.portfolio.service import PortfolioService
+        ledger = PortfolioService(session)
+        account = await ledger.create_account(CreateAccount(idempotency_key=uuid4(), name="backup fixture"))
+        await ledger.append(AppendEvent(account_id=account.id, expected_revision=0, idempotency_key=uuid4(), fact=Balance(
+            kind="opening_balance", occurred_at=datetime(2025,1,1,tzinfo=UTC), source="user fixture statement", user_confirmed=True,
+            coverage="partial", asset_scope="one explicitly confirmed account", cash=Decimal("100.01"),
+            holdings=(Holding(listing_ref=ObjectRef(kind="listing", id=listing.id, revision=1), quantity=Decimal("3.5")),),
+            prior_history="included_in_confirmed_balance")))
         await PipelineRunRepository(session).mark_success(run.id)
         print(run.id)
 
@@ -202,7 +214,7 @@ def test_backup_verify_tamper_and_restore_drill(tmp_path: Path, drill_env: dict[
         timeout=120,
     )
     assert current.returncode == 0
-    assert "024 (head)" in current.stdout
+    assert "045 (head)" in current.stdout
 
     check = subprocess.run(
         [
@@ -231,6 +243,18 @@ async def main():
         assert snapshot.score_json["investment_score"] == 70.0
         change = (await session.execute(select(ResearchChangeSet))).scalars().one()
         assert change.current_snapshot_id == snapshot.id and change.baseline is True
+        from investment_agent.storage.models.portfolio import PortfolioAccount, PortfolioEvent, PortfolioSnapshot, PortfolioRequest
+        from investment_agent.portfolio.contracts import Snapshot
+        account = (await session.scalars(select(PortfolioAccount))).one()
+        event = (await session.scalars(select(PortfolioEvent))).one()
+        ledger_snapshot = (await session.scalars(select(PortfolioSnapshot))).one()
+        receipt = (await session.scalars(select(PortfolioRequest))).one()
+        assert account.current_snapshot_id == ledger_snapshot.id and account.revision == event.revision == 1
+        assert receipt.event_id == event.id
+        value = Snapshot.model_validate(ledger_snapshot.payload)
+        assert str(value.known_cash) == "100.01" and str(value.holdings[0].confirmed_quantity) == "3.5"
+        assert value.total_assets is None and value.coverage == "partial"
+
     print("restored-ok")
 
 asyncio.run(main())

@@ -313,3 +313,23 @@ def test_ifind_test_without_key(client) -> None:
         "/settings/test/ifind", json={"url": "http://proxy.example"}, headers=KEY
     ).json()
     assert body["ok"] is False and "API Key" in body["message"]
+
+
+def test_agent_settings_api_isolated_encrypted_and_validated(client, encryption_key):
+    before = _items(client.get("/settings", headers=KEY).json())
+    response = client.patch("/settings", headers=KEY, json={"values": {
+        "agent_provider": "openai", "agent_model": "deepseek-v4-pro",
+        "agent_base_url": "https://fixture.invalid/v1", "agent_api_key": SECRET,
+        "agent_output_mode": "prompted", "agent_tool_choice_required": False,
+        "agent_profile": "deepseek", "agent_profile_model": "deepseek-v4-pro",
+    }})
+    assert response.status_code == 200
+    items = _items(response.json()["settings"])
+    assert items["agent_model"]["value"] == "deepseek-v4-pro"
+    assert items["agent_api_key"]["configured"] and "value" not in items["agent_api_key"]
+    assert items["agent_tool_choice_required"]["input"]["type"] == "text"
+    assert items["llm_tier3_model"] == before["llm_tier3_model"]
+    assert SECRET not in response.text
+    assert SECRET not in client.get("/settings/history", headers=KEY).text
+    for invalid in [{"agent_provider": "silent-fallback"}, {"agent_retries": -1}, {"agent_credential_ref": "llm_tier3_api_key"}]:
+        assert client.patch("/settings", headers=KEY, json={"values": invalid}).status_code == 422

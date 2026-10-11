@@ -9,12 +9,13 @@ from typing import Any
 import pytest
 
 from investment_agent.factors.registry import FactorValue
-from investment_agent.rules.schema import RuleTemplate
+from investment_agent.rules.schema import ConditionGroup, RuleTemplate
 from investment_agent.rules.screen import (
     ScreenConfig,
     ScreenDefinitionError,
     ScreenMember,
     TemplateResult,
+    evaluate_zone_conditions,
     required_factors,
     run_screen,
     screen_json,
@@ -83,6 +84,35 @@ def screen(members: list[ScreenMember], templates: list[RuleTemplate] | None = N
 
 def outcome(result: TemplateResult, ticker: str) -> str:
     return next(m.outcome for m in result.members if m.ticker == ticker)
+
+
+def test_evaluate_zone_conditions_returns_screen_reason_shape() -> None:
+    zones: dict[str, Any] = {
+        "buy_zone": ConditionGroup.model_validate(
+            {"all": [{"factor": "pe_percentile_5y", "op": "<=", "value": "$pe_pct_max"}]}
+        )
+    }
+    checks = evaluate_zone_conditions(
+        zones=zones, factors={"pe_percentile_5y": fv("pe_percentile_5y", 0.2)}, params={"pe_pct_max": 0.2}
+    )
+    [reason] = checks["buy_zone"]
+    assert reason["factor"] == "pe_percentile_5y"
+    assert reason["outcome"] == "met"
+    assert reason["actual"] == 0.2
+    assert reason["threshold"] == 0.2
+    assert reason["param"] == "pe_pct_max"
+    assert isinstance(reason["snapshot_ref"], dict)
+
+
+def test_evaluate_zone_conditions_records_missing_factor() -> None:
+    zones: dict[str, Any] = {
+        "drop": ConditionGroup.model_validate({"any": [{"factor": "roe", "op": "<", "value": 0.08}]})
+    }
+    checks = evaluate_zone_conditions(zones=zones, factors={}, params={})
+    [reason] = checks["drop"]
+    assert reason["outcome"] == "missing"
+    assert reason["actual"] is None
+    assert reason["quality"] == "missing"
 
 
 def test_hit_reasons_carry_threshold_param_actual_and_snapshot_ref() -> None:

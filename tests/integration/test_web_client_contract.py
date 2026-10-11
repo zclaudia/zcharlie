@@ -36,6 +36,35 @@ def test_watchlist_page_declares_list_add_and_refresh_hooks(api_client):
     assert 'id="watchlist-add-form"' in html
     assert 'id="watchlist-refresh-all"' in html
     assert 'data-endpoint="/watchlist/refresh"' in html
+    year_input = next(line for line in html.splitlines() if 'name="report_year"' in line)
+    assert 'value=' not in year_input
+    assert 'placeholder="年报年度"' in year_input
+
+
+def test_portfolio_page_declares_ledger_regions(api_client):
+    _login(api_client)
+    html = api_client.get("/app/portfolio").text
+    assert 'id="portfolio-account"' in html
+    assert 'id="portfolio-holdings"' in html
+    assert 'id="portfolio-events"' in html
+    assert 'id="portfolio-fact-form"' in html
+    assert 'id="portfolio-create-form"' in html
+    for option in ("opening_balance", "reconciliation", "trade", "cash_transfer", "dividend", "corporate_action"):
+        assert f'value="{option}"' in html
+    assert "卖出" in html  # the user's own recorded facts, never an order
+    # WP5: the correction panel and the ratio-change fields are on the page.
+    assert 'id="portfolio-correction-submit"' in html
+    assert 'id="portfolio-correction-reason"' in html
+    assert 'id="portfolio-fact-ratio"' in html
+    # WP7: the display close-out regions (realized P&L, dividends, archive).
+    assert 'id="portfolio-realized"' in html
+    assert 'id="portfolio-archive"' in html
+    script = api_client.get("/app/static/portfolio.js").text
+    assert "/portfolio/corrections" in script
+    assert "corporate_action" in script
+    assert "selectedEvents" in script
+    assert "orderByRecentActivity" in script
+    assert "realizedTable" in script and "archiveList" in script
 
 
 def test_stock_page_declares_history_and_change_regions(api_client):
@@ -97,23 +126,25 @@ def test_api_client_handles_states_idempotency_and_errors():
 
 
 def test_renderer_consumes_only_versioned_read_models():
-    source = (WEB_STATIC / "app.js").read_text(encoding="utf-8")
+    app = (WEB_STATIC / "app.js").read_text(encoding="utf-8")
+    watchlist = (WEB_STATIC / "watchlist.js").read_text(encoding="utf-8")
     # Dashboard and per-stock history endpoints come from the templates'
-    # data-endpoint attributes (see page contract tests above); the renderer
-    # itself only references these endpoints directly.
-    for endpoint in ("/watchlist", "/watchlist/refresh", "/research/runs"):
-        assert endpoint in source, endpoint
+    # data-endpoint attributes (see page contract tests above); the renderers
+    # themselves only reference these endpoints directly.
+    assert "/research/runs" in app
+    for endpoint in ("/watchlist", "/watchlist/refresh"):
+        assert endpoint in watchlist, endpoint
 
 
 def test_sparkline_component_and_mounts():
-    """ui.js owns the SVG sparkline; app.js and candidates.js feed it from /market/."""
+    """ui.js owns the SVG sparkline; watchlist.js and candidates.js feed it from /market/."""
 
     ui = (WEB_STATIC / "ui.js").read_text(encoding="utf-8")
     assert "export function sparkline" in ui
     assert "export async function fillSparklines" in ui
     for marker in ('viewBox: `0 0 ${SPARK_W} ${SPARK_H}`', 'preserveAspectRatio: "none"', "non-scaling-stroke", "spark-band", "spark-last", "spark-empty"):
         assert marker in ui, marker
-    for module in ("app.js", "candidates.js"):
+    for module in ("watchlist.js", "candidates.js"):
         source = (WEB_STATIC / module).read_text(encoding="utf-8")
         assert "/market/" in source, module
         assert "fillSparklines" in source, module
@@ -185,7 +216,7 @@ def test_combobox_component_and_mounts():
     assert "/stocks/search?q=" in combobox
     for marker in ('role: "listbox"', 'role: "option"', '"ArrowDown"', '"ArrowUp"', '"Enter"', '"Escape"', "DEBOUNCE_MS = 200"):
         assert marker in combobox, marker
-    for module in ("app.js", "candidates.js"):
+    for module in ("watchlist.js", "candidates.js"):
         source = (WEB_STATIC / module).read_text(encoding="utf-8")
         assert 'from "./combobox.js"' in source, module
         assert "attachCombobox(" in source, module
@@ -253,6 +284,35 @@ def test_combobox_searches_renders_and_selects_with_the_keyboard():
     out.hiddenAfterEscape = list.hidden;
     input.value = ""; input.dispatch("input"); await sleep(300);
     out.queriesAfterBlank = queries.length;
+
+    // IME Enter must accept Chinese text, without selecting a stock.
+    input.value = "山东"; input.dispatch("compositionstart"); input.dispatch("input");
+    await sleep(300);
+    out.noSearchDuringComposition = queries.length === 2 && list.hidden;
+    const imeEnter = input.dispatch("keydown", { key: "Enter", isComposing: true });
+    out.imeEnter = { prevented: Boolean(imeEnter.prevented), value: input.value, selected: selected.length };
+    input.dispatch("compositionend"); await sleep(300);
+    out.searchedCommittedChinese = queries.at(-1) === "山东" && !list.hidden;
+    input.dispatch("keydown", { key: "Escape" });
+    input.dispatch("blur"); input.value = "山东黄"; input.dispatch("input"); await sleep(300);
+    out.searchAfterQuickRefocus = queries.at(-1) === "山东黄" && !list.hidden;
+
+    // A dismissed, superseded, or destroyed search cannot reopen its list.
+    const raceInput = new Node("input"); raceInput.name = "race"; form.appendChild(raceInput);
+    const pending = [];
+    const raceCombo = attachCombobox(raceInput, { fetch: () => new Promise((resolve, reject) => pending.push({resolve, reject})) });
+    const raceList = raceInput.parentNode.children[1];
+    raceInput.value = "山东"; raceInput.dispatch("keydown", {key:"ArrowDown"});
+    raceCombo.close(); pending.shift().resolve([{ticker:"600547.SH",name:"山东黄金"}]); await sleep(0);
+    out.dismissedSearchStaysClosed = raceList.hidden;
+    raceInput.dispatch("keydown", {key:"ArrowDown"});
+    raceInput.value = "600"; raceInput.dispatch("input");
+    pending.shift().reject(new Error("old search failed")); await sleep(0);
+    out.oldErrorStaysClosed = raceList.hidden;
+    raceCombo.close();
+    raceInput.dispatch("keydown", {key:"ArrowDown"});
+    raceCombo.destroy(); pending.shift().resolve([{ticker:"600547.SH",name:"山东黄金"}]); await sleep(0);
+    out.destroyedSearchStaysClosed = raceList.hidden;
     console.log(JSON.stringify(out));
     """
     result = subprocess.run(
@@ -274,6 +334,123 @@ def test_combobox_searches_renders_and_selects_with_the_keyboard():
     assert out["enterOnEmptyPrevented"] is False  # a plain Enter still submits the form
     assert out["hiddenAfterEscape"] is True
     assert out["queriesAfterBlank"] == 2  # "gz", "zzz"; a blank value never searches
+    assert out["noSearchDuringComposition"] is True
+    assert out["imeEnter"] == {"prevented": False, "value": "山东", "selected": 1}
+    assert out["searchedCommittedChinese"] is True
+    assert out["searchAfterQuickRefocus"] is True
+    assert out["dismissedSearchStaysClosed"] is True
+    assert out["oldErrorStaysClosed"] is True
+    assert out["destroyedSearchStaysClosed"] is True
+
+
+def test_watchlist_metadata_autofill_ignores_superseded_requests():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+    source = (WEB_STATIC / "watchlist.js").read_text(encoding="utf-8")
+    source = source[source.index("function wireWatchlistForm("):source.index("function wireRefreshAll(")]
+    script = "import assert from 'node:assert/strict';\n" + """
+    class Field {
+      constructor() { this.value = ''; this.placeholder = ''; this.title = ''; this.disabled = false; this.listeners = {}; }
+      addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+      fire(type, event = {}) { for (const fn of this.listeners[type] || []) fn(event); }
+    }
+    const fields = Object.fromEntries(['ticker','name','industry','report_year'].map(key => [key, new Field()]));
+    const submit = new Field(), form = new Field();
+    form.querySelector = selector => selector.startsWith('button') ? submit : fields[/name="(.*?)"/.exec(selector)[1]];
+    let select;
+    const requests = [];
+    const attachCombobox = (input, opts) => { select = opts.onSelect; };
+    const get = path => new Promise((resolve, reject) => requests.push({path, resolve, reject}));
+    const document = {querySelector: () => null};
+    """ + source + """
+    wireWatchlistForm(form);
+    const metadataSelect = select;
+    select = item => metadataSelect({report_year:2025, ...item});
+    const gold = {ticker:'600547.SH', name:'山东黄金', industry:'有色金属', report_year:2025, disclosed_on:'2026-03-30'};
+    fields.ticker.value = gold.ticker; await select(gold);
+    assert.equal(fields.name.value, gold.name);
+    assert.equal(fields.industry.value, gold.industry);
+    assert.equal(fields.report_year.value, '2025');
+    assert.ok(fields.report_year.title.includes('2026-03-30'));
+    assert.equal(requests.length, 0);
+    fields.ticker.value = '600350.SH';
+    let first = select({ticker:'600350.SH', name:'山东高速'});
+    assert.equal(fields.industry.value, '');
+    assert.equal(submit.disabled, true);
+    form.fire('submit', {preventDefault() {}}); // Pending industry lookup blocks submission.
+    fields.ticker.value = gold.ticker; await select(gold);
+    requests.shift().resolve({industry:'道路运输业'}); await first;
+    assert.equal(fields.industry.value, gold.industry); // Old answer cannot overwrite the new stock.
+    assert.equal(submit.disabled, false);
+    fields.ticker.value = '600350.SH'; first = select({ticker:'600350.SH', name:'山东高速'});
+    fields.industry.value = '交通运输';
+    requests.shift().resolve({industry:'道路运输业'}); await first;
+    assert.equal(fields.industry.value, '交通运输'); // Keep manual edits made during lookup.
+    first = select({ticker:'600350.SH', name:'山东高速'});
+    form.fire('reset');
+    requests.shift().resolve({industry:'道路运输业'}); await first;
+    assert.equal(fields.industry.value, '');
+    assert.equal(submit.disabled, false);
+    first = select({ticker:'600350.SH', name:'山东高速'});
+    fields.ticker.value = '山东'; fields.ticker.fire('input');
+    requests.shift().reject(new Error('old lookup failed')); await first;
+    assert.equal(fields.industry.value, '');
+    assert.equal(submit.disabled, false);
+
+    // An unknown year is looked up by stock and replaces any previous value.
+    fields.ticker.value = gold.ticker;
+    first = select({...gold, report_year:null});
+    assert.equal(fields.report_year.value, '');
+    assert.equal(submit.disabled, true);
+    assert.equal(requests[0].path, '/stocks/600547.SH/report-year');
+    requests.shift().resolve({report_year:2024, disclosed_on:'2025-03-29'}); await first;
+    assert.equal(fields.report_year.value, '2024');
+    assert.ok(fields.report_year.title.includes('2025-03-29'));
+    assert.equal(submit.disabled, false);
+
+    // A late annual-report response must not overwrite another selected stock.
+    first = select({...gold, report_year:null});
+    fields.ticker.value = '600350.SH';
+    await select({ticker:'600350.SH', industry:'交通运输', report_year:2025});
+    requests.shift().resolve({report_year:2024}); await first;
+    assert.equal(fields.report_year.value, '2025');
+    assert.equal(submit.disabled, false);
+
+    // Keep an explicit year edit, and never guess when disclosure is unavailable.
+    fields.ticker.value = gold.ticker;
+    first = select({...gold, report_year:null});
+    fields.report_year.value = '2023';
+    requests.shift().resolve({report_year:2024}); await first;
+    assert.equal(fields.report_year.value, '2023');
+    first = select({...gold, report_year:null});
+    requests.shift().resolve({report_year:null}); await first;
+    assert.equal(fields.report_year.value, '');
+    first = select({...gold, report_year:null});
+    requests.shift().reject(new Error('disclosure unavailable')); await first;
+    assert.equal(fields.report_year.value, '');
+    assert.equal(submit.disabled, false);
+
+    // Both lookups must finish before submission is enabled.
+    first = select({...gold, industry:null, report_year:null});
+    assert.equal(requests.length, 2);
+    requests.shift().resolve({industry:'有色金属'});
+    await Promise.resolve();
+    assert.equal(submit.disabled, true);
+    requests.shift().resolve({report_year:2025}); await first;
+    assert.equal(submit.disabled, false);
+    first = select({...gold, report_year:null});
+    form.fire('reset');
+    requests.shift().resolve({report_year:2025}); await first;
+    assert.equal(fields.report_year.value, '');
+    assert.equal(submit.disabled, false);
+    first = select({...gold, report_year:null});
+    fields.ticker.value = '山东'; fields.ticker.fire('input');
+    requests.shift().resolve({report_year:2025}); await first;
+    assert.equal(fields.report_year.value, '');
+    """
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,76 @@
+{
+  "message": {
+    "id": "00000000-0000-0000-0000-000000000008",
+    "schema_version": 1,
+    "revision": 1,
+    "created_at": "2026-08-01T00:00:00+00:00",
+    "actor": "fixture_application",
+    "origin_ref": null,
+    "conversation_ref": {
+      "kind": "conversation",
+      "id": "00000000-0000-0000-0000-000000000009",
+      "revision": 1
+    },
+    "sequence": 1,
+    "role": "user",
+    "text": "核查公司甲现金转化",
+    "context_refs": [
+      {
+        "kind": "case",
+        "id": "00000000-0000-0000-0000-000000000004",
+        "revision": 1
+      }
+    ],
+    "reply_to": null,
+    "client_message_id": "00000000-0000-0000-0000-00000000000a",
+    "task_ref": {
+      "kind": "task",
+      "id": "00000000-0000-0000-0000-00000000000b",
+      "revision": 1
+    }
+  },
+  "task": {
+    "id": "00000000-0000-0000-0000-00000000000b",
+    "schema_version": 1,
+    "revision": 1,
+    "created_at": "2026-08-01T00:00:00+00:00",
+    "actor": "fixture_application",
+    "origin_ref": null,
+    "parent_task_id": null,
+    "message_ref": {
+      "kind": "message",
+      "id": "00000000-0000-0000-0000-000000000008",
+      "revision": 1
+    },
+    "binding": {
+      "context_refs": [
+        {
+          "kind": "case",
+          "id": "00000000-0000-0000-0000-000000000004",
+          "revision": 1
+        }
+      ],
+      "base_refs": [
+        {
+          "kind": "case",
+          "id": "00000000-0000-0000-0000-000000000004",
+          "revision": 1
+        }
+      ],
+      "as_of": "2026-08-01T00:00:00+00:00"
+    },
+    "status": "queued",
+    "stop_reason": null,
+    "waiting": null,
+    "artifact_refs": [],
+    "usage": {
+      "cost": {
+        "value": null,
+        "unit": "yuan",
+        "currency": "CNY",
+        "unknown_reason": "fixture pricing unavailable"
+      }
+    }
+  },
+  "events_url": "/agent/tasks/00000000-0000-0000-0000-00000000000b/events"
+}
