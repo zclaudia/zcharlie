@@ -542,12 +542,10 @@ class AkshareEastmoneyBackend:
         table = self._call(CASH_FLOW_ENDPOINT, symbol=symbol)
         if table is None:
             return None
-        # Keep only what the collector uses (the statement has 250-320 columns).
-        kept = [column for column in CASH_FLOW_KEPT_COLUMNS if column in table.columns]
-        return RawTable(
-            columns=table.columns,
-            rows=tuple({column: row.get(column) for column in kept} for row in table.rows),
-        )
+        # AG11: preserve the upstream statement, including nulls and unmapped
+        # columns. Filtering here made local loss indistinguishable from an
+        # upstream missing field and prevented auditable FCFE qualification.
+        return table
 
     def forecast_table(self, period: str) -> RawTable | None:
         rows: RowSink = []

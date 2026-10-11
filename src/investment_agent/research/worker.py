@@ -203,12 +203,22 @@ def default_job_handlers(
 ) -> list[JobHandler]:
     """Every job kind a worker serves unless restricted with ``kinds``."""
 
+    from investment_agent.agent.job import agent_job_handlers
+    from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
+    from investment_agent.rules.zone_jobs import ZoneDetectionHandler
+
     return [
+        *agent_job_handlers(settings),
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
         ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings)),
         RuleDraftHandler(settings=settings),
         IfindVerifyHandler(settings),
+        PortfolioValuationHandler(
+            settings=settings,
+            calendar_path=_calendar_path(),
+        ),
+        ZoneDetectionHandler(settings=settings, calendar_path=_calendar_path()),
     ]
 
 
@@ -322,8 +332,22 @@ class ResearchWorker:
     async def run_once(self, *, run_id: int | None = None) -> int | None:
         """Claim and run one job; ``run_id`` claims that specific queued run."""
 
+        if self._reloads_settings:
+            from investment_agent.investor.notifications import deliver_one
+            await deliver_one(self.settings)
         async with session_scope() as session:
             await self.refresh_settings(session)
+            if self._reloads_settings:
+                from investment_agent.agent.tasks import TaskService
+
+                await TaskService(session).expire_due(now=datetime.now(UTC), limit=100)
+                await TaskService(session).retain_events(now=datetime.now(UTC), limit=500)
+                from investment_agent.agent.observation import resume_collectors
+                await resume_collectors(session)
+                from investment_agent.investor.monitoring import MonitoringService
+                await MonitoringService(session, self.settings).maintain(limit=50)
+                from investment_agent.investor.discovery import DiscoveryService
+                await DiscoveryService(session, self.settings).maintain()
             run = await PipelineRunRepository(session).claim_next(
                 worker_id=self.worker_id,
                 kinds=self.kinds,
