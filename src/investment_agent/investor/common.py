@@ -74,6 +74,7 @@ class ObjectRef(Contract):
         "candidate",
         "watchlist_item",
         "pipeline_run",
+        "research_dataset",
         "portfolio_snapshot",
         "portfolio_valuation",
         "portfolio_plan",
@@ -95,6 +96,7 @@ class ObjectRef(Contract):
             "candidate",
             "watchlist_item",
             "pipeline_run",
+            "research_dataset",
         }
         if legacy != isinstance(self.id, int):
             raise ValueError("existing storage references use integer IDs; new objects use UUIDs")

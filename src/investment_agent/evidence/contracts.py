@@ -1,12 +1,27 @@
 """Evidence and deterministic calculation records; values retain their identity and time."""
 
 from datetime import date, datetime
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import model_validator
 
 from investment_agent.investor.common import Contract, ObjectRef, Quantity, Record, Text
 from investment_agent.investor.enums import CalculationStatus
+
+
+class DatePrecision(StrEnum):
+    """How precisely a stored source states its publication time.
+
+    Deliberately local to the evidence layer: ``materials.contracts`` defines
+    the same three values for the material layer, and evidence must not import
+    materials (the material adapters build on evidence contracts, not the other
+    way around). A test asserts the two value sets stay identical.
+    """
+
+    TIMESTAMP = "timestamp"
+    DATE = "date"
+    UNKNOWN = "unknown"
 
 
 class Period(Contract):
@@ -40,7 +55,7 @@ class DocumentProvenance(Contract):
 
 class EvidenceRecord(Record):
     source_ref: ObjectRef
-    source_kind: Literal["snapshot", "document", "user_report"]
+    source_kind: Literal["snapshot", "document", "user_report", "research_dataset"]
     locator: Text
     content_hash: Text
     subject_ref: ObjectRef
@@ -50,6 +65,14 @@ class EvidenceRecord(Record):
     available_from: datetime
     verification: Literal["candidate", "verified", "user_report"]
     conflict: Literal["none", "unresolved", "resolved"]
+    date_precision: DatePrecision | None = None
+    """Optional addition: the source's stated precision for ``published_at``.
+
+    Existing payloads have no such key and keep meaning "precision not recorded"
+    (``None``); material-backed evidence sets it explicitly. A ``date``-precision
+    record's ``published_at`` is midnight UTC and ``available_from`` starts the
+    next day, so the boundary never claims a known time of day.
+    """
     value: Quantity | None = None
     text: str | None = None
     correction_refs: tuple[ObjectRef, ...] = ()

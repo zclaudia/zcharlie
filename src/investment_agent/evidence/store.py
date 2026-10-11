@@ -237,6 +237,64 @@ class EvidenceService:
                 else:
                     raise InvestorError("invalid_reference", "Unsupported saved event source")
                 actor = "event_adapter"
+            elif record.source_kind == "research_dataset":
+                from investment_agent.materials.evidence import material_evidence
+                from investment_agent.storage.models.research_material import ResearchDataset
+
+                if record.source_ref.kind != "research_dataset":
+                    raise InvestorError(
+                        "invalid_reference", "Research dataset source reference is required"
+                    )
+                material_row = await self.session.get(ResearchDataset, record.source_ref.id)
+                if material_row is None or material_row.revision != record.source_ref.revision:
+                    raise InvestorError(
+                        "invalid_reference", "Research dataset version does not exist"
+                    )
+                # Never trust the submitted record: rebuild every fact of that
+                # version from the stored payload and require an exact match.
+                try:
+                    materialized, _skipped = material_evidence(
+                        material_row,
+                        subject_ref=record.subject_ref,
+                        created_at=record.created_at,
+                    )
+                except ValueError as exc:
+                    raise InvestorError(
+                        "invalid_reference", f"Research dataset cannot be materialized: {exc}"
+                    ) from exc
+                candidates = [
+                    candidate
+                    for candidate in materialized
+                    if candidate.content_hash == record.content_hash
+                ]
+                if len(candidates) != 1:
+                    raise InvestorError(
+                        "invalid_reference",
+                        "Research dataset fact does not match the saved source",
+                    )
+                expected_material = candidates[0]
+                for name in (
+                    "subject_ref",
+                    "period",
+                    "source_ref",
+                    "locator",
+                    "value",
+                    "text",
+                    "published_at",
+                    "acquired_at",
+                    "available_from",
+                    "content_hash",
+                    "verification",
+                    "conflict",
+                    "date_precision",
+                    "document_provenance",
+                ):
+                    if getattr(expected_material, name) != getattr(record, name):
+                        raise InvestorError(
+                            "invalid_reference",
+                            f"Research dataset {name} does not match saved source",
+                        )
+                actor = "material_adapter"
             elif record.source_kind == "user_report":
                 if record.source_ref != record.subject_ref or record.verification != "user_report":
                     raise InvestorError(
