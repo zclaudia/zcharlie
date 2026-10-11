@@ -323,6 +323,8 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /research/runs/{id}/changes`、`/change-notification` | 结构化 diff / 重要变化通知下载 |
 | `GET /research/runs/{id}/artifacts[/{name}]` | 受控制品下载（限本 run 目录内） |
 | `GET /research/stocks/{ticker}/history` | 分页快照历史 |
+| `GET /research/listings/{listing_id}/financial-context` | 港美受控证券的已保存财务资料：口径、状态与能力位。严格只读（不访问上游；未知 listing 404，名单外证券返回显式「未覆盖」视图） |
+| `POST /research/listings/{listing_id}/refresh` | 入队一次（幂等去重）港美资料采集运行；未知 listing 404、被拒请求 422，响应给出 `online_refresh_enabled`（首期默认关闭，见 [`docs/product/hk-us-expansion.md`](docs/product/hk-us-expansion.md)） |
 | `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数 + `data_health` 计数；`warnings` 含日历与数据健康提醒） |
 | `GET /health/data` | 数据健康聚合（只读）：`accumulation`、`freshness`、`universes`、`industry`、`collections`、`backfill`、`verification`、`overdue`、`warnings` |
 | `GET /calendar/status`、`POST /calendar/check`、`POST /calendar/apply` | 交易日历（`/app/health` 卡片的三个动作）：状态含生效文件与仓库基线、覆盖范围、已审年份（每年带 `verified_by` / `verified_on`）、候选、是否可写、上次核对结果；`check` 入队一次双源核对（`force=true`，跳过 60 天窗口）；`apply` 把候选写入 `DATA_DIR/calendars/a_share.yaml` 并删除候选（只允许*新增*年份，改写或缺少已审年份返回 409） |
@@ -417,6 +419,15 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
   以沪深小盘替代并记录在
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。
+- 港美财务资料扩展只覆盖八家受控名单（中电控股 `00002`、汇丰控股 `00005`、腾讯控股 `00700`、
+  AAPL、COST、JPM、XOM、TSM）；名单外证券即使能取到数据也不采信，读模型返回显式「未覆盖」。
+- 港美**在线刷新默认关闭**（`ONLINE_REFRESH_ENABLED = False`，不是运行时设置项）：东财/Yahoo
+  的使用许可未确认，采集任务在上游调用前停止并记录 `online_refresh_disabled`。
+  打开前需确认展示/缓存/商业授权并补联网验收。
+- 港美资料的**最新实际年报尚未补验**（本地证据只覆盖 2021–2024），需联网逐家核对。
+- 港美**行情 / FX / 市净率 / TTM 未启用**：`capabilities` 里 `price`/`annual_pe`/`dividends`/`pb`
+  为假是决定而非检查失败，缺口同时出现在 `statuses` 中；分红事件与年度 PE 为尾部任务，未交付。
+- 港美发布只支持原币，跨币种发布仍被拒绝（汇率时间点与使用许可未验收）。
 - 无任何交易执行路径；未来若考虑自动交易必须作为独立项目重新评审。
 
 ## Legacy
@@ -441,3 +452,5 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - P1 运维手册（部署、回补、调度、日常检查、故障处理）：[`docs/product/operations.md`](docs/product/operations.md)
 - 规则模板审阅与决定：[`docs/product/templates-v1-review.md`](docs/product/templates-v1-review.md)
 - 观察端 snapshot 模式：[`docs/product/observation-snapshot-mode.md`](docs/product/observation-snapshot-mode.md)
+- 港股与美股财务资料扩展（首期交付、能力位、离线导入、遗留）：[`docs/product/hk-us-expansion.md`](docs/product/hk-us-expansion.md)
+- 港美扩展实施计划（含验收矩阵与完成记录）：[`docs/product/plans/hk-us-expansion/`](docs/product/plans/hk-us-expansion/)
