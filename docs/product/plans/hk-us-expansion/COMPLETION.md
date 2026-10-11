@@ -8,10 +8,10 @@
 | 项 | 值 |
 | --- | --- |
 | 集成分支 | `feat/hk-us-expansion` @ `/Users/zhvala/SourceCode/zcharlie-hkus` |
-| 起始提交 | （控制 agent 填写：`git log --oneline -1`） |
+| 起始提交 | `75d3656 feat(gateway): connect to zclaudia-gateway as a Backend for the mobile app`（计划文档在 `8c83241`） |
 | 启动时刻 T0 | （填写 ISO 时间） |
 | 硬截止 | T0 + 4h = （填写）；**到点停止派发新任务** |
-| 基线门禁 | `pytest -q -m "not network"`：1590 passed / 0 failed（2026-10-12 00:4x 在干净 worktree 上实测）；`ruff check .` OK；`mypy src` OK（194 files） |
+| 基线门禁 | worktree HEAD `75d3656` 上实测（2026-10-12 00:41）：`pytest -q -m "not network"` = **1606 passed / 3 skipped / 0 failed**；`ruff check .` OK；`mypy src` OK（200 source files） |
 | 工具链 | `PYTHONPATH=<worktree>/src` + 主 checkout 的 `.venv/bin/python`；`DATA_DIR`/`DATABASE_URL` 指向 `/tmp/zc-hkus-gate-*/` |
 
 ## 基线失败清单（后续波次只允许"不新增"）

@@ -31,7 +31,7 @@
 ## 步骤
 
 - [ ] T12.1 逐条跑上表的测试节点，记录 `passed/failed` 与命令；凡未落地的（尾部任务未启动、需联网）写"未覆盖 + 原因 + 恢复条件"。
-- [ ] T12.2 跑完整门禁（`00-conventions.md` 三条），记录 pytest 数字并与代码事实基线（1590 passed / 0 failed）对比；出现新增失败必须修掉或在矩阵里写明为已知偏差。
+- [ ] T12.2 跑完整门禁（`00-conventions.md` 三条），记录 pytest 数字并与代码事实基线（`75d3656` 上 1606 passed / 3 skipped / 0 failed）对比；出现新增失败必须修掉或在矩阵里写明为已知偏差。
 - [ ] T12.3 写 `docs/product/hk-us-expansion.md`：交付边界（照 `README.md` §1 的表，但用产品语言）、能力位与默认关闭项、来源与许可状态、离线导入用法、遗留清单。**不得**把未验收能力写成已交付。
 - [ ] T12.4 更新 `README.md`：`## HTTP API` 表加两行（`GET /research/listings/{id}/financial-context`、`POST /research/listings/{id}/refresh`），`## 文档` 索引加本计划与新功能文档，`## 已知限制` 补港美条目的当前边界（在线刷新关闭、最新年报待补验、PB/TTM/股息率未启用）。
 - [ ] T12.5 重写本文件为验收矩阵（保留上表 + 实测结果 + 未覆盖清单）。
