@@ -13,6 +13,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from investment_agent.api.schemas.admin import ZoneEventsOut
 from investment_agent.rules.schema import TEMPLATE_ID
 
 CandidateStatus = Literal["open", "promoted", "dismissed", "expired"]
@@ -153,6 +154,18 @@ class CandidateSummaryOut(BaseModel):
     """Newest screen result: its ``reasons`` are the candidate's latest reasons."""
     draft_state: DraftState
     draft_rule: RuleSummaryOut | None
+    draft_overall_rationale: str | None = None
+    """The draft's overall analysis (``overall_rationale`` of the rationale
+    JSON; plain-text rationales pass through). The web list shows it as the
+    candidate's reasons when there are no screen hits (manual nomination)."""
+    draft_checks: list[ScreenReasonOut] = Field(default_factory=list)
+    """The draft rule's candidate zones evaluated against the stock's current
+    factors (screen-reason shape); shown like screen reasons for manual
+    nominations. Empty while the draft is pending or snapshot data is missing."""
+    zone_events: ZoneEventsOut | None = None
+    """The daily zone detection's record for this listing (WP8): the interval
+    the approved candidate rule is in, plus the newest entering event with the
+    rule version that fired. ``None`` until something has been evaluated."""
     note: str | None
 
 

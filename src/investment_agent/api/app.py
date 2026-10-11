@@ -1,7 +1,8 @@
 """FastAPI app factory: middleware, auth, lifespan, route registration."""
 
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from typing import Any
 
 import structlog
@@ -13,6 +14,7 @@ from investment_agent.config import Settings
 from investment_agent.gateway.manager import GatewayManager
 from investment_agent.logging import configure_logging
 from investment_agent.settings.loader import ensure_imported
+from investment_agent.snapshots.directory import initialize_directory
 from investment_agent.storage.database import engine_lifespan, session_scope
 
 log = structlog.get_logger(__name__)
@@ -36,10 +38,14 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         gateway = GatewayManager(_app, base=settings)
         _app.state.gateway = gateway
         await gateway.start()
+        directory_task = asyncio.create_task(initialize_directory())
         try:
             yield
         finally:
             await gateway.stop()
+            directory_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await directory_task
 
 
 # CSP for the /app UI: templates and app.js use no inline scripts or styles.
@@ -125,12 +131,16 @@ def _register_protected_routes(app: FastAPI) -> None:
     """Register routes that require X-API-Key auth."""
     from investment_agent.api.routes import (
         admin,
+        agent,
         calendar,
         candidates,
         dashboard,
         data_health,
         gateway,
+        holding_rules,
+        investor,
         market,
+        portfolio,
         research,
         rule_templates,
         stocks,
@@ -147,6 +157,14 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(calendar.router)
     app.include_router(gateway.router)
     app.include_router(market.router)
+    app.include_router(investor.router)
+    from investment_agent.api.routes import methods
+    app.include_router(methods.router)
+    from investment_agent.api.routes import disclosures
+    app.include_router(disclosures.router)
+    app.include_router(portfolio.router)
+    app.include_router(holding_rules.router)
+    app.include_router(agent.router)
     app.include_router(stocks.router)
     app.include_router(watchlist.router)
     app.include_router(admin.router)

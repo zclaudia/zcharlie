@@ -30,7 +30,8 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.candidates import CandidateRecord
 from investment_agent.storage.models.rules import RuleTemplateRecord
 
-# P2 position factors are not in the registry yet (holding zones only).
+# Position factors are derived from a holding's daily valuation by the zone
+# detector, so they are not in the factor registry; their units for rendering.
 PENDING_FACTOR_UNITS: dict[str, str] = {
     "position_weight": "fraction",
     "gain_vs_cost": "fraction",

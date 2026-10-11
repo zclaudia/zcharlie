@@ -26,8 +26,10 @@ import structlog
 from pypinyin import Style, lazy_pinyin
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.providers.baostock_reference import DirectorySnapshot
+from investment_agent.clock import shanghai_today
+from investment_agent.providers.baostock_reference import BaostockReferenceClient, DirectorySnapshot
 from investment_agent.providers.errors import ProviderDataError
+from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.stock_directory import STATUS_LISTED, STATUS_SUSPENDED
 from investment_agent.storage.repositories.stock_directory import (
     DirectoryUpsert,
@@ -57,6 +59,24 @@ def pinyin_initials(name: str) -> str:
     return "".join(
         part.strip().lower() for part in lazy_pinyin(cleaned, style=Style.FIRST_LETTER)
     )
+
+
+async def initialize_directory(client: DirectoryClient | None = None) -> None:
+    """Bootstrap an empty directory independently of the weekly universe job.
+
+    The API runs this in the background so startup remains responsive. Existing
+    directories continue to use the weekly refresh, with no upstream search calls.
+    """
+    try:
+        async with session_scope() as session:
+            _, total = await StockDirectoryRepository(session).freshness()
+        if total:
+            return
+        client = client or BaostockReferenceClient(timeout_seconds=30, max_attempts=1)
+        async with session_scope() as session:
+            await sync_directory(session, client, today=shanghai_today())
+    except Exception:
+        log.exception("directory_initialization_failed", hint="retry `ia snapshot sync-universe --now`")
 
 
 async def _latest_snapshot(client: DirectoryClient, *, today: date) -> DirectorySnapshot:
@@ -122,6 +142,7 @@ async def sync_directory(
 __all__ = [
     "MAX_LOOKBACK_DAYS",
     "DirectoryClient",
+    "initialize_directory",
     "pinyin_initials",
     "sync_directory",
 ]

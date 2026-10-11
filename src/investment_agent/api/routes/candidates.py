@@ -10,9 +10,11 @@ writes its decision in the same transaction.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, NoReturn
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,9 +66,12 @@ from investment_agent.candidates.promote import (
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
+from investment_agent.rules.drafting import load_stock_context
+from investment_agent.rules.screen import evaluate_zone_conditions
 from investment_agent.rules.screen_job import SCREEN_RUN, screen_results
-from investment_agent.rules.store import template_from_record
+from investment_agent.rules.store import instance_from_record, template_from_record
 from investment_agent.rules.validation import RuleValidationError, effective_params
+from investment_agent.rules.zone_detection import CANDIDATE_SCOPE, zone_summaries
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.candidates import CandidateRecord, DecisionRecord
@@ -83,6 +88,7 @@ from investment_agent.storage.repositories.candidate import (
 )
 
 _auth = [Depends(verify_api_key_or_session)]
+log = structlog.get_logger(__name__)
 candidates_router = APIRouter(prefix="/candidates", tags=["candidates"], dependencies=_auth)
 rules_router = APIRouter(prefix="/rules", tags=["rules"], dependencies=_auth)
 screen_runs_router = APIRouter(prefix="/screen-runs", tags=["screen-runs"], dependencies=_auth)
@@ -266,6 +272,54 @@ async def _company_name(session: AsyncSession, listing_id: int) -> str | None:
     return company.canonical_name if company is not None else None
 
 
+def _overall_rationale(raw: str | None) -> str | None:
+    """A draft's overall analysis: ``overall_rationale`` of the rationale JSON;
+    a plain-text rationale (manual drafts) passes through as-is."""
+
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return text
+    if isinstance(data, dict):
+        overall = data.get("overall_rationale")
+        if isinstance(overall, str) and overall.strip():
+            return overall.strip()
+    return None
+
+
+async def _draft_checks(
+    session: AsyncSession,
+    candidate: CandidateRecord,
+    draft: RuleInstanceRecord,
+    templates: TemplateCache,
+) -> list[dict[str, Any]]:
+    """The draft rule's candidate zones evaluated against the stock's current
+    factors - lets a manual nomination show the same per-factor checks as a
+    screen hit. Empty on any data problem; never breaks the list."""
+
+    try:
+        record = await templates.get(draft.template_id, draft.template_version)
+        if record is None:
+            return []
+        template = template_from_record(record)
+        rule = instance_from_record(draft)
+        zones = rule.zones or template.zones_for(rule.scope)
+        if not zones:
+            return []
+        params = effective_params(template) | rule_params(draft)
+        context = await load_stock_context(session, candidate.ticker, shanghai_today())
+        checks = evaluate_zone_conditions(zones=zones, factors=context.factors, params=params)
+    except Exception:
+        log.warning(
+            "candidate.draft_checks_failed", candidate_id=candidate.id, exc_info=True
+        )
+        return []
+    return [reason for name in sorted(checks) for reason in checks[name]]
+
+
 async def _summary_parts(
     session: AsyncSession, candidate: CandidateRecord, templates: TemplateCache
 ) -> tuple[dict[str, Any], list[ScreenResultRecord], RuleInstanceRecord | None]:
@@ -283,6 +337,14 @@ async def _summary_parts(
         (item for item in reversed(sources) if item.template_id and item.template_version),
         None,
     )
+    draft_checks: list[dict[str, Any]] = []
+    if not results and draft is not None:
+        draft_checks = await _draft_checks(session, candidate, draft, templates)
+    # The daily zone detection's record of this listing's approved rule (WP8):
+    # the page shows which zone it is in, and with which rule version.
+    zone = (
+        await zone_summaries(session, listing_ids=[candidate.listing_id], scope=CANDIDATE_SCOPE)
+    ).get(candidate.listing_id)
     fields: dict[str, Any] = {
         "id": candidate.id,
         "listing_id": candidate.listing_id,
@@ -302,6 +364,9 @@ async def _summary_parts(
         "latest_screen": await _screen_result_out(results[0], templates) if results else None,
         "draft_state": draft_state,
         "draft_rule": await _rule_summary(draft, templates) if draft is not None else None,
+        "draft_overall_rationale": _overall_rationale(draft.draft_rationale) if draft is not None else None,
+        "draft_checks": _reasons(draft_checks),
+        "zone_events": zone,
         "note": candidate.note,
     }
     return fields, results, draft

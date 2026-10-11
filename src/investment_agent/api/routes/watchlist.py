@@ -3,18 +3,25 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.auth import get_settings, verify_api_key_or_session
 from investment_agent.api.schemas.admin import (
+    TemplateSuggestionOut,
     WatchlistAdd,
     WatchlistItemOut,
     WatchlistLatestResearch,
     WatchlistRefreshItemOut,
     WatchlistRefreshOut,
     WatchlistRefreshRequest,
+    WatchlistRemove,
+    WatchlistRuleApproveRequest,
+    WatchlistRuleDraftRequest,
+    WatchlistRuleEditRequest,
+    WatchlistRuleOut,
+    WatchlistRuleRejectRequest,
     WatchlistUpdate,
 )
 from investment_agent.clock import shanghai_today
@@ -24,6 +31,8 @@ from investment_agent.research.watchlist_refresh import (
     enqueue_watchlist_refresh,
     research_source_mode,
 )
+from investment_agent.rules.recommend import suggest_template
+from investment_agent.rules.validation import RuleValidationError
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.user_domain import WatchlistItem
@@ -36,6 +45,16 @@ from investment_agent.storage.repositories.research_snapshot import (
     score_item_from_payload,
 )
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
+from investment_agent.watchlist.drafts import (
+    WatchDraftError,
+    approve_draft,
+    edit_draft_params,
+    redraft,
+    reject_draft,
+    remove_entry,
+    rule_snapshot,
+    sync_add_state,
+)
 
 router = APIRouter(
     prefix="/watchlist",
@@ -148,6 +167,16 @@ async def add_watchlist(body: WatchlistAdd) -> WatchlistItemOut:
             report_year=report_year,
             enabled=body.enabled,
         )
+        try:
+            await sync_add_state(
+                session,
+                item,
+                template_id=body.template_id,
+                as_of=shanghai_today(),
+                triggered_by="watchlist_api",
+            )
+        except WatchDraftError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         return await watchlist_item_out(session, item)
 
 
@@ -195,6 +224,11 @@ async def watchlist_item_out(session: AsyncSession, item: WatchlistItem) -> Watc
     """One watchlist row with its company name and newest research summary
     (shared by ``GET /watchlist`` and the MCP ``list_watchlist`` tool)."""
 
+    state = inspect(item)
+    if "updated_at" in state.expired_attributes:
+        # ``onupdate=func.now()`` expires the column after an UPDATE flush;
+        # load it explicitly so serialization never triggers a lazy IO.
+        await session.refresh(item, attribute_names=["updated_at"])
     listing = await session.get(Listing, item.listing_id)
     if listing is None:
         raise ValueError(f"Listing {item.listing_id} not found")
@@ -230,6 +264,7 @@ async def watchlist_item_out(session: AsyncSession, item: WatchlistItem) -> Watc
         last_refresh_error=item.last_refresh_error,
         last_research_run_id=item.last_research_run_id,
         latest_research=latest,
+        rule=WatchlistRuleOut.model_validate(await rule_snapshot(session, item)),
     )
 
 
@@ -321,13 +356,136 @@ async def update_watchlist_item(listing_id: int, body: WatchlistUpdate) -> Watch
         return await watchlist_item_out(session, item)
 
 
-@router.delete("/{listing_id}", status_code=204)
-async def remove_watchlist(listing_id: int) -> Response:
+async def _watch_item_or_404(session: AsyncSession, listing_id: int) -> WatchlistItem:
+    item = await WatchlistRepository(session).get_by_listing(listing_id)
+    if item is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No watchlist entry for listing_id={listing_id}",
+        )
+    return item
+
+
+@router.get("/template-suggestion", response_model=TemplateSuggestionOut)
+async def template_suggestion(
+    ticker: Annotated[str, Query(min_length=1, max_length=32)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> TemplateSuggestionOut:
+    """Best-effort drafting-template suggestion for the add form (plan 1.5).
+
+    Returns empty fields when nothing could be suggested; the entry can still
+    be added and drafted later with an explicit template choice.
+    """
+
+    parsed = parse_a_share_ticker(ticker.strip().upper())
+    if parsed is None:
+        raise HTTPException(status_code=422, detail=f"not an A-share ticker: {ticker}")
+    symbol, market = parsed
     async with session_scope() as session:
-        removed = await WatchlistRepository(session).remove(listing_id)
-        if not removed:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No watchlist entry for listing_id={listing_id}",
+        suggestion = await suggest_template(
+            session,
+            ticker=f"{symbol}.{market.suffix}",
+            as_of=shanghai_today(),
+            settings=settings,
+        )
+    if suggestion is None:
+        return TemplateSuggestionOut()
+    return TemplateSuggestionOut(**suggestion.__dict__)
+
+
+@router.post("/{listing_id}/rule/draft", response_model=WatchlistRuleOut)
+async def draft_watch_rule(
+    listing_id: int, body: WatchlistRuleDraftRequest
+) -> WatchlistRuleOut:
+    """(Re-)draft the entry's rule; the template falls back to the newest intent."""
+
+    async with session_scope() as session:
+        item = await _watch_item_or_404(session, listing_id)
+        try:
+            await redraft(
+                session,
+                item,
+                as_of=shanghai_today(),
+                template_id=body.template_id,
+                triggered_by="watchlist_api",
             )
+        except WatchDraftError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        return WatchlistRuleOut.model_validate(await rule_snapshot(session, item))
+
+
+@router.post("/{listing_id}/rule/approve", response_model=WatchlistRuleOut)
+async def approve_watch_rule(
+    listing_id: int, body: WatchlistRuleApproveRequest
+) -> WatchlistRuleOut:
+    """Approve the entry's current draft (previous active version retires)."""
+
+    async with session_scope() as session:
+        item = await _watch_item_or_404(session, listing_id)
+        try:
+            await approve_draft(
+                session,
+                item,
+                rule_instance_id=body.rule_instance_id,
+                reason=body.reason,
+                expected_active_rule_instance_id=body.expected_active_rule_instance_id,
+            )
+        except WatchDraftError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        return WatchlistRuleOut.model_validate(await rule_snapshot(session, item))
+
+
+@router.post("/{listing_id}/rule/edit", response_model=WatchlistRuleOut)
+async def edit_watch_rule(
+    listing_id: int, body: WatchlistRuleEditRequest
+) -> WatchlistRuleOut:
+    """Save a new draft version with ``params`` merged over the current draft."""
+
+    async with session_scope() as session:
+        item = await _watch_item_or_404(session, listing_id)
+        try:
+            await edit_draft_params(
+                session,
+                item,
+                rule_instance_id=body.rule_instance_id,
+                params=body.params,
+                reason=body.reason,
+            )
+        except WatchDraftError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        except RuleValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return WatchlistRuleOut.model_validate(await rule_snapshot(session, item))
+
+
+@router.post("/{listing_id}/rule/reject", response_model=WatchlistRuleOut)
+async def reject_watch_rule(
+    listing_id: int, body: WatchlistRuleRejectRequest
+) -> WatchlistRuleOut:
+    """Reject the current draft with a required reason (no automatic re-draft)."""
+
+    async with session_scope() as session:
+        item = await _watch_item_or_404(session, listing_id)
+        try:
+            await reject_draft(
+                session,
+                item,
+                rule_instance_id=body.rule_instance_id,
+                reason=body.reason,
+            )
+        except WatchDraftError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+        return WatchlistRuleOut.model_validate(await rule_snapshot(session, item))
+
+
+@router.delete("/{listing_id}", status_code=204)
+async def remove_watchlist(listing_id: int, body: WatchlistRemove) -> Response:
+    """Remove an observation entry; the reason is journaled (plan 1.5 移除)."""
+
+    async with session_scope() as session:
+        item = await _watch_item_or_404(session, listing_id)
+        try:
+            await remove_entry(session, item, reason=body.reason)
+        except WatchDraftError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         return Response(status_code=204)
