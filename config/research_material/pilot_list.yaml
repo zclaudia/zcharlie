@@ -1,0 +1,205 @@
+# 港美受控身份名单（hk-us-expansion W1 任务 01 的人工核对产物）。
+#
+# 这是应用内港美证券身份的**权威**：不由模型输出，不取自上游响应，不因名称
+# 相近或代码相似合并公司。每条身份的字段都对照已保存的调研证据核对：
+# 东财原币端点的代码与报表币种、Yahoo chart 的请求代码、SEC Submissions 的
+# 发行人标识（见 research/market-data-validation/evidence/remaining-final-03/）。
+#
+# 约定：
+# - ticker 是应用内存储代码：港股五位含前导零（"00002"），美股大写（"AAPL"）。
+# - quote_currency 是证券报价币种，report_currency 是报表币种，两者独立；
+#   Market.currency（市场默认报价币种）不得顶替证券报表币种。
+# - sources 里的 symbol 是该来源实际使用的代码，按来源单独保存，不互相换算：
+#     eastmoney.hk.native.v1 -> 东财 SECUCODE（"00005.HK"）
+#     yahoo.chart.v1         -> Yahoo chart 代码（"0005.HK"）
+#     sec.companyfacts.v1    ->SEC CIK 十进制；CIK 是发行人标识，不等于股票
+#                             类别或交易所标识。
+# - valid_from 取核对所依据的调研证据取得日（2026-10-11），不回填更早时间。
+# - 只有共享 company_key 才表示应用内共用同一个 Company；文件内不允许同名条目
+#   靠名称复用，加载时由 validate_pilot_list 拒绝重复与自相矛盾。
+version: 1
+checked_on: 2026-10-11
+identities:
+  - market_code: HKEX
+    ticker: "00002"
+    company_key: clp-holdings
+    company_name: CLP Holdings Limited
+    company_name_zh: 中电控股
+    security_type: ordinary
+    quote_currency: HKD
+    report_currency: HKD
+    fiscal_year_end_note: "12-31"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      报价与报表币种均为 HKD。东财原币端点 2021–2024 四年的 CURRENCY_CODE 为
+      HKD，2024 年收入/股东利润/资产/股东权益/经营现金流/固定资产现金支出
+      6 个金额已对照发行人报表 PDF。
+    sources:
+      - source: eastmoney.hk.native.v1
+        symbol: "00002.HK"
+        note: 东财 SECUCODE；证据 evidence/remaining-final-03/raw/native/00002/income-four-years.json
+      - source: yahoo.chart.v1
+        symbol: "0002.HK"
+        note: 保留前导零到四位；证据 evidence/remaining-final-03/raw/yahoo-clp-chart.json
+  - market_code: HKEX
+    ticker: "00005"
+    company_key: hsbc-holdings
+    company_name: HSBC Holdings plc
+    company_name_zh: 汇丰控股
+    security_type: ordinary
+    quote_currency: HKD
+    report_currency: USD
+    fiscal_year_end_note: "12-31"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      汇丰报价 HKD、报表 USD：东财原币端点 CURRENCY_CODE=USD，行情为 HKD，
+      不能混用。人民币展示乘数 7.1884 是已观察到的展示换算，不是汇率来源，
+      不得用于原币金额换算。
+    sources:
+      - source: eastmoney.hk.native.v1
+        symbol: "00005.HK"
+        note: 东财 SECUCODE；证据 evidence/remaining-final-03/raw/native/00005/income-four-years.json
+      - source: yahoo.chart.v1
+        symbol: "0005.HK"
+        note: 保留前导零到四位；证据 evidence/remaining-final-03/raw/yahoo-hsbc-chart.json
+      - source: sec.companyfacts.v1
+        symbol: "1089113"
+        note: >-
+          CIK 十进制（Submissions cik=0001089113）；CIK 是发行人标识，不等于
+          股票类别或交易所标识。仅作交叉核对，不代表所有港股都有 SEC 来源。
+  - market_code: HKEX
+    ticker: "00700"
+    company_key: tencent-holdings
+    company_name: Tencent Holdings Limited
+    company_name_zh: 腾讯控股
+    security_type: ordinary
+    quote_currency: HKD
+    report_currency: CNY
+    fiscal_year_end_note: "12-31"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      腾讯报价 HKD、报表 CNY：东财原币端点 CURRENCY_CODE=CNY，行情为 HKD。
+      报表币种与报价币种分别处理，不用市场默认报价币种顶替。
+    sources:
+      - source: eastmoney.hk.native.v1
+        symbol: "00700.HK"
+        note: 东财 SECUCODE；证据 evidence/remaining-final-03/raw/native/00700/income-four-years.json
+      - source: yahoo.chart.v1
+        symbol: "0700.HK"
+        note: 保留前导零到四位；证据 evidence/remaining-final-03/raw/yahoo-tencent-chart.json
+  - market_code: NASDAQ
+    ticker: "AAPL"
+    company_key: apple
+    company_name: Apple Inc.
+    company_name_zh: 苹果公司
+    security_type: ordinary
+    quote_currency: USD
+    report_currency: USD
+    fiscal_year_end_note: "52/53 周制：财年结束于最接近 9 月最后一个周六（Submissions fiscalYearEnd=0926）"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      使用发行人自己的 52/53 周财年边界，不用 frames 的自然年标签代替。
+      2020 年 4:1 拆股的行情调整案例已留存（Close 已按拆股调整）。
+    sources:
+      - source: sec.companyfacts.v1
+        symbol: "320193"
+        note: >-
+          CIK 十进制（Submissions cik=0000320193）；CIK 是发行人标识，不等于
+          股票类别或交易所标识。
+      - source: yahoo.chart.v1
+        symbol: "AAPL"
+        note: 行情第二来源缺位，只有 Yahoo 一个来源；证据 evidence/remaining-final-03/raw/yahoo-aapl-chart.json
+  - market_code: NASDAQ
+    ticker: "COST"
+    company_key: costco
+    company_name: Costco Wholesale Corporation
+    company_name_zh: 好市多
+    security_type: ordinary
+    quote_currency: USD
+    report_currency: USD
+    fiscal_year_end_note: "52/53 周制：财年结束于最接近 8 月 31 日的周日（Submissions fiscalYearEnd=0830）"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      财年边界取发行人申报，不用自然年标签代替。
+    sources:
+      - source: sec.companyfacts.v1
+        symbol: "909832"
+        note: >-
+          CIK 十进制（Submissions cik=0000909832）；CIK 是发行人标识，不等于
+          股票类别或交易所标识。
+  - market_code: NYSE
+    ticker: "JPM"
+    company_key: jpmorgan-chase
+    company_name: JPMorgan Chase & Co.
+    company_name_zh: 摩根大通
+    security_type: ordinary
+    quote_currency: USD
+    report_currency: USD
+    fiscal_year_end_note: "12-31"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      银行样本：2024 年 GAAP 净收入与管理口径收入不同名，不套用普通企业的
+      毛利率/自由现金流口径。
+    sources:
+      - source: sec.companyfacts.v1
+        symbol: "19617"
+        note: >-
+          CIK 十进制（Submissions cik=0000019617）；CIK 是发行人标识，不等于
+          股票类别或交易所标识。发行人有多类优先股代码，本行只登记普通股 JPM。
+  - market_code: NYSE
+    ticker: "XOM"
+    company_key: exxon-mobil
+    company_name: Exxon Mobil Corporation
+    company_name_zh: 埃克森美孚
+    security_type: ordinary
+    quote_currency: USD
+    report_currency: USD
+    fiscal_year_end_note: "12-31"
+    ads_ratio: null
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      已保存的 Submissions 中发行人 ticker 列表为空：不能用它自动补证券映射，
+      本行身份为人工核对结果，行情身份另行核对。收入口径差异（销售及其他
+      经营收入 vs 标准 Revenues）保留，不合并成一个名字。
+    sources:
+      - source: sec.companyfacts.v1
+        symbol: "34088"
+        note: >-
+          CIK 十进制（Submissions cik=0000034088）；CIK 是发行人标识，不等于
+          股票类别或交易所标识。
+  - market_code: NYSE
+    ticker: "TSM"
+    company_key: tsmc
+    company_name: Taiwan Semiconductor Manufacturing Company Limited
+    company_name_zh: 台积电
+    security_type: ads
+    quote_currency: USD
+    report_currency: TWD
+    fiscal_year_end_note: "12-31"
+    ads_ratio: "5"
+    valid_from: 2026-10-11
+    valid_to: null
+    notes: >-
+      美国上市 ADS，报表为新台币：一个 ADS 代表五股普通股（TSM 2024 20-F
+      明示），ads_ratio 来源为该发行人申报。ADS 报价与 TWD 普通股 EPS 不能
+      直接组合；20-F 的便利阅读美元换算不是估值日汇率。本地年报与 20-F 的
+      利润差异未解决，不得混用，也不得拼接为增长率。
+    sources:
+      - source: sec.companyfacts.v1
+        symbol: "1046179"
+        note: >-
+          CIK 十进制（Submissions cik=0001046179）；CIK 是发行人标识，不等于
+          股票类别或交易所标识。ADS 比例亦出自该发行人的 20-F 申报。
