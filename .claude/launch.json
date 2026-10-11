@@ -4,8 +4,30 @@
     {
       "name": "zcharlie-api",
       "runtimeExecutable": "/Users/zhvala/SourceCode/zcharlie/.venv/bin/ia",
-      "runtimeArgs": ["api", "serve", "--host", "127.0.0.1", "--port", "8010"],
+      "runtimeArgs": [
+        "api",
+        "serve",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8010"
+      ],
       "port": 8010
+    },
+    {
+      "name": "zcharlie-api-dbcopy",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "DATABASE_URL=sqlite+aiosqlite:////private/tmp/claude-501/-Users-zhvala-SourceCode-zcharlie/0341b884-bc80-4d38-ac8d-822e2e9f23fc/scratchpad/app.db",
+        "/Users/zhvala/SourceCode/zcharlie/.venv/bin/ia",
+        "api",
+        "serve",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8011"
+      ],
+      "port": 8011
     }
   ]
 }
