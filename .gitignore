@@ -42,3 +42,6 @@ docs/superpowers/
 
 # Local dev app data copy (tools/dev.sh)
 .dev/
+
+# Local research data validation artifacts (large, not for remote)
+research/
