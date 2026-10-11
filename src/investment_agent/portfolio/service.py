@@ -1,0 +1,1023 @@
+"""Atomic authenticated fact append and deterministic bitemporal projection.
+
+Caller owns commit. No investment mandate, recommendation or broker dependency.
+Balances include earlier facts in (occurred_at, recorded revision) order.
+Equal-time facts sort by recorded revision; reversals remove an original on rebuild, never
+rewrite either its body or an earlier snapshot.
+"""
+import hashlib
+import json
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from decimal import Decimal, localcontext
+from typing import Any, Literal
+from uuid import UUID, uuid4, uuid5
+
+import structlog
+from sqlalchemy import or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from investment_agent.clock import SHANGHAI_TZ
+from investment_agent.investor.common import ObjectRef
+from investment_agent.investor.foundations import InvestorError, storage_conflicts
+from investment_agent.portfolio.contracts import (
+    Account,
+    AppendEvent,
+    AppendResult,
+    ApplyCorrection,
+    Balance,
+    CashFact,
+    CorporateAction,
+    CorrectionResult,
+    CreateAccount,
+    DividendRecord,
+    EventFact,
+    EventPage,
+    EventRecord,
+    HoldingComparison,
+    ImportBatch,
+    ImportPreview,
+    ImportResult,
+    ImportRowEffect,
+    RealizedPnL,
+    ReconciliationComparison,
+    Reversal,
+    Snapshot,
+    SnapshotHolding,
+    Trade,
+)
+from investment_agent.storage.models.pit_snapshot import MarketSnapshot
+from investment_agent.storage.models.portfolio import (
+    PortfolioAccount,
+    PortfolioEvent,
+    PortfolioRequest,
+    PortfolioSnapshot,
+)
+from investment_agent.storage.models.reference import Listing, Market
+
+log = structlog.get_logger(__name__)
+
+COST_METHOD_VERSION = "weighted_average_remaining_v1"
+"""Plan 2.7口径: remaining weighted acquisition cost, fees included."""
+
+
+def digest(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+
+
+@dataclass
+class _CostState:
+    """Remaining-cost projection state of one listing (plan 2.7)."""
+
+    quantity: Decimal
+    remaining: Decimal | None
+    opened_on: Any = None
+    reason: str | None = None
+
+
+def fact_refs(fact: EventFact) -> tuple[ObjectRef, ...]:
+    """The listings one fact names (empty for pure cash facts)."""
+
+    if isinstance(fact, Balance):
+        return tuple(holding.listing_ref for holding in fact.holdings)
+    if isinstance(fact, Trade):
+        return (fact.holding.listing_ref,)
+    if isinstance(fact, (CashFact, CorporateAction)) and fact.listing_ref is not None:
+        return (fact.listing_ref,)
+    return ()
+
+
+@dataclass
+class Projection:
+    snapshot: Snapshot
+    confirmable_deficits: list[tuple[UUID, ObjectRef]] = field(default_factory=list)
+    """Sells (event id, listing id) whose confirmable basis was known and insufficient."""
+
+
+class PortfolioService:
+    def __init__(self, session: AsyncSession, owner: str = "local_owner") -> None:
+        self.session = session
+        self.owner = owner
+
+    async def _reserve(self) -> None:
+        # DML before SELECT: SQLite obtains its writer reservation without
+        # upgrading a stale read transaction (BUSY_SNAPSHOT).
+        await self.session.execute(update(PortfolioAccount).where(PortfolioAccount.owner_id == self.owner).values(revision=PortfolioAccount.revision))
+
+    async def _account(self, account_id: UUID) -> PortfolioAccount:
+        row = await self.session.scalar(select(PortfolioAccount).where(PortfolioAccount.id == str(account_id), PortfolioAccount.owner_id == self.owner).execution_options(populate_existing=True))
+        if row is None:
+            raise InvestorError("not_found", "Portfolio account not found")
+        return row
+
+    @storage_conflicts
+    async def create_account(self, request: CreateAccount) -> Account:
+        await self._reserve()
+        payload = request.model_dump(mode="json")
+        row = await self.session.get(PortfolioAccount, str(request.idempotency_key))
+        if row is not None:
+            if row.owner_id != self.owner:
+                raise InvestorError("not_found", "Portfolio account not found")
+            if row.input_hash != digest(payload):
+                raise InvestorError("idempotency_conflict", "Account key reused with another body")
+            return Account.model_validate(row.payload)
+        account = Account(id=request.idempotency_key, name=request.name, currency=request.currency, revision=0, current_snapshot_id=None)
+        self.session.add(PortfolioAccount(id=str(account.id), owner_id=self.owner, revision=0, current_snapshot_id=None, input_hash=digest(payload), payload=account.model_dump(mode="json")))
+        await self.session.flush()
+        return account
+
+    async def accounts(self) -> tuple[Account, ...]:
+        rows = await self.session.scalars(select(PortfolioAccount).where(PortfolioAccount.owner_id == self.owner).order_by(PortfolioAccount.id))
+        return tuple(Account.model_validate(row.payload) for row in rows)
+
+    async def events(self, account_id: UUID, *, after_revision: int = 0, limit: int = 100) -> EventPage:
+        if after_revision < 0 or not 1 <= limit <= 200:
+            raise InvestorError("invalid_reference", "Invalid ledger pagination")
+        account = await self._account(account_id)
+        rows = list(await self.session.scalars(select(PortfolioEvent).where(PortfolioEvent.account_id == account.id, PortfolioEvent.revision > after_revision, PortfolioEvent.revision <= account.revision).order_by(PortfolioEvent.revision).limit(limit + 1)))
+        values = tuple(EventRecord.model_validate(row.payload) for row in rows[:limit])
+        return EventPage(items=values, next_after_revision=values[-1].revision if len(rows) > limit else None, observed_revision=account.revision)
+
+    async def event(self, account_id: UUID, event_id: UUID) -> EventRecord:
+        account = await self._account(account_id)
+        row = await self.session.scalar(select(PortfolioEvent).where(PortfolioEvent.account_id == account.id, PortfolioEvent.id == str(event_id)))
+        if row is None:
+            raise InvestorError("not_found", "Portfolio event not found")
+        return EventRecord.model_validate(row.payload)
+
+    async def snapshot(self, account_id: UUID, *, snapshot_id: UUID | None = None, revision: int | None = None) -> Snapshot:
+        # Current head and immutable snapshot must be read consistently.
+        connection = await self.session.connection()
+        if connection.dialect.name == "sqlite":
+            active = await connection.run_sync(lambda c: bool(getattr(c.connection.driver_connection, "in_transaction", False)))
+            if not active:
+                await connection.exec_driver_sql("BEGIN")
+        account = await self._account(account_id)
+        query = select(PortfolioSnapshot).where(PortfolioSnapshot.account_id == account.id)
+        if snapshot_id is not None:
+            query = query.where(PortfolioSnapshot.id == str(snapshot_id))
+        elif revision is not None:
+            query = query.where(PortfolioSnapshot.revision == revision)
+        else:
+            query = query.where(PortfolioSnapshot.id == account.current_snapshot_id)
+        row = await self.session.scalar(query)
+        if row is None:
+            raise InvestorError("not_found", "Portfolio snapshot not found")
+        value = Snapshot.model_validate(row.payload)
+        if revision is not None and value.revision != revision:
+            raise InvestorError("not_found", "Portfolio snapshot version not found")
+        return value
+
+    async def _result(self, row: PortfolioEvent) -> AppendResult:
+        snapshot = await self.session.scalar(select(PortfolioSnapshot).where(PortfolioSnapshot.account_id == row.account_id, PortfolioSnapshot.revision == row.revision))
+        if snapshot is None:
+            raise RuntimeError("committed event has no atomic snapshot")
+        return AppendResult(event=EventRecord.model_validate(row.payload), snapshot=Snapshot.model_validate(snapshot.payload))
+
+    @storage_conflicts
+    async def append(self, request: AppendEvent) -> AppendResult:
+        await self._reserve()
+        account = await self._account(request.account_id)
+        payload = request.model_dump(mode="json")
+        body_hash = digest(payload)
+        fact_hash = digest(request.fact.model_dump(mode="json"))
+        receipt = await self.session.get(PortfolioRequest, (account.id, str(request.idempotency_key)))
+        if receipt is not None:
+            if receipt.input_hash != body_hash:
+                raise InvestorError("idempotency_conflict", "Event identity reused with another body")
+            prior_event = await self.session.get(PortfolioEvent, receipt.event_id)
+            if prior_event is None:
+                raise RuntimeError("request receipt has no event")
+            return await self._result(prior_event)
+        conditions = [PortfolioEvent.idempotency_key == str(request.idempotency_key)]
+        if request.batch_id is not None:
+            conditions.append((PortfolioEvent.batch_id == str(request.batch_id)) & (PortfolioEvent.row_id == request.row_id))
+        prior = list(await self.session.scalars(select(PortfolioEvent).where(PortfolioEvent.account_id == account.id, or_(*conditions))))
+        if prior:
+            if len(prior) != 1:
+                raise InvestorError("idempotency_conflict", "Request identities refer to different events")
+            row = prior[0]
+            if row.idempotency_key == str(request.idempotency_key):
+                same = row.input_hash == body_hash
+            else:
+                same = row.fact_hash == fact_hash
+            if not same:
+                raise InvestorError("idempotency_conflict", "Event identity reused with another body")
+            self.session.add(PortfolioRequest(account_id=account.id, idempotency_key=str(request.idempotency_key), event_id=row.id, input_hash=body_hash))
+            await self.session.flush()
+            return await self._result(row)  # replay precedes stale revision CAS
+        if request.expected_revision != account.revision:
+            raise InvestorError("revision_conflict", "Reload current account revision")
+        records = [EventRecord.model_validate(row.payload) for row in await self.session.scalars(select(PortfolioEvent).where(PortfolioEvent.account_id == account.id).order_by(PortfolioEvent.revision))]
+        fact = request.fact
+        if fact.occurred_at > datetime.now(UTC):
+            raise InvestorError("invalid_reference", "Ledger accepts only already occurred facts")
+        if not records and (not isinstance(fact, Balance) or fact.kind != "opening_balance"):
+            raise InvestorError("invalid_reference", "First fact must confirm opening balance")
+        if records and isinstance(fact, Balance) and fact.kind == "opening_balance":
+            reversed_ids = {r.request.fact.original_event_id for r in records if isinstance(r.request.fact, Reversal)}
+            if any(isinstance(r.request.fact, Balance) and r.request.fact.kind == "opening_balance" and r.id not in reversed_ids for r in records):
+                raise InvestorError("invalid_reference", "At most one active opening balance per account")
+        if isinstance(fact, Reversal):
+            original = next((r for r in records if r.id == fact.original_event_id), None)
+            if original is None or isinstance(original.request.fact, Reversal):
+                raise InvestorError("invalid_reference", "Original event must belong to this account and cannot be a reversal")
+            if any(isinstance(r.request.fact, Reversal) and r.request.fact.original_event_id == fact.original_event_id for r in records):
+                raise InvestorError("idempotency_conflict", "Original event already reversed")
+        refs: list[ObjectRef] = []
+        if isinstance(fact, Balance):
+            refs = [h.listing_ref for h in fact.holdings]
+        elif isinstance(fact, Trade):
+            refs = [fact.holding.listing_ref]
+        elif isinstance(fact, (CashFact, CorporateAction)) and fact.listing_ref is not None:
+            refs = [fact.listing_ref]
+        for ref in refs:
+            listing = await self.session.get(Listing, ref.id)
+            market = await self.session.get(Market, listing.market_code) if listing else None
+            # First release has no FX or foreign-currency settlement support.
+            if listing is None or market is None or market.currency != "CNY" or listing.market_code not in {"CN", "SH", "SZ", "BJ", "SSE", "SZSE", "BSE"}:
+                raise InvestorError("invalid_reference", "Listing unavailable or outside CNY settlement scope")
+        recorded = datetime.now(UTC)
+        record = EventRecord(id=uuid4(), revision=account.revision + 1, recorded_at=recorded, request=request)
+        projection = await self._project(request.account_id, records + [record], recorded, new_event_ids=frozenset({record.id}))
+        if projection.confirmable_deficits:
+            # Plan 2.8: a normal sell beyond the confirmed basis is rejected at
+            # commit; fix the facts through a correction instead of recording a
+            # negative position.
+            raise InvestorError("invalid_reference", "Sell exceeds the confirmable quantity; correct the facts first")
+        snapshot = projection.snapshot
+        result = await self.session.execute(update(PortfolioAccount).where(PortfolioAccount.id == account.id, PortfolioAccount.owner_id == self.owner, PortfolioAccount.revision == request.expected_revision).values(revision=record.revision, current_snapshot_id=str(snapshot.id), payload=Account(id=request.account_id, name=account.payload["name"], currency="CNY", revision=record.revision, current_snapshot_id=snapshot.id).model_dump(mode="json")))
+        if not result.rowcount:  # type: ignore[attr-defined]
+            raise InvestorError("revision_conflict", "Concurrent portfolio append")
+        self.session.add(PortfolioEvent(id=str(record.id), account_id=account.id, revision=record.revision, idempotency_key=str(request.idempotency_key), batch_id=str(request.batch_id) if request.batch_id else None, row_id=request.row_id, reverses_id=str(fact.original_event_id) if isinstance(fact, Reversal) else None, input_hash=body_hash, fact_hash=fact_hash, payload=record.model_dump(mode="json")))
+        self.session.add(PortfolioSnapshot(id=str(snapshot.id), account_id=account.id, revision=record.revision, payload=snapshot.model_dump(mode="json")))
+        await self.session.flush()
+        self.session.add(PortfolioRequest(account_id=account.id, idempotency_key=str(request.idempotency_key), event_id=str(record.id), input_hash=body_hash))
+        await self.session.flush()
+        return AppendResult(event=record, snapshot=snapshot)
+
+    # -- whole-batch import and preview (plan 2.8, WP4) ---------------------- #
+
+    async def _records(self, account_id: UUID | str) -> list[EventRecord]:
+        rows = await self.session.scalars(
+            select(PortfolioEvent).where(PortfolioEvent.account_id == str(account_id)).order_by(PortfolioEvent.revision)
+        )
+        return [EventRecord.model_validate(row.payload) for row in rows]
+
+    def _import_records(
+        self, request: ImportBatch, revision: int, *, recorded: datetime
+    ) -> list[EventRecord]:
+        return [
+            EventRecord(
+                id=uuid4(),
+                revision=revision + 1 + index,
+                recorded_at=recorded,
+                request=AppendEvent(
+                    account_id=request.account_id,
+                    expected_revision=request.expected_revision,
+                    idempotency_key=uuid5(request.operation_id, row.row_id),
+                    batch_id=request.operation_id,
+                    row_id=row.row_id,
+                    fact=row.fact,
+                ),
+            )
+            for index, row in enumerate(request.rows)
+        ]
+
+    async def _import_conflicts(
+        self,
+        records: list[EventRecord],
+        new_records: list[EventRecord],
+        *,
+        now: datetime,
+    ) -> list[str]:
+        """Structural conflicts of a batch, named per row where possible."""
+
+        conflicts: list[str] = []
+        for record in new_records:
+            row_id = record.request.row_id
+            fact = record.request.fact
+            if fact.occurred_at > now:
+                conflicts.append(f"future_fact:{row_id}")
+            if fact.occurred_at.tzinfo is None:
+                conflicts.append(f"naive_occurred_at:{row_id}")
+            for ref in fact_refs(fact):
+                listing = await self.session.get(Listing, ref.id)
+                market = await self.session.get(Market, listing.market_code) if listing else None
+                if listing is None or market is None or market.currency != "CNY" or listing.market_code not in {"CN", "SH", "SZ", "BJ", "SSE", "SZSE", "BSE"}:
+                    conflicts.append(f"listing_outside_scope:{row_id}:{ref.id}")
+        if not records:
+            first = new_records[0].request.fact
+            if not (isinstance(first, Balance) and first.kind == "opening_balance"):
+                conflicts.append(
+                    f"first_fact_must_be_opening_balance:{new_records[0].request.row_id}"
+                )
+        reversed_ids = {r.request.fact.original_event_id for r in records if isinstance(r.request.fact, Reversal)}
+        openings = sum(
+            isinstance(r.request.fact, Balance)
+            and r.request.fact.kind == "opening_balance"
+            and r.id not in reversed_ids
+            for r in records
+        ) + sum(
+            isinstance(r.request.fact, Balance) and r.request.fact.kind == "opening_balance"
+            for r in new_records
+        )
+        if openings > 1:
+            conflicts.append("multiple_opening_balance")
+        return conflicts
+
+    async def _import_plan(
+        self, request: ImportBatch, records: list[EventRecord], *, now: datetime
+    ) -> tuple[list[EventRecord], Projection, dict[UUID, dict[str, Any]], list[str], list[str]]:
+        """The batch's whole replay: new records, projection, per-row trace, conflicts."""
+
+        new_records = self._import_records(request, records[-1].revision if records else 0, recorded=now)
+        conflicts = await self._import_conflicts(records, new_records, now=now)
+        trace: dict[UUID, dict[str, Any]] = {record.id: {} for record in new_records}
+        before = await self._project(request.account_id, records, now, trace=None)
+        after = await self._project(
+            request.account_id,
+            records + new_records,
+            now,
+            new_event_ids=frozenset(trace),
+            trace=trace,
+        )
+        baseline = set(before.snapshot.conflicts)
+        introduced = [issue for issue in after.snapshot.conflicts if issue not in baseline]
+        conflicts.extend(f"projection:{issue}" for issue in introduced)
+        row_of = {record.id: record.request.row_id for record in new_records}
+        conflicts.extend(
+            f"sell_exceeds_confirmable_quantity:{row_of[event_id]}"
+            for event_id, _ref in after.confirmable_deficits
+            if event_id in row_of
+        )
+        return new_records, after, trace, conflicts, introduced
+
+    async def preview_import(self, request: ImportBatch) -> ImportPreview:
+        """Server-computed preview on the caller's base revision; no writes.
+
+        A preview older than the current facts is refused (recompute it), and
+        every row reports its inclusion - ``audit_prior_history`` rows stay
+        history only and never change quantity, cost or cash (plan 2.6, 2.8).
+        """
+
+        account = await self._account(request.account_id)
+        if request.expected_revision != account.revision:
+            raise InvestorError("revision_conflict", "预览基准事实版本已变化，请重新预览整批")
+        now = datetime.now(UTC)
+        records = await self._records(account.id)
+        new_records, projection, trace, conflicts, _introduced = await self._import_plan(
+            request, records, now=now
+        )
+        rejected: dict[str, list[str]] = {}
+        for conflict in conflicts:
+            for conflict_row in {str(row.row_id) for row in request.rows}:
+                if conflict.endswith(f":{conflict_row}") or f":{conflict_row}:" in conflict:
+                    rejected.setdefault(conflict_row, []).append(conflict)
+        rows: list[ImportRowEffect] = []
+        for record in new_records:
+            row_id = str(record.request.row_id)
+            effect = trace.get(record.id, {})
+            inclusion = effect.get("inclusion", "applied")
+            rows.append(
+                ImportRowEffect(
+                    row_id=row_id,
+                    occurred_at=record.request.fact.occurred_at,
+                    kind=record.request.fact.kind,
+                    inclusion=inclusion,
+                    accepted=row_id not in rejected,
+                    reasons=tuple(rejected.get(row_id, ())),
+                    quantity_delta=effect.get("quantity_delta", {}),
+                    cash_delta=effect.get("cash_delta"),
+                    cost_remaining=effect.get("cost_remaining", {}),
+                )
+            )
+        return ImportPreview(
+            account_id=request.account_id,
+            base_revision=request.expected_revision,
+            batch_hash=digest(request.model_dump(mode="json")),
+            ready=not conflicts,
+            rows=tuple(rows),
+            conflicts=tuple(conflicts),
+            resulting_revision=projection.snapshot.revision,
+        )
+
+    @storage_conflicts
+    async def apply_import(self, request: ImportBatch) -> ImportResult:
+        """Commit the whole batch under one CAS, or nothing (plan 2.8).
+
+        The rows keep their ``batch_id``/``row_id`` identity, one snapshot is
+        written for the final revision, and a retried identical operation
+        returns the original receipt instead of half a batch.
+        """
+
+        await self._reserve()
+        account = await self._account(request.account_id)
+        payload = request.model_dump(mode="json")
+        body_hash = digest(payload)
+        receipt = await self.session.get(PortfolioRequest, (account.id, str(request.operation_id)))
+        if receipt is not None:
+            if receipt.input_hash != body_hash:
+                raise InvestorError("idempotency_conflict", "Import key reused with another body")
+            stored = list(
+                await self.session.scalars(
+                    select(PortfolioEvent)
+                    .where(
+                        PortfolioEvent.account_id == account.id,
+                        PortfolioEvent.batch_id == str(request.operation_id),
+                    )
+                    .order_by(PortfolioEvent.revision)
+                )
+            )
+            if not stored:
+                raise RuntimeError("import receipt has no events")
+            final_row = stored[-1]
+            snapshot_row = await self.session.scalar(
+                select(PortfolioSnapshot).where(
+                    PortfolioSnapshot.account_id == account.id,
+                    PortfolioSnapshot.revision == final_row.revision,
+                )
+            )
+            if snapshot_row is None:
+                raise RuntimeError("committed import has no atomic snapshot")
+            events = tuple(EventRecord.model_validate(row.payload) for row in stored)
+            audit = await self._audit_row_ids(events[-len(request.rows) :], list(events))
+            return ImportResult(
+                operation_id=request.operation_id,
+                events=events,
+                snapshot=Snapshot.model_validate(snapshot_row.payload),
+                audit_only_row_ids=tuple(audit),
+            )
+        if request.expected_revision != account.revision:
+            raise InvestorError("revision_conflict", "Reload current account revision before importing")
+        now = datetime.now(UTC)
+        records = await self._records(account.id)
+        new_records, projection, trace, conflicts, _introduced = await self._import_plan(
+            request, records, now=now
+        )
+        if conflicts:
+            raise InvestorError(
+                "invalid_reference",
+                "Import batch would not replay validly: " + "; ".join(sorted(conflicts)[:8]),
+            )
+        snapshot = projection.snapshot
+        final = new_records[-1]
+        result = await self.session.execute(
+            update(PortfolioAccount)
+            .where(
+                PortfolioAccount.id == account.id,
+                PortfolioAccount.owner_id == self.owner,
+                PortfolioAccount.revision == request.expected_revision,
+            )
+            .values(
+                revision=final.revision,
+                current_snapshot_id=str(snapshot.id),
+                payload=Account(
+                    id=request.account_id,
+                    name=account.payload["name"],
+                    currency="CNY",
+                    revision=final.revision,
+                    current_snapshot_id=snapshot.id,
+                ).model_dump(mode="json"),
+            )
+        )
+        if not result.rowcount:  # type: ignore[attr-defined]
+            raise InvestorError("revision_conflict", "Concurrent portfolio append")
+        for record in new_records:
+            fact = record.request.fact
+            self.session.add(
+                PortfolioEvent(
+                    id=str(record.id),
+                    account_id=account.id,
+                    revision=record.revision,
+                    idempotency_key=str(record.request.idempotency_key),
+                    batch_id=str(request.operation_id),
+                    row_id=record.request.row_id,
+                    reverses_id=None,
+                    input_hash=body_hash,
+                    fact_hash=digest(fact.model_dump(mode="json")),
+                    payload=record.model_dump(mode="json"),
+                )
+            )
+        self.session.add(
+            PortfolioSnapshot(
+                id=str(snapshot.id),
+                account_id=account.id,
+                revision=final.revision,
+                payload=snapshot.model_dump(mode="json"),
+            )
+        )
+        await self.session.flush()
+        self.session.add(
+            PortfolioRequest(
+                account_id=account.id,
+                idempotency_key=str(request.operation_id),
+                event_id=str(final.id),
+                input_hash=body_hash,
+            )
+        )
+        await self.session.flush()
+        audit = [
+            str(record.request.row_id)
+            for record in new_records
+            if trace.get(record.id, {}).get("inclusion") == "audit_prior_history"
+        ]
+        log.info(
+            "portfolio.import.applied",
+            account_id=str(account.id),
+            operation_id=str(request.operation_id),
+            rows=len(new_records),
+            audit_only=len(audit),
+        )
+        return ImportResult(
+            operation_id=request.operation_id,
+            events=tuple(new_records),
+            snapshot=snapshot,
+            audit_only_row_ids=tuple(audit),
+        )
+
+    async def _audit_row_ids(
+        self, batch_records: Sequence[EventRecord], all_records: list[EventRecord]
+    ) -> list[str]:
+        """Prior-history row ids of an already-committed batch (replay path)."""
+
+        trace: dict[UUID, dict[str, Any]] = {record.id: {} for record in batch_records}
+        await self._project(
+            batch_records[0].request.account_id,
+            all_records,
+            datetime.now(UTC),
+            trace=trace,
+        )
+        return [
+            str(record.request.row_id)
+            for record in batch_records
+            if trace.get(record.id, {}).get("inclusion") == "audit_prior_history"
+        ]
+
+    @storage_conflicts
+    async def apply_correction(self, request: ApplyCorrection) -> CorrectionResult:
+        """One reversal plus replacements, atomically and idempotently (plan 2.8).
+
+        The operation is bound to one UUID, the revision the user previewed and
+        the exact body; a retried identical request returns the original result.
+        Every event is written in this transaction (or none is), the account
+        head only ever exposes the final snapshot, and a replay that would leave
+        a confirmable sell basis exceeded is rejected whole.
+        """
+        await self._reserve()
+        account = await self._account(request.account_id)
+        payload = request.model_dump(mode="json")
+        body_hash = digest(payload)
+        receipt = await self.session.get(PortfolioRequest, (account.id, str(request.operation_id)))
+        if receipt is not None:
+            if receipt.input_hash != body_hash:
+                raise InvestorError("idempotency_conflict", "Correction key reused with another body")
+            rows = list(await self.session.scalars(select(PortfolioEvent).where(PortfolioEvent.account_id == account.id, PortfolioEvent.batch_id == str(request.operation_id)).order_by(PortfolioEvent.revision)))
+            if not rows:
+                raise RuntimeError("correction receipt has no events")
+            final_row = rows[-1]
+            snapshot_row = await self.session.scalar(select(PortfolioSnapshot).where(PortfolioSnapshot.account_id == account.id, PortfolioSnapshot.revision == final_row.revision))
+            if snapshot_row is None:
+                raise RuntimeError("committed correction has no atomic snapshot")
+            return CorrectionResult(
+                operation_id=request.operation_id,
+                events=tuple(EventRecord.model_validate(row.payload) for row in rows),
+                snapshot=Snapshot.model_validate(snapshot_row.payload),
+            )
+        if request.expected_revision != account.revision:
+            raise InvestorError("revision_conflict", "Reload current account revision")
+        records = [EventRecord.model_validate(row.payload) for row in await self.session.scalars(select(PortfolioEvent).where(PortfolioEvent.account_id == account.id).order_by(PortfolioEvent.revision))]
+        reversed_now: set[UUID] = set()
+        for target in request.reversals:
+            original = next((r for r in records if r.id == target), None)
+            if original is None or isinstance(original.request.fact, Reversal):
+                raise InvestorError("invalid_reference", "Reversed events must belong to this account and cannot be reversals")
+            if any(isinstance(r.request.fact, Reversal) and r.request.fact.original_event_id == target for r in records):
+                raise InvestorError("idempotency_conflict", "Original event already reversed")
+            reversed_now.add(target)
+        now = datetime.now(UTC)
+        facts: list[EventFact] = [
+            Reversal(kind="reversal", occurred_at=now, source="user correction", user_confirmed=True, original_event_id=target, reason=request.reason)
+            for target in request.reversals
+        ] + list(request.replacements)
+        for fact in facts:
+            if fact.occurred_at > now:
+                raise InvestorError("invalid_reference", "Ledger accepts only already occurred facts")
+        reversed_ids = {r.request.fact.original_event_id for r in records if isinstance(r.request.fact, Reversal)} | reversed_now
+        openings = sum(isinstance(r.request.fact, Balance) and r.request.fact.kind == "opening_balance" and r.id not in reversed_ids for r in records)
+        openings += sum(isinstance(fact, Balance) and fact.kind == "opening_balance" for fact in facts)
+        if openings > 1:
+            raise InvestorError("invalid_reference", "At most one active opening balance per account")
+        for fact in facts:
+            refs: list[ObjectRef] = []
+            if isinstance(fact, Balance):
+                refs = [h.listing_ref for h in fact.holdings]
+            elif isinstance(fact, Trade):
+                refs = [fact.holding.listing_ref]
+            elif isinstance(fact, (CashFact, CorporateAction)) and fact.listing_ref is not None:
+                refs = [fact.listing_ref]
+            for ref in refs:
+                listing = await self.session.get(Listing, ref.id)
+                market = await self.session.get(Market, listing.market_code) if listing else None
+                if listing is None or market is None or market.currency != "CNY" or listing.market_code not in {"CN", "SH", "SZ", "BJ", "SSE", "SZSE", "BSE"}:
+                    raise InvestorError("invalid_reference", "Listing unavailable or outside CNY settlement scope")
+        new_records = [
+            EventRecord(
+                id=uuid4(),
+                revision=account.revision + 1 + index,
+                recorded_at=now,
+                request=AppendEvent(
+                    account_id=request.account_id,
+                    expected_revision=request.expected_revision,
+                    idempotency_key=uuid5(request.operation_id, row_id),
+                    batch_id=request.operation_id,
+                    row_id=row_id,
+                    fact=fact,
+                ),
+            )
+            for index, (row_id, fact) in enumerate([*( (f"reversal:{i}", fact) for i, fact in enumerate(facts[: len(request.reversals)]) ), *[(f"replacement:{i}", fact) for i, fact in enumerate(request.replacements)]])
+        ]
+        projection = await self._project(request.account_id, records + new_records, now, new_event_ids=frozenset(r.id for r in new_records))
+        if projection.confirmable_deficits:
+            # The whole replay must stay valid: a reversal that strands a later
+            # sell needs its companion facts in the same operation (plan 2.8).
+            raise InvestorError("invalid_reference", "Correction would leave an invalid replay; include the companion corrections")
+        snapshot = projection.snapshot
+        final = new_records[-1]
+        result = await self.session.execute(update(PortfolioAccount).where(PortfolioAccount.id == account.id, PortfolioAccount.owner_id == self.owner, PortfolioAccount.revision == request.expected_revision).values(revision=final.revision, current_snapshot_id=str(snapshot.id), payload=Account(id=request.account_id, name=account.payload["name"], currency="CNY", revision=final.revision, current_snapshot_id=snapshot.id).model_dump(mode="json")))
+        if not result.rowcount:  # type: ignore[attr-defined]
+            raise InvestorError("revision_conflict", "Concurrent portfolio append")
+        for record in new_records:
+            fact = record.request.fact
+            self.session.add(
+                PortfolioEvent(
+                    id=str(record.id),
+                    account_id=account.id,
+                    revision=record.revision,
+                    idempotency_key=str(record.request.idempotency_key),
+                    batch_id=str(request.operation_id),
+                    row_id=record.request.row_id,
+                    reverses_id=str(fact.original_event_id) if isinstance(fact, Reversal) else None,
+                    input_hash=body_hash,
+                    fact_hash=digest(fact.model_dump(mode="json")),
+                    payload=record.model_dump(mode="json"),
+                )
+            )
+        self.session.add(PortfolioSnapshot(id=str(snapshot.id), account_id=account.id, revision=final.revision, payload=snapshot.model_dump(mode="json")))
+        await self.session.flush()
+        self.session.add(PortfolioRequest(account_id=account.id, idempotency_key=str(request.operation_id), event_id=str(final.id), input_hash=body_hash))
+        await self.session.flush()
+        return CorrectionResult(operation_id=request.operation_id, events=tuple(new_records), snapshot=snapshot)
+
+    async def _project(
+        self,
+        account_id: UUID,
+        records: list[EventRecord],
+        recorded: datetime,
+        *,
+        new_event_ids: frozenset[UUID] = frozenset(),
+        trace: dict[UUID, dict[str, Any]] | None = None,
+    ) -> Projection:
+        with localcontext() as context:
+            # Bounded arithmetic precision, no binary floats or silent rounding.
+            context.prec = max(128, 80 * len(records))
+            return await self._project_decimal(account_id, records, recorded, new_event_ids, trace)
+
+    async def _project_decimal(
+        self,
+        account_id: UUID,
+        records: list[EventRecord],
+        recorded: datetime,
+        new_event_ids: frozenset[UUID],
+        trace: dict[UUID, dict[str, Any]] | None = None,
+    ) -> Projection:
+        reversed_ids = {r.request.fact.original_event_id for r in records if isinstance(r.request.fact, Reversal)}
+        active = sorted((r for r in records if r.id not in reversed_ids and not isinstance(r.request.fact, Reversal)), key=lambda r: (r.request.fact.occurred_at, r.revision))
+        opening = next((r for r in active if isinstance(r.request.fact, Balance) and r.request.fact.kind == "opening_balance"), None)
+        balances = [r for r in active if isinstance(r.request.fact, Balance)]
+        # Earlier backfills are included in the confirmed baseline. Same-time
+        # later-recorded events are applied, never silently discarded.
+        baseline = opening or (balances[0] if balances else None)
+        baseline_key = (baseline.request.fact.occurred_at, baseline.revision) if baseline else None
+        excluded: list[UUID] = []
+        quantities: dict[ObjectRef, Decimal] = {}
+        restricted: set[ObjectRef] = set()
+        cash: Decimal | None = None
+        cash_unknown: set[str] = {"missing_confirmed_balance"}
+        history: set[str] = set()
+        conflicts: list[str] = []
+        comparisons: list[ReconciliationComparison] = []
+        has_balance = False
+        coverage: Literal["complete", "partial"] = "partial"
+        scope = "no active confirmed balance"
+        # Plan 2.7: remaining weighted acquisition cost per listing, fees
+        # included on buys; unknown costs stay unknown instead of guessing.
+        costs: dict[ObjectRef, _CostState] = {}
+        cost_history: set[str] = set()
+        realized_records: list[RealizedPnL] = []
+        dividends: list[DividendRecord] = []
+        deficits: list[tuple[UUID, ObjectRef]] = []
+        for record in active:
+            traced = trace is not None and record.id in trace
+            before_quantities: dict[ObjectRef, Decimal] = {}
+            before_cash: Decimal | None = None
+            if traced:
+                before_quantities, before_cash = dict(quantities), cash
+            fact = record.request.fact
+            if isinstance(fact, Balance):
+                if fact.kind == "reconciliation":
+                    before_cash = cash if not cash_unknown else None
+                    confirmed_holdings = {h.listing_ref: h.quantity for h in fact.holdings}
+                    holding_comparisons: list[HoldingComparison] = []
+                    for ref in sorted(quantities.keys() | confirmed_holdings.keys() | restricted, key=lambda r: int(r.id)):
+                        before_qty = quantities.get(ref, Decimal(0)) if ref not in restricted and (ref in quantities or coverage == "complete") else None
+                        after_qty = confirmed_holdings.get(ref, Decimal(0)) if ref in confirmed_holdings or fact.coverage == "complete" else None
+                        delta = after_qty - before_qty if before_qty is not None and after_qty is not None else None
+                        holding_comparisons.append(HoldingComparison(listing_ref=ref, before=before_qty, confirmed=after_qty, delta=delta, unknown_reason="before_or_confirmed_quantity_unknown" if delta is None else None))
+                    cash_delta = fact.cash - before_cash if fact.cash is not None and before_cash is not None else None
+                    comparison = ReconciliationComparison(event_id=record.id, occurred_at=fact.occurred_at, before_cash=before_cash, confirmed_cash=fact.cash, cash_delta=cash_delta, cash_unknown_reason="before_or_confirmed_cash_unknown" if cash_delta is None else None, holdings=tuple(holding_comparisons), user_difference_explanation=fact.unexplained_difference or "none")
+                    comparisons.append(comparison)
+                    if cash_delta is None or cash_delta != 0 or any(h.delta is None or h.delta != 0 for h in holding_comparisons):
+                        conflicts.append(f"reconciliation_difference:{record.id}")
+                if has_balance:
+                    history.update(cash_unknown)
+                    history.update(f"unknown_quantity:{ref.id}" for ref in restricted)
+                    if coverage == "partial":
+                        history.add("unlisted_assets_unknown")
+                prior_quantities = dict(quantities)
+                prior_costs = dict(costs)
+                prior_restricted = set(restricted)
+                quantities = {h.listing_ref: h.quantity for h in fact.holdings}
+                restricted = set()
+                cash = fact.cash
+                cash_unknown = set() if cash is not None else {f"unknown_cash:{record.id}"}
+                coverage = fact.coverage
+                scope = fact.asset_scope
+                has_balance = True
+                history.update(cash_unknown)
+                if coverage == "partial":
+                    history.add("unlisted_assets_unknown")
+                # Plan 2.7: balance holdings carry optional confirmed average
+                # cost and cycle start; without a confirmation the cost stays
+                # unknown unless this is the same unchanged position as before.
+                costs = {}
+                for holding in fact.holdings:
+                    ref = holding.listing_ref
+                    if holding.quantity == 0:
+                        closed = prior_costs.get(ref)
+                        if closed is not None and closed.reason:
+                            cost_history.add(closed.reason)
+                        continue
+                    prior = prior_costs.get(ref)
+                    prior_quantity = prior_quantities.get(ref)
+                    if prior_quantity is None and prior is not None:
+                        prior_quantity = prior.quantity
+                    same_quantity = ref not in prior_restricted and prior_quantity is not None and prior_quantity == holding.quantity
+                    if holding.average_cost is not None:
+                        remaining = holding.quantity * holding.average_cost
+                        reason = None
+                    elif prior is not None and same_quantity and prior.remaining is not None:
+                        remaining = prior.remaining
+                        reason = None
+                    else:
+                        remaining = None
+                        reason = "balance_cost_not_confirmed"
+                    if prior is not None and prior.reason and prior.reason != reason and not same_quantity:
+                        cost_history.add(prior.reason)
+                    opened_on = holding.opened_on if holding.opened_on is not None else (prior.opened_on if prior is not None and same_quantity else None)
+                    costs[ref] = _CostState(quantity=holding.quantity, remaining=remaining, opened_on=opened_on, reason=reason)
+                continue
+            if baseline_key is not None and (fact.occurred_at, record.revision) < baseline_key:
+                excluded.append(record.id)
+                if trace is not None and record.id in trace:
+                    trace[record.id] = {"inclusion": "audit_prior_history"}
+                continue
+            if isinstance(fact, Trade):
+                ref = fact.holding.listing_ref
+                basis_unknown = ref in restricted
+                if ref not in quantities and coverage == "partial":
+                    restricted.add(ref)
+                    basis_unknown = True
+                direction = Decimal(1) if fact.direction == "buy" else Decimal(-1)
+                quantities[ref] = quantities.get(ref, Decimal(0)) + direction * fact.holding.quantity
+                if quantities[ref] < 0:
+                    conflicts.append(f"negative_quantity:{record.id}:{ref.id}")
+                    # Plan 2.8: a sell beyond a *confirmed* basis is rejected at
+                    # commit; an unknown basis is recorded, never pretended.
+                    if not basis_unknown:
+                        deficits.append((record.id, ref))
+                    restricted.add(ref)
+                state = costs.get(ref)
+                if fact.direction == "buy":
+                    if state is None or state.quantity == 0:
+                        # A buy from flat opens a new cycle (plan 2.7).
+                        opened_on = fact.occurred_at.astimezone(SHANGHAI_TZ).date()
+                        remaining = Decimal(0)
+                        reason = None
+                    else:
+                        opened_on = state.opened_on
+                        remaining = state.remaining
+                        reason = state.reason
+                    if remaining is None:
+                        remaining, reason = None, reason or "prior_cost_unknown"
+                    elif fact.fee is None:
+                        remaining, reason = None, "buy_fee_unknown"
+                    else:
+                        remaining = remaining + fact.holding.quantity * fact.actual_price + fact.fee
+                        reason = None
+                    if basis_unknown:
+                        remaining, reason, opened_on = None, "quantity_basis_unknown", None
+                    costs[ref] = _CostState(
+                        quantity=(state.quantity if state is not None else Decimal(0)) + fact.holding.quantity,
+                        remaining=remaining,
+                        opened_on=opened_on,
+                        reason=reason,
+                    )
+                else:
+                    carried: Decimal | None = None
+                    opened_on = state.opened_on if state is not None else None
+                    cycle_opened_on = opened_on
+                    cycle_reason = state.reason if state is not None else None
+                    if state is not None and state.remaining is not None and state.quantity > 0:
+                        # Carry the pre-sale average out of the sold portion; the
+                        # remaining average stays unchanged (plan 2.7).
+                        carried = state.remaining * fact.holding.quantity / state.quantity
+                        remaining = state.remaining - carried if fact.holding.quantity < state.quantity else Decimal(0)
+                        reason = None
+                    else:
+                        remaining, reason = None, cycle_reason or "sell_cost_basis_unknown"
+                    new_quantity = quantities[ref]
+                    if new_quantity == 0:
+                        # Cycle closed: remaining cost resets, cycle reference ends.
+                        remaining, reason, opened_on = Decimal(0), None, None
+                        if cycle_reason:
+                            cost_history.add(cycle_reason)
+                    costs[ref] = _CostState(quantity=new_quantity, remaining=remaining, opened_on=opened_on, reason=reason)
+                    gross = fact.holding.quantity * fact.actual_price
+                    realized_records.append(
+                        RealizedPnL(
+                            event_id=record.id,
+                            listing_ref=ref,
+                            quantity=fact.holding.quantity,
+                            gross=gross,
+                            fee=fact.fee,
+                            cost_carried=carried,
+                            realized=(gross - fact.fee - carried) if (fact.fee is not None and carried is not None) else None,
+                            cycle_opened_on=cycle_opened_on,
+                        )
+                    )
+                if cash is not None:
+                    cash -= direction * fact.holding.quantity * fact.actual_price
+                    if fact.fee is not None:
+                        cash -= fact.fee
+                if fact.fee is None:
+                    issue = f"unknown_fee:{record.id}"
+                    cash_unknown.add(issue)
+                    history.add(issue)
+            elif isinstance(fact, CashFact):
+                if cash is not None:
+                    cash += fact.amount
+                if fact.kind == "dividend":
+                    # Dividends never reduce the acquisition cost (plan 2.7).
+                    dividends.append(DividendRecord(event_id=record.id, listing_ref=fact.listing_ref, amount=fact.amount))
+            elif isinstance(fact, CorporateAction):
+                ref = fact.listing_ref
+                if fact.action == "split":
+                    if ref not in quantities and coverage == "partial":
+                        restricted.add(ref)
+                    quantities[ref] = quantities.get(ref, Decimal(0)) * (fact.ratio or Decimal(1))
+                    state = costs.get(ref)
+                    if state is not None:
+                        # Quantity scales, total cost is unchanged, the cycle continues.
+                        costs[ref] = _CostState(quantity=quantities[ref], remaining=state.remaining, opened_on=state.opened_on, reason=state.reason)
+                else:
+                    issue = f"pending_corporate_action:{record.id}"
+                    history.add(issue)
+                    if "quantity" in fact.affects:
+                        restricted.add(ref)
+                        quantities.setdefault(ref, Decimal(0))
+                        # An unconfirmed action keeps the cost unknown until the
+                        # user confirms the actual fact (plan 2.7).
+                        state = costs.get(ref)
+                        if state is not None and state.reason:
+                            cost_history.add(state.reason)
+                        costs[ref] = _CostState(
+                            quantity=state.quantity if state is not None else quantities.get(ref, Decimal(0)),
+                            remaining=None,
+                            opened_on=state.opened_on if state is not None else None,
+                            reason="pending_corporate_action",
+                        )
+                    if "cash" in fact.affects:
+                        cash_unknown.add(issue)
+            if cash is not None and cash < 0:
+                issue = f"negative_cash:{record.id}"
+                conflicts.append(issue)
+                cash_unknown.add(issue)
+            history.update(cash_unknown)
+            history.update(f"unknown_quantity:{ref.id}" for ref in restricted)
+            if trace is not None and record.id in trace:
+                refs = fact_refs(fact)
+                trace[record.id] = {
+                    "inclusion": "applied",
+                    "quantity_delta": {
+                        str(ref.id): quantities.get(ref, Decimal(0))
+                        - before_quantities.get(ref, Decimal(0))
+                        for ref in refs
+                    },
+                    "cash_delta": (
+                        cash - before_cash
+                        if cash is not None and before_cash is not None
+                        else None
+                    ),
+                    "cost_remaining": {
+                        str(ref.id): costs[ref].remaining
+                        for ref in refs
+                        if ref in costs and costs[ref].remaining is not None
+                    },
+                }
+        holdings: list[SnapshotHolding] = []
+        unknowns = set(cash_unknown)
+        cost_unknowns: set[str] = set()
+        if opening is None:
+            unknowns.add("no_active_opening")
+        if coverage == "partial":
+            unknowns.add("unlisted_assets_unknown")
+        price_complete = True
+        known_cash = cash if not cash_unknown else None
+        subtotal = known_cash
+        fact_as_of = max(r.request.fact.occurred_at for r in records)
+        for ref, quantity in sorted(quantities.items(), key=lambda pair: int(pair[0].id)):
+            confirmed = quantity if ref not in restricted else None
+            if confirmed is None:
+                unknowns.add(f"unknown_quantity:{ref.id}")
+            price = await self.session.scalar(select(MarketSnapshot).where(MarketSnapshot.listing_id == ref.id, MarketSnapshot.adjust == "none", MarketSnapshot.trade_date <= recorded.date(), MarketSnapshot.captured_at <= recorded, MarketSnapshot.close > 0).order_by(MarketSnapshot.trade_date.desc(), MarketSnapshot.version.desc(), MarketSnapshot.id.desc()).limit(1))
+            if price is None and confirmed != 0:
+                price_complete = False
+                unknowns.add(f"missing_price:{ref.id}")
+            value = Decimal(0) if confirmed == 0 else confirmed * price.close if confirmed is not None and price is not None else None
+            if value is not None:
+                subtotal = (subtotal or Decimal(0)) + value
+            state = costs.get(ref)
+            cost_reason = state.reason if state is not None else None
+            if quantity == 0:
+                # A flat position carries no remaining cost (plan 2.7).
+                remaining_cost: Decimal | None = Decimal(0)
+                cost_reason = None
+            else:
+                remaining_cost = state.remaining if state is not None else None
+                if state is None and cost_reason is None:
+                    cost_reason = "cost_never_confirmed"
+            average_cost = remaining_cost / quantity if remaining_cost is not None and quantity > 0 else None
+            opened_on_value = state.opened_on if state is not None and quantity > 0 else None
+            if quantity != 0 and cost_reason is not None:
+                cost_unknowns.add(f"{cost_reason}:{ref.id}")
+            holdings.append(
+                SnapshotHolding(
+                    listing_ref=ref,
+                    confirmed_quantity=confirmed,
+                    quantity_subtotal=quantity,
+                    price=price.close if price else None,
+                    price_ref=ObjectRef(kind="market_snapshot", id=price.id, revision=price.version) if price else None,
+                    price_date=price.trade_date if price else None,
+                    market_value=value,
+                    remaining_cost=remaining_cost,
+                    average_cost=average_cost,
+                    opened_on=opened_on_value,
+                    cost_unknown_reason=cost_reason if quantity != 0 else None,
+                )
+            )
+        total = subtotal if coverage == "complete" and not unknowns and not any(q < 0 for q in quantities.values()) else None
+        if total is not None and total > 0:
+            with localcontext() as ratio_context:
+                ratio_context.prec = 40
+                holdings = [h.model_copy(update={"weight": h.market_value / total if h.market_value is not None else None}) for h in holdings]
+        snapshot_id = uuid4()
+        snapshot = Snapshot(
+            id=snapshot_id,
+            account_id=account_id,
+            revision=records[-1].revision,
+            recorded_at=recorded,
+            fact_as_of=fact_as_of,
+            valuation_at=recorded,
+            coverage=coverage,
+            asset_scope=scope,
+            known_cash=known_cash,
+            cash_subtotal=cash,
+            holdings=tuple(holdings),
+            known_subtotal=subtotal,
+            total_assets=total,
+            unknowns=tuple(sorted(unknowns)),
+            historical_unknowns=tuple(sorted(history)),
+            reconciliations=tuple(comparisons),
+            conflicts=tuple(conflicts),
+            source_event_ids=tuple(r.id for r in records),
+            excluded_prior_event_ids=tuple(excluded),
+            reference=ObjectRef(kind="portfolio_snapshot", id=snapshot_id, revision=records[-1].revision),
+            price_coverage="complete" if price_complete else "partial",
+            cost_method_version=COST_METHOD_VERSION,
+            realized=tuple(realized_records),
+            dividends=tuple(dividends),
+            cost_unknowns=tuple(sorted(cost_unknowns | {f"historical:{reason}" for reason in cost_history})),
+        )
+        return Projection(snapshot=snapshot, confirmable_deficits=deficits)
