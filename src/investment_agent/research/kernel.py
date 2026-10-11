@@ -31,6 +31,16 @@ DEFAULT_TRADING_CALENDAR_PATH = (
 
 @lru_cache(maxsize=4)
 def _load_trading_day_predicate(path: Path) -> TradingDayPredicate | None:
+    """Market staleness in exchange sessions; honours the data-dir calendar copy.
+
+    The path is resolved like everywhere else (``DATA_DIR/calendars/<name>``
+    first, else the given baseline), so a calendar applied from the health
+    page is what staleness is measured against.
+    """
+
+    from investment_agent.settings.loader import resolved_calendar_path
+
+    path = resolved_calendar_path(path)
     if not path.is_file():
         return None
     from investment_agent.scheduler.trading_calendar import load_trading_calendar

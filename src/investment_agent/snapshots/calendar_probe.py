@@ -131,19 +131,26 @@ def candidates(data_dir: Path) -> list[CalendarCandidate]:
 
 
 class CandidateConflictError(RuntimeError):
-    """The candidate cannot be applied to the committed calendar as it is."""
+    """The candidate cannot be applied to the calendar in effect as it is."""
 
 
-def apply_candidate(calendar_path: Path, candidate: CalendarCandidate) -> tuple[TradingCalendar, tuple[int, ...]]:
-    """Write a verified candidate over the runtime calendar (atomic).
+def apply_candidate(
+    target: Path, candidate: CalendarCandidate, *, fallback: Path | None = None
+) -> tuple[TradingCalendar, tuple[int, ...]]:
+    """Write a verified candidate to ``target`` and remove the candidate file.
 
-    A click must never rewrite history, so the candidate may only *add* years:
-    it must contain every reviewed year the committed file has, with identical
-    data and provenance, and at least one new year. The candidate file is
-    removed once the calendar is written.
+    ``target`` is the writable runtime copy under ``DATA_DIR`` (see
+    :func:`investment_agent.settings.loader.runtime_calendar_path`); the
+    add-only guard reads ``target`` when it already exists, else ``fallback``
+    (the committed baseline). A click must never rewrite history, so the
+    candidate may only *add* years: it must contain every reviewed year with
+    identical data and provenance, and at least one new year.
     """
 
-    current = load_trading_calendar(calendar_path)
+    current_path = target if target.is_file() else fallback
+    if current_path is None:
+        raise CandidateConflictError("no calendar to compare the candidate against")
+    current = load_trading_calendar(current_path)
     before = {item.year: item for item in current.years}
     after = {item.year: item for item in candidate.calendar.years}
     missing = sorted(before.keys() - after.keys())
@@ -163,9 +170,9 @@ def apply_candidate(calendar_path: Path, candidate: CalendarCandidate) -> tuple[
     text = render_calendar(candidate.calendar)
     if parse_calendar_text(text) != candidate.calendar:
         raise CandidateConflictError("candidate does not round-trip")
-    _write_atomic(Path(calendar_path), text)
+    _write_atomic(target, text)
     candidate.path.unlink()
-    log.info("calendar_probe.applied", year=added[-1], path=str(calendar_path))
+    log.info("calendar_probe.applied", year=added[-1], path=str(target))
     return candidate.calendar, added
 
 
@@ -190,9 +197,9 @@ def _candidate_body(year: int, path: Path, calendar: TradingCalendar) -> str:
         f"工作日休市 {len(item.closed_dates)} 天，周末交易日 {len(item.open_dates)} 天。\n\n"
         f"休市日：{closed}\n\n"
         f"候选文件：{path}\n\n"
-        "在『数据健康』页的交易日历卡片点「应用候选」即可写入 "
-        "`config/calendars/a_share.yaml`（再提交一次文件变更以随部署保留）。\n"
-        f"命令行等价操作：`python {TOOL} --write` 或直接用候选文件覆盖日历文件。\n"
+        "在『数据健康』页的交易日历卡片点「应用候选」即可：写入数据目录 "
+        "`DATA_DIR/calendars/a_share.yaml`（数据目录优先于仓库里的基线，无需提交）。\n"
+        f"命令行等价操作：`python {TOOL}`。\n"
     )
 
 

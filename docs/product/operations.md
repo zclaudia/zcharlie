@@ -97,9 +97,10 @@
 |---|---|---|
 | 日线落后 ≥ 1 个交易日 | baostock 未更新或任务失败 | 看健康页对应任务的缺失清单；手动补采 `ia snapshot collect-market --universe CSI300 --date <D> --now` |
 | iFinD 核对显示「已延后」 | 5 小时窗口预算用尽 | 正常现象，窗口滚动后自动继续；`ia verify status` 查看下次可用时间 |
-| 交易日历候选已生成 | 周一核对发现下一年双源一致 | 在 `/app/health` 的「交易日历」卡片点「应用候选」（写入日历文件并删除候选），然后提交这次文件变更；健康页与今日概览同时给出提醒 |
+| 交易日历候选已生成 | 周一核对发现下一年双源一致 | 在 `/app/health` 的「交易日历」卡片点「应用候选」（写入 `DATA_DIR/calendars/`，无需提交），健康页与今日概览同时给出提醒 |
 | 交易日历核对分歧 | baostock 与 Sina 对某天是否交易不一致 | 不写入任何文件；下周自动重试，也可在健康页点「检查更新」立刻重试，或用 `python tools/refresh_trading_calendar.py` 看完整差异 |
-| 交易日历「应用候选」不可点 / 报只读 | 日历文件不可写（容器里 config 只读挂载） | 确认用 `docker-compose.yml` 启动（`api` 服务对 `config/calendars` 有独立写挂载）；自建部署则给该目录加写挂载 |
+| 交易日历「应用候选」不可点 / 报数据目录不可写 | `DATA_DIR` 不可写 | 检查数据目录挂载与权限（容器里 `./data` 必须可写）；仓库 `config/` 只读不影响应用 |
+| 交易日历读取报错（`无法读取交易日历`） | `DATA_DIR/calendars/` 里的副本损坏或格式非法 | 修复或删除该副本即回落仓库基线；fail-closed 不静默回落是刻意设计 |
 | 通知「iFinD 额度已用尽」 | Kimi 网关 5 小时额度（可能与日常 Kimi 使用共用） | 无需操作；当前批次停止，下个窗口自动续采。频繁出现时在设置页调低「iFinD 5 小时预算」 |
 | 东财采集 `partial`（`provider_unavailable`） | 东财接口连续失败，或该源仍在熔断窗口内（健康页「上游调用」显示熔断至何时） | 下次调度自动重试；持续失败时检查 AkShare 版本与接口列名（列名变化会直接报错） |
 | 财报事件缺采 / 补采上一季 | 披露季外不调度，或 worker 未运行 | `ia snapshot collect-earnings-events --part forecast\|schedule\|segments [--period 20250930] --now`；`--period` 缺省为最近一个已结束季度 |
@@ -115,16 +116,23 @@
   `DATA_DIR/calendar_candidates/a_share-<年>.yaml` 并发 `info` 通知（健康页与今日概览同时提醒），
   分歧时发 `action_required` 且不写任何文件。
   **生效**：在 `/app/health` 的「交易日历」卡片点「应用候选」——把候选写入
-  `config/calendars/a_share.yaml` 并删除候选；或点「检查更新」立即核对一次（跳过 60 天窗口，
-  但仍要求两源全年覆盖且逐日一致）。应用只会*新增*年份：候选若缺少或改写已审年份会被拒绝（409）。
-  容器部署时 `api` 服务对 `config/calendars` 有单独的写挂载（见 `docker-compose.yml`），
-  其余 config 仍只读；写入后提交这次文件变更以随部署保留。
-  无浏览器的场景仍可用 `python tools/refresh_trading_calendar.py --write`（等价，重新双源核对后写入）。
-  写入按年记录核对来源与日期（`verified_by` / `verified_on`）。次年公告发布时用
+  `DATA_DIR/calendars/a_share.yaml`（数据目录副本）并删除候选；或点「检查更新」立即核对一次
+  （跳过 60 天窗口，但仍要求两源全年覆盖且逐日一致）。应用只会*新增*年份：候选若缺少或改写
+  已审年份会被拒绝（409）。
+  **解析顺序**：所有读取方（调度任务每次触发、worker、健康页/今日概览、持仓估值与分区检测、
+  研究内核的行情时效）都优先用 `DATA_DIR/calendars/<名>`，不存在时回落到仓库基线
+  `config/calendars/a_share.yaml`——**无需提交、无需重启**；副本存在但损坏不会静默回落
+  （读取直接失败，fail-closed）。清理副本即可回到基线。
+  仓库基线仍随之更新年份（`config/calendars/` 保持只读：容器里 `config` 是只读挂载）：
+  需要把某年烘进仓库时用 `python tools/refresh_trading_calendar.py --write
+  --calendar config/calendars/a_share.yaml` 后提交。
+  无浏览器场景用 `python tools/refresh_trading_calendar.py --write`（默认写数据目录副本，与按钮等价）。
+  每年写入都记录核对来源与日期（`verified_by` / `verified_on`）。次年公告发布时用
   `--notice-url` / `--notice-title` / `--notice-published-on` 更新 `source`。
   该任务可用设置页 `schedule.snapshot.calendar_probe_cron` 停用；不加 `--write` 手动运行工具
   只打印差异（有漂移返回 1，可作巡检）。到期前 60 天健康页与调度日志会提醒，
   未知年份的交易日门控任务会停止（fail-closed）。
+  备份范围含 `DATA_DIR/calendars/`（见 `backup-and-recovery.md`）。
 - **申万代码表**：`python tools/refresh_shenwan_directory.py` 查看差异，确认后加 `--write` 并提交。
 - **申万官网证书**：`src/investment_agent/providers/certs/swsresearch-intermediate.pem` 文件头写有刷新步骤；
   证书校验失败时申万同步会终止并提示更新证书。

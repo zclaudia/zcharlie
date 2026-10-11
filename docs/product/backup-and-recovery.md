@@ -11,9 +11,10 @@ MVP 保留策略：**不自动删除任何原始证据**。备份按日期目录
 
 | 内容 | 位置 | 说明 |
 |---|---|---|
-| 数据库（状态真相） | `data/app.db` | 迁移版本、自选股、run、快照、diff、通知状态 |
+| 数据库（状态真相） | `data/app.db` | 迁移版本、观察池、run、快照、diff、通知状态 |
 | 研究制品（审计真相） | `data/research-runs/<run_id>/` | 原始响应、canonical、scores、报告 |
 | 变化通知 | `data/notifications/` | meaningful-change Markdown |
+| 运行时交易日历 | `data/calendars/a_share.yaml`（存在时） | 数据健康页「应用候选」写入的副本，优先于仓库基线 `config/calendars/a_share.yaml`；不备份则恢复后回落到基线（缺年份时 fail-closed） |
 
 数据库与制品必须通过 `run_id` 关联恢复，缺一不可。
 

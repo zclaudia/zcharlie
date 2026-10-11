@@ -71,7 +71,7 @@ def test_calendar_routes_require_auth(api_client) -> None:
     assert api_client.post("/calendar/apply").status_code == 401
 
 
-def test_status_reports_coverage_and_no_candidate(api_client, calendar_env) -> None:
+def test_status_reports_coverage_and_no_candidate(api_client, calendar_env, tmp_path) -> None:
     body = api_client.get("/calendar/status", headers=KEY).json()
 
     assert body["calendar_id"] == "CN_A_SHARE" and body["timezone"] == "Asia/Shanghai"
@@ -81,7 +81,9 @@ def test_status_reports_coverage_and_no_candidate(api_client, calendar_env) -> N
     assert body["candidate"] is None
     assert body["writable"] is True
     assert body["last_probe"] is None
-    assert str(calendar_env) == body["path"]
+    assert body["path"] == str(calendar_env) and body["baseline"] == str(calendar_env)
+    assert body["source"] == "baseline"
+    assert body["target"] == str(tmp_path / "calendars" / "a_share.yaml")
 
 
 def test_status_lists_the_pending_candidate(api_client, calendar_env, tmp_path) -> None:
@@ -97,9 +99,13 @@ def test_status_lists_the_pending_candidate(api_client, calendar_env, tmp_path) 
     assert candidate["verified_on"] == "2026-12-18"
 
 
-def test_apply_writes_the_candidate_and_removes_it(api_client, calendar_env, tmp_path) -> None:
+def test_apply_writes_the_data_dir_copy_and_removes_the_candidate(
+    api_client, calendar_env, tmp_path
+) -> None:
     repo_before = REPO_CALENDAR.read_bytes()
+    baseline_before = calendar_env.read_bytes()
     candidate = _write_candidate(tmp_path, calendar=calendar_env)
+    target = tmp_path / "calendars" / "a_share.yaml"
 
     response = api_client.post("/calendar/apply", headers=KEY)
 
@@ -107,13 +113,34 @@ def test_apply_writes_the_candidate_and_removes_it(api_client, calendar_env, tmp
     body = response.json()
     assert body["added_years"] == [2027]
     assert body["removed_candidate"] == str(candidate)
+    assert body["path"] == str(target)
     assert not candidate.exists()
-    written = load_trading_calendar(calendar_env)
+    written = load_trading_calendar(target)
     assert [item.year for item in written.years] == [2026, 2027]
     item = written.years[-1]
     assert item.closed_dates == {date(2027, 1, 1)}
     assert item.verified_on == date(2026, 12, 18)
+    assert calendar_env.read_bytes() == baseline_before, "the baseline must stay untouched"
     assert REPO_CALENDAR.read_bytes() == repo_before, "the repository calendar must stay untouched"
+
+    # The data-dir copy takes precedence for every reader from now on.
+    status = api_client.get("/calendar/status", headers=KEY).json()
+    assert status["source"] == "data_dir" and status["path"] == str(target)
+    assert [item["year"] for item in status["years"]] == [2026, 2027]
+
+    # A second apply adds the next year on top of the runtime copy.
+    two_years = load_trading_calendar(target)
+    candidate_2028 = candidate_path(tmp_path, 2028)
+    candidate_2028.write_text(
+        render_calendar(
+            merge_years(two_years, [build_year(2028, {d for d in days_of_year(2028) if d.weekday() < 5})])
+        ),
+        encoding="utf-8",
+    )
+    second = api_client.post("/calendar/apply", headers=KEY)
+    assert second.status_code == 200, second.text
+    assert second.json()["added_years"] == [2028]
+    assert [item.year for item in load_trading_calendar(target).years] == [2026, 2027, 2028]
 
 
 def test_apply_without_a_candidate_is_404(api_client, calendar_env) -> None:
@@ -148,20 +175,19 @@ def test_apply_refuses_to_rewrite_a_reviewed_year(api_client, calendar_env, tmp_
     assert path.exists() and load_trading_calendar(calendar_env).years[0] == current.years[0]
 
 
-def test_apply_reports_a_read_only_calendar(api_client, calendar_env, tmp_path) -> None:
-    """The docker file layout: config read-only, so the atomic write fails."""
+def test_apply_reports_an_unwritable_data_dir(api_client, calendar_env, tmp_path) -> None:
+    """A read-only data dir (the only thing the write needs) is a 409, not a crash."""
 
     _write_candidate(tmp_path, calendar=calendar_env)
-    calendar_env.chmod(0o444)
-    calendar_env.parent.chmod(0o555)
+    tmp_path.chmod(0o555)
     try:
         response = api_client.post("/calendar/apply", headers=KEY)
     finally:
-        calendar_env.parent.chmod(0o755)
-        calendar_env.chmod(0o644)
+        tmp_path.chmod(0o755)
 
     assert response.status_code == 409
-    assert "只读挂载" in response.json()["detail"]
+    assert "DATA_DIR" in response.json()["detail"]
+    assert not (tmp_path / "calendars").exists()
 
 
 async def test_check_enqueues_a_forced_probe(api_client, calendar_env) -> None:

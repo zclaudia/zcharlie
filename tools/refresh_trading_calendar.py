@@ -19,13 +19,18 @@ not as an error. See docs/product/operations.md, "年度 / 不定期维护".
 Routine use happens in the browser: the health page's trading-calendar card
 applies the candidate the weekly ``calendar_probe`` job recorded (and can run
 a check on demand). This CLI stays for headless ops - applying a candidate
-without the UI, and regenerating from a live two-source fetch.
+without the UI, and regenerating from a live two-source fetch. Like the card
+it writes the **data-dir copy** (``DATA_DIR/calendars/<name>``), which takes
+precedence over the repository baseline and needs no commit; pass
+``--calendar config/calendars/a_share.yaml`` to bake a year into the baseline.
 
 Usage::
 
     python tools/refresh_trading_calendar.py                 # show the diff
-    python tools/refresh_trading_calendar.py --write         # rewrite + verify
+    python tools/refresh_trading_calendar.py --write         # write the data-dir copy
     python tools/refresh_trading_calendar.py --year 2027     # one year only
+    python tools/refresh_trading_calendar.py --write \
+        --calendar config/calendars/a_share.yaml            # bake into the baseline
     python tools/refresh_trading_calendar.py --notice-url URL --notice-title T \
         --notice-published-on 2026-12-18                     # new announcement
 """
@@ -34,7 +39,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -59,7 +63,12 @@ from investment_agent.scheduler.trading_calendar import (  # noqa: E402
     TradingCalendar,
     load_trading_calendar,
 )
-from investment_agent.settings.loader import calendar_path  # noqa: E402
+from investment_agent.settings.loader import (  # noqa: E402
+    configured_calendar_path,
+    resolved_calendar_path,
+    runtime_calendar_path,
+    runtime_data_dir,
+)
 from investment_agent.snapshots.calendar_probe import candidate_path  # noqa: E402
 
 
@@ -106,11 +115,32 @@ def _clear_applied_candidates(calendar: TradingCalendar, data_dir: Path) -> list
     return applied
 
 
+def _paths(args: argparse.Namespace) -> tuple[Path, Path]:
+    """``(read path, write target)``: the health page's behaviour by default.
+
+    Default target is the data-dir copy the health page writes
+    (``DATA_DIR/calendars/<name>``); ``--calendar`` overrides it, which is also
+    how a year is baked into the repository baseline.
+    """
+
+    baseline = Path(configured_calendar_path(REPO_ROOT / "config" / "app.yaml"))
+    data_dir = Path(args.data_dir)
+    if args.calendar:
+        target = Path(args.calendar)
+        read = target if target.is_file() else resolved_calendar_path(baseline, data_dir=data_dir)
+        return read, target
+    return (
+        resolved_calendar_path(baseline, data_dir=data_dir),
+        runtime_calendar_path(baseline, data_dir=data_dir),
+    )
+
+
 def main(args: argparse.Namespace) -> int:
-    path = Path(args.calendar)
-    current = load_trading_calendar(path)
+    read_path, target = _paths(args)
+    current = load_trading_calendar(read_path)
     years = sorted(set(args.year)) if args.year else refresh_years(current)
-    print(f"calendar: {path} ({len(current.years)} reviewed years); checking {years}")
+    print(f"calendar in effect: {read_path} ({len(current.years)} reviewed years); checking {years}")
+    print(f"write target: {target}")
 
     start, end = date(min(years), 1, 1), date(max(years), 12, 31)
     try:
@@ -158,11 +188,13 @@ def main(args: argparse.Namespace) -> int:
         print("differences above; review them, then re-run with --write")
         return 1
 
-    failure = _write_calendar(path, proposed)
+    failure = _write_calendar(target, proposed)
     if failure is not None:
         print(failure, file=sys.stderr)
         return 2
-    print(f"wrote {path} - review the diff and commit it")
+    print(f"wrote {target}")
+    if target != read_path:
+        print("the data-dir copy takes precedence; commit the baseline separately if you want it in the repo")
     for candidate in _clear_applied_candidates(proposed, Path(args.data_dir)):
         print(f"removed the applied candidate {candidate}")
     return 0
@@ -171,7 +203,7 @@ def main(args: argparse.Namespace) -> int:
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument(
-        "--write", action="store_true", help="rewrite the calendar file (then commit it)"
+        "--write", action="store_true", help="write the new calendar (no commit needed)"
     )
     parser.add_argument(
         "--year",
@@ -182,13 +214,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--calendar",
-        default=calendar_path(REPO_ROOT / "config" / "app.yaml"),
-        help="calendar file to refresh",
+        default=None,
+        help=(
+            "write target; default is the data-dir copy DATA_DIR/calendars/<name> "
+            "(what the health page writes). Pass config/calendars/a_share.yaml to bake "
+            "the year into the repository baseline instead."
+        ),
     )
     parser.add_argument(
         "--data-dir",
-        default=os.environ.get("DATA_DIR", "data"),
-        help="runtime data dir holding calendar_candidates/ (default: $DATA_DIR or ./data)",
+        default=str(runtime_data_dir()),
+        help="runtime data dir (candidates + default write target; default: $DATA_DIR)",
     )
     parser.add_argument("--notice-url", default=None, help="next announcement URL for source.url")
     parser.add_argument("--notice-title", default=None, help="next announcement title")

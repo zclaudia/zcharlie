@@ -21,6 +21,7 @@ import the values the import would store (so behaviour does not change when
 the import runs). ``a_share_calendar_path`` always comes from app.yaml.
 """
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -226,12 +227,65 @@ async def load_runtime(
     return await store.load()
 
 
-def calendar_path(app_yaml_path: Path = DEFAULT_APP_YAML) -> str:
-    """``scheduler.a_share_calendar_path`` from app.yaml (its default when absent)."""
+RUNTIME_CALENDAR_DIR = "calendars"
+"""Where an applied calendar lives under ``DATA_DIR`` (``DATA_DIR/calendars/<name>``)."""
+
+
+def configured_calendar_path(app_yaml_path: Path = DEFAULT_APP_YAML) -> str:
+    """``scheduler.a_share_calendar_path`` from app.yaml (its default when absent).
+
+    This is the *baseline* the repository ships; the file in effect may be the
+    runtime copy under ``DATA_DIR`` (see :func:`calendar_path`).
+    """
 
     if app_yaml_path.exists():
         return load_app_yaml(app_yaml_path).scheduler.a_share_calendar_path
     return str(SchedulerConfig.model_fields["a_share_calendar_path"].default)
+
+
+def runtime_data_dir() -> Path:
+    """``DATA_DIR`` as the running app sees it (env value, else the Settings default)."""
+
+    raw = os.environ.get("DATA_DIR")
+    if raw:
+        return Path(raw)
+    return Path(str(Settings.model_fields["data_dir"].default))
+
+
+def runtime_calendar_path(configured: Path | str, *, data_dir: Path | None = None) -> Path:
+    """The writable location an applied calendar goes to.
+
+    Keeps the baseline's file name so a future second calendar would resolve
+    independently. This path does not have to exist yet.
+    """
+
+    baseline = Path(configured)
+    root = data_dir if data_dir is not None else runtime_data_dir()
+    return root / RUNTIME_CALENDAR_DIR / baseline.name
+
+
+def resolved_calendar_path(configured: Path | str, *, data_dir: Path | None = None) -> Path:
+    """The calendar in effect: the DATA_DIR copy when it exists, else the baseline.
+
+    A runtime copy that exists but does not parse is *not* silently ignored:
+    the read fails loudly (fail-closed) so a broken file cannot silently
+    shadow a good baseline.
+    """
+
+    baseline = Path(configured)
+    runtime = runtime_calendar_path(baseline, data_dir=data_dir)
+    return runtime if runtime.is_file() else baseline
+
+
+def calendar_path(app_yaml_path: Path = DEFAULT_APP_YAML) -> str:
+    """The calendar in effect: the DATA_DIR copy first, else ``a_share_calendar_path``.
+
+    Every reader (scheduler jobs, the worker runtime, the API pages) resolves
+    through this, so applying a candidate from the health page takes effect on
+    the next scheduled fire without a restart or a commit.
+    """
+
+    return str(resolved_calendar_path(configured_calendar_path(app_yaml_path)))
 
 
 def app_config_from(schedule: ScheduleSettings, *, calendar: str) -> AppYamlConfig:
@@ -260,7 +314,12 @@ async def load_app_config(
 
     revision = await store_for(session, settings).revision()
     runtime = await load_runtime(session, settings, app_yaml_path)
-    return app_config_from(runtime.schedule, calendar=calendar_path(app_yaml_path)), revision
+    # The scheduler resolves the data-dir copy per fire; the config here is the
+    # baseline path it resolves from.
+    return (
+        app_config_from(runtime.schedule, calendar=configured_calendar_path(app_yaml_path)),
+        revision,
+    )
 
 
 async def import_and_load(

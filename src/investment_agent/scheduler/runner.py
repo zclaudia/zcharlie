@@ -48,6 +48,7 @@ from investment_agent.settings.loader import (
     ensure_imported,
     load_app_config,
     load_settings,
+    resolved_calendar_path,
     store_for,
 )
 from investment_agent.snapshots.jobs import CalendarProbePayload, enqueue_snapshot_job
@@ -228,7 +229,7 @@ async def run_snapshot_schedule_job(
     calendar: TradingCalendar | None = None
     try:
         if job not in CALENDAR_FREE_JOBS:
-            calendar = load_trading_calendar(Path(calendar_path))
+            calendar = load_trading_calendar(resolved_calendar_path(calendar_path))
             log_calendar_coverage(calendar, local_today)
         payloads = snapshot_payloads(
             job, today=local_today, calendar=calendar, universes=snapshot_cfg.universes
@@ -270,7 +271,7 @@ async def run_calendar_probe_job(
 
     local_today = today or datetime.now(ZoneInfo(timezone)).date()
     try:
-        calendar = load_trading_calendar(Path(calendar_path))
+        calendar = load_trading_calendar(resolved_calendar_path(calendar_path))
     except Exception:
         log.exception("scheduler.calendar_probe.failed", calendar_path=calendar_path)
         return None
@@ -457,7 +458,7 @@ async def _startup_watchlist_check(app_config: AppYamlConfig, now: datetime) -> 
     scheduler_cfg = app_config.scheduler
     calendar_path = scheduler_cfg.a_share_calendar_path
     try:
-        calendar = load_trading_calendar(Path(calendar_path))
+        calendar = load_trading_calendar(resolved_calendar_path(calendar_path))
         log_calendar_coverage(
             calendar, now.astimezone(ZoneInfo(calendar.timezone)).date()
         )
@@ -479,7 +480,7 @@ async def _startup_watchlist_check(app_config: AppYamlConfig, now: datetime) -> 
 
 async def _run_watchlist_refresh_job(calendar_path: str) -> None:
     try:
-        calendar = load_trading_calendar(Path(calendar_path))
+        calendar = load_trading_calendar(resolved_calendar_path(calendar_path))
         trading_date = datetime.now(ZoneInfo(calendar.timezone)).date()
         log_calendar_coverage(calendar, trading_date)
         created = await _enqueue_scheduled_watchlist_refresh(

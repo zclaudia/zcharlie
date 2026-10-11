@@ -212,6 +212,17 @@ def default_job_handlers(
     ]
 
 
+def _calendar_path() -> str | None:
+    """The trading calendar in effect (data-dir copy first; plan 2.10 / WP10)."""
+
+    try:
+        from investment_agent.settings.loader import calendar_path
+
+        return calendar_path()
+    except Exception:
+        return None
+
+
 class ResearchWorker:
     """Claim and execute one queued job at a time, dispatching by ``kind``."""
 

@@ -1,20 +1,22 @@
 """``/calendar`` - trading-calendar status and the two maintenance actions.
 
-The calendar file (``config/calendars/a_share.yaml``) is a reviewed artifact
-that decides when scheduled research runs; the CLI
-(``tools/refresh_trading_calendar.py``) stays for ops, but routine use happens
-here, from the health page:
+The calendar in effect is the **data-dir copy** when it exists
+(``DATA_DIR/calendars/<name>``), else the committed baseline
+(``config/calendars/a_share.yaml``) - see
+:func:`investment_agent.settings.loader.resolved_calendar_path`. The baseline
+stays the reviewed artifact shipped with the checkout; applying a candidate
+writes the runtime copy, which needs no commit and no writable ``config``.
+The CLI (``tools/refresh_trading_calendar.py``) stays for ops.
 
 * ``GET /calendar/status`` - coverage, reviewed years, the dual-source
-  candidate (if the weekly probe recorded one), whether the file is writable
-  and how the last probe ended;
+  candidate (if the weekly probe recorded one), the effective file and its
+  baseline, whether applying is possible, and how the last probe ended;
 * ``POST /calendar/check`` - enqueue one ``calendar_probe`` run now (the
   worker cross-checks the next unreviewed year against baostock and
   AkShare/Sina; ``force`` skips only the expiry-window gate);
-* ``POST /calendar/apply`` - write the verified candidate over the runtime
-  calendar and remove it. Applying can only *add* years: a candidate that
-  would change or drop a reviewed year is refused (409), as is a read-only
-  calendar file (e.g. the read-only ``config`` mount).
+* ``POST /calendar/apply`` - write the verified candidate to the runtime copy
+  and remove it. Applying can only *add* years: a candidate that would change
+  or drop a reviewed year is refused (409), as is an unwritable data dir.
 
 Auth: ``X-API-Key`` or the web session, like every other route.
 """
@@ -24,7 +26,7 @@ from __future__ import annotations
 import os
 from datetime import date
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,7 +34,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 
 from investment_agent.api.auth import get_settings, verify_api_key_or_session
-from investment_agent.api.routes.dashboard import _calendar_path
+from investment_agent.api.routes import dashboard
 from investment_agent.clock import today_in
 from investment_agent.config import Settings
 from investment_agent.scheduler.calendar_refresh import refresh_years
@@ -40,6 +42,11 @@ from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
     calendar_coverage,
     load_trading_calendar,
+)
+from investment_agent.settings.loader import (
+    calendar_path,
+    configured_calendar_path,
+    runtime_calendar_path,
 )
 from investment_agent.snapshots.calendar_probe import (
     CalendarCandidate,
@@ -95,6 +102,12 @@ class LastProbe(BaseModel):
 
 class CalendarStatus(BaseModel):
     path: str
+    """The file in effect."""
+    baseline: str
+    """The committed file the runtime copy is derived from."""
+    target: str
+    """Where an applied calendar is written (``DATA_DIR/calendars/<name>``)."""
+    source: Literal["data_dir", "baseline"]
     calendar_id: str
     timezone: str
     years: list[CalendarYearStatus]
@@ -115,6 +128,13 @@ class CalendarApplied(BaseModel):
     added_years: list[int]
     years: list[CalendarYearStatus]
     removed_candidate: str
+
+
+def _paths() -> tuple[Path, Path, Path]:
+    """``(baseline, effective, runtime target)`` for the configured calendar."""
+
+    baseline = Path(configured_calendar_path(dashboard._APP_CONFIG_PATH))
+    return baseline, Path(calendar_path(dashboard._APP_CONFIG_PATH)), runtime_calendar_path(baseline)
 
 
 def _load(path: Path) -> TradingCalendar:
@@ -152,6 +172,15 @@ def _candidate_status(candidate: CalendarCandidate) -> CalendarCandidateStatus:
     )
 
 
+def _writable(target: Path) -> bool:
+    """Whether the apply target can be written (its nearest existing dir is writable)."""
+
+    directory = target.parent
+    while not directory.exists() and directory.parent != directory:
+        directory = directory.parent
+    return os.access(directory, os.W_OK)
+
+
 async def _last_probe() -> LastProbe | None:
     async with session_scope() as session:
         run = await session.scalar(
@@ -177,12 +206,15 @@ async def _last_probe() -> LastProbe | None:
 async def calendar_status(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CalendarStatus:
-    path = _calendar_path()
-    calendar = _load(path)
+    baseline, effective, target = _paths()
+    calendar = _load(effective)
     coverage = calendar_coverage(calendar, today_in(calendar.timezone))
     found = candidates(settings.data_dir)
     return CalendarStatus(
-        path=str(path),
+        path=str(effective),
+        baseline=str(baseline),
+        target=str(target),
+        source="data_dir" if effective != baseline else "baseline",
         calendar_id=calendar.calendar_id,
         timezone=calendar.timezone,
         years=_year_status(calendar),
@@ -193,7 +225,7 @@ async def calendar_status(
             message=coverage.message(),
         ),
         candidate=_candidate_status(found[-1]) if found else None,
-        writable=os.access(path, os.W_OK),
+        writable=_writable(target),
         last_probe=await _last_probe(),
     )
 
@@ -204,7 +236,8 @@ async def check_calendar(
 ) -> ProbeQueued:
     """Enqueue one dual-source check of the next unreviewed year, right now."""
 
-    calendar = _load(_calendar_path())
+    _, effective, _ = _paths()
+    calendar = _load(effective)
     today = today_in(calendar.timezone)
     year = refresh_years(calendar, today=today)[-1]
     payload = CalendarProbePayload(as_of=today, year=year, force=True)
@@ -218,10 +251,10 @@ async def check_calendar(
 async def apply_calendar(
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CalendarApplied:
-    """Write the verified candidate over the runtime calendar and remove it."""
+    """Write the verified candidate to the runtime copy and remove it."""
 
-    path = _calendar_path()
-    _load(path)
+    baseline, effective, target = _paths()
+    _load(effective)
     found = candidates(settings.data_dir)
     if not found:
         raise HTTPException(
@@ -230,20 +263,17 @@ async def apply_calendar(
         )
     candidate = found[-1]
     try:
-        calendar, added = apply_candidate(path, candidate)
+        calendar, added = apply_candidate(target, candidate, fallback=baseline)
     except CandidateConflictError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except OSError as exc:
-        log.warning("calendar.apply_failed", path=str(path), error=str(exc))
+        log.warning("calendar.apply_failed", path=str(target), error=str(exc))
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"无法写入 {path}（{exc}）。容器部署时 config 目录是只读挂载，"
-                "请给日历文件单独加一条可写挂载。"
-            ),
+            detail=f"无法写入 {target}（{exc}）；请确认数据目录可写（DATA_DIR）。",
         ) from exc
     return CalendarApplied(
-        path=str(path),
+        path=str(target),
         added_years=list(added),
         years=_year_status(calendar),
         removed_candidate=str(candidate.path),

@@ -901,7 +901,7 @@ function calendarActions(status, reload) {
   const candidate = status.candidate;
   applyButton.disabled = !candidate || !status.writable;
   if (candidate && !status.writable) {
-    applyButton.title = "日历文件不可写（容器部署时 config 是只读挂载）";
+    applyButton.title = "数据目录不可写，无法应用候选";
   }
 
   applyButton.addEventListener("click", async () => {
@@ -916,7 +916,7 @@ function calendarActions(status, reload) {
       const result = await post("/calendar/apply", {});
       say(
         `已应用 ${result.added_years.join("、")} 年：写入 ${result.path}，候选文件已删除。` +
-          "提交这次文件变更后随部署保留；本机调度器下次触发即用新日历。"
+          "调度器下次触发即用新日历（数据目录优先，无需提交）。"
       );
       await reload();
     } catch (error) {
@@ -966,8 +966,13 @@ function renderCalendar(card, status, reload) {
   card.appendChild(el("p", {}, calendarCoverageLine(status)));
   const years = calendarYearLine(status);
   if (years) card.appendChild(el("p", { class: "small muted" }, years));
+  const source = status.source === "data_dir" ? "数据目录副本" : "仓库基线";
   card.appendChild(
-    el("p", { class: "small muted" }, `文件 ${status.path}${status.writable ? "" : "（只读，无法应用）"}`)
+    el(
+      "p",
+      { class: "small muted" },
+      `生效文件 ${status.path}（${source}）· 基线 ${status.baseline}`
+    )
   );
   if (status.candidate) {
     card.appendChild(calendarCandidateBlock(status.candidate));

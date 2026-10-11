@@ -27,6 +27,7 @@ from investment_agent.scheduler.calendar_refresh import (
     render_calendar,
 )
 from investment_agent.scheduler.trading_calendar import TradingCalendar, load_trading_calendar
+from investment_agent.settings.loader import runtime_calendar_path
 from investment_agent.snapshots.calendar_probe import candidate_path, collect_calendar_probe
 from investment_agent.snapshots.jobs import CalendarProbePayload
 
@@ -146,7 +147,7 @@ async def test_probe_writes_a_candidate_and_notifies_once(tmp_path: Path) -> Non
     assert len(files) == 1
     body = files[0].read_text(encoding="utf-8")
     assert "交易日历候选 2027" in body and "2027-01-01" in body
-    assert "tools/refresh_trading_calendar.py --write" in body
+    assert "数据健康" in body and "DATA_DIR/calendars/a_share.yaml" in body
 
     # A second probe with identical answers rewrites nothing and stays quiet.
     repeat, _ = await _probe(_calendar(), today=today, tmp_path=tmp_path)
@@ -217,6 +218,44 @@ async def test_probe_job_enqueues_only_inside_the_expiry_window(
         today=date(2026, 11, 16),
     )
     assert unavailable is None and len(enqueued) == 1
+
+
+async def test_probe_job_reads_the_data_dir_calendar(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Per-fire resolution: a data-dir copy that already has 2027 silences the probe."""
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    reviewed = merge_years(
+        _calendar(),
+        [
+            build_year(2027, TRADING_2027).model_copy(
+                update={"verified_by": ["baostock", "akshare"], "verified_on": date(2026, 12, 18)}
+            )
+        ],
+    )
+    target = runtime_calendar_path(CALENDAR_PATH, data_dir=tmp_path)
+    target.parent.mkdir(parents=True)
+    target.write_text(render_calendar(reviewed), encoding="utf-8")
+
+    enqueued: list[Any] = []
+
+    async def fake_enqueue(session: Any, payload: Any, *, triggered_by: str, **_: Any) -> Any:
+        enqueued.append(payload)
+        return SimpleNamespace(id=3, idempotency_key=f"key:{payload.year}"), True
+
+    @asynccontextmanager
+    async def fake_scope() -> Any:
+        yield None
+
+    monkeypatch.setattr(runner, "enqueue_snapshot_job", fake_enqueue)
+    monkeypatch.setattr(runner, "session_scope", fake_scope)
+
+    created = await runner.run_calendar_probe_job(
+        calendar_path=str(CALENDAR_PATH), timezone="Asia/Shanghai", today=date(2026, 11, 16)
+    )
+
+    assert created == 0 and enqueued == []  # the baseline alone would have enqueued 2027
 
 
 def test_build_scheduler_registers_the_calendar_probe_job(

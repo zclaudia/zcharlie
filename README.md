@@ -13,7 +13,8 @@
 
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
-- 持久化：SQLite + Alembic（迁移 `020`）；制品目录 `data/research-runs/<run_id>/`
+- 持久化：SQLite + Alembic（迁移 `020`）；制品目录 `data/research-runs/<run_id>/`；
+  运行时交易日历 `data/calendars/`（优先于仓库里的 `config/calendars/` 基线）
 - 界面：同源 Web UI（`/app`，会话 Cookie 登录）+ CLI + HTTP API
 
 ## 快速开始（空环境到第一次研究）
@@ -321,9 +322,12 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /research/stocks/{ticker}/history` | 分页快照历史 |
 | `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数 + `data_health` 计数；`warnings` 含日历与数据健康提醒） |
 | `GET /health/data` | 数据健康聚合（只读）：`accumulation`、`freshness`、`universes`、`industry`、`collections`、`backfill`、`verification`、`overdue`、`warnings` |
-| `GET /calendar/status`、`POST /calendar/check`、`POST /calendar/apply` | 交易日历（`/app/health` 卡片的三个动作）：状态含覆盖范围 / 已审年份（每年带 `verified_by` / `verified_on`）/ 候选 / 是否可写 / 上次核对结果；`check` 入队一次双源核对（`force=true`，跳过 60 天窗口）；`apply` 把候选写入日历文件并删除候选，只允许*新增*年份，改写或缺少已审年份返回 409，只读挂载同样 409 |
-| `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
+| `GET /calendar/status`、`POST /calendar/check`、`POST /calendar/apply` | 交易日历（`/app/health` 卡片的三个动作）：状态含生效文件与仓库基线、覆盖范围、已审年份（每年带 `verified_by` / `verified_on`）、候选、是否可写、上次核对结果；`check` 入队一次双源核对（`force=true`，跳过 60 天窗口）；`apply` 把候选写入 `DATA_DIR/calendars/a_share.yaml` 并删除候选（只允许*新增*年份，改写或缺少已审年份返回 409） |
+| `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 观察池管理与隔离型批量刷新；`POST` 可带 `template_id` 自动起草观察规则；`DELETE` 必填 `{reason}`（决策日志 `remove_watch`） |
+| `POST /watchlist/{id}/rule/draft`、`/approve`、`/edit`、`/reject`、`GET /watchlist/template-suggestion` | 观察池规则起草 / 批准 / 改参数（新草稿版本）/ 驳回（必填理由）；手动添加时的模板推荐（失败返回空，条目存为 `needs_template`）。观察条目状态见 `GET /watchlist` 的 `rule` 块（`state`、`request`、`draft`/`active`，规则与候选按 listing + candidate scope 共享） |
 | `GET /admin/llm-calls`、`/admin/llm-calls/cost` | LLM 调用审计 / 月度成本 |
+| `GET /portfolio/valuations/current`、`/history`、`/valuations/{id}`、`/portfolio/listings` | 持仓池每日估值（`/app/portfolio` 页面数据源）：当日知识截止内复用不可变估值行，迟到/修订行情生成新身份；`total_assets` 只在覆盖完整、现金/数量/价格可用时给出，409 表示"估值更新中"（账本刚变化） |
+| `GET/POST /portfolio/events`、`/portfolio/accounts`、`/portfolio/listing` | 持仓账本（A1b）：只接受用户确认的已发生事实（期初余额/交易/资金流/分红），费用留空即未知；确定数量不足的卖出被拒绝；纠错通过 `ApplyCorrection`（一次操作冲销多个事实 + 替代事实，原子且幂等）。写入受 `portfolio_ledger_enabled` 开关约束 |
 | `GET /candidates?status=&limit=&offset=`、`GET /candidates/{id}` | 候选分页列表（来源、最新理由、草稿状态）/ 详情（理由与快照引用、草稿规则、决策历史） |
 | `POST /candidates` | 手动提名 `{ticker, template_id?, note?}` |
 | `POST /candidates/{id}/dismiss`、`/promote` | 忽略 `{reason}` / 晋级 `{rule_instance_id?, params_override?, reason?}`（无可批准规则时 409） |
@@ -359,11 +363,13 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
 `config/app.yaml` 的调度段会一次性导入数据库；此后以数据库为准，`.env` / `app.yaml` 里的这些值
 被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
 `LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
-交易日历路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），日历见
+交易日历基线路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），基线文件是
 `config/calendars/a_share.yaml`（未知年份 fail-closed；由双源核对生成，每年带
-`verified_by` / `verified_on`）。日常在 `/app/health` 的「交易日历」卡片核对与应用；
-`tools/refresh_trading_calendar.py`（`--write`）是无浏览器场景的等价入口。容器部署时
-`config` 只读、仅 `config/calendars` 由 `api` 服务单独写挂载。
+`verified_by` / `verified_on`）。**运行时以 `DATA_DIR/calendars/<名>` 优先**：健康页卡片
+「应用候选」写这份副本，所有读取方（调度、worker、页面、研究内核）下次即用，无需提交、
+无需重启；副本不存在时回落仓库基线，副本损坏则 fail-closed 报错。
+`tools/refresh_trading_calendar.py --write` 是无浏览器场景的等价入口（默认同样写数据目录；
+加 `--calendar config/calendars/a_share.yaml` 可把年份烘进仓库基线）。
 
 评分成功但解释失败时运行以 `partial` 收尾：确定性分数与制品保留，
 `explanation` 为 `null` 并注明原因，不重试非瞬时错误。
@@ -402,9 +408,9 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
   只用于按需核对与手动深度研究。东财单股现金流量表尚未批量采集时，快照模式缺资本支出 / 自由现金流（需复核）。
 - 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天内 `calendar_probe` 任务每周一
   用 baostock + AkShare/Sina 双源核对下一年，一致时写入 `data/calendar_candidates/a_share-<年>.yaml`
-  并在健康页 / 今日概览 / 通知中提醒；在 `/app/health` 的「交易日历」卡片点「应用候选」补入
-  `config/calendars/a_share.yaml`（并提交文件变更），无浏览器时用
-  `python tools/refresh_trading_calendar.py --write`。
+  并在健康页 / 今日概览 / 通知中提醒；在 `/app/health` 的「交易日历」卡片点「应用候选」写入
+  `data/calendars/a_share.yaml`（运行时副本，优先于仓库基线，无需提交），
+  无浏览器时用 `python tools/refresh_trading_calendar.py --write`。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
   以沪深小盘替代并记录在
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。

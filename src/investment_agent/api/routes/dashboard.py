@@ -25,7 +25,7 @@ from investment_agent.api.schemas.dashboard import (
 )
 from investment_agent.candidates.lifecycle import effective_draft
 from investment_agent.clock import today_in
-from investment_agent.config import SchedulerConfig, Settings, load_app_yaml
+from investment_agent.config import SchedulerConfig, Settings
 from investment_agent.scheduler.trading_calendar import (
     calendar_coverage,
     load_trading_calendar,
@@ -160,11 +160,15 @@ async def candidate_counts(session: AsyncSession) -> CandidateCounts:
 
 
 def _calendar_path() -> Path:
+    """The calendar in effect (data-dir copy first, else the configured baseline)."""
+
+    from investment_agent.settings.loader import configured_calendar_path, resolved_calendar_path
+
     try:
-        return Path(load_app_yaml(_APP_CONFIG_PATH).scheduler.a_share_calendar_path)
+        baseline = configured_calendar_path(_APP_CONFIG_PATH)
     except Exception:
-        default = SchedulerConfig.model_fields["a_share_calendar_path"].default
-        return Path(str(default))
+        baseline = str(SchedulerConfig.model_fields["a_share_calendar_path"].default)
+    return resolved_calendar_path(baseline)
 
 
 def calendar_candidates(data_dir: Path | None) -> list[Path]:
