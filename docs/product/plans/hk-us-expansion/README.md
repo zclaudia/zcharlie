@@ -23,10 +23,10 @@
 | 波次 | 子任务 | 依赖 |
 | --- | --- | --- |
 | W1 | 01 身份与市场注册表 ‖ 02 资料契约·模型·迁移·仓储 | 无 |
-| W2 | 03 港股原币适配器 ‖ 04 美股 SEC 适配器 ‖ 05 不可变资料存储·原始制品·离线导入 | 02（W1） |
-| W3 | 06 单证券资料采集任务 ‖ 07 资料→证据适配分支 ‖ 08 确定性财务指标 | 05（W2） |
-| W4 | 09 财务上下文读模型·只读 API·刷新 API ‖ 10 研究档案与发布校验接入 | 06、07、08（W3） |
-| W5 | 11 财务页面展示 ‖ 12 验收矩阵与文档收口 | 09、10（W4） |
+| W2 | 03 港股原币适配器 ‖ 04 美股 SEC 适配器 ‖ 05 不可变资料存储·原始制品·离线导入 | 02（W1）；05 只依赖 02（适配器经参数注入） |
+| W3 | 06 单证券资料采集任务 ‖ 07 资料→证据适配分支 ‖ 08 确定性财务指标 | 06 需 03/04/05；07 只依赖 02（不 import store）；08 只依赖 02 |
+| W4 | 09 财务上下文读模型·只读 API·刷新 API ‖ 10 研究档案与发布校验接入 | 09 需 06/07/08；10 需 07（+05 供测试造数） |
+| W5 | 11 财务页面展示 ‖ 12 验收矩阵与文档收口 | 09（11）、全部（12） |
 | W6（可选尾部） | 13 年度 PE 条件启用 ‖ 14 分红事件展示 | 09；剩余 ≥45 分钟才启动 |
 
 依赖图（→ 表示"需要先合并"）：
@@ -46,8 +46,9 @@
 | 契约 | 位置 | 冻结内容 |
 | --- | --- | --- |
 | 受控身份 | `src/investment_agent/domain/security.py` | `SecurityMarket` / `SecurityType` / `ControlledIdentity` / `load_pilot_identities` / `normalize_ticker` / `source_ticker` |
-| 资料契约 | `src/investment_agent/materials/contracts.py` | `DatasetKind` / `SubjectKind` / `FactPeriod` / `FactSemantics` / `FactValue` / `FactProvenance` / `FactRecord` / `DatasetDraft` / `RawPayload` / `ParseResult` / `MaterialAdapter` / `SCHEMA_VERSION` |
+| 资料契约 | `src/investment_agent/materials/contracts.py` | `DatasetKind` / `SubjectKind` / `FactPeriod` / `FactSemantics` / `FactValue` / `FactProvenance` / `FactRecord` / `DatasetDraft` / `RawPayload` / `ParseResult` / `MaterialAdapter` / `SCHEMA_VERSION` / `fact_to_payload` / `fact_from_payload` / `payload_facts` |
 | 资料存储 | `src/investment_agent/materials/store.py` | `MaterialStore.save(draft) -> ObjectRef`（幂等：内容相同返回既有版本）、`latest()`、`history()` |
+| 离线导入 | `src/investment_agent/materials/offline_import.py` | `import_offline_evidence(..., adapters: Mapping[str, MaterialAdapter])`（适配器由参数注入，模块不 import 具体适配器） |
 | 证据适配 | `src/investment_agent/materials/evidence.py` | `material_evidence(dataset, *, fields, subject_ref) -> tuple[EvidenceRecord, ...]` |
 | 指标 | `src/investment_agent/materials/metrics.py` | `compute_metrics(dataset, *, profile) -> MetricSet` |
 | 读模型 | `src/investment_agent/materials/context.py` | `financial_context(session, listing_id) -> FinancialContextView` |
@@ -83,6 +84,7 @@
    `git -C /Users/zhvala/SourceCode/zcharlie-hkus worktree add /tmp/zc-hkus-<task> -b hk-us/<task> HEAD`，
    把子计划路径交给一个 sub-agent（`general-purpose`，可写）。
 3. **子 agent 交付**：按子计划的 Task 清单实现 → 跑该任务的定向测试 + 全量三门禁 → 只 `git add` 自己文件清单里的路径 → 一次提交 → 返回结构化报告（任务号 / 分支 / 提交哈希 / 门禁结果 / 偏差 / 未决）。
+   **依赖边界**：一个子任务只允许 import 已合并波次的模块；同波次产物一律走参数注入或测试内假实现（见 05 的 `adapters=` 注入），不得 import 尚不存在的模块。
 4. **控制 agent 合并**：一个波次的所有子 agent 结束后，在集成分支上依次 `git merge --no-ff hk-us/<task>`；冲突按"谁的文件谁改"回退给对应任务重做，不做无主合并。合并后跑一次全量门禁。
 5. **状态记录**：每个子任务结束后更新 [`COMPLETION.md`](COMPLETION.md)（任务号、提交哈希、测试数、偏差、下一步）并提交。**任何时刻中断，COMPLETION.md 都反映已完成的真实状态。**
 6. **死代码清理**：`git worktree remove --force /tmp/zc-hkus-<task>` 在合并后执行，避免残留。

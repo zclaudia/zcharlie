@@ -132,7 +132,26 @@ class MaterialAdapter(Protocol):
 
 def validate_draft(draft: DatasetDraft) -> tuple[str, ...]      # 返回违规原因，空元组表示合法
 def content_hash(draft: DatasetDraft) -> str                    # payload 规范化 JSON + raw_bytes 的 sha256
+
+# 规范 payload 与事实序列化（03/04 只准用这对函数写 payload，07 只准用它读）
+FACT_ENTRY_KEYS = frozenset({
+    "metric", "period", "semantics", "value", "provenance",
+    "verification", "conflict", "applicability",
+    "source_label", "source_field", "original_locator", "missing_reason",
+})
+def fact_to_payload(fact: FactRecord, *, source_label: str | None = None,
+                    source_field: str | None = None, original_locator: str | None = None) -> dict[str, Any]
+def fact_from_payload(entry: Mapping[str, Any]) -> FactRecord
+
+def payload_facts(payload: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]
+    # payload["facts"] 的读取口；缺失或类型不对 → raise ValueError（由 validate_draft 前置拦下）
 ```
+
+**规范 payload 形状（冻结）**：`DatasetDraft.payload` 永远是
+`{"facts": [ <fact_to_payload 的返回> ... ], ...来源特有键}`。
+`period`/`semantics`/`value`/`provenance` 各自是 02 四个 dataclass 的 JSON 形式（枚举写 value，日期写 ISO 字符串，金额写十进制字符串）；`period.days`、`basis`、`unit`、`currency`、`sign_convention`、`missing_reason` 全部必填键（可 null 但不能缺）。
+来源特有信息（东财的 `source_item_code`、SEC 的 `accession`、页码、unmapped 计数等）放在 `facts[*]` 之外的顶层键或 `original_locator`。
+`validate_draft` 额外校验（针对 `payload["facts"]`）：每个 entry 的键集合等于 `FACT_ENTRY_KEYS`（多键少键都违规）、`fact_from_payload` 往返后字段完全一致。
 
 `validate_draft` 必须实现（每条都要有测试）：
 1. `captured_at` 时区感知；缺失即违规。
@@ -207,6 +226,7 @@ class ResearchDatasetRepository(Repository[ResearchDataset]):
   - `content_hash` 稳定性：同 draft 两次调用相同；改一个 `raw_value` 或 `raw_bytes` 即变化；payload 键顺序不影响结果。
   - `PERIOD_52W`：`days=371` 的 AAPL 财年通过校验；`days=364` 通过；`days=300` 被拒。
 - `tests/unit/test_research_material_repo.py`：`insert_version` 递增 revision 与 previous_id；`latest` 取最大 revision；`history` 有序；更新/删除 dataset 与 binding 抛错（不可变）；`list_for` 的 `at` 过滤（`valid_from <= at` 且 `valid_to is None or valid_to >= at`）。
+- `tests/unit/test_research_material_contracts.py` 还要覆盖：`fact_to_payload`→`fact_from_payload` 往返一致（含 `basis=INSTANT`、`missing_reason` 非空、`precision=UNKNOWN` 三种边界）；键集合多一个或少一个键都被 `validate_draft` 拒绝；`payload_facts` 对缺失 `facts` 抛错。
 - `tests/integration/test_migration_046.py`：照 `tests/integration/test_migration_045.py` 的写法，upgrade 后 `sqlalchemy.inspect` 断言两张表、唯一约束名、索引名；`downgrade` 后两张表消失；迁移链 head 为 `046`。
 - 全量门禁见 `00-conventions.md`（**新增迁移后必须重跑全量**，确认无新增失败）。
 

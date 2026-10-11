@@ -62,11 +62,13 @@ class ImportReport:
 async def import_offline_evidence(
     session: AsyncSession, *, data_dir: Path, source_dir: Path,
     identities: Sequence[ControlledIdentity], company_ids: Mapping[str, int],
-    sources: Sequence[str], *, imported_at: datetime | None = None,
+    adapters: Mapping[str, MaterialAdapter], *,
+    imported_at: datetime | None = None,
 ) -> ImportReport
 ```
 
-- 参数 `source_dir` 是调研证据目录（例如 `.../evidence/remaining-final-03/raw`），按 03/04 的适配器能识别的文件名定位原始响应与同名 `.meta.json`。
+- **适配器由参数注入**（`source -> MaterialAdapter`）：本模块**不 import `materials/hk_native.py` 或 `materials/us_sec.py`**（03、04 与本任务同波次，不在本任务的 worktree 里）。真实适配器的装配属 06；本任务的测试用测试文件内定义的假适配器。
+- 参数 `source_dir` 是调研证据目录（例如 `.../evidence/remaining-final-03/raw`），按注入适配器的 `requests()` 输出与文件名约定定位原始响应与同名 `.meta.json`（`name` 字段决定文件名；`.meta.json` 取 `fetched_at_utc`/`url`）。
 - `captured_at = imported_at or now(UTC)` —— **真实导入时间**；`source_fetched_at` 取 `.meta.json` 的 `fetched_at_utc`；`draft.raw_source_url` 取 `meta.url`。**不得**把 `fetched_at` 写进 `captured_at`，也不得回填其他过去时间。
 - 单个文件解析失败只记入 `problems`，不中断其余导入（返回 `skipped` 列出）。
 - `company_ids` 由调用方（CLI/测试）用 01 的名单解析 `company_key -> Company.id` 后传入；本模块不自己匹配公司。
@@ -80,11 +82,12 @@ async def import_offline_evidence(
   - 契约违规 draft（如 `ANNUAL` 只 300 天）→ `ValueError`，不落盘、不建行；
   - 相同内容但不同 `subject_id` → 各自独立行（hash 相同也不跨 subject 合并）。
 - `tests/integration/test_material_offline_import.py`：
-  - 用 `tests/fixtures/materials/offline/` 造一个临时 `source_dir` + 临时 `DATA_DIR`，导入汇丰 income 一年期：`saved` 非空、`captured_at == imported_at`、`source_fetched_at == meta.fetched_at_utc`、`raw_ref` 指向的字节与 fixture 一致；
+  - 用 `tests/fixtures/materials/offline/` 造一个临时 `source_dir` + 临时 `DATA_DIR`，注入一个测试内定义的假适配器（单表、单期间、一条 fact）导入：`saved` 非空、`captured_at == imported_at`、`source_fetched_at == meta.fetched_at_utc`、`raw_ref` 指向的字节与 fixture 一致；
   - **第二次导入同一目录** → 全部 `created=False`（离线重放幂等），行数不变；
   - 缺 `.meta.json` 的文件 → `problems` 有人可读的原因，其余仍导入；
   - `.meta.json` 里 `fetched_at_utc` 缺失 → `source_fetched_at is None` 且**不回填**导入时间（断言两者不相等）；
-  - 真实证据目录存在时（`/Users/zhvala/SourceCode/zcharlie/research/market-data-validation/evidence/remaining-final-03/raw`，用 `pytest.mark.skipif(not Path(...).exists())` 守卫）导入汇丰三表四年：`problems == ()`、产生 ≥ 3 个数据集、`captured_at` 是本次运行时间而 `source_fetched_at` 是 2026-10-11。此用例在 CI（无该目录）自动跳过，不影响门禁。
+  - 假适配器返回 `problems` → 该来源进 `problems`/`skipped`，其余来源仍导入。
+  - **真实证据 + 真实适配器的端到端导入用例不在这里**（需要 03/04 的模块），由 06 承担。
 
 ## 提交
 

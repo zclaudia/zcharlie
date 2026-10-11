@@ -15,6 +15,7 @@
 - 子 agent 的当前目录是其任务 worktree；所有相对路径都相对该目录。
 - **禁止**在主 checkout 里编辑、提交、切分支、stash 或 `git add -A`。
 - 只 `git add` 自己子计划「文件清单」里的路径；用 `git add <path> ...` 显式列出，**不使用 `git add -A` / `git add .`**。
+- **只 import 已完成（已合并）波次的模块**：同波次的其它任务不在你的 worktree 里。需要同波次产物时用参数注入（见 05 的 `import_offline_evidence(adapters=...)`）或按契约写代码 + 测试内假实现，不要 import 尚不存在的模块，也不要为了让它 import 成功而复制别人的代码。
 - 提交信息用子计划给出的文本，结尾加 `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`。
 - 不开 PR、不 push、不合并到 main；合并由控制 agent 负责。
 

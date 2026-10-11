@@ -1,6 +1,6 @@
 # 07 资料→证据适配分支
 
-> 波次 W3 ‖ 可与 06、08 并行。依赖：05 已合并。
+> 波次 W3 ‖ 可与 06、08 并行。依赖：02 已合并（**不依赖 05**，见下"依赖边界"）。
 > 文件所有权：见 [`README.md`](README.md) §4 第 07 行。本任务是**唯一**允许改动 `evidence/contracts.py` 与 `evidence/store.py` 的任务。
 
 **目标：** 让港美资料中**满足时间与来源要求**的事实转成可引用的 `EvidenceRecord`，不满足的留在资料层并给出明确原因；既有 A 股证据路径行为不变。
@@ -49,7 +49,14 @@ def material_evidence(
     created_at: datetime | None = None,
 ) -> tuple[tuple[EvidenceRecord, ...], tuple[str, ...]]
     """返回 (证据列表, 未转换原因列表)。第二个返回值必须解释每一条被跳过的 fact。"""
+
+def dataset_facts(dataset: ResearchDataset) -> tuple[FactRecord, ...]
+    """读 payload 只用 02 的 payload_facts + fact_from_payload，不自己解析键名，
+    也不假设来源特有的顶层键。文档型 fact 的 source_label/original_locator 从
+    fact_from_payload 保留的附加字段取。"""
 ```
+
+**依赖边界**：本任务需要的是 02（契约与模型），**不 import `materials/store.py`（05）与适配器（03/04）**；测试直接经 02 的仓储构造 `ResearchDataset` 行，payload 用 02 的 `fact_to_payload` 构造。这样即使 05 尚未合并也能独立完成。
 
 转换规则（逐条可测）：
 

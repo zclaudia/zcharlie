@@ -79,18 +79,16 @@ class HkNativeAdapter:
 `payload`（每个 draft）：
 ```json
 {
+  "facts": [ /* 每条由 contracts.fact_to_payload(FactRecord, source_label=ITEM_NAME, source_field=STD_ITEM_CODE, original_locator="<pdf url> p12") 生成；键集合由 FACT_ENTRY_KEYS 固定，不要自定义键 */ ],
   "report": "income",
   "report_name": "RPT_HKF10_FN_INCOME",
   "account_standard": "国际会计准则",
   "fiscal_year_label": "12-31",
-  "facts": [ { "metric": "...", "source_item_code": "001003999", "source_label": "经营收入总额",
-               "amount": "62440000000", "sign_rule": "...", "official_ref": {"url": "...", "page": 12, "label": "Net operating income"},
-               "verification": "candidate", "missing_reason": null } ],
   "unmapped_item_count": 3,
   "provider": {"secucode": "00005.HK", "report_type": "年报"}
 }
 ```
-`drafts` 粒度 = 每公司 × 每表 × 每报告期一个 draft：`kind=ANNUAL_FACTS`、`subject_kind=COMPANY`、`subject_id=company.id`、`period=FactPeriod(basis=ANNUAL)`、`source=SOURCE`、`captured_at=now`。
+`drafts` 粒度 = 每公司 × 每表 × 每报告期一个 draft：`kind=ANNUAL_FACTS`、`subject_kind=COMPANY`、`subject_id=company.id`、`period=FactPeriod(basis=ANNUAL)`、`source=SOURCE`、`captured_at=now`。**写 payload 只用 `fact_to_payload`**（02 冻结）；本任务不 import `materials/store.py`（05 与本任务同波次）。
 
 **明确缺失的项必须写进 payload 事实列表（`raw_value=None` + `missing_reason`），不要省略**：汇丰的 `revenue_gross`（信用损失前 65,854）与 `credit_loss_expense`（3,414）不在端点明细中——原始响应里只有 `001003999` 经营收入总额 62,440；`equity_ordinary`（普通股净资产）对汇丰不可取（母公司权益含其他权益工具）→ 三条都要以 `missing_reason` 落库，**不得由其他项目反推或按 7.1884 换算**。
 

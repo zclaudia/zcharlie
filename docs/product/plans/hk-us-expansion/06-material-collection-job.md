@@ -96,6 +96,10 @@ class MaterialCollectionHandler(BaseJobHandler):
   - 未覆盖证券：listing 不在名单 → `partial` + `listing_not_covered`，无请求。
   - 恢复/幂等：同一 payload 二次入队不新增 run；已提交来源在重跑时不重复写 dataset（第二次 `created=False`）。
   - 取消：在假 fetcher 里 `raise LeaseLostError` 后 `execute` 不吞异常（由 worker 层处理），断言异常向上传播且已有提交保留。
+- `tests/integration/test_material_collection_job.py` 还承担**真实适配器 + 真实证据的离线导入端到端用例**（05 的 `import_offline_evidence` 注入 03/04 的真实适配器；三者在 W3 已全部合并）：
+  - 用 `pytest.mark.skipif(not Path("/Users/zhvala/SourceCode/zcharlie/research/market-data-validation/evidence/remaining-final-03/raw").exists())` 守卫，证据目录存在时导入汇丰 00005 三表四年：`problems == ()`、产生 ≥ 3 个 `annual_facts` 数据集、`captured_at` 是本次运行时间而 `source_fetched_at` 是 `2026-10-11T15:47:50+00:00` 级别的历史时刻（断言两者不相等、且 `source_fetched_at < captured_at`）；
+  - 同目录再导入一次 → 全部 `created=False`（离线重放幂等）；
+  - 目录不存在（CI）时该用例自动跳过，不影响门禁。
 
 ## 提交
 

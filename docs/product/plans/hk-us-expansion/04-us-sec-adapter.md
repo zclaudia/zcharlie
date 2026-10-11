@@ -69,7 +69,7 @@ class SecFactsAdapter:
    每个映射都要有对应 fixture 断言，**映射不到的 metric 不要求强行产出**。
 9. `equity_scope`/`reporting_scope`/`accounting_standard` 必须显式填（不落 `unknown` 除非确实无从判断）；`equity_parent` 与 `equity_ordinary` 不得互填。
 10. **时间**：`filed`（日期）→ `source_published_date`，`acceptanceDateTime`（时刻，UTC）→ `accepted_at` + `source_published_at` + `source_published_precision=TIMESTAMP`；只有日期时 `precision=DATE`；都缺 → `UNKNOWN`。`source_available_at` 一律留空（未知就是未知）。
-11. **`filing_index` payload**：
+11. **`filing_index` payload**（此 kind 没有 `facts`，形状自由但必须自洽）：
 ```json
 {
   "cik": "0000320193",
@@ -81,6 +81,7 @@ class SecFactsAdapter:
   "unreliable_notices": [{"accession":"...","form":"8-K","accepted_at":"...","items":["4.02"],"known_at":"..."}]
 }
 ```
+`annual_facts` 的 payload 只用 02 的 `fact_to_payload` 写 `facts`（键集合由 `FACT_ENTRY_KEYS` 固定，不要自定义键；accession/页码等进 `original_locator` 或顶层键）。**本任务不 import `materials/store.py`**（05 与本任务同波次）。
 12. **版本状态机**（纯函数，`select_period_state(filings, notices)`），状态取值固定为 `current` / `superseded` / `nonreliance_notice_known` / `conflict`：
    - `10-K/A` 存在且接受时间晚于原始 `10-K` → 原始为 `superseded`、修订为 `current`；**不能只看 `/A` 后缀或 `is_restated`**（LNC 案例里修订事实的 `is_restated` 仍为 false）。
    - 出现 Item 4.02 的 8-K 且其接受时间晚于原申报 → 该期间标记 `nonreliance_notice_known`，`usable=false`，**旧值保留可追溯**。

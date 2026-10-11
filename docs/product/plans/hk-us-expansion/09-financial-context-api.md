@@ -67,7 +67,8 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
 ```
 
 规则：
-- **零 IO 上游**：本模块只 import 仓储与 `materials` 的纯函数；不 import `httpx`/适配器/`materials.handlers`（用测试断言模块依赖）。
+- **零 IO 上游**：本模块只 import 仓储、`materials` 的纯函数（`metrics`/`evidence.dataset_facts`）与 `materials.handlers.ONLINE_REFRESH_ENABLED` 这一个常量；**不 import `materials/hk_native.py`、`materials/us_sec.py`、`materials/offline_import.py`**（用测试断言这几个模块不在 `context` 的 import 图里），也不在 GET 路径上调用任何 fetcher。
+- 资料事实一律经 07 的 `dataset_facts(dataset)` 读取；`facts` 视图的 `conflict`/`verification`/`amount`/`unit`/`currency`/`missing_reason` 全部来自 `FactRecord`，不要在 context 里重新解析 payload。
 - 财年来自资料层的 `FactPeriod`（真实期间）；**不出现 `date(year, 12, 31)` 之类硬编码**，不把自然年当财年。
 - 资料覆盖与核对覆盖**分别统计**（`facts_total` vs `facts_verified`），不合并成一个布尔。
 - 状态码固定集合，逐个映射文案与下一步：
