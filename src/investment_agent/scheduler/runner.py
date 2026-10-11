@@ -247,6 +247,7 @@ async def run_snapshot_schedule_job(
         return 0
     outcomes = await enqueue_snapshot_payloads(payloads)
     created = sum(outcome.created for outcome in outcomes)
+    await _enqueue_portfolio_valuations_after_ingestion(job, today=local_today)
     log.info(
         "scheduler.snapshot.queued",
         job=job,
@@ -337,6 +338,79 @@ async def run_screen_schedule_job(
         log.exception("scheduler.screen.failed", today=local_today.isoformat())
         return None
     return created
+
+
+async def run_portfolio_valuation_job() -> int | None:
+    """Queue today's deterministic valuation for every portfolio account (WP6).
+
+    Idempotent per (account, ledger revision, date); no LLM, no model budget.
+    """
+
+    from investment_agent.portfolio.valuation_jobs import enqueue_due_valuations
+
+    try:
+        async with session_scope() as session:
+            created = await enqueue_due_valuations(session, triggered_by="scheduler")
+    except Exception:
+        log.exception("scheduler.portfolio_valuation.failed")
+        return None
+    log.info("scheduler.portfolio_valuation.queued", created_runs=len(created))
+    return len(created)
+
+
+async def _enqueue_portfolio_valuations_after_ingestion(
+    job: SnapshotScheduleJob, *, today: date | None = None
+) -> None:
+    """Close prices / evening bars are in: queue the day's valuations (plan 2.10).
+
+    A stored valuation chains into the holding zone detection (WP8); the
+    explicit zone enqueue below is the backstop for a day whose valuations were
+    already stored by an earlier trigger. Both use the ingested day, not the
+    wall clock, so a catch-up after midnight still detects the right date.
+    """
+
+    from investment_agent.portfolio.valuation_jobs import (
+        PRICE_INGESTION_JOBS,
+        enqueue_due_valuations,
+    )
+    from investment_agent.rules.zone_jobs import enqueue_due_zone_detections
+
+    if job not in PRICE_INGESTION_JOBS:
+        return
+    try:
+        async with session_scope() as session:
+            created = await enqueue_due_valuations(
+                session, triggered_by="snapshot_close", valuation_date=today
+            )
+        log.info("scheduler.portfolio_valuation.after_ingestion", job=job, created_runs=len(created))
+        async with session_scope() as session:
+            await enqueue_due_zone_detections(
+                session, triggered_by="snapshot_close", as_of=today, reason=str(job)
+            )
+    except Exception:
+        log.exception("scheduler.portfolio_valuation.after_ingestion_failed", job=job)
+
+
+async def run_zone_detection_job() -> int | None:
+    """Queue today's zone detection for candidates and holdings (WP8).
+
+    Idempotent per (scope, date, ``cron``); no LLM, no model budget. The
+    holding runs are usually already enqueued by the valuation chain - this
+    cross-day backstop keeps zones firing on a day without new ingestion.
+    """
+
+    from investment_agent.rules.zone_jobs import enqueue_due_zone_detections
+
+    try:
+        async with session_scope() as session:
+            created = await enqueue_due_zone_detections(
+                session, triggered_by="scheduler", reason="cron"
+            )
+    except Exception:
+        log.exception("scheduler.zone_detection.failed")
+        return None
+    log.info("scheduler.zone_detection.queued", created_runs=len(created))
+    return len(created)
 
 
 async def run_candidate_expiry_job() -> int | None:
@@ -586,6 +660,29 @@ def add_jobs(sched: AsyncIOScheduler, app_config: AppYamlConfig) -> list[str]:
             replace_existing=True,
             **_JOB_DEFAULTS,
         )
+    portfolio_cron = scheduler_cfg.portfolio_valuation_cron
+    if portfolio_cron is not None:
+        sched.add_job(
+            run_portfolio_valuation_job,
+            trigger=_parse_cron(
+                portfolio_cron,
+                timezone=scheduler_cfg.portfolio_valuation_timezone,
+            ),
+            args=[],
+            id="portfolio_valuation",
+            replace_existing=True,
+            **_JOB_DEFAULTS,
+        )
+    zone_cron = scheduler_cfg.zone_detection_cron
+    if zone_cron is not None:
+        sched.add_job(
+            run_zone_detection_job,
+            trigger=_parse_cron(zone_cron, timezone=scheduler_cfg.zone_detection_timezone),
+            args=[],
+            id="zone_detection",
+            replace_existing=True,
+            **_JOB_DEFAULTS,
+        )
     verification_cfg = app_config.verification
     for name, trigger in _verification_triggers(verification_cfg).items():
         assert verification_cfg is not None
@@ -643,6 +740,12 @@ async def watch_settings(
     while True:
         await asyncio.sleep(poll_seconds)
         try:
+            from investment_agent.investor.monitoring import MonitoringService
+            if settings.investor_agent_enabled:
+                async with session_scope() as session:
+                    await MonitoringService(session, settings).scan(limit=50)
+                    from investment_agent.investor.discovery import DiscoveryService
+                    await DiscoveryService(session, settings).scan()
             current = await _read_revision(settings)
             if current == revision:
                 continue
@@ -671,6 +774,19 @@ async def _startup_verification_check(app_config: AppYamlConfig, now: datetime) 
             await run_verification_calibration(cfg, today=today)
 
 
+async def _startup_portfolio_valuation_check(app_config: AppYamlConfig, now: datetime) -> None:
+    """Catch up today's valuation enqueue if its fire time already passed (idempotent)."""
+
+    cfg = app_config.scheduler
+    if cfg.portfolio_valuation_cron is None:
+        return
+    trigger = _parse_cron(cfg.portfolio_valuation_cron, timezone=cfg.portfolio_valuation_timezone)
+    if fired_today(now=now, trigger=trigger) is None:
+        return
+    log.info("scheduler.portfolio_valuation.catch_up")
+    await run_portfolio_valuation_job()
+
+
 async def _startup_screen_check(app_config: AppYamlConfig, now: datetime) -> bool:
     """Catch up the weekly screen if its fire time already passed today (idempotent)."""
 
@@ -682,6 +798,20 @@ async def _startup_screen_check(app_config: AppYamlConfig, now: datetime) -> boo
         return False
     log.info("scheduler.screen.catch_up", today=today.isoformat())
     await run_screen_schedule_job(app_config.screen, today=today)
+    return True
+
+
+async def _startup_zone_detection_check(app_config: AppYamlConfig, now: datetime) -> bool:
+    """Catch up today's zone detection if its fire time already passed (WP8)."""
+
+    cfg = app_config.scheduler
+    if cfg.zone_detection_cron is None:
+        return False
+    trigger = _parse_cron(cfg.zone_detection_cron, timezone=cfg.zone_detection_timezone)
+    if fired_today(now=now, trigger=trigger) is None:
+        return False
+    log.info("scheduler.zone_detection.catch_up")
+    await run_zone_detection_job()
     return True
 
 
@@ -716,6 +846,8 @@ async def _run_scheduler(
     started_at = datetime.now(ZoneInfo("UTC"))
     await _startup_watchlist_check(cfg, started_at)
     await _startup_snapshot_check(cfg, started_at)
+    await _startup_portfolio_valuation_check(cfg, started_at)
+    await _startup_zone_detection_check(cfg, started_at)
     await _startup_screen_check(cfg, started_at)
     if _candidate_trigger(cfg.candidates) is not None:
         await run_candidate_expiry_job()
