@@ -20,7 +20,15 @@ from investment_agent.storage.models.evidence import SavedEvidence
 from investment_agent.storage.models.reference import Company, Listing
 
 NUMBER = re.compile(r"[0-9０-９]|[零〇一二两三四五六七八九十百千万亿]+(?:成|倍|年|个月|天|元|股|万元|亿元|个百分点|%)")
-MONEY = {"CNY": Decimal(1), "元": Decimal(1), "万元": Decimal(10000), "亿元": Decimal(100000000), "CNY_million": Decimal(1000000)}
+MONEY = {"CNY": Decimal(1), "元": Decimal(1), "万元": Decimal(10000), "亿元": Decimal(100000000), "CNY_million": Decimal(1000000), "HKD": Decimal(1), "USD": Decimal(1), "TWD": Decimal(1)}
+CNY_ALIASES = frozenset({"CNY", "元", "万元", "亿元", "CNY_million"})
+"""The CNY display aliases in :data:`MONEY`; only they carry a multiplier."""
+ORIGINAL_CURRENCIES = frozenset({"HKD", "USD", "TWD"})
+"""Currencies publishable in their own unit; no conversion factor is applied."""
+PER_SHARE_UNITS = frozenset({"CNY/share", "HKD/share", "USD/share", "TWD/share"})
+"""Per-share units; the prefix names the currency the amount is stated in."""
+PUBLISHABLE_CURRENCIES = frozenset({"CNY", *ORIGINAL_CURRENCIES})
+DISPLAY_UNITS = frozenset({"shares", "ratio", "percent", "percentage_points", "years", "days", "count"}) | frozenset(MONEY) | PER_SHARE_UNITS
 
 
 class ResolvedNode(Contract):
@@ -35,15 +43,31 @@ class ResolvedNode(Contract):
     quality: tuple[str, ...] = ()
 
 
+def _stated_currency(unit: str) -> str | None:
+    """The currency ``unit`` states, or ``None`` for a currency-free unit."""
+    if unit in MONEY:
+        return "CNY" if unit in CNY_ALIASES else unit
+    return unit.partition("/")[0] if unit in PER_SHARE_UNITS else None
+
+
 def format_quantity(quantity: Quantity, display: str) -> tuple[str, str, int, str]:
     value, unit = quantity.value, quantity.unit
     if value is None:
         raise InvestorError("invalid_reference", "Unknown quantity cannot be rendered")
-    if quantity.currency not in {None, "CNY"}:
+    currency = quantity.currency
+    if currency not in {None, *PUBLISHABLE_CURRENCIES}:
         raise InvestorError("invalid_reference", "Cross currency publication requires a verified conversion")
-    if unit in MONEY:
-        value *= MONEY[unit]
-        unit = "CNY"
+    stated = _stated_currency(unit)
+    if stated is not None:
+        # A unit names one currency. HKD/USD/TWD values are published as
+        # themselves; an amount declared in another currency than the unit names
+        # (for example an HKD value written in "亿元") is a conversion claim and
+        # keeps the existing refusal.
+        if currency not in {None, stated}:
+            raise InvestorError("invalid_reference", "Cross currency publication requires a verified conversion")
+        if unit in CNY_ALIASES:
+            value *= MONEY[unit]
+            unit = "CNY"
     if display == "percent":
         if unit == "fraction":
             value *= 100
@@ -52,8 +76,7 @@ def format_quantity(quantity: Quantity, display: str) -> tuple[str, str, int, st
         unit = "percent"
     elif display != "decimal" or unit in {"fraction", "percent"}:
         raise InvestorError("invalid_reference", "Quantity display format is incompatible")
-    allowed = {"CNY", "CNY/share", "shares", "ratio", "percent", "percentage_points", "years", "days", "count"}
-    if unit not in allowed:
+    if unit not in DISPLAY_UNITS:
         raise InvestorError("invalid_reference", "Unit has no deterministic display rule")
     precision = 0 if unit in {"shares", "years", "days", "count"} else 2
     rounded = value.quantize(Decimal(1).scaleb(-precision), rounding=ROUND_HALF_UP)
