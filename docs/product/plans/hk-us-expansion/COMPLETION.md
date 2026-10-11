@@ -34,8 +34,8 @@
 
 | 任务 | 波次 | 分支 | 提交 | 合并 | 定向测试 | 全量 | 偏差/未决 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 01 身份与市场注册表 | W1 | | | | | | |
-| 02 资料契约·模型·迁移·仓储 | W1 | | | | | | |
+| 01 身份与市场注册表 | W1 | hk-us/01 | `b51805f`（重放后） | `a19cdd0` | 34 passed | 2427 passed / 0 failed / 3 skipped | 5 条偏差（更严的加载期校验、`PilotListError`+常量、两阶段写入使拒绝零写入、AAPL 额外绑 yahoo、`valid_from=2026-10-11`）；规则 2/3 口径见偏差 7 |
+| 02 资料契约·模型·迁移·仓储 | W1 | hk-us/02 | `fafb0fb`（重放后） | `734be28` | 75 passed | 见 W1 波次门禁 | 8 条偏差：`FACT_ENTRY_KEYS` 14 键（含 conflict_note/source_version）、046 `down_revision="045"`（重放后修正）、`MaterialAdapter.identity` 用 `Any`（同波次不得 import 01）、额外结构校验、raw_value 拒绝 NaN/分隔符/空白、`ImmutableResearchMaterialError` 双继承、**11 个既有 `test_migration_0NN.py` 的 head 断言由硬编码 `"045"` 改为 `ScriptDirectory.get_current_head()`**（新增迁移的必然连带）、`test_backup_restore`/`test_funnel_e2e` 同样改为动态取 head |
 | 03 港股原币适配器 | W2 | | | | | | |
 | 04 美股 SEC 适配器 | W2 | | | | | | |
 | 05 不可变资料存储·离线导入 | W2 | | | | | | |
@@ -70,6 +70,8 @@
 | 4 | 发布只支持原币，跨币种仍拒绝 | 汇率时间点与使用许可未验收 | 汇率能力验收后另开任务 |
 | 5 | 实施在独立 worktree + 分支，不合并 main、不 push | 主 checkout 有 200+ 用户 WIP，避免把用户改动卷入提交 | 由用户决定合并时机 |
 | 6 | **施工基线改为"用户 WIP 快照" `d5cf937`** | 计划编写时依据的是主 checkout 的**工作区**状态，但 main 的已提交树缺少 `evidence/`、`investor/` 两个包与迁移 025–045（它们只是未提交改动）。按原基线施工会让 07（资料→证据）与 10（研究档案/发布）没有可实现的对象，且交付物与用户即将提交的代码无法合并 | 快照是复制而非 stash/checkout：主 checkout 的工作区、索引、main 全程未被改动。用户自行提交那批改动后，用 `git rebase --onto main d5cf937 feat/hk-us-expansion` 丢掉本快照，只保留港美股扩展的实现提交。快照不含 `research/`（448MB 未跟踪调研材料）与 .gitignore 覆盖路径 |
+| 7 | 01 的 company 解析口径：同 `company_key` 组内，组的既有 listing 一律复用其 company、绝不改指；组内两个 listing 指向不同 company，或精确同名 Company 有 ≥2 行 → `ValueError` 且不写入任何行 | 复用既有语义、又不在名称上模糊合并；拒绝前不写入（两阶段） | 已接受。空库单次调用下同名不同 key 必得两行 Company |
+| 8 | 基线里那 1 个 pytest 失败是**顺序/状态相关**（`test_engine_lifecycle::test_api_lifespan_disposes_the_engine_on_shutdown`：全量 fresh gate dir 下通过，单独跑失败，报 `no such table: app_setting_meta`） | 属用户 WIP 既有问题，与本次改动无关 | 门禁判定改为"**不新增失败**"：该用例偶发失败不阻塞；出现**其它**失败必须归零 |
 
 ## 终止记录（仅在触发时限或异常停止时填写）
 
