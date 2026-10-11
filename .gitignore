@@ -44,4 +44,4 @@ docs/superpowers/
 .dev/
 
 # Local research data validation artifacts (large, not for remote)
-research/
+/research/
