@@ -8,16 +8,26 @@
 | 项 | 值 |
 | --- | --- |
 | 集成分支 | `feat/hk-us-expansion` @ `/Users/zhvala/SourceCode/zcharlie-hkus` |
-| 起始提交 | `99be5f5`（计划与文档修订链：`8c83241` 计划 → `75d3656` gateway 提交 → `81e3775` 基线记录 → `99be5f5` 波次耦合修订）。**起点判定：HEAD 为 `99be5f5` 或其在 main 上的后代即视为正确；若 main 又前进，先 `merge --ff-only main` 再开始。** |
-| 启动时刻 T0 | （填写 ISO 时间） |
-| 硬截止 | T0 + 4h = （填写）；**到点停止派发新任务** |
-| 基线门禁 | worktree HEAD `75d3656` 上实测（2026-10-12 00:41）：`pytest -q -m "not network"` = **1606 passed / 3 skipped / 0 failed**；`ruff check .` OK；`mypy src` OK（200 source files） |
+| 起始提交 | 施工基线 `d5cf937`（**主 checkout 未提交工作区的快照**，见偏差 6）→ 计划与文档修订链在其之下：`8c83241` 计划 → `75d3656` gateway → `81e3775` 基线 → `99be5f5` 波次耦合 → `f147e65` 起点说明 → `14745cb` T0 记录 → `d5cf937` WIP 快照。 |
+| 启动时刻 T0 | 2026-10-12T01:36:44+0800（epoch 1791740204） |
+| 硬截止 | T0 + 4h = **2026-10-12 05:36:44 CST**（epoch 1791754604）；**到点停止派发新任务** |
+| 基线门禁（施工基线 `d5cf937`，02:04 实测） | `pytest -q -m "not network"` = **2392 passed / 1 failed / 3 skipped / 6 deselected**（≈5.4 分钟）；`mypy src` OK（293 files）；`ruff check .` **5 个既存错误**（全在用户 WIP 的 portfolio 文件，非本次代码） |
 | 工具链 | `PYTHONPATH=<worktree>/src` + 主 checkout 的 `.venv/bin/python`；`DATA_DIR`/`DATABASE_URL` 指向 `/tmp/zc-hkus-gate-*/` |
 
 ## 基线失败清单（后续波次只允许"不新增"）
 
 ```
-（控制 agent 在第一次合并后填写；基线为 0 failed）
+基线（施工基线 d5cf937）：
+1) pytest 失败 1 个：tests/unit/test_engine_lifecycle.py::test_api_lifespan_disposes_the_engine_on_shutdown
+   （与 zcharlie 记忆里的"用户 WIP 已知失败"一致，非本次引入；不修，也不许因它放宽断言）
+2) ruff 既存错误 5 个（全在用户 WIP 的 portfolio 文件，非本次代码；不修，保持快照与主 checkout 一致）：
+   src/investment_agent/storage/models/portfolio.py:5:30 F401
+   tests/integration/test_portfolio_valuation_jobs.py:9:1 I001
+   tests/test_portfolio_import.py:10:1 I001
+   tests/test_portfolio_valuation_binding.py:9:1 I001
+   tests/test_portfolio_valuation_binding.py:10:21 N817
+要求的门槛：全量 pytest 的 failed 数 ≤ 1 且新增失败必须归零；ruff/mypy 的报错不得落在本次改动的文件上。
+全量 pytest 单次约 5.4 分钟——预算里要算进去。
 ```
 
 ## 任务状态
@@ -59,6 +69,7 @@
 | 3 | 在线刷新默认关闭（`ONLINE_REFRESH_ENABLED=False`） | 东财/Yahoo/HKMA 使用许可未确认 | 许可确认后打开并补联网验收 |
 | 4 | 发布只支持原币，跨币种仍拒绝 | 汇率时间点与使用许可未验收 | 汇率能力验收后另开任务 |
 | 5 | 实施在独立 worktree + 分支，不合并 main、不 push | 主 checkout 有 200+ 用户 WIP，避免把用户改动卷入提交 | 由用户决定合并时机 |
+| 6 | **施工基线改为"用户 WIP 快照" `d5cf937`** | 计划编写时依据的是主 checkout 的**工作区**状态，但 main 的已提交树缺少 `evidence/`、`investor/` 两个包与迁移 025–045（它们只是未提交改动）。按原基线施工会让 07（资料→证据）与 10（研究档案/发布）没有可实现的对象，且交付物与用户即将提交的代码无法合并 | 快照是复制而非 stash/checkout：主 checkout 的工作区、索引、main 全程未被改动。用户自行提交那批改动后，用 `git rebase --onto main d5cf937 feat/hk-us-expansion` 丢掉本快照，只保留港美股扩展的实现提交。快照不含 `research/`（448MB 未跟踪调研材料）与 .gitignore 覆盖路径 |
 
 ## 终止记录（仅在触发时限或异常停止时填写）
 
