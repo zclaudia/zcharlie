@@ -1,5 +1,168 @@
 {% extends "base.html" %}
 {% block content %}
+{% if financial %}
+<header class="page-head">
+  <h1>单股研究 <span class="code">{{ ticker }}</span></h1>
+  <a href="/app/agent?ticker={{ ticker }}">在对话工作台提问</a>
+  <p class="muted">已保存原件的财务资料：真实报告期、原币金额、核对状态与来源定位；缺失与不适用照实标注。</p>
+</header>
+<section class="card" id="stock-financials">
+  <div class="card-head">
+    <h2>财务资料</h2>
+    <span class="faint">{{ financial.company_name }}</span>
+  </div>
+  <dl class="kv-list financial-identity">
+    <dt>交易所</dt>
+    <dd id="financial-market">{{ labels.market.get(financial.market, financial.market) }}</dd>
+    <dt>证券类型</dt>
+    <dd id="financial-security-type">{{ labels.security_type.get(financial.security_type, financial.security_type) }}</dd>
+    <dt>报价币种</dt>
+    <dd id="financial-quote-currency">{{ financial.quote_currency }}</dd>
+    <dt>报表币种</dt>
+    <dd id="financial-report-currency">{{ labels.unknown.get(financial.report_currency, financial.report_currency) }}</dd>
+  </dl>
+  <p class="faint">报价币种与报表币种分别标注，互不顶替；金额一律为原件的原币数值，不做展示换算。</p>
+
+  <p id="financial-material-coverage" class="financial-coverage"
+     data-periods-covered="{{ financial.coverage.periods_covered }}"
+     data-facts-total="{{ financial.coverage.facts_total }}">
+    资料覆盖：{{ financial.coverage.periods_covered }} 个报告期 · {{ financial.coverage.facts_total }} 项事实
+  </p>
+  <p id="financial-verification-coverage" class="financial-coverage"
+     data-facts-verified="{{ financial.coverage.facts_verified }}"
+     data-facts-candidate="{{ financial.coverage.facts_candidate }}">
+    核对覆盖：{{ financial.coverage.facts_verified }} / {{ financial.coverage.facts_total }} 项已核对原件（候选 {{ financial.coverage.facts_candidate }} 项）
+  </p>
+  <p class="faint">资料覆盖与核对覆盖分别计数，不合成一个完整度。</p>
+
+  <div id="financial-statuses">
+    <h3>资料状态与下一步</h3>
+    <ul class="financial-status-list">
+      {% for status in financial.statuses %}
+      <li class="financial-status" data-status-code="{{ status.code }}">
+        <span class="badge">{{ labels.status.get(status.code, status.code) }}</span>
+        {% if status.affected %}<span class="financial-status-affect">影响：{{ status.affected | join("、") }}</span>{% endif %}
+        <span class="financial-status-next">{{ status.next_step }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  {% if financial.fiscal_years %}
+  <div id="financial-fiscal-years">
+    <h3>报告期（真实财年，非日历年份假定）</h3>
+    <ul class="financial-year-list">
+      {% for year in financial.fiscal_years %}
+      <li data-period-end="{{ year.end }}">
+        <span class="financial-year-end">{{ year.end }}</span>
+        {% if year.label %}<span class="faint">{{ year.label }}</span>{% endif %}
+        {% if year.days is not none %}<span class="faint">{{ year.days }} 天</span>{% endif %}
+        <span class="faint">{{ labels.period_basis.get(year.basis, year.basis) }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  <table class="stack-table financial-facts">
+    <caption>各报告期的事实与原件信息；缺失表示原件未列示该科目，不以 0 代替。</caption>
+    <thead>
+      <tr>
+        <th scope="col">指标</th>
+        {% for year in financial.fiscal_years %}
+        <th scope="col">
+          <span class="financial-year-end">{{ year.end }}</span>
+          {% if year.label %}<span class="faint">{{ year.label }}</span>{% endif %}
+        </th>
+        {% endfor %}
+        <th scope="col">指标定义与来源</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for metric, facts in financial.facts | groupby("metric") %}
+      <tr data-fact-metric="{{ metric }}">
+        <th scope="row">{{ facts[0].label }}</th>
+        {% for year in financial.fiscal_years %}
+        {% set cells = facts | selectattr("period_end", "equalto", year.end) | list %}
+        <td data-label="{{ year.end }}">
+          {% if cells %}
+          {% for cell in cells %}
+          <div class="financial-fact" data-metric="{{ metric }}" data-period-end="{{ year.end }}">
+            {% if cell.amount is not none %}
+            <span class="financial-amount">{{ cell.amount }}</span>
+            <span class="financial-unit">{{ cell.unit }}{% if cell.currency and cell.currency != cell.unit %} · {{ cell.currency }}{% endif %}</span>
+            {% else %}
+            <span class="financial-missing">缺失</span>
+            <span class="financial-missing-reason">{{ cell.missing_reason or "原件未标注缺失原因" }}</span>
+            {% endif %}
+            <span class="verify">{{ labels.verification.get(cell.verification, cell.verification) }}</span>
+            {% if cell.conflict != "none" %}<span class="badge warn">{{ labels.conflict.get(cell.conflict, cell.conflict) }}</span>{% endif %}
+            <span class="faint">{{ cell.source }}{% if cell.source_date %} · 来源日期 {{ cell.source_date }}{% else %} · 来源日期未标注{% endif %}</span>
+            {% if cell.locator %}<span class="faint">原件定位：{{ cell.locator }}</span>{% endif %}
+          </div>
+          {% endfor %}
+          {% else %}
+          <div class="financial-fact financial-fact-absent" data-metric="{{ metric }}" data-period-end="{{ year.end }}">
+            <span class="financial-missing">缺失</span>
+            <span class="financial-missing-reason">该报告期未收录此科目的资料</span>
+          </div>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td data-label="指标定义与来源" class="financial-definition">
+          {{ facts[0].definition }}
+          <span class="faint">报告期口径：{{ labels.period_basis.get(facts[0].basis, facts[0].basis) }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if financial.metrics %}
+  <div id="financial-metrics">
+    <h3>指标</h3>
+    <ul class="financial-metric-list">
+      {% for metric in financial.metrics %}
+      <li class="financial-metric" data-metric="{{ metric.key }}" data-metric-status="{{ metric.status }}">
+        <div class="financial-metric-head">
+          <span class="financial-metric-label">{{ metric.label }}</span>
+          <span class="badge">{{ labels.metric_status.get(metric.status, metric.status) }}</span>
+          {% if metric.periods %}<span class="faint">{{ metric.periods | join("、") }}</span>{% endif %}
+        </div>
+        <div class="financial-metric-value">
+          {% if metric.value is not none %}
+          {{ metric.value }}{% if metric.currency %} {{ metric.currency }}{% else %} {{ labels.unit.get(metric.unit, metric.unit) }}{% endif %}
+          {% else %}
+          <span class="financial-missing">无值</span>：{{ labels.metric_status.get(metric.status, metric.status) }}
+          {% endif %}
+        </div>
+        <div class="faint financial-metric-basis">{{ metric.basis }}</div>
+        {% for note in metric.notes %}
+        <div class="financial-metric-note">{{ note }}</div>
+        {% endfor %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="financial-refresh" id="financial-refresh">
+    <h3>资料刷新</h3>
+    {% if financial.covered %}
+    <button type="button" id="financial-refresh-button" data-listing-id="{{ financial.listing_id }}">刷新资料</button>
+    <p class="faint" id="financial-refresh-hint">
+      {% if financial.capabilities.online_refresh %}
+      在线刷新已开启：登记后由采集流程执行，完成后页面数据才会更新。
+      {% else %}
+      在线刷新未开启：点按只会登记一次采集任务，不会联网采集，也不会立即更新本页数据。
+      {% endif %}
+    </p>
+    <div id="financial-refresh-result" class="financial-refresh-result" aria-live="polite"></div>
+    {% else %}
+    <p class="notice notice-warn">该证券不在受控身份名单内：先完成身份核对，再登记资料采集；名单外证券的资料不采信。</p>
+    {% endif %}
+  </div>
+</section>
+{% else %}
 <header class="page-head">
   <h1>单股研究 <span class="code">{{ ticker }}</span></h1>
   <a href="/app/agent?ticker={{ ticker }}">在对话工作台提问</a>
@@ -40,4 +203,5 @@
     </div>
   </section>
 </div>
+{% endif %}
 {% endblock %}

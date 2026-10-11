@@ -6,13 +6,20 @@ stored in the cookie or rendered back). JSON APIs keep ``X-API-Key`` support;
 only the same-origin UI uses the cookie. State-changing UI requests validate
 the ``Origin`` header when present (``Origin: null`` is rejected). Failed
 logins are throttled per client IP; logout revokes sessions server-side.
+
+The stock page understands two kinds of display code. A-share codes take the
+unchanged first branch (same validation, same 400 copy). A HK/US code is parsed
+with the controlled registry and answered from the saved material of its
+listing: the financial section is server-rendered from plan 09's read model, so
+the page never fetches a supplier itself, and a code with no known listing is
+answered with an explicit error instead of an invented view.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,6 +34,16 @@ from investment_agent.api.auth import (
     is_same_origin,
 )
 from investment_agent.config import Settings
+from investment_agent.domain.a_share import parse_a_share_ticker
+from investment_agent.domain.security import normalize_ticker
+from investment_agent.materials.context import (
+    DISPLAY_SUFFIXES,
+    FinancialContextView,
+    financial_context,
+)
+from investment_agent.storage.database import session_scope
+from investment_agent.storage.models.reference import Listing
+from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.web.session import (
     SESSION_COOKIE_NAME,
     create_session_token,
@@ -41,6 +58,122 @@ templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 router = APIRouter(prefix="/app", tags=["web"], include_in_schema=False)
 
 _DISCLAIMER = "研究辅助，非投资建议"
+
+_HK_DISPLAY_CODE = re.compile(r"^\d{1,5}\.HK$")
+"""HK display code of the page (``00002.HK``); the stored ticker is 5 digits."""
+
+_US_DISPLAY_CODE = re.compile(r"^[A-Z]{1,6}(?:\.[A-Z])?$")
+"""US display code of the page (``AAPL``); not every letter string is one.
+
+The page only renders securities it can resolve to a local listing. A stricter
+shape than the registry's own symbol rule keeps a malformed code on the
+existing A-share 400 branch (``NOT-A-TICKER`` is not a page code) instead of
+turning it into a lookup miss.
+"""
+
+_US_MARKET_CODES: Final[tuple[str, ...]] = ("NASDAQ", "NYSE")
+"""Markets a bare US ticker is looked up in; the exchange is never assumed."""
+
+MARKET_LABELS: Final[dict[str, str]] = {
+    "HKEX": "香港交易所",
+    "NASDAQ": "纳斯达克",
+    "NYSE": "纽约证券交易所",
+}
+SECURITY_TYPE_LABELS: Final[dict[str, str]] = {
+    "ordinary": "普通股",
+    "ads": "ADS（美国存托凭证）",
+    "unknown": "未标注",
+}
+VERIFICATION_LABELS: Final[dict[str, str]] = {
+    "candidate": "候选（未核对原件）",
+    "verified": "已核对原件",
+}
+CONFLICT_LABELS: Final[dict[str, str]] = {
+    "unresolved": "来源冲突（未判定）",
+    "resolved": "冲突已判定",
+}
+STATUS_LABELS: Final[dict[str, str]] = {
+    "listing_not_covered": "当前未覆盖",
+    "material_missing": "资料待采集",
+    "partial_verification": "部分数据待核",
+    "metric_not_applicable": "指标不适用",
+    "source_conflict": "来源冲突",
+    "material_stale": "资料待更新",
+    "online_refresh_disabled": "在线刷新未开启",
+}
+"""Business wording of every read-model status code (no supplier/run identifier)."""
+
+METRIC_STATUS_LABELS: Final[dict[str, str]] = {
+    "ok": "已计算",
+    "not_applicable": "不适用",
+    "missing_inputs": "输入缺失",
+    "missing_assumptions": "假设缺失",
+    "stale_inputs": "输入过期",
+    "outside_search_range": "超出检索范围",
+    "calculation_error": "计算错误",
+}
+PERIOD_BASIS_LABELS: Final[dict[str, str]] = {
+    "annual": "年度",
+    "interim": "中期",
+    "quarter": "季度",
+    "ytd": "年初至今",
+    "instant": "时点",
+    "daily": "每日",
+}
+UNIT_LABELS: Final[dict[str, str]] = {"ratio": "比率"}
+UNKNOWN_LABELS: Final[dict[str, str]] = {"unknown": "未标注"}
+"""Display labels of the financial section; unknown codes fall back to themselves."""
+
+FINANCIAL_LABELS: Final[dict[str, dict[str, str]]] = {
+    "market": MARKET_LABELS,
+    "security_type": SECURITY_TYPE_LABELS,
+    "verification": VERIFICATION_LABELS,
+    "conflict": CONFLICT_LABELS,
+    "status": STATUS_LABELS,
+    "metric_status": METRIC_STATUS_LABELS,
+    "period_basis": PERIOD_BASIS_LABELS,
+    "unit": UNIT_LABELS,
+    "unknown": UNKNOWN_LABELS,
+}
+
+INVALID_A_SHARE_COPY = "不是有效的 A 股代码：{ticker}"
+"""Unchanged 400 copy of the A-share branch (behaviour stays exactly as before)."""
+
+
+def _hk_us_code(ticker: str) -> tuple[tuple[str, ...], str] | None:
+    """Candidate markets and stored ticker of a HK/US display code, or ``None``.
+
+    ``ticker`` is the upper-cased display code. The canonical stored ticker comes
+    from the controlled registry (:func:`normalize_ticker`), never from a string
+    transform here; a US code without an exchange suffix is looked up in the US
+    markets of the registry instead of one being assumed.
+    """
+
+    if _HK_DISPLAY_CODE.fullmatch(ticker) is not None:
+        return ("HKEX",), normalize_ticker("HKEX", ticker)
+    if _US_DISPLAY_CODE.fullmatch(ticker) is not None:
+        return _US_MARKET_CODES, normalize_ticker("NASDAQ", ticker)
+    return None
+
+
+def _display_code(market_code: str, ticker: str) -> str:
+    """The page code of a stored ticker (``00005`` -> ``00005.HK``)."""
+
+    return f"{ticker}{DISPLAY_SUFFIXES.get(market_code, '')}"
+
+
+def _financial_page(request: Request, view: FinancialContextView) -> HTMLResponse:
+    """Render the stock page carrying one HK/US financial section."""
+
+    return _render(
+        "stock.html",
+        request,
+        page_title=f"单股研究 {view.display_code}",
+        active_nav="watchlist",
+        ticker=view.display_code,
+        financial=view,
+        labels=FINANCIAL_LABELS,
+    )
 
 
 def register_web(app: Any) -> None:
@@ -228,21 +361,56 @@ async def agent_page(request: Request) -> HTMLResponse:
 @router.get("/stocks/{ticker}", response_class=HTMLResponse)
 async def stock_page(request: Request, ticker: str) -> HTMLResponse:
     normalized = ticker.upper()
-    if re.fullmatch(r"\d{6}\.(SH|SZ|BJ)", normalized) is None:
+    if parse_a_share_ticker(normalized) is not None:
+        return _render(
+            "stock.html",
+            request,
+            page_title=f"单股研究 {normalized}",
+            active_nav="watchlist",
+            ticker=normalized,
+            financial=None,
+        )
+    code = _hk_us_code(normalized)
+    if code is None:
         return _render(
             "error.html",
             request,
             status_code=status.HTTP_400_BAD_REQUEST,
             page_title="无效标的",
-            message=f"不是有效的 A 股代码：{ticker}",
+            message=INVALID_A_SHARE_COPY.format(ticker=ticker),
         )
-    return _render(
-        "stock.html",
-        request,
-        page_title=f"单股研究 {normalized}",
-        active_nav="watchlist",
-        ticker=normalized,
-    )
+    markets, stored = code
+    async with session_scope() as session:
+        repository = ListingRepository(session)
+        matches: list[Listing] = []
+        for market_code in markets:
+            listing = await repository.get_by_ticker(market_code, stored)
+            if listing is not None:
+                matches.append(listing)
+        if not matches:
+            return _render(
+                "error.html",
+                request,
+                status_code=status.HTTP_404_NOT_FOUND,
+                page_title="未收录标的",
+                message=(
+                    f"未收录该证券：{_display_code(markets[0], stored)}。"
+                    "名单外证券的资料不采信；请先完成身份登记与资料采集。"
+                ),
+            )
+        if len(matches) > 1:
+            # Two markets carry the same ticker: the code alone cannot say which
+            # security is meant, so no listing is silently preferred.
+            return _render(
+                "error.html",
+                request,
+                status_code=status.HTTP_400_BAD_REQUEST,
+                page_title="代码不唯一",
+                message=f"该代码在多个市场登记：{normalized}；请在名单中核对证券身份。",
+            )
+        # Same session as the lookup above, so the row cannot disappear here.
+        view = await financial_context(session, matches[0].id)
+    return _financial_page(request, view)
 
 
 @router.get("/runs", response_class=HTMLResponse)

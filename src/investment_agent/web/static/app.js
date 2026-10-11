@@ -43,6 +43,7 @@ import {
 import { aiStamp, alertList, bar, fillSparklines, ring } from "./ui.js";
 import { bootAgent } from "./agent.js";
 import { bootAgentPortfolio } from "./agent_portfolio.js";
+import { bootFinancials } from "./financials.js";
 import { WATCHLIST_REGIONS, bootWatchlist } from "./watchlist.js";
 import { PORTFOLIO_REGIONS, bootPortfolio } from "./portfolio.js";
 import { mountPriceChart } from "./pricechart.js";
@@ -855,6 +856,7 @@ function boot() {
   bootTemplates();
   bootHealth();
   bootSettings();
+  bootFinancials();
 }
 
 if (document.readyState === "loading") {
