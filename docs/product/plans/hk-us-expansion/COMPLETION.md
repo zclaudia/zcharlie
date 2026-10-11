@@ -8,7 +8,7 @@
 | 项 | 值 |
 | --- | --- |
 | 集成分支 | `feat/hk-us-expansion` @ `/Users/zhvala/SourceCode/zcharlie-hkus` |
-| 起始提交 | `75d3656 feat(gateway): connect to zclaudia-gateway as a Backend for the mobile app`（计划文档在 `8c83241`） |
+| 起始提交 | `99be5f5`（计划与文档修订链：`8c83241` 计划 → `75d3656` gateway 提交 → `81e3775` 基线记录 → `99be5f5` 波次耦合修订）。**起点判定：HEAD 为 `99be5f5` 或其在 main 上的后代即视为正确；若 main 又前进，先 `merge --ff-only main` 再开始。** |
 | 启动时刻 T0 | （填写 ISO 时间） |
 | 硬截止 | T0 + 4h = （填写）；**到点停止派发新任务** |
 | 基线门禁 | worktree HEAD `75d3656` 上实测（2026-10-12 00:41）：`pytest -q -m "not network"` = **1606 passed / 3 skipped / 0 failed**；`ruff check .` OK；`mypy src` OK（200 source files） |
