@@ -8,9 +8,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def test_conversation_migration_retains_events_and_fresh_head(tmp_path, monkeypatch):
@@ -30,7 +35,7 @@ def test_conversation_migration_retains_events_and_fresh_head(tmp_path, monkeypa
             assert not [diff for diff in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(diff)]
         engine.dispose()
         with sqlite3.connect(db) as conn:
-            assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+            assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
             ddl = conn.execute("SELECT sql FROM sqlite_master WHERE name='agent_task_event'").fetchone()[0]
             assert "AUTOINCREMENT" in ddl
             if not fresh:

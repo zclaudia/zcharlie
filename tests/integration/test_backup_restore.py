@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from alembic.script import ScriptDirectory
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -214,7 +215,8 @@ def test_backup_verify_tamper_and_restore_drill(tmp_path: Path, drill_env: dict[
         timeout=120,
     )
     assert current.returncode == 0
-    assert "045 (head)" in current.stdout
+    expected_head = ScriptDirectory(str(REPO_ROOT / "alembic")).get_current_head()
+    assert f"{expected_head} (head)" in current.stdout
 
     check = subprocess.run(
         [

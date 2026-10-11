@@ -8,10 +8,15 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models import investor  # noqa: F401
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def test_upgrade_downgrade_and_fresh_head(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,7 +39,7 @@ def test_upgrade_downgrade_and_fresh_head(tmp_path: Path, monkeypatch: pytest.Mo
         engine.dispose()
         with sqlite3.connect(db) as connection:
             assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-                "045",
+                CURRENT_HEAD,
             )
             tables = {
                 r[0]

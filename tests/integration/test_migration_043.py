@@ -7,9 +7,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def _config() -> Config:
@@ -39,7 +44,7 @@ def test_valuation_schema_roundtrip(tmp_path, monkeypatch):
         assert not diffs, diffs
     engine.dispose()
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
         columns = {row[1] for row in conn.execute("PRAGMA table_info(portfolio_account)")}
         assert "current_valuation_id" in columns
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}

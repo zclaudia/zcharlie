@@ -6,9 +6,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def test_publication_migration_metadata_and_roundtrip(tmp_path, monkeypatch):
@@ -25,7 +30,7 @@ def test_publication_migration_metadata_and_roundtrip(tmp_path, monkeypatch):
         assert not [difference for difference in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "investor_publication" in repr(difference)]
     engine.dispose()
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
     command.downgrade(config, "030")
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT mandate_id FROM investor_mandate_head").fetchone() == ("retained",)

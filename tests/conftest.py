@@ -24,6 +24,7 @@ from investment_agent.storage.models import (  # noqa: F401
     publication,
     reference,
     relationship,
+    research_material,
     rules,
     stock_directory,
     user_domain,

@@ -8,9 +8,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 CONVERSATION_ID = "11111111-1111-4111-8111-111111111111"
 MESSAGE_ONE = "33333333-3333-4333-8333-333333333333"
@@ -60,7 +65,7 @@ def test_backfill_mixed_offsets_order_and_subject_projection(tmp_path, monkeypat
             if "agent_conversation" in repr(diff)]
     engine.dispose()
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
         row = conn.execute("SELECT last_activity_at, title_revision, subject_refs FROM agent_conversation WHERE id=?",
             (CONVERSATION_ID,)).fetchone()
         # 12:30+08:00 is 04:30 UTC; the newest message wins and stays six-digit UTC.
@@ -116,4 +121,4 @@ def test_fresh_head(tmp_path, monkeypatch):
             if "agent_conversation" in repr(diff)]
     engine.dispose()
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)

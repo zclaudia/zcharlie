@@ -7,9 +7,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def test_discovery_migration_metadata_roundtrip_and_legacy_review(tmp_path, monkeypatch):
@@ -34,7 +39,7 @@ def test_discovery_migration_metadata_roundtrip_and_legacy_review(tmp_path, monk
     engine.dispose()
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT purpose,cost_usd FROM agent_budget_entry").fetchone()==('review',.1)
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()==('045',)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone()==(CURRENT_HEAD,)
     command.downgrade(config,"033")
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT cost_usd FROM agent_budget_entry").fetchone()==(.1,)

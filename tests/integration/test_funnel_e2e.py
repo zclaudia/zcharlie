@@ -34,6 +34,7 @@ from typing import Any
 
 import pytest
 import respx
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from freezegun import freeze_time
 from sqlalchemy import func, select, text
@@ -274,7 +275,7 @@ async def test_offline_funnel_end_to_end(funnel_env: Settings) -> None:
             head = (
                 await session.execute(text("SELECT version_num FROM alembic_version"))
             ).scalar_one()
-        assert head == "045", head
+        assert head == ScriptDirectory(str(REPO_ROOT / "alembic")).get_current_head(), head
         # Build the app before freezing time: FastAPI resolves the routes'
         # ``datetime`` annotations when they are registered.
         api = TestClient(create_app())
