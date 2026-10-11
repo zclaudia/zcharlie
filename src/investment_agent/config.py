@@ -2,6 +2,7 @@
 
 import logging
 import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
@@ -17,6 +18,10 @@ _PLACEHOLDER_KEY_PREFIX = "change-me"
 _weak_key_warned = False
 
 
+AgentProvider = Literal["openai", "deepseek"]
+AgentProfile = Literal["openai", "deepseek"]
+AgentOutputMode = Literal["prompted", "tool", "native"]
+
 ThinkingMode = Literal["auto", "enabled", "disabled"]
 
 
@@ -29,6 +34,13 @@ class LLMTierConfig(BaseModel):
     """Reasoning toggle sent as ``thinking: {type: ...}`` (DeepSeek-style
     OpenAI-compatible extension). ``auto`` sends nothing, so endpoints that do
     not know the parameter are unaffected."""
+
+
+def validate_token_price(value: Decimal | None) -> Decimal | None:
+    exponent = value.normalize().as_tuple().exponent if value is not None else 0
+    if value is not None and (not isinstance(exponent, int) or value >= Decimal("100000000") or exponent < -8):
+        raise ValueError("verified token prices require at most eight decimal places and eight integer digits")
+    return value
 
 
 def validate_gateway_url(value: str) -> str:
@@ -65,6 +77,66 @@ class Settings(BaseSettings):
     api_key: str
 
     database_url: str = "sqlite+aiosqlite:///./data/app.db"
+
+    # Independent Agent settings; empty endpoint/model/key is intentionally unconfigured.
+    # Investor execution controls are separate from immutable model parameters.
+    @field_validator("investor_agent_input_usd_per_million", "investor_agent_output_usd_per_million")
+    @classmethod
+    def valid_token_price(cls, value: Decimal | None) -> Decimal | None:
+        return validate_token_price(value)
+
+    investor_agent_input_usd_per_million: Decimal | None = Field(default=None, ge=0)
+    investor_agent_output_usd_per_million: Decimal | None = Field(default=None, ge=0)
+    investor_agent_task_tool_calls: int = Field(default=50, gt=0)
+    investor_agent_daily_tool_calls: int = Field(default=200, gt=0)
+    investor_agent_price_config_version: str = ""
+    investor_agent_price_version: str = ""
+    investor_agent_price_model: str = ""
+    portfolio_ledger_enabled: bool = False
+    portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
+    disclosure_originals_enabled: bool = False
+    investor_agent_enabled: bool = False
+    investor_agent_background_enabled: bool = False
+    agent_queue_max_running: int = Field(default=4, ge=1, le=4)
+    agent_queue_interactive_capacity: int = Field(default=128, ge=1, le=128)
+    agent_queue_review_capacity: int = Field(default=96, ge=1, le=96)
+    agent_queue_exploration_capacity: int = Field(default=32, ge=1, le=32)
+    @field_validator("notification_webhook_url")
+    @classmethod
+    def valid_webhook_url(cls, value: str) -> str:
+        if value:
+            from investment_agent.investor.notification_http import validate_endpoint
+            validate_endpoint(value)
+        return value
+
+    notification_external_enabled: bool = False
+    notification_webhook_url: str = Field(default="", repr=False)
+    notification_webhook_token: str = Field(default="", repr=False)
+    notification_webhook_idempotent: bool = False
+    investor_agent_max_leads_per_batch: int = Field(default=20, ge=0, le=20)
+    investor_agent_max_new_tasks_per_batch: int = Field(default=3, ge=0, le=3)
+    investor_agent_task_requests: int = Field(default=20, gt=0)
+    investor_agent_task_tokens: int = Field(default=100000, gt=0)
+    investor_agent_daily_requests: int = Field(default=100, gt=0)
+    investor_agent_daily_tokens: int = Field(default=500000, gt=0)
+    investor_agent_task_seconds: float = Field(default=600.0, gt=0)
+
+    agent_provider: AgentProvider = "openai"
+    agent_base_url: str = ""
+    agent_model: str = ""
+    agent_api_key: str = Field(default="", repr=False)
+    agent_credential_ref: Literal["agent_api_key"] = "agent_api_key"
+    agent_profile: AgentProfile = "openai"
+    agent_profile_model: str = ""
+    agent_output_mode: AgentOutputMode = "prompted"
+    agent_supports_json_schema: bool = False
+    agent_supports_json_object: bool = True
+    agent_tool_choice_required: bool = False
+    agent_thinking: ThinkingMode = "auto"
+    agent_timeout_seconds: float = Field(default=120.0, gt=0)
+    agent_temperature: float | None = Field(default=None, ge=0, le=2)
+    agent_max_tokens: int | None = Field(default=None, gt=0)
+    agent_retries: int = Field(default=1, ge=0, le=5)
 
     # Tier 3: research explanation model (any OpenAI-compatible endpoint).
     llm_tier3_base_url: str = "https://api.openai.com/v1"
@@ -191,6 +263,12 @@ class Settings(BaseSettings):
 class SchedulerConfig(BaseModel):
     watchlist_refresh_cron: str | None = None
     watchlist_refresh_timezone: str = "Asia/Shanghai"
+    portfolio_valuation_cron: str | None = None
+    portfolio_valuation_timezone: str = "Asia/Shanghai"
+    # Daily zone detection (WP8): after the valuations, so holding factors are
+    # current when the holding zones are compared.
+    zone_detection_cron: str | None = None
+    zone_detection_timezone: str = "Asia/Shanghai"
     a_share_calendar_path: str = "config/calendars/a_share.yaml"
 
 

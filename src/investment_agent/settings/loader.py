@@ -23,7 +23,7 @@ the import runs). ``a_share_calendar_path`` always comes from app.yaml.
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from pydantic import ValidationError
@@ -44,6 +44,9 @@ from investment_agent.settings.registry import (
 )
 from investment_agent.settings.store import SettingsStore, SettingsValidationError
 from investment_agent.storage.database import session_scope
+
+if TYPE_CHECKING:
+    from investment_agent.agent.model import AgentModelConfig
 
 log = structlog.get_logger(__name__)
 
@@ -91,7 +94,7 @@ def env_import_values(settings: Settings) -> dict[str, Any]:
     """Runtime keys explicitly set in env / ``.env`` (not the code defaults)."""
 
     dumped = settings.model_dump(mode="json", include=set(ENV_KEYS))
-    return {key: dumped[key] for key in ENV_KEYS if key in settings.model_fields_set}
+    return {key: dumped[key] for key in ENV_KEYS if key in settings.model_fields_set and not key.startswith("notification_")}
 
 
 def yaml_import_values(app_yaml_path: Path) -> dict[str, Any]:
@@ -298,6 +301,12 @@ def app_config_from(schedule: ScheduleSettings, *, calendar: str) -> AppYamlConf
         scheduler=SchedulerConfig(
             watchlist_refresh_cron=schedule.watchlist.cron,
             watchlist_refresh_timezone=schedule.watchlist.timezone,
+            # The valuation and zone-detection crons are runtime settings too
+            # (WP6/WP8): dropping them here would register no daily job at all.
+            portfolio_valuation_cron=schedule.portfolio.cron,
+            portfolio_valuation_timezone=schedule.portfolio.timezone,
+            zone_detection_cron=schedule.zone_detection.cron,
+            zone_detection_timezone=schedule.zone_detection.timezone,
             a_share_calendar_path=calendar,
         ),
         snapshot=schedule.snapshot,
@@ -336,3 +345,26 @@ async def import_and_load(
     async with session_scope() as session:
         revision = await store_for(session, settings).revision()
         return await load_settings(session, base=settings), revision
+
+
+async def load_agent_model_config(
+    session: AsyncSession, *, base: Settings | None = None
+) -> "AgentModelConfig":
+    """Resolve credentials with bounded revision rechecks, without a long read lock.
+
+    SQLite's legacy SELECT behavior does not imply a read snapshot. A writer
+    between reads forces a fresh overlay; repeated churn fails explicitly.
+    Caller closes its short read session before invoking the model.
+    """
+    from investment_agent.agent.model import AgentModelConfig
+
+    bootstrap = base if base is not None else Settings()  # type: ignore[call-arg]
+    store = store_for(session, bootstrap)
+    for _ in range(3):
+        revision = await store.revision()
+        effective = await load_settings(session, base=bootstrap)
+        if await store.revision() == revision:
+            return AgentModelConfig.from_settings(effective, revision)
+    from investment_agent.agent.model import AgentConfigurationError
+
+    raise AgentConfigurationError("Agent settings changed repeatedly; retry configuration load")

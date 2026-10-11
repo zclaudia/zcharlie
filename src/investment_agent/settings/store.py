@@ -107,7 +107,7 @@ class SettingsStore:
         self._cipher()
 
     async def _rows(self) -> dict[str, AppSetting]:
-        rows = (await self.session.execute(select(AppSetting))).scalars()
+        rows = (await self.session.execute(select(AppSetting).execution_options(populate_existing=True))).scalars()
         return {row.key: row for row in rows}
 
     def _resolve_secret(self, row: AppSetting) -> tuple[str, SecretStatus]:

@@ -8,6 +8,15 @@ scheduler:
   # (snapshot.market_snapshot_cron, 18:30) has stored the day's bars.
   watchlist_refresh_cron: "30 19 * * 1-5"
   watchlist_refresh_timezone: Asia/Shanghai
+  # Daily portfolio valuation (plan 2.10): just after Beijing midnight, so
+  # holding days and the latest stored close refresh even without a visitor.
+  portfolio_valuation_cron: "5 0 * * *"
+  portfolio_valuation_timezone: Asia/Shanghai
+  # Daily zone detection (WP8), after the valuations: candidate buy_zone/drop
+  # on reviewed trading days, holding add/trim/exit_review from the day's
+  # valuation. Idempotent per (scope, date, trigger); no LLM.
+  zone_detection_cron: "20 0 * * *"
+  zone_detection_timezone: Asia/Shanghai
   a_share_calendar_path: config/calendars/a_share.yaml
 
 # PIT snapshot collection (P1-A5, P1-A7). The scheduler only enqueues; the

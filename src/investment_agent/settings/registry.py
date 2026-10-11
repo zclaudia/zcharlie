@@ -26,6 +26,7 @@ timezone and cron checks. Crons are parsed the way the scheduler parses them
 """
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Literal, get_args, get_origin
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -34,6 +35,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from pydantic.fields import FieldInfo
 
 from investment_agent.config import (
+    AgentOutputMode,
+    AgentProfile,
+    AgentProvider,
     CandidateScheduleConfig,
     ScreenScheduleConfig,
     SnapshotScheduleConfig,
@@ -41,6 +45,7 @@ from investment_agent.config import (
     VerificationScheduleConfig,
     validate_gateway_identifier,
     validate_gateway_url,
+    validate_token_price,
 )
 
 ApplyMode = Literal["live", "next_job", "reschedule"]
@@ -49,6 +54,8 @@ ApplyMode = Literal["live", "next_job", "reschedule"]
 SettingSource = Literal["env", "app_yaml"]
 
 GROUPS: dict[str, str] = {
+    "agent": "投资 Agent 模型",
+    "notifications": "可选外部通知",
     "llm": "大模型",
     "ifind": "iFinD 代理",
     "collection": "数据采集",
@@ -122,6 +129,30 @@ class WatchlistSchedule(BaseModel):
     _cron = field_validator("cron")(_check_cron)
 
 
+class PortfolioValuationSchedule(BaseModel):
+    """Daily portfolio valuation (app.yaml ``scheduler.portfolio_valuation_*``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timezone: str = "Asia/Shanghai"
+    cron: str | None = None
+
+    _timezone = field_validator("timezone")(_check_timezone)
+    _cron = field_validator("cron")(_check_cron)
+
+
+class ZoneDetectionSchedule(BaseModel):
+    """Daily zone detection (app.yaml ``scheduler.zone_detection_*``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timezone: str = "Asia/Shanghai"
+    cron: str | None = None
+
+    _timezone = field_validator("timezone")(_check_timezone)
+    _cron = field_validator("cron")(_check_cron)
+
+
 class SnapshotSchedule(SnapshotScheduleConfig):
     model_config = ConfigDict(extra="forbid")
 
@@ -166,6 +197,8 @@ class ScheduleSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     watchlist: WatchlistSchedule = Field(default_factory=WatchlistSchedule)
+    portfolio: PortfolioValuationSchedule = Field(default_factory=PortfolioValuationSchedule)
+    zone_detection: ZoneDetectionSchedule = Field(default_factory=ZoneDetectionSchedule)
     snapshot: SnapshotSchedule = Field(default_factory=SnapshotSchedule)
     screen: ScreenSchedule = Field(default_factory=ScreenSchedule)
     candidates: CandidateSchedule = Field(default_factory=CandidateSchedule)
@@ -176,6 +209,66 @@ class RuntimeSettings(BaseModel):
     """The full runtime layer; defaults and bounds mirror ``Settings``."""
 
     model_config = ConfigDict(extra="forbid")
+
+    # Independent Agent settings; empty endpoint/model/key is intentionally unconfigured.
+    # Investor execution controls are separate from immutable model parameters.
+    @field_validator("investor_agent_input_usd_per_million", "investor_agent_output_usd_per_million")
+    @classmethod
+    def valid_token_price(cls, value: Decimal | None) -> Decimal | None:
+        return validate_token_price(value)
+
+    investor_agent_input_usd_per_million: Decimal | None = Field(default=None, ge=0)
+    investor_agent_output_usd_per_million: Decimal | None = Field(default=None, ge=0)
+    investor_agent_task_tool_calls: int = Field(default=50, gt=0)
+    investor_agent_daily_tool_calls: int = Field(default=200, gt=0)
+    investor_agent_price_config_version: str = ""
+    investor_agent_price_version: str = ""
+    investor_agent_price_model: str = ""
+    disclosure_originals_enabled: bool = False
+    portfolio_ledger_enabled: bool = False
+    portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
+    investor_agent_enabled: bool = False
+    investor_agent_background_enabled: bool = False
+    agent_queue_max_running: int = Field(default=4, ge=1, le=4)
+    agent_queue_interactive_capacity: int = Field(default=128, ge=1, le=128)
+    agent_queue_review_capacity: int = Field(default=96, ge=1, le=96)
+    agent_queue_exploration_capacity: int = Field(default=32, ge=1, le=32)
+    @field_validator("notification_webhook_url")
+    @classmethod
+    def valid_webhook_url(cls, value: str) -> str:
+        if value:
+            from investment_agent.investor.notification_http import validate_endpoint
+            validate_endpoint(value)
+        return value
+
+    notification_external_enabled: bool = False
+    notification_webhook_url: str = Field(default="", repr=False)
+    notification_webhook_token: str = Field(default="", repr=False)
+    notification_webhook_idempotent: bool = False
+    investor_agent_max_leads_per_batch: int = Field(default=20, ge=0, le=20)
+    investor_agent_max_new_tasks_per_batch: int = Field(default=3, ge=0, le=3)
+    investor_agent_task_requests: int = Field(default=20, gt=0)
+    investor_agent_task_tokens: int = Field(default=100000, gt=0)
+    investor_agent_daily_requests: int = Field(default=100, gt=0)
+    investor_agent_daily_tokens: int = Field(default=500000, gt=0)
+    investor_agent_task_seconds: float = Field(default=600.0, gt=0)
+
+    agent_provider: AgentProvider = "openai"
+    agent_base_url: str = ""
+    agent_model: str = ""
+    agent_api_key: str = Field(default="", repr=False)
+    agent_credential_ref: Literal["agent_api_key"] = "agent_api_key"
+    agent_profile: AgentProfile = "openai"
+    agent_profile_model: str = ""
+    agent_output_mode: AgentOutputMode = "prompted"
+    agent_supports_json_schema: bool = False
+    agent_supports_json_object: bool = True
+    agent_tool_choice_required: bool = False
+    agent_thinking: ThinkingMode = "auto"
+    agent_timeout_seconds: float = Field(default=120.0, gt=0)
+    agent_temperature: float | None = Field(default=None, ge=0, le=2)
+    agent_max_tokens: int | None = Field(default=None, gt=0)
+    agent_retries: int = Field(default=1, ge=0, le=5)
 
     llm_tier3_base_url: str = "https://api.openai.com/v1"
     llm_tier3_model: str = "gpt-5"
@@ -231,6 +324,53 @@ def _yaml(key: str, label: str, help: str, yaml_path: tuple[str, str]) -> Settin
 _CRON_HELP = "标准 5 段 crontab（分 时 日 月 周），留空 = 停用；星期建议写 sun / mon 名称。"
 
 SPECS: tuple[SettingSpec, ...] = (
+    _env("agent_queue_max_running", "agent", "Agent 最大并发", "本机持久队列共享上限 1–4；单 worker 仍依次执行。", "next_job"),
+    _env("agent_queue_interactive_capacity", "agent", "交互队列容量", "1–128；满时拒绝新任务，既有任务不重建。", "next_job"),
+    _env("agent_queue_review_capacity", "agent", "复核队列容量", "1–96；后台账号按最近服务公平轮转。", "next_job"),
+    _env("agent_queue_exploration_capacity", "agent", "探索队列容量", "1–32；探索最多一项同时运行。", "next_job"),
+    _env("investor_agent_input_usd_per_million", "agent", "每百万输入 token 美元价格", "部署者核验的美元价格；未知保持空，版本绑定计费模型。", "next_job"),
+    _env("investor_agent_output_usd_per_million", "agent", "每百万输出 token 美元价格", "部署者核验的美元价格；未知保持空，版本绑定计费模型。", "next_job"),
+    _env("investor_agent_price_model", "agent", "核验价格绑定模型", "必须与执行模型相同。", "next_job"),
+    _env("investor_agent_price_version", "agent", "核验价格版本", "部署者核验的美元价格；未知保持空，版本绑定计费模型。", "next_job"),
+    _env("investor_agent_task_tool_calls", "agent", "单任务工具调用上限", "独立执行额度/核验价格绑定。", "next_job"),
+    _env("investor_agent_daily_tool_calls", "agent", "每日工具调用上限", "独立执行额度/核验价格绑定。", "next_job"),
+    _env("investor_agent_price_config_version", "agent", "核验价格绑定模型配置指纹", "独立执行额度/核验价格绑定。", "next_job"),
+    _env("disclosure_originals_enabled", "agent", "启用公告原件取证", "默认关闭；仅显式授权深圳CNInfo有界发现/获取，关闭仍可读历史。每次执行边界复查。", "next_job"),
+    _env("portfolio_ledger_enabled", "agent", "启用真实账本录入", "A1b事实录入默认关闭；不执行交易。", "next_job"),
+    _env(
+        "portfolio_valuation_max_staleness_days", "agent", "估值价格时效（交易日）",
+        "收盘价超过该交易日数视为过期，不参与市值与 NAV；未知年份按受限原因处理。",
+        "next_job",
+    ),
+    _env("investor_agent_enabled", "agent", "启用 Investor Agent", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_background_enabled", "agent", "启用后台研究", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_max_leads_per_batch", "agent", "每批探索线索上限", "最多20；仍受当前投资约定限制。", "next_job"),
+    _env("investor_agent_max_new_tasks_per_batch", "agent", "每批新研究任务上限", "最多3；不是产出目标。", "next_job"),
+    _env("investor_agent_task_requests", "agent", "单任务请求上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_task_tokens", "agent", "单任务 token 上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_daily_requests", "agent", "每日请求上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_daily_tokens", "agent", "每日 token 上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_task_seconds", "agent", "单任务时间上限（秒）", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("agent_provider", "agent", "Agent 供应商接口", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_base_url", "agent", "Agent 端点", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_model", "agent", "Agent 模型", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_api_key", "agent", "Agent API Key", "独立于旧解释模型；按现有机制加密存储，下次运行生效。", "next_job", secret=True),
+    _env("agent_credential_ref", "agent", "Agent 凭证引用", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_profile", "agent", "Agent 能力 profile", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_profile_model", "agent", "Profile 官方模型名", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_output_mode", "agent", "Agent 输出模式", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_supports_json_schema", "agent", "端点支持 JSON Schema", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_supports_json_object", "agent", "端点支持 JSON Object", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_tool_choice_required", "agent", "端点支持强制工具选择", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_thinking", "agent", "Agent 思考模式", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_timeout_seconds", "agent", "Agent 请求超时（秒）", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_temperature", "agent", "Agent temperature", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_max_tokens", "agent", "Agent 最大输出 token", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("agent_retries", "agent", "Agent 框架校验重试次数", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("notification_external_enabled", "notifications", "我启用外部通知", "默认关闭。仅从此刻的新变化发送状态及引用，不发送私有提示词或原文。", "next_job"),
+    _env("notification_webhook_url", "notifications", "HTTPS webhook 地址", "用户指定的公网 HTTPS 地址；加密保存，拒绝重定向、私网及环境导入。", "next_job", secret=True),
+    _env("notification_webhook_token", "notifications", "Webhook Bearer 凭证", "加密保存；为空则不发送认证头。", "next_job", secret=True),
+    _env("notification_webhook_idempotent", "notifications", "接收端保证幂等", "只有接收端保证 Idempotency-Key 去重时启用；否则确认未知后停止，不自动重试。", "next_job"),
     _env("llm_tier3_base_url", "llm", "接口地址", "OpenAI 兼容接口的 base URL。", "next_job"),
     _env("llm_tier3_model", "llm", "模型", "研究解释与规则草拟使用的模型名。", "next_job"),
     _env("llm_tier3_api_key", "llm", "API Key", "加密保存，只写不读。", "next_job", secret=True),
@@ -315,6 +455,22 @@ SPECS: tuple[SettingSpec, ...] = (
     _yaml(
         "schedule.watchlist.timezone", "观察池刷新时区", "IANA 时区名，如 Asia/Shanghai。",
         ("scheduler", "watchlist_refresh_timezone"),
+    ),
+    _yaml(
+        "schedule.portfolio.cron", "持仓估值 cron", _CRON_HELP,
+        ("scheduler", "portfolio_valuation_cron"),
+    ),
+    _yaml(
+        "schedule.portfolio.timezone", "持仓估值时区", "IANA 时区名，如 Asia/Shanghai。",
+        ("scheduler", "portfolio_valuation_timezone"),
+    ),
+    _yaml(
+        "schedule.zone_detection.cron", "区间检测 cron", _CRON_HELP,
+        ("scheduler", "zone_detection_cron"),
+    ),
+    _yaml(
+        "schedule.zone_detection.timezone", "区间检测时区", "IANA 时区名，如 Asia/Shanghai。",
+        ("scheduler", "zone_detection_timezone"),
     ),
     _yaml(
         "schedule.snapshot.universes", "快照股票池", "采集的指数成分股池，如 CSI300。",
@@ -470,7 +626,7 @@ def input_spec(spec: SettingSpec) -> dict[str, Any]:
             if isinstance(item, annotated_types.MinLen):
                 meta["min_items"] = item.min_length
     elif annotation in (int, float):
-        meta["type"] = annotation.__name__
+        meta["type"] = "int" if annotation is int else "float"
         for item in info.metadata:
             if isinstance(item, annotated_types.Gt):
                 meta.update(min=item.gt, min_exclusive=True)
