@@ -29,18 +29,31 @@
 | 3 | 中电与腾讯原币表、真实当期列和支出符号正确；不得误生成统一 FCF | 同上（含 `sign_convention` 三态断言） | **通过**：27 + 41 passed / 0 failed（§2.2）。`sign_convention` 三态断言：`test_capex_sign_conventions_stay_issuer_specific`（`assert len(set(texts.values())) == 3`：汇丰 `net purchases`／中电 `capital expenditure`／腾讯 `prepayments`），配套 `test_hsbc_capex_is_not_applicable_for_a_bank`、`test_tencent_capex_definition_is_rejected_by_name`、`test_clp_fcf_is_operating_cash_flow_minus_capex`；聚焦子集 1 passed / 0 failed（§2.6） |
 | 4 | AAPL/COST 非自然年与 52/53 周；JPM 缺 capex 不填零；XOM 收入定义不替换 | `tests/unit/test_material_us_sec.py`、`tests/unit/test_material_metrics.py` | **通过**：57 + 41 passed / 0 failed（§2.3、§2.2）。落点用例：`test_aapl_52_53_week_years_keep_their_true_lengths`、`test_cost_fiscal_year_is_not_a_calendar_year`、`test_non_annual_forms_never_define_a_fiscal_year`、`test_jpm_missing_capex_is_missing_inputs_never_zero`、`test_jpm_missing_capex_is_null_with_a_reason_not_a_nearby_tag`、`test_xom_revenue_operating_binding_is_the_standard_revenues_concept`、`test_xom_sales_only_tag_does_not_become_revenue_operating`、`test_cagr_uses_the_real_apple_52_53_week_boundaries` |
 | 5 | LNC 原始 / 不可依赖 / 修订三时点状态正确；日期过滤不绕过接受时间 | `tests/unit/test_material_us_sec.py` | **通过**：LNC 相关子集 14 passed / 0 failed（§2.4）。落点用例：`test_lnc_state_machine_sees_the_documented_time_points`、`test_lnc_state_machine_matches_the_saved_cutoffs_file`、`test_lnc_revision_replaces_the_original_without_using_is_restated`、`test_lnc_conflict_keeps_every_candidate_and_computes_no_growth`、`test_superseded_period_keeps_the_old_value_when_the_amendment_has_no_facts`、`test_unreliable_notices_are_exposed_from_the_submissions_document`、`test_filing_without_any_date_counts_as_known_at_every_cutoff`、`test_period_without_its_own_annual_report_is_not_filed` |
-| 6 | TSM TWD、美元便利换算、ADS 与普通股分开；不同报告利润不拼接 | `tests/unit/test_security_identity.py`、`tests/unit/test_material_us_sec.py`、（若启动）`tests/unit/test_material_valuation.py` | **部分通过**：`test_security_identity.py` 34 passed、`test_material_us_sec.py` 57 passed（§2.1、§2.3）；落点用例 `test_validate_requires_ads_ratio_and_a_source_of_the_market`、`test_tsm_is_ifrs_twd_without_any_usd_conversion`、`test_tsm_profit_metrics_only_read_the_20f_series`、`test_tsm_ads_roe_is_not_applicable_but_other_metrics_are_allowed`、`test_currency_change_is_not_converted`。`tests/unit/test_material_valuation.py` **未覆盖**：属尾部任务 13，见 §3 |
-| 7 | 苹果拆股后价格不直接匹配拆股前 EPS；汇丰最终 HKD 分红在确定日之前不能成为已知现金事实 | （尾部）`tests/unit/test_material_valuation.py`、`tests/unit/test_material_dividends.py` | **未覆盖**：两个文件均不存在，属并行/尾部任务 13、14；**由控制 agent 在最终门禁确认**，本任务不标为通过（§3） |
+| 6 | TSM TWD、美元便利换算、ADS 与普通股分开；不同报告利润不拼接 | `tests/unit/test_security_identity.py`、`tests/unit/test_material_us_sec.py`、`tests/unit/test_material_valuation.py` | **通过**：34 + 57 passed（§2.1、§2.3）；落点用例 `test_validate_requires_ads_ratio_and_a_source_of_the_market`、`test_tsm_is_ifrs_twd_without_any_usd_conversion`、`test_tsm_profit_metrics_only_read_the_20f_series`、`test_tsm_ads_roe_is_not_applicable_but_other_metrics_are_allowed`、`test_currency_change_is_not_converted`。`tests/unit/test_material_valuation.py` 由控制 agent 在 13 合并后确认（24 passed）：`test_ads_profile_is_not_applicable_with_the_ratio_and_fx_gaps` 断言 TSM 的 ADS PE 即使注入价格与当日汇率也恒 `NOT_APPLICABLE`，并列出比例/比例有效期/当日汇率/股数基础四项缺口 |
+| 7 | 苹果拆股后价格不直接匹配拆股前 EPS；汇丰最终 HKD 分红在确定日之前不能成为已知现金事实 | `tests/unit/test_material_valuation.py`、`tests/unit/test_material_dividends.py` | **通过（控制 agent 在最终门禁确认）**：两文件 24 + 41 passed / 0 failed，聚焦子集（拆股 + 分红时间线）9 passed。落点用例：`test_split_between_eps_period_and_price_is_not_applicable`、`test_split_consistent_inputs_can_compute`（苹果 2020-08-31 4:1）、`test_hsbc_final_amount_is_only_known_on_its_determination_date`（2025-03-06 / 03-07 / 03-10 / 04-13 一律 `declared:USD 0.36`，04-14 起才是 `final:HKD 2.791007`）、`test_ex_date_alone_cannot_be_the_available_date`（只有 ex_date 的事件 `available_from is None`） |
 | 8 | 只有日期或未知公布时间的输入保留精度与缺口；导入旧材料不回填取得时间；新证据不改写旧研究 | `tests/unit/test_material_store.py`、`tests/unit/test_material_evidence.py`、`tests/integration/test_material_offline_import.py` | **通过**：12 + 24 + 9 passed / 0 failed（§2.5）。落点用例：`test_date_precision_is_never_earlier_than_the_acceptance_time`、`test_unknown_publication_time_stays_in_the_material_layer`、`test_missing_sidecar_keeps_the_fetch_time_unknown`、`test_sidecar_without_fetched_at_utc_does_not_back_fill`、`test_default_import_time_is_now`、`test_changed_payload_is_a_new_revision_and_the_old_row_is_untouched`、`test_timestamps_do_not_change_the_version` |
 | 9 | HTTP 200 错误正文、分页截断、重复字段、行情异常、FX 日期越界、断网与 schema 变化都有明确状态 | `tests/unit/test_material_hk_native.py`、`tests/unit/test_material_us_sec.py`、`tests/integration/test_material_collection_job.py`；**行情/FX 首期未启用 → 在矩阵里写"能力未启用，缺口可见"并给出 `capabilities` 断言位置** | **通过（行情/FX 除外）**：27 + 57 + 14 passed / 0 failed（§2.2、§2.3、§2.7）。落点用例：`test_upstream_error_body_is_a_failure_and_does_not_raise`、`test_pagination_truncation_is_reported`、`test_duplicate_item_code_blocks_the_table`、`test_invalid_amount_is_reported_and_not_invented`、`test_unexpected_period_is_reported`、`test_html_body_is_a_structural_problem`、`test_missing_facts_block_is_a_structural_problem`、`test_a_transient_failure_is_retried_and_the_finished_source_is_kept`、`test_structural_problems_stay_partial_and_are_not_retried`。**行情异常与 FX 日期越界：能力未启用，缺口可见**——`price` 是 `CONDITIONAL_CAPABILITIES` 成员、FX 首期不启用，缺口由 `capabilities` 断言可见，断言位置见 §2.9 |
 | 10 | 最新实际年报验收；缺价格仍可财务研究；许可未确认仍关闭在线源；A 股取数、评分、证据与任务回归 | `tests/integration/test_api_research_materials.py`、`tests/integration/test_material_collection_job.py`（`online_refresh_disabled`）、本任务的全量回归；**"最新实际年报"需联网 → 记为遗留，不得标为通过** | **部分通过**：18 + 14 + 22 passed / 0 failed（§2.8、§2.7），全量回归见 §4。「缺价格仍可财务研究」由 `test_material_uses_real_fiscal_years_and_keeps_price_missing` 覆盖；「许可未确认仍关闭在线源」由 `test_refresh_reports_the_disabled_online_refresh`（`capabilities["online_refresh"] is False`）与 `test_default_offline_branch_makes_no_upstream_call`（`online_refresh_disabled`）覆盖。「**最新实际年报验收：未覆盖：需联网补验**」——本地证据只覆盖 2021–2024，见 §3 |
 
-**并行任务交付的行（不由本任务判定）**：上表 7，以及本子计划第 11/13/14 任务的测试
+**并行任务交付的行（已由控制 agent 在最终门禁确认，2026-10-12 03:54）**：上表 7 与第 11/13/14 任务的测试
 （`tests/integration/test_web_stock_financials.py`、`tests/unit/test_material_valuation.py`、
-`tests/unit/test_material_dividends.py`）在本 worktree 中**不存在**，由并行任务交付，
-**由控制 agent 在最终门禁确认**；本任务**不因文件不存在而将其标为失败**，也不标为通过。
+`tests/unit/test_material_dividends.py`）在本任务执行时尚未存在，现已由 11/13/14 合并交付。
+控制 agent 在集成分支（HEAD `7c8ad28`）上复跑确认：
 
-上述三个文件确实尚不存在的可复核证据（本任务执行时，集成分支 HEAD = `d2ac41e merge: 09`）：
+```
+$ PYTHONPATH=$PWD/src python -m pytest -q tests/unit/test_material_valuation.py \
+      tests/unit/test_material_dividends.py tests/integration/test_web_stock_financials.py
+79 passed in 5.61s
+
+$ PYTHONPATH=$PWD/src python -m pytest -q tests/unit/test_material_valuation.py -k "split" \
+      tests/unit/test_material_dividends.py -k "hsbc or split or final"
+9 passed, 56 deselected in 0.94s
+```
+
+因此上表 6、7 两行改判为**通过**；task 11 的页面回归由 `test_web_stock_financials.py` 14 passed 覆盖
+（控制 agent 未做浏览器像素级复核，见 COMPLETION.md 未结事项 6）。
+
+本任务执行时三个文件确实尚不存在的可复核证据（当时的集成分支 HEAD = `d2ac41e merge: 09`）：
 
 ```
 $ ls tests/unit/test_material_valuation.py tests/unit/test_material_dividends.py \
@@ -57,7 +70,7 @@ hk-us/13: d2ac41e merge: 09        （无目标测试文件）
 hk-us/14: d2ac41e merge: 09        （无目标测试文件）
 ```
 
-即三个分支都仍停在集成分支起点、尚无提交；本任务对其**不判定通过，也不判定失败**。
+即当时的三个分支都仍停在集成分支起点、尚无提交；本任务对其**不判定通过，也不判定失败**（现由控制 agent 补判）。
 
 ## 2. 分节点实测（命令与原始结果）
 
