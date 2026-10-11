@@ -1,4 +1,10 @@
-"""Versioned, fail-closed trading calendar for scheduled A-share research."""
+"""Versioned, fail-closed trading calendar for scheduled A-share research.
+
+The committed ``config/calendars/a_share.yaml`` is a reviewed artifact: jobs
+that consult it stop for an unreviewed year instead of guessing. Regenerate it
+with ``tools/refresh_trading_calendar.py`` (two providers must agree on every
+trading day) - see :mod:`investment_agent.scheduler.calendar_refresh`.
+"""
 
 from dataclasses import dataclass
 from datetime import date
@@ -27,6 +33,14 @@ class TradingCalendarYear(BaseModel):
     year: int = Field(ge=2000, le=2200)
     closed_dates: set[date] = Field(default_factory=set)
     open_dates: set[date] = Field(default_factory=set)
+    verified_by: list[str] = Field(default_factory=list)
+    """Provider ids whose day-by-day answers were cross-checked for this year.
+
+    Empty for a hand-transcribed year; ``tools/refresh_trading_calendar.py``
+    records ``["baostock", "akshare"]`` only after both agreed on every day.
+    """
+    verified_on: date | None = None
+    """The day the cross-check above ran; ``None`` for a hand-transcribed year."""
 
     @model_validator(mode="after")
     def validate_dates_belong_to_year(self) -> "TradingCalendarYear":
@@ -111,11 +125,13 @@ class CalendarCoverage:
         if self.coverage_end is None:
             return (
                 f"交易日历 {self.calendar_id} 未覆盖 {self.today.year} 年，"
-                "自选股定时刷新已停止；请在官方公布休市安排后补充日历。"
+                "观察池定时刷新已停止；请在官方公布休市安排后运行"
+                " tools/refresh_trading_calendar.py --write 补充并提交。"
             )
         return (
             f"交易日历 {self.calendar_id} 仅覆盖至 {self.coverage_end.isoformat()}"
-            f"（剩余 {self.days_remaining} 天），请在官方公布休市安排后补充下一年度。"
+            f"（剩余 {self.days_remaining} 天），请在官方公布休市安排后运行"
+            " tools/refresh_trading_calendar.py --write 补充下一年度。"
         )
 
 

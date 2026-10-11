@@ -358,7 +358,8 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
 被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
 `LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
 交易日历路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），日历见
-`config/calendars/a_share.yaml`（未知年份 fail-closed）。
+`config/calendars/a_share.yaml`（未知年份 fail-closed；由
+`tools/refresh_trading_calendar.py` 双源核对生成，每年带 `verified_by` / `verified_on`）。
 
 评分成功但解释失败时运行以 `partial` 收尾：确定性分数与制品保留，
 `explanation` 为 `null` 并注明原因，不重试非瞬时错误。
@@ -396,7 +397,9 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - 目标池与观察池日常数据走免费源（baostock + 东财，D6 二次修订）；iFinD 经 Kimi 网关有 5 小时滚动额度，
   只用于按需核对与手动深度研究。东财单股现金流量表尚未批量采集时，快照模式缺资本支出 / 自由现金流（需复核）。
 - 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天起调度日志与
-  `/dashboard/today` 会给出警告，交易所公布次年安排后需补入 `config/calendars/a_share.yaml`。
+  `/dashboard/today` 会给出警告，交易所公布次年安排后用
+  `python tools/refresh_trading_calendar.py --write`（baostock + AkShare/Sina 双源核对）补入
+  `config/calendars/a_share.yaml` 并提交。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
   以沪深小盘替代并记录在
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。

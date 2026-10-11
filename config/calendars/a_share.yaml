@@ -1,3 +1,7 @@
+# A-share trading calendar. Regenerate with tools/refresh_trading_calendar.py
+# (baostock and AkShare/Sina must agree day by day); do not edit years by hand.
+# closed_dates lists weekday closures only; Saturdays and Sundays are closed by
+# rule. open_dates lists weekend trading days (none in recent years).
 calendar_id: CN_A_SHARE
 timezone: Asia/Shanghai
 source:
@@ -5,26 +9,29 @@ source:
   url: https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml
   published_on: 2025-12-22
 years:
-  - year: 2026
-    # Only weekday exceptions are listed; Saturdays and Sundays are closed by rule.
-    closed_dates:
-      - 2026-01-01
-      - 2026-01-02
-      - 2026-02-16
-      - 2026-02-17
-      - 2026-02-18
-      - 2026-02-19
-      - 2026-02-20
-      - 2026-02-23
-      - 2026-04-06
-      - 2026-05-01
-      - 2026-05-04
-      - 2026-05-05
-      - 2026-06-19
-      - 2026-09-25
-      - 2026-10-01
-      - 2026-10-02
-      - 2026-10-05
-      - 2026-10-06
-      - 2026-10-07
-    open_dates: []
+- year: 2026
+  closed_dates:
+  - 2026-01-01
+  - 2026-01-02
+  - 2026-02-16
+  - 2026-02-17
+  - 2026-02-18
+  - 2026-02-19
+  - 2026-02-20
+  - 2026-02-23
+  - 2026-04-06
+  - 2026-05-01
+  - 2026-05-04
+  - 2026-05-05
+  - 2026-06-19
+  - 2026-09-25
+  - 2026-10-01
+  - 2026-10-02
+  - 2026-10-05
+  - 2026-10-06
+  - 2026-10-07
+  open_dates: []
+  verified_by:
+  - baostock
+  - akshare
+  verified_on: 2026-10-11

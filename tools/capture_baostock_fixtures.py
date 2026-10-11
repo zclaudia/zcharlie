@@ -11,11 +11,13 @@ Files: ``constituents.json`` and ``industry.json`` (reference data),
 *ST stock and a 2026 IPO) and ``financial.json`` (profit / balance /
 cash-flow / growth answers incl. an undisclosed period and a bank) and
 ``dividend.json`` (``query_dividend_data`` by ex-date year: duplicated
-preliminary rows, bonus / capitalisation issues and a year without dividends).
+preliminary rows, bonus / capitalisation issues and a year without dividends)
+and ``trade_dates.json`` (``query_trade_dates`` across the 2026 National Day
+closure: weekday holidays, weekends and the reopening).
 
 Usage::
 
-    .venv/bin/python tools/capture_baostock_fixtures.py [reference] [daily] [financial] [dividend]
+    .venv/bin/python tools/capture_baostock_fixtures.py [reference] [daily] [financial] [dividend] [trade_dates]
 
 baostock logs in anonymously; no credentials exist. Only query answers
 (``error_code``, ``error_msg``, ``fields``, ``rows`` and the paging counters)
@@ -109,6 +111,10 @@ FINANCIAL_REQUESTS: tuple[tuple[str, int, int], ...] = (
     ("001248.SZ", 2026, 2),  # recent IPO
     ("001248.SZ", 2025, 4),
     ("000016.SZ", 2026, 2),
+)
+
+TRADE_DATE_WINDOWS: tuple[tuple[date, date], ...] = (
+    (date(2026, 9, 25), date(2026, 10, 15)),  # 2026 National Day closure + reopening
 )
 
 DIVIDEND_REQUESTS: tuple[tuple[str, int], ...] = (
@@ -254,6 +260,11 @@ class RecordingBackend:
         result = self._real.query_dividend_data(code=code, year=year, yearType=yearType)
         return self._record("query_dividend_data", params, result)
 
+    def query_trade_dates(self, start_date: str = "", end_date: str = "") -> BaostockResultSet:
+        params = {"start_date": start_date, "end_date": end_date}
+        result = self._real.query_trade_dates(start_date=start_date, end_date=end_date)
+        return self._record("query_trade_dates", params, result)
+
 
 def _opt_str(value: object) -> str | None:
     return None if value is None else str(value)
@@ -272,7 +283,7 @@ def _write(name: str, records: list[dict[str, Any]], captured_at: datetime) -> P
     return path
 
 
-GROUPS = ("reference", "daily", "financial", "dividend")
+GROUPS = ("reference", "daily", "financial", "dividend", "trade_dates")
 
 
 async def main(groups: tuple[str, ...] = GROUPS) -> None:
@@ -286,6 +297,8 @@ async def main(groups: tuple[str, ...] = GROUPS) -> None:
         await capture_financial(captured_at)
     if "dividend" in groups:
         await capture_dividend(captured_at)
+    if "trade_dates" in groups:
+        await capture_trade_dates(captured_at)
 
 
 async def capture_reference(captured_at: datetime) -> None:
@@ -343,6 +356,16 @@ async def capture_dividend(captured_at: datetime) -> None:
                 f" duplicates {answer.duplicates}"
             )
     print(_write("dividend.json", dividend.records, captured_at))
+
+
+async def capture_trade_dates(captured_at: datetime) -> None:
+    trade_dates = RecordingBackend(load_default_backend())  # type: ignore[arg-type]
+    client = BaostockReferenceClient(trade_dates)
+    for start, end in TRADE_DATE_WINDOWS:
+        answers = await client.fetch_trade_dates(start, end)
+        closed = sum(1 for trading in answers.values() if not trading)
+        print(f"{start}..{end}: {len(answers)} days answered, {closed} closed")
+    print(_write("trade_dates.json", trade_dates.records, captured_at))
 
 
 if __name__ == "__main__":

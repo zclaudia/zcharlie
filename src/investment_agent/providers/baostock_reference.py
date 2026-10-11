@@ -125,6 +125,8 @@ class BaostockBackend(Protocol):
 
     def query_all_stock(self, day: str = "") -> BaostockResultSet: ...
 
+    def query_trade_dates(self, start_date: str = "", end_date: str = "") -> BaostockResultSet: ...
+
 
 def load_default_backend() -> BaostockBackend:
     """Import the real ``baostock`` module lazily (it pulls in pandas)."""
@@ -508,6 +510,54 @@ class BaostockReferenceClient:
             captured_at=captured_at,
             raw_rows=raw.rows,
         )
+
+    async def fetch_trade_dates(self, start: date, end: date) -> dict[date, bool]:
+        """Exchange calendar answers for every day in ``[start, end]``.
+
+        Returns ``{date: is_trading_day}`` covering *every* calendar day of the
+        range (weekends included), so a fully answered year is recognizable by
+        day coverage alone. This is the one query that deliberately answers the
+        future - the exchange publishes the holiday schedule months ahead - so
+        the point-of-time guards of the other methods do not apply. Until the
+        schedule is published the range comes back empty.
+        """
+
+        if end < start:
+            raise ValueError("end must be on or after start")
+        start_text = start.isoformat()
+        end_text = end.isoformat()
+        operation = "query_trade_dates"
+
+        def query(backend: BaostockBackend) -> BaostockResultSet:
+            return backend.query_trade_dates(start_date=start_text, end_date=end_text)
+
+        raw = await self._run(operation, query)
+        answers: dict[date, bool] = {}
+        for row in raw.rows:
+            raw_day = row.get("calendar_date", "")
+            try:
+                day = date.fromisoformat(raw_day)
+            except ValueError as exc:
+                raise ProviderDataError(
+                    f"baostock {operation} returned an invalid calendar_date {raw_day!r}",
+                    provider=PROVIDER,
+                ) from exc
+            flag = row.get("is_trading_day", "").strip()
+            if flag not in ("0", "1"):
+                raise ProviderDataError(
+                    f"baostock {operation} returned an invalid is_trading_day {flag!r} "
+                    f"for {raw_day}",
+                    provider=PROVIDER,
+                )
+            answers[day] = flag == "1"
+        log.info(
+            "baostock_trade_dates_fetched",
+            start=start_text,
+            end=end_text,
+            days=len(answers),
+            trading=sum(answers.values()),
+        )
+        return answers
 
     # -- plumbing ---------------------------------------------------------- #
 

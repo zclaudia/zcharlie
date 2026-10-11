@@ -97,6 +97,9 @@ class FakeBaostock:
     def query_all_stock(self, day: str = "") -> _ReplayResult:
         return self._replay("query_all_stock", {"day": day})
 
+    def query_trade_dates(self, start_date: str = "", end_date: str = "") -> _ReplayResult:
+        return self._replay("query_trade_dates", {"start_date": start_date, "end_date": end_date})
+
     def query_stock_industry(self, code: str = "", date: str = "") -> _ReplayResult:
         if code:
             return self._replay("query_stock_industry", {"code": code, "date": date})
@@ -264,6 +267,48 @@ async def test_fetch_all_stocks_rejects_a_future_day() -> None:
     with pytest.raises(LookaheadDataError):
         await _client(backend, now=DIRECTORY_CAPTURE_TIME).fetch_all_stocks(date(2026, 10, 10))
     assert backend.calls == []  # guarded before any upstream call
+
+
+async def test_fetch_trade_dates_answers_every_day_including_weekends() -> None:
+    backend = FakeBaostock()
+    answers = await _client(backend).fetch_trade_dates(date(2026, 9, 25), date(2026, 10, 15))
+
+    assert len(answers) == 21  # every calendar day of the window
+    assert answers[date(2026, 9, 25)] is False  # Friday before the closure
+    assert answers[date(2026, 9, 26)] is False  # Saturday
+    assert answers[date(2026, 9, 28)] is True
+    assert answers[date(2026, 10, 7)] is False  # last closure day
+    assert answers[date(2026, 10, 8)] is True  # reopening Thursday
+    assert answers[date(2026, 10, 12)] is True
+    assert backend.calls == ["login", "query_trade_dates", "logout"]
+
+
+async def test_fetch_trade_dates_unpublished_years_are_empty_not_error() -> None:
+    backend = FakeBaostock()
+    key = ("query_trade_dates", (("end_date", "2027-01-15"), ("start_date", "2027-01-01")))
+    backend.records[key] = {
+        "error_code": "0",
+        "error_msg": "success",
+        "fields": ["calendar_date", "is_trading_day"],
+        "rows": [],
+    }
+    answers = await _client(backend).fetch_trade_dates(date(2027, 1, 1), date(2027, 1, 15))
+    assert answers == {}
+
+
+async def test_fetch_trade_dates_rejects_a_malformed_flag() -> None:
+    backend = FakeBaostock()
+    key = ("query_trade_dates", (("end_date", "2026-10-15"), ("start_date", "2026-09-25")))
+    record = json.loads(json.dumps(backend.records[key]))
+    record["rows"][0][1] = "maybe"
+    backend.records[key] = record
+    with pytest.raises(ProviderDataError):
+        await _client(backend).fetch_trade_dates(date(2026, 9, 25), date(2026, 10, 15))
+
+
+async def test_fetch_trade_dates_rejects_an_inverted_range() -> None:
+    with pytest.raises(ValueError):
+        await _client(FakeBaostock()).fetch_trade_dates(date(2026, 10, 15), date(2026, 9, 25))
 
 
 async def test_pre_publication_constituents_are_empty_not_error() -> None:

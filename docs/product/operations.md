@@ -106,7 +106,12 @@
 
 ## 6. 年度 / 不定期维护
 
-- **交易日历**：交易所公布次年休市安排后（通常 12 月），补入 `config/calendars/a_share.yaml`；
+- **交易日历**：`python tools/refresh_trading_calendar.py` 用 baostock 与 AkShare/Sina 双源逐日核对
+  `config/calendars/a_share.yaml`；不加 `--write` 只打印差异、有漂移时返回 1（可作巡检）。
+  交易所公布次年休市安排后（通常 12 月）重跑并加 `--write`，核对差异后提交；写入时按年记录
+  核对来源与日期（`verified_by` / `verified_on`），两源必须全年覆盖且逐日一致，任何一年分歧即
+  整次拒绝写入（退出码 2）。次年公告发布时用 `--notice-url` / `--notice-title` /
+  `--notice-published-on` 同步更新 `source`。
   到期前 60 天健康页与调度日志会提醒，未知年份的交易日门控任务会停止（fail-closed）。
 - **申万代码表**：`python tools/refresh_shenwan_directory.py` 查看差异，确认后加 `--write` 并提交。
 - **申万官网证书**：`src/investment_agent/providers/certs/swsresearch-intermediate.pem` 文件头写有刷新步骤；
