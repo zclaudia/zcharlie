@@ -55,7 +55,14 @@ from investment_agent.rules.schema import ConditionGroup, RuleInstance, RuleTemp
 from investment_agent.rules.validation import RuleContext, check_instance
 
 DRAFT_SCHEMA_VERSION = "rule_draft.v1"
-DRAFT_SCOPE: Literal["candidate"] = "candidate"
+DRAFT_SCOPE = "candidate"
+"""The default drafting scope: candidate rules (``buy_zone`` / ``drop``).
+
+Holding rules (``add`` / ``trim`` / ``exit_review``, WP8) reuse the same
+drafting contract with ``scope="holding"``; conditions, factors and zones still
+come from the template, so only the zone set and the stored scope differ.
+"""
+DraftScope = Literal["candidate", "holding"]
 
 
 # --------------------------------------------------------------------------- #
@@ -370,14 +377,15 @@ def build_instance(
     drafted_by: str,
     rationale: Mapping[str, Any],
     context: RuleContext | None = None,
+    scope: DraftScope = "candidate",
 ) -> tuple[RuleInstance | None, list[DraftIssue]]:
-    """The candidate-scope instance, or the P1-C1 issues that block it."""
+    """The scope's instance, or the P1-C1 issues that block it."""
 
     try:
         instance = RuleInstance(
             template_ref=template.ref,
             symbol=symbol,
-            scope=DRAFT_SCOPE,
+            scope=scope,
             params=instance_params(output, template),
             drafted_by=drafted_by[:64],
             draft_rationale=json.dumps(rationale, ensure_ascii=False, sort_keys=True),
@@ -400,6 +408,7 @@ def validate_draft(
     drafted_by: str,
     extra: Mapping[str, Any] | None = None,
     context: RuleContext | None = None,
+    scope: DraftScope = "candidate",
 ) -> tuple[RuleInstance | None, list[DraftIssue]]:
     """Policy checks, then (only when clean) full rule-instance validation."""
 
@@ -413,12 +422,14 @@ def validate_draft(
         drafted_by=drafted_by,
         rationale=rationale_document(output, template, extra=extra),
         context=context,
+        scope=scope,
     )
 
 
 __all__ = [
     "DRAFT_SCHEMA_VERSION",
     "DRAFT_SCOPE",
+    "DraftScope",
     "RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE",
     "DraftIssue",
     "ParamRationale",

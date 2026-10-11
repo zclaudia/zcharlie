@@ -83,12 +83,12 @@ holding_zones:
   add:
     all:
       - {factor: pe_percentile_5y, op: "<=", value: "$add_pe_pct_max", label: 估值低位}
-      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: P2 仓位因子，P1 不执行}
+      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   trim:
     any:
       - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min", label: 估值高位}
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: P2 仓位因子，P1 不执行}
-      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: P2 仓位因子，P1 不执行}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   exit_review:
     any:
       - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max", label: 毛利率恶化, why: 证伪：定价能力消失。}

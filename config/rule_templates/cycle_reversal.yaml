@@ -70,17 +70,17 @@ holding_zones:
   add:
     all:
       - {factor: pb_percentile_5y, op: "<=", value: "$add_pb_pct_max", label: PB 低位}
-      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: P2 仓位因子，P1 不执行}
+      - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   trim:
     any:
       - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min", label: 估值回到高位, why: 周期股在强势时减持。}
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: P2 仓位因子，P1 不执行}
-      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: P2 仓位因子，P1 不执行}
+      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   exit_review:
     any:
       - {factor: roe, op: "<", value: "$exit_roe_max", label: 亏损扩大, why: 证伪：成本优势不在。}
       - {factor: debt_ratio, op: ">", value: 0.85, label: 负债过高, why: 证伪：资产负债表无法支撑等待。}
-      - {factor: holding_days, op: ">", value: "$exit_holding_days_min", label: 持有超时, why: 反转逻辑的时间上限。, data_note: P2 仓位因子，P1 不执行}
+      - {factor: holding_days, op: ">", value: "$exit_holding_days_min", label: 持有超时, why: 反转逻辑的时间上限。, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
 
 params:
   drawdown_min: {default: 0.30, range: [0.20, 0.60], label: 近一年最大回撤下限}

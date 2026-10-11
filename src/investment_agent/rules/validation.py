@@ -10,7 +10,7 @@ code                        meaning
 ==========================  ==================================================
 ``schema``                  wrong shape / type / unknown key (pydantic)
 ``unknown_factor``          factor is not in the factor registry
-``pending_factor``          a P2 position factor outside a holding zone
+``pending_factor``          a position factor outside a holding zone
 ``invalid_op``              operator not in ``< <= > >= == != between in``
 ``op_value_mismatch``       value type does not fit the operator
 ``free_text_value``         a string value that is not a ``$param`` reference
@@ -40,11 +40,12 @@ code                        meaning
 screen) does not enforce them, and stored versions written before the
 metadata existed stay valid.
 
-**Pending factors.** Position factors (``position_weight``, ``gain_vs_cost``,
-``holding_days``) come from holding snapshots in P2. Templates may already
-use them in holding zones (P1 defines holding zones without executing them);
-anywhere else - ``screen`` or candidate zones - they are rejected, and the
-screen engine refuses any factor missing from the registry.
+**Position factors.** ``position_weight`` / ``gain_vs_cost`` / ``holding_days``
+are not in the factor registry: they are derived from a holding's daily
+valuation by the zone detector (watch-holding-plan WP8 / funnel 5.4). Templates
+and instances may use them in holding zones only; anywhere else - ``screen`` or
+candidate zones - they are rejected (``pending_factor``), and the screen engine
+refuses any factor missing from the registry.
 """
 
 from __future__ import annotations
@@ -92,7 +93,7 @@ IssueCode = Literal[
 ]
 
 PENDING_FACTORS: frozenset[str] = frozenset({"position_weight", "gain_vs_cost", "holding_days"})
-"""Position factors defined in P2 (holding snapshots); holding zones only."""
+"""Position factors (valuation-derived); allowed in holding zones only."""
 MAX_GROUP_DEPTH = 2
 """A root group may contain groups; those may only contain conditions."""
 
@@ -197,7 +198,7 @@ class _Checker:
                 self.add(
                     "pending_factor",
                     path,
-                    f"{factor!r} is a P2 position factor; only holding zones may use it",
+                    f"{factor!r} is a position factor (derived from the daily valuation); only holding zones may use it",
                 )
         elif factor not in self.context.factor_names:
             self.add("unknown_factor", path, f"unknown factor {factor!r}")

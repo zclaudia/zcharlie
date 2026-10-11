@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.providers.shenwan_directory import default_shenwan_directory
+from investment_agent.rules.generation import claim_draft_generation, is_current_token
 from investment_agent.rules.store import RuleStore
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
@@ -260,6 +261,17 @@ def rule_draft_payload(
 _LIVE_RUN_STATUSES = frozenset({"queued", "running"})
 
 
+def _draft_identity(payload: Mapping[str, object]) -> dict[str, object]:
+    """Payload comparison ignores the frozen generation token.
+
+    The token is deterministic per run identity (it *is* the idempotency key),
+    so a retried enqueue still recognises its own run; publishing the field
+    must not turn the retry into a new draft intent (plan 7.2 WP9).
+    """
+
+    return {key: value for key, value in payload.items() if key != "draft_token"}
+
+
 async def _draft_run_key(
     repository: PipelineRunRepository,
     base_key: str,
@@ -281,8 +293,9 @@ async def _draft_run_key(
         existing = await repository.by_idempotency_key(kind=RULE_DRAFT, idempotency_key=key)
         if existing is None:
             return key
-        if existing.request_json == dict(payload) and (
-            not fresh or existing.status in _LIVE_RUN_STATUSES
+        if (
+            _draft_identity(existing.request_json or {}) == _draft_identity(payload)
+            and (not fresh or existing.status in _LIVE_RUN_STATUSES)
         ):
             return key
         key = f"{base_key}:r{attempt}"
@@ -302,7 +315,11 @@ async def enqueue_rule_draft(
 ) -> PipelineRun:
     """Queue the drafting job for ``candidate`` and mark its draft pending.
 
-    Without a registered ``rule_draft`` handler the run simply stays queued.
+    A *new* run claims the shared ``(listing, scope)`` drafting generation
+    (plan 7.2 WP9): the token is frozen into the payload and the run may store
+    only while it stays current. A reused run (idempotent retry) must not
+    re-claim - a network retry is not a new drafting intent. Without a
+    registered ``rule_draft`` handler the run simply stays queued.
     """
 
     payload = rule_draft_payload(
@@ -321,13 +338,25 @@ async def enqueue_rule_draft(
         payload,
         fresh=fresh,
     )
-    run, _created = await repository.enqueue(
+    payload["draft_token"] = key
+    run, created = await repository.enqueue(
         kind=RULE_DRAFT,
         idempotency_key=key,
         triggered_by=triggered_by,
         listing_id=candidate.listing_id,
         request_json=payload,
     )
+    if created:
+        await claim_draft_generation(
+            session,
+            listing_id=candidate.listing_id,
+            symbol=candidate.ticker,
+            scope=CANDIDATE_SCOPE,
+            token=key,
+            origin_kind="candidate",
+            origin_id=candidate.id,
+            template_ref=f"{template_id}@{template_version}",
+        )
     candidate.draft_state = "pending"
     await session.flush()
     return run
@@ -339,6 +368,7 @@ async def mark_draft_result(
     rule_instance_id: int | None,
     failed: bool = False,
     error: str | None = None,
+    draft_token: str | None = None,
     session: AsyncSession | None = None,
 ) -> None:
     """Record the drafting job's outcome on the candidate.
@@ -346,6 +376,12 @@ async def mark_draft_result(
     ``failed=True`` -> ``draft_state = failed`` (the UI offers a manual
     rule); otherwise ``ready`` with ``draft_rule_instance_id``. Opens its own
     transaction unless ``session`` is given.
+
+    ``draft_token`` makes the callback re-check the shared generation inside
+    that transaction (plan 7.2 WP9): a run a newer request has superseded
+    leaves audit only - it never links its rule as the candidate's draft and
+    never flips a shared open draft to a stale one. A failure is still
+    recorded (the attempt produced nothing), matching the watchlist side.
     """
 
     if session is None:
@@ -355,12 +391,32 @@ async def mark_draft_result(
                 rule_instance_id=rule_instance_id,
                 failed=failed,
                 error=error,
+                draft_token=draft_token,
                 session=own,
             )
         return
     candidate = await CandidateRepository(session).get(candidate_id)
     if candidate is None:
         raise CandidateNotFoundError(f"no candidate {candidate_id}")
+    if draft_token is not None and not await is_current_token(
+        session, listing_id=candidate.listing_id, scope=CANDIDATE_SCOPE, token=draft_token
+    ):
+        log.warning(
+            "candidate.draft.superseded_callback",
+            candidate_id=candidate_id,
+            draft_token=draft_token,
+            rule_instance_id=rule_instance_id,
+            failed=failed,
+        )
+        # Never link this run's rule (it may be stale); show whatever the
+        # shared open draft currently is - the effective_draft derivation.
+        adopted = await _adopt_open_draft(session, candidate)
+        if adopted is None and (failed or rule_instance_id is None):
+            candidate.draft_state = "failed"
+            if error:
+                log.warning("candidate.draft_failed", candidate_id=candidate_id, error=error)
+        await session.flush()
+        return
     if failed or rule_instance_id is None:
         candidate.draft_state = "failed"
         if error:
@@ -376,6 +432,44 @@ async def mark_draft_result(
     await session.flush()
 
 
+async def _newest_open_draft(
+    session: AsyncSession, candidate: CandidateRecord
+) -> RuleInstanceRecord | None:
+    """The newest open candidate-scope draft of the listing, opened after the
+    candidate itself (a draft from before its nomination is not its draft)."""
+
+    stmt = (
+        select(RuleInstanceRecord)
+        .where(
+            RuleInstanceRecord.listing_id == candidate.listing_id,
+            RuleInstanceRecord.scope == CANDIDATE_SCOPE,
+            RuleInstanceRecord.status == "draft",
+        )
+        .order_by(RuleInstanceRecord.version.desc())
+        .limit(1)
+    )
+    rule = (await session.execute(stmt)).scalar_one_or_none()
+    # ``created_at`` is a server default (whole seconds on SQLite).
+    opened = as_utc(candidate.opened_at).replace(microsecond=0)
+    if rule is not None and as_utc(rule.created_at) >= opened:
+        return rule
+    return None
+
+
+async def _adopt_open_draft(
+    session: AsyncSession, candidate: CandidateRecord
+) -> RuleInstanceRecord | None:
+    """Persist the state :func:`effective_draft` would derive lazily."""
+
+    candidate.draft_state = "pending"
+    candidate.draft_rule_instance_id = None
+    rule = await _newest_open_draft(session, candidate)
+    if rule is not None:
+        candidate.draft_state = "ready"
+        candidate.draft_rule_instance_id = rule.id
+    return rule
+
+
 async def effective_draft(
     session: AsyncSession, candidate: CandidateRecord
 ) -> tuple[str, RuleInstanceRecord | None]:
@@ -386,20 +480,8 @@ async def effective_draft(
         rule = await session.get(RuleInstanceRecord, candidate.draft_rule_instance_id)
         return candidate.draft_state, rule
     if candidate.draft_state in {"none", "pending"}:
-        stmt = (
-            select(RuleInstanceRecord)
-            .where(
-                RuleInstanceRecord.listing_id == candidate.listing_id,
-                RuleInstanceRecord.scope == CANDIDATE_SCOPE,
-                RuleInstanceRecord.status == "draft",
-            )
-            .order_by(RuleInstanceRecord.version.desc())
-            .limit(1)
-        )
-        rule = (await session.execute(stmt)).scalar_one_or_none()
-        # ``created_at`` is a server default (whole seconds on SQLite).
-        opened = as_utc(candidate.opened_at).replace(microsecond=0)
-        if rule is not None and as_utc(rule.created_at) >= opened:
+        rule = await _newest_open_draft(session, candidate)
+        if rule is not None:
             return "ready", rule
     return candidate.draft_state, None
 
@@ -814,3 +896,85 @@ async def dismiss_candidate(
         at=at,
     )
     return candidate
+
+
+def zone_event_summary(event: Any) -> dict[str, Any]:
+    """The event reference a ``drop`` decision records (rule version included)."""
+
+    conditions = [
+        {
+            "factor": reason.get("factor"),
+            "op": reason.get("op"),
+            "threshold": reason.get("threshold"),
+            "actual": reason.get("actual"),
+            "quality": reason.get("quality"),
+        }
+        for reason in (event.conditions_met or [])
+        if isinstance(reason, Mapping)
+    ]
+    text = "、".join(
+        f"{item['factor']} {item['op']} {item['threshold']}（实际 {item['actual']}）"
+        for item in conditions
+    )
+    return {
+        "id": event.id,
+        "as_of": event.as_of.isoformat(),
+        "zone": event.zone,
+        "level": event.level,
+        "rule_instance_id": event.rule_instance_id,
+        "rule_version": event.rule_version,
+        "template_ref": f"{event.template_id}@{event.template_version}",
+        "calibration_status": event.calibration_status,
+        "conditions_met": conditions,
+        "summary": text,
+    }
+
+
+async def archive_candidate_on_drop(
+    session: AsyncSession,
+    candidate: CandidateRecord,
+    *,
+    event: Any,
+    now: datetime | None = None,
+) -> DecisionRecord | None:
+    """``open -> dismissed`` by a ``drop`` zone event (funnel 7.3).
+
+    The daily zone detector archives a candidate whose ``drop`` conditions
+    started holding, and records a system ``drop`` decision carrying the event
+    and the rule version that fired. An already-terminal candidate is left
+    alone (``None``). The event is a prompt and a record - it archives the
+    candidate row only; the shared rule slot, the observation entry and the
+    user's portfolio ledger are untouched.
+    """
+
+    if candidate.status != "open":
+        return None
+    at = now or _now()
+    summary = zone_event_summary(event)
+    candidate.status = "dismissed"
+    candidate.closed_at = at
+    await session.flush()
+    decision = await DecisionRepository(session).append(
+        listing_id=candidate.listing_id,
+        ticker=candidate.ticker,
+        kind="drop",
+        actor="system",
+        reason_text=(
+            f"区间事件：移出候选条件成立（规则 v{event.rule_version}，"
+            f"{event.template_id}@{event.template_version}）。{summary['summary']}"
+        ),
+        candidate_id=candidate.id,
+        rule_instance_id=event.rule_instance_id,
+        rule_ref=f"{candidate.ticker}/{event.template_id}@{event.template_version}"
+        f"/v{event.rule_version}",
+        context=await candidate_context(session, candidate, zone_event=summary),
+        at=at,
+    )
+    log.info(
+        "candidates.dropped",
+        candidate_id=candidate.id,
+        listing_id=candidate.listing_id,
+        zone_event_id=event.id,
+        rule_instance_id=event.rule_instance_id,
+    )
+    return decision

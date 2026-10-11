@@ -82,6 +82,12 @@ class RuleStore:
         self.session = session
         self.context = context
 
+    async def head_token(self, symbol: str, scope: str) -> str:
+        """A shared candidate/observation revision and approval-state guard."""
+        latest = await self.session.scalar(select(RuleInstanceRecord).where(RuleInstanceRecord.symbol == symbol, RuleInstanceRecord.scope == scope).order_by(RuleInstanceRecord.version.desc()).limit(1))
+        active = await self.session.scalar(select(RuleInstanceRecord.id).where(RuleInstanceRecord.symbol == symbol, RuleInstanceRecord.scope == scope, RuleInstanceRecord.status == "active"))
+        return f"{latest.id}:{latest.status}:{active}" if latest is not None else "empty"
+
     # -- templates ---------------------------------------------------------- #
 
     async def sync_templates(

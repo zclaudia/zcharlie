@@ -354,6 +354,67 @@ def _strength(leaves: Sequence[_Leaf]) -> float:
     return round(sum(margins) / len(margins), STRENGTH_DIGITS)
 
 
+def evaluate_zone_conditions(
+    *,
+    zones: Mapping[str, ConditionGroup],
+    factors: Mapping[str, FactorValue],
+    params: Mapping[str, float],
+) -> dict[str, list[dict[str, Any]]]:
+    """Evaluate a rule's zone conditions against one stock's factors (pure).
+
+    The candidate summary uses this to show a manual nomination's draft rule
+    as the same per-factor checks a screen hit gets: reasons reuse the screen
+    reason shape (factor / op / threshold / actual / outcome / snapshot_ref),
+    keyed by zone name in ``zones`` order.
+    """
+
+    return {
+        name: [dict(reason) for reason in outcome.reasons]
+        for name, outcome in evaluate_zone_outcomes(
+            zones=zones, factors=factors, params=params
+        ).items()
+    }
+
+
+@dataclass(frozen=True)
+class ZoneOutcome:
+    """One zone's evaluation for one stock (the daily zone detector's kernel).
+
+    ``holds`` is the group result under the same three-valued logic the screen
+    engine uses: ``True`` (holds), ``False`` (does not hold) or ``None`` when
+    every condition was skipped as ``not_applicable`` and the zone is
+    therefore undecided. ``met`` carries the conditions that held, with their
+    actual values, in the shared reason shape.
+    """
+
+    zone: str
+    holds: bool | None
+    reasons: tuple[Mapping[str, Any], ...]
+    met: tuple[Mapping[str, Any], ...]
+
+
+def evaluate_zone_outcomes(
+    *,
+    zones: Mapping[str, ConditionGroup],
+    factors: Mapping[str, FactorValue],
+    params: Mapping[str, float],
+) -> dict[str, ZoneOutcome]:
+    """Per-zone group result plus every leaf reason (pure, no short circuit)."""
+
+    member = ScreenMember(listing_id=0, ticker="", industry_group="", factors=factors)
+    outcomes: dict[str, ZoneOutcome] = {}
+    for name, group in zones.items():
+        leaves: list[_Leaf] = []
+        holds = _evaluate(group, name, member, params, leaves)
+        outcomes[name] = ZoneOutcome(
+            zone=name,
+            holds=holds,
+            reasons=tuple(leaf.reason() for leaf in leaves),
+            met=tuple(leaf.reason() for leaf in leaves if leaf.outcome == "met"),
+        )
+    return outcomes
+
+
 def _excluded_by(member: ScreenMember, factors: Sequence[str]) -> tuple[str, ...]:
     hits: list[str] = []
     for name in factors:

@@ -61,8 +61,8 @@ from datetime import date, datetime, time
 from typing import Any, Literal
 
 import structlog
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from sqlalchemy import select
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.config import Settings
@@ -80,6 +80,7 @@ from investment_agent.rules.draft_policy import (
     system_prompt,
     validate_draft,
 )
+from investment_agent.rules.generation import guard_store, preflight_reason
 from investment_agent.rules.schema import TEMPLATE_ID, RuleInstance, RuleTemplate, canonical_hash
 from investment_agent.rules.store import RuleStore
 from investment_agent.storage.database import session_scope
@@ -107,13 +108,42 @@ class RuleDraftPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     candidate_id: int = Field(ge=0)
-    """``0``: manual draft (``ia rules draft``) without a candidate to notify."""
+    """``0``: a draft without a candidate to notify (manual CLI draft, watchlist, holding)."""
     ticker: str = Field(pattern=r"^\d{6}\.(SH|SZ|BJ)$")
     template_id: str = Field(pattern=TEMPLATE_ID)
     template_version: int = Field(ge=1)
     as_of: date
     screen_result_id: int | None = None
     preference_notes: list[str] = Field(default_factory=list)
+    scope: Literal["candidate", "holding"] = "candidate"
+    """The rule slot the draft belongs to (WP8 adds ``holding``)."""
+    origin_kind: Literal["candidate", "watchlist", "holding"] = "candidate"
+    """Candidate-origin runs (the default) keep the legacy identity and callback."""
+    origin_id: int | None = None
+    """``watchlist_item.id`` of a watchlist-origin run, ``listing_id`` of a holding one."""
+    draft_request_id: str | None = Field(default=None, min_length=1, max_length=36)
+    """``watch_draft_request.id`` (UUID) of a watchlist-origin run, or the holding
+    request UUID."""
+    expected_rule_head: str | None = None
+    draft_token: str | None = Field(default=None, min_length=1, max_length=160)
+    """Frozen shared-generation identity (plan 7.2 WP9): the candidate run's
+    idempotency key, or the watch/holding request UUID. A run without one
+    predates the shared generation guard (legacy) and only stores while its
+    slot has no explicit claim."""
+
+    @model_validator(mode="after")
+    def _origin_identity(self) -> RuleDraftPayload:
+        if self.origin_kind == "watchlist" and (
+            self.origin_id is None or self.draft_request_id is None
+        ):
+            raise ValueError("watchlist-origin drafts need origin_id and draft_request_id")
+        if self.origin_kind == "holding" and (
+            self.origin_id is None or self.draft_request_id is None
+        ):
+            raise ValueError("holding-origin drafts need origin_id and draft_request_id")
+        if self.origin_kind == "candidate" and self.scope != "candidate":
+            raise ValueError("only holding-origin drafts may draft the holding scope")
+        return self
 
     @property
     def template_ref(self) -> str:
@@ -121,6 +151,10 @@ class RuleDraftPayload(BaseModel):
 
 
 def rule_draft_idempotency_key(payload: RuleDraftPayload) -> str:
+    if payload.origin_kind == "watchlist":
+        return f"{RULE_DRAFT}:watchlist:{payload.origin_id}:{payload.draft_request_id}"
+    if payload.origin_kind == "holding":
+        return f"{RULE_DRAFT}:holding:{payload.origin_id}:{payload.draft_request_id}"
     return f"{RULE_DRAFT}:{payload.candidate_id}:{payload.template_ref}"
 
 
@@ -360,7 +394,7 @@ def build_draft_input(
     group = stock.industry.get("group")
     message: dict[str, Any] = {
         "task": "rule_draft",
-        "scope": DRAFT_SCOPE,
+        "scope": payload.scope,
         "stock": {
             "ticker": payload.ticker,
             "as_of": payload.as_of.isoformat(),
@@ -409,13 +443,14 @@ async def screen_context(
 
 @dataclass
 class DraftResult:
-    status: Literal["drafted", "reused", "unavailable"]
+    status: Literal["drafted", "reused", "unavailable", "stale"]
     template_ref: str
     rule_instance_id: int | None = None
     attempts: int = 0
     model: str | None = None
     issues: list[list[str]] = field(default_factory=list)
     """Issues of each failed attempt (strings), in order."""
+    stale_reason: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -425,6 +460,9 @@ class DraftResult:
     def error(self) -> str | None:
         if self.ok:
             return None
+        if self.status == "stale":
+            detail = self.stale_reason or "the draft request is no longer current"
+            return f"superseded before store: {detail}"
         last = self.issues[-1] if self.issues else []
         text = f"draft_unavailable after {self.attempts} attempt(s): " + "; ".join(last)
         return text[:MAX_ERROR_CHARS]
@@ -445,6 +483,49 @@ def default_client_factory(settings: Settings) -> ClientFactory:
         return OpenAICompatibleClient(tier_name="tier3", config=settings.llm_rule_draft, session=session)
 
     return build
+
+
+DraftStorer = Callable[..., Awaitable[tuple[int, bool] | None]]
+"""Stores a validated instance and returns ``(record id, reused)`` -
+``None`` when the store was rejected (a watchlist request that lost currency)."""
+
+
+def _storer_for(
+    payload: RuleDraftPayload,
+    expected_rule_head: str | None = None,
+    stale_notes: list[str] | None = None,
+) -> DraftStorer:
+    """The store step of :func:`draft_rule`: the shared path, or - for a
+    watchlist request - the guarded store-and-link of the watch module.
+
+    ``stale_notes`` receives the guard's refusal reason, so the run result and
+    the origin's audit text explain *why* the store was rejected.
+    """
+
+    async def store(
+        instance: RuleInstance, template: RuleTemplate, *, now: datetime | None = None
+    ) -> tuple[int, bool] | None:
+        if payload.origin_kind != "watchlist" or payload.draft_request_id is None:
+            return await _store(
+                instance,
+                template,
+                now=now,
+                expected_rule_head=expected_rule_head,
+                token=payload.draft_token,
+                stale_notes=stale_notes,
+            )
+        from investment_agent.watchlist.drafts import store_watch_draft
+
+        return await store_watch_draft(
+            payload.draft_request_id,
+            instance,
+            template,
+            now=now,
+            expected_rule_head=expected_rule_head,
+            stale_notes=stale_notes,
+        )
+
+    return store
 
 
 async def _complete(
@@ -495,6 +576,21 @@ def _short(exc: ValidationError, fallback: str) -> str:
     return "; ".join(parts) or fallback
 
 
+def _frozen_token(payload: RuleDraftPayload) -> str | None:
+    """The run's frozen shared-generation identity (plan 7.2 WP9).
+
+    Candidate runs carry it as ``draft_token``; watchlist and holding requests
+    freeze the same value in their request identity, so a payload from before
+    the guard still maps to the token its request claims.
+    """
+
+    if payload.draft_token is not None:
+        return payload.draft_token
+    if payload.origin_kind in {"watchlist", "holding"}:
+        return payload.draft_request_id
+    return None
+
+
 def _rationale_json(record: RuleInstanceRecord) -> dict[str, Any]:
     try:
         data = json.loads(record.draft_rationale or "{}")
@@ -504,13 +600,13 @@ def _rationale_json(record: RuleInstanceRecord) -> dict[str, Any]:
 
 
 async def _drafts_for(
-    session: AsyncSession, symbol: str, template: RuleTemplate
+    session: AsyncSession, symbol: str, template: RuleTemplate, scope: str = DRAFT_SCOPE
 ) -> list[RuleInstanceRecord]:
     stmt = (
         select(RuleInstanceRecord)
         .where(
             RuleInstanceRecord.symbol == symbol,
-            RuleInstanceRecord.scope == DRAFT_SCOPE,
+            RuleInstanceRecord.scope == scope,
             RuleInstanceRecord.template_id == template.id,
             RuleInstanceRecord.template_version == template.version,
             RuleInstanceRecord.status == "draft",
@@ -520,16 +616,50 @@ async def _drafts_for(
     return list((await session.execute(stmt)).scalars())
 
 
-async def _store(
-    instance: RuleInstance, template: RuleTemplate, *, now: datetime | None
-) -> tuple[int, bool]:
-    """``(record id, reused)``: an equivalent open draft is returned as is."""
+async def reuse_equivalent_draft(
+    session: AsyncSession, instance: RuleInstance, template: RuleTemplate
+) -> RuleInstanceRecord | None:
+    """An open draft of the same listing, scope, template and content, if any."""
 
     digest = canonical_hash(instance)
+    for record in await _drafts_for(session, instance.symbol, template, instance.scope):
+        if record.hash == digest:
+            return record
+    return None
+
+
+async def _store(
+    instance: RuleInstance, template: RuleTemplate, *, now: datetime | None,
+    expected_rule_head: str | None = None,
+    token: str | None = None,
+    stale_notes: list[str] | None = None,
+) -> tuple[int, bool] | None:
+    """``(record id, reused)``: an equivalent open draft is returned as is.
+
+    ``None`` when the shared generation guard refused the store (a newer
+    request or a changed rule head owns the slot; plan 7.2 WP9) - check and
+    write happen in the same transaction.
+    """
+
     async with session_scope() as session:
-        for record in await _drafts_for(session, instance.symbol, template):
-            if record.hash == digest:
-                return record.id, True
+        await session.execute(update(RuleInstanceRecord).where(RuleInstanceRecord.symbol == instance.symbol, RuleInstanceRecord.scope == instance.scope).values(status=RuleInstanceRecord.status))
+        refused = await guard_store(session, symbol=instance.symbol, scope=instance.scope, token=token)
+        if refused is not None:
+            if stale_notes is not None:
+                stale_notes.append(refused)
+            log.warning(
+                "rule_draft.store.superseded",
+                ticker=instance.symbol,
+                scope=instance.scope,
+                token=token,
+                reason=refused,
+            )
+            return None
+        if expected_rule_head is not None and await RuleStore(session).head_token(instance.symbol, instance.scope) != expected_rule_head:
+            return None
+        reused = await reuse_equivalent_draft(session, instance, template)
+        if reused is not None:
+            return reused.id, True
         record = await RuleStore(session).create_draft(instance, now=now)
         return record.id, False
 
@@ -551,6 +681,9 @@ async def draft_rule(
         client_factory = default_client_factory(settings)
     loader = stock_loader or load_stock_context
     async with session_scope() as session:
+        rule_head = payload.expected_rule_head or await RuleStore(session).head_token(
+            payload.ticker, payload.scope
+        )
         template = await RuleStore(session).get_template(
             payload.template_id, payload.template_version
         )
@@ -560,9 +693,27 @@ async def draft_rule(
             )
         if run_id is not None:
             # A retried attempt of a run that already stored its draft.
-            for record in await _drafts_for(session, payload.ticker, template):
+            for record in await _drafts_for(session, payload.ticker, template, payload.scope):
                 if _rationale_json(record).get("pipeline_run_id") == run_id:
                     return DraftResult("reused", template.ref, record.id)
+        early = await preflight_reason(
+            session,
+            symbol=payload.ticker,
+            scope=payload.scope,
+            token=_frozen_token(payload),
+        )
+        if early is not None:
+            # A newer request already owns the slot: skip the model call, keep
+            # the run as audit (plan 7.2 WP9).
+            log.warning(
+                "rule_draft.superseded",
+                ticker=payload.ticker,
+                template=template.ref,
+                draft_request_id=payload.draft_request_id,
+                token=payload.draft_token,
+                reason=early,
+            )
+            return DraftResult("stale", template.ref, stale_reason=early)
         try:
             stock = await loader(session, payload.ticker, payload.as_of)
         except LookupError as exc:
@@ -571,6 +722,8 @@ async def draft_rule(
     draft_input = build_draft_input(payload=payload, template=template, stock=stock, screen=screen)
     base_message = json.dumps(draft_input, ensure_ascii=False, sort_keys=True)
     system = system_prompt()
+    stale_notes: list[str] = []
+    storer = _storer_for(payload, rule_head, stale_notes=stale_notes)
     result = DraftResult("unavailable", template.ref)
     feedback: list[DraftIssue] = []
     for attempt in range(1, MAX_DRAFT_ATTEMPTS + 1):
@@ -587,6 +740,7 @@ async def draft_rule(
                 factors=stock.factors,
                 symbol=payload.ticker,
                 drafted_by=drafted_by,
+                scope=payload.scope,
                 extra={
                     "candidate_id": payload.candidate_id or None,
                     "as_of": payload.as_of.isoformat(),
@@ -594,10 +748,25 @@ async def draft_rule(
                     "pipeline_run_id": run_id,
                     "model": model,
                     "llm_attempts": attempt,
+                    "origin_kind": payload.origin_kind,
+                    "draft_request_id": payload.draft_request_id,
                 },
             )
         if instance is not None:
-            record_id, reused = await _store(instance, template, now=now)
+            stored = await storer(instance, template, now=now)
+            if stored is None:
+                # The request lost its currency before the store (plan 1.5
+                # 过期任务隔离): audit only, never a late draft.
+                result.status = "stale"
+                result.stale_reason = stale_notes[-1] if stale_notes else None
+                log.warning(
+                    "rule_draft.superseded",
+                    ticker=payload.ticker,
+                    template=template.ref,
+                    draft_request_id=payload.draft_request_id,
+                )
+                return result
+            record_id, reused = stored
             result.rule_instance_id = record_id
             result.status = "reused" if reused else "drafted"
             log.info(
@@ -626,22 +795,29 @@ async def draft_rule(
 # --------------------------------------------------------------------------- #
 
 _HOOK_MODULES = ("investment_agent.candidates.lifecycle",)
+_WATCH_HOOK_MODULES = ("investment_agent.watchlist.drafts",)
 
 
-def _resolve_mark_draft_result() -> Callable[..., Any] | None:
-    for module_name in _HOOK_MODULES:
+def _resolve_hook(
+    module_names: tuple[str, ...], attribute: str
+) -> Callable[..., Any] | None:
+    for module_name in module_names:
         try:
             module = importlib.import_module(module_name)
         except ModuleNotFoundError as exc:
-            # Only "the candidate module does not exist (yet)" is expected;
-            # a missing dependency *inside* it must surface.
+            # Only "the module does not exist (yet)" is expected; a missing
+            # dependency *inside* it must surface.
             if exc.name is not None and module_name.startswith(exc.name):
                 continue
             raise
-        hook: object = getattr(module, "mark_draft_result", None)
+        hook: object = getattr(module, attribute, None)
         if callable(hook):
             return hook
     return None
+
+
+def _resolve_mark_draft_result() -> Callable[..., Any] | None:
+    return _resolve_hook(_HOOK_MODULES, "mark_draft_result")
 
 
 async def notify_draft_result(
@@ -650,13 +826,17 @@ async def notify_draft_result(
     rule_instance_id: int | None,
     failed: bool,
     error: str | None,
+    draft_token: str | None = None,
 ) -> bool:
     """Tell the candidate lifecycle a draft finished; ``True`` when delivered.
 
     Resolves ``mark_draft_result`` from ``investment_agent.candidates.lifecycle``
     lazily (the candidates package imports the rule store) and calls ``mark_draft_result(candidate_id, *, rule_instance_id, failed,
-    error)``; a coroutine result is awaited. ``candidate_id == 0`` (manual
-    draft) and a missing hook are logged and skipped.
+    error, draft_token)``; a coroutine result is awaited. ``candidate_id == 0``
+    (manual draft) and a missing hook are logged and skipped. ``draft_token``
+    lets the callback re-check the shared generation in its own transaction
+    (plan 7.2 WP9): a superseded run never rewrites the candidate's draft
+    association.
     """
 
     if candidate_id <= 0:
@@ -670,7 +850,42 @@ async def notify_draft_result(
             failed=failed,
         )
         return False
-    outcome = hook(candidate_id, rule_instance_id=rule_instance_id, failed=failed, error=error)
+    outcome = hook(
+        candidate_id,
+        rule_instance_id=rule_instance_id,
+        failed=failed,
+        error=error,
+        draft_token=draft_token,
+    )
+    if inspect.isawaitable(outcome):
+        await outcome
+    return True
+
+
+async def notify_watch_draft_result(
+    request_id: str,
+    *,
+    rule_instance_id: int | None,
+    failed: bool,
+    error: str | None,
+) -> bool:
+    """Tell a watchlist draft request that its draft finished; ``True`` when delivered.
+
+    Resolves ``mark_draft_result(request_id, *, rule_instance_id, failed,
+    error)`` from :mod:`investment_agent.watchlist.drafts` lazily; a coroutine
+    result is awaited and a missing hook is logged and skipped.
+    """
+
+    hook = _resolve_hook(_WATCH_HOOK_MODULES, "mark_draft_result")
+    if hook is None:
+        log.info(
+            "rule_draft.notify.watch.unwired",
+            draft_request_id=request_id,
+            rule_instance_id=rule_instance_id,
+            failed=failed,
+        )
+        return False
+    outcome = hook(request_id, rule_instance_id=rule_instance_id, failed=failed, error=error)
     if inspect.isawaitable(outcome):
         await outcome
     return True
@@ -695,6 +910,24 @@ class RuleDraftHandler(BaseJobHandler):
         self.client_factory = client_factory
         self.stock_loader = stock_loader
 
+    async def on_claimed(self, session: AsyncSession, job: ClaimedJob) -> None:
+        """Mark a watchlist request ``drafting`` while its run is claimed."""
+
+        raw = job.request_json
+        if raw.get("origin_kind") != "watchlist":
+            return
+        request_id = raw.get("draft_request_id")
+        if not isinstance(request_id, str) or not request_id:
+            return
+        try:
+            from investment_agent.watchlist.drafts import mark_claimed
+
+            await mark_claimed(session, request_id)
+        except Exception:
+            log.exception(
+                "rule_draft.watch.claim_bookkeeping_failed", draft_request_id=request_id
+            )
+
     async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
         payload = RuleDraftPayload.model_validate(job.request_json)
 
@@ -712,6 +945,9 @@ class RuleDraftHandler(BaseJobHandler):
             "ticker": payload.ticker,
             "candidate_id": payload.candidate_id,
             "as_of": payload.as_of.isoformat(),
+            "origin_kind": payload.origin_kind,
+            "origin_id": payload.origin_id,
+            "draft_request_id": payload.draft_request_id,
             **result.metadata(),
         }
         async with session_scope() as session:
@@ -733,7 +969,7 @@ class RuleDraftHandler(BaseJobHandler):
         return "completed" if result.ok else "partial"
 
     async def finalize(self, job: ClaimedJob) -> None:
-        """Notify the candidate of a terminal outcome (success / partial / failed)."""
+        """Notify the origin of a terminal outcome (success / partial / failed)."""
 
         try:
             async with session_scope() as session:
@@ -742,15 +978,34 @@ class RuleDraftHandler(BaseJobHandler):
                     return  # retry scheduled or lease lost: not terminal for us
                 status, error = run.status, run.error_summary
                 metadata = dict(run.metadata_json or {})
+            rule_id = metadata.get("rule_instance_id")
+            origin_kind = job.request_json.get("origin_kind")
+            if origin_kind == "holding":
+                # A holding draft's state is derived from the shared rule slot
+                # and this run's status (rules/holding.py); no entry pointer to
+                # update, so a terminal outcome needs no callback.
+                return
+            if origin_kind == "watchlist":
+                raw_request = job.request_json.get("draft_request_id")
+                if not isinstance(raw_request, str) or not raw_request:
+                    return
+                await notify_watch_draft_result(
+                    raw_request,
+                    rule_instance_id=rule_id if isinstance(rule_id, int) else None,
+                    failed=status != "success",
+                    error=None if status == "success" else error,
+                )
+                return
             raw_candidate = job.request_json.get("candidate_id")
             if not isinstance(raw_candidate, int):
                 return
-            rule_id = metadata.get("rule_instance_id")
+            raw_token = job.request_json.get("draft_token")
             await notify_draft_result(
                 raw_candidate,
                 rule_instance_id=rule_id if isinstance(rule_id, int) else None,
                 failed=status != "success",
                 error=None if status == "success" else error,
+                draft_token=raw_token if isinstance(raw_token, str) and raw_token else None,
             )
         except Exception:
             log.exception("rule_draft.notify_failed", run_id=job.run_id)
@@ -770,5 +1025,7 @@ __all__ = [
     "enqueue_rule_draft",
     "load_stock_context",
     "notify_draft_result",
+    "notify_watch_draft_result",
+    "reuse_equivalent_draft",
     "rule_draft_idempotency_key",
 ]
