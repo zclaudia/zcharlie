@@ -133,6 +133,7 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "close_quote",
         "earnings_event",
         "calendar_probe",
+        "material_collection",
         "screen_run",
         "rule_draft",
         "ifind_verify",

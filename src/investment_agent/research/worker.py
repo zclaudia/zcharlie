@@ -36,6 +36,7 @@ from investment_agent.jobs.base import (
     JobHandler,
     JobOutcome,
 )
+from investment_agent.materials.handlers import MaterialCollectionHandler
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.research.change_notification import render_change_notification
 from investment_agent.research.ifind_chain import (
@@ -211,6 +212,7 @@ def default_job_handlers(
         *agent_job_handlers(settings),
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
+        MaterialCollectionHandler(settings=settings),
         ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings)),
         RuleDraftHandler(settings=settings),
         IfindVerifyHandler(settings),
