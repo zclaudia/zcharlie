@@ -24,7 +24,7 @@ from investment_agent.storage.models.candidates import (
 )
 from investment_agent.storage.repositories.base import Repository
 
-REASON_REQUIRED_KINDS = frozenset({"dismiss", "reject_rule"})
+REASON_REQUIRED_KINDS = frozenset({"dismiss", "reject_rule", "remove_watch"})
 PREFERENCE_KINDS = ("reject_rule", "dismiss")
 
 

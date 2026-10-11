@@ -6,7 +6,9 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
+from functools import lru_cache
 
+from pypinyin import lazy_pinyin
 from sqlalchemy import ColumnElement, case, func, select
 
 from investment_agent.storage.models.stock_directory import (
@@ -22,6 +24,13 @@ from investment_agent.storage.repositories.base import Repository
 # suffix being typed (``6005``, ``600519.``, ``600519.S``).
 _CODE_QUERY = re.compile(r"^\d{1,6}(?:\.[A-Za-z]{0,2})?$")
 _PINYIN_QUERY = re.compile(r"^[A-Za-z]+$")
+
+
+@lru_cache(maxsize=8192)
+def _full_pinyin(name: str) -> str:
+    # Cache by name, so renamed stocks immediately get their new spelling.
+    return "".join(lazy_pinyin(re.sub(r"\W+", "", name))).lower()
+
 
 _STATUS_RANK = case(
     (StockDirectoryEntry.status == STATUS_LISTED, 0),
@@ -120,7 +129,7 @@ class StockDirectoryRepository(Repository[StockDirectoryEntry]):
         )
 
     async def search(self, query: str, *, limit: int) -> list[StockDirectoryEntry]:
-        """Code prefix > name substring > pinyin-initials prefix, deduplicated.
+        """Code prefix > name substring > initials > full pinyin, deduplicated.
 
         Inside each group listed rows come before suspended, then delisted,
         then by ticker. An empty / blank query returns nothing.
@@ -154,6 +163,21 @@ class StockDirectoryRepository(Repository[StockDirectoryEntry]):
                 merged.append(row)
                 if len(merged) >= limit:
                     return merged
+        if _PINYIN_QUERY.fullmatch(text):
+            # The directory is only ~5,000 rows. Compute cached full spellings
+            # locally, including for existing directories, without a migration.
+            names = await self.session.execute(
+                select(StockDirectoryEntry.ticker, StockDirectoryEntry.name)
+                .order_by(_STATUS_RANK, StockDirectoryEntry.ticker)
+            )
+            matches = []
+            for ticker, name in names:
+                if ticker not in seen and _full_pinyin(name).startswith(text.lower()):
+                    matches.append(ticker)
+                    if len(matches) >= limit - len(merged):
+                        break
+            if matches:
+                merged.extend(await self._rows(StockDirectoryEntry.ticker.in_(matches), len(matches)))
         return merged
 
     async def _rows(

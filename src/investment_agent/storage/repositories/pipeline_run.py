@@ -168,6 +168,14 @@ class PipelineRunRepository(Repository[PipelineRun]):
                         "idempotency key is already associated with different input"
                     )
                 return existing, False
+        from investment_agent.agent.operations import AGENT_KINDS, admission
+        if kind in AGENT_KINDS:
+            queue_class = str((request_json or {}).get("queue_class") or {"agent_discovery": "exploration", "agent_review": "review"}.get(kind, "interactive"))
+            if queue_class not in {"interactive", "review", "exploration"}:
+                raise ValueError("invalid queue class")
+            if not await admission(self.session, queue_class):
+                from investment_agent.agent.tasks import TaskBoundaryError
+                raise TaskBoundaryError("queue_capacity")
         try:
             async with self.session.begin_nested():
                 run = await self.create(
@@ -215,6 +223,17 @@ class PipelineRunRepository(Repository[PipelineRun]):
         """
 
         claimed_at = now or datetime.now(UTC)
+        from investment_agent.agent.operations import AGENT_KINDS, choose
+        selected_kinds = list(kinds) if kinds is not None else [kind] if kind else []
+        if run_id is not None and not selected_kinds:
+            selected_kind = await self.session.scalar(select(PipelineRun.kind).where(PipelineRun.id == run_id))
+            if selected_kind in AGENT_KINDS:
+                selected_kinds = [selected_kind]
+        if any(k in AGENT_KINDS for k in selected_kinds):
+            selected_id = await choose(self.session, kinds=selected_kinds, now=claimed_at, run_id=run_id)
+            if selected_id is None:
+                return None
+            run_id = selected_id
         candidate = (
             select(PipelineRun.id)
             .where(

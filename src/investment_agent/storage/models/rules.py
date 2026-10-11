@@ -92,6 +92,33 @@ class RuleInstanceRecord(Base, TimestampMixin):
     retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class RuleDraftGenerationRecord(Base, TimestampMixin):
+    """The shared drafting generation of one ``(listing, scope)`` (plan 7.2 WP9).
+
+    Candidate lifecycle and watchlist entries both enqueue ``rule_draft`` runs
+    for the same rule slot. Each enqueue claims the next generation, freezing
+    the request ``token`` and the shared rule head it saw; the store and the
+    completion callback re-check both inside their own transaction, so a
+    superseded request can only leave audit rows.
+    """
+
+    __tablename__ = "rule_draft_generation"
+
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listing.id"), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(16), primary_key=True)
+    generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
+    )
+    current_token: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    """Request identity: the candidate ``rule_draft`` idempotency key, or the watch request UUID."""
+    current_origin_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    current_origin_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    template_ref: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    rule_head: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    """The :meth:`RuleStore.head_token` the claimer saw; a later shared-rule
+    change (approve, edit, retire) makes the frozen request stale too."""
+
+
 class ScreenResultRecord(Base):
     __tablename__ = "screen_result"
     __table_args__ = (

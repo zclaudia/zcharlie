@@ -43,6 +43,8 @@ DECISION_KINDS = (
     "reject_rule",
     "edit_rule",
     "expire",
+    "remove_watch",
+    "drop",
 )
 DECISION_ACTORS = ("user", "system")
 
