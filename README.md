@@ -100,7 +100,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `industry_sync` | `ia snapshot sync-industry [--universe CSI300 \| --all-market] [--system sw2021\|csrc ...] [--as-of]` | 每月首个交易日 08:00 | 证监会行业（baostock，`system=csrc`）与申万 2021 行业（AkShare，`system=sw2021`）→ `industry_classification`，默认两者都同步（`--system` 可重复）；不带参数时默认配置的目标池（`snapshot.universes`），全市场需显式 `--all-market` |
 | `market_snapshot` | `ia snapshot collect-market [--provider baostock\|ifind] [--scope universe\|watchlist] [--universe CSI300] [--date]` | 交易日 18:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权；baostock 行附 `pe_ttm`、`pb_mrq`、`ps_ttm`、`turnover`、`trade_status`、`is_st` |
 | `financial_snapshot` | `ia snapshot collect-financial --period 2026-06-30 [--provider] [--scope] [--universe] [--as-of]` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 19:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采该数据源尚无该期的标的；截止日后顺带逾期检测 |
-| `calendar_probe` | —（`python tools/refresh_trading_calendar.py` 手动核对） | 每周一 08:00，仅日历到期前 60 天内 | 双源核对下一年交易日历：一致时写 `data/calendar_candidates/a_share-<年>.yaml` 并发 `info` 通知，分歧时 `action_required` 且不写文件；生效需人工 `--write` + 提交 |
+| `calendar_probe` | —（健康页「交易日历」卡片的「检查更新」按钮，或 `python tools/refresh_trading_calendar.py` 手动核对） | 每周一 08:00，仅日历到期前 60 天内 | 双源核对下一年交易日历：一致时写 `data/calendar_candidates/a_share-<年>.yaml` 并发 `info` 通知，分歧时 `action_required` 且不写文件；卡片上点「应用候选」一键生效 |
 
 - **baostock（目标池）**：一次运行只登录一次，调用经进程级锁串行，无需令牌桶。每只股票每个序列从该数据源最后一个
   交易日 +1 增量取到 `--date`（无历史的从当日开始，深度历史由回补负责）。停牌日（`trade_status=0`，
@@ -321,6 +321,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `GET /research/stocks/{ticker}/history` | 分页快照历史 |
 | `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数 + `data_health` 计数；`warnings` 含日历与数据健康提醒） |
 | `GET /health/data` | 数据健康聚合（只读）：`accumulation`、`freshness`、`universes`、`industry`、`collections`、`backfill`、`verification`、`overdue`、`warnings` |
+| `GET /calendar/status`、`POST /calendar/check`、`POST /calendar/apply` | 交易日历（`/app/health` 卡片的三个动作）：状态含覆盖范围 / 已审年份（每年带 `verified_by` / `verified_on`）/ 候选 / 是否可写 / 上次核对结果；`check` 入队一次双源核对（`force=true`，跳过 60 天窗口）；`apply` 把候选写入日历文件并删除候选，只允许*新增*年份，改写或缺少已审年份返回 409，只读挂载同样 409 |
 | `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 自选股管理与隔离型批量刷新 |
 | `GET /admin/llm-calls`、`/admin/llm-calls/cost` | LLM 调用审计 / 月度成本 |
 | `GET /candidates?status=&limit=&offset=`、`GET /candidates/{id}` | 候选分页列表（来源、最新理由、草稿状态）/ 详情（理由与快照引用、草稿规则、决策历史） |
@@ -359,8 +360,10 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
 被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
 `LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
 交易日历路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），日历见
-`config/calendars/a_share.yaml`（未知年份 fail-closed；由
-`tools/refresh_trading_calendar.py` 双源核对生成，每年带 `verified_by` / `verified_on`）。
+`config/calendars/a_share.yaml`（未知年份 fail-closed；由双源核对生成，每年带
+`verified_by` / `verified_on`）。日常在 `/app/health` 的「交易日历」卡片核对与应用；
+`tools/refresh_trading_calendar.py`（`--write`）是无浏览器场景的等价入口。容器部署时
+`config` 只读、仅 `config/calendars` 由 `api` 服务单独写挂载。
 
 评分成功但解释失败时运行以 `partial` 收尾：确定性分数与制品保留，
 `explanation` 为 `null` 并注明原因，不重试非瞬时错误。
@@ -399,8 +402,9 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
   只用于按需核对与手动深度研究。东财单股现金流量表尚未批量采集时，快照模式缺资本支出 / 自由现金流（需复核）。
 - 交易日历仅审核到 2026 年；未审核年份 fail-closed。到期前 60 天内 `calendar_probe` 任务每周一
   用 baostock + AkShare/Sina 双源核对下一年，一致时写入 `data/calendar_candidates/a_share-<年>.yaml`
-  并在健康页 / 今日概览 / 通知中提醒；核对差异后运行
-  `python tools/refresh_trading_calendar.py --write` 补入 `config/calendars/a_share.yaml` 并提交。
+  并在健康页 / 今日概览 / 通知中提醒；在 `/app/health` 的「交易日历」卡片点「应用候选」补入
+  `config/calendars/a_share.yaml`（并提交文件变更），无浏览器时用
+  `python tools/refresh_trading_calendar.py --write`。
 - 北交所行情（history/realtime）暂被上游网关阻塞，corpus 中北交所样本
   以沪深小盘替代并记录在
   [`tests/fixtures/research_kernel/manifest.yaml`](tests/fixtures/research_kernel/manifest.yaml)。

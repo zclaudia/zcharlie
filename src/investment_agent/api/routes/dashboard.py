@@ -194,7 +194,7 @@ def calendar_warnings(
                 level="warn",
                 message=(
                     f"交易日历候选已生成：{candidate}（双源核对通过）。"
-                    "核对差异后运行 tools/refresh_trading_calendar.py --write 并提交。"
+                    "在『数据健康』页的交易日历卡片点「应用候选」即可。"
                 ),
             )
         )

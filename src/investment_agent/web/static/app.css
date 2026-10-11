@@ -780,6 +780,9 @@ meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--c-accent)
 .ticker-list a { margin-right: 6px; }
 .health-table td { overflow-wrap: anywhere; }
 .health-warnings .notice { margin: 6px 0; }
+.calendar-candidate { margin: var(--sp-2) 0; }
+.calendar-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.calendar-messages .notice { margin: var(--sp-2) 0 0; }
 
 .run-success, .week-qualified { color: var(--c-accent); border-color: color-mix(in srgb, var(--c-accent) 40%, var(--c-line)); background: var(--c-accent-soft); }
 .run-partial, .week-below_threshold { color: var(--c-ai); border-color: color-mix(in srgb, var(--c-ai) 35%, var(--c-line)); background: var(--c-ai-soft); }

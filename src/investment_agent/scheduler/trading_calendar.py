@@ -125,13 +125,13 @@ class CalendarCoverage:
         if self.coverage_end is None:
             return (
                 f"交易日历 {self.calendar_id} 未覆盖 {self.today.year} 年，"
-                "观察池定时刷新已停止；请在官方公布休市安排后运行"
-                " tools/refresh_trading_calendar.py --write 补充并提交。"
+                "观察池定时刷新已停止；请在『数据健康』页的交易日历卡片应用候选"
+                "（或先点「检查更新」）。"
             )
         return (
             f"交易日历 {self.calendar_id} 仅覆盖至 {self.coverage_end.isoformat()}"
-            f"（剩余 {self.days_remaining} 天），请在官方公布休市安排后运行"
-            " tools/refresh_trading_calendar.py --write 补充下一年度。"
+            f"（剩余 {self.days_remaining} 天），请在『数据健康』页的交易日历卡片核对并应用"
+            "候选；系统每周一自动核对一次。"
         )
 
 

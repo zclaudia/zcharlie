@@ -24,6 +24,7 @@ from investment_agent.scheduler.calendar_refresh import (
     days_of_year,
     merge_years,
     parse_calendar_text,
+    render_calendar,
 )
 from investment_agent.scheduler.trading_calendar import TradingCalendar, load_trading_calendar
 from investment_agent.snapshots.calendar_probe import candidate_path, collect_calendar_probe
@@ -242,3 +243,81 @@ def test_calendar_probe_is_a_validated_schedule_setting() -> None:
     assert spec.yaml_path == ("snapshot", "calendar_probe_cron")
     with pytest.raises(ValueError):
         SnapshotSchedule(calendar_probe_cron="0 8 * * 9")
+
+
+def test_candidates_lists_parseable_files_by_year(tmp_path: Path) -> None:
+    from investment_agent.snapshots.calendar_probe import candidates
+
+    assert candidates(tmp_path) == []
+    good = merge_years(
+        _calendar(), [build_year(2027, TRADING_2027).model_copy(update={"verified_on": date(2026, 12, 18)})]
+    )
+    path = candidate_path(tmp_path, 2027)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_calendar(good), encoding="utf-8")
+    (path.parent / "a_share-2028.yaml").write_text("not: a calendar\n", encoding="utf-8")
+
+    found = candidates(tmp_path)
+
+    assert [item.year for item in found] == [2027]
+    assert found[0].closed_dates == (HOLIDAY_2027,)
+    assert found[0].trading_days == len(TRADING_2027)
+    assert found[0].verified_on == date(2026, 12, 18)
+
+
+def _write_candidate(tmp_path: Path, calendar: TradingCalendar) -> Any:
+    from investment_agent.snapshots.calendar_probe import candidates
+
+    path = candidate_path(tmp_path, max(item.year for item in calendar.years))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_calendar(calendar), encoding="utf-8")
+    return candidates(tmp_path)[-1]
+
+
+def test_apply_candidate_adds_the_year_and_removes_the_candidate(tmp_path: Path) -> None:
+    from investment_agent.snapshots.calendar_probe import apply_candidate
+
+    current_path = tmp_path / "a_share.yaml"
+    current_path.write_text(render_calendar(_calendar()), encoding="utf-8")
+    proposed = merge_years(
+        _calendar(),
+        [
+            build_year(2027, TRADING_2027).model_copy(
+                update={"verified_by": ["baostock", "akshare"], "verified_on": date(2026, 12, 18)}
+            )
+        ],
+    )
+    candidate = _write_candidate(tmp_path, proposed)
+
+    written, added = apply_candidate(current_path, candidate)
+
+    assert added == (2027,)
+    assert [item.year for item in written.years] == [2026, 2027]
+    assert load_trading_calendar(current_path).years[-1].closed_dates == {HOLIDAY_2027}
+    assert not candidate.path.exists()
+
+
+@pytest.mark.parametrize("scenario", ["missing_year", "changed_year", "adds_nothing"])
+def test_apply_candidate_only_ever_adds_years(tmp_path: Path, scenario: str) -> None:
+    from investment_agent.snapshots.calendar_probe import CandidateConflictError, apply_candidate
+
+    current = _calendar()
+    current_path = tmp_path / "a_share.yaml"
+    current_path.write_text(render_calendar(current), encoding="utf-8")
+    reviewed_2027 = build_year(2027, TRADING_2027)
+    if scenario == "missing_year":
+        proposed = current.model_copy(update={"years": [reviewed_2027]})  # 2026 dropped
+    elif scenario == "changed_year":
+        changed_2026 = current.years[0].model_copy(
+            update={"closed_dates": current.years[0].closed_dates | {date(2026, 7, 1)}}
+        )
+        proposed = current.model_copy(update={"years": [changed_2026, reviewed_2027]})
+    else:
+        proposed = current
+    candidate = _write_candidate(tmp_path, proposed)
+
+    with pytest.raises(CandidateConflictError, match="2026|adds no year"):
+        apply_candidate(current_path, candidate)
+
+    assert load_trading_calendar(current_path) == current
+    assert candidate.path.exists()

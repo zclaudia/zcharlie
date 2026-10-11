@@ -339,13 +339,18 @@ class CalendarProbePayload(_Payload):
     The scheduler enqueues one probe per week while the committed calendar is
     inside its expiry window; the worker fetches baostock's day-by-day answers
     and Sina's list (via AkShare) and records a candidate file only when both
-    agree on every trading day. Applying stays manual
-    (``tools/refresh_trading_calendar.py --write`` + commit): see
+    agree on every trading day. An agreeing candidate is applied from the
+    health page (``POST /calendar/apply``) or by
+    ``tools/refresh_trading_calendar.py --write``: see
     :mod:`investment_agent.snapshots.calendar_probe`.
+
+    ``force`` marks a manually requested check: it skips the expiry-window
+    gate (never the publication or agreement gates).
     """
 
     as_of: date
     year: int = Field(ge=2000, le=2200)
+    force: bool = False
 
 
 SnapshotPayload = (

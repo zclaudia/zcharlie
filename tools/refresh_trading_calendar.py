@@ -16,6 +16,11 @@ The exchanges publish next year's holiday schedule around December; until then
 both sources answer nothing for that year and the tool reports it as skipped,
 not as an error. See docs/product/operations.md, "年度 / 不定期维护".
 
+Routine use happens in the browser: the health page's trading-calendar card
+applies the candidate the weekly ``calendar_probe`` job recorded (and can run
+a check on demand). This CLI stays for headless ops - applying a candidate
+without the UI, and regenerating from a live two-source fetch.
+
 Usage::
 
     python tools/refresh_trading_calendar.py                 # show the diff

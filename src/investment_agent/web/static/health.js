@@ -5,7 +5,7 @@
 // 所有 DOM 经 dom.js 构造（textContent / setAttribute），不写 HTML 字符串；
 // 进度条用原生 <meter> / <progress>，不写内联样式。
 
-import { ApiError, get } from "./api.js";
+import { ApiError, get, post } from "./api.js";
 import { clear, el, errorText, fmt, stockLink } from "./dom.js";
 import { alertList, kpi } from "./ui.js";
 import {
@@ -81,6 +81,7 @@ const SECTION_LABELS = Object.freeze({
   verification: "iFinD 核对",
   overdue: "逾期财报",
   providers: "上游调用",
+  calendar: "交易日历",
 });
 
 export const PROVIDER_LABELS = Object.freeze({
@@ -821,7 +822,199 @@ export function healthBucket(counts) {
   return card;
 }
 
+// ---- 交易日历卡片（页面上唯一会写文件的操作） --------------------------------
+
+const CALENDAR_ENDPOINT = "/calendar/status";
+const CALENDAR_POLL_MS = 4000;
+const CALENDAR_POLL_TRIES = 15;
+const PROBE_OUTCOME_LABELS = Object.freeze({
+  candidate: "发现新年度，已生成候选",
+  not_published: "两源均未公布该年度",
+  not_due: "未到核对窗口",
+  up_to_date: "已是最新",
+  conflict: "两源分歧，未写入",
+  calendar_unavailable: "日历不可读",
+  queued: "已排队",
+  running: "核对中",
+});
+
+function calendarCoverageLine(status) {
+  const years = status.years.map((item) => item.year).join(" / ") || "—";
+  const coverage = status.coverage;
+  const end = coverage.end ? fmt(coverage.end) : "—";
+  const tail = coverage.expired ? "已过期" : `剩余 ${coverage.days_remaining} 天`;
+  return `已审年份 ${years}（覆盖至 ${end}，${tail}）`;
+}
+
+function calendarYearLine(status) {
+  return status.years
+    .map((item) =>
+      `${item.year}：${item.closed_dates} 个休市日${
+        item.verified_on
+          ? `（${(item.verified_by || []).join("+")} 核对 ${fmt(item.verified_on)}）`
+          : ""
+      }`
+    )
+    .join(" · ");
+}
+
+function calendarCandidateBlock(candidate) {
+  const block = el("div", { class: "calendar-candidate" });
+  block.appendChild(
+    el(
+      "p",
+      {},
+      `候选 ${candidate.year}：${candidate.trading_days} 个交易日，${candidate.closed_dates.length} 个工作日休市`
+    )
+  );
+  block.appendChild(
+    el(
+      "p",
+      { class: "small muted" },
+      `双源核对 ${(candidate.verified_by || []).join(" + ")}` +
+        `${candidate.verified_on ? `（${fmt(candidate.verified_on)}）` : ""} · 文件 ${candidate.path}`
+    )
+  );
+  if (candidate.closed_dates.length) {
+    const details = el("details");
+    details.appendChild(el("summary", {}, "休市日明细"));
+    details.appendChild(el("p", { class: "small" }, candidate.closed_dates.join("、")));
+    block.appendChild(details);
+  }
+  return block;
+}
+
+function calendarActions(status, reload) {
+  const row = el("div", { class: "calendar-actions" });
+  const messages = el("div", { class: "calendar-messages" });
+  const say = (text, kind = "notice") => {
+    clear(messages);
+    messages.appendChild(el("p", { class: kind }, text));
+  };
+  const busy = (button, value) => {
+    button.disabled = value;
+    button.setAttribute("aria-busy", value ? "true" : "false");
+  };
+
+  const applyButton = el("button", { type: "button", class: "primary" }, "应用候选");
+  const checkButton = el("button", { type: "button", class: "secondary" }, "检查更新");
+  const candidate = status.candidate;
+  applyButton.disabled = !candidate || !status.writable;
+  if (candidate && !status.writable) {
+    applyButton.title = "日历文件不可写（容器部署时 config 是只读挂载）";
+  }
+
+  applyButton.addEventListener("click", async () => {
+    if (!candidate) return;
+    const question =
+      `把 ${candidate.year} 年写入交易日历？\n` +
+      `${candidate.trading_days} 个交易日、${candidate.closed_dates.length} 个工作日休市（双源已核对）。`;
+    if (!globalThis.confirm(question)) return;
+    busy(applyButton, true);
+    say("正在写入…");
+    try {
+      const result = await post("/calendar/apply", {});
+      say(
+        `已应用 ${result.added_years.join("、")} 年：写入 ${result.path}，候选文件已删除。` +
+          "提交这次文件变更后随部署保留；本机调度器下次触发即用新日历。"
+      );
+      await reload();
+    } catch (error) {
+      busy(applyButton, false);
+      say(error.message || "应用失败。", "notice notice-error");
+    }
+  });
+
+  checkButton.addEventListener("click", async () => {
+    busy(checkButton, true);
+    say("已排队核对（baostock + AkShare/Sina）…");
+    let queued;
+    try {
+      queued = await post("/calendar/check", {});
+    } catch (error) {
+      busy(checkButton, false);
+      say(error.message || "排队失败。", "notice notice-error");
+      return;
+    }
+    const deadline = Date.now() + CALENDAR_POLL_MS * CALENDAR_POLL_TRIES;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, CALENDAR_POLL_MS));
+      let latest = null;
+      try {
+        latest = await get(CALENDAR_ENDPOINT);
+      } catch {
+        continue;
+      }
+      const probe = latest && latest.last_probe;
+      if (probe && probe.run_id >= queued.run_id && !["queued", "running"].includes(probe.status)) {
+        busy(checkButton, false);
+        await reload();
+        return;
+      }
+    }
+    busy(checkButton, false);
+    say("核对仍在进行（worker 可能没在运行）；稍后刷新本页查看结果。", "notice");
+  });
+
+  row.appendChild(applyButton);
+  row.appendChild(checkButton);
+  return { row, messages };
+}
+
+function renderCalendar(card, status, reload) {
+  clear(card);
+  card.appendChild(el("p", {}, calendarCoverageLine(status)));
+  const years = calendarYearLine(status);
+  if (years) card.appendChild(el("p", { class: "small muted" }, years));
+  card.appendChild(
+    el("p", { class: "small muted" }, `文件 ${status.path}${status.writable ? "" : "（只读，无法应用）"}`)
+  );
+  if (status.candidate) {
+    card.appendChild(calendarCandidateBlock(status.candidate));
+  } else {
+    card.appendChild(
+      el("p", { class: "small muted" }, "没有待应用的候选：系统每周自动核对，也可以点「检查更新」立即核对。")
+    );
+  }
+  const actions = calendarActions(status, reload);
+  card.appendChild(actions.row);
+  card.appendChild(actions.messages);
+  const probe = status.last_probe;
+  if (probe) {
+    card.appendChild(
+      el(
+        "p",
+        { class: "small muted" },
+        `上次核对：${label(PROBE_OUTCOME_LABELS, probe.outcome || probe.status)}` +
+          `${probe.finished_at ? `（${formatDateTime(probe.finished_at)}）` : ""}` +
+          `${probe.summary ? ` · ${probe.summary}` : ""}`
+      )
+    );
+  }
+}
+
+async function loadCalendar() {
+  const card = document.getElementById("calendar-card");
+  if (!card) return;
+  document.getElementById("health-calendar")?.removeAttribute("hidden");
+  const reload = () => loadCalendar();
+  try {
+    const status = await get(CALENDAR_ENDPOINT);
+    renderCalendar(card, status, reload);
+  } catch (error) {
+    clear(card);
+    card.appendChild(
+      el(
+        "p",
+        { class: "notice notice-error" },
+        error instanceof ApiError ? error.message : "交易日历状态加载失败。"
+      )
+    );
+  }
+}
+
 export function bootHealth() {
   const region = document.getElementById("data-health");
   if (region) loadHealth(region);
+  loadCalendar();
 }

@@ -44,4 +44,4 @@ def test_dashboard_warns_about_a_calendar_candidate(api_client, tmp_path) -> Non
     candidate = body["warnings"][0]
     assert candidate["source"] == "calendar" and candidate["level"] == "warn"
     assert "a_share-2027.yaml" in candidate["message"]
-    assert "tools/refresh_trading_calendar.py --write" in candidate["message"]
+    assert "数据健康" in candidate["message"] and "应用候选" in candidate["message"]

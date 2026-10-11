@@ -80,7 +80,7 @@ def health_settings(
     if include_calendar_warnings:
         warnings = tuple(
             HealthWarning(
-                code=item.code, level=item.level, message=item.message, section="freshness"
+                code=item.code, level=item.level, message=item.message, section="calendar"
             )
             for item in calendar_warnings(data_dir=settings.data_dir)
         )

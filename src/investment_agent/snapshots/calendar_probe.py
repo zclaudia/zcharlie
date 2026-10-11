@@ -42,7 +42,11 @@ from investment_agent.scheduler.calendar_refresh import (
     plan_refresh,
     render_calendar,
 )
-from investment_agent.scheduler.trading_calendar import TradingCalendar, calendar_coverage
+from investment_agent.scheduler.trading_calendar import (
+    TradingCalendar,
+    calendar_coverage,
+    load_trading_calendar,
+)
 from investment_agent.snapshots.jobs import CalendarProbePayload
 
 log = structlog.get_logger(__name__)
@@ -70,6 +74,101 @@ def candidate_path(data_dir: Path, year: int) -> Path:
     return Path(data_dir) / CANDIDATE_DIR / f"a_share-{year}.yaml"
 
 
+@dataclass(frozen=True)
+class CalendarCandidate:
+    """One verified candidate file, parsed (the UI status and the apply action)."""
+
+    path: Path
+    year: int
+    calendar: TradingCalendar
+
+    @property
+    def closed_dates(self) -> tuple[date, ...]:
+        item = next(entry for entry in self.calendar.years if entry.year == self.year)
+        return tuple(sorted(item.closed_dates))
+
+    @property
+    def open_dates(self) -> tuple[date, ...]:
+        item = next(entry for entry in self.calendar.years if entry.year == self.year)
+        return tuple(sorted(item.open_dates))
+
+    @property
+    def trading_days(self) -> int:
+        item = next(entry for entry in self.calendar.years if entry.year == self.year)
+        return sum(
+            1
+            for day in days_of_year(self.year)
+            if (day.weekday() < 5 and day not in item.closed_dates) or day in item.open_dates
+        )
+
+    @property
+    def verified_by(self) -> tuple[str, ...]:
+        return tuple(
+            next(entry for entry in self.calendar.years if entry.year == self.year).verified_by
+        )
+
+    @property
+    def verified_on(self) -> date | None:
+        return next(entry for entry in self.calendar.years if entry.year == self.year).verified_on
+
+
+def candidates(data_dir: Path) -> list[CalendarCandidate]:
+    """Every parseable candidate under ``data/calendar_candidates``, by year."""
+
+    directory = Path(data_dir) / CANDIDATE_DIR
+    parsed: list[CalendarCandidate] = []
+    for path in sorted(directory.glob("a_share-*.yaml")) if directory.is_dir() else []:
+        try:
+            calendar = parse_calendar_text(path.read_text(encoding="utf-8"))
+        except Exception:
+            log.warning("calendar_probe.candidate_unreadable", path=str(path))
+            continue
+        if not calendar.years:
+            continue
+        year = max(item.year for item in calendar.years)
+        parsed.append(CalendarCandidate(path=path, year=year, calendar=calendar))
+    return sorted(parsed, key=lambda item: (item.year, str(item.path)))
+
+
+class CandidateConflictError(RuntimeError):
+    """The candidate cannot be applied to the committed calendar as it is."""
+
+
+def apply_candidate(calendar_path: Path, candidate: CalendarCandidate) -> tuple[TradingCalendar, tuple[int, ...]]:
+    """Write a verified candidate over the runtime calendar (atomic).
+
+    A click must never rewrite history, so the candidate may only *add* years:
+    it must contain every reviewed year the committed file has, with identical
+    data and provenance, and at least one new year. The candidate file is
+    removed once the calendar is written.
+    """
+
+    current = load_trading_calendar(calendar_path)
+    before = {item.year: item for item in current.years}
+    after = {item.year: item for item in candidate.calendar.years}
+    missing = sorted(before.keys() - after.keys())
+    if missing:
+        raise CandidateConflictError(
+            f"candidate {candidate.path.name} lacks reviewed years {missing}"
+        )
+    for year in sorted(before.keys() & after.keys()):
+        if before[year] != after[year]:
+            raise CandidateConflictError(
+                f"candidate would change the reviewed year {year}"
+            )
+    added = tuple(sorted(after.keys() - before.keys()))
+    if not added:
+        raise CandidateConflictError("candidate adds no year")
+
+    text = render_calendar(candidate.calendar)
+    if parse_calendar_text(text) != candidate.calendar:
+        raise CandidateConflictError("candidate does not round-trip")
+    _write_atomic(Path(calendar_path), text)
+    candidate.path.unlink()
+    log.info("calendar_probe.applied", year=added[-1], path=str(calendar_path))
+    return candidate.calendar, added
+
+
 def _write_atomic(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
@@ -91,10 +190,9 @@ def _candidate_body(year: int, path: Path, calendar: TradingCalendar) -> str:
         f"工作日休市 {len(item.closed_dates)} 天，周末交易日 {len(item.open_dates)} 天。\n\n"
         f"休市日：{closed}\n\n"
         f"候选文件：{path}\n\n"
-        "核对差异后启用（二者等价）：\n\n"
-        f"1. `python {TOOL} --write` 重新双源核对并写入 `config/calendars/a_share.yaml`；\n"
-        f"2. 复制候选文件覆盖 `config/calendars/a_share.yaml`。\n\n"
-        "然后 `git commit`（候选文件已带 `verified_by` / `verified_on`）。\n"
+        "在『数据健康』页的交易日历卡片点「应用候选」即可写入 "
+        "`config/calendars/a_share.yaml`（再提交一次文件变更以随部署保留）。\n"
+        f"命令行等价操作：`python {TOOL} --write` 或直接用候选文件覆盖日历文件。\n"
     )
 
 
@@ -145,7 +243,11 @@ async def collect_calendar_probe(
     run_id: int,
     today: date,
 ) -> ProbeOutcome:
-    """One probe run: cross-check ``payload.year`` and record a candidate."""
+    """One probe run: cross-check ``payload.year`` and record a candidate.
+
+    ``payload.force`` (a manual check from the health page) skips the
+    expiry-window gate only; publication and agreement still decide.
+    """
 
     if calendar is None:
         return ProbeOutcome(
@@ -154,7 +256,7 @@ async def collect_calendar_probe(
             "交易日历不可读，跳过核对",
         )
     coverage = calendar_coverage(calendar, today)
-    if not coverage.expiring_soon:
+    if not coverage.expiring_soon and not payload.force:
         return ProbeOutcome(
             "success",
             {

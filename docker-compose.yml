@@ -8,9 +8,13 @@ services:
     # Code (src/, alembic/) ships in the image; only data is writable.
     # On Linux the host ./data must be writable by uid 10001 (or rebuild with
     # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
+    # config/ stays read-only except the calendars directory: the health
+    # page's trading-calendar card applies the dual-source candidate there
+    # (the atomic write needs a temp file in that directory).
     volumes:
       - ./data:/app/data
       - ./config:/app/config:ro
+      - ./config/calendars:/app/config/calendars
     working_dir: /app
     # Published on loopback only; put a TLS reverse proxy in front for remote
     # access (then set WEB_COOKIE_SECURE=true and WEB_PUBLIC_ORIGIN).

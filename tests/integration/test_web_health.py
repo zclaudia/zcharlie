@@ -87,6 +87,26 @@ def test_static_health_module_is_served(api_client) -> None:
     assert "javascript" in response.headers["content-type"]
 
 
+def test_health_page_has_the_calendar_card(api_client) -> None:
+    """The card is the click-path that replaces the CLI for calendar updates."""
+
+    _login(api_client)
+    html = api_client.get("/app/health").text
+    assert 'id="health-calendar"' in html
+    assert 'id="calendar-card"' in html
+    source = (STATIC / "health.js").read_text(encoding="utf-8")
+    for marker in (
+        '"/calendar/status"',
+        '"/calendar/apply"',
+        '"/calendar/check"',
+        "应用候选",
+        "检查更新",
+        'calendar: "交易日历"',
+        "loadCalendar",
+    ):
+        assert marker in source, marker
+
+
 def test_health_js_renders_every_section_and_wires_the_overview() -> None:
     source = (STATIC / "health.js").read_text(encoding="utf-8")
     for section in SECTIONS:
