@@ -15,15 +15,18 @@
   <header class="app-header">
     <a class="brand" href="/app">
       <img class="brand-icon" src="/app/static/brand/icon-64.png" width="40" height="40" alt="">
-      <span>zcharlie 研究台</span>
+      <span>ZCHARLIE 研究台</span>
     </a>
     <nav class="app-nav" aria-label="主导航">
       <a href="/app" {% if active_nav == "overview" %}class="active" aria-current="page"{% endif %}>今日概览</a>
-      <a href="/app/candidates" {% if active_nav == "candidates" %}class="active" aria-current="page"{% endif %}>候选</a>
+      <a href="/app/agent" {% if active_nav == "agent" %}class="active" aria-current="page"{% endif %}>AI</a>
+      <a href="/app/candidates" {% if active_nav == "candidates" %}class="active" aria-current="page"{% endif %}>候选池</a>
       <a href="/app/templates" {% if active_nav == "templates" %}class="active" aria-current="page"{% endif %}>模板</a>
-      <a href="/app/watchlist" {% if active_nav == "watchlist" %}class="active" aria-current="page"{% endif %}>自选股</a>
+      <a href="/app/watchlist" {% if active_nav == "watchlist" %}class="active" aria-current="page"{% endif %}>观察池</a>
+      <a href="/app/portfolio" {% if active_nav == "portfolio" %}class="active" aria-current="page"{% endif %}>持仓池</a>
       <a href="/app/runs" {% if active_nav == "runs" %}class="active" aria-current="page"{% endif %}>运行中心</a>
       <a href="/app/health" {% if active_nav == "health" %}class="active" aria-current="page"{% endif %}>数据健康</a>
+      <a href="/app/methods" {% if active_nav == "methods" %}class="active" aria-current="page"{% endif %}>研究方法</a>
       <a href="/app/settings" {% if active_nav == "settings" %}class="active" aria-current="page"{% endif %}>设置</a>
       <form method="post" action="/app/logout" class="logout-form">
         <button type="submit" class="link-button">退出</button>
@@ -40,7 +43,7 @@
     </noscript>
   </main>
   <footer class="app-footer">
-    <p>{{ disclaimer }}；所有结论以数据库中的确定性结果为准。</p>
+    {% if active_nav == "agent" %}<p>{{ disclaimer }}；研究观点是基于所列来源与当时材料的分析，包含假设与不确定性。交易决定由你作出。</p>{% else %}<p>{{ disclaimer }}；所有结论以数据库中的确定性结果为准。</p>{% endif %}
   </footer>
   <script type="module" src="/app/static/app.js"></script>
 </body>

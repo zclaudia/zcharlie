@@ -4,8 +4,9 @@
      data-endpoint="/candidates/{{ candidate_id }}"
      data-candidate-id="{{ candidate_id }}">
   <header class="page-head">
-    <p class="small"><a href="/app/candidates">← 返回候选列表</a></p>
+    <p class="small"><a href="/app/candidates">← 返回候选池</a></p>
     <h1 id="candidate-title">候选 #{{ candidate_id }}</h1>
+    <a href="/app/agent?candidate={{ candidate_id }}">在对话工作台讨论此候选</a>
   </header>
   <section class="card">
     <div id="candidate-header" aria-live="polite">

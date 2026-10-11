@@ -15,6 +15,8 @@ import { CANDIDATE_REGIONS, bootCandidates, candidatesBucket } from "./candidate
 import { TEMPLATE_REGIONS, bootTemplates } from "./templates.js";
 import { attachCombobox } from "./combobox.js";
 import { HEALTH_REGIONS, bootHealth, healthBucket } from "./health.js";
+import { bootAgentControls } from "./agent_controls.js";
+import { bootAgentViews } from "./agent_views.js";
 import { SETTINGS_REGIONS, bootSettings } from "./settings.js";
 import { el, errorText, fmt, fmtNumber, kvTable, statusBadge, stockLink, table } from "./dom.js";
 import {
@@ -39,6 +41,10 @@ import {
   scoreFactorLabel,
 } from "./research_format.js";
 import { aiStamp, alertList, bar, fillSparklines, ring } from "./ui.js";
+import { bootAgent } from "./agent.js";
+import { bootAgentPortfolio } from "./agent_portfolio.js";
+import { WATCHLIST_REGIONS, bootWatchlist } from "./watchlist.js";
+import { PORTFOLIO_REGIONS, bootPortfolio } from "./portfolio.js";
 import { mountPriceChart } from "./pricechart.js";
 
 // ---- 今日概览 ---------------------------------------------------------
@@ -116,235 +122,6 @@ async function loadDashboard(region, data) {
     );
   }
   renderRegion(region, "ready", container);
-}
-
-// ---- 自选股 ----------------------------------------------------------
-
-// 日线迷你图（B3）：占位先渲染，再按行异步替换；只画收盘价，不评判。
-const SPARK_DAYS = 120;
-
-function loadBars(ticker, days) {
-  return get(`/market/${encodeURIComponent(ticker)}/bars?days=${days}`);
-}
-
-function sparkSlot(ticker, cls = "spark-slot") {
-  return el("span", { class: `spark spark-pending ${cls}`.trim(), "data-spark": ticker, "aria-hidden": "true" });
-}
-
-function mountSparklines(root, days, options) {
-  const targets = root.querySelectorAll("[data-spark]");
-  if (!targets.length) return Promise.resolve();
-  return fillSparklines(targets, (ticker) => loadBars(ticker, days), options);
-}
-
-async function loadWatchlist(region, items) {
-  const count = document.querySelector("#watchlist-count");
-  if (!Array.isArray(items) || !items.length) {
-    if (count) count.textContent = "";
-    renderRegion(region, "empty");
-    return;
-  }
-  if (count) {
-    const enabled = items.filter((item) => item.enabled).length;
-    count.textContent = `共 ${items.length} 只${enabled < items.length ? `，启用 ${enabled}` : ""}`;
-  }
-  const sorted = [...items].sort((a, b) => Number(b.enabled) - Number(a.enabled));
-  const node = table(
-    [
-      { label: "股票" },
-      { label: `近 ${SPARK_DAYS} 日` },
-      { label: "策略 / 行业" },
-      { label: "投资分" },
-      { label: "置信度" },
-      { label: "数据新鲜度" },
-      { label: "最近变化" },
-      { label: "刷新" },
-      { label: "操作" },
-    ],
-    sorted.map((item) => watchlistRow(region, item))
-  );
-  node.classList.add("watch-table");
-  renderRegion(region, "ready", node);
-  mountSparklines(node, SPARK_DAYS);
-}
-
-function stockCell(ticker, name) {
-  const cell = el("td", { class: "stock-cell" });
-  const link = el("a", { href: `/app/stocks/${encodeURIComponent(ticker)}`, class: "stock-name" }, name || ticker);
-  cell.appendChild(link);
-  cell.appendChild(el("span", { class: "stock-code" }, ticker));
-  return cell;
-}
-
-function freshnessCell(latest) {
-  const cell = el("td");
-  if (!latest || latest.freshness_ok === null || latest.freshness_ok === undefined) {
-    cell.appendChild(el("span", { class: "faint" }, "—"));
-    return cell;
-  }
-  const box = el("span", { class: "fresh-inline" });
-  box.appendChild(el("span", { class: `dot ${latest.freshness_ok ? "dot-fresh" : "dot-stale"}`, "aria-hidden": "true" }));
-  box.appendChild(document.createTextNode(latest.freshness_ok ? "正常" : "已过期"));
-  cell.appendChild(box);
-  return cell;
-}
-
-function watchlistRow(region, item) {
-  const latest = item.latest_research;
-  const tr = el("tr", { class: item.enabled ? undefined : "row-disabled" });
-  const stock = stockCell(item.ticker, item.name);
-  if (!item.enabled) stock.appendChild(el("span", { class: "badge" }, "已停用"));
-  tr.appendChild(stock);
-
-  const spark = el("td", { class: "spark-cell" });
-  spark.appendChild(sparkSlot(item.ticker));
-  tr.appendChild(spark);
-
-  const strategy = el("td");
-  strategy.appendChild(el("span", {}, (latest && latest.strategy_label) || "—"));
-  strategy.appendChild(el("span", { class: "cell-sub" }, fmt(item.industry)));
-  tr.appendChild(strategy);
-
-  const score = el("td", { class: "score-cell" });
-  if (latest && typeof latest.investment_score === "number") {
-    score.appendChild(el("span", { class: "score-cell-value" }, fmtNumber(latest.investment_score, 1)));
-    score.appendChild(bar(latest.investment_score));
-  } else {
-    score.appendChild(el("span", { class: "faint" }, "未研究"));
-  }
-  tr.appendChild(score);
-  tr.appendChild(el("td", { class: "num" }, fmtNumber(latest && latest.research_confidence_score, 0)));
-  tr.appendChild(freshnessCell(latest));
-
-  const changed = el("td");
-  changed.appendChild(el("span", {}, latest && latest.changed_at ? formatDateTime(latest.changed_at) : "—"));
-  if (latest && latest.meaningful_change_count) {
-    changed.appendChild(el("span", { class: "cell-sub" }, `重要变化 ${latest.meaningful_change_count} 项`));
-  }
-  if (latest && latest.needs_agent_review) changed.appendChild(el("span", { class: "badge warn" }, "需复核"));
-  tr.appendChild(changed);
-
-  const refresh = el("td");
-  refresh.appendChild(statusBadge(item.last_refresh_status));
-  if (item.last_refreshed_at) refresh.appendChild(el("span", { class: "cell-sub" }, formatDateTime(item.last_refreshed_at)));
-  if (item.last_refresh_error) refresh.appendChild(errorText(item.last_refresh_error));
-  tr.appendChild(refresh);
-
-  const actions = el("td", { class: "row-actions" });
-  const toggle = el("button", { type: "button" }, item.enabled ? "停用" : "启用");
-  toggle.addEventListener("click", () => {
-    const promise = fetch(`/watchlist/${item.listing_id}`, {
-      method: "PATCH",
-      headers: { ...FETCH_MARKER_HEADERS, "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ enabled: !item.enabled }),
-    }).then((response) => {
-      if (response.ok) {
-        loadRegion(region, { render: loadWatchlist });
-      } else {
-        renderRegion(region, "error", `更新失败（HTTP ${response.status}）。`);
-      }
-    });
-    lockWhileBusy(toggle, promise);
-  });
-  actions.appendChild(toggle);
-  const remove = el("button", { type: "button", class: "danger" }, "删除");
-  remove.addEventListener("click", () => {
-    if (!globalThis.confirm(`删除自选股 ${item.ticker}？`)) return;
-    removeWatchlistItem(region, item, remove);
-  });
-  actions.appendChild(remove);
-  tr.appendChild(actions);
-  return tr;
-}
-
-async function removeWatchlistItem(region, item, button) {
-  const promise = fetch(`/watchlist/${item.listing_id}`, {
-    method: "DELETE",
-    headers: { ...FETCH_MARKER_HEADERS },
-    credentials: "same-origin",
-  }).then((response) => {
-    if (response.status === 204) {
-      loadRegion(region, { render: loadWatchlist });
-    } else {
-      renderRegion(region, "error", `删除失败（HTTP ${response.status}）。`);
-    }
-  });
-  lockWhileBusy(button, promise);
-  await promise;
-}
-
-function wireWatchlistForm(form) {
-  // 代码框是股票搜索下拉（代码 / 名称 / 拼音首字母）：选中回填 ticker 并自动填名称；
-  // 提交时 ticker 的校验规则不变（服务端 WatchlistAdd）。
-  const tickerInput = form.querySelector('input[name="ticker"]');
-  const nameInput = form.querySelector('input[name="name"]');
-  if (tickerInput) {
-    attachCombobox(tickerInput, {
-      onSelect: (item) => {
-        if (nameInput && item.name) nameInput.value = item.name;
-      },
-    });
-  }
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const submit = form.querySelector('button[type="submit"]');
-    const formData = new FormData(form);
-    const payload = {};
-    for (const key of ["ticker", "industry", "name", "report_year"]) {
-      const value = String(formData.get(key) || "").trim();
-      if (value) payload[key] = key === "report_year" ? Number(value) : value;
-    }
-    const promise = post("/watchlist", payload, { idempotency: false })
-      .then(() => {
-        form.reset();
-        const list = document.querySelector("#watchlist-list");
-        if (list) loadRegion(list, { render: loadWatchlist });
-      })
-      .catch((error) => {
-        const results = document.querySelector("#watchlist-refresh-results");
-        if (results) renderRegion(results, "error", error.message);
-      });
-    if (submit) lockWhileBusy(submit, promise);
-    await promise;
-  });
-}
-
-function wireRefreshAll(button) {
-  button.addEventListener("click", () => {
-    const promise = post("/watchlist/refresh", {}, { idempotency: true })
-      .then((data) => {
-        const results = document.querySelector("#watchlist-refresh-results");
-        if (results) {
-          const container = el("div");
-          container.appendChild(
-            el(
-              "p",
-              {},
-              `共 ${data.total} 只：新排队 ${data.created_runs}，复用运行 ${data.reused_runs}，失败 ${data.failed}。`
-            )
-          );
-          const list = el("ul", { class: "refresh-results" });
-          for (const item of data.items || []) {
-            const row = el("li");
-            row.appendChild(el("span", { class: "stock-code" }, fmt(item.ticker)));
-            row.appendChild(statusBadge(item.status));
-            if (item.run_id) row.appendChild(el("span", { class: "faint" }, `运行 #${item.run_id}${item.created ? "（新建）" : "（复用）"}`));
-            if (item.error) row.appendChild(errorText(item.error));
-            list.appendChild(row);
-          }
-          container.appendChild(list);
-          renderRegion(results, "ready", container);
-        }
-        const list = document.querySelector("#watchlist-list");
-        if (list) loadRegion(list, { render: loadWatchlist });
-      })
-      .catch((error) => {
-        const results = document.querySelector("#watchlist-refresh-results");
-        if (results) renderRegion(results, "error", error.message);
-      });
-    lockWhileBusy(button, promise);
-  });
 }
 
 // ---- 运行中心 ---------------------------------------------------------
@@ -1045,8 +822,9 @@ function boot() {
   for (const region of document.querySelectorAll(".data-region[data-endpoint]")) {
     const id = region.id;
     if (CANDIDATE_REGIONS.has(id) || TEMPLATE_REGIONS.has(id) || HEALTH_REGIONS.has(id) || SETTINGS_REGIONS.has(id)) continue;
+    if (WATCHLIST_REGIONS.has(id)) continue;
+    if (PORTFOLIO_REGIONS.has(id)) continue;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
-    else if (id === "watchlist-list") loadRegion(region, { render: loadWatchlist });
     else if (id === "runs-list") loadRunsPage(region, 0);
     else if (id === "stock-history")
       loadRegion(region, { render: (node, data) => loadStockHistory(node, data).then((latest) => {
@@ -1056,18 +834,23 @@ function boot() {
     else loadRegion(region);
   }
 
-  const addForm = document.querySelector("#watchlist-add-form");
-  if (addForm) wireWatchlistForm(addForm);
-  const refreshAll = document.querySelector("#watchlist-refresh-all");
-  if (refreshAll) wireRefreshAll(refreshAll);
   const stockRunForm = document.querySelector("#stock-run-form");
   if (stockRunForm) wireStockRunForm(stockRunForm);
 
   const filter = document.querySelector("#runs-status-filter");
   if (filter) {
-    filter.addEventListener("change", () => loadRunsPage(document.querySelector("#runs-list"), 0));
+    filter.addEventListener("change", () => {
+      const region = document.querySelector("#runs-list");
+      loadRunsPage(region, 0, { status: filter.value });
+    });
   }
 
+  bootWatchlist();
+  bootPortfolio();
+  bootAgentControls();
+  bootAgentViews();
+  bootAgentPortfolio();
+  bootAgent();
   bootCandidates();
   bootTemplates();
   bootHealth();
@@ -1080,4 +863,4 @@ if (document.readyState === "loading") {
   boot();
 }
 
-export { loadDashboard, loadRuns, loadStockChanges, loadStockDetail, loadStockHistory, loadWatchlist, table };
+export { loadDashboard, loadRuns, loadStockChanges, loadStockDetail, loadStockHistory, table };

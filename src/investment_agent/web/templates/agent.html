@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="agent-workbench" class="agent-workbench" data-tab="chat" data-pane="chat" data-drawer="open">
+  <h1 class="sr-only">AI</h1>
+  <div class="ai-tabs" role="tablist" aria-label="AI 功能">
+    <button type="button" role="tab" id="agent-tab-chat" data-agent-tab="chat" aria-selected="true" aria-controls="agent-panel-chat">对话</button>
+    <button type="button" role="tab" id="agent-tab-portfolio" data-agent-tab="portfolio" aria-selected="false" aria-controls="agent-panel-portfolio" tabindex="-1">组合</button>
+    <button type="button" role="tab" id="agent-tab-controls" data-agent-tab="controls" aria-selected="false" aria-controls="agent-panel-controls" tabindex="-1">约定与记忆</button>
+  </div>
+
+  <div id="agent-panel-chat" class="ai-chat" role="tabpanel" aria-labelledby="agent-tab-chat" data-panel="chat">
+    <div class="ai-panes" role="group" aria-label="切换区域">
+      <button type="button" data-agent-pane="list" aria-pressed="false">会话</button>
+      <button type="button" data-agent-pane="chat" aria-pressed="true">对话</button>
+      <button type="button" data-agent-pane="drawer" aria-pressed="false">档案</button>
+    </div>
+
+    <aside class="ai-side" data-pane-name="list" aria-label="会话">
+      <button id="agent-new" type="button" class="primary ai-new">＋ 新对话</button>
+      <div id="agent-conversations" class="ai-conversations"></div>
+    </aside>
+
+    <section class="ai-main" data-pane-name="chat" aria-label="当前对话">
+      <header class="ai-head">
+        <h2 id="agent-title">新对话</h2>
+        <button id="agent-drawer-toggle" type="button" class="ai-drawer-toggle" aria-expanded="true" aria-controls="agent-artifact-panel">档案 ▸ 收起</button>
+      </header>
+      <div id="agent-updates" class="ai-updates" aria-live="polite"></div>
+      <p id="agent-notice" class="ai-notice" role="status" aria-live="polite" hidden></p>
+      <div id="agent-messages" class="ai-thread" aria-live="polite"></div>
+
+      <div class="ai-compose-wrap">
+        <form id="agent-compose" class="ai-compose" autocomplete="off">
+          <div id="agent-pending" class="ai-banner ai-banner-warn" hidden>
+            <span><strong>这条消息是否已送达尚未确认。</strong>内容和对象已原样保留，不会重复提交。</span>
+            <button id="agent-retry" type="button" hidden>确认是否已送达</button>
+          </div>
+          <div class="ai-cbox">
+            <div class="ai-cbox-row">
+              <span class="ai-faint">下一条的对象：</span>
+              <span id="agent-binding" class="ai-binding"></span>
+              <button id="agent-add-object" type="button" class="ai-chip ai-chip-btn" aria-expanded="false" aria-controls="agent-picker">＋ 对象</button>
+              <span class="ai-grow"></span>
+              <button id="agent-mode-btn" type="button" class="ai-mode" aria-haspopup="listbox" aria-expanded="false" aria-controls="agent-mode-pop">处理方式 <strong id="agent-mode-label">自动</strong> ▾</button>
+            </div>
+            <label for="agent-input" class="sr-only">问题</label>
+            <textarea id="agent-input" rows="2" maxlength="32000" placeholder="问点什么…（点“＋ 对象”可指定证券）"></textarea>
+            <div class="ai-cbox-row">
+              <span id="agent-draft-state" class="ai-faint" aria-live="off"></span>
+              <span class="ai-grow"></span>
+              <span class="ai-faint ai-keys">Enter 发送 · Shift+Enter 换行</span>
+              <button id="agent-send" type="submit" class="primary">发送</button>
+            </div>
+          </div>
+
+          <select id="agent-kind" class="sr-only" tabindex="-1" aria-hidden="true">
+            <option value="auto">按本问题处理</option><option value="explanation">解释已有材料</option>
+            <option value="local_check">局部核查</option><option value="company_research">完整公司研究</option>
+            <option value="portfolio_action">组合建议（明确账户快照）</option><option value="comparison">比较明确对象</option><option value="review">复盘</option>
+          </select>
+          <p id="agent-mode-hint" class="ai-faint ai-hint">对象与版本在发送时固定，切换只影响下一条消息。普通提问不会自动启动完整公司研究。</p>
+        </form>
+        <div id="agent-picker" class="ai-pop ai-picker" hidden>
+          <form id="agent-subject-form" class="ai-picker-form">
+            <label for="agent-search" class="sr-only">证券名称或完整代码</label>
+            <input id="agent-search" maxlength="32" autocomplete="off" placeholder="证券名称、拼音或完整代码">
+            <button type="submit">查找对象</button>
+          </form>
+          <div id="agent-search-results" class="ai-results" aria-live="polite"></div>
+          <p class="ai-faint ai-picker-note">名称与代码来自已保存的证券身份；范围外的证券只能保存线索。再选一个即为比较对象。</p>
+        </div>
+        <div id="agent-mode-pop" class="ai-pop ai-mode-pop" role="listbox" aria-label="处理方式" hidden></div>
+      </div>
+    </section>
+
+    <aside id="agent-artifact-panel" class="ai-drawer" data-pane-name="drawer" aria-label="研究档案">
+      <div class="ai-drawer-head"><h2>研究档案</h2><button id="agent-drawer-wide" type="button" class="ai-link" aria-pressed="false">加宽</button></div>
+      <div id="agent-artifact-extension"></div>
+    </aside>
+  </div>
+
+  <section id="agent-panel-portfolio" class="ai-page" role="tabpanel" aria-labelledby="agent-tab-portfolio" data-panel="portfolio" hidden>
+    <div class="ai-page-head">
+      <h2>组合</h2>
+      <p class="ai-faint">真实账户、持仓、资金用途与组合方案。点“绑定此快照到下一条消息”后回到“对话”页签提问。</p>
+    </div>
+    <section id="agent-portfolio" class="ai-portfolio" aria-label="真实组合"></section>
+  </section>
+
+  <section id="agent-panel-controls" class="ai-page" role="tabpanel" aria-labelledby="agent-tab-controls" data-panel="controls" hidden>
+    <div class="ai-page-head">
+      <h2>约定与记忆</h2>
+      <p class="ai-faint">先处理待审阅的提案，再查看生效中的投资约定、启用状态、记忆与档案操作。暂停、静音、归档彼此独立。</p>
+    </div>
+    <div id="agent-controls-extension" class="ai-controls"></div>
+  </section>
+</div>
+{% endblock %}

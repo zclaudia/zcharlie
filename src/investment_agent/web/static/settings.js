@@ -70,6 +70,7 @@ export function cronWarning(raw) {
 // 把输入框的原始值解析为提交值：{ value } 或 { error }。
 export function parseSettingInput(meta, raw) {
   const type = meta && meta.type;
+  if (typeof raw === "boolean") return {value: raw};
   if (type === "int" || type === "float") {
     const text = String(raw ?? "").trim();
     if (!text) return { error: "必填" };
@@ -302,6 +303,11 @@ function secretControl(item, encryptionReady) {
 function controlFor(item, encryptionReady) {
   const type = item.input && item.input.type;
   if (item.secret) return secretControl(item, encryptionReady);
+  if (typeof item.default === "boolean") {
+    const control = el("input", {id: inputId(item.key), type: "checkbox"});
+    control.checked = Boolean(item.value);
+    return {control, root: control, read: () => control.checked};
+  }
   if (type === "int" || type === "float") return numberControl(item);
   if (type === "select") return selectControl(item);
   if (type === "multi") return multiControl(item);
@@ -481,6 +487,10 @@ function groupNotices(group) {
       notices.push(el("p", { class: "notice notice-warn" }, "未配置大模型 API Key：研究解释与规则草拟会直接失败。"));
     }
   }
+  if (group.key === "notifications") {
+    notices.push(el("p", {class: "faint"}, "默认只在站内提醒。明确启用后，仅向你保存的 HTTPS 地址发送新变化的状态及引用；私有提示词和原文不会发送。关闭、静音或暂停会抑制尚未发送的提醒，恢复后不会补发历史提醒。"));
+    notices.push(el("p", {class: "faint"}, "确认未知时，只有接收端保证 Idempotency-Key 去重才会重试同一份内容；不会重新研究或生成观点。"));
+  }
   if (group.key === "schedule") {
     notices.push(
       el(
@@ -535,13 +545,28 @@ function renderForm(region, data) {
     head.appendChild(el("h2", {}, group.title));
     head.appendChild(el("span", { class: "faint" }, `${group.items.length} 项`));
     card.appendChild(head);
+    if (group.key === "agent") {
+      card.id = "agent-settings";
+      card.appendChild(el("p", {class: "notice"}, "Agent 模型与旧解释模型独立。保存仅更新配置，不代表供应商网络或研究质量已经验证；后台运行开关与投资约定授权须分别明确开启。"));
+      card.appendChild(el("a", {href: "/app/agent"}, "查看投资约定、USD 金额上限与本地 readiness / 当前配置指纹"));
+    }
     for (const notice of groupNotices(group)) card.appendChild(notice);
     if (group.key === "llm" || group.key === "ifind") card.appendChild(connectionTest(group.key));
     const list = el("div", { class: "setting-list" });
+    const advanced = el("details");
+    advanced.appendChild(el("summary", {}, "高级模型参数与执行限额"));
+    const basicAgent = new Set(["agent_provider", "agent_base_url", "agent_model", "agent_api_key",
+      "agent_profile", "agent_profile_model", "agent_output_mode", "investor_agent_enabled",
+      "investor_agent_background_enabled", "investor_agent_input_usd_per_million",
+      "investor_agent_output_usd_per_million", "investor_agent_price_model",
+      "investor_agent_price_version", "investor_agent_price_config_version"]);
     for (const item of group.items) {
       state.items.set(item.key, item);
-      list.appendChild(settingRow(item, encryptionReady));
+      const row = settingRow(item, encryptionReady);
+      if (group.key === "agent" && !basicAgent.has(item.key)) advanced.appendChild(row);
+      else list.appendChild(row);
     }
+    if (group.key === "agent") list.appendChild(advanced);
     card.appendChild(list);
     root.appendChild(card);
   }

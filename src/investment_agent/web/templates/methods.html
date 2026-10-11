@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}研究方法{% endblock %}
+{% block content %}
+<div id="method-workbench" class="method-workbench">
+  <h1>研究方法</h1>
+  <p>从已完成复盘提出改进，检查失败样本与反例，再由你明确批准。只支持加强研究步骤；不会修改持仓或发送提醒。</p>
+  <p class="muted">离线重放经过原生模型边界；前瞻步骤影子检查评估后新任务的真实输出。只有前瞻步骤影子可供批准，两者都是工程检查，不能证明研究质量。新任务固定方法版本；已有任务与历史观点保留原版本。</p>
+  <p id="method-status" role="status" aria-live="polite"></p>
+  <button id="method-refresh" type="button">刷新记录</button>
+  <p id="method-page-note"></p><button id="method-prev" type="button">较新记录</button><button id="method-next" type="button">较早记录</button>
+  <section class="method-panel"><h2>冻结真实过程复盘</h2>
+    <label for="method-task">已完成任务</label><select id="method-task"></select>
+    <button id="method-review" type="button">保存任务与实际输出</button>
+  </section>
+  <section class="method-panel"><h2>提出步骤改进</h2>
+    <form id="method-create">
+      <label for="method-failure">失败或不完整复盘</label><select id="method-failure" required></select>
+      <label for="method-summary">改进摘要</label><textarea id="method-summary" maxlength="1000" required></textarea>
+      <label for="method-pattern">实际错误模式与证据说明</label><textarea id="method-pattern" maxlength="1000" required></textarea>
+      <label><input id="method-two" type="checkbox">要求两个不同的反向解释</label>
+      <label><input id="method-verified" type="checkbox">要求已验证、无未解冲突的反证来源</label>
+      <label><input id="method-stop" type="checkbox">未回答时要求明确停止或继续判断</label>
+      <button type="submit">保存提案（不会启用）</button>
+    </form>
+  </section>
+  <section class="method-panel"><h2>提案、评估与影子记录</h2><div id="method-proposals"></div></section>
+  <section class="method-panel"><h2>当前适用方法与版本回退</h2><p>只适用一个明确证券。多证券、比较与组合任务使用固定基线。回退会追加新版本并保留所有记录；执行中的任务继续使用原版本。</p><div id="method-heads"></div></section>
+</div>
+<script src="/app/static/methods.js" defer></script>
+{% endblock %}

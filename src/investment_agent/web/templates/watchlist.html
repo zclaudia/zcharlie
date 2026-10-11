@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <header class="page-head">
-  <h1>自选股</h1>
-  <p class="muted">长期跟踪的标的：最新评分、置信度、数据新鲜度与变化时间。</p>
+  <h1>观察池</h1>
+  <p class="muted">长期跟踪的标的：规则起草与审批、最新评分、置信度、数据新鲜度与变化时间。</p>
 </header>
 <section class="card">
   <div class="card-head">
@@ -12,19 +12,22 @@
             data-endpoint="/watchlist/refresh">刷新全部</button>
   </div>
   <details class="add-panel">
-    <summary>＋ 添加自选股</summary>
+    <summary>＋ 手动添加</summary>
     <form id="watchlist-add-form" class="inline-form" data-endpoint="/watchlist" method="post">
-      <input name="ticker" placeholder="代码 / 名称 / 拼音首字母，如 600406 或 gzmt" required aria-label="代码" autocomplete="off">
-      <input name="industry" placeholder="行业，如 电力设备" required aria-label="行业">
+      <input name="ticker" placeholder="代码 / 名称 / 拼音，如 山东、600547 或 sdhj" maxlength="32" required aria-label="代码" autocomplete="off">
+      <input name="industry" placeholder="行业（自动填充，可修改）" aria-label="行业">
       <input name="name" placeholder="名称（可选）" aria-label="名称">
-      <input name="report_year" type="number" min="1990" max="2100" value="2025" required aria-label="报告年度">
+      <input name="report_year" type="number" min="1990" max="2100" placeholder="年报年度" title="最新已披露的年报年度，可修改" required aria-label="报告年度">
+      <select name="template_id" aria-label="起草模板">
+        <option value="auto" selected>AI 推荐模板（自动起草）</option>
+      </select>
       <button type="submit" class="primary">添加</button>
     </form>
   </details>
   <div id="watchlist-refresh-results" class="data-region" aria-live="polite"></div>
   <div id="watchlist-list" class="data-region"
        data-endpoint="/watchlist"
-       data-empty-text="自选股为空；点击“添加自选股”开始跟踪一只 A 股。">
+       data-empty-text="观察池为空；点击“手动添加”开始跟踪一只 A 股。">
     <p class="notice notice-loading" data-state="loading">正在加载…</p>
   </div>
 </section>

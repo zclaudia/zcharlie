@@ -212,7 +212,17 @@ async def overview_page(request: Request) -> HTMLResponse:
 
 @router.get("/watchlist", response_class=HTMLResponse)
 async def watchlist_page(request: Request) -> HTMLResponse:
-    return _render("watchlist.html", request, page_title="自选股", active_nav="watchlist")
+    return _render("watchlist.html", request, page_title="观察池", active_nav="watchlist")
+
+
+@router.get("/portfolio", response_class=HTMLResponse)
+async def portfolio_page(request: Request) -> HTMLResponse:
+    return _render("portfolio.html", request, page_title="持仓池", active_nav="portfolio")
+
+
+@router.get("/agent", response_class=HTMLResponse)
+async def agent_page(request: Request) -> HTMLResponse:
+    return _render("agent.html", request, page_title="AI", active_nav="agent")
 
 
 @router.get("/stocks/{ticker}", response_class=HTMLResponse)
@@ -247,7 +257,7 @@ async def health_page(request: Request) -> HTMLResponse:
 
 @router.get("/candidates", response_class=HTMLResponse)
 async def candidates_page(request: Request) -> HTMLResponse:
-    return _render("candidates.html", request, page_title="本周候选", active_nav="candidates")
+    return _render("candidates.html", request, page_title="候选池", active_nav="candidates")
 
 
 @router.get("/candidates/{candidate_id}", response_class=HTMLResponse)
@@ -296,3 +306,8 @@ async def template_page(request: Request, template_id: str) -> HTMLResponse:
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return _render("settings.html", request, page_title="设置", active_nav="settings")
+
+
+@router.get("/methods", response_class=HTMLResponse)
+async def methods_page(request: Request) -> HTMLResponse:
+    return _render("methods.html", request, active_nav="methods")

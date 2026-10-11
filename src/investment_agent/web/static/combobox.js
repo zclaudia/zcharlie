@@ -1,6 +1,6 @@
 // 股票搜索下拉（mrd-intake D4）：输入 → 防抖 200ms → GET /stocks/search →
 // role="listbox" 的 <ul>；↑↓ 移动、回车选中、Esc 关闭；选中把 ticker 回填并回调 onSelect(item)。
-// 只读本地字典（代码前缀 / 名称子串 / 拼音首字母），不解释任何数据；DOM 全部经 dom.js 构造。
+// 只读本地字典（代码前缀 / 名称子串 / 拼音及首字母），不解释任何数据；DOM 全部经 dom.js 构造。
 
 import { get } from "./api.js";
 import { clear, el } from "./dom.js";
@@ -35,8 +35,11 @@ export function attachCombobox(input, { fetch = searchStocks, onSelect, minChars
   let active = -1;
   let timer = null;
   let requestId = 0;
+  let composing = false;
 
   function close() {
+    clearTimeout(timer);
+    requestId += 1;
     items = [];
     active = -1;
     clear(list);
@@ -113,7 +116,7 @@ export function attachCombobox(input, { fetch = searchStocks, onSelect, minChars
     try {
       results = await fetch(query);
     } catch (error) {
-      if (id === requestId) renderNotice(`搜索失败：${error && error.message ? error.message : "请稍后重试"}`);
+      if (id === requestId && input.value.trim() === query) renderNotice(`搜索失败：${error && error.message ? error.message : "请稍后重试"}`);
       return;
     }
     if (id !== requestId || input.value.trim() !== query) return;
@@ -121,17 +124,18 @@ export function attachCombobox(input, { fetch = searchStocks, onSelect, minChars
   }
 
   function schedule() {
-    clearTimeout(timer);
+    close();
+    if (composing) return;
     const query = input.value.trim();
     if (query.length < minChars) {
-      requestId += 1;
-      close();
       return;
     }
     timer = setTimeout(() => search(query), DEBOUNCE_MS);
   }
 
   function onKeydown(event) {
+    // Enter accepts the IME's Chinese candidate before it can select a stock.
+    if (composing || event.isComposing || event.keyCode === 229) return;
     if (list.hidden) {
       if (event.key === "ArrowDown" && input.value.trim().length >= minChars) {
         event.preventDefault();
@@ -167,10 +171,22 @@ export function attachCombobox(input, { fetch = searchStocks, onSelect, minChars
   }
 
   function onBlur() {
-    setTimeout(close, 120);
+    close(); // List mousedown keeps focus; cancel pending work as soon as focus leaves.
+  }
+
+  function onCompositionStart() {
+    composing = true;
+    close();
+  }
+
+  function onCompositionEnd() {
+    composing = false;
+    schedule();
   }
 
   input.addEventListener("input", schedule);
+  input.addEventListener("compositionstart", onCompositionStart);
+  input.addEventListener("compositionend", onCompositionEnd);
   input.addEventListener("keydown", onKeydown);
   input.addEventListener("blur", onBlur);
   list.addEventListener("mousedown", onListMousedown);
@@ -184,6 +200,8 @@ export function attachCombobox(input, { fetch = searchStocks, onSelect, minChars
       clearTimeout(timer);
       close();
       input.removeEventListener("input", schedule);
+      input.removeEventListener("compositionstart", onCompositionStart);
+      input.removeEventListener("compositionend", onCompositionEnd);
       input.removeEventListener("keydown", onKeydown);
       input.removeEventListener("blur", onBlur);
       list.removeEventListener("mousedown", onListMousedown);

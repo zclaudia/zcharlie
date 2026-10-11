@@ -46,7 +46,7 @@ import { aiStamp, fillSparklines, kpi, legend, scale, timeline } from "./ui.js";
 export const CANDIDATE_REGIONS = new Set(["candidates-list", "candidate-detail"]);
 
 const LIST_LIMIT = 100;
-const TOP_REASONS = 3;
+const TOP_REASONS = 6;
 const SPARK_DAYS = 120;
 const UNFINISHED_VERIFICATION = new Set(["pending", "deferred", "running"]);
 const ZONE_ORDER = ["buy_zone", "drop", "add", "trim", "exit_review"];
@@ -91,6 +91,20 @@ function templateChip(ref) {
   const node = chip(templateLabel(ref), "chip-template");
   node.title = ref;
   return node;
+}
+
+// 每日区间检测（WP8）：当前所处区间 + 最近一次进入事件引用的规则版本。
+function zoneDetectionLine(events) {
+  const latest = events && events.latest;
+  const interval = (events && events.interval) || {};
+  if (!latest && !interval.inside) return null;
+  const zone = label(ZONE_LABELS, interval.zone || (latest && latest.zone));
+  const since = interval.entered_as_of || (latest && latest.as_of);
+  const version = latest ? ` · 规则 v${latest.rule_version}` : "";
+  const text = interval.inside
+    ? `区间检测：${zone} 触发中（${since}）${version}`
+    : `区间检测：${zone} 已离开（${since}）${version}`;
+  return el("p", { class: interval.inside ? "zone-detection active" : "zone-detection faint" }, text);
 }
 
 // 草稿状态只对待处理候选有意义；已关闭的候选看规则本身的状态。
@@ -241,6 +255,57 @@ function candidateItem(candidate) {
         )
       );
     }
+  } else if (Array.isArray(candidate.draft_checks) && candidate.draft_checks.length) {
+    // 手动提名：草稿规则的候选区间 × 本股因子，产出与筛选命中同构的检查项。
+    // 移出类区间（drop / exit / trim / remove）"满足"意味着离场信号，✓/! 按是否有利翻转，计数只统计有利项。
+    const NEGATIVE_ZONE = /(^|_)(drop|exit|trim|remove)(_|$)/;
+    const zoneOf = (reason) => String(reason.rule_path || "").split(".")[0];
+    const items = candidate.draft_checks.map((reason) => {
+      const zone = zoneOf(reason);
+      const negative = NEGATIVE_ZONE.test(zone);
+      const desirable = negative ? reason.outcome !== "met" : reason.outcome === "met";
+      return { reason, desirable, zone };
+    });
+    const good = items.filter((item) => item.desirable).length;
+    whyHead.appendChild(el("span", { class: "faint" }, `满足 ${good}/${items.length} 项`));
+    const list = el("ul", { class: "reason-list" });
+    for (const { reason, desirable, zone } of items.slice(0, TOP_REASONS)) {
+      const zoneLabel = label(ZONE_LABELS, zone);
+      const prefix = zoneLabel !== zone ? `${zoneLabel}·` : "";
+      list.appendChild(
+        el("li", { class: desirable ? "reason-ok" : "reason-warn" }, `${prefix}${formatReason(reason)}`)
+      );
+    }
+    block.appendChild(list);
+    block.appendChild(
+      el(
+        "a",
+        { class: "candidate-why-more small", href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
+        items.length > TOP_REASONS ? `另有 ${items.length - TOP_REASONS} 项，查看详情 →` : "查看完整分析 →"
+      )
+    );
+  } else if (candidate.draft_overall_rationale) {
+    // 手动提名的候选：起草完成后用 LLM 的整体分析替代占位文案，
+    // 按句拆成列表，复用筛选命中的 reason-list 样式（✓ 项）。
+    const sentences = candidate.draft_overall_rationale
+      .split(/(?<=[。！？；;])/)
+      .map((sentence) => sentence.trim())
+      .filter(Boolean);
+    whyHead.appendChild(el("span", { class: "faint" }, "AI 起草分析"));
+    const list = el("ul", { class: "reason-list" });
+    for (const sentence of sentences.slice(0, 4)) {
+      list.appendChild(
+        el("li", {}, sentence.length > 72 ? `${sentence.slice(0, 72)}…` : sentence)
+      );
+    }
+    block.appendChild(list);
+    block.appendChild(
+      el(
+        "a",
+        { class: "candidate-why-more small", href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
+        "查看完整分析 →"
+      )
+    );
   } else {
     block.appendChild(el("p", { class: "muted" }, "无筛选理由（手动提名）。"));
   }
@@ -433,7 +498,7 @@ function wireNominateForm(form, list) {
       .catch((error) => {
         if (redirectOn401(error)) return;
         const conflict = error instanceof ApiError && error.status === 409;
-        nominateNotice(result, conflict ? `提名失败：${ticker} 已在自选股中，无需再提名。` : `提名失败：${error.message}`, "notice-error");
+        nominateNotice(result, conflict ? `提名失败：${ticker} 已在观察池中，无需再提名。` : `提名失败：${error.message}`, "notice-error");
       });
     if (submit) lockWhileBusy(submit, promise);
     await promise;
@@ -655,7 +720,24 @@ function renderReasons(candidate) {
   if (!node) return;
   const results = Array.isArray(candidate.screen_results) ? candidate.screen_results : [];
   if (!results.length) {
-    renderRegion(node, "empty", "手动提名：没有筛选理由。");
+    const checks = Array.isArray(candidate.draft_checks) ? candidate.draft_checks : [];
+    if (checks.length) {
+      // 手动提名：展示草稿规则 × 本股因子的检查项（与筛选命中同构）。
+      const box = el("div", { class: "reason-block" });
+      box.appendChild(el("h3", {}, "AI 起草分析"));
+      const list = el("ul", { class: "reason-list" });
+      for (const reason of checks) list.appendChild(el("li", {}, formatReason(reason)));
+      box.appendChild(list);
+      sectionReady(node, box);
+    } else {
+      renderRegion(
+        node,
+        "empty",
+        candidate.draft_overall_rationale
+          ? "手动提名：没有筛选命中；AI 起草分析见下方规则草稿。"
+          : "手动提名：没有筛选理由。"
+      );
+    }
     return;
   }
   const box = el("div");
@@ -964,6 +1046,8 @@ function renderRule(candidate) {
   box.appendChild(
     el("p", { class: "faint" }, `范围：${rule.scope === "candidate" ? "候选" : rule.scope === "holding" ? "持仓" : fmt(rule.scope)} · 区间条件按生效参数显示；灰字为本股最新筛选值。`)
   );
+  const detection = zoneDetectionLine(candidate.zone_events);
+  if (detection) box.appendChild(detection);
 
   const zones = rule.zones && typeof rule.zones === "object" ? rule.zones : {};
   const names = Object.keys(zones).sort(
@@ -1150,7 +1234,7 @@ function promoteSummary(result) {
       "p",
       {},
       `已晋级到观察池：规则 #${result.rule.rule_instance_id} v${result.rule.version} 生效；` +
-        `自选股 ${result.watchlist.ticker}（行业 ${fmt(result.watchlist.industry)}，报告年度 ${fmt(result.watchlist.report_year)}）。`
+        `观察池 ${result.watchlist.ticker}（行业 ${fmt(result.watchlist.industry)}，报告年度 ${fmt(result.watchlist.report_year)}）。`
     )
   );
   box.appendChild(

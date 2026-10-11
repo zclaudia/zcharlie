@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <header class="page-head">
-  <h1>本周候选</h1>
+  <h1>候选池</h1>
   <p class="muted">筛选命中与手动提名的标的：先看触发理由，再审阅起草的区间规则。候选只表示研究优先级，不是操作建议。</p>
 </header>
 <p class="notice notice-warn calibration-banner">
@@ -12,7 +12,7 @@
   <details class="add-panel">
     <summary>＋ 手动提名</summary>
     <form id="candidate-nominate-form" class="inline-form" data-endpoint="/candidates" method="post">
-      <input name="ticker" placeholder="代码 / 名称 / 拼音首字母，如 600900 或 cjdl" required aria-label="代码" autocomplete="off"
+      <input name="ticker" placeholder="代码 / 名称 / 拼音，如 长江、600900 或 cjdl" maxlength="32" required aria-label="代码" autocomplete="off"
              pattern="\d{6}(\.(SH|SZ|BJ|sh|sz|bj))?">
       <select name="template_id" required aria-label="起草模板">
         <option value="">选择起草模板…</option>
