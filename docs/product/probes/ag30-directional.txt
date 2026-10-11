@@ -1,0 +1,11 @@
+........................................................................ [ 94%]
+....                                                                     [100%]
+=============================== warnings summary ===============================
+tests/test_method_evolution.py::test_actual_failure_counterexamples_native_shadow_approval_binding_rollback
+  /Users/zhvala/SourceCode/zcharlie/src/investment_agent/investor/publication.py:366: RuntimeWarning: coroutine 'PublicationService._directional' was never awaited
+    await validate_progress(session, claim.task_id, ResearchProgress.model_validate(progress_action.result["progress"]), final=True, formal_directional=self._directional(candidate.recommendation))
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+76 passed, 1 warning in 26.32s

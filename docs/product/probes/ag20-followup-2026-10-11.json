@@ -1,0 +1,3731 @@
+{
+  "date": "2026-10-11",
+  "status": "bounded trial completed; product quality pending",
+  "limits": {
+    "requests_per_company": 8,
+    "total_requests": 24,
+    "tokens_per_company": 120000,
+    "total_tokens": 360000,
+    "validation_retries": 2,
+    "seconds_per_company": 360,
+    "requested_output_tokens": 4096
+  },
+  "companies": [
+    {
+      "company": "招商银行",
+      "requests": 3,
+      "input_tokens": 37614,
+      "output_tokens": 8838,
+      "last_task_status": "partial",
+      "last_stop_reason": "budget_exhausted",
+      "actual_material_actions": 0,
+      "semantic_acceptance": "pending; no qualified research answer"
+    },
+    {
+      "company": "海康威视",
+      "requests": 4,
+      "input_tokens": 49730,
+      "output_tokens": 7321,
+      "last_task_status": "failed",
+      "last_stop_reason": "budget_exhausted",
+      "actual_material_actions": 4,
+      "semantic_acceptance": "pending; no qualified research answer"
+    },
+    {
+      "company": "国电南瑞",
+      "requests": 3,
+      "input_tokens": 46356,
+      "output_tokens": 9243,
+      "last_task_status": "partial",
+      "last_stop_reason": "budget_exhausted",
+      "actual_material_actions": 14,
+      "semantic_acceptance": "pending; no qualified research answer"
+    }
+  ],
+  "http_attempts": 10,
+  "total_tokens": 159102,
+  "money_cost_usd": null,
+  "money_unknown_reason": "provider price not verified",
+  "source_unchanged": true,
+  "source": {
+    "size": 360513536,
+    "mtime_ns": 1791489715347475627,
+    "sha256": "85c29a22e6ece11efff8f25d76f7baf886cbf8d10efeb6a4082460c112a32e3b"
+  },
+  "isolated_revision": "040",
+  "cleanup": {
+    "encrypted_settings_remaining": 0,
+    "agent_enabled": false,
+    "background_enabled": false
+  },
+  "reservations": [
+    {
+      "task_id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+      "reserved_tokens": 45385,
+      "input_tokens": 11304,
+      "output_tokens": 3412
+    },
+    {
+      "task_id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+      "reserved_tokens": 61922,
+      "input_tokens": 14779,
+      "output_tokens": 2592
+    },
+    {
+      "task_id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+      "reserved_tokens": 45381,
+      "input_tokens": 11305,
+      "output_tokens": 1693
+    },
+    {
+      "task_id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+      "reserved_tokens": 54888,
+      "input_tokens": 13267,
+      "output_tokens": 1701
+    },
+    {
+      "task_id": "21859c68-7979-485b-8319-92bceed71059",
+      "reserved_tokens": 45385,
+      "input_tokens": 11312,
+      "output_tokens": 1982
+    },
+    {
+      "task_id": "7b4b8ddb-4230-4e98-ac9f-65498139f6bf",
+      "reserved_tokens": 46370,
+      "input_tokens": 11531,
+      "output_tokens": 2834
+    },
+    {
+      "task_id": "be178519-01dc-4b25-bb1d-b5777daebd1a",
+      "reserved_tokens": 46366,
+      "input_tokens": 11524,
+      "output_tokens": 1833
+    },
+    {
+      "task_id": "be178519-01dc-4b25-bb1d-b5777daebd1a",
+      "reserved_tokens": 63560,
+      "input_tokens": 13634,
+      "output_tokens": 2094
+    },
+    {
+      "task_id": "0e3e82b7-9271-40f1-99f2-b10f3b78a538",
+      "reserved_tokens": 46370,
+      "input_tokens": 11545,
+      "output_tokens": 3347
+    },
+    {
+      "task_id": "0e3e82b7-9271-40f1-99f2-b10f3b78a538",
+      "reserved_tokens": 87966,
+      "input_tokens": 23499,
+      "output_tokens": 3914
+    }
+  ],
+  "rounds": [
+    {
+      "state": "bounded trial completed",
+      "limits": {
+        "requests_per_company": 8,
+        "total_requests": 24,
+        "tokens_per_company": 120000,
+        "total_tokens": 360000,
+        "validation_retries": 2,
+        "seconds_per_company": 360,
+        "requested_output_tokens": 4096
+      },
+      "configuration": {
+        "revision": 0,
+        "version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+        "values": {
+          "agent_credential_ref": "agent_api_key",
+          "agent_max_tokens": 4096,
+          "agent_model": "deepseek-flash",
+          "agent_output_mode": "prompted",
+          "agent_profile": "deepseek",
+          "agent_profile_model": "",
+          "agent_provider": "deepseek",
+          "agent_queue_exploration_capacity": 32,
+          "agent_queue_interactive_capacity": 128,
+          "agent_queue_max_running": 4,
+          "agent_queue_review_capacity": 96,
+          "agent_retries": 2,
+          "agent_supports_json_object": true,
+          "agent_supports_json_schema": false,
+          "agent_temperature": null,
+          "agent_thinking": "auto",
+          "agent_timeout_seconds": 45.0,
+          "agent_tool_choice_required": false,
+          "endpoint_hash": "4217b1ac5a57c64fb1cc4d0e23df8b7ff82059e438a71a8766bf59fd008147b3"
+        }
+      },
+      "material_set_hash": "942e1505c6399d5d64944a0fa51a27c8ccfa6c85a8a6997ddffcd6924e290319",
+      "previous_attempt": null,
+      "results": [
+        {
+          "previous_failed_task_id": null,
+          "cumulative_remaining_before_attempt": null,
+          "actual_material_receipts": [],
+          "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "model_runs": [
+            {
+              "framework_requests": 2,
+              "http_attempts": 2,
+              "http_responses": [
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 11304,
+                    "completion_tokens": 3412,
+                    "total_tokens": 14716
+                  }
+                },
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 14779,
+                    "completion_tokens": 2592,
+                    "total_tokens": 17371
+                  }
+                }
+              ],
+              "usage": {
+                "input_tokens": 26083,
+                "output_tokens": 6004
+              },
+              "usage_unknown_reason": null,
+              "latency_ms": 28260,
+              "success": false,
+              "error_code": "research_reference_scope_mismatch",
+              "config_version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+              "framework_version": "2.31.1",
+              "cost_usd": null,
+              "cost_unknown_reason": "price_or_usage_unknown"
+            }
+          ],
+          "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+          "packet_is_exhaustive_actual_material_set": false,
+          "actual_artifact_refs": [],
+          "company": {
+            "id": 134,
+            "ticker": "600036",
+            "market_code": "SSE",
+            "canonical_name": "招商银行",
+            "sector_code": null
+          },
+          "task": {
+            "id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+            "schema_version": 1,
+            "revision": 6,
+            "created_at": "2026-10-11T03:10:31.649005Z",
+            "actor": "local_owner",
+            "origin_ref": null,
+            "parent_task_id": null,
+            "message_ref": {
+              "kind": "message",
+              "id": "27cfc09b-fafe-44cb-8ae9-2f81fba3eade",
+              "revision": 1,
+              "field_path": null
+            },
+            "binding": {
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "base_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                },
+                {
+                  "kind": "case",
+                  "id": "4c65ffd9-7e78-4839-8655-dfa35dc9d59a",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "as_of": "2026-10-10T04:00:00Z"
+            },
+            "status": "failed",
+            "cancel_requested": false,
+            "stop_reason": "evidence_blocked",
+            "waiting": null,
+            "artifact_refs": [],
+            "usage": {
+              "tool_calls": 0,
+              "requests": 2,
+              "input_tokens": 26083,
+              "output_tokens": 6004,
+              "cost": {
+                "value": null,
+                "unit": "currency",
+                "currency": "USD",
+                "unknown_reason": "price_or_usage_unknown"
+              }
+            }
+          },
+          "messages": [
+            {
+              "id": "27cfc09b-fafe-44cb-8ae9-2f81fba3eade",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:10:31.661488Z",
+              "actor": "local_owner",
+              "origin_ref": null,
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "6b02b69a-569a-4e04-9300-2472d242e68c",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 1,
+              "role": "user",
+              "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": null,
+              "client_message_id": "7acd9a75-73f2-4d1b-bb55-d913b2dd3b51",
+              "task_ref": {
+                "kind": "task",
+                "id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+                "revision": 1,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            },
+            {
+              "id": "237a9e06-78bb-4ae2-bbd5-c8d25db0cde0",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:11:00.083206Z",
+              "actor": "local_owner",
+              "origin_ref": {
+                "kind": "message",
+                "id": "27cfc09b-fafe-44cb-8ae9-2f81fba3eade",
+                "revision": 1,
+                "field_path": null
+              },
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "6b02b69a-569a-4e04-9300-2472d242e68c",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 2,
+              "role": "assistant",
+              "text": "研究尚未完成，候选内容没有发布。\nprogress.content.1.ref：证据主体必须与本任务明确授权的证券一致。\n下一步：按来源引用与授权范围修复研究进展；证据不足时明确保留缺口。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": {
+                "kind": "message",
+                "id": "27cfc09b-fafe-44cb-8ae9-2f81fba3eade",
+                "revision": 1,
+                "field_path": null
+              },
+              "client_message_id": null,
+              "task_ref": {
+                "kind": "task",
+                "id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+                "revision": 5,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            }
+          ],
+          "latency_seconds": 28.431220250204206,
+          "error_type": null,
+          "semantic_acceptance": "human pending",
+          "money_cost_usd": null
+        },
+        {
+          "previous_failed_task_id": null,
+          "cumulative_remaining_before_attempt": null,
+          "actual_material_receipts": [],
+          "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "model_runs": [
+            {
+              "framework_requests": 2,
+              "http_attempts": 2,
+              "http_responses": [
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 11305,
+                    "completion_tokens": 1693,
+                    "total_tokens": 12998
+                  }
+                },
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 13267,
+                    "completion_tokens": 1701,
+                    "total_tokens": 14968
+                  }
+                }
+              ],
+              "usage": {
+                "input_tokens": 24572,
+                "output_tokens": 3394
+              },
+              "usage_unknown_reason": null,
+              "latency_ms": 15644,
+              "success": false,
+              "error_code": "research_reference_scope_mismatch",
+              "config_version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+              "framework_version": "2.31.1",
+              "cost_usd": null,
+              "cost_unknown_reason": "price_or_usage_unknown"
+            }
+          ],
+          "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+          "packet_is_exhaustive_actual_material_set": false,
+          "actual_artifact_refs": [],
+          "company": {
+            "id": 62,
+            "ticker": "002415",
+            "market_code": "SZSE",
+            "canonical_name": "海康威视",
+            "sector_code": null
+          },
+          "task": {
+            "id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+            "schema_version": 1,
+            "revision": 7,
+            "created_at": "2026-10-11T03:11:00.110867Z",
+            "actor": "local_owner",
+            "origin_ref": null,
+            "parent_task_id": null,
+            "message_ref": {
+              "kind": "message",
+              "id": "0dedce6d-3a0f-4b32-b80f-2bea698e04eb",
+              "revision": 1,
+              "field_path": null
+            },
+            "binding": {
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "base_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                },
+                {
+                  "kind": "case",
+                  "id": "ba0950df-5b4e-408b-9ad3-e565566fe5ba",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "as_of": "2026-10-10T04:00:00Z"
+            },
+            "status": "failed",
+            "cancel_requested": false,
+            "stop_reason": "evidence_blocked",
+            "waiting": null,
+            "artifact_refs": [],
+            "usage": {
+              "tool_calls": 5,
+              "requests": 2,
+              "input_tokens": 24572,
+              "output_tokens": 3394,
+              "cost": {
+                "value": null,
+                "unit": "currency",
+                "currency": "USD",
+                "unknown_reason": "price_or_usage_unknown"
+              }
+            }
+          },
+          "messages": [
+            {
+              "id": "0dedce6d-3a0f-4b32-b80f-2bea698e04eb",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:11:00.117819Z",
+              "actor": "local_owner",
+              "origin_ref": null,
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "6d1c0039-e25d-4e1e-b49a-2e38a2a3c00c",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 1,
+              "role": "user",
+              "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": null,
+              "client_message_id": "95378663-399c-4046-90c4-43f353e78ff7",
+              "task_ref": {
+                "kind": "task",
+                "id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+                "revision": 1,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            },
+            {
+              "id": "68a3ae54-9230-4a84-9dd1-4d242ed0707b",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:11:15.847623Z",
+              "actor": "local_owner",
+              "origin_ref": {
+                "kind": "message",
+                "id": "0dedce6d-3a0f-4b32-b80f-2bea698e04eb",
+                "revision": 1,
+                "field_path": null
+              },
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "6d1c0039-e25d-4e1e-b49a-2e38a2a3c00c",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 2,
+              "role": "assistant",
+              "text": "研究尚未完成，候选内容没有发布。\nprogress.content.1.ref：证据主体必须与本任务明确授权的证券一致。\n下一步：按来源引用与授权范围修复研究进展；证据不足时明确保留缺口。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": {
+                "kind": "message",
+                "id": "0dedce6d-3a0f-4b32-b80f-2bea698e04eb",
+                "revision": 1,
+                "field_path": null
+              },
+              "client_message_id": null,
+              "task_ref": {
+                "kind": "task",
+                "id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+                "revision": 6,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            }
+          ],
+          "latency_seconds": 15.737891416065395,
+          "error_type": null,
+          "semantic_acceptance": "human pending",
+          "money_cost_usd": null
+        },
+        {
+          "previous_failed_task_id": null,
+          "cumulative_remaining_before_attempt": null,
+          "actual_material_receipts": [],
+          "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "model_runs": [
+            {
+              "framework_requests": 1,
+              "http_attempts": 1,
+              "http_responses": [
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 11312,
+                    "completion_tokens": 1982,
+                    "total_tokens": 13294
+                  }
+                }
+              ],
+              "usage": {
+                "input_tokens": 11312,
+                "output_tokens": 1982
+              },
+              "usage_unknown_reason": null,
+              "latency_ms": 10326,
+              "success": true,
+              "error_code": null,
+              "config_version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+              "framework_version": "2.31.1",
+              "cost_usd": null,
+              "cost_unknown_reason": "price_or_usage_unknown"
+            }
+          ],
+          "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+          "packet_is_exhaustive_actual_material_set": false,
+          "actual_artifact_refs": [
+            {
+              "kind": "research_progress",
+              "id": "6d1d8d54-f9e0-4bf8-b793-d9c92abecd55",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "company": {
+            "id": 160,
+            "ticker": "600406",
+            "market_code": "SSE",
+            "canonical_name": "国电南瑞",
+            "sector_code": null
+          },
+          "task": {
+            "id": "21859c68-7979-485b-8319-92bceed71059",
+            "schema_version": 1,
+            "revision": 6,
+            "created_at": "2026-10-11T03:11:15.869867Z",
+            "actor": "local_owner",
+            "origin_ref": null,
+            "parent_task_id": null,
+            "message_ref": {
+              "kind": "message",
+              "id": "6dcccd9e-5037-429c-91b2-ae8fbb2e8e62",
+              "revision": 1,
+              "field_path": null
+            },
+            "binding": {
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "base_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                },
+                {
+                  "kind": "case",
+                  "id": "80c12cf5-af57-4b7d-a8c1-7094e21dcdf1",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "as_of": "2026-10-10T04:00:00Z"
+            },
+            "status": "partial",
+            "cancel_requested": false,
+            "stop_reason": "evidence_blocked",
+            "waiting": null,
+            "artifact_refs": [
+              {
+                "kind": "research_progress",
+                "id": "6d1d8d54-f9e0-4bf8-b793-d9c92abecd55",
+                "revision": 1,
+                "field_path": null
+              }
+            ],
+            "usage": {
+              "tool_calls": 0,
+              "requests": 1,
+              "input_tokens": 11312,
+              "output_tokens": 1982,
+              "cost": {
+                "value": null,
+                "unit": "currency",
+                "currency": "USD",
+                "unknown_reason": "price_or_usage_unknown"
+              }
+            }
+          },
+          "messages": [
+            {
+              "id": "6dcccd9e-5037-429c-91b2-ae8fbb2e8e62",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:11:15.877048Z",
+              "actor": "local_owner",
+              "origin_ref": null,
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "2e95b7b3-0494-4bc1-a8eb-05f1a7da4dc4",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 1,
+              "role": "user",
+              "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": null,
+              "client_message_id": "f2a1c8a1-4e01-4d09-950a-1b913296d3d2",
+              "task_ref": {
+                "kind": "task",
+                "id": "21859c68-7979-485b-8319-92bceed71059",
+                "revision": 1,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            },
+            {
+              "id": "97405a41-2976-4dac-af88-544fdf7d4de7",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:11:26.322533Z",
+              "actor": "local_owner",
+              "origin_ref": {
+                "kind": "message",
+                "id": "6dcccd9e-5037-429c-91b2-ae8fbb2e8e62",
+                "revision": 1,
+                "field_path": null
+              },
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "2e95b7b3-0494-4bc1-a8eb-05f1a7da4dc4",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 2,
+              "role": "assistant",
+              "text": "国电南瑞 (600406)\n研究对象为服务器身份元数据所述的授权上市公司（国电南瑞）。研究要求：给出有依据的立场、关键依据、最可能推翻观点的反证、下一步证据步骤与研究缺口；供应商候选未核验，银行不得套用FCFE，DCF保持关闭，证据不足不得发表方向结论。\n材料缺口：尚未取得可核验的分部收入与订单/在手合同披露。；尚未取得可核验的毛利率、经营现金流与应收账款序列。；价格与历史估值分位尚未获取。；面向该标的最具重要性的反证材料尚未定位。\n局限：供应商候选数据未经核验，只能保持为缺口，不得升级为已核验事实。；完整的FCFE资格数据不可得，不得以经营现金流减资本开支替代，DCF保持关闭。；历史估值分位仅描述价格的历史相对位置，不代表便宜或昂贵。；无网络访问与解析能力：无法获取或解析新的原始披露，仅能使用任务截止时点前已保存材料。",
+              "content": [
+                {
+                  "type": "entity_ref",
+                  "ref": {
+                    "kind": "listing",
+                    "id": 160,
+                    "revision": 1,
+                    "field_path": null
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "研究对象为服务器身份元数据所述的授权上市公司（国电南瑞）。研究要求：给出有依据的立场、关键依据、最可能推翻观点的反证、下一步证据步骤与研究缺口；供应商候选未核验，银行不得套用FCFE，DCF保持关闭，证据不足不得发表方向结论。"
+                }
+              ],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": {
+                "kind": "message",
+                "id": "6dcccd9e-5037-429c-91b2-ae8fbb2e8e62",
+                "revision": 1,
+                "field_path": null
+              },
+              "client_message_id": null,
+              "task_ref": {
+                "kind": "task",
+                "id": "21859c68-7979-485b-8319-92bceed71059",
+                "revision": 4,
+                "field_path": null
+              },
+              "artifact_refs": [
+                {
+                  "kind": "research_progress",
+                  "id": "6d1d8d54-f9e0-4bf8-b793-d9c92abecd55",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "disclosure_access": []
+            }
+          ],
+          "latency_seconds": 10.470714499708265,
+          "error_type": null,
+          "semantic_acceptance": "human pending",
+          "money_cost_usd": null
+        }
+      ]
+    },
+    {
+      "state": "bounded trial completed",
+      "limits": {
+        "requests_per_company": 8,
+        "total_requests": 24,
+        "tokens_per_company": 120000,
+        "total_tokens": 360000,
+        "validation_retries": 2,
+        "seconds_per_company": 360,
+        "requested_output_tokens": 4096
+      },
+      "configuration": {
+        "revision": 0,
+        "version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+        "values": {
+          "agent_credential_ref": "agent_api_key",
+          "agent_max_tokens": 4096,
+          "agent_model": "deepseek-flash",
+          "agent_output_mode": "prompted",
+          "agent_profile": "deepseek",
+          "agent_profile_model": "",
+          "agent_provider": "deepseek",
+          "agent_queue_exploration_capacity": 32,
+          "agent_queue_interactive_capacity": 128,
+          "agent_queue_max_running": 4,
+          "agent_queue_review_capacity": 96,
+          "agent_retries": 2,
+          "agent_supports_json_object": true,
+          "agent_supports_json_schema": false,
+          "agent_temperature": null,
+          "agent_thinking": "auto",
+          "agent_timeout_seconds": 45.0,
+          "agent_tool_choice_required": false,
+          "endpoint_hash": "4217b1ac5a57c64fb1cc4d0e23df8b7ff82059e438a71a8766bf59fd008147b3"
+        }
+      },
+      "material_set_hash": "942e1505c6399d5d64944a0fa51a27c8ccfa6c85a8a6997ddffcd6924e290319",
+      "previous_attempt": "/tmp/ag20-company-trial-20261011/actual-results.json",
+      "results": [
+        {
+          "previous_failed_task_id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+          "cumulative_remaining_before_attempt": {
+            "requests": 6,
+            "tokens": 87913,
+            "tools": 24,
+            "seconds": 331,
+            "total_used_requests": 5,
+            "total_used_tokens": 73347
+          },
+          "actual_material_receipts": [],
+          "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "model_runs": [
+            {
+              "framework_requests": 1,
+              "http_attempts": 1,
+              "http_responses": [
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 11531,
+                    "completion_tokens": 2834,
+                    "total_tokens": 14365
+                  }
+                }
+              ],
+              "usage": {
+                "input_tokens": 11531,
+                "output_tokens": 2834
+              },
+              "usage_unknown_reason": null,
+              "latency_ms": 14686,
+              "success": false,
+              "error_code": "BudgetExceededError",
+              "config_version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+              "framework_version": "2.31.1",
+              "cost_usd": null,
+              "cost_unknown_reason": "price_or_usage_unknown"
+            }
+          ],
+          "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+          "packet_is_exhaustive_actual_material_set": false,
+          "actual_artifact_refs": [
+            {
+              "kind": "research_progress",
+              "id": "88c60795-4bce-4df8-b943-738a42ddc2df",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "company": {
+            "id": 134,
+            "ticker": "600036",
+            "market_code": "SSE",
+            "canonical_name": "招商银行",
+            "sector_code": null
+          },
+          "task": {
+            "id": "7b4b8ddb-4230-4e98-ac9f-65498139f6bf",
+            "schema_version": 1,
+            "revision": 7,
+            "created_at": "2026-10-11T03:20:43.213877Z",
+            "actor": "local_owner",
+            "origin_ref": null,
+            "parent_task_id": "afcb343c-7bc3-42d4-9bab-5eb127710f7f",
+            "message_ref": {
+              "kind": "message",
+              "id": "288821b7-fb26-4e13-b9f3-89e4353d9fc4",
+              "revision": 1,
+              "field_path": null
+            },
+            "binding": {
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "base_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                },
+                {
+                  "kind": "case",
+                  "id": "4c65ffd9-7e78-4839-8655-dfa35dc9d59a",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "as_of": "2026-10-10T04:00:00Z"
+            },
+            "status": "partial",
+            "cancel_requested": false,
+            "stop_reason": "budget_exhausted",
+            "waiting": null,
+            "artifact_refs": [
+              {
+                "kind": "research_progress",
+                "id": "88c60795-4bce-4df8-b943-738a42ddc2df",
+                "revision": 1,
+                "field_path": null
+              }
+            ],
+            "usage": {
+              "tool_calls": 1,
+              "requests": 1,
+              "input_tokens": 11531,
+              "output_tokens": 2834,
+              "cost": {
+                "value": null,
+                "unit": "currency",
+                "currency": "USD",
+                "unknown_reason": "price_or_usage_unknown"
+              }
+            }
+          },
+          "messages": [
+            {
+              "id": "288821b7-fb26-4e13-b9f3-89e4353d9fc4",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:20:43.224764Z",
+              "actor": "local_owner",
+              "origin_ref": null,
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "91a991de-c020-467c-b72d-968e0d11f944",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 1,
+              "role": "user",
+              "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 134,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": null,
+              "client_message_id": "ffd83c1d-2873-4a40-9836-d44d2cccf488",
+              "task_ref": {
+                "kind": "task",
+                "id": "7b4b8ddb-4230-4e98-ac9f-65498139f6bf",
+                "revision": 1,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            }
+          ],
+          "latency_seconds": 14.830150374677032,
+          "error_type": null,
+          "semantic_acceptance": "human pending",
+          "money_cost_usd": null
+        },
+        {
+          "previous_failed_task_id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+          "cumulative_remaining_before_attempt": {
+            "requests": 6,
+            "tokens": 92034,
+            "tools": 19,
+            "seconds": 344,
+            "total_used_requests": 6,
+            "total_used_tokens": 87712
+          },
+          "actual_material_receipts": [
+            {
+              "operation_id": "fe59723c-51e0-49ae-975b-6cca84446d64",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "002415.SZ",
+                  "field": "net_profit_parent",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "2dabb459-6e28-5d20-9544-1c69d5bc6861",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:47:50.278181Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 56,
+                      "revision": 1,
+                      "field_path": "fields.net_profit_parent"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_parent",
+                    "content_hash": "5f990eeb3668bb60606c9ebfeb5b2850c18afbbf60909572628e3315b15958ff",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:47:50.278181Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "8f3ca34f-84b7-5cd8-b8b4-582d494e2228",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 3956,
+                      "revision": 2,
+                      "field_path": "fields.net_profit_parent"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_parent",
+                    "content_hash": "f148f93ace3febaa45b755ce3d2d7aad593f50147c5b6294b5acccfd301adf4b",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "7895705450.11",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "7a376a70-fd23-5f5e-9798-69b171017797",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:20:56.505360Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 7905,
+                      "revision": 3,
+                      "field_path": "fields.net_profit_parent"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_parent",
+                    "content_hash": "a8790f376e767be63589f1d8bf0da1da41faab30d6b9b8823fbde638d8ad694d",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:20:56.505360Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 56,
+                    "revision": 1,
+                    "field_path": "fields.net_profit_parent"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 3956,
+                    "revision": 2,
+                    "field_path": "fields.net_profit_parent"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 7905,
+                    "revision": 3,
+                    "field_path": "fields.net_profit_parent"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "61cc2547936f40fdd373a52b461d486ea07acf15e15270b6482b74d0dbccfc77"
+            },
+            {
+              "operation_id": "6a17c097-c58d-4bbe-a291-5bd58e337152",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "002415.SZ",
+                  "field": "operating_cash_flow",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "b3e4d04c-15f3-5868-9d21-5d3f1b4cc718",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:47:50.278181Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 56,
+                      "revision": 1,
+                      "field_path": "fields.operating_cash_flow"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.operating_cash_flow",
+                    "content_hash": "27ab9bb4f62bcf5e7319e7a79374aa4bedd28c541096b2db09361c5f4cddc16f",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:47:50.278181Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "a64535b6-16d3-59d6-bcbf-8865967380ee",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 3956,
+                      "revision": 2,
+                      "field_path": "fields.operating_cash_flow"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.operating_cash_flow",
+                    "content_hash": "d16c413daa5beecc5659be93829e7595b5d037b3f2911cf39b9aa40e8ae13d14",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "3231411324.58",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "e1a87cf2-f66f-51dd-994c-555f4eb3d6f6",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:20:56.505360Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 7905,
+                      "revision": 3,
+                      "field_path": "fields.operating_cash_flow"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.operating_cash_flow",
+                    "content_hash": "03e8a7e50d4f3debde2c3608551d66ae826137ec2d77786f27fe42f29e4f3ac2",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:20:56.505360Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "3231411324.58",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 56,
+                    "revision": 1,
+                    "field_path": "fields.operating_cash_flow"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 3956,
+                    "revision": 2,
+                    "field_path": "fields.operating_cash_flow"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 7905,
+                    "revision": 3,
+                    "field_path": "fields.operating_cash_flow"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "95002854041f113f46eb4505776ba3a702420740f0348d013117b0a26ded6d67"
+            },
+            {
+              "operation_id": "96c76080-fa48-4843-a9f1-0cdc8616a17d",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "002415.SZ",
+                  "field": "close",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "48322c4a-c64a-554c-ac57-1105cf12c990",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-08T12:15:12.590492Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "market_snapshot",
+                      "id": 1049026,
+                      "revision": 1,
+                      "field_path": "close"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "close",
+                    "content_hash": "cf30ad3c017b2663c811bcdeac6a45e3771925f0aa89140f196718689dfb15a3",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-10-08",
+                      "end": "2026-10-08",
+                      "basis": "daily/none"
+                    },
+                    "published_at": "2026-10-08T07:00:00Z",
+                    "acquired_at": "2026-10-08T12:15:12.590492Z",
+                    "available_from": "2026-10-08T07:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "33.000000",
+                      "unit": "CNY/share",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "daily close; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "market_snapshot",
+                    "id": 1049026,
+                    "revision": 1,
+                    "field_path": "close"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "daily close; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "e5d89b9d6f963251031ca53aa26ddb623e75ec198581491e50c5dc5548ba8ba2"
+            },
+            {
+              "operation_id": "7eeda7f3-21f7-4428-b2df-4fcb5f8dd11f",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "002415.SZ",
+                  "field": "revenue_main",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "6ca28c71-3170-5121-a953-7b9dbb489a76",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:47:50.278181Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 56,
+                      "revision": 1,
+                      "field_path": "fields.revenue"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue",
+                    "content_hash": "a207529e2e6a1d2ffff59a854c9f0f6e044ed89eb3a36c274b7b493847e42f58",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:47:50.278181Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "46822537847.07",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "0e5f8031-a9df-5c1e-b119-61a35eb6e2d0",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 3956,
+                      "revision": 2,
+                      "field_path": "fields.revenue_main"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_main",
+                    "content_hash": "b56086c820dbf47c4cb79760d7330d4055ae66c4b9ad87b47d92cd474c695b4f",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "cd0cfbf5-2d69-5784-ab56-c1604363f4fc",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:20:56.505360Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 7905,
+                      "revision": 3,
+                      "field_path": "fields.revenue_main"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_main",
+                    "content_hash": "bb2d51ad1fdf4e47e5efaff71a26e89ab67abed8ec391bc74397292a01d2fc34",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 62,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-07-24T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:20:56.505360Z",
+                    "available_from": "2026-07-24T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 56,
+                    "revision": 1,
+                    "field_path": "fields.revenue"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 3956,
+                    "revision": 2,
+                    "field_path": "fields.revenue_main"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 7905,
+                    "revision": 3,
+                    "field_path": "fields.revenue_main"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "9f4a3d45f5d0e43b9ba2570bad381232bbf3ae9887a3385e95d4b0eeae5c322a"
+            }
+          ],
+          "actual_material_receipts_hash": "885bc6861e2ab4c1663962de5182e7fbd8b628a7a24b8b5669f31d431b94f8c2",
+          "model_runs": [
+            {
+              "framework_requests": 2,
+              "http_attempts": 2,
+              "http_responses": [
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 11524,
+                    "completion_tokens": 1833,
+                    "total_tokens": 13357
+                  }
+                },
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 13634,
+                    "completion_tokens": 2094,
+                    "total_tokens": 15728
+                  }
+                }
+              ],
+              "usage": {
+                "input_tokens": 25158,
+                "output_tokens": 3927
+              },
+              "usage_unknown_reason": null,
+              "latency_ms": 16096,
+              "success": false,
+              "error_code": "BudgetExceededError",
+              "config_version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+              "framework_version": "2.31.1",
+              "cost_usd": null,
+              "cost_unknown_reason": "price_or_usage_unknown"
+            }
+          ],
+          "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+          "packet_is_exhaustive_actual_material_set": false,
+          "actual_artifact_refs": [],
+          "company": {
+            "id": 62,
+            "ticker": "002415",
+            "market_code": "SZSE",
+            "canonical_name": "海康威视",
+            "sector_code": null
+          },
+          "task": {
+            "id": "be178519-01dc-4b25-bb1d-b5777daebd1a",
+            "schema_version": 1,
+            "revision": 7,
+            "created_at": "2026-10-11T03:20:58.086686Z",
+            "actor": "local_owner",
+            "origin_ref": null,
+            "parent_task_id": "5065fb2a-57e2-4d8e-ae18-5b39a074de50",
+            "message_ref": {
+              "kind": "message",
+              "id": "ae64292c-d598-4d09-8b7e-975a7304df0a",
+              "revision": 1,
+              "field_path": null
+            },
+            "binding": {
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "base_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                },
+                {
+                  "kind": "case",
+                  "id": "ba0950df-5b4e-408b-9ad3-e565566fe5ba",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "as_of": "2026-10-10T04:00:00Z"
+            },
+            "status": "failed",
+            "cancel_requested": false,
+            "stop_reason": "budget_exhausted",
+            "waiting": null,
+            "artifact_refs": [],
+            "usage": {
+              "tool_calls": 6,
+              "requests": 2,
+              "input_tokens": 25158,
+              "output_tokens": 3927,
+              "cost": {
+                "value": null,
+                "unit": "currency",
+                "currency": "USD",
+                "unknown_reason": "price_or_usage_unknown"
+              }
+            }
+          },
+          "messages": [
+            {
+              "id": "ae64292c-d598-4d09-8b7e-975a7304df0a",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:20:58.094779Z",
+              "actor": "local_owner",
+              "origin_ref": null,
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "4a2436fa-90bc-4aa7-b4e9-bc39925895cc",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 1,
+              "role": "user",
+              "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 62,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": null,
+              "client_message_id": "83610351-9421-4940-a4dc-b9f357a38724",
+              "task_ref": {
+                "kind": "task",
+                "id": "be178519-01dc-4b25-bb1d-b5777daebd1a",
+                "revision": 1,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            }
+          ],
+          "latency_seconds": 16.20570958312601,
+          "error_type": null,
+          "semantic_acceptance": "human pending",
+          "money_cost_usd": null
+        },
+        {
+          "previous_failed_task_id": "21859c68-7979-485b-8319-92bceed71059",
+          "cumulative_remaining_before_attempt": {
+            "requests": 7,
+            "tokens": 106706,
+            "tools": 24,
+            "seconds": 349,
+            "total_used_requests": 8,
+            "total_used_tokens": 116797
+          },
+          "actual_material_receipts": [
+            {
+              "operation_id": "23dead8f-22c5-4ed9-ab88-57fb2284ba63",
+              "request": {
+                "tool": "capture_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "roe",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": "2026-06-30"
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "kind": "evidence",
+                    "id": "fabe2813-09fa-410b-ba9c-8bbbaa94ab8e",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "96fb9af8-dace-486e-981a-a0c1500d16ee",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "4e2a9530-552b-4bc5-b7e1-262c3e2fc472",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "evidence",
+                    "id": "fabe2813-09fa-410b-ba9c-8bbbaa94ab8e",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "96fb9af8-dace-486e-981a-a0c1500d16ee",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "4e2a9530-552b-4bc5-b7e1-262c3e2fc472",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "5f5970cb39b6be06a530864c9abc46f6e159983e8153a26c5c1f9bb1e53fc2d3"
+            },
+            {
+              "operation_id": "0133ff33-45bf-4481-9d6b-ee27c07000bd",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "capital_expenditure",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "7afb700b-fc86-527d-9278-55bb2ff78d42",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.capital_expenditure"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.capital_expenditure",
+                    "content_hash": "9a95934834247c6b7b8f7c869f0808b9f51c2cf439edac707e13e5a90892c1f2",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "4b2d73f5-ef2d-5eb0-ba86-28eb008712ed",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.capital_expenditure"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.capital_expenditure",
+                    "content_hash": "10fa21bb6a7fd3b26fae4080027e529395857206bd4364a7b8b63cb37834782f",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "90516641-f9fc-50c3-bf79-bb5ebf16ff91",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.capital_expenditure"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.capital_expenditure",
+                    "content_hash": "c886ee922e53570c89a70c51b708a1ae82f73b642cbc30c8d52ebc6c3d67ad3f",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "754329578.19",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.capital_expenditure"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.capital_expenditure"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.capital_expenditure"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "fff663b8805e654a42c2a95524352b6966128f08b14d6bb71bf92f4197e4f174"
+            },
+            {
+              "operation_id": "499b142e-8a7c-4d11-b5ca-d63a05e29bdc",
+              "request": {
+                "tool": "capture_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "close",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "kind": "evidence",
+                    "id": "43fc4dd4-b80e-4c61-a7ee-648b43dd45d2",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "evidence",
+                    "id": "43fc4dd4-b80e-4c61-a7ee-648b43dd45d2",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "daily close; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "17b15cb7f62ab316f2c08688e98e07c673aeb18b9517f5052e0dc06322bd6bb1"
+            },
+            {
+              "operation_id": "4fba903a-f482-472d-a580-275fe26e2dd2",
+              "request": {
+                "tool": "capture_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "net_profit_parent",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": "2026-06-30"
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "kind": "evidence",
+                    "id": "ac1bc53e-456e-4f45-b28c-4b6bca550503",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "064cf1f4-41ff-41cf-b100-748c73a1582f",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "30541c13-ad62-44c6-878d-357d82b0dc11",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "evidence",
+                    "id": "ac1bc53e-456e-4f45-b28c-4b6bca550503",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "064cf1f4-41ff-41cf-b100-748c73a1582f",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "30541c13-ad62-44c6-878d-357d82b0dc11",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "036fae51832033452ad60f824fe96b88b85bcc8aff924f20c5d1157093bf48a2"
+            },
+            {
+              "operation_id": "005ff9f5-ffb0-4cee-a948-efa44169f52f",
+              "request": {
+                "tool": "capture_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "revenue_total",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": "2026-06-30"
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "kind": "evidence",
+                    "id": "b9b2bbe2-16cd-4aab-94d0-c4057b456511",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "e80f7bbf-9fff-4fea-89bd-b25c0b079470",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "45efefb6-85e8-400e-8344-155706bf7e56",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "evidence",
+                    "id": "b9b2bbe2-16cd-4aab-94d0-c4057b456511",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "e80f7bbf-9fff-4fea-89bd-b25c0b079470",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "45efefb6-85e8-400e-8344-155706bf7e56",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "51bae8f83a3d955e4690cff1c924c3b68c58cccacbfe39b70e05522f88999e2c"
+            },
+            {
+              "operation_id": "4963521a-4802-4ef2-b157-551484ffb45a",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "close",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "4dc38ebd-ea2a-5ff9-a2ce-0d3c48d933f9",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-08T12:21:06.745515Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "market_snapshot",
+                      "id": 1049222,
+                      "revision": 1,
+                      "field_path": "close"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "close",
+                    "content_hash": "0da1312709984f21decf0945823ec068a9de4d2302207614c5894b6fac4326a6",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-10-08",
+                      "end": "2026-10-08",
+                      "basis": "daily/none"
+                    },
+                    "published_at": "2026-10-08T07:00:00Z",
+                    "acquired_at": "2026-10-08T12:21:06.745515Z",
+                    "available_from": "2026-10-08T07:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "22.860000",
+                      "unit": "CNY/share",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "daily close; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "market_snapshot",
+                    "id": 1049222,
+                    "revision": 1,
+                    "field_path": "close"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "daily close; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "223fd08f14484f0ae24d9340a68cb885276d993a6382218e326b73a1f4ec3ad5"
+            },
+            {
+              "operation_id": "2d72f2b2-6ad6-4fa0-8078-639004351e8d",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "net_profit_parent",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "441e791f-ce6c-59f9-a221-c6c9af45df9d",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.net_profit_parent"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_parent",
+                    "content_hash": "fb1caeb076886ce9f93e2182a815cdd812b23385ac007138cac303801630c678",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "33a36f12-bfcb-5023-9b64-4421668d27f1",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.net_profit_parent"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_parent",
+                    "content_hash": "e297ebf07d9e6a70216641a04cee42042fcd31a5db8c371730c1b4fac89c5c69",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "3072688826.28",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "0976e2c4-f74b-5846-bd6e-99b48321be6f",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.net_profit_parent"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_parent",
+                    "content_hash": "bf49c62a581fde3559809e71864298da25f953b6c6ab8ed3e99204fe703803fc",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.net_profit_parent"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.net_profit_parent"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.net_profit_parent"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "ff190c661a3db94df16fd55ceda650968287d19a3b34e4bf1144c2a88fcbc213"
+            },
+            {
+              "operation_id": "3ad2ba92-3f9f-400c-ba82-f2afe3ab9664",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "net_profit_total",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "a99bd357-87e2-5f2b-881d-549df58c0947",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.net_profit"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit",
+                    "content_hash": "c634deed9f318c93e50c61344318484a5d5573cbd7e09c4367d46441d22a0172",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "3248358319.32",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "e8b920e3-f475-5da6-b0a7-00f10fac34fe",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.net_profit_total"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_total",
+                    "content_hash": "41ec26e23b1fc77eb418d60676576fd80623042438ca0a4a0a05375504dc0908",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "7989a708-a644-5bb2-bd74-403a67a34954",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.net_profit_total"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.net_profit_total",
+                    "content_hash": "321cd5fb938182cea1b01c44ee26562e5fffec627eee22cde7114a2d428f37df",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.net_profit"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.net_profit_total"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.net_profit_total"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "dd99cf265af15991dee9356877b302a428d4aabeb7a84dc56cfcef92001518b7"
+            },
+            {
+              "operation_id": "7154a154-e50a-4ca6-9a60-f15817831e2f",
+              "request": {
+                "tool": "capture_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "capital_expenditure",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": "2026-06-30"
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "kind": "evidence",
+                    "id": "e7d76695-3eff-48d4-baaa-b9979fec160f",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "dae5ad21-19ea-48db-95c4-115e8447e121",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "a109ad8a-7312-449b-a19d-fe21cd597f03",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "evidence",
+                    "id": "e7d76695-3eff-48d4-baaa-b9979fec160f",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "dae5ad21-19ea-48db-95c4-115e8447e121",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "a109ad8a-7312-449b-a19d-fe21cd597f03",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "cdfd85c2ad9029ca0d547a3c25b26cbe955aff5000350a35c50d61f68bae9ef7"
+            },
+            {
+              "operation_id": "ebfac51e-9d6f-45fc-a801-ec313b9da7fd",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "operating_cash_flow",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "a31ea4be-99f5-55b7-8fe7-b0f6ddc490af",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.operating_cash_flow"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.operating_cash_flow",
+                    "content_hash": "999ba0da900949c9cadf564893f7d0b876e623bc92cca13f758a855cda9cd4c5",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "8ddbf275-6b55-538a-8f70-238b21a9e278",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.operating_cash_flow"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.operating_cash_flow",
+                    "content_hash": "bb48bcd10cebe6ee3289b1769afbd9bb090ab4c40ecc5e61bdb306a17321f8f0",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "591109591.8",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "653f44c1-4697-5f3e-bc07-8f2c1d328198",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.operating_cash_flow"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.operating_cash_flow",
+                    "content_hash": "642c47445f7e66f21c1a169efdf5c02f591ccc27088ca2bf7c953b0641b0bf5b",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "591109591.8",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.operating_cash_flow"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.operating_cash_flow"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.operating_cash_flow"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "987267111f2e9ccb2c0f83339a6988735324fa0a37aedd0086d76986e82ffde0"
+            },
+            {
+              "operation_id": "27be8c12-1aaf-4a3d-90f3-20abdc684bf9",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "roe",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "989243bb-e6f8-5244-9ad7-56b9fb27db3f",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.roe"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.roe",
+                    "content_hash": "df6d5cab22897501f4bec91df1a6d129a756a4b552729e0d0ab8af8d2da17912",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "0.058684",
+                      "unit": "fraction",
+                      "currency": null,
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "fada1773-6092-595a-8162-99a29b96084f",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.roe"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.roe",
+                    "content_hash": "6f12754da1fb443feefd7bdbf033b0857f0e49908d03cb9df3b46b38b1300ce6",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "fraction",
+                      "currency": null,
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "4f2fd9d0-0c35-5055-ab3c-ffb04eb03e9f",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.roe"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.roe",
+                    "content_hash": "eb933290163d4497868abb9e6e982660c61d6a88efc59d825127234898a8e781",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "fraction",
+                      "currency": null,
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.roe"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.roe"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.roe"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "a250d9854eeda1a56a2cb8cb01d357fb78e2ec20863eb87d7dbd795d84fb31fd"
+            },
+            {
+              "operation_id": "948f5f8a-240c-43d7-bae9-1b2210b217b7",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "revenue_total",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "ac93fb1f-8778-517a-a614-4652d5565844",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.revenue_total"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_total",
+                    "content_hash": "a6b3de4a225ab0e716347b62ee3710caa8c5a839666d070339e13876effe01ff",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "24b4ec59-155a-59a1-95ae-7ec737d5e3a3",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.revenue_total"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_total",
+                    "content_hash": "04ab9c1e8e621fb154aedb4cf173ec758978c8ecd5709d397e0e3f95af97d00f",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "27767190529.75",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "7990add3-aed4-5094-8382-8dc2a58df612",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.revenue_total"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_total",
+                    "content_hash": "c0749d61a96ec3c8b0abf0515677e0c8563efa0d94d604313e638c5c4c1f0ec1",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.revenue_total"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.revenue_total"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.revenue_total"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "050ce0ac7ea02d63d669ac2670e1c43749851b928de8240b820ddda806bfc7fe"
+            },
+            {
+              "operation_id": "2059c52c-2369-49c8-a0bc-1976cbc91391",
+              "request": {
+                "tool": "capture_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "operating_cash_flow",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": "2026-06-30"
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "kind": "evidence",
+                    "id": "ed695ad8-e920-49ff-92fd-43dc28a8911c",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "a99a54e8-ebe8-4dae-b9cf-cbdf827bfd0d",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "9ff8ae70-361c-4024-be38-1d9c0db844fc",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "evidence",
+                    "id": "ed695ad8-e920-49ff-92fd-43dc28a8911c",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "a99a54e8-ebe8-4dae-b9cf-cbdf827bfd0d",
+                    "revision": 1,
+                    "field_path": null
+                  },
+                  {
+                    "kind": "evidence",
+                    "id": "9ff8ae70-361c-4024-be38-1d9c0db844fc",
+                    "revision": 1,
+                    "field_path": null
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "34dbae91141cecf27f4ec2f5466e76d72940e9abde6382b7f9aa9515534f08a4"
+            },
+            {
+              "operation_id": "7434d9d8-cf20-4f1f-9cfa-86d2591023c5",
+              "request": {
+                "tool": "get_snapshot",
+                "business": {
+                  "ticker": "600406.SH",
+                  "field": "revenue_main",
+                  "as_of": "2026-10-10T04:00:00Z",
+                  "report_period": null
+                },
+                "phase": "research:v1"
+              },
+              "result": {
+                "status": "ok",
+                "data": [
+                  {
+                    "id": "c113ec90-0125-5d4e-801b-ca9c4f245dba",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T12:50:08.864803Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 154,
+                      "revision": 1,
+                      "field_path": "fields.revenue"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue",
+                    "content_hash": "d26f5e8c84f2276348ad0d377b7e276f8c525c716608f3b408405a5027cee6c9",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T12:50:08.864803Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": "27767190529.75",
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": null
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "1bffe731-081e-5b95-8cc2-c67b3a211b95",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-06T22:59:18.079944Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 4054,
+                      "revision": 2,
+                      "field_path": "fields.revenue_main"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_main",
+                    "content_hash": "92e9b49d5ebcc1cdbbffa72db0c82c64953b9fca153463272f5c394c66b1e740",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-06T22:59:18.079944Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  },
+                  {
+                    "id": "59a4ab0d-3026-5c56-8007-bb49ea9605a8",
+                    "schema_version": 1,
+                    "revision": 1,
+                    "created_at": "2026-10-07T04:47:06.439418Z",
+                    "actor": "snapshot_adapter",
+                    "origin_ref": null,
+                    "source_ref": {
+                      "kind": "financial_snapshot",
+                      "id": 9273,
+                      "revision": 3,
+                      "field_path": "fields.revenue_main"
+                    },
+                    "source_kind": "snapshot",
+                    "locator": "fields.revenue_main",
+                    "content_hash": "d8e2200580da68ab734fa315c39ef423ef8bfc504a5b471ea8f9eb9f37e14356",
+                    "subject_ref": {
+                      "kind": "listing",
+                      "id": 160,
+                      "revision": 1,
+                      "field_path": null
+                    },
+                    "period": {
+                      "start": "2026-01-01",
+                      "end": "2026-06-30",
+                      "basis": "period_to_date/semi"
+                    },
+                    "published_at": "2026-08-26T16:00:00Z",
+                    "acquired_at": "2026-10-07T04:47:06.439418Z",
+                    "available_from": "2026-08-26T16:00:00Z",
+                    "verification": "candidate",
+                    "conflict": "none",
+                    "value": {
+                      "value": null,
+                      "unit": "CNY",
+                      "currency": "CNY",
+                      "unknown_reason": "field_missing_or_rejected"
+                    },
+                    "text": "availability=actual; date precision; registry=2026-10-09.3",
+                    "correction_refs": [],
+                    "document_provenance": null
+                  }
+                ],
+                "refs": [
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 154,
+                    "revision": 1,
+                    "field_path": "fields.revenue"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 4054,
+                    "revision": 2,
+                    "field_path": "fields.revenue_main"
+                  },
+                  {
+                    "kind": "financial_snapshot",
+                    "id": 9273,
+                    "revision": 3,
+                    "field_path": "fields.revenue_main"
+                  }
+                ],
+                "as_of": "2026-10-10T04:00:00Z",
+                "coverage": "source candidates; strict acquisition/public time; no backfill reconstruction",
+                "warnings": [
+                  "availability=actual; date precision; registry=2026-10-09.3"
+                ],
+                "dependency_id": null
+              },
+              "receipt_hash": "8901bc7c611868da6e951e6924566fafef1215e0118a27cfccc38f91f34ea5a3"
+            }
+          ],
+          "actual_material_receipts_hash": "760f820d2c4636581b33131d31d90539c04924e91a38bc5db32858b78f3a9d68",
+          "model_runs": [
+            {
+              "framework_requests": 2,
+              "http_attempts": 2,
+              "http_responses": [
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 11545,
+                    "completion_tokens": 3347,
+                    "total_tokens": 14892
+                  }
+                },
+                {
+                  "status": 200,
+                  "usage": {
+                    "prompt_tokens": 23499,
+                    "completion_tokens": 3914,
+                    "total_tokens": 27413
+                  }
+                }
+              ],
+              "usage": {
+                "input_tokens": 35044,
+                "output_tokens": 7261
+              },
+              "usage_unknown_reason": null,
+              "latency_ms": 30044,
+              "success": false,
+              "error_code": "BudgetExceededError",
+              "config_version": "e32df9a17b2a88fddf67eb4daa047fdfd0d6a7e7b236f22b8c853f90bd31cf0a",
+              "framework_version": "2.31.1",
+              "cost_usd": null,
+              "cost_unknown_reason": "price_or_usage_unknown"
+            }
+          ],
+          "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+          "packet_is_exhaustive_actual_material_set": false,
+          "actual_artifact_refs": [
+            {
+              "kind": "research_progress",
+              "id": "2ab91fb9-363b-45b8-960d-d07df62a432f",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "b9b2bbe2-16cd-4aab-94d0-c4057b456511",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "e80f7bbf-9fff-4fea-89bd-b25c0b079470",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "45efefb6-85e8-400e-8344-155706bf7e56",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "ac1bc53e-456e-4f45-b28c-4b6bca550503",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "064cf1f4-41ff-41cf-b100-748c73a1582f",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "30541c13-ad62-44c6-878d-357d82b0dc11",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "ed695ad8-e920-49ff-92fd-43dc28a8911c",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "a99a54e8-ebe8-4dae-b9cf-cbdf827bfd0d",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "9ff8ae70-361c-4024-be38-1d9c0db844fc",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "e7d76695-3eff-48d4-baaa-b9979fec160f",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "dae5ad21-19ea-48db-95c4-115e8447e121",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "a109ad8a-7312-449b-a19d-fe21cd597f03",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "fabe2813-09fa-410b-ba9c-8bbbaa94ab8e",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "96fb9af8-dace-486e-981a-a0c1500d16ee",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "4e2a9530-552b-4bc5-b7e1-262c3e2fc472",
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "evidence",
+              "id": "43fc4dd4-b80e-4c61-a7ee-648b43dd45d2",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "company": {
+            "id": 160,
+            "ticker": "600406",
+            "market_code": "SSE",
+            "canonical_name": "国电南瑞",
+            "sector_code": null
+          },
+          "task": {
+            "id": "0e3e82b7-9271-40f1-99f2-b10f3b78a538",
+            "schema_version": 1,
+            "revision": 15,
+            "created_at": "2026-10-11T03:21:14.339510Z",
+            "actor": "local_owner",
+            "origin_ref": null,
+            "parent_task_id": "21859c68-7979-485b-8319-92bceed71059",
+            "message_ref": {
+              "kind": "message",
+              "id": "d2e0cec6-e9d3-4f15-9a93-8acf80874359",
+              "revision": 1,
+              "field_path": null
+            },
+            "binding": {
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "base_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                },
+                {
+                  "kind": "case",
+                  "id": "80c12cf5-af57-4b7d-a8c1-7094e21dcdf1",
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "as_of": "2026-10-10T04:00:00Z"
+            },
+            "status": "partial",
+            "cancel_requested": false,
+            "stop_reason": "budget_exhausted",
+            "waiting": null,
+            "artifact_refs": [
+              {
+                "kind": "research_progress",
+                "id": "2ab91fb9-363b-45b8-960d-d07df62a432f",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "b9b2bbe2-16cd-4aab-94d0-c4057b456511",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "e80f7bbf-9fff-4fea-89bd-b25c0b079470",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "45efefb6-85e8-400e-8344-155706bf7e56",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "ac1bc53e-456e-4f45-b28c-4b6bca550503",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "064cf1f4-41ff-41cf-b100-748c73a1582f",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "30541c13-ad62-44c6-878d-357d82b0dc11",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "ed695ad8-e920-49ff-92fd-43dc28a8911c",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "a99a54e8-ebe8-4dae-b9cf-cbdf827bfd0d",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "9ff8ae70-361c-4024-be38-1d9c0db844fc",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "e7d76695-3eff-48d4-baaa-b9979fec160f",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "dae5ad21-19ea-48db-95c4-115e8447e121",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "a109ad8a-7312-449b-a19d-fe21cd597f03",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "fabe2813-09fa-410b-ba9c-8bbbaa94ab8e",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "96fb9af8-dace-486e-981a-a0c1500d16ee",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "4e2a9530-552b-4bc5-b7e1-262c3e2fc472",
+                "revision": 1,
+                "field_path": null
+              },
+              {
+                "kind": "evidence",
+                "id": "43fc4dd4-b80e-4c61-a7ee-648b43dd45d2",
+                "revision": 1,
+                "field_path": null
+              }
+            ],
+            "usage": {
+              "tool_calls": 18,
+              "requests": 2,
+              "input_tokens": 35044,
+              "output_tokens": 7261,
+              "cost": {
+                "value": null,
+                "unit": "currency",
+                "currency": "USD",
+                "unknown_reason": "price_or_usage_unknown"
+              }
+            }
+          },
+          "messages": [
+            {
+              "id": "d2e0cec6-e9d3-4f15-9a93-8acf80874359",
+              "schema_version": 1,
+              "revision": 1,
+              "created_at": "2026-10-11T03:21:14.348206Z",
+              "actor": "local_owner",
+              "origin_ref": null,
+              "conversation_ref": {
+                "kind": "conversation",
+                "id": "af38bc69-61d0-4264-b308-6b09a303fe71",
+                "revision": 1,
+                "field_path": null
+              },
+              "sequence": 1,
+              "role": "user",
+              "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+              "content": [],
+              "context_refs": [
+                {
+                  "kind": "listing",
+                  "id": 160,
+                  "revision": 1,
+                  "field_path": null
+                }
+              ],
+              "reply_to": null,
+              "client_message_id": "25fd3c2a-f8d3-4f0f-bf1c-29ae6d3b14cd",
+              "task_ref": {
+                "kind": "task",
+                "id": "0e3e82b7-9271-40f1-99f2-b10f3b78a538",
+                "revision": 1,
+                "field_path": null
+              },
+              "artifact_refs": [],
+              "disclosure_access": []
+            }
+          ],
+          "latency_seconds": 30.265272458083928,
+          "error_type": null,
+          "semantic_acceptance": "human pending",
+          "money_cost_usd": null
+        }
+      ]
+    }
+  ],
+  "post_trial_offline_only_changes": [
+    "compact native save_research_progress receipt; complete durable receipt unchanged"
+  ],
+  "qualified_answers": 0
+}

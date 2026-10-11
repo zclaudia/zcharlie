@@ -3,7 +3,7 @@
 > 先读 [`00-conventions.md`](00-conventions.md)。波次 W2，可与 02 并行。**前置：03 已合并**（同改 `app.js` / `candidates.js`）。
 
 **目标：** 本地股票字典（全部 A 股，每周随 `sync-universe` 刷新），`GET /stocks/search` 三路匹配（代码前缀 / 名称子串 / 拼音首字母），
-自选股添加与候选提名输入改为 combobox。
+观察池添加与候选提名输入改为 combobox。
 
 **决策：** D4（本地 `stock_directory` + baostock `query_all_stock` + `pypinyin`；不接新浪 / 东财 suggest）。
 
@@ -11,7 +11,7 @@
 
 - baostock 参考客户端 `providers/baostock_reference.py`（`query_hs/sz/zz`、`query_stock_industry`，3 次线性重试，PIT 校验 626 / 632）；本机已核实 `baostock.query_all_stock(day)` 存在（返回当日全部证券 `code, tradeStatus, code_name`，含指数与基金，需按 `sh.6 / sz.0 / sz.3 / bj.` 前缀过滤为股票）。
 - `sync-universe`：`cli/commands/snapshot.py`，kind `UNIVERSE_SYNC`，采集器 `snapshots/reference.py`。
-- 名称当前来自 `Company.canonical_name`（`storage/models/reference.py:34-62`）；自选股添加 `api/routes/watchlist.py:54`，body `WatchlistAdd`（`api/schemas/admin.py:50-73`，无 listing 且无快照时必须给 `name`）；前端 `app.js:248 wireWatchlistForm`；候选提名 `candidates.js:301 normalizeTicker`。
+- 名称当前来自 `Company.canonical_name`（`storage/models/reference.py:34-62`）；观察池添加 `api/routes/watchlist.py:54`，body `WatchlistAdd`（`api/schemas/admin.py:50-73`，无 listing 且无快照时必须给 `name`）；前端 `app.js:248 wireWatchlistForm`；候选提名 `candidates.js:301 normalizeTicker`。
 - 路由注册 `api/app.py`；守卫与 JS 清单见 00。
 
 ## 文件清单
@@ -49,7 +49,7 @@
 ## Task 3：combobox
 
 - [ ] `web/static/combobox.js` 导出 `attachCombobox(input, { fetch, onSelect, minChars = 1 })`：输入防抖 200ms → `get('/stocks/search?q=…')`；下拉用 `el('ul', {class:'combo-list', role:'listbox'})`；上下键 / 回车 / Esc；选中回填 `ticker` 并触发 `onSelect(item)`。
-- [ ] 自选股表单：选中后自动填 `name`，`ticker` 校验规则不变；候选提名输入同样接入。
+- [ ] 观察池表单：选中后自动填 `name`，`ticker` 校验规则不变；候选提名输入同样接入。
 - [ ] `app.css` 下拉样式；`combobox.js` 加入 `test_web_client_contract.py:106` 清单；守卫通过。
 - [ ] 提交：`feat(web): combobox stock search on watchlist add and candidate nomination`
 
@@ -85,7 +85,7 @@
 6. **表多了 `provider` / `captured_at` 两列**（00 约定"所有写入带 provider 与 captured_at"），并给 `pinyin_initials` 加索引；`upsert_all` 对未变化的行也刷新 `synced_on` / `captured_at`，`changed` 只数名称 / 首字母 / 状态变化，另返回 `delisted` 计数。
 7. **健康页落点**：`DirectoryHealth(synced_on, total, age_days)` 放在 `freshness.directory`（不改 `/health/data` 顶层键清单与页面区块清单）；未同步发 `info` `directory_missing`，`age_days > 14` 发 `warn` `directory_stale`，section 都是 `freshness`。
 8. **搜索细节**：`q` 最长 32，`limit` 1～50（默认 10）；代码分支的判定是 `^\d{1,6}(\.[A-Za-z]{0,2})?$`，拼音分支只对纯字母查询；三路各取 `limit` 后按顺序去重；组内 `listed > suspended > delisted` 再按代码；LIKE 通配符用 `autoescape` 转义。`in_universe` 取运行时设置里目标池第一项的当日成分（`members_as_of`），`on_watchlist` 不区分启用 / 停用。
-9. **combobox**：`fetch` 默认即 `get('/stocks/search?q=…&limit=10')`；回车在下拉打开且有结果时选中高亮项（无高亮取第一项）并阻止提交，无结果时放行提交；列表 `mousedown` 阻止默认以免 blur 先关闭；`form reset` 时关闭。自选股表单选中后**覆盖**填入 `name`；候选提名只回填 ticker，`normalizeTicker` 不变。`candidates.html` 的 `pattern` 保留（输入拼音未选中就点提交会被浏览器拦下）。
+9. **combobox**：`fetch` 默认即 `get('/stocks/search?q=…&limit=10')`；回车在下拉打开且有结果时选中高亮项（无高亮取第一项）并阻止提交，无结果时放行提交；列表 `mousedown` 阻止默认以免 blur 先关闭；`form reset` 时关闭。观察池表单选中后**覆盖**填入 `name`；候选提名只回填 ticker，`normalizeTicker` 不变。`candidates.html` 的 `pattern` 保留（输入拼音未选中就点提交会被浏览器拦下）。
 10. **`api/schemas/stocks.py`** 新增（计划清单里没有，沿用 `schemas/market.py` 的放法）；`stocks.py` 复用了 `data_health._snapshot_universes`（与 `data_health` 引 `dashboard._APP_CONFIG_PATH` 同一做法）。
 
 ### 计划清单之外触碰的文件

@@ -1,0 +1,2 @@
+AG30 1440: native frozen failure/inside/outside evaluation, shadow, user approval, lost ack/reload, real CAS409 rollback history, auth401 and safe DOM passed
+AG30 390: native frozen failure/inside/outside evaluation, shadow, user approval, lost ack/reload, real CAS409 rollback history, auth401 and safe DOM passed

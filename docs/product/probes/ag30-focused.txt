@@ -1,0 +1,40 @@
+........................................................................ [ 26%]
+........................................................................ [ 53%]
+........................................................................ [ 80%]
+......................................F
+=================================== FAILURES ===================================
+_____________________ test_evidence_upgrade_and_downgrade ______________________
+
+tmp_path = PosixPath('/private/var/folders/5z/0dgzyc2j7hq0v4gnbx8pp1n80000gn/T/pytest-of-zhvala/pytest-1467/test_evidence_upgrade_and_down0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1155a4590>
+
+    def test_evidence_upgrade_and_downgrade(tmp_path, monkeypatch):
+        db = tmp_path / "evidence.db"
+        url = f"sqlite+aiosqlite:///{db}"
+        monkeypatch.setenv("DATABASE_URL", url)
+        config = Config()
+        config.set_main_option("script_location", str(Path(__file__).resolve().parents[2] / "alembic"))
+        config.set_main_option("sqlalchemy.url", url)
+        command.upgrade(config, "025")
+        with sqlite3.connect(db) as connection:
+            connection.execute(
+                "INSERT INTO investor_mandate_head VALUES ('local_owner', 'saved-mandate', 1)"
+            )
+        command.upgrade(config, "026")
+        engine = create_engine(f"sqlite:///{db}")
+        with engine.connect() as connection:
+>           assert not [
+                d
+                for d in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+                if "investor_" in repr(d) and not any(
+                    later in repr(d)
+                    for later in ("investor_publication_", "investor_user_object", "investor_memory_state", "investor_monitor_receipt", "investor_review_cycle", "investor_notification", "investor_discovery_cursor", "investor_discovery_batch")
+                )
+            ]
+E           AssertionError: assert not [('add_table', Table('investor_method_artifact', MetaData(), Column('id', String(length=36), table=<investor_method_ar..._method_head>, nullable=False), Column('payload', JSON(), table=<investor_method_head>, nullable=False), schema=None))]
+
+tests/integration/test_migration_026.py:30: AssertionError
+=========================== short test summary info ============================
+FAILED tests/integration/test_migration_026.py::test_evidence_upgrade_and_downgrade
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 failed, 254 passed in 84.47s (0:01:24)

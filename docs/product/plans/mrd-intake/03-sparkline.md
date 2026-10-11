@@ -2,7 +2,7 @@
 
 > 先读 [`00-conventions.md`](00-conventions.md)。波次 W1，可与 01 并行。无前置（只读已有 baostock 日线）。
 
-**目标：** 自选股行、候选卡、股票页顶部显示最近 120 个交易日（股票页 240 日）的收盘价迷你图，
+**目标：** 观察池行、候选卡、股票页顶部显示最近 120 个交易日（股票页 240 日）的收盘价迷你图，
 手写 SVG，不引入图表库，满足 CSP 与静态守卫；预留 P2 区间带参数。
 
 **决策：** D7（120 个交易日、不复权、baostock 版本；`bands` 参数占位）。
@@ -10,7 +10,7 @@
 ## 代码事实
 
 - `web/static/ui.js`：`svg(tag, attributes, text)` 用拆分后的命名空间字符串（line 7）；现有 `scale` / `bar` / `ring` 都用百分比坐标与 CSS class；`dom.js` 导出 `el`。
-- 自选股行 `web/static/app.js:167 watchlistRow`（`stockCell` 146，加载 `loadWatchlist` 117）；候选卡 `web/static/candidates.js:186 candidateItem`；股票页 `web/templates/stock.html`（`#stock-detail`）与 `app.js:877 loadStockDetail`。
+- 观察池行 `web/static/app.js:167 watchlistRow`（`stockCell` 146，加载 `loadWatchlist` 117）；候选卡 `web/static/candidates.js:186 candidateItem`；股票页 `web/templates/stock.html`（`#stock-detail`）与 `app.js:877 loadStockDetail`。
 - 日线读取：`storage/repositories/market_snapshot.py::series_as_of(listing_id, start, end, as_of_captured, *, adjust="none", provider=None, include_backfill=True)`；listing 查找 `storage/repositories/listing.py`。
 - 路由样板：`api/routes/watchlist.py`（鉴权依赖、schema 在 `api/schemas/`）；路由注册在 `api/app.py`。
 - 守卫：不得出现 `http://`、`style=`、innerHTML；`candidates.js` 不得出现 `score` / `strength`；新 JS 文件须加进 `test_web_client_contract.py:106` 清单。样式在 `web/static/app.css`。
@@ -23,7 +23,7 @@
 新增  tests/integration/test_api_market_bars.py
 修改  tests/integration/test_web_client_contract.py（契约：ui.js 导出 sparkline、app.js / candidates.js 调用 /market/）
 修改  src/investment_agent/api/app.py（注册路由）
-修改  src/investment_agent/web/static/ui.js（sparkline）、app.js（自选股行 + 股票页）、candidates.js（候选卡）、app.css
+修改  src/investment_agent/web/static/ui.js（sparkline）、app.js（观察池行 + 股票页）、candidates.js（候选卡）、app.css
 修改  src/investment_agent/web/templates/stock.html（迷你图容器）
 ```
 

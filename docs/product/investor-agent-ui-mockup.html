@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>投资 Agent 界面 Mockup</title>
 <style>
-/* 个人投资 Agent 界面 mockup（docs/product/investor-agent-design.md 的“主要交互”章节）。
+/* 个人投资 Agent 界面 mockup。对应 investor-agent-design.md 的“主要交互”、
+   investor-agent-contracts.md 的对话与页面交互、investor-agent-valuation.md 的估值输出。
    自包含、无外部依赖。设计 token 与 src/investment_agent/web/static/app.css 一致：
    蓝 = 主信息，灰 = 中性，橙 = 警示，紫 = AI；不用红绿表达好坏。
-   示例公司与数字均为虚构。源文件为设计画布的 6 块 artboard，此处按屏幕合并。 */
-html{background:#e9edf2;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+   示例公司与数字均为虚构，不进入 fixture 的真实事实集。源文件为设计画布的 26 块 artboard。 */
+html{background:#e9edf2;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5;scroll-padding-top:64px}
 body{margin:0}
 .mk-nav{position:sticky;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:10px 16px;background:#18202b;color:#e4e8ee}
 .mk-nav .mk-brand{font-weight:700;margin-right:12px}
@@ -17,132 +18,305 @@ body{margin:0}
 .mk-nav a:hover{background:#2a313d;color:#fff}
 .mk-nav .mk-note{margin-left:auto;font-size:12px;color:#a9b2bf}
 .screen{padding:24px 16px 40px;max-width:1400px;margin:0 auto}
-.mk-title{margin:0 0 12px;font-size:15px;font-weight:600;color:#4a5462;display:flex;gap:10px;align-items:baseline}
+.mk-title{margin:0 0 12px;font-size:15px;font-weight:600;color:#4a5462;display:flex;flex-wrap:wrap;gap:10px;align-items:baseline}
 .mk-src{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;font-weight:400;color:#7b8594}
 .mk-frame{border:1px solid #c4cbd5;border-radius:12px;overflow:hidden;background:#f4f6f9}
-#phone .mk-frame{display:inline-block;border-radius:24px}
-/* ---- 首页 (Main.dc.html) ---- */
-#main{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
-#main a{color:#2357d9}
-#main a:hover{color:#163f9f}
-#main .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box}
-#main .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
-#main .chip-accent{background:#e8eefc;color:#163f9f}
-#main .chip-neutral{background:#eef1f5;color:#4a5462}
-#main .chip-warn{background:#fdf1e3;color:#9a5208}
-#main .chip-ai{background:#f5ebfa;color:#6e2f99}
-#main .faint{color:#5f6977;font-size:12.5px}
-#main .h2{margin:0;font-size:15px;font-weight:600}
-#main .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
-#main .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
-#main .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
-#main .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
-#main .row{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px solid #eef1f5}
-#main .row:first-of-type{border-top:0;padding-top:0}
-#main .t{font-weight:600}
-/* ---- 研究工作台 (Workbench.dc.html) ---- */
-#workbench{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
-#workbench a{color:#2357d9}
-#workbench a:hover{color:#163f9f}
-#workbench .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box}
-#workbench .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
-#workbench .chip-accent{background:#e8eefc;color:#163f9f}
-#workbench .chip-neutral{background:#eef1f5;color:#4a5462}
-#workbench .chip-warn{background:#fdf1e3;color:#9a5208}
-#workbench .chip-ai{background:#f5ebfa;color:#6e2f99}
-#workbench .faint{color:#5f6977;font-size:12.5px}
-#workbench .h2{margin:0;font-size:15px;font-weight:600}
-#workbench .h3{margin:0;font-size:13px;font-weight:600;color:#4a5462;text-transform:none;letter-spacing:.02em}
-#workbench .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
-#workbench .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
-#workbench .btn-sm{height:30px;padding:0 10px;font-size:13px}
-#workbench .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
-#workbench .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
-#workbench .case{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:8px;text-decoration:none;color:inherit}
-#workbench .case.on{background:#e8eefc}
-#workbench .case:hover{background:#f7f9fb}
-#workbench .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
-#workbench .src{color:#5f6977;font-size:11.5px}
-#workbench .sec{display:flex;flex-direction:column;gap:8px;padding:14px 0;border-top:1px solid #eef1f5}
-#workbench .sec:first-of-type{border-top:0;padding-top:0}
-#workbench table{border-collapse:collapse;width:100%;font-size:13px}
-#workbench th{text-align:left;color:#4a5462;font-weight:500;padding:6px 8px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
-#workbench td{padding:6px 8px;border-bottom:1px solid #eef1f5;vertical-align:top}
-#workbench .bul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
-#workbench details summary{cursor:pointer;color:#163f9f;font-weight:500}
-/* ---- 意见卡片 (Opinion.dc.html) ---- */
-#opinion{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
-#opinion a{color:#2357d9}
-#opinion a:hover{color:#163f9f}
-#opinion .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
-#opinion .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
-#opinion .chip-accent{background:#e8eefc;color:#163f9f}
-#opinion .chip-neutral{background:#eef1f5;color:#4a5462}
-#opinion .chip-warn{background:#fdf1e3;color:#9a5208}
-#opinion .chip-ai{background:#f5ebfa;color:#6e2f99}
-#opinion .faint{color:#5f6977;font-size:12.5px}
-#opinion .h3{margin:0;font-size:12.5px;font-weight:600;color:#4a5462;letter-spacing:.03em}
-#opinion .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
-#opinion .src{color:#5f6977;font-size:11.5px}
-#opinion .bul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
-#opinion .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px}
-#opinion .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
-#opinion .kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 10px;font-size:13px}
-#opinion .kv .k{color:#5f6977}
-#opinion .stance{font-size:20px;font-weight:600}
-#opinion .ok{color:#163f9f;font-weight:600}
-#opinion .meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:#5f6977;border-top:1px solid #eef1f5;padding-top:10px}
-/* ---- 操作卡片与任务 (Cards.dc.html) ---- */
-#cards{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
-#cards a{color:#2357d9}
-#cards a:hover{color:#163f9f}
-#cards .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
-#cards .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
-#cards .chip-accent{background:#e8eefc;color:#163f9f}
-#cards .chip-neutral{background:#eef1f5;color:#4a5462}
-#cards .chip-warn{background:#fdf1e3;color:#9a5208}
-#cards .chip-ai{background:#f5ebfa;color:#6e2f99}
-#cards .faint{color:#5f6977;font-size:12.5px}
-#cards .h2{margin:0;font-size:15px;font-weight:600}
-#cards .h3{margin:0;font-size:12.5px;font-weight:600;color:#4a5462;letter-spacing:.03em}
-#cards .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
-#cards .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px}
-#cards .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
-#cards .field{display:flex;flex-direction:column;gap:4px}
-#cards .field label{font-size:12.5px;color:#4a5462}
-#cards .field input,#cards .field select{height:38px;padding:0 10px;border:1px solid #c4cbd5;border-radius:8px;font:inherit;box-sizing:border-box;width:100%;background:#fff;color:#18202b}
-#cards .field .hint{font-size:11.5px;color:#5f6977}
-#cards .step{display:flex;align-items:center;gap:10px;padding:6px 0}
-#cards .dot{width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:0 0 auto}
-#cards .dot-done{background:#2357d9;color:#fff}
-#cards .dot-now{background:#f5ebfa;color:#6e2f99;border:2px solid #8b3dbf;box-sizing:border-box}
-#cards .dot-todo{background:#eef1f5;color:#7b8594}
-#cards .warnbox{background:#fdf1e3;color:#7a4206;border-radius:8px;padding:10px 12px;font-size:13px}
-#cards .okbox{background:#e8eefc;color:#163f9f;border-radius:8px;padding:10px 12px;font-size:13px}
-#cards .bar{height:6px;background:#e6eaf0;border-radius:999px;overflow:hidden}
-#cards .bar span{display:block;height:100%;background:#3b6be0}
-/* ---- 投资约定 (Mandate.dc.html) ---- */
-#mandate{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
-#mandate a{color:#2357d9}
-#mandate a:hover{color:#163f9f}
-#mandate .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
-#mandate .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
-#mandate .chip-accent{background:#e8eefc;color:#163f9f}
-#mandate .chip-neutral{background:#eef1f5;color:#4a5462}
-#mandate .chip-warn{background:#fdf1e3;color:#9a5208}
-#mandate .chip-ai{background:#f5ebfa;color:#6e2f99}
-#mandate .faint{color:#5f6977;font-size:12.5px}
-#mandate .h2{margin:0;font-size:15px;font-weight:600}
-#mandate .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
-#mandate .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px}
-#mandate .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
-#mandate .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
-#mandate .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
-#mandate table{border-collapse:collapse;width:100%;font-size:13px}
-#mandate th{text-align:left;color:#4a5462;font-weight:500;padding:6px 8px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
-#mandate td{padding:8px;border-bottom:1px solid #eef1f5;vertical-align:top}
-#mandate .missing{color:#9a5208;font-weight:600}
-/* ---- 手机端 (Phone.dc.html) ---- */
+.mk-phones{display:flex;flex-wrap:wrap;gap:24px}
+.mk-phones .mk-frame{border-radius:24px}
+.mk-phones main{min-height:0}
+.mk-phones main>*{flex-shrink:0}
+.mk-phones header,.mk-phones footer{flex-shrink:0}
+.mk-phones section[aria-label]{overflow-y:auto}
+.mk-phones section[aria-label]>*{flex-shrink:0}
+.mk-cell{flex:0 0 auto;display:flex;flex-direction:column;gap:6px}
+.mk-cap{font-size:12.5px;color:#4a5462;font-weight:600}
+/* ---- Main.dc.html ---- */
+#home-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#home-frame a{color:#2357d9}
+#home-frame a:hover{color:#163f9f}
+#home-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box}
+#home-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#home-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#home-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#home-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#home-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#home-frame .faint{color:#5f6977;font-size:12.5px}
+#home-frame .h2{margin:0;font-size:15px;font-weight:600}
+#home-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
+#home-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#home-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#home-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#home-frame .row{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-top:1px solid #eef1f5}
+#home-frame .row:first-of-type{border-top:0;padding-top:0}
+#home-frame .t{font-weight:600}
+/* ---- Workbench.dc.html ---- */
+#workbench-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#workbench-frame a{color:#2357d9}
+#workbench-frame a:hover{color:#163f9f}
+#workbench-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box}
+#workbench-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#workbench-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#workbench-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#workbench-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#workbench-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#workbench-frame .faint{color:#5f6977;font-size:12.5px}
+#workbench-frame .h2{margin:0;font-size:15px;font-weight:600}
+#workbench-frame .h3{margin:0;font-size:13px;font-weight:600;color:#4a5462;text-transform:none;letter-spacing:.02em}
+#workbench-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
+#workbench-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#workbench-frame .btn-sm{height:30px;padding:0 10px;font-size:13px}
+#workbench-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#workbench-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#workbench-frame .case{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:8px;text-decoration:none;color:inherit}
+#workbench-frame .case.on{background:#e8eefc}
+#workbench-frame .case:hover{background:#f7f9fb}
+#workbench-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#workbench-frame .src{color:#5f6977;font-size:11.5px}
+#workbench-frame .sec{display:flex;flex-direction:column;gap:8px;padding:14px 0;border-top:1px solid #eef1f5}
+#workbench-frame .sec:first-of-type{border-top:0;padding-top:0}
+#workbench-frame table{border-collapse:collapse;width:100%;font-size:13px}
+#workbench-frame th{text-align:left;color:#4a5462;font-weight:500;padding:6px 8px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
+#workbench-frame td{padding:6px 8px;border-bottom:1px solid #eef1f5;vertical-align:top}
+#workbench-frame .bul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#workbench-frame details summary{cursor:pointer;color:#163f9f;font-weight:500}
+#workbench-frame .sub a{color:#4a5462;text-decoration:none;padding:10px 4px;border-bottom:2px solid transparent;font-weight:500}
+#workbench-frame .sub a.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+#workbench-frame .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;border-bottom:1px dashed #5f6977;color:inherit;text-decoration:none;white-space:nowrap}
+#workbench-frame .role{font-size:11px;color:#5f6977;margin-left:2px;white-space:nowrap}
+/* ---- Leads.dc.html ---- */
+#leads-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#leads-frame a{color:#2357d9}
+#leads-frame a:hover{color:#163f9f}
+#leads-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#leads-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#leads-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#leads-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#leads-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#leads-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#leads-frame .faint{color:#5f6977;font-size:12.5px}
+#leads-frame .h2{margin:0;font-size:15px;font-weight:600}
+#leads-frame .h3{margin:0;font-size:12.5px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#leads-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#leads-frame .src{color:#5f6977;font-size:11.5px}
+#leads-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#leads-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#leads-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#leads-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#leads-frame .sub a{color:#4a5462;text-decoration:none;padding:10px 4px;border-bottom:2px solid transparent;font-weight:500}
+#leads-frame .sub a.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+#leads-frame table{border-collapse:collapse;width:100%;font-size:13px}
+#leads-frame th{text-align:left;color:#4a5462;font-weight:500;padding:8px;background:#f7f9fb;border-bottom:1px solid #dde2e9;white-space:nowrap}
+#leads-frame td{padding:9px 8px;border-bottom:1px solid #eef1f5;vertical-align:top}
+#leads-frame .stage{flex:1 1 150px;min-width:0;background:#f7f9fb;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:2px}
+#leads-frame .stage .n{font-size:24px;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#leads-frame .arrow{flex:0 0 auto;align-self:center;color:#7b8594}
+/* ---- Compare.dc.html ---- */
+#compare-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#compare-frame a{color:#2357d9}
+#compare-frame a:hover{color:#163f9f}
+#compare-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#compare-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#compare-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#compare-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#compare-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#compare-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#compare-frame .faint{color:#5f6977;font-size:12.5px}
+#compare-frame .h2{margin:0;font-size:15px;font-weight:600}
+#compare-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13.5px}
+#compare-frame .src{color:#5f6977;font-size:11.5px;display:block}
+#compare-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#compare-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#compare-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#compare-frame .sub a{color:#4a5462;text-decoration:none;padding:10px 4px;border-bottom:2px solid transparent;font-weight:500}
+#compare-frame .sub a.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+#compare-frame table{border-collapse:collapse;width:100%;font-size:13px;min-width:860px}
+#compare-frame th{text-align:left;color:#4a5462;font-weight:500;padding:10px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
+#compare-frame td{padding:10px;border-bottom:1px solid #eef1f5;vertical-align:top}
+#compare-frame .grp td{background:#f7f9fb;font-weight:600;color:#4a5462;font-size:12.5px;letter-spacing:.03em;padding:6px 10px}
+#compare-frame .rowh{color:#4a5462;width:180px}
+#compare-frame .judg td{background:#fbf7fd}
+#compare-frame .judg .txt{color:#3d2350}
+#compare-frame .stale{background:#fdf1e3}
+/* ---- Opinion.dc.html ---- */
+#opinion-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#opinion-frame a{color:#2357d9}
+#opinion-frame a:hover{color:#163f9f}
+#opinion-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#opinion-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#opinion-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#opinion-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#opinion-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#opinion-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#opinion-frame .faint{color:#5f6977;font-size:12.5px}
+#opinion-frame .h3{margin:0;font-size:12.5px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#opinion-frame .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;border-bottom:1px dashed #5f6977;color:inherit;text-decoration:none;white-space:nowrap}
+#opinion-frame .role{font-size:11px;color:#5f6977;margin-left:2px;white-space:nowrap}
+#opinion-frame .bul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#opinion-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#opinion-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#opinion-frame .kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 10px;font-size:13px}
+#opinion-frame .kv .k{color:#5f6977}
+#opinion-frame .scope{padding:8px 10px;background:#eef1f5;border-radius:8px;font-size:13px}
+#opinion-frame .axes{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+#opinion-frame .ax{border:1px solid #dde2e9;border-radius:8px;padding:6px 10px;display:flex;flex-direction:column}
+#opinion-frame .ax .v{font-size:16px;font-weight:600}
+#opinion-frame .ca{display:flex;gap:8px;align-items:flex-start;font-size:13px}
+#opinion-frame .ok{color:#163f9f;font-weight:600}
+#opinion-frame .meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:#5f6977;border-top:1px solid #eef1f5;padding-top:10px}
+#opinion-frame .old{color:#5f6977}
+/* ---- Diff.dc.html ---- */
+#diff-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#diff-frame a{color:#2357d9}
+#diff-frame a:hover{color:#163f9f}
+#diff-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#diff-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#diff-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#diff-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#diff-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#diff-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#diff-frame .faint{color:#5f6977;font-size:12.5px}
+#diff-frame .h2{margin:0;font-size:15px;font-weight:600}
+#diff-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#diff-frame .src{color:#5f6977;font-size:11.5px;display:block}
+#diff-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#diff-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#diff-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#diff-frame table{border-collapse:collapse;width:100%;font-size:13px;min-width:860px}
+#diff-frame th{text-align:left;color:#4a5462;font-weight:500;padding:10px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
+#diff-frame td{padding:10px;border-bottom:1px solid #eef1f5;vertical-align:top}
+#diff-frame .rowh{color:#4a5462;width:160px}
+#diff-frame .chg{background:#fdf1e3}
+#diff-frame .add{color:#163f9f;font-weight:500}
+#diff-frame .del{color:#5f6977;text-decoration:line-through}
+#diff-frame .tl{display:flex;flex-direction:column;gap:0}
+#diff-frame .tl .it{display:flex;gap:12px;padding:8px 0}
+#diff-frame .tl .dot{width:10px;height:10px;border-radius:999px;margin-top:6px;flex:0 0 auto}
+/* ---- Retro.dc.html ---- */
+#retro-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#retro-frame a{color:#2357d9}
+#retro-frame a:hover{color:#163f9f}
+#retro-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#retro-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#retro-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#retro-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#retro-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#retro-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#retro-frame .faint{color:#5f6977;font-size:12.5px}
+#retro-frame .h2{margin:0;font-size:15px;font-weight:600}
+#retro-frame .q{display:flex;gap:10px;align-items:baseline}
+#retro-frame .qn{flex:0 0 auto;width:24px;height:24px;border-radius:999px;background:#18202b;color:#fff;font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center}
+#retro-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#retro-frame .src{color:#5f6977;font-size:11.5px;display:block}
+#retro-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#retro-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#retro-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#retro-frame .sub a{color:#4a5462;text-decoration:none;padding:10px 4px;border-bottom:2px solid transparent;font-weight:500}
+#retro-frame .sub a.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+#retro-frame table{border-collapse:collapse;width:100%;font-size:13px}
+#retro-frame th{text-align:left;color:#4a5462;font-weight:500;padding:8px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
+#retro-frame td{padding:9px 8px;border-bottom:1px solid #eef1f5;vertical-align:top}
+#retro-frame .bar{display:flex;align-items:center;gap:10px;font-size:13px}
+#retro-frame .bar .lbl{width:72px;color:#4a5462;flex:0 0 auto}
+#retro-frame .bar .trk{flex:1 1 auto;height:10px;background:#e6eaf0;border-radius:999px;overflow:hidden}
+#retro-frame .bar .fill{display:block;height:100%;background:#3b6be0;border-radius:999px}
+#retro-frame .bar .v{width:24px;text-align:right;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;flex:0 0 auto}
+/* ---- Disagree.dc.html ---- */
+#disagree-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#disagree-frame a{color:#2357d9}
+#disagree-frame a:hover{color:#163f9f}
+#disagree-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#disagree-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#disagree-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#disagree-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#disagree-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#disagree-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#disagree-frame .faint{color:#5f6977;font-size:12.5px}
+#disagree-frame .h2{margin:0;font-size:15px;font-weight:600}
+#disagree-frame .h3{margin:0;font-size:12.5px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#disagree-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#disagree-frame .src{color:#5f6977;font-size:11.5px}
+#disagree-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#disagree-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#disagree-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#disagree-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#disagree-frame .me{align-self:flex-end;max-width:70%;background:#e8eefc;color:#163f9f;border-radius:12px 12px 2px 12px;padding:10px 14px}
+#disagree-frame .ag{display:flex;flex-direction:column;gap:10px;max-width:780px}
+#disagree-frame .bul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+#disagree-frame .kv{display:grid;grid-template-columns:92px minmax(0,1fr);gap:6px 10px;font-size:13px}
+#disagree-frame .kv .k{color:#5f6977}
+#disagree-frame .opt{display:flex;align-items:center;gap:8px;padding:0 12px;min-height:40px;border:1px solid #c4cbd5;border-radius:8px;font-size:13px;background:#fff;cursor:pointer}
+/* ---- Cards.dc.html ---- */
+#cards-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#cards-frame a{color:#2357d9}
+#cards-frame a:hover{color:#163f9f}
+#cards-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#cards-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#cards-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#cards-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#cards-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#cards-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#cards-frame .faint{color:#5f6977;font-size:12.5px}
+#cards-frame .h2{margin:0;font-size:15px;font-weight:600}
+#cards-frame .h3{margin:0;font-size:12.5px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#cards-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#cards-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px}
+#cards-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#cards-frame .field{display:flex;flex-direction:column;gap:4px}
+#cards-frame .field label{font-size:12.5px;color:#4a5462}
+#cards-frame .field input,#cards-frame .field select{height:38px;padding:0 10px;border:1px solid #c4cbd5;border-radius:8px;font:inherit;box-sizing:border-box;width:100%;background:#fff;color:#18202b}
+#cards-frame .field .hint{font-size:11.5px;color:#5f6977}
+#cards-frame .step{display:flex;align-items:center;gap:10px;padding:6px 0}
+#cards-frame .dot{width:18px;height:18px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex:0 0 auto}
+#cards-frame .dot-done{background:#2357d9;color:#fff}
+#cards-frame .dot-now{background:#f5ebfa;color:#6e2f99;border:2px solid #8b3dbf;box-sizing:border-box}
+#cards-frame .dot-todo{background:#eef1f5;color:#7b8594}
+#cards-frame .warnbox{background:#fdf1e3;color:#7a4206;border-radius:8px;padding:10px 12px;font-size:13px}
+#cards-frame .okbox{background:#e8eefc;color:#163f9f;border-radius:8px;padding:10px 12px;font-size:13px}
+#cards-frame .bar{height:6px;background:#e6eaf0;border-radius:999px;overflow:hidden}
+#cards-frame .bar span{display:block;height:100%;background:#3b6be0}
+/* ---- Mandate.dc.html ---- */
+#mandate-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#mandate-frame a{color:#2357d9}
+#mandate-frame a:hover{color:#163f9f}
+#mandate-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#mandate-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#mandate-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#mandate-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#mandate-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#mandate-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#mandate-frame .faint{color:#5f6977;font-size:12.5px}
+#mandate-frame .h2{margin:0;font-size:15px;font-weight:600}
+#mandate-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#mandate-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px}
+#mandate-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#mandate-frame .nav a{color:#4a5462;text-decoration:none;padding:6px 10px;border-radius:6px}
+#mandate-frame .nav a.on{color:#163f9f;background:#e8eefc;font-weight:600}
+#mandate-frame table{border-collapse:collapse;width:100%;font-size:13px}
+#mandate-frame th{text-align:left;color:#4a5462;font-weight:500;padding:6px 8px;background:#f7f9fb;border-bottom:1px solid #dde2e9}
+#mandate-frame td{padding:8px;border-bottom:1px solid #eef1f5;vertical-align:top}
+#mandate-frame .missing{color:#9a5208;font-weight:600}
+/* ---- Onboarding.dc.html ---- */
+#onboarding-frame{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#onboarding-frame a{color:#2357d9}
+#onboarding-frame a:hover{color:#163f9f}
+#onboarding-frame .card{background:#fff;border:1px solid #dde2e9;border-radius:12px;padding:18px;box-shadow:0 1px 2px rgba(20,30,50,.05);box-sizing:border-box;display:flex;flex-direction:column;gap:12px}
+#onboarding-frame .chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
+#onboarding-frame .chip-accent{background:#e8eefc;color:#163f9f}
+#onboarding-frame .chip-neutral{background:#eef1f5;color:#4a5462}
+#onboarding-frame .chip-warn{background:#fdf1e3;color:#9a5208}
+#onboarding-frame .chip-ai{background:#f5ebfa;color:#6e2f99}
+#onboarding-frame .faint{color:#5f6977;font-size:12.5px}
+#onboarding-frame .h2{margin:0;font-size:15px;font-weight:600}
+#onboarding-frame .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+#onboarding-frame .btn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;text-decoration:none}
+#onboarding-frame .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#onboarding-frame .opt{display:flex;align-items:center;gap:8px;padding:0 12px;min-height:44px;border:1px solid #c4cbd5;border-radius:8px;cursor:pointer;font-size:13.5px;background:#fff}
+#onboarding-frame .opt input{margin:0}
+#onboarding-frame .chk{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #eef1f5;font-size:13px}
+#onboarding-frame .chk:first-of-type{border-top:0}
+#onboarding-frame .ok{color:#163f9f;font-weight:600;flex:0 0 auto;width:44px}
+#onboarding-frame .no{color:#9a5208;font-weight:600;flex:0 0 auto;width:44px}
+/* ---- Phone.dc.html ---- */
 #phone{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
 #phone a{color:#2357d9}
 #phone a:hover{color:#163f9f}
@@ -152,7 +326,7 @@ body{margin:0}
 #phone .chip-warn{background:#fdf1e3;color:#9a5208}
 #phone .chip-ai{background:#f5ebfa;color:#6e2f99}
 #phone .faint{color:#5f6977;font-size:12px}
-#phone .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+#phone .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;border-bottom:1px dashed #5f6977}
 #phone .src{color:#5f6977;font-size:11px}
 #phone .tab{flex:1 1 0;text-align:center;padding:10px 0;color:#4a5462;text-decoration:none;font-weight:500;border-bottom:2px solid transparent;min-height:44px;box-sizing:border-box}
 #phone .tab.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
@@ -160,27 +334,282 @@ body{margin:0}
 #phone details summary{cursor:pointer;color:#163f9f;font-weight:500;font-size:13px}
 #phone .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
 #phone .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+/* ---- PhoneArchive.dc.html ---- */
+#phone-archive{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-archive a{color:#2357d9}
+#phone-archive a:hover{color:#163f9f}
+#phone-archive .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-archive .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-archive .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-archive .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-archive .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-archive .faint{color:#5f6977;font-size:12px}
+#phone-archive .fact{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+#phone-archive .src{color:#5f6977;font-size:11px}
+#phone-archive .tab{flex:1 1 0;text-align:center;padding:10px 0;color:#4a5462;text-decoration:none;font-weight:500;border-bottom:2px solid transparent;min-height:44px;box-sizing:border-box}
+#phone-archive .tab.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+#phone-archive .sec{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#phone-archive .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-archive .row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px}
+#phone-archive .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+/* ---- PhoneNav.dc.html ---- */
+#phone-nav{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-nav a{color:#2357d9}
+#phone-nav a:hover{color:#163f9f}
+#phone-nav .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-nav .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-nav .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-nav .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-nav .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-nav .faint{color:#5f6977;font-size:12px}
+#phone-nav .tab{flex:1 1 0;text-align:center;padding:10px 0;color:#4a5462;text-decoration:none;font-weight:500;border-bottom:2px solid transparent;min-height:44px;box-sizing:border-box}
+#phone-nav .tab.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+#phone-nav .grp{font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em;padding:8px 0 4px;display:flex;justify-content:space-between}
+#phone-nav .case{display:flex;align-items:center;gap:10px;min-height:56px;padding:6px 12px;background:#fff;border:1px solid #dde2e9;border-radius:10px;text-decoration:none;color:inherit;box-sizing:border-box}
+#phone-nav .case.on{border-color:#2357d9;background:#f4f7fe}
+#phone-nav .case .nm{font-weight:600}
+#phone-nav .case .r{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+#phone-nav .tile{flex:1 1 0;background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:8px 10px;text-decoration:none;color:inherit;min-height:44px;box-sizing:border-box}
+#phone-nav .tile .n{font-size:18px;font-weight:600}
+/* ---- PhoneInbox.dc.html ---- */
+#phone-inbox{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-inbox a{color:#2357d9}
+#phone-inbox a:hover{color:#163f9f}
+#phone-inbox .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-inbox .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-inbox .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-inbox .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-inbox .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-inbox .faint{color:#5f6977;font-size:12px}
+#phone-inbox .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;border-bottom:1px dashed #7b8594;color:inherit;text-decoration:none;white-space:nowrap}
+#phone-inbox .grp{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em;padding:4px 2px 0}
+#phone-inbox .item{display:flex;flex-direction:column;gap:4px;padding:12px;background:#fff;border:1px solid #dde2e9;border-radius:10px;text-decoration:none;color:inherit}
+#phone-inbox .item .t{font-weight:600}
+#phone-inbox .kv{display:grid;grid-template-columns:64px minmax(0,1fr);gap:2px 8px;font-size:12.5px}
+#phone-inbox .kv .k{color:#5f6977}
+/* ---- PhoneDisambig.dc.html ---- */
+#phone-disambig{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-disambig a{color:#2357d9}
+#phone-disambig a:hover{color:#163f9f}
+#phone-disambig .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-disambig .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-disambig .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-disambig .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-disambig .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-disambig .faint{color:#5f6977;font-size:12px}
+#phone-disambig .me{align-self:flex-end;max-width:80%;background:#e8eefc;color:#163f9f;border-radius:12px 12px 2px 12px;padding:8px 12px}
+#phone-disambig .opt{display:flex;align-items:center;gap:10px;min-height:52px;padding:6px 12px;border:1px solid #c4cbd5;border-radius:10px;background:#fff;cursor:pointer;font:inherit;color:inherit;text-align:left;width:100%;box-sizing:border-box}
+#phone-disambig .opt .c{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#4a5462}
+#phone-disambig .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
+#phone-disambig .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+#phone-disambig .tab{flex:1 1 0;text-align:center;padding:10px 0;color:#4a5462;text-decoration:none;font-weight:500;border-bottom:2px solid transparent;min-height:44px;box-sizing:border-box}
+#phone-disambig .tab.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+/* ---- PhoneTask.dc.html ---- */
+#phone-task{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-task a{color:#2357d9}
+#phone-task a:hover{color:#163f9f}
+#phone-task .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-task .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-task .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-task .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-task .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-task .faint{color:#5f6977;font-size:12px}
+#phone-task .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+#phone-task .card{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#phone-task .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-task .step{display:flex;align-items:center;gap:8px;font-size:13px;min-height:24px}
+#phone-task .dot{width:16px;height:16px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex:0 0 auto;box-sizing:border-box}
+#phone-task .d-done{background:#2357d9;color:#fff}
+#phone-task .d-now{background:#fff;border:2px solid #c26a12;color:#9a5208}
+#phone-task .d-skip{background:#eef1f5;color:#7b8594}
+#phone-task .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer}
+#phone-task .tab{flex:1 1 0;text-align:center;padding:10px 0;color:#4a5462;text-decoration:none;font-weight:500;border-bottom:2px solid transparent;min-height:44px;box-sizing:border-box}
+#phone-task .tab.on{color:#163f9f;border-bottom-color:#2357d9;font-weight:600}
+/* ---- PhoneOpinion.dc.html ---- */
+#phone-opinion{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-opinion a{color:#2357d9}
+#phone-opinion a:hover{color:#163f9f}
+#phone-opinion .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-opinion .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-opinion .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-opinion .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-opinion .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-opinion .faint{color:#5f6977;font-size:12px}
+#phone-opinion .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;border-bottom:1px dashed #5f6977;color:inherit;text-decoration:none;white-space:nowrap}
+#phone-opinion .role{font-size:10.5px;color:#5f6977;margin-left:2px;white-space:nowrap}
+#phone-opinion .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-opinion .axis{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+#phone-opinion .axis .v{font-size:16px;font-weight:600}
+#phone-opinion .ca{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:8px 10px;border:1px solid #dde2e9;border-radius:8px;background:#fff}
+#phone-opinion .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+#phone-opinion .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+/* ---- PhoneValuation.dc.html ---- */
+#phone-valuation{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-valuation a{color:#2357d9}
+#phone-valuation a:hover{color:#163f9f}
+#phone-valuation .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-valuation .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-valuation .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-valuation .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-valuation .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-valuation .faint{color:#5f6977;font-size:12px}
+#phone-valuation .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#phone-valuation .card{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#phone-valuation .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-valuation table{border-collapse:collapse;width:100%;font-size:12.5px}
+#phone-valuation th{text-align:left;color:#4a5462;font-weight:500;padding:4px 6px;background:#f7f9fb}
+#phone-valuation td{padding:4px 6px;border-top:1px solid #eef1f5}
+#phone-valuation .hl{background:#e8eefc;font-weight:600}
+/* ---- PhoneEvidence.dc.html ---- */
+#phone-evidence{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-evidence a{color:#2357d9}
+#phone-evidence a:hover{color:#163f9f}
+#phone-evidence .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-evidence .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-evidence .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-evidence .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-evidence .faint{color:#5f6977;font-size:12px}
+#phone-evidence .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#phone-evidence .kv{display:grid;grid-template-columns:62px minmax(0,1fr);gap:2px 8px;font-size:12.5px}
+#phone-evidence .kv .k{color:#5f6977}
+#phone-evidence .ev{border:1px solid #dde2e9;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}
+#phone-evidence .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+/* ---- PhoneReview.dc.html ---- */
+#phone-review{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-review a{color:#2357d9}
+#phone-review a:hover{color:#163f9f}
+#phone-review .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-review .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-review .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-review .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-review .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-review .faint{color:#5f6977;font-size:12px}
+#phone-review .num{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;border-bottom:1px dashed #5f6977;color:inherit;text-decoration:none;white-space:nowrap}
+#phone-review .role{font-size:10.5px;color:#5f6977;margin-left:2px}
+#phone-review .card{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#phone-review .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-review table{border-collapse:collapse;width:100%;font-size:12.5px}
+#phone-review th{text-align:left;color:#4a5462;font-weight:500;padding:4px 6px;background:#f7f9fb}
+#phone-review td{padding:6px;border-top:1px solid #eef1f5;vertical-align:top}
+#phone-review .chg td{background:#fffaf3}
+#phone-review .oc{display:flex;gap:8px;align-items:flex-start;font-size:12.5px}
+#phone-review .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+/* ---- PhoneDecision.dc.html ---- */
+#phone-decision{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-decision a{color:#2357d9}
+#phone-decision a:hover{color:#163f9f}
+#phone-decision .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-decision .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-decision .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-decision .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-decision .faint{color:#5f6977;font-size:12px}
+#phone-decision .opt{display:flex;align-items:flex-start;gap:10px;min-height:52px;padding:8px 12px;border:1px solid #c4cbd5;border-radius:10px;cursor:pointer;box-sizing:border-box}
+#phone-decision .opt.on{border-color:#2357d9;background:#f4f7fe}
+#phone-decision .opt input{margin-top:4px}
+#phone-decision .opt .t{font-weight:600;font-size:13.5px}
+#phone-decision .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+#phone-decision .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+/* ---- PhoneControls.dc.html ---- */
+#phone-controls{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-controls a{color:#2357d9}
+#phone-controls a:hover{color:#163f9f}
+#phone-controls .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-controls .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-controls .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-controls .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-controls .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-controls .faint{color:#5f6977;font-size:12px}
+#phone-controls .op{display:flex;align-items:center;gap:12px;min-height:64px;padding:8px 0;border-top:1px solid #eef1f5}
+#phone-controls .op:first-of-type{border-top:0}
+#phone-controls .op .b{flex:1 1 auto;min-width:0}
+#phone-controls .op .t{font-weight:600;font-size:14px}
+#phone-controls .btn{display:inline-flex;align-items:center;justify-content:center;height:40px;padding:0 12px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:13px;white-space:nowrap;min-width:72px}
+#phone-controls .btn-warn{border-color:#c26a12;color:#9a5208}
+/* ---- PhoneSetup.dc.html ---- */
+#phone-setup{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-setup a{color:#2357d9}
+#phone-setup a:hover{color:#163f9f}
+#phone-setup .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-setup .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-setup .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-setup .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-setup .faint{color:#5f6977;font-size:12px}
+#phone-setup .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#phone-setup .card{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#phone-setup .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-setup .row{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:34px;font-size:13.5px;border-top:1px solid #eef1f5}
+#phone-setup .row:first-of-type{border-top:0}
+#phone-setup .seg{display:flex;border:1px solid #c4cbd5;border-radius:8px;overflow:hidden}
+#phone-setup .seg label{flex:1 1 0;text-align:center;padding:9px 0;font-size:13px;cursor:pointer;border-left:1px solid #c4cbd5}
+#phone-setup .seg label:first-child{border-left:0}
+#phone-setup .seg label.on{background:#e8eefc;color:#163f9f;font-weight:600}
+#phone-setup .seg input{position:absolute;opacity:0}
+#phone-setup .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+#phone-setup .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
+/* ---- PhoneMemory.dc.html ---- */
+#phone-memory{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-memory a{color:#2357d9}
+#phone-memory a:hover{color:#163f9f}
+#phone-memory .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-memory .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-memory .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-memory .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-memory .faint{color:#5f6977;font-size:12px}
+#phone-memory .card{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+#phone-memory .h3{margin:0;font-size:12px;font-weight:600;color:#4a5462;letter-spacing:.03em}
+#phone-memory .mem{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-top:1px solid #eef1f5}
+#phone-memory .mem:first-of-type{border-top:0;padding-top:0}
+#phone-memory .acts{display:flex;gap:6px}
+#phone-memory .sbtn{display:inline-flex;align-items:center;justify-content:center;height:36px;padding:0 10px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;font-size:12.5px;text-decoration:none}
+#phone-memory .del{display:flex;align-items:center;gap:10px;min-height:48px;border-top:1px solid #eef1f5;font-size:13px}
+#phone-memory .del:first-of-type{border-top:0}
+#phone-memory .del .b{flex:1 1 auto;min-width:0}
+/* ---- PhonePlan.dc.html ---- */
+#phone-plan{margin:0;background:#f4f6f9;color:#18202b;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:14px;line-height:1.5}
+#phone-plan a{color:#2357d9}
+#phone-plan a:hover{color:#163f9f}
+#phone-plan .chip{display:inline-flex;align-items:center;height:20px;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:500;white-space:nowrap}
+#phone-plan .chip-accent{background:#e8eefc;color:#163f9f}
+#phone-plan .chip-neutral{background:#eef1f5;color:#4a5462}
+#phone-plan .chip-warn{background:#fdf1e3;color:#9a5208}
+#phone-plan .chip-ai{background:#f5ebfa;color:#6e2f99}
+#phone-plan .faint{color:#5f6977;font-size:12px}
+#phone-plan .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px}
+#phone-plan .opt{background:#fff;border:1px solid #dde2e9;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+#phone-plan .opt.rec{border-color:#2357d9;box-shadow:0 0 0 1px #2357d9 inset}
+#phone-plan .kv{display:grid;grid-template-columns:72px minmax(0,1fr);gap:2px 8px;font-size:12.5px}
+#phone-plan .kv .k{color:#5f6977}
+#phone-plan .btn{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 14px;border-radius:8px;border:1px solid #c4cbd5;background:#fff;color:#18202b;font:inherit;font-weight:500;cursor:pointer;text-decoration:none}
+#phone-plan .btn-primary{background:#2357d9;border-color:#2357d9;color:#fff}
 </style>
 </head>
 <body>
 <nav class="mk-nav">
 <span class="mk-brand">zcharlie · 投资 Agent 界面 mockup</span>
-<a href="#main">首页</a>
+<a href="#home">首页</a>
 <a href="#workbench">研究工作台</a>
+<a href="#leads">线索与探索</a>
+<a href="#compare">结构化比较</a>
 <a href="#opinion">意见卡片</a>
+<a href="#diff">版本对比与复核</a>
+<a href="#retro">过程复盘</a>
+<a href="#disagree">分歧与决定</a>
 <a href="#cards">操作卡片与任务</a>
 <a href="#mandate">投资约定</a>
-<a href="#phone">手机端</a>
+<a href="#onboarding">首次使用</a>
+<a href="#phone">手机端：工作台</a>
+<a href="#phone-a1a">手机端：A1a 研究流程</a>
+<a href="#phone-ops">手机端：控制、决定与组合</a>
 <span class="mk-note">示例数据均为虚构 · 2026-10-10</span>
 </nav>
-<section class="screen" id="main">
+<section class="screen" id="home">
 <h2 class="mk-title">首页<span class="mk-src">Main.dc.html</span></h2>
-<div class="mk-frame">
+<div class="mk-cell"><div class="mk-frame" id="home-frame">
 <div style="min-height: 940px; display: flex; flex-direction: column; box-sizing: border-box">
   <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
     <div style="font-weight: 700; font-size: 16px; letter-spacing: .02em">zcharlie</div>
     <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
-      <a class="on" href="#main">首页</a>
+      <a class="on" href="#home">首页</a>
       <a href="#workbench">研究工作台</a>
       <a href="#">候选</a>
       <a href="#">持仓</a>
@@ -205,12 +634,12 @@ body{margin:0}
         </div>
         <div class="row">
           <div class="t">公司甲 <span class="faint" style="font-weight: 400">600001</span></div>
-          <div>三季报推翻"现金转化改善"假设，原意见已转为待复核。</div>
-          <div><span class="chip chip-warn">待复核</span> <span class="faint">触发 10-08 披露入库</span></div>
+          <div>三季报触发复核，v3 已替代旧意见；现金流原因仍待核查。</div>
+          <div><span class="chip chip-warn">已修订</span> <span class="faint">10-09 更新 · 触发 10-08 入库</span></div>
         </div>
         <div class="row">
           <div class="t">公司乙 <span class="faint" style="font-weight: 400">000002</span></div>
-          <div>价格较上次判断下跌 12%，反向 DCF 隐含增长率从 9% 降到 5%。</div>
+          <div>价格较上次判断下跌 12%，股权现金流增长要求从 9% 降到 5%。</div>
           <div><span class="chip chip-ai">复核进行中 3/6</span></div>
         </div>
       </div>
@@ -234,6 +663,7 @@ body{margin:0}
           <div>命中"稳健质量"模板，但 Agent 认为研究价值较低，原因已记录。</div>
           <div><span class="chip chip-neutral">模板命中 · 优先级低</span></div>
         </div>
+        <div><a href="#leads">查看本轮探索记录</a></div>
       </div>
 
       <div class="card" style="display: flex; flex-direction: column; gap: 10px; border-top: 3px solid #8a94a3">
@@ -242,7 +672,7 @@ body{margin:0}
         </div>
         <div class="row">
           <div class="t">公司甲 · 现金转化是否持续</div>
-          <div class="faint">缺 2026 年三季度经营现金流分期数据，取证任务排队中。</div>
+          <div class="faint">现金流已入库；季节性解释所需营运资金材料尚缺。</div>
         </div>
         <div class="row">
           <div class="t">公司乙 · 一次性收益口径</div>
@@ -264,7 +694,7 @@ body{margin:0}
         </div>
         <div class="row">
           <div class="t">投资期限未填写</div>
-          <div>影响：公司乙的组合行动建议暂不发布，公司观点不受影响。</div>
+          <div>影响：公司乙依赖期限的建议暂不发布；公司研究与已知约束检查可继续。</div>
           <div><a href="#mandate">去填写投资约定</a></div>
         </div>
         <div class="row">
@@ -296,11 +726,11 @@ body{margin:0}
         <h2 class="h2">最近的 Agent 活动</h2>
         <div class="row">
           <div><span class="chip chip-ai">观点修订</span> 公司甲 v2 → v3</div>
-          <div class="faint">10-08 · 原因：三季报现金流推翻假设。旧版依据已保留。</div>
+          <div class="faint">10-09 · 原因：三季报现金流推翻假设。旧版依据已保留。</div>
         </div>
         <div class="row">
           <div><span class="chip chip-neutral">维持观点</span> 公司己</div>
-          <div class="faint">10-07 · 计划复核日到期，经营证据无变化，留下简要依据。</div>
+          <div class="faint">10-09 · 有效期内复核，无实质变化，留下简要依据。</div>
         </div>
         <div class="row">
           <div><span class="chip chip-neutral">本轮无新线索</span> 探索任务 #e-118</div>
@@ -319,16 +749,16 @@ body{margin:0}
     </section>
   </main>
 </div>
-</div>
+</div></div>
 </section>
 <section class="screen" id="workbench">
 <h2 class="mk-title">研究工作台<span class="mk-src">Workbench.dc.html</span></h2>
-<div class="mk-frame">
+<div class="mk-cell"><div class="mk-frame" id="workbench-frame">
 <div style="min-height: 980px; display: flex; flex-direction: column; box-sizing: border-box">
   <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
     <div style="font-weight: 700; font-size: 16px">zcharlie</div>
     <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
-      <a href="#main">首页</a>
+      <a href="#home">首页</a>
       <a class="on" href="#workbench">研究工作台</a>
       <a href="#">候选</a>
       <a href="#">持仓</a>
@@ -338,6 +768,12 @@ body{margin:0}
     <div style="flex: 1 1 auto"></div>
     <span class="chip chip-neutral">数据截至 2026-10-09 收盘</span>
   </header>
+  <nav class="sub" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <a class="on" href="#workbench">研究档案</a>
+    <a href="#leads">线索与探索</a>
+    <a href="#compare">比较</a>
+    <a href="#retro">复盘</a>
+  </nav>
 
   <div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; box-sizing: border-box">
 
@@ -347,7 +783,7 @@ body{margin:0}
       <div class="h3">需要重看 · 2</div>
       <a class="case on" href="#">
         <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">公司甲</span><span class="faint">600001</span></div>
-        <div style="display: flex; gap: 6px"><span class="chip chip-warn">待复核</span><span class="chip chip-neutral">研究中</span></div>
+        <div style="display: flex; gap: 6px"><span class="chip chip-neutral">v3 已修订</span><span class="chip chip-neutral">研究中</span></div>
       </a>
       <a class="case" href="#">
         <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">公司乙</span><span class="faint">000002</span></div>
@@ -356,11 +792,11 @@ body{margin:0}
       <div class="h3" style="margin-top: 6px">持续跟踪 · 5</div>
       <a class="case" href="#">
         <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">公司己</span><span class="faint">601006</span></div>
-        <div class="faint">条件性看好 · 有效至 11-20</div>
+        <div class="faint">经营与价格暂不判断 · 至 10-23</div>
       </a>
       <a class="case" href="#">
         <div style="display: flex; justify-content: space-between"><span style="font-weight: 600">公司庚</span><span class="faint">000007</span></div>
-        <div class="faint">观望 · 有效至 11-02</div>
+        <div class="faint">意见已撤回 · 提醒已静音</div>
       </a>
       <a class="case" href="#"><div class="faint">还有 3 只 …</div></a>
       <div class="h3" style="margin-top: 6px">线索 · 3</div>
@@ -378,7 +814,7 @@ body{margin:0}
         <span style="font-size: 18px; font-weight: 600">公司甲</span>
         <span class="faint">600001 · 申万二级 某行业</span>
         <span class="chip chip-neutral">研究中</span>
-        <span class="chip chip-warn">当前意见待复核</span>
+        <span class="chip chip-warn">暂不发布买卖看法</span>
         <div style="flex: 1 1 auto"></div>
         <span class="faint">判断 v3 · 2026-10-09</span>
         <button class="btn btn-sm" type="button">固定关注</button>
@@ -390,11 +826,12 @@ body{margin:0}
 
         <div style="display: flex; flex-direction: column; gap: 12px; max-width: 760px">
           <div style="display: flex; align-items: center; gap: 8px"><span class="chip chip-ai">Agent</span><span class="faint">基于判断 v3 · 数据截至 10-09</span></div>
-          <p style="margin: 0; font-size: 15px"><strong>立场：公司观点仍是条件性看好，但原意见已转为待复核，当前不作为建议显示。</strong>下跌本身没有改变经营判断；改变的是价格隐含预期和三季报带来的现金转化疑问。</p>
+          <div style="padding: 6px 10px; background: #eef1f5; border-radius: 8px; font-size: 13px"><strong>本回答的范围：</strong>价格下跌和三季报对现有判断的影响。公司整体长期价值仍待研究。</div>
+          <p style="margin: 0; font-size: 15px"><strong>立场：经营判断从偏正面改为好坏参半，价格判断暂不判断；季节性问题回答前不发布买卖看法。</strong>下跌本身不是改变经营判断的原因，改变它的是三季报带来的现金转化反证。</p>
           <ul class="bul">
-            <li><strong>价格隐含预期下降。</strong>反向 DCF 隐含的中期增长率从 9.1% 降到 5.4%，低于近三年收入增速。这使价格更有吸引力，前提是现金转化假设成立。</li>
-            <li><strong>关键假设出现反证。</strong>三季度经营现金流为 -1.2 亿元，与"现金转化改善"假设相反。这是我在 v2 里写的最强证伪条件之一。</li>
-            <li><strong>还不知道的事。</strong>现金流下滑是否来自季节性备货。主营构成分期表尚未更新，取证任务排队中。</li>
+            <li><strong>价格下降，估值依据也变了。</strong>新的现金流反证使旧基数不再能直接沿用；先核实持续现金流，再判断价格是否有吸引力。</li>
+            <li><strong>关键假设出现反证。</strong>累计前三季度经营现金流 <a class="num" href="#">-1.20 亿元</a><span class="role">事实</span>，与"现金转化可持续"相反。这是我在 v2 里写下的证伪条件。</li>
+            <li><strong>还不知道的事。</strong>现金流下滑是否来自季节性备货。需要同口径营运资金与历史季节性材料，现有主营构成表不足以回答。</li>
           </ul>
 
           <details open>
@@ -402,7 +839,7 @@ body{margin:0}
             <table style="margin-top: 8px">
               <tr><th>事实</th><th>数值</th><th>来源与时点</th></tr>
               <tr><td>收盘价</td><td class="fact">18.42</td><td class="src">腾讯行情 · 2026-10-09 收盘 · 已核验</td></tr>
-              <tr><td>三季度经营现金流</td><td class="fact">-1.20 亿元</td><td class="src">东财分期表 · 报告期 2026Q3 · 取得 10-08 · 已核验</td></tr>
+              <tr><td>累计前三季度经营现金流</td><td class="fact">-1.20 亿元</td><td class="src">东财分期表 · 报告期 2026Q3 · 取得 10-08 · 已核验</td></tr>
               <tr><td>近三年收入增速</td><td class="fact">7.8%</td><td class="src">PIT 快照 · as_of 10-09 · 已核验</td></tr>
             </table>
           </details>
@@ -410,21 +847,15 @@ body{margin:0}
             <summary>反证与替代解释（2 条）</summary>
           </details>
           <details open>
-            <summary>计算：反向 DCF 隐含增长率（方法 v1）</summary>
-            <table style="margin-top: 8px">
-              <tr><th>折现率</th><th>现金流基数 = 近 3 年均值</th><th>基数 = 最近 4 季</th></tr>
-              <tr><td class="fact">8%</td><td class="fact">4.6%</td><td class="fact">7.9%</td></tr>
-              <tr><td class="fact">9%</td><td class="fact">5.4%</td><td class="fact">8.8%</td></tr>
-              <tr><td class="fact">10%</td><td class="fact">6.3%</td><td class="fact">9.7%</td></tr>
-            </table>
-            <div class="src" style="margin-top: 6px">假设来自投资约定 v4 的默认值；输入与单位见计算记录 #c-2231。估值是给定假设下的计算，不是价格预测。</div>
+            <summary>反向 DCF：现金流基础待核</summary>
+            <div class="src" style="margin-top: 6px">新材料影响历史现金流基数的适用性，当前情景暂不运行。旧计算保留在历史版本中，不能作为当前价格判断。</div>
           </details>
         </div>
 
         <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px dashed #c4cbd5; border-radius: 8px; max-width: 760px">
           <span class="chip chip-ai">取证中</span>
           <div style="flex: 1 1 auto">
-            <div>正在获取主营构成分期表，回答"现金流下滑是否来自季节性备货"。</div>
+            <div>正在检查同口径历史现金流；营运资金与备货解释所需原文尚缺，A2 接入后补核。</div>
             <div class="faint">步骤 3/6 · 模型调用 4/12 · 工具调用 7/24 · 已用 ¥0.31</div>
           </div>
           <button class="btn btn-sm" type="button">取消</button>
@@ -447,9 +878,9 @@ body{margin:0}
 
       <div class="sec">
         <div class="h3">当前判断 · v3</div>
-        <div><span class="chip chip-accent">条件性看好</span> <span class="chip chip-warn">意见待复核</span></div>
-        <div>经营价值取决于现金转化能否恢复；价格已反映较低增长预期。</div>
-        <div class="faint">证据充分程度：中 · 持仓：未录入</div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap"><span class="chip chip-neutral">经营 好坏参半</span><span class="chip chip-neutral">价格 暂不判断</span><span class="chip chip-warn">暂不发布买卖看法</span></div>
+        <div>经营价值取决于现金转化能否恢复；旧现金流基数需复核，价格暂不判断。</div>
+        <div class="faint">研究充分度：有限 · 持仓：未录入</div>
       </div>
 
       <div class="sec">
@@ -465,10 +896,10 @@ body{margin:0}
       <div class="sec">
         <div class="h3">估值情景</div>
         <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
-          <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="faint">隐含增长率 @9%</div><div class="fact" style="font-size: 18px">5.4%</div></div>
+          <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="faint">FCFE 基数待核</div><div class="fact" style="font-size: 18px">暂不计算</div></div>
           <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="faint">PE 五年分位</div><div class="fact" style="font-size: 18px">23%</div></div>
         </div>
-        <div class="src">反向 DCF 方法 v1 · 分位覆盖 5.0 年</div>
+        <div class="src">反向 DCF 股权口径 v1 · 分位有效样本覆盖 5.0 年</div>
       </div>
 
       <div class="sec">
@@ -482,11 +913,11 @@ body{margin:0}
       <div class="sec">
         <div class="h3">历史观点</div>
         <div style="display: flex; flex-direction: column; gap: 6px">
-          <div><span class="fact">v3</span> <span class="faint">10-09</span> 待复核：三季报现金流反证</div>
-          <div><span class="fact">v2</span> <span class="faint">09-26</span> 条件性看好，发布公司观点</div>
+          <div><span class="fact">v3</span> <span class="faint">10-09</span> 新证据修订：经营改为好坏参半</div>
+          <div><span class="fact">v2</span> <span class="faint">09-26</span> 经营偏正面 · 价格有吸引力，已替代</div>
           <div><span class="fact">v1</span> <span class="faint">09-18</span> 线索：财报变化，未命中模板</div>
         </div>
-        <div class="faint">每个版本永久关联当时的数据与投资约定版本。</div>
+        <div class="faint">每个版本永久关联当时的数据与投资约定版本。<a href="#diff">对比 v2 与 v3</a></div>
       </div>
 
       <div class="sec">
@@ -497,15 +928,247 @@ body{margin:0}
     </aside>
   </div>
 </div>
+</div></div>
+</section>
+<section class="screen" id="leads">
+<h2 class="mk-title">线索与探索<span class="mk-src">Leads.dc.html</span></h2>
+<div class="mk-cell"><div class="mk-frame" id="leads-frame">
+<div style="min-height: 1000px; display: flex; flex-direction: column; box-sizing: border-box">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+    <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
+      <a href="#home">首页</a>
+      <a class="on" href="#workbench">研究工作台</a>
+      <a href="#">候选</a>
+      <a href="#">持仓</a>
+      <a href="#mandate">投资约定</a>
+      <a href="#">设置</a>
+    </nav>
+    <div style="flex: 1 1 auto"></div>
+    <span class="chip chip-neutral">数据截至 2026-10-09 收盘</span>
+  </header>
+  <nav class="sub" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <a href="#workbench">研究档案</a>
+    <a class="on" href="#leads">线索与探索</a>
+    <a href="#compare">比较</a>
+    <a href="#retro">复盘</a>
+  </nav>
+
+  <main style="flex: 1 1 auto; max-width: 1280px; width: 100%; margin: 0 auto; padding: 20px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 600">探索任务 #e-119</h1>
+      <span class="chip chip-neutral">已完成</span>
+      <span class="faint">2026-10-09 18:40 · 数据采集完成后触发 · 用时 2 分 10 秒 · ¥0.42 / 今日探索预算 ¥5</span>
+      <span style="flex: 1 1 auto"></span>
+      <button class="btn" type="button">立即再跑一轮</button>
+    </div>
+
+    <section class="card">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline">
+        <h2 class="h2">从事件到线索</h2>
+        <span class="faint">短名单由确定性规则生成，Agent 只对短名单排研究优先级，不逐只扫描目标池。</span>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: stretch">
+        <div class="stage"><span class="faint">事件流</span><span class="n">37</span><span class="src">变化记录 21 · 业绩预告 9 · 披露日历 4 · 模板差异 2 · 同业指标 1</span></div>
+        <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <div class="stage"><span class="faint">确定性短名单</span><span class="n">11</span><span class="src">去重后按触发规则保留；已有档案的事件转入复核</span></div>
+        <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <div class="stage" style="background: #f5ebfa; border-color: #e4cdf2"><span class="faint">Agent 排序</span><span class="n">11</span><span class="src">比较研究价值，理由逐条保存</span></div>
+        <svg class="arrow" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <div class="stage" style="background: #e8eefc; border-color: #c9d6f7"><span class="faint">结果</span><span class="n">2 · 3 · 6</span><span class="src">建档研究 · 保存线索 · 不推进</span></div>
+      </div>
+    </section>
+
+    <section class="card" style="padding: 0; overflow: hidden">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 16px 18px 4px">
+        <h2 class="h2">短名单与处理</h2>
+        <span class="faint">"模板命中"保留筛选原意，"研究优先级"是 Agent 的判断，两者不混排。</span>
+      </div>
+      <div style="overflow-x: auto; padding: 0 18px 16px">
+        <table>
+          <tr><th>公司</th><th>触发事件</th><th>确定性条件</th><th>模板命中</th><th>研究优先级</th><th>Agent 的理由</th><th>处理</th></tr>
+          <tr>
+            <td><strong>公司丙</strong><div class="src">300003</div></td>
+            <td>业绩预告 · 10-07</td>
+            <td class="fact">预告类型 = 扭亏</td>
+            <td><span class="chip chip-neutral">未命中</span></td>
+            <td><span class="chip chip-ai">高 · 1</span></td>
+            <td>扭亏来源可能是经营改善也可能是资产处置，判断价值高、取证成本低。</td>
+            <td><span class="chip chip-accent">已建档</span></td>
+          </tr>
+          <tr>
+            <td><strong>公司丁</strong><div class="src">600004</div></td>
+            <td>同业指标 · 10-09</td>
+            <td class="fact">毛利率与行业中位数差 ≥ 5pp</td>
+            <td><span class="chip chip-neutral">未命中</span></td>
+            <td><span class="chip chip-ai">高 · 2</span></td>
+            <td>毛利率领先同业 8 个百分点，可与已有档案公司甲直接比较。</td>
+            <td><span class="chip chip-accent">已建档</span></td>
+          </tr>
+          <tr>
+            <td><strong>公司辛</strong><div class="src">002008</div></td>
+            <td>变化记录 · 10-09</td>
+            <td class="fact">ROE 变化 ≥ 3pp</td>
+            <td><span class="chip chip-accent">稳健质量</span></td>
+            <td><span class="chip chip-ai">中 · 3</span></td>
+            <td>ROE 上升主要来自回购后权益下降，需要拆分；本轮预算内先保存。</td>
+            <td><span class="chip chip-neutral">保存线索</span></td>
+          </tr>
+          <tr>
+            <td><strong>公司壬</strong><div class="src">601009</div></td>
+            <td>披露日历 · 10-09</td>
+            <td class="fact">预约披露 ≤ 3 个交易日</td>
+            <td><span class="chip chip-neutral">未命中</span></td>
+            <td><span class="chip chip-ai">中 · 4</span></td>
+            <td>三季报即将披露，等数据入库再判断更省预算。</td>
+            <td><span class="chip chip-neutral">保存线索 · 10-14 复看</span></td>
+          </tr>
+          <tr>
+            <td><strong>公司戊</strong><div class="src">002005</div></td>
+            <td>模板差异 · 10-06</td>
+            <td class="fact">新进入"稳健质量"</td>
+            <td><span class="chip chip-accent">稳健质量</span></td>
+            <td><span class="chip chip-ai">低 · 9</span></td>
+            <td>命中原因是分红率提升，但自由现金流连续两年不覆盖分红，研究价值较低。</td>
+            <td><span class="chip chip-neutral">不推进</span></td>
+          </tr>
+          <tr>
+            <td colspan="7" class="faint">另有 6 条：保存线索 1 条、不推进 5 条，理由已记录。<a href="#">展开全部</a></td>
+          </tr>
+        </table>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+      <section class="card">
+        <div style="display: flex; gap: 8px; align-items: center"><h2 class="h2">范围外线索</h2><span class="chip chip-warn">2</span></div>
+        <div class="faint">只保存线索，不形成意见。扩大范围需要你修改投资约定。</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+          <div><strong>公司癸</strong> <span class="src">688010 · 申万电子</span><div class="faint">业绩预告预增 60% 以上；尚未完成证券识别与覆盖检查</div></div>
+          <div><strong>公司子</strong> <span class="src">300011 · 申万电子</span><div class="faint">同业毛利率差扩大；尚未完成覆盖检查</div></div>
+        </div>
+        <a class="btn" href="#cards">查看范围变更提案</a>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">本轮停止原因</h2>
+        <div><span class="chip chip-accent">短名单处理完</span></div>
+        <table>
+          <tr><td>模型调用</td><td class="fact">6 / 12</td></tr>
+          <tr><td>工具调用</td><td class="fact">14 / 24</td></tr>
+          <tr><td>费用</td><td class="fact">¥0.42 / ¥5.00</td></tr>
+          <tr><td>审阅线索</td><td class="fact">11 / 20</td></tr>
+          <tr><td>新建研究</td><td class="fact">2 / 3</td></tr>
+        </table>
+        <div class="faint">两个上限写在投资约定的研究授权里，是工程限额，不是每轮必须产出的数量。没用满说明短名单里没有更值得做的。</div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">最近几轮</h2>
+        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+          <div><span class="fact">#e-119</span> <span class="faint">10-09</span> 建档 2 · 线索 3 · 不推进 6</div>
+          <div><span class="fact">#e-118</span> <span class="faint">10-07</span> <strong>本轮没有值得推进的新线索</strong><div class="faint">短名单 11 只，全部不推进，理由已记录</div></div>
+          <div><span class="fact">#e-117</span> <span class="faint">10-06</span> 线索 1 · 不推进 4</div>
+          <div><span class="fact">#e-116</span> <span class="faint">10-05</span> <span class="chip chip-warn">部分完成</span> 业绩预告源失败，只处理了变化记录</div>
+        </div>
+      </section>
+    </div>
+  </main>
 </div>
+</div></div>
+</section>
+<section class="screen" id="compare">
+<h2 class="mk-title">结构化比较<span class="mk-src">Compare.dc.html</span></h2>
+<div class="mk-cell"><div class="mk-frame" id="compare-frame">
+<div style="min-height: 1000px; display: flex; flex-direction: column; box-sizing: border-box">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+    <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
+      <a href="#home">首页</a>
+      <a class="on" href="#workbench">研究工作台</a>
+      <a href="#">候选</a>
+      <a href="#">持仓</a>
+      <a href="#mandate">投资约定</a>
+      <a href="#">设置</a>
+    </nav>
+    <div style="flex: 1 1 auto"></div>
+    <span class="chip chip-neutral">数据截至 2026-10-09 收盘</span>
+  </header>
+  <nav class="sub" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <a href="#workbench">研究档案</a>
+    <a href="#leads">线索与探索</a>
+    <a class="on" href="#compare">比较</a>
+    <a href="#retro">复盘</a>
+  </nav>
+
+  <main style="flex: 1 1 auto; max-width: 1280px; width: 100%; margin: 0 auto; padding: 20px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+      <h1 style="margin: 0; font-size: 20px; font-weight: 600">公司甲 对比 公司丁</h1>
+      <span class="chip chip-neutral">同属申万二级 某行业</span>
+      <span style="flex: 1 1 auto"></span>
+      <div style="display: flex; gap: 12px; align-items: center; font-size: 12.5px; color: #4a5462">
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #fff; border: 1px solid #c4cbd5"></span>事实</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #fbf7fd; border: 1px solid #e4cdf2"></span>Agent 判断</span>
+        <span style="display: inline-flex; align-items: center; gap: 6px"><span style="display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: #fdf1e3; border: 1px solid #f0d2ad"></span>过期或待核</span>
+      </div>
+      <button class="btn" type="button">添加公司</button>
+    </div>
+
+    <div style="padding: 10px 14px; background: #fdf1e3; color: #7a4206; border-radius: 8px; font-size: 13px">
+      <strong>比较口径不满足约定。</strong>投资约定 v4 要求申万二级样本不少于 5 家，该行业只有 4 家，下表中的"行业中位数"仅作参考，结论会注明。
+    </div>
+
+    <section class="card" style="padding: 0; overflow: hidden">
+      <div style="overflow-x: auto">
+        <table>
+          <tr><th class="rowh">研究方面</th><th>公司甲 <span class="faint">600001 · 判断 v3</span></th><th>公司丁 <span class="faint">600004 · 判断 v1</span></th><th style="width: 150px">行业中位数 <span class="faint">4 家</span></th></tr>
+
+          <tr class="grp"><td colspan="4">财务与现金</td></tr>
+          <tr><td class="rowh">近三年收入增速</td><td><span class="fact">7.8%</span><span class="src">PIT 快照 · as_of 10-09</span></td><td><span class="fact">5.1%</span><span class="src">PIT 快照 · as_of 10-09</span></td><td class="fact">6.0%</td></tr>
+          <tr><td class="rowh">毛利率 2026H1</td><td><span class="fact">24.6%</span><span class="src">东财分期表 · 2026H1</span></td><td><span class="fact">32.9%</span><span class="src">东财分期表 · 2026H1</span></td><td class="fact">25.3%</td></tr>
+          <tr><td class="rowh">经营现金流 / 净利润，近 4 季</td><td><span class="fact">0.41</span><span class="src">东财分期表 · 2025Q4 到 2026Q3</span></td><td class="stale"><span class="fact">1.08</span><span class="src">截至 2026H1 · Q3 未入库，待核</span></td><td class="fact">0.86</td></tr>
+          <tr><td class="rowh">负债率</td><td><span class="fact">48%</span><span class="src">东财分期表 · 2026Q3</span></td><td><span class="fact">31%</span><span class="src">东财分期表 · 2026H1</span></td><td class="fact">44%</td></tr>
+          <tr class="judg"><td class="rowh">判断</td><td colspan="3" class="txt">公司丁已披露期间的毛利率和现金转化较好，但两家现金流期间不一致，不能据此断言当前利润质量更好；公司甲的现金转化需优先核查。<span class="src">推断 · 依据上面 4 行</span></td></tr>
+
+          <tr class="grp"><td colspan="4">商业模式与竞争</td></tr>
+          <tr><td class="rowh">主营构成</td><td>两项业务，最大一项占收入 <span class="fact">71%</span><span class="src">主营构成 · 2026H1</span></td><td>单一业务占 <span class="fact">93%</span><span class="src">主营构成 · 2026H1</span></td><td class="faint">不可比</td></tr>
+          <tr class="judg"><td class="rowh">竞争优势来源</td><td class="txt">渠道覆盖<span class="src">尚缺材料 · 渠道优势未取证</span></td><td class="txt">产品定价能力，毛利率持续高于同业<span class="src">推断 · 依据毛利率序列</span></td><td></td></tr>
+
+          <tr class="grp"><td colspan="4">价格与预期</td></tr>
+          <tr><td class="rowh">反向 DCF 股权现金流增长要求 @9%</td><td><span class="fact">暂不计算</span><span class="src">新证据影响现金流基础</span></td><td><span class="fact">6.8%</span><span class="src">计算 #c-2244 · 股权口径 v1</span></td><td class="faint">不计算</td></tr>
+          <tr><td class="rowh">PE 五年分位</td><td><span class="fact">23%</span><span class="src">覆盖 5.0 年</span></td><td><span class="fact">61%</span><span class="src">覆盖 5.0 年</span></td><td class="faint">不计算</td></tr>
+          <tr class="judg"><td class="rowh">判断</td><td colspan="3" class="txt">公司甲现金流基础待核，暂不比较价格吸引力。两家的历史分位只能各自解读；公司丁的现金流增长情景还需再投资与融资依据。<span class="src">范围限制 · 不能拿现金流增长与收入增长直接比较</span></td></tr>
+
+          <tr class="grp"><td colspan="4">资本配置</td></tr>
+          <tr><td class="rowh">股息率</td><td><span class="fact">1.9%</span><span class="src">PIT 快照 · 10-09</span></td><td><span class="fact">3.2%</span><span class="src">PIT 快照 · 10-09</span></td><td class="fact">2.4%</td></tr>
+          <tr><td class="rowh">再投资与管理层行为</td><td><span class="chip chip-neutral">尚缺材料</span></td><td><span class="chip chip-neutral">尚缺材料</span></td><td class="faint">需公告原文</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" style="border-top: 3px solid #8b3dbf">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+        <span class="chip chip-ai">Agent 比较结论</span>
+        <span class="faint">比较不是排名。两家的档案和意见仍各自独立维护。</span>
+      </div>
+      <div style="font-size: 15px"><strong>如果只能先研究一家，先研究公司丁。</strong>它有可核查的毛利率差异；先补齐同期间现金流再比较。公司甲的营运资金材料暂时不可得。</div>
+      <div class="faint">会改变这个结论的证据：公司甲三季度现金流下滑被证实是季节性备货；公司丁三季度现金流明显恶化。样本只有 4 家，行业中位数的结论较弱。</div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <a class="btn" href="#workbench">打开公司丁档案</a>
+        <button class="btn" type="button">保存这次比较</button>
+      </div>
+    </section>
+  </main>
+</div>
+</div></div>
 </section>
 <section class="screen" id="opinion">
 <h2 class="mk-title">意见卡片<span class="mk-src">Opinion.dc.html</span></h2>
-<div class="mk-frame">
+<div class="mk-cell"><div class="mk-frame" id="opinion-frame">
 <div style="min-height: 1060px; box-sizing: border-box; padding: 24px 16px; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px">
   <div>
     <h1 style="margin: 0; font-size: 20px; font-weight: 600">意见卡片</h1>
-    <div class="faint">意见与事实用不同样式：判断为正文，事实为等宽字并带来源。每张卡片从已保存的意见对象渲染，正文里的数字都能定位到引用。</div>
+    <div class="faint">公司观点分开回答经营和价格两个问题，首屏先写清本观点回答的问题。正文不直接写数字：虚线数字是带来源的结构化节点，后面的小字说明它是事实、计算还是条件。</div>
   </div>
 
   <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
@@ -513,118 +1176,416 @@ body{margin:0}
     <article class="card" style="border-top: 3px solid #2357d9">
       <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
         <span class="chip chip-accent">公司观点</span>
-        <span class="chip chip-neutral">有效</span>
+        <span class="chip chip-neutral">有效至 10-23</span>
         <span style="flex: 1 1 auto"></span>
         <span class="faint">公司己 601006 · 判断 v2</span>
       </div>
-      <div class="stance">条件性看好</div>
-      <div>按当前价格，市场隐含的中期增长率低于公司近三年实际增速。若现金转化维持，价格有吸引力。不假设你有持仓或资金。</div>
+      <div class="scope"><strong>本观点回答：</strong>经营与价格的已知依据及关键缺口。<span class="faint">公司整体长期价值仍待研究。</span></div>
+      <div class="axes">
+        <div class="ax"><span class="faint">经营判断</span><span class="v">暂不判断</span></div>
+        <div class="ax"><span class="faint">价格判断</span><span class="v">暂不判断</span></div>
+        <div class="ax"><span class="faint">研究充分度</span><span class="v">有限</span></div>
+      </div>
       <div class="h3">理由</div>
       <ul class="bul">
-        <li>反向 DCF 隐含增长率 <span class="fact">4.1%</span>，近三年收入增速 <span class="fact">9.6%</span>。<span class="src">计算 #c-2190 · 快照 10-09</span></li>
-        <li>经营现金流连续 8 个季度覆盖净利润。<span class="src">东财分期表 · 2024Q4 到 2026Q3</span></li>
-        <li>PE 处于五年 <span class="fact">18%</span> 分位。<span class="src">历史估值分位 · 覆盖 5.0 年</span></li>
+        <li>情景下价格隐含的股权现金流增长要求为 <a class="num" href="#phone-valuation">16.0%</a><span class="role">计算</span>；仍需核实再投资与融资能否支持这一路径。</li>
+        <li>本期经营现金流与归母净利润比值为 <a class="num" href="#">1.18</a><span class="role">计算</span>。</li>
+        <li>市盈率处于历史分位 <a class="num" href="#">18%</a><span class="role">计算</span>，只说明在自身历史估值中的相对位置。</li>
       </ul>
       <div class="h3">主要反证</div>
       <ul class="bul">
-        <li>收入增速中约三成来自 2025 年并表，内生增速可能只有 6% 左右。此项为推断，未取证。影响：隐含增长率仍低于内生增速，不足以改变判断。</li>
+        <li>收入增长中有一部分可能来自并表；主营构成表可见业务结构变化，但不足以确认并表贡献。内生增长、再投资和融资假设尚缺核验，暂不作价格方向判断。</li>
       </ul>
+      <div class="h3">附条件的看法</div>
+      <div class="ca"><span class="chip chip-neutral">等待</span><span>先核实持续现金流及融资假设，再形成买卖看法。</span></div>
+      <div class="faint">监测：下一期同口径现金转化明显下降时优先复核。</div>
       <div class="kv">
-        <div class="k">适用条件</div><div>价格 ≤ 24.0 元；三季度现金流覆盖率不低于 0.8</div>
-        <div class="k">有效至</div><div>2026-11-20，或提前触发：三季报入库、价格变动超 15%</div>
-        <div class="k">下次复核</div><div>三季报入库后回答"并表贡献占比"</div>
+        <div class="k">有效期</div><div>原至 10-12；10-09 在有效期内复核，延长至 10-23</div>
+        <div class="k">下次复核</div><div>10-16 计划复核；如三季报先入库则提前检查</div>
       </div>
-      <div class="meta"><span>发布 2026-09-28</span><span>投资约定 v4</span><span>模型 deepseek-v4-flash</span><span>提示词 v3</span><span><a href="#">查看运行记录</a></span></div>
+      <div class="meta"><span>发布 2026-09-28</span><span>投资约定 v3</span><span>方法 v1</span><span>发布校验通过</span><span><a href="#">查看运行记录</a></span></div>
     </article>
 
     <article class="card" style="border-top: 3px solid #c26a12; background: #fbfbfc">
       <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
         <span class="chip chip-accent">公司观点</span>
-        <span class="chip chip-warn">待复核 · 不作为当前建议</span>
+        <span class="chip chip-warn">已被 v3 替代</span>
         <span style="flex: 1 1 auto"></span>
         <span class="faint">公司甲 600001 · 判断 v2</span>
       </div>
       <div style="background: #fdf1e3; color: #7a4206; border-radius: 8px; padding: 10px 12px">
-        <strong>此意见已于 2026-10-08 转为待复核。</strong>三季报经营现金流为 -1.2 亿元，推翻了"现金转化改善"这一关键假设。复核任务进行中，完成后会产生新版本；本卡片保留原文作为审计依据。
+        <strong>10-08 起不作为当前建议，10-09 被 v3 替代。</strong>累计前三季度经营现金流 <span class="num">-1.20 亿元</span><span class="role">事实</span>，推翻了"现金转化可持续"这项关键假设。原文保留作审计依据。
       </div>
-      <div class="stance" style="color: #4a5462">条件性看好（已失效）</div>
-      <div style="color: #4a5462">经营价值改善正在被现金流验证；价格已反映较低预期。</div>
-      <div class="h3">当时的理由</div>
-      <ul class="bul" style="color: #4a5462">
-        <li>上半年经营现金流转正。<span class="src">东财分期表 · 2026H1</span></li>
-        <li>隐含增长率 <span class="fact">9.1%</span> 对应价格 21.0 元。<span class="src">计算 #c-2102</span></li>
-      </ul>
+      <div class="scope old"><strong>本观点回答：</strong>上半年的现金流改善能否说明经营在好转。</div>
+      <div class="axes old">
+        <div class="ax"><span class="faint">经营判断</span><span class="v">偏正面</span></div>
+        <div class="ax"><span class="faint">价格判断</span><span class="v">有吸引力</span></div>
+        <div class="ax"><span class="faint">研究充分度</span><span class="v">有限</span></div>
+      </div>
       <div class="h3">当时写下的证伪条件</div>
-      <ul class="bul"><li><strong>三季度经营现金流转负</strong> ← 已发生</li><li>主营收入增速低于 5%</li></ul>
+      <ul class="bul"><li><strong>下一期经营现金流转负</strong>：已发生</li><li>主营收入增速低于 <span class="num">5%</span><span class="role">条件</span>：未发生</li></ul>
+      <div class="h3">现在的 v3</div>
+      <div style="font-size: 13px">经营 好坏参半 · 价格 暂不判断 · 季节性问题回答前不发布买卖看法</div>
       <div style="display: flex; gap: 8px; flex-wrap: wrap">
-        <a class="btn" href="#workbench">查看复核任务</a>
-        <button class="btn" type="button">对比 v2 与 v3</button>
+        <a class="btn" href="#diff">对比 v2 与 v3</a>
+        <a class="btn" href="#workbench">打开档案</a>
       </div>
-      <div class="meta"><span>发布 2026-09-26</span><span>失效 2026-10-08</span><span>投资约定 v4</span></div>
+      <div class="meta"><span>发布 2026-09-26</span><span>替代 2026-10-09</span><span>投资约定 v3</span></div>
     </article>
 
-    <article class="card" style="border-top: 3px solid #2357d9">
+    <article class="card" style="border-top: 3px solid #8b3dbf">
       <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
         <span class="chip chip-ai">组合行动建议</span>
-        <span class="chip chip-neutral">有效</span>
         <span class="chip chip-neutral">A1b</span>
+        <span class="chip chip-neutral">有效至 10-16</span>
         <span style="flex: 1 1 auto"></span>
-        <span class="faint">公司庚 000007 · 判断 v4</span>
+        <span class="faint">方案 #pp-12 · 选项 A</span>
       </div>
-      <div class="stance">减仓至约 8%</div>
-      <div>公司观点仍为持有，但当前仓位 <span class="fact">12.4%</span> 超过你设定的单股上限，且近两次复核都没有新的支持证据。建议把超出部分减到上限以内，而不是清仓。</div>
-      <div class="h3">仓位计算与约束校验</div>
+      <div class="scope"><strong>本建议回答：</strong>公司庚超过单股上限时怎么处理。依据组合快照 #p-91，本账户，覆盖完整。</div>
+      <div style="font-size: 20px; font-weight: 600">减持公司庚</div>
+      <div>示例卖出 <span class="num">1,300 股</span><span class="role">计算</span>，占比从 <span class="num">12.4%</span><span class="role">计算</span> 降到 <span class="num">9.6%</span><span class="role">计算</span>。公司旧观点已撤回；本意见依据已确认持仓与硬约束，数量为费用待核的情景。</div>
+      <div class="h3">同一方案里的比较</div>
       <table style="border-collapse: collapse; width: 100%; font-size: 13px">
-        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">单股上限 10%</td><td class="fact" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">12.4% → 8.0%</td><td class="ok" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">通过</td></tr>
-        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">行业暴露上限 30%</td><td class="fact" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">26% → 22%</td><td class="ok" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">通过</td></tr>
-        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">减持数量</td><td class="fact" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">约 1,300 股</td><td class="src" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">按 10-09 收盘价估算</td></tr>
-        <tr><td style="padding: 5px 0">组合快照</td><td class="fact" style="padding: 5px 0">#p-88</td><td class="src" style="padding: 5px 0">账本截至 10-09 · 覆盖完整 · 行情 10-09</td></tr>
+        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">不行动</td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">超限持续</td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5"><span class="chip chip-warn">约束冲突</span></td></tr>
+        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5"><strong>A 减持公司庚</strong></td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">按交易单位取整</td><td class="ok" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">费用待核</td></tr>
+        <tr><td style="padding: 5px 0">B 减持并买入公司己</td><td style="padding: 5px 0">公司己关键假设尚缺核验</td><td style="padding: 5px 0"><span class="chip chip-warn">暂不发布</span></td></tr>
       </table>
-      <div class="kv">
-        <div class="k">有效至</div><div>2026-10-23，或提前触发：持仓变化、价格变动超 10%</div>
-        <div class="k">不采纳时</div><div>保留你的决定与理由，不再反复提醒；下次复核仍按计划</div>
-      </div>
+      <div class="faint">按参考价 20.00 元卖出 1,300 股，未扣费收入 26,000 元；费用待核，金额与比例仅为情景。现金收益未知。</div>
       <div style="display: flex; gap: 8px; flex-wrap: wrap">
         <button class="btn btn-primary" type="button">记录我的决定</button>
-        <a class="btn" href="#cards">记录一笔已发生的交易</a>
-        <button class="btn" type="button">我不同意，说明原因</button>
+        <a class="btn" href="#cards">记录已发生的交易</a>
+        <a class="btn" href="#disagree">我不同意</a>
       </div>
-      <div class="meta"><span>发布 2026-10-09</span><span>投资约定 v4</span><span>计算 #c-2240</span><span>Agent 不下单，决定与成交由你记录</span></div>
+      <div class="meta"><span>发布 2026-10-09</span><span>投资约定 v4</span><span>约束计算 #c-2240</span><span>Agent 不下单，决定与成交由你记录</span></div>
     </article>
 
     <article class="card" style="border-top: 3px solid #8a94a3">
       <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
         <span class="chip chip-accent">公司观点</span>
-        <span class="chip chip-neutral">证据不足</span>
+        <span class="chip chip-neutral">有效至 10-16</span>
         <span style="flex: 1 1 auto"></span>
         <span class="faint">公司丙 300003 · 判断 v1</span>
       </div>
-      <div class="stance">继续研究，暂不形成买卖看法</div>
-      <div>这不是看空。业绩预告的扭亏可能来自经营改善，也可能来自资产处置；两种解释目前都无法排除，形成观点会超出证据。</div>
+      <div class="scope"><strong>本观点回答：</strong>业绩预告的扭亏来自经营改善还是一次性收益。</div>
+      <div class="axes">
+        <div class="ax"><span class="faint">经营判断</span><span class="v">暂不判断</span></div>
+        <div class="ax"><span class="faint">价格判断</span><span class="v">暂不判断</span></div>
+        <div class="ax"><span class="faint">研究充分度</span><span class="v">不足</span></div>
+      </div>
+      <div>这不是看空。两种解释目前都无法排除，形成方向会超出证据，所以没有附条件的买卖看法。</div>
       <div class="h3">已取证</div>
       <ul class="bul">
-        <li>业绩预告：预计 2026 年前三季度净利润 <span class="fact">0.8 到 1.1 亿元</span>，去年同期亏损。<span class="src">东财业绩预告 · 公告 10-07</span></li>
-        <li>PB 五年分位 <span class="fact">9%</span>。<span class="src">历史估值分位</span></li>
+        <li>公司披露的前三季度净利润预告区间 <a class="num" href="#">0.8–1.1 亿元</a><span class="role">事实</span>，去年同期亏损。</li>
+        <li>市净率历史分位 <a class="num" href="#">9%</a><span class="role">计算</span>。</li>
       </ul>
       <div class="h3">缺口与下一步</div>
       <table style="border-collapse: collapse; width: 100%; font-size: 13px">
-        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">扭亏来源</td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5"><span class="chip chip-neutral">尚缺材料</span></td><td class="src" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">等主营构成分期表更新</td></tr>
-        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">非经常性损益</td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5"><span class="chip chip-neutral">尚缺材料</span></td><td class="src" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">需公告原文，A2 接入</td></tr>
-        <tr><td style="padding: 5px 0">反向 DCF</td><td style="padding: 5px 0"><span class="chip chip-neutral">不适用</span></td><td class="src" style="padding: 5px 0">自由现金流为负，方法声明不适用</td></tr>
+        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">扭亏来源</td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5"><span class="chip chip-neutral">尚缺材料</span></td><td class="faint" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">等主营构成分期表更新</td></tr>
+        <tr><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5">非经常性损益</td><td style="padding: 5px 0; border-bottom: 1px solid #eef1f5"><span class="chip chip-neutral">尚缺材料</span></td><td class="faint" style="padding: 5px 0; border-bottom: 1px solid #eef1f5">需公告原文，A2 接入</td></tr>
+        <tr><td style="padding: 5px 0">反向 DCF</td><td style="padding: 5px 0"><span class="chip chip-neutral">不适用</span></td><td class="faint" style="padding: 5px 0">近年股权现金流有负值</td></tr>
       </table>
       <div class="kv">
         <div class="k">复核触发</div><div>三季报入库；主营构成更新</div>
-        <div class="k">研究优先级</div><div>中。与公司丁比较后排第 2，依据已记录</div>
+        <div class="k">研究优先级</div><div>中。与公司丁比较后排在后面，依据已记录</div>
       </div>
-      <div class="meta"><span>保存 2026-10-09</span><span>投资约定 v4</span><span>未发布为正式意见</span></div>
+      <div class="meta"><span>发布 2026-10-09</span><span>投资约定 v4</span><span>"暂不判断"也是正式结果</span></div>
     </article>
   </div>
 </div>
+</div></div>
+</section>
+<section class="screen" id="diff">
+<h2 class="mk-title">版本对比与复核<span class="mk-src">Diff.dc.html</span></h2>
+<div class="mk-cell"><div class="mk-frame" id="diff-frame">
+<div style="min-height: 1060px; display: flex; flex-direction: column; box-sizing: border-box">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+    <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
+      <a href="#home">首页</a>
+      <a class="on" href="#workbench">研究工作台</a>
+      <a href="#">候选</a>
+      <a href="#">持仓</a>
+      <a href="#mandate">投资约定</a>
+      <a href="#">设置</a>
+    </nav>
+  </header>
+
+  <main style="flex: 1 1 auto; max-width: 1280px; width: 100%; margin: 0 auto; padding: 20px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+      <a href="#workbench" class="faint">公司甲 档案</a><span class="faint">/</span>
+      <h1 style="margin: 0; font-size: 20px; font-weight: 600">判断 v2 → v3</h1>
+      <span class="chip chip-warn">观点修订</span>
+      <span style="flex: 1 1 auto"></span>
+      <label for="cmp" class="faint">对比</label>
+      <select id="cmp" style="height: 34px; border: 1px solid #c4cbd5; border-radius: 8px; padding: 0 8px; font: inherit; background: #fff; color: #18202b">
+        <option>v2 → v3</option><option>v1 → v2</option><option>v1 → v3</option>
+      </select>
+    </div>
+
+    <section class="card" style="border-top: 3px solid #c26a12">
+      <div class="faint" style="font-weight: 600; color: #4a5462">变化原因</div>
+      <div style="font-size: 15px">三季报入库，经营现金流为 <span class="fact">-1.20 亿元</span>，推翻了 v2 的关键假设"现金转化改善"。经营判断从"正在被现金流验证"改为"取决于现金转化能否恢复"。旧意见已被 v3 替代；新观点保留经营判断与缺口，价格暂不判断，不发布买卖看法。</div>
+      <div class="faint">v2 原文不可修改，永久关联当时的数据（截至 09-26）与投资约定 v3。</div>
+    </section>
+
+    <section class="card" style="padding: 0; overflow: hidden">
+      <div style="overflow-x: auto">
+        <table>
+          <tr><th class="rowh"></th><th>v2 <span class="faint">2026-09-26</span></th><th>v3 <span class="faint">2026-10-09</span></th></tr>
+          <tr class="chg"><td class="rowh">核心判断</td><td>经营价值改善正在被现金流验证；价格已反映较低预期。</td><td>经营价值取决于现金转化能否恢复；旧现金流基数需复核，价格暂不判断。</td></tr>
+          <tr class="chg"><td class="rowh">经营判断</td><td><span class="chip chip-accent">偏正面</span></td><td><span class="chip chip-neutral">好坏参半</span></td></tr>
+          <tr><td class="rowh">价格判断</td><td><span class="chip chip-accent">有吸引力</span></td><td><span class="chip chip-neutral">暂不判断</span> <span class="faint">现金流基础待核</span></td></tr>
+          <tr><td class="rowh">研究充分度</td><td>有限</td><td>有限 <span class="faint">未变</span></td></tr>
+          <tr class="chg"><td class="rowh">附条件看法</td><td>可考虑买入：现金转化继续改善且价格不高于条件价</td><td>等待：季节性问题回答前不发布买卖看法</td></tr>
+          <tr><td class="rowh">修订类型</td><td></td><td><span class="chip chip-warn">新证据</span> <span class="faint">证据不变而只改推断时会标为"推断修订"</span></td></tr>
+          <tr class="chg"><td class="rowh">意见</td><td>公司观点已发布，有效至 11-10</td><td>v2 于 10-08 受限，10-09 由有限观点 v3 替代；不含买卖看法</td></tr>
+          <tr class="chg"><td class="rowh">假设：现金转化改善</td><td><span class="chip chip-accent">已取证</span> 上半年经营现金流转正<span class="src">东财分期表 · 2026H1</span></td><td><span class="chip chip-warn">反证出现</span> 累计前三季度 <span class="fact">-1.20 亿元</span><span class="src">东财分期表 · 2026Q3 · 取得 10-08</span></td></tr>
+          <tr><td class="rowh">假设：收入增速 ≥ 7%</td><td><span class="chip chip-accent">已取证</span> 近三年 <span class="fact">7.8%</span></td><td><span class="chip chip-accent">已取证</span> 累计前三季度同比 <span class="fact">8.1%</span>，未变</td></tr>
+          <tr><td class="rowh">假设：渠道优势</td><td><span class="chip chip-neutral">仅定性</span></td><td><span class="chip chip-neutral">仅定性</span>，未变</td></tr>
+          <tr class="chg"><td class="rowh">未知项</td><td>一次性收益口径</td><td>一次性收益口径<div class="add">+ 现金流下滑是否来自季节性备货</div></td></tr>
+          <tr class="chg"><td class="rowh">估值</td><td>收盘 <span class="fact">21.00</span><span class="src">当时情景与输入保留在历史计算记录</span></td><td>收盘 <span class="fact">18.42</span> · 当前情景暂不计算<span class="src">新材料影响现金流基数，不能沿用旧判断</span></td></tr>
+          <tr class="chg"><td class="rowh">证据集</td><td>5 条</td><td>7 条 <span class="add">+ 2026Q3 现金流 · + 10-09 收盘价</span></td></tr>
+          <tr class="chg"><td class="rowh">投资约定</td><td>v3</td><td>v4 <span class="faint">10-02 同业口径改为申万二级，不影响本判断</span></td></tr>
+          <tr><td class="rowh">证伪条件</td><td>累计前三季度经营现金流转负；主营收入增速低于 5%</td><td><span class="del">累计前三季度经营现金流转负</span> 已发生<div>主营收入增速低于 5%；全年累计经营现金流仍为负</div></td></tr>
+          <tr class="chg"><td class="rowh">下次复核</td><td>三季报入库</td><td>同口径营运资金及历史季节性材料补齐</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+      <section class="card">
+        <h2 class="h2">这次复核的经过</h2>
+        <div class="tl">
+          <div class="it"><span class="dot" style="background: #c26a12"></span><div><strong>触发</strong> 10-08 20:10 · 2026Q3 分期表入库<div class="faint">命中监测条件"经营现金流 &lt; 0"，监测 #m-31 v2</div></div></div>
+          <div class="it"><span class="dot" style="background: #c26a12"></span><div><strong>意见转为待复核</strong> 10-08 20:10<div class="faint">与触发同时发生，不等后台任务</div></div></div>
+          <div class="it"><span class="dot" style="background: #8b3dbf"></span><div><strong>复核任务开始</strong> 10-08 20:12 · #r-3290<div class="faint">取证 3 次，记录营运资金材料缺口；先完成有限观点修订</div></div></div>
+          <div class="it"><span class="dot" style="background: #8b3dbf"></span><div><strong>修订观点</strong> 10-09 09:30 · 保存 v3<div class="faint">结果：修订，不是维持或撤回</div></div></div>
+          <div class="it"><span class="dot" style="background: #8a94a3"></span><div><strong>站内提醒</strong> 10-09 09:30 · 1 条，同批变化已合并</div></div>
+          <div class="it"><span class="dot" style="background: #8a94a3; border: 2px solid #8a94a3; background: #fff; box-sizing: border-box"></span><div><strong>下一步</strong> 材料补齐后创建后续研究 #r-3307；不重开已完成任务</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">复核结果的四种可能</h2>
+        <div class="faint">每次复核都要留下结果。没有实质变化时只留简要依据，不发提醒。</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+          <div style="padding: 10px 12px; border: 1px solid #dde2e9; border-radius: 8px"><span class="chip chip-neutral">维持</span> 公司己 · 10-09<div class="faint" style="margin-top: 4px">原意见仍有效，关键依据和条件未变；10-09 核查后追加续期事件至 10-23，下次复核 10-16。正文不变，未发提醒。</div></div>
+          <div style="padding: 10px 12px; border: 1px solid #dde2e9; border-radius: 8px"><span class="chip chip-neutral">无法判断</span> 公司乙 · 10-08<div class="faint" style="margin-top: 4px">新材料与原假设各有支持，取证预算用完前没能区分。保留限制，旧意见不恢复有效，下一步问题已记入计划。</div></div>
+          <div style="padding: 10px 12px; border: 1px solid #f0d2ad; border-radius: 8px; background: #fffaf3"><span class="chip chip-warn">修订</span> 公司甲 · 10-09<div class="faint" style="margin-top: 4px">关键假设被推翻，产生 v3，旧意见失效。已提醒。</div></div>
+          <div style="padding: 10px 12px; border: 1px solid #dde2e9; border-radius: 8px"><span class="chip chip-neutral">撤回</span> 公司庚 · 09-30<div class="faint" style="margin-top: 4px">主要数据源连续两天失败，无法确认判断仍成立。撤回意见并标出缺口，不推导成看空。已提醒。</div></div>
+        </div>
+      </section>
+    </div>
+  </main>
 </div>
+</div></div>
+</section>
+<section class="screen" id="retro">
+<h2 class="mk-title">过程复盘<span class="mk-src">Retro.dc.html</span></h2>
+<div class="mk-cell"><div class="mk-frame" id="retro-frame">
+<div style="min-height: 1100px; display: flex; flex-direction: column; box-sizing: border-box">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+    <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
+      <a href="#home">首页</a>
+      <a class="on" href="#workbench">研究工作台</a>
+      <a href="#">候选</a>
+      <a href="#">持仓</a>
+      <a href="#mandate">投资约定</a>
+      <a href="#">设置</a>
+    </nav>
+  </header>
+  <nav class="sub" style="display: flex; flex-wrap: wrap; gap: 20px; padding: 0 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <a href="#workbench">研究档案</a>
+    <a href="#leads">线索与探索</a>
+    <a href="#compare">比较</a>
+    <a class="on" href="#retro">复盘</a>
+  </nav>
+
+  <main style="flex: 1 1 auto; max-width: 1280px; width: 100%; margin: 0 auto; padding: 20px 16px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+    <div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px">
+        <h1 style="margin: 0; font-size: 20px; font-weight: 600">公司甲 · 第一个研究阶段</h1>
+        <span class="faint">2026-09-18 至 10-09 · 判断 v1 到 v3 · 复盘生成于 10-09</span>
+      </div>
+      <div class="faint">复盘检验研究过程，不给判断能力打分。三个问题按顺序回答。</div>
+
+      <section class="card">
+        <div class="q"><span class="qn">1</span><h2 class="h2">当时的关键假设，后来被证实还是证伪？</h2></div>
+        <table>
+          <tr><th>假设</th><th>写入版本</th><th>结果</th><th>依据</th></tr>
+          <tr><td>主营收入增速维持 7% 以上</td><td class="fact">v2</td><td><span class="chip chip-accent">证实</span></td><td>累计前三季度同比 <span class="fact">8.1%</span><span class="src">东财分期表 · 2026Q3</span></td></tr>
+          <tr><td>现金转化改善</td><td class="fact">v2</td><td><span class="chip chip-warn">证伪</span></td><td>累计前三季度经营现金流 <span class="fact">-1.20 亿元</span><span class="src">东财分期表 · 2026Q3</span></td></tr>
+          <tr><td>竞争优势来自渠道</td><td class="fact">v2</td><td><span class="chip chip-neutral">未决</span></td><td class="faint">始终只有定性推断，没有可引用证据</td></tr>
+        </table>
+      </section>
+
+      <section class="card">
+        <div class="q"><span class="qn">2</span><h2 class="h2">证伪条件出现时，复核是否按时触发？</h2></div>
+        <div><span class="chip chip-accent">按时</span> 数据入库到意见转为待复核用时 0 分钟，到复核任务开始用时 2 分钟，到观点修订用时 13 小时 20 分。</div>
+        <div class="faint">修订耗时主要在等待主营构成更新；等待期间旧意见已不作为当前建议显示。<a href="#diff">查看复核经过</a></div>
+      </section>
+
+      <section class="card">
+        <div class="q"><span class="qn">3</span><h2 class="h2">哪一步出了错？</h2></div>
+        <table>
+          <tr><th style="width: 90px">环节</th><th>发现</th><th style="width: 90px">归类</th></tr>
+          <tr><td>推断</td><td>把上半年现金流转正当作趋势，没有用同季度同比排除季节性。</td><td><span class="chip chip-warn">过程错误</span></td></tr>
+          <tr><td>取证</td><td>v2 发布前没有取主营构成分期，导致季节性问题拖到现在才问。</td><td><span class="chip chip-warn">过程错误</span></td></tr>
+          <tr><td>约束执行</td><td>未发现问题。v2 只发布公司观点，没有越过组合背景。</td><td><span class="chip chip-neutral">无</span></td></tr>
+          <tr><td>数据</td><td>未发现问题。三季报按计划入库，无冲突。</td><td><span class="chip chip-neutral">无</span></td></tr>
+        </table>
+        <div style="padding: 10px 12px; background: #f5ebfa; color: #4d2370; border-radius: 8px; font-size: 13px">
+          <strong>研究方法调整</strong>：周期性或季节性明显的公司，现金流假设一律用同季度同比。已在授权范围内写入研究方法 v5 草稿，不涉及硬约束。<a href="#mandate" style="color: #4d2370">查看投资约定</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap"><h2 class="h2">价格结果</h2><span class="chip chip-neutral">仅记录，不评分</span></div>
+        <table>
+          <tr><td>v2 发布日收盘</td><td class="fact">21.00</td><td class="src">09-26</td></tr>
+          <tr><td>v2 失效日收盘</td><td class="fact">18.42</td><td class="src">10-09</td></tr>
+          <tr><td>区间变动</td><td class="fact">-12.3%</td><td class="src">不复权，未计股息与费用</td></tr>
+        </table>
+        <div class="faint">期间你的决定是"暂不行动"。这段价格变化是对未采纳意见的观察，不算作真实交易收益，也不用来证明当时的意见对错。</div>
+      </section>
+    </div>
+
+    <aside style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+      <section class="card">
+        <h2 class="h2">全部档案的过程指标</h2>
+        <div class="faint">7 份档案 · 14 份意见 · 含未采纳、搁置与归档</div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+          <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="faint">假设证实</div><div class="fact" style="font-size: 20px">6</div></div>
+          <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="faint">假设证伪</div><div class="fact" style="font-size: 20px">3</div></div>
+          <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="faint">尚未决</div><div class="fact" style="font-size: 20px">11</div></div>
+        </div>
+        <div style="font-size: 13px">证伪后 24 小时内完成复核 <span class="fact">3 / 3</span></div>
+        <div style="font-size: 13px">逾期复核 <span class="fact">0</span></div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">过程错误按环节</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div class="bar"><span class="lbl">取证</span><span class="trk"><span class="fill" style="width: 100%"></span></span><span class="v">3</span></div>
+          <div class="bar"><span class="lbl">推断</span><span class="trk"><span class="fill" style="width: 67%"></span></span><span class="v">2</span></div>
+          <div class="bar"><span class="lbl">数据</span><span class="trk"><span class="fill" style="width: 33%"></span></span><span class="v">1</span></div>
+          <div class="bar"><span class="lbl">约束执行</span><span class="trk"><span class="fill" style="width: 0%"></span></span><span class="v">0</span></div>
+        </div>
+        <div class="faint">单用户的档案数量不足以做统计校准，这里不计算胜率或收益排名。</div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">其他待复盘</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+          <div><strong>公司庚</strong> · 意见暂时撤回 <span class="faint">09-30</span></div>
+          <div><strong>公司寅</strong> · 归档 <span class="faint">09-12 · 退出理由：估值方法不适用</span></div>
+        </div>
+      </section>
+    </aside>
+  </main>
+</div>
+</div></div>
+</section>
+<section class="screen" id="disagree">
+<h2 class="mk-title">分歧与决定<span class="mk-src">Disagree.dc.html</span></h2>
+<div class="mk-cell"><div class="mk-frame" id="disagree-frame">
+<div style="min-height: 980px; display: flex; flex-direction: column; box-sizing: border-box">
+  <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+    <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
+      <a href="#home">首页</a>
+      <a class="on" href="#workbench">研究工作台</a>
+      <a href="#">候选</a>
+      <a href="#">持仓</a>
+      <a href="#mandate">投资约定</a>
+      <a href="#">设置</a>
+    </nav>
+    <div style="flex: 1 1 auto"></div>
+    <span class="faint">公司甲 600001 · 判断 v3</span>
+  </header>
+
+  <div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; box-sizing: border-box; max-width: 1360px; width: 100%; margin: 0 auto">
+
+    <section class="card" style="flex: 999 1 620px; min-width: 0; gap: 16px; padding: 20px">
+      <div class="me">我觉得现金流只是季节性的，公司甲没问题。我想买 2000 股。</div>
+
+      <div class="ag">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="chip chip-ai">Agent</span><span class="faint">基于判断 v3 · 数据截至 10-09</span></div>
+        <p style="margin: 0"><strong>当前判断是经营好坏参半、价格暂不判断，暂不发布买卖看法。</strong>季节性是合理的解释，我也正在查，但现有证据还不支持它。</p>
+        <ul class="bul">
+          <li>同季度比较仍在恶化：去年累计前三季度经营现金流 <span class="fact">+0.60 亿元</span>，今年 <span class="fact">-1.20 亿元</span>。<span class="src">东财分期表 · 2025Q3、2026Q3</span></li>
+          <li>如果是备货，存货应同步上升；这项数据要等主营构成更新才能确认。</li>
+        </ul>
+        <p style="margin: 0">买不买是你的决定，我不会反复劝。会让我改变看法的证据是：主营构成显示三季度备货集中在主要业务，且四季度经营现金流转正。</p>
+        <div style="padding: 10px 12px; background: #fdf1e3; color: #7a4206; border-radius: 8px; font-size: 13px">按你录入的组合，这笔买入会让公司甲占比约 <span class="fact">12%</span>，超过约定的单股上限 <span class="fact">10%</span>。提前告诉你，不是阻止你。</div>
+      </div>
+
+      <div style="border: 1px solid #dde2e9; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; max-width: 780px">
+        <div style="display: flex; gap: 8px; align-items: center"><h2 class="h2">记录你的决定</h2><span class="faint">不改变持仓</span></div>
+        <fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px">
+          <legend style="position: absolute; left: -9999px">决定</legend>
+          <label class="opt"><input type="radio" name="dec" checked>自行决定买入</label>
+          <label class="opt"><input type="radio" name="dec">等复核结果</label>
+          <label class="opt"><input type="radio" name="dec">放弃</label>
+        </fieldset>
+        <label for="why" class="faint">你的理由（会和 Agent 的观点并列保存）</label>
+        <input id="why" type="text" value="三季度是行业备货季，现金流是季节性的" style="height: 38px; padding: 0 10px; border: 1px solid #c4cbd5; border-radius: 8px; font: inherit; box-sizing: border-box">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+          <button class="btn btn-primary" type="button">记录决定</button>
+          <a class="btn" href="#cards">成交后记录交易</a>
+          <span class="faint">"我同意"或"我要买"只记为决定，真正成交要补成交价和日期。</span>
+        </div>
+      </div>
+
+      <div class="me">你上次的判断哪里错了？</div>
+
+      <div class="ag">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="chip chip-ai">Agent</span><span class="faint">引用复盘 · 10-09</span></div>
+        <p style="margin: 0"><strong>错在推断，不在数据。</strong>v2 里我把上半年现金流转正当作趋势，没有用同季度同比排除季节性；也没有在发布前取主营构成。</p>
+        <p style="margin: 0">数据本身没有问题，三季报按时入库，复核也按时触发。我已经在研究方法里加了一条：季节性明显的公司，现金流假设一律用同季度同比。</p>
+        <div style="display: flex; gap: 8px"><a class="btn" href="#retro">查看复盘</a><a class="btn" href="#diff">对比 v2 与 v3</a></div>
+      </div>
+    </section>
+
+    <aside style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+      <section class="card">
+        <div style="display: flex; gap: 8px; align-items: center"><h2 class="h2">分歧记录</h2><span class="chip chip-neutral">开放</span></div>
+        <div class="kv">
+          <div class="k">你的观点</div><div>现金流下滑是季节性的，基本面没问题</div>
+          <div class="k">Agent 观点</div><div>可能是季节性，但同季度同比仍在恶化，证据不足</div>
+          <div class="k">分歧点</div><div>三季度现金流下滑的原因</div>
+          <div class="k">能解决的证据</div><div>主营构成与存货变化；四季度经营现金流</div>
+          <div class="k">何时检查</div><div>主营构成更新后自动检查，结果会同时写进两边的记录</div>
+        </div>
+        <div class="faint">双方意见都保留。以后复盘会看谁的解释被证据支持，不会只记 Agent 对的那次。</div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">你的决定时间线</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+          <div><span class="fact">10-09</span> 自行决定买入 <span class="faint">与判断 v3 不一致 · 草稿</span></div>
+          <div><span class="fact">09-30</span> 暂不行动 <span class="faint">理由：等三季报 · 与 v2 一致</span></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">Agent 在分歧时不会做的事</h2>
+        <ul class="bul" style="font-size: 13px">
+          <li>因为你表达喜欢或反对而改变事实与核心判断。讲解方式可以变。</li>
+          <li>反复劝说或在每次对话里重提。</li>
+          <li>拒绝登记你实际发生的交易，或为此修改约定。</li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+</div>
+</div></div>
 </section>
 <section class="screen" id="cards">
 <h2 class="mk-title">操作卡片与任务<span class="mk-src">Cards.dc.html</span></h2>
-<div class="mk-frame">
+<div class="mk-cell"><div class="mk-frame" id="cards-frame">
 <div style="min-height: 1060px; box-sizing: border-box; padding: 24px 16px; max-width: 1280px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px">
   <div>
     <h1 style="margin: 0; font-size: 20px; font-weight: 600">操作卡片与任务状态</h1>
@@ -708,7 +1669,7 @@ body{margin:0}
     <article class="card">
       <div style="display: flex; gap: 8px; align-items: center">
         <h2 class="h2">深度研究任务</h2>
-        <span class="chip chip-ai">运行中</span>
+        <span class="chip chip-ai">进行中</span>
         <span style="flex: 1 1 auto"></span>
         <span class="faint">#r-3307</span>
       </div>
@@ -729,7 +1690,7 @@ body{margin:0}
     <article class="card">
       <div style="display: flex; gap: 8px; align-items: center">
         <h2 class="h2">任务部分完成</h2>
-        <span class="chip chip-warn">partial</span>
+        <span class="chip chip-warn">部分完成</span>
         <span style="flex: 1 1 auto"></span>
         <span class="faint">#r-3301</span>
       </div>
@@ -751,8 +1712,8 @@ body{margin:0}
       <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
         <div style="padding: 10px 12px; border: 1px solid #dde2e9; border-radius: 8px; display: flex; flex-direction: column; gap: 4px">
           <div><span class="chip chip-warn">观点修订</span> <strong>公司甲 v2 → v3</strong></div>
-          <div><span class="faint">触发事实：</span>三季度经营现金流 -1.2 亿元</div>
-          <div><span class="faint">原观点：</span>条件性看好 → <span class="faint">现在：</span>待复核</div>
+          <div><span class="faint">触发事实：</span>累计前三季度经营现金流 -1.2 亿元</div>
+          <div><span class="faint">原观点：</span>经营偏正面 → <span class="faint">现在：</span>经营好坏参半，价格判断不变</div>
           <div><span class="faint">你需要做的：</span>无需操作；若已持仓，等复核结果</div>
           <div class="faint">10-08 20:15 · 同一 case 的同批变化已合并</div>
         </div>
@@ -761,16 +1722,16 @@ body{margin:0}
     </article>
   </div>
 </div>
-</div>
+</div></div>
 </section>
 <section class="screen" id="mandate">
 <h2 class="mk-title">投资约定<span class="mk-src">Mandate.dc.html</span></h2>
-<div class="mk-frame">
+<div class="mk-cell"><div class="mk-frame" id="mandate-frame">
 <div style="min-height: 960px; display: flex; flex-direction: column; box-sizing: border-box">
   <header style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
     <div style="font-weight: 700; font-size: 16px">zcharlie</div>
     <nav class="nav" style="display: flex; flex-wrap: wrap; gap: 2px">
-      <a href="#main">首页</a>
+      <a href="#home">首页</a>
       <a href="#workbench">研究工作台</a>
       <a href="#">候选</a>
       <a href="#">持仓</a>
@@ -798,7 +1759,7 @@ body{margin:0}
         <div class="faint">Agent 可以提出变更建议，但不能借研究调整放宽这里的任何一项。</div>
         <table>
           <tr><td>资金用途</td><td>长期闲置资金，不依赖此账户支出</td></tr>
-          <tr><td>投资期限</td><td><span class="missing">未填写</span><div class="faint">影响：组合行动建议不发布；公司观点不受影响</div></td></tr>
+          <tr><td>投资期限</td><td><span class="missing">未填写</span><div class="faint">影响：依赖期限的建议受限；已知约束检查与公司研究可继续</div></td></tr>
           <tr><td>投资范围</td><td>沪深 300 成分股；你指定的标的</td></tr>
           <tr><td>单股上限</td><td class="fact">10%</td></tr>
           <tr><td>行业暴露上限</td><td class="fact">30%</td></tr>
@@ -817,7 +1778,7 @@ body{margin:0}
           <tr><td>折现率默认</td><td class="fact">9%</td><td class="faint">v3 起</td></tr>
           <tr><td>永续增长默认</td><td class="fact">2%</td><td class="faint">v3 起</td></tr>
           <tr><td>同业比较口径</td><td>申万二级行业，样本不少于 5 家</td><td class="faint">v4 Agent 提案，你已确认</td></tr>
-          <tr><td>反向 DCF 现金流基数</td><td>近 3 年均值与最近 4 季并列展示</td><td class="faint">v2 起</td></tr>
+          <tr><td>反向 DCF 现金流基数</td><td>最近三个完整年度中位数与最近一年并列展示</td><td class="faint">v2 起</td></tr>
           <tr><td>正式意见前</td><td>至少一次核心假设反证检查</td><td class="faint">固定规则</td></tr>
         </table>
         <div style="padding: 10px 12px; background: #f5ebfa; color: #6e2f99; border-radius: 8px; font-size: 13px">
@@ -881,39 +1842,116 @@ body{margin:0}
     </div>
   </main>
 </div>
-</div>
+</div></div>
 </section>
-<section class="screen" id="phone">
-<h2 class="mk-title">手机端<span class="mk-src">Phone.dc.html</span></h2>
-<div class="mk-frame">
+<section class="screen" id="onboarding">
+<h2 class="mk-title">首次使用<span class="mk-src">Onboarding.dc.html</span></h2>
+<div class="mk-cell"><div class="mk-frame" id="onboarding-frame">
+<div style="min-height: 900px; display: flex; flex-direction: column; box-sizing: border-box">
+  <header style="display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: #fff; border-bottom: 1px solid #dde2e9">
+    <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+    <span class="chip chip-ai">投资 Agent · 首次使用</span>
+  </header>
+
+  <main style="flex: 1 1 auto; max-width: 1180px; width: 100%; margin: 0 auto; padding: 32px 16px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+    <div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <h1 style="margin: 0; font-size: 26px; font-weight: 600">从一个真实的研究问题开始</h1>
+        <div style="color: #4a5462">不用先填完整画像。只有当某个判断依赖你的期限、资金用途或持仓时，我才会问，而且只问那一项。</div>
+      </div>
+
+      <section class="card" style="padding: 20px">
+        <label for="first-q" style="font-weight: 600">你最近在想哪家公司，或者哪个问题？</label>
+        <textarea id="first-q" rows="3" style="padding: 12px; border: 1px solid #c4cbd5; border-radius: 8px; font: inherit; resize: vertical; box-sizing: border-box">公司己最近跌了不少，现在的价格贵不贵？</textarea>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+          <button class="btn btn-primary" type="button" style="height: 44px">开始研究</button>
+          <span class="faint">也可以试试：</span>
+          <button class="btn" type="button">比较两家同行</button>
+          <button class="btn" type="button">从本周候选里挑一只</button>
+        </div>
+      </section>
+
+      <section class="card" style="border-top: 3px solid #8b3dbf">
+        <div style="display: flex; align-items: center; gap: 8px"><span class="chip chip-ai">Agent</span><span class="faint">研究进行到一半时的补问</span></div>
+        <div>公司层面仍需核实现金流持续性。若继续讨论对你资金的适用性，需要先补齐相关约束。</div>
+        <div><strong>要判断它适不适合你，我需要知道一件事：这笔钱你打算放多久？</strong></div>
+        <fieldset style="border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+          <legend style="position: absolute; left: -9999px">投资期限</legend>
+          <label class="opt"><input type="radio" name="horizon">一年以内可能要用</label>
+          <label class="opt"><input type="radio" name="horizon">一到三年</label>
+          <label class="opt"><input type="radio" name="horizon" checked>三年以上不用</label>
+          <label class="opt"><input type="radio" name="horizon">暂不回答</label>
+        </fieldset>
+        <div class="faint">暂不回答也能继续。公司观点不受影响，依赖期限的个性化判断会标出缺口。你的回答会写进投资约定 v1，之后随时可以改。</div>
+        <div style="display: flex; gap: 8px"><button class="btn btn-primary" type="button">确定</button></div>
+      </section>
+    </div>
+
+    <aside style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+      <section class="card">
+        <h2 class="h2">开始前的检查</h2>
+        <div>
+          <div class="chk"><span class="ok">就绪</span><div>数据截至 2026-10-09 收盘<div class="faint">目标池覆盖 298 / 300</div></div></div>
+          <div class="chk"><span class="ok">就绪</span><div>Agent 模型已配置<div class="faint">能力验证通过 10-10：多轮工具、结构化输出、事件流</div></div></div>
+          <div class="chk"><span class="ok">就绪</span><div>反向 DCF 仅对 FCFE 口径与字段已核验的范围启用<div class="faint">不适用的公司只给定性观点</div></div></div>
+          <div class="chk"><span class="no">缺口</span><div>公告原文尚未接入<div class="faint">一次性因素等问题会标为"尚缺材料"</div></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">我已经知道的</h2>
+        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px">
+          <div><span class="chip chip-accent">已知</span> 研究范围：沪深 300 <span class="faint">来自现有目标池配置</span></div>
+          <div><span class="chip chip-accent">已知</span> 关注列表 12 只 <span class="faint">来自自选</span></div>
+          <div><span class="chip chip-neutral">未知</span> 投资期限、资金用途</div>
+          <div><span class="chip chip-neutral">未知</span> 持仓与现金 <span class="faint">没有它们时只给公司观点</span></div>
+        </div>
+        <div class="faint">已有信息不会重复问。</div>
+      </section>
+
+      <section class="card">
+        <h2 class="h2">交互研究与后台授权</h2>
+        <div class="faint" style="color: #4a5462">当前提问允许读取数据、保存研究和公司观点，受单任务上限约束。后台探索与复核尚未启用；可在设置卡中确认范围和每日额度。</div>
+        <a class="btn" href="#mandate">调整权限与预算</a>
+      </section>
+    </aside>
+  </main>
+</div>
+</div></div>
+</section>
+<section class="screen" id="phone-workbench">
+<h2 class="mk-title">手机端：工作台<span class="mk-src">Phone.dc.html · PhoneArchive.dc.html · PhoneNav.dc.html</span></h2>
+<div class="mk-phones"><div class="mk-cell"><div class="mk-cap">手机端：对话</div><div class="mk-frame" id="phone">
 <div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
   <header style="padding: 14px 16px 0; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; flex-direction: column; gap: 8px">
     <div style="display: flex; align-items: center; gap: 10px">
-      <a href="#main" aria-label="返回首页" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <a href="#home" aria-label="返回首页" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </a>
       <div style="flex: 1 1 auto; min-width: 0">
         <div style="font-weight: 600; font-size: 16px">公司甲 <span class="faint" style="font-weight: 400">600001</span></div>
-        <div style="display: flex; gap: 6px; margin-top: 2px"><span class="chip chip-neutral">研究中</span><span class="chip chip-warn">意见待复核</span></div>
+        <div style="display: flex; gap: 6px; margin-top: 2px"><span class="chip chip-neutral">研究中</span><span class="chip chip-neutral">有限观点 · v3</span></div>
       </div>
       <button class="btn" type="button" style="height: 36px; padding: 0 10px; font-size: 13px">固定</button>
     </div>
     <nav style="display: flex">
-      <a class="tab on" href="#">对话</a>
-      <a class="tab" href="#">档案</a>
-      <a class="tab" href="#">导航</a>
+      <a class="tab on" href="#phone">对话</a>
+      <a class="tab" href="#phone-archive">档案</a>
+      <a class="tab" href="#phone-nav">导航</a>
     </nav>
   </header>
 
-  <main style="flex: 1 1 auto; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px">
     <div style="align-self: flex-end; max-width: 85%; background: #e8eefc; color: #163f9f; border-radius: 12px 12px 2px 12px; padding: 8px 12px; font-size: 14px">这次下跌改变了什么？</div>
 
     <div style="display: flex; flex-direction: column; gap: 10px">
       <div style="display: flex; align-items: center; gap: 6px"><span class="chip chip-ai">Agent</span><span class="faint">判断 v3 · 数据截至 10-09</span></div>
-      <p style="margin: 0"><strong>立场：公司观点仍是条件性看好，但原意见已转为待复核，当前不作为建议。</strong></p>
+      <div style="padding: 6px 10px; background: #eef1f5; border-radius: 8px; font-size: 12.5px"><strong>范围：</strong>下跌和三季报对现有判断的影响</div>
+      <p style="margin: 0"><strong>立场：经营改为好坏参半，价格暂不判断；季节性问题回答前不发布买卖看法。</strong></p>
       <ul class="bul" style="font-size: 13.5px">
-        <li><strong>价格隐含预期下降。</strong>隐含增长率从 <span class="fact">9.1%</span> 降到 <span class="fact">5.4%</span>，低于近三年收入增速。</li>
-        <li><strong>关键假设出现反证。</strong>三季度经营现金流 <span class="fact">-1.2 亿元</span>，与"现金转化改善"相反。</li>
+        <li><strong>估值依据也变了。</strong>现金流基数需重新核实，价格下跌不能单独证明便宜。</li>
+        <li><strong>关键假设出现反证。</strong>累计前三季度经营现金流 <span class="fact">-1.20 亿元</span>，与"现金转化可持续"相反。</li>
         <li><strong>还不知道。</strong>下滑是否来自季节性备货，取证中。</li>
       </ul>
       <details>
@@ -923,20 +1961,15 @@ body{margin:0}
         <summary>反证与替代解释（2 条）</summary>
       </details>
       <details open>
-        <summary>计算：反向 DCF 隐含增长率</summary>
-        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 8px; font-size: 12.5px">
-          <div style="background: #f7f9fb; border-radius: 6px; padding: 6px 8px"><div class="src">@8%</div><div class="fact">4.6%</div></div>
-          <div style="background: #f7f9fb; border-radius: 6px; padding: 6px 8px"><div class="src">@9%</div><div class="fact">5.4%</div></div>
-          <div style="background: #f7f9fb; border-radius: 6px; padding: 6px 8px"><div class="src">@10%</div><div class="fact">6.3%</div></div>
-        </div>
-        <div class="src" style="margin-top: 6px">基数 = 近 3 年均值 · 计算 #c-2231</div>
+        <summary>反向 DCF：现金流基础待核</summary>
+        <div class="src" style="margin-top: 6px">当前情景暂不运行，旧计算仅保留在历史版本中。</div>
       </details>
     </div>
 
     <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px dashed #c4cbd5; border-radius: 8px; background: #fff">
       <span class="chip chip-ai">取证中</span>
       <div style="flex: 1 1 auto; min-width: 0; font-size: 12.5px">
-        <div>主营构成分期表</div>
+        <div>历史现金流核查；营运资金原文尚缺</div>
         <div class="faint">步骤 3/6 · ¥0.31</div>
       </div>
       <button class="btn" type="button" style="height: 36px; padding: 0 10px; font-size: 13px">取消</button>
@@ -951,7 +1984,741 @@ body{margin:0}
     </button>
   </footer>
 </div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：档案</div><div class="mk-frame" id="phone-archive">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 0; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <a href="#phone-nav" aria-label="返回档案列表" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div style="flex: 1 1 auto; min-width: 0">
+        <div style="font-weight: 600; font-size: 16px">公司甲 <span class="faint" style="font-weight: 400">600001</span></div>
+        <div style="display: flex; gap: 6px; margin-top: 2px"><span class="chip chip-neutral">研究中</span><span class="chip chip-neutral">有限观点 · v3</span></div>
+      </div>
+    </div>
+    <nav style="display: flex">
+      <a class="tab" href="#phone">对话</a>
+      <a class="tab on" href="#phone-archive">档案</a>
+      <a class="tab" href="#phone-nav">导航</a>
+    </nav>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px">
+    <div class="sec">
+      <div class="h3">当前判断 · v3 · 10-09</div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap"><span class="chip chip-neutral">经营 好坏参半</span><span class="chip chip-neutral">价格 暂不判断</span><span class="chip chip-warn">暂不发布买卖看法</span></div>
+      <div style="font-size: 13.5px">经营价值取决于现金转化能否恢复；旧现金流基数需复核，价格暂不判断。</div>
+      <div class="faint">研究充分度：有限 · 持仓：未录入</div>
+    </div>
+
+    <div class="sec">
+      <div class="h3">关键假设</div>
+      <div class="row"><span>收入增速 ≥ 7%</span><span class="chip chip-accent">已取证</span></div>
+      <div class="row"><span>现金转化改善</span><span class="chip chip-warn">反证出现</span></div>
+      <div class="row"><span>渠道优势</span><span class="chip chip-neutral">仅定性</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="h3">估值情景</div>
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+        <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="src">隐含 FCFE 基数待核</div><div class="fact" style="font-size: 17px">暂不计算</div></div>
+        <div style="background: #f7f9fb; border-radius: 8px; padding: 8px 10px"><div class="src">PE 五年分位</div><div class="fact" style="font-size: 17px">23%</div></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="h3">未解决 · 2</div>
+      <div style="font-size: 13px">现金流下滑是否季节性 <span class="chip chip-ai">取证中</span></div>
+      <div style="font-size: 13px">一次性收益口径 <span class="faint">尚缺材料</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="h3">历史观点</div>
+      <a href="#diff" class="row" style="text-decoration: none; color: inherit; min-height: 32px"><span><span class="fact">v3</span> 10-09 有限观点</span><span class="faint">对比</span></a>
+      <div class="row"><span><span class="fact">v2</span> 09-26 经营偏正面 · 价格有吸引力</span><span class="faint">已替代</span></div>
+      <div class="row"><span><span class="fact">v1</span> 09-18 线索</span><span></span></div>
+    </div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px">
+    <button class="btn" type="button" style="flex: 1 1 0">请求复核</button>
+    <button class="btn" type="button" style="flex: 1 1 0">固定关注</button>
+  </footer>
 </div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：导航</div><div class="mk-frame" id="phone-nav">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 0; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; align-items: center; gap: 10px; min-height: 44px">
+      <div style="font-weight: 700; font-size: 16px">zcharlie</div>
+      <span class="faint">数据截至 10-09</span>
+    </div>
+    <nav style="display: flex">
+      <a class="tab" href="#phone">对话</a>
+      <a class="tab" href="#phone-archive">档案</a>
+      <a class="tab on" href="#phone-nav">导航</a>
+    </nav>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+    <label for="m-q" style="position: absolute; left: -9999px">搜索研究档案</label>
+    <input id="m-q" type="search" placeholder="搜索代码、名称或拼音" style="height: 44px; padding: 0 12px; border: 1px solid #c4cbd5; border-radius: 10px; font: inherit; box-sizing: border-box; width: 100%; background: #fff">
+
+    <div style="display: flex; gap: 8px">
+      <a class="tile" href="#home"><div class="faint">需重看</div><div class="n" style="color: #9a5208">2</div></a>
+      <a class="tile" href="#leads"><div class="faint">新线索</div><div class="n" style="color: #163f9f">3</div></a>
+      <a class="tile" href="#mandate"><div class="faint">需补充</div><div class="n" style="color: #6e2f99">2</div></a>
+    </div>
+
+    <div class="grp"><span>需要重看</span><span>2</span></div>
+    <a class="case on" href="#phone-archive">
+      <div><div class="nm">公司甲</div><div class="faint">600001</div></div>
+      <div class="r"><span class="chip chip-neutral">v3 已修订</span><span class="faint">原因待核</span></div>
+    </a>
+    <a class="case" href="#">
+      <div><div class="nm">公司乙</div><div class="faint">000002</div></div>
+      <div class="r"><span class="chip chip-ai">复核中 3/6</span><span class="faint">价格下跌 12%</span></div>
+    </a>
+
+    <div class="grp"><span>持续跟踪</span><span>5</span></div>
+    <a class="case" href="#phone-opinion">
+      <div><div class="nm">公司己</div><div class="faint">601006</div></div>
+      <div class="r"><span class="chip chip-neutral">价格暂不判断</span><span class="faint">经营暂不判断 · 至 10-23</span></div>
+    </a>
+    <a class="case" href="#">
+      <div><div class="nm">公司庚</div><div class="faint">000007</div></div>
+      <div class="r"><span class="chip chip-neutral">意见已撤回</span><span class="faint">数据源失败</span></div>
+    </a>
+
+    <div class="grp"><span>线索</span><span>3</span></div>
+    <a class="case" href="#">
+      <div><div class="nm">公司丙</div><div class="faint">300003</div></div>
+      <div class="r"><span class="chip chip-neutral">证据不足</span><span class="faint">业绩预告扭亏</span></div>
+    </a>
+    <a class="case" href="#">
+      <div><div class="nm">公司丁</div><div class="faint">600004</div></div>
+      <div class="r"><span class="chip chip-neutral">线索</span><span class="faint">同业毛利率领先</span></div>
+    </a>
+
+    <div style="display: flex; gap: 6px; align-items: center">
+      <a href="#" class="faint" style="flex: 0 0 auto; padding: 0 4px 0 0">搁置 1 · 归档 4</a>
+      <a class="tile" href="#phone-inbox" style="display: flex; align-items: center; justify-content: center; padding: 0 4px; font-size: 12.5px">提醒</a>
+      <a class="tile" href="#phone-setup" style="display: flex; align-items: center; justify-content: center; padding: 0 4px; font-size: 12.5px">后台</a>
+      <a class="tile" href="#phone-memory" style="display: flex; align-items: center; justify-content: center; padding: 0 4px; font-size: 12.5px">记忆</a>
+      <a class="tile" href="#phone-plan" style="display: flex; align-items: center; justify-content: center; padding: 0 4px; font-size: 12.5px">组合</a>
+    </div>
+  </main>
+</div>
+</div></div></div>
+</section>
+<section class="screen" id="phone-a1a">
+<h2 class="mk-title">手机端：A1a 研究流程<span class="mk-src">PhoneInbox.dc.html · PhoneDisambig.dc.html · PhoneTask.dc.html · PhoneOpinion.dc.html · PhoneValuation.dc.html · PhoneEvidence.dc.html</span></h2>
+<div class="mk-phones"><div class="mk-cell"><div class="mk-cap">手机端：提醒</div><div class="mk-frame" id="phone-inbox">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 8px">
+    <a href="#phone-nav" aria-label="返回导航" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; font-weight: 600; font-size: 17px">提醒</div>
+    <span class="faint">数据截至 10-09</span>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+    <div class="grp"><span>需要你补充 · 2</span></div>
+    <a class="item" href="#phone-disambig">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-ai">等你选择</span><span class="faint">10-10 08:12</span></div>
+      <div class="t">"甲科"指哪一只证券？</div>
+      <div class="faint">有三只候选，选定后研究才会开始。</div>
+    </a>
+    <a class="item" href="#phone-setup">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-ai">缺信息</span><span class="chip chip-neutral">A1b</span></div>
+      <div class="t">投资期限未填写</div>
+      <div class="faint">仅依赖期限的建议受限；已知约束检查可继续。</div>
+    </a>
+
+    <div class="grp" style="padding-top: 8px"><span>判断重大变化 · 1</span></div>
+    <a class="item" href="#phone-review">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-warn">观点修订</span><span class="faint">公司甲 · 10-09 09:30</span></div>
+      <div class="kv">
+        <div class="k">触发</div><div>累计前三季度经营现金流 <span class="num">-1.20 亿元</span></div>
+        <div class="k">原观点</div><div>经营 偏正面 · 价格 有吸引力</div>
+        <div class="k">现在</div><div>经营 好坏参半 · 价格 暂不判断</div>
+        <div class="k">你要做的</div><div>无需操作；旧意见已不作为当前建议</div>
+      </div>
+    </a>
+
+    <div class="grp" style="padding-top: 8px"><span>普通研究进展</span></div>
+    <div class="item" style="background: #f7f9fb">
+      <div style="font-size: 13px">普通进展不推送，记在各档案的时间线里。今天有 4 条：维持观点 1 条、线索保存 3 条。</div>
+      <a href="#phone-nav" style="font-size: 13px">查看档案时间线</a>
+    </div>
+
+    <div class="item" style="background: #f7f9fb; gap: 6px">
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px"><span>后台研究</span><span class="chip chip-accent">已启用</span></div>
+      <div class="faint">今日已用 <span class="num">¥3.20</span> / <span class="num">¥10.00</span> · 复核 2 次 · 探索 1 轮</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px"><span>公司庚</span><span class="chip chip-neutral">提醒已静音</span></div>
+      <div class="faint">静音只停提醒，研究和过期检查照常。</div>
+    </div>
+  </main>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：证券消歧与更新提示</div><div class="mk-frame" id="phone-disambig">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 0; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <a href="#phone-inbox" aria-label="返回提醒" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div style="flex: 1 1 auto; min-width: 0">
+        <div style="font-weight: 600; font-size: 16px">对话 · 周末看的几家</div>
+        <div class="faint">关联：公司甲 · 待确认 1 只</div>
+      </div>
+    </div>
+    <nav style="display: flex">
+      <a class="tab on" href="#phone-disambig">对话</a>
+      <a class="tab" href="#phone-archive">档案</a>
+      <a class="tab" href="#phone-nav">导航</a>
+    </nav>
+  </header>
+
+  <div style="padding: 8px 16px; background: #fdf1e3; color: #7a4206; font-size: 12.5px; display: flex; gap: 8px; align-items: center">
+    <span style="flex: 1 1 auto"><strong>依据的观点已有更新。</strong>公司甲 v2 已被 v3 替代，下面的旧回答保持原样。</span>
+    <a href="#phone-review" style="color: #7a4206; font-weight: 600; white-space: nowrap">看变化</a>
+  </div>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px">
+    <div class="me" style="opacity: .75">公司甲现在值得关注吗？</div>
+    <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid #dde2e9; border-radius: 10px; background: #f7f9fb">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-ai">Agent</span><span class="faint">09-27 · 基于 v2</span><span class="chip chip-warn">已有更新</span></div>
+      <div style="font-size: 13px; color: #4a5462">经营偏正面，价格有吸引力；关键前提是现金转化继续改善。</div>
+    </div>
+
+    <div class="me">那甲科最近怎么样？</div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-ai">Agent</span><span class="chip chip-ai">等你选择</span></div>
+      <div>"甲科"能对应到三只证券。选定后我再开始研究，不会按简称猜一只。</div>
+      <button class="opt" type="button"><span style="flex: 1 1 auto"><strong>甲科技</strong><div class="faint">申万 电子 · 在研究范围内</div></span><span class="c">600101</span></button>
+      <button class="opt" type="button"><span style="flex: 1 1 auto"><strong>甲科股份</strong><div class="faint">申万 机械设备 · 在研究范围内</div></span><span class="c">300102</span></button>
+      <button class="opt" type="button" style="background: #f7f9fb"><span style="flex: 1 1 auto"><strong>甲科控股</strong><div class="faint">港股 · 不在研究范围，只能保存线索</div></span><span class="c">HK 0103</span></button>
+      <div class="faint">名称与代码来自证券身份库，不由模型补全。</div>
+    </div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px; align-items: center">
+    <label for="d-msg" style="position: absolute; left: -9999px">继续提问</label>
+    <input id="d-msg" type="text" placeholder="也可以直接输入代码…" style="flex: 1 1 auto; height: 44px; padding: 0 12px; border: 1px solid #c4cbd5; border-radius: 999px; font: inherit; box-sizing: border-box; min-width: 0">
+    <button class="btn btn-primary" type="button" aria-label="发送" style="width: 44px; padding: 0; border-radius: 999px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </footer>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：研究计划与任务状态</div><div class="mk-frame" id="phone-task">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 0; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; flex-direction: column; gap: 8px">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <a href="#phone-nav" aria-label="返回导航" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div style="flex: 1 1 auto; min-width: 0">
+        <div style="font-weight: 600; font-size: 16px">甲科技 <span class="faint" style="font-weight: 400">600101</span></div>
+        <div style="display: flex; gap: 6px; margin-top: 2px"><span class="chip chip-neutral">研究中</span></div>
+      </div>
+    </div>
+    <nav style="display: flex">
+      <a class="tab on" href="#phone-task">对话</a>
+      <a class="tab" href="#phone-archive">档案</a>
+      <a class="tab" href="#phone-nav">导航</a>
+    </nav>
+  </header>
+
+  <div style="padding: 6px 16px; background: #e8eefc; color: #163f9f; font-size: 12.5px">连接已恢复，补齐了 3 条进展。断线不会取消任务。</div>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div class="card">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-ai">研究计划</span><span class="faint">开始前给出，不逐步确认</span></div>
+      <div style="font-size: 13.5px"><strong>问题：</strong>收入加速是新产品放量，还是渠道压货？</div>
+      <div style="display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 4px 8px; font-size: 12.5px">
+        <div class="faint">最先查</div><div>应收与存货是否和收入同步变化</div>
+        <div class="faint">完成标准</div><div>能区分两种解释，或说明为何区分不了</div>
+        <div class="faint">停止条件</div><div>连续两轮无新证据，或达到上限</div>
+        <div class="faint">本次上限</div><div>模型 <span class="num">12</span> 次 · 工具 <span class="num">24</span> 次 · <span class="num">¥1.00</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="border-color: #f0d2ad">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-warn">正在停止</span><span class="faint">#r-3320 · 你在 08:31 点了取消</span></div>
+      <div class="step"><span class="dot d-done">1</span>理解问题</div>
+      <div class="step"><span class="dot d-done">2</span>取证：应收、存货分期表 <span class="faint">已保存</span></div>
+      <div class="step"><span class="dot d-now">3</span>取证：同业收入增速 <span class="faint">等待在途调用返回</span></div>
+      <div class="step"><span class="dot d-skip">4</span><span style="color: #5f6977">形成判断 · 不会再开始</span></div>
+      <div class="faint" style="line-height: 1.45">不会再发起新的调用，也不会发布观点。已发出的那次调用可能仍会计费，返回后才显示"已取消"。已取得的 2 条证据会保留。</div>
+    </div>
+
+    <div class="card" style="background: #f7f9fb">
+      <div class="h3">上一个任务 · 已结束</div>
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap"><span class="chip chip-neutral">部分完成</span><span class="chip chip-neutral">证据受阻</span></div>
+      <div style="font-size: 13px">主营构成分期表不可得，问题没有回答完。已保存进展和缺口，本任务结束；材料补齐后可创建关联的后续研究。</div>
+      <div class="faint">停止原因只有六种：已回答、证据受阻、无进展、预算用完、已取消、失败。</div>
+    </div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px">
+    <button class="btn" type="button" style="flex: 1 1 0">用已有进展继续</button>
+    <a class="btn" href="#phone-controls" style="flex: 1 1 0; text-decoration: none">档案操作</a>
+  </footer>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：公司观点</div><div class="mk-frame" id="phone-opinion">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 10px">
+    <a href="#phone-archive" aria-label="返回档案" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; min-width: 0">
+      <div style="font-weight: 600; font-size: 16px">公司己 <span class="faint" style="font-weight: 400">601006</span></div>
+      <div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap"><span class="chip chip-accent">公司观点</span><span class="chip chip-neutral">有效至 10-23</span></div>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div style="padding: 8px 10px; background: #eef1f5; border-radius: 8px; font-size: 12.5px">
+      <div><strong>本观点回答：</strong>经营与价格的已知依据及关键缺口。</div>
+      <div class="faint">公司整体长期价值仍待研究，不能当作"值得投资"的结论。</div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      <div class="axis"><span class="faint">经营判断</span><span class="v">暂不判断</span></div>
+      <div class="axis"><span class="faint">价格判断</span><span class="v">暂不判断</span></div>
+    </div>
+    <div class="faint">研究充分度：<strong style="color: #18202b">有限</strong>，可以说明已知事实与缺口，尚不足以支持买入看法。</div>
+
+    <div class="h3">最重要的理由</div>
+    <div style="font-size: 13.5px">情景下价格隐含的股权现金流增长要求为 <a class="num" href="#phone-valuation">16.0%</a><span class="role">计算</span>，不能直接与收入增长比较。本期经营现金流与归母净利润比值为 <a class="num" href="#phone-evidence">1.18</a><span class="role">计算</span>。</div>
+
+    <div class="h3">最可能改变观点的反证</div>
+    <div style="font-size: 13.5px">收入增长中有一部分可能来自并表。现有主营构成表不足以确认并表贡献；内生增长、再投资与融资假设仍待核实。</div>
+
+    <div class="h3">附条件的看法</div>
+    <div class="ca"><span class="chip chip-neutral">等待</span><span>先核实持续现金流及融资假设，再形成买卖看法。</span></div>
+    <div class="faint">监测：下一期同口径现金转化明显下降时优先复核。</div>
+    <div class="faint">这是公司层面的看法，不涉及你的资金和仓位。</div>
+
+    <div style="display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 2px 8px; font-size: 12.5px">
+      <div class="faint">下一步</div><div>10-16 计划复核；如三季报先入库则提前检查</div>
+      <div class="faint">有效期</div><div>原至 10-12；10-09 复核通过，延长至 10-23</div>
+    </div>
+    <div class="faint">虚线数字可点开来源，后面的小字标明它是事实、计算还是条件。正文本身不直接写数字。</div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px">
+    <a class="btn btn-primary" href="#phone-decision" style="flex: 1 1 0">记录决定</a>
+    <a class="btn" href="#phone-valuation" style="flex: 1 1 0">估值详情</a>
+  </footer>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：估值详情</div><div class="mk-frame" id="phone-valuation">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 10px">
+    <a href="#phone-opinion" aria-label="返回公司观点" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; min-width: 0">
+      <div style="font-weight: 600; font-size: 16px">估值 · 公司己</div>
+      <div class="faint">价格日期 10-09 · 计算 #c-2301</div>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px">
+    <div class="card">
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap"><span class="h3">反向 DCF · 股权现金流口径 v1</span><span class="chip chip-accent">计算成功</span></div>
+      <div style="display: flex; align-items: baseline; gap: 8px"><span class="mono" style="font-size: 26px; font-weight: 600">16.0%</span><span class="faint">价格隐含的股权现金流增长要求，未来五年每年</span></div>
+      <div style="font-size: 12.5px">终值现值占比 <span class="mono">76.7%</span>：结论主要取决于长期假设。</div>
+      <div class="faint">这是价格要求的现金流增长，不是增长预测。某格失败时显示原因，不用相邻格补齐。</div>
+      <table>
+        <tr><th>折现率</th><th>基数 三年中位数</th><th>基数 最近一年</th></tr>
+        <tr><td class="mono">8%</td><td class="mono">11.9%</td><td class="mono">9.4%</td></tr>
+        <tr><td class="mono">9%</td><td class="mono hl">16.0%</td><td class="mono">13.3%</td></tr>
+        <tr><td class="mono">10%</td><td class="mono">19.7%</td><td class="mono">16.9%</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="h3">输入与假设</div>
+      <table>
+        <tr><td>普通股总市值</td><td class="mono">212.4 亿元</td><td><span class="chip chip-accent">事实</span></td></tr>
+        <tr><td>股权现金流 2023 · 2024 · 2025</td><td class="mono">7.6 · 8.2 · 9.1 亿元</td><td><span class="chip chip-neutral">计算</span></td></tr>
+        <tr><td>折现率</td><td class="mono">9%</td><td><span class="chip chip-neutral">方法默认</span></td></tr>
+        <tr><td>永续增长</td><td class="mono">2%</td><td><span class="chip chip-ai">Agent 情景</span></td></tr>
+      </table>
+      <div style="padding: 6px 8px; background: #fdf1e3; color: #7a4206; border-radius: 6px; font-size: 12px">虚构示例假定已核验现金利息、净借款及股权归属；现金流为确定性推导，未用应计利息代理。历史现金流能否持续仍待研究。</div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="h3">历史估值分位</span><span class="faint">既有算法 · 不重算</span></div>
+      <table>
+        <tr><td>PE 五年分位</td><td class="mono">18%</td><td class="faint">有效 1,192 日 · 排除非正 0</td></tr>
+        <tr><td>PB 五年分位</td><td class="mono">27%</td><td class="faint">有效 1,214 日 · 排除非正 0</td></tr>
+      </table>
+      <div class="faint">覆盖 2021-10-11 起。分位低只说明在自身历史估值中的相对位置。</div>
+    </div>
+
+    <div class="card" style="background: #f7f9fb">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="h3">对照：公司丙</span><span class="chip chip-neutral">不适用</span></div>
+      <div style="font-size: 12.5px">近年股权现金流有负值，反向 DCF 不运行，不会改用经营现金流凑结果。</div>
+    </div>
+  </main>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：数字的来源</div><div class="mk-frame" id="phone-evidence">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px; position: relative">
+  <div style="padding: 24px 16px; display: flex; flex-direction: column; gap: 8px; color: #4a5462">
+    <div style="font-weight: 600; font-size: 16px">公司己 · 公司观点</div>
+    <div style="font-size: 13.5px">本期经营现金流与归母净利润比值为 <span class="mono" style="background: #e8eefc; padding: 0 3px; border-radius: 3px">1.18</span>…</div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(24, 32, 43, .38)"></div>
+
+  <section aria-label="数字的来源" style="position: absolute; left: 0; right: 0; bottom: 0; height: 712px; background: #fff; border-radius: 18px 18px 24px 24px; padding: 10px 16px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+    <div style="align-self: center; width: 40px; height: 4px; border-radius: 999px; background: #c4cbd5"></div>
+    <div style="display: flex; align-items: center; gap: 8px">
+      <div style="flex: 1 1 auto">
+        <div class="faint">经营现金流 ÷ 归母净利润</div>
+        <div style="display: flex; align-items: baseline; gap: 8px"><span class="mono" style="font-size: 26px; font-weight: 600">1.18</span><span class="chip chip-neutral">计算输出</span></div>
+      </div>
+      <a href="#phone-opinion" aria-label="关闭" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </a>
+    </div>
+    <div class="kv">
+      <div class="k">主体</div><div>公司己 601006 <span class="faint">来自证券身份库</span></div>
+      <div class="k">期间</div><div>2026 年半年报，累计口径</div>
+      <div class="k">方法</div><div class="mono" style="font-size: 12px">cash_conversion v1 · #c-2298</div>
+      <div class="k">显示</div><div>保留两位小数，四舍五入</div>
+    </div>
+
+    <div class="ev">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="chip chip-accent">已核验</span><strong style="font-size: 13px">经营活动现金流量净额</strong></div>
+      <div class="mono" style="font-size: 15px">12.4 亿元</div>
+      <div class="kv">
+        <div class="k">来源</div><div>东财现金流量表</div>
+        <div class="k">发布</div><div>08-28 · 系统取得 08-29</div>
+        <div class="k">可用起</div><div>08-29 首次取得；历史回放按系统实际可得时间</div>
+        <div class="k">定位</div><div class="mono" style="font-size: 11.5px">financial_snapshot 88412 · operating_cash_flow</div>
+      </div>
+    </div>
+
+    <div class="ev">
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap"><span class="chip chip-accent">已核验</span><span class="chip chip-warn">已采用更正</span><strong style="font-size: 13px">归母净利润</strong></div>
+      <div class="mono" style="font-size: 15px">10.5 亿元</div>
+      <div class="kv">
+        <div class="k">来源</div><div>东财利润表，与 baostock 交叉核对一致</div>
+        <div class="k">版本</div><div>09-02 供应商重述，使用新版本；旧版本保留可查</div>
+      </div>
+    </div>
+
+    <div style="flex: 1 1 auto"></div>
+    <div class="faint">你提交的来源会记为用户材料，核验后才会更正事实，原记录不会被覆盖。</div>
+    <div style="display: flex; gap: 8px">
+      <button class="btn" type="button" style="flex: 1 1 0">这个数据有误</button>
+      <button class="btn" type="button" style="flex: 1 1 0">查看快照原值</button>
+    </div>
+  </section>
+</div>
+</div></div></div>
+</section>
+<section class="screen" id="phone-ops">
+<h2 class="mk-title">手机端：控制、决定与组合<span class="mk-src">PhoneReview.dc.html · PhoneDecision.dc.html · PhoneControls.dc.html · PhoneSetup.dc.html · PhoneMemory.dc.html · PhonePlan.dc.html</span></h2>
+<div class="mk-phones"><div class="mk-cell"><div class="mk-cap">手机端：变化提醒详情</div><div class="mk-frame" id="phone-review">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 10px">
+    <a href="#phone-inbox" aria-label="返回提醒" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; min-width: 0">
+      <div style="font-weight: 600; font-size: 16px">判断重大变化 · 公司甲</div>
+      <div style="display: flex; gap: 6px; margin-top: 2px"><span class="chip chip-warn">修订</span><span class="chip chip-neutral">新证据</span><span class="faint">10-09 09:30</span></div>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px">
+    <div class="card">
+      <div class="h3">触发事实</div>
+      <div style="font-size: 13.5px">三季报分期表入库，累计前三季度经营现金流 <span class="num">-1.20 亿元</span><span class="role">事实</span>。命中监测条件：经营现金流低于 <span class="num">0</span><span class="role">条件</span>。</div>
+      <div class="faint">10-08 20:10 入库后，旧意见立即不再作为当前建议，没有等复核完成。</div>
+    </div>
+
+    <div class="card" style="padding: 0; overflow: hidden">
+      <table>
+        <tr><th></th><th>v2 · 已替代</th><th>v3 · 当前</th></tr>
+        <tr class="chg"><td class="faint">经营判断</td><td>偏正面</td><td><strong>好坏参半</strong></td></tr>
+        <tr><td class="faint">价格判断</td><td>有吸引力</td><td>暂不判断</td></tr>
+        <tr><td class="faint">研究充分度</td><td>有限</td><td>有限</td></tr>
+        <tr class="chg"><td class="faint">附条件看法</td><td>可考虑买入</td><td><strong>等待</strong>，季节性问题回答前</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="h3">变化原因</div>
+      <div style="font-size: 13.5px">"现金转化可持续"这项假设出现直接反证。经营判断按新证据下调；现金流基础也受影响，价格判断改为暂不判断。</div>
+      <div class="faint">你需要做的：无需操作。旧版本和你当时的"暂不行动"决定都保留。</div>
+    </div>
+
+    <div class="card" style="background: #f7f9fb">
+      <div class="h3">复核结果只有四种</div>
+      <div class="oc"><span class="chip chip-neutral">维持</span><span>依据不变且仍有效时可续期；过期或受限后需发布新意见</span></div>
+      <div class="oc"><span class="chip chip-warn">修订</span><span>发布新版本，旧版本同时被替代</span></div>
+      <div class="oc"><span class="chip chip-neutral">撤回</span><span>不再给观点，标出缺口，不推导成看空</span></div>
+      <div class="oc"><span class="chip chip-neutral">无法判断</span><span>保留限制，旧意见不会恢复有效</span></div>
+      <div class="faint">证据没变、只是推断改了，会标为"推断修订"，不会伪装成收到新证据。</div>
+    </div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px">
+    <a class="btn" href="#diff" style="flex: 1 1 0">逐项对比</a>
+    <a class="btn" href="#phone-archive" style="flex: 1 1 0">打开档案</a>
+  </footer>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：记录决定</div><div class="mk-frame" id="phone-decision">
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f6f9; overflow: hidden; border-radius: 24px; position: relative">
+  <div style="padding: 24px 16px; color: #4a5462">
+    <div style="font-weight: 600; font-size: 16px">公司己 · 公司观点</div>
+    <div style="font-size: 13px">经营 暂不判断 · 价格 暂不判断</div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(24, 32, 43, .38)"></div>
+
+  <section aria-label="记录决定" style="position: absolute; left: 0; right: 0; bottom: 0; height: 740px; background: #fff; border-radius: 18px 18px 24px 24px; padding: 10px 16px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px">
+    <div style="align-self: center; width: 40px; height: 4px; border-radius: 999px; background: #c4cbd5"></div>
+    <div style="display: flex; align-items: center">
+      <div style="flex: 1 1 auto; font-weight: 600; font-size: 17px">记录你的决定</div>
+      <a href="#phone-opinion" aria-label="关闭" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </a>
+    </div>
+    <div class="faint">关联：公司己观点 v2 · 发布于 09-28，10-09 核查续期。决定只记录你的想法，不改变持仓，也不会下单。</div>
+
+    <fieldset style="border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px">
+      <legend style="position: absolute; left: -9999px">决定</legend>
+      <label class="opt"><input type="radio" name="dc"><span><span class="t">接受这个看法</span><div class="faint">同意当前判断，打算按条件行事</div></span></label>
+      <label class="opt"><input type="radio" name="dc"><span><span class="t">不采纳</span><div class="faint">不同意，理由会和 Agent 的观点并列保存</div></span></label>
+      <label class="opt on"><input type="radio" name="dc" checked><span><span class="t">暂缓</span><div class="faint">先不行动，等条件或材料</div></span></label>
+      <label class="opt"><input type="radio" name="dc"><span><span class="t">我自行决定</span><div class="faint">按自己的判断，与这份观点无关</div></span></label>
+    </fieldset>
+
+    <label for="dc-why" class="faint">理由（可空）</label>
+    <input id="dc-why" type="text" value="等三季报确认并表影响" style="height: 44px; padding: 0 12px; border: 1px solid #c4cbd5; border-radius: 8px; font: inherit; box-sizing: border-box">
+
+    <div style="padding: 8px 10px; background: #eef1f5; border-radius: 8px; font-size: 12.5px">
+      <strong>"跌到某个价再买"</strong>会存成条件性决定或研究计划，不是订单，也不会自动提醒你下单。
+    </div>
+
+    <div style="flex: 1 1 auto"></div>
+    <button class="btn btn-primary" type="button" style="width: 100%">记录"暂缓"</button>
+    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px dashed #c4cbd5; border-radius: 8px">
+      <span style="flex: 1 1 auto; font-size: 12.5px">已经买入或卖出了？成交要单独记录，需要价格、数量和日期。</span>
+      <span class="chip chip-neutral">A1b 启用</span>
+    </div>
+  </section>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：档案操作</div><div class="mk-frame" id="phone-controls">
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #f4f6f9; overflow: hidden; border-radius: 24px; position: relative">
+  <div style="padding: 24px 16px; color: #4a5462">
+    <div style="font-weight: 600; font-size: 16px">公司庚 · 档案</div>
+    <div style="font-size: 13px">持续跟踪 · 有持仓 · 已固定</div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(24, 32, 43, .38)"></div>
+
+  <section aria-label="档案操作" style="position: absolute; left: 0; right: 0; bottom: 0; height: 724px; background: #fff; border-radius: 18px 18px 24px 24px; padding: 10px 16px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px">
+    <div style="align-self: center; width: 40px; height: 4px; border-radius: 999px; background: #c4cbd5"></div>
+    <div style="display: flex; align-items: center">
+      <div style="flex: 1 1 auto">
+        <div style="font-weight: 600; font-size: 17px">公司庚 · 档案操作</div>
+        <div class="faint">四个操作互不隐含，按需要分别使用。</div>
+      </div>
+      <a href="#phone-archive" aria-label="关闭" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </a>
+    </div>
+
+    <div>
+      <div class="op">
+        <div class="b"><div class="t">取消当前任务</div><div class="faint">只停正在跑的复核 #r-3311。已保存的证据保留，下次计划复核照常。</div></div>
+        <button class="btn" type="button">取消</button>
+      </div>
+      <div class="op">
+        <div class="b"><div class="t">暂停后台研究</div><div class="faint">下一执行边界停止后台后续调用与发布；仍可主动提问。旧意见到期显示已过期。</div></div>
+        <button class="btn" type="button">暂停</button>
+      </div>
+      <div class="op">
+        <div class="b"><div class="t">提醒 <span class="chip chip-neutral">已静音</span></div><div class="faint">只影响提醒。研究和过期检查照常，变化仍记在时间线里。</div></div>
+        <button class="btn" type="button">取消静音</button>
+      </div>
+      <div class="op">
+        <div class="b"><div class="t">归档</div><div class="faint">停止研究计划，并撤回当前有效意见。历史、真实持仓和固定标记都保留；只有你重新开启后才恢复研究。</div></div>
+        <button class="btn btn-warn" type="button">归档…</button>
+      </div>
+    </div>
+
+    <div style="padding: 10px 12px; background: #fdf1e3; color: #7a4206; border-radius: 8px; font-size: 12.5px">
+      这只股票有持仓，归档后组合约束检查仍然生效。Agent 不会自己搁置或归档有持仓、有有效意见或已固定的档案，只有你能归档。
+    </div>
+
+    <div class="op" style="border-top: 1px solid #eef1f5">
+      <div class="b"><div class="t">固定关注 <span class="chip chip-accent">已固定</span></div><div class="faint">固定后不会被 Agent 的队列整理掉；与研究优先级无关。</div></div>
+      <button class="btn" type="button">取消固定</button>
+    </div>
+  </section>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：启用后台研究</div><div class="mk-frame" id="phone-setup">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 10px">
+    <a href="#phone-inbox" aria-label="返回" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; font-weight: 600; font-size: 17px">后台研究</div>
+    <span class="chip chip-neutral">未启用</span>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px">
+    <div style="font-size: 13px">数据更新后自动复核档案、找新线索。不启用也能随时提问研究。</div>
+
+    <div class="card">
+      <div class="h3">研究范围</div>
+      <fieldset class="seg" style="margin: 0; padding: 0">
+        <legend style="position: absolute; left: -9999px">研究范围</legend>
+        <label class="on"><input type="radio" name="sc" checked>沪深 300</label>
+        <label><input type="radio" name="sc">只看我的关注</label>
+      </fieldset>
+      <div class="faint">范围外的公司只保存线索，不形成意见。</div>
+    </div>
+
+    <div class="card">
+      <div class="h3">每日预算</div>
+      <div class="row"><span>每日总额</span><span class="mono">¥10.00</span></div>
+      <div class="row"><span>其中探索新线索</span><span class="mono">¥5.00</span></div>
+      <div class="row"><span>其中复核已有档案</span><span class="mono">¥5.00</span></div>
+      <div class="row"><span>每轮最多审阅线索</span><span class="mono">20</span></div>
+      <div class="row"><span>每轮最多新建研究</span><span class="mono">3</span></div>
+      <div class="faint">都是上限，不必用完；用完当天就停，Agent 不能自己提高。</div>
+    </div>
+
+    <div class="card">
+      <div class="h3">提醒方式</div>
+      <div class="row"><span>站内提醒</span><span class="chip chip-accent">开启</span></div>
+      <div class="row"><span>外部推送</span><span class="faint">未配置渠道</span></div>
+      <div class="faint">只提醒"需要你补充"和"判断重大变化"。</div>
+    </div>
+
+    <div class="card" style="background: #f7f9fb; padding: 8px 12px">
+      <div class="row" style="border-top: 0"><span>Agent 模型 <span class="faint">凭证单独管理</span></span><span class="chip chip-accent">能力验证通过</span></div>
+    </div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px">
+    <button class="btn" type="button" style="flex: 1 1 0">暂不启用</button>
+    <button class="btn btn-primary" type="button" style="flex: 1 1 0">启用后台研究</button>
+  </footer>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：记忆与偏好</div><div class="mk-frame" id="phone-memory">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 10px">
+    <a href="#phone-nav" aria-label="返回" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; font-weight: 600; font-size: 17px">Agent 记住的事</div>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px">
+    <div class="card">
+      <div class="h3">你明确说过的</div>
+      <div class="mem">
+        <div style="font-size: 13.5px">讲解时少用术语，第一次出现时用一句话解释</div>
+        <div class="faint">来源：09-12 对话 · 用于讲解方式</div>
+        <div class="acts"><button class="sbtn" type="button">修改</button><button class="sbtn" type="button">忘记</button></div>
+      </div>
+      <div class="faint">"我很喜欢公司己"这类话只影响讲解背景。长期限制在<a href="#mandate">投资约定</a>里改。</div>
+    </div>
+
+    <div class="card">
+      <div style="display: flex; gap: 6px; align-items: center"><span class="h3">观察到的</span><span class="chip chip-neutral">待你核实</span></div>
+      <div class="mem">
+        <div style="font-size: 13.5px">你最近常研究消费行业</div>
+        <div class="faint">来自对话记录 · 11-28 后需重新评估</div>
+        <div class="acts"><button class="sbtn" type="button">是的</button><button class="sbtn" type="button">不对</button></div>
+      </div>
+      <div class="faint">还有 1 条。观察不会用来推断你的风险偏好，过期后不再使用。</div>
+    </div>
+
+    <div class="card">
+      <div class="h3">清除</div>
+      <div class="del"><div class="b"><strong>忘记一项偏好</strong><div class="faint">以后不再用于个性化；旧判断引用的版本保留作审计</div></div></div>
+      <div class="del"><div class="b"><strong>删除一段对话</strong><div class="faint">只删聊天记录，研究档案和判断不受影响</div></div><button class="sbtn" type="button">选择</button></div>
+      <div class="del"><div class="b"><strong>归档一份研究</strong><div class="faint">在档案操作里进行</div></div><a class="sbtn" href="#phone-controls">前往</a></div>
+      <div class="del"><div class="b"><strong style="color: #9a5208">删除本机全部数据</strong><div class="faint">无法恢复，需要再次确认</div></div><button class="sbtn" type="button" style="border-color: #c26a12; color: #9a5208">删除…</button></div>
+      <div class="faint">已经发给模型服务的请求，按该服务的数据设置处理；本地删除不能撤回。</div>
+    </div>
+  </main>
+</div>
+</div></div>
+<div class="mk-cell"><div class="mk-cap">手机端：组合方案（A1b）</div><div class="mk-frame" id="phone-plan">
+<div style="width: 390px; height: 844px; box-sizing: border-box; display: flex; flex-direction: column; background: #f4f6f9; overflow: hidden; border-radius: 24px">
+  <header style="padding: 14px 16px 10px; background: #fff; border-bottom: 1px solid #dde2e9; display: flex; align-items: center; gap: 10px">
+    <a href="#phone-nav" aria-label="返回" style="display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; margin-left: -12px">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#18202b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+    <div style="flex: 1 1 auto; min-width: 0">
+      <div style="font-weight: 600; font-size: 16px">组合方案 #pp-12</div>
+      <div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap"><span class="chip chip-neutral">A1b</span><span class="faint">快照 #p-91 · 10-09 · 本账户 · 覆盖完整</span></div>
+    </div>
+  </header>
+
+  <main style="flex: 1 1 auto; overflow-y: auto; min-height: 0; padding: 10px 16px; display: flex; flex-direction: column; gap: 8px">
+    <div style="padding: 8px 10px; background: #fdf1e3; color: #7a4206; border-radius: 8px; font-size: 12.5px">
+      <strong>为什么有这个方案：</strong>公司庚占比 <span class="mono">12.4%</span>，超过单股上限 <span class="mono">10%</span>。三个选项互斥，共用同一份现金。
+    </div>
+    <div class="faint">可用现金 <span class="mono">¥38,200</span> · 须保留 <span class="mono">¥20,000</span> · 净资产 <span class="mono">¥928,600</span></div>
+
+    <div class="opt">
+      <div style="display: flex; gap: 6px; align-items: center"><strong>不行动</strong><span class="chip chip-warn">约束冲突持续</span></div>
+      <div style="font-size: 12.5px">不产生交易成本；超限状态保留，无新变化不重复提醒。</div>
+    </div>
+
+    <div class="opt rec">
+      <div style="display: flex; gap: 6px; align-items: center"><strong>选项 A · 减持公司庚</strong><span class="chip chip-accent">Agent 倾向</span></div>
+      <div class="kv">
+        <div class="k">减持情景</div><div>卖出 <span class="mono">1,300 股</span>，按交易单位 <span class="mono">100 股</span> 取整</div>
+        <div class="k">参考价</div><div><span class="mono">¥20.00</span>，未扣费收入 <span class="mono">¥26,000</span></div>
+        <div class="k">情景结果</div><div>未扣费占比 <span class="mono">9.6%</span> · 现金 <span class="mono">¥64,200</span></div>
+        <div class="k">约束</div><div>费用待核，尚不能称全部通过</div>
+      </div>
+    </div>
+
+    <div class="opt">
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap"><strong>选项 B · 减持公司庚并买入公司己</strong><span class="chip chip-warn">暂不发布</span></div>
+      <div class="kv">
+        <div class="k">研究结论</div><div>公司己的持续现金流假设尚未核实</div>
+        <div class="k">行动范围</div><div>继续研究，暂不发布买入金额或数量</div>
+        <div class="k">依赖</div><div>A 的卖出成交后才有资金</div>
+      </div>
+    </div>
+
+    <div style="font-size: 12.5px; padding: 8px 10px; background: #fff; border: 1px solid #dde2e9; border-radius: 8px">
+      <strong>为什么倾向 A：</strong>先解决超限；公司己的经营和价格仍待判断，买入依据不足；A 的数量只展示未扣费情景。
+    </div>
+    <div class="faint">现金收益未知，不当作零。这不是订单；你执行一部分后，剩下的动作会用新快照重新评估。</div>
+  </main>
+
+  <footer style="padding: 10px 16px 18px; background: #fff; border-top: 1px solid #dde2e9; display: flex; gap: 8px">
+    <a class="btn btn-primary" href="#phone-decision" style="flex: 1 1 0">记录决定</a>
+    <button class="btn" type="button" style="flex: 1 1 0">查看计算</button>
+  </footer>
+</div>
+</div></div></div>
 </section>
 </body>
 </html>

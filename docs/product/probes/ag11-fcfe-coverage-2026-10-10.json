@@ -1,0 +1,598 @@
+{
+  "schema_version": "ag11.v3b.v1",
+  "as_of": "2026-10-10T23:59:59+08:00",
+  "denominator": 4,
+  "scope": "fixed representative sample; not CSI300 coverage",
+  "years": [
+    2023,
+    2024,
+    2025
+  ],
+  "raw_fields_definition": "three annual non-null CFO/capex/borrowings/bonds/repayments candidate columns; cash interest separately unverified",
+  "cash_interest_mapping_approved": false,
+  "summary": {
+    "raw_fields_available": 0,
+    "accounting_usable": 0,
+    "method_applicable": 0,
+    "numerical_success": 0
+  },
+  "production_reverse_dcf_enabled": false,
+  "stocks": [
+    {
+      "symbol": "SH600519",
+      "industry": "consumer",
+      "years": [
+        {
+          "period": "2025-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "61522204989.35",
+            "capex": "3127594916.41",
+            "borrowings": null,
+            "bonds": null,
+            "repayments": null
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_borrowings",
+            "missing_bonds",
+            "missing_repayments",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_borrowings"
+        },
+        {
+          "period": "2024-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "92463692168.43",
+            "capex": "4678712053.56",
+            "borrowings": null,
+            "bonds": null,
+            "repayments": null
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_borrowings",
+            "missing_bonds",
+            "missing_repayments",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_borrowings"
+        },
+        {
+          "period": "2023-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "66593247721.09",
+            "capex": "2619755888.79",
+            "borrowings": null,
+            "bonds": null,
+            "repayments": null
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_borrowings",
+            "missing_bonds",
+            "missing_repayments",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_borrowings"
+        }
+      ],
+      "request_succeeded": true,
+      "complete_annual_rows": true,
+      "field_diagnostics": [
+        {
+          "period": "2025-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "null",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "null",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2024-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "null",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "null",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2023-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "null",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "null",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        }
+      ],
+      "raw_fields_available": false,
+      "accounting_usable": false,
+      "method_applicable": false,
+      "numerical_success": false,
+      "reasons": [
+        "missing_borrowings",
+        "missing_bonds",
+        "missing_repayments",
+        "cash_interest_unverified",
+        "interest_classification_unverified",
+        "financing_disjoint_unverified",
+        "ordinary_equity_unverified",
+        "consolidated_scope_unverified",
+        "non_operating_consistent_unverified",
+        "material_changes_handled_unverified",
+        "units_verified_unverified",
+        "ordinary_equity_market_value_unverified",
+        "no_approved_saved_evidence_adapter"
+      ],
+      "primary_reason": "missing_borrowings",
+      "raw_sha256": "f71afe718bd486c98009178a6b892c03ca7cf34baa528c9d944fe2459c81a80a",
+      "captured_at": "2026-10-10T05:45:45.938831+00:00"
+    },
+    {
+      "symbol": "SZ000333",
+      "industry": "appliances",
+      "years": [
+        {
+          "period": "2025-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "53345930000",
+            "capex": "11141889000",
+            "borrowings": "88859535000",
+            "bonds": null,
+            "repayments": "112064327000"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_bonds",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_bonds"
+        },
+        {
+          "period": "2024-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "60511572000",
+            "capex": "7839636000",
+            "borrowings": "37800361000",
+            "bonds": null,
+            "repayments": "24986249000"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_bonds",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_bonds"
+        },
+        {
+          "period": "2023-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "57902611000",
+            "capex": "6314051000",
+            "borrowings": "33888703000",
+            "bonds": null,
+            "repayments": "33114644000"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_bonds",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_bonds"
+        }
+      ],
+      "request_succeeded": true,
+      "complete_annual_rows": true,
+      "field_diagnostics": [
+        {
+          "period": "2025-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "value",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2024-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "value",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2023-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "value",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        }
+      ],
+      "raw_fields_available": false,
+      "accounting_usable": false,
+      "method_applicable": false,
+      "numerical_success": false,
+      "reasons": [
+        "missing_bonds",
+        "cash_interest_unverified",
+        "interest_classification_unverified",
+        "financing_disjoint_unverified",
+        "ordinary_equity_unverified",
+        "consolidated_scope_unverified",
+        "non_operating_consistent_unverified",
+        "material_changes_handled_unverified",
+        "units_verified_unverified",
+        "ordinary_equity_market_value_unverified",
+        "no_approved_saved_evidence_adapter"
+      ],
+      "primary_reason": "missing_bonds",
+      "raw_sha256": "6878fbae75148161000149e0c795fc0cac0a988e6286bacae6316fcffdb847fd",
+      "captured_at": "2026-10-10T05:45:46.274227+00:00"
+    },
+    {
+      "symbol": "SH600900",
+      "industry": "utilities",
+      "years": [
+        {
+          "period": "2025-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "60562925570.41",
+            "capex": "18488466859.29",
+            "borrowings": "158562144700.1",
+            "bonds": null,
+            "repayments": "168073820413.41"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_bonds",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_bonds"
+        },
+        {
+          "period": "2024-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "59648468284.22",
+            "capex": "14634075051.41",
+            "borrowings": "129082714492.21",
+            "bonds": null,
+            "repayments": "144184148332.02"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_bonds",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_bonds"
+        },
+        {
+          "period": "2023-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "64749448288.66",
+            "capex": "12417112224.11",
+            "borrowings": "153335092218.76",
+            "bonds": null,
+            "repayments": "123635147482.54"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "missing_bonds",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "missing_bonds"
+        }
+      ],
+      "request_succeeded": true,
+      "complete_annual_rows": true,
+      "field_diagnostics": [
+        {
+          "period": "2025-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "value",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2024-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "value",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2023-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "value",
+            "ISSUE_BOND": "null",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        }
+      ],
+      "raw_fields_available": false,
+      "accounting_usable": false,
+      "method_applicable": false,
+      "numerical_success": false,
+      "reasons": [
+        "missing_bonds",
+        "cash_interest_unverified",
+        "interest_classification_unverified",
+        "financing_disjoint_unverified",
+        "ordinary_equity_unverified",
+        "consolidated_scope_unverified",
+        "non_operating_consistent_unverified",
+        "material_changes_handled_unverified",
+        "units_verified_unverified",
+        "ordinary_equity_market_value_unverified",
+        "no_approved_saved_evidence_adapter"
+      ],
+      "primary_reason": "missing_bonds",
+      "raw_sha256": "ac22c80f6ba91a0510b837acdbf6ae8591f6dc9761a6ec530ea5feb9eff56e7d",
+      "captured_at": "2026-10-10T05:45:46.421920+00:00"
+    },
+    {
+      "symbol": "SH601398",
+      "industry": "bank_excluded",
+      "years": [
+        {
+          "period": "2025-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "1890530000000",
+            "capex": "38239000000",
+            "borrowings": null,
+            "bonds": "2508380000000",
+            "repayments": "2329359000000"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "financial_sector_excluded",
+            "missing_borrowings",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "financial_sector_excluded"
+        },
+        {
+          "period": "2024-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "579194000000",
+            "capex": "35585000000",
+            "borrowings": null,
+            "bonds": "2092588000000",
+            "repayments": "1463682000000"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "financial_sector_excluded",
+            "missing_borrowings",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "financial_sector_excluded"
+        },
+        {
+          "period": "2023-12-31",
+          "mapping_version": "eastmoney.fcfe_candidate.v1",
+          "raw_fields_available": false,
+          "values": {
+            "cfo": "1417002000000",
+            "capex": "14494000000",
+            "borrowings": null,
+            "bonds": "1422308000000",
+            "repayments": "956689000000"
+          },
+          "fcfe_candidate": null,
+          "accounting_usable": false,
+          "reasons": [
+            "financial_sector_excluded",
+            "missing_borrowings",
+            "cash_interest_unverified",
+            "interest_classification_unverified",
+            "financing_disjoint_unverified",
+            "ordinary_equity_unverified",
+            "consolidated_scope_unverified",
+            "non_operating_consistent_unverified",
+            "material_changes_handled_unverified",
+            "units_verified_unverified"
+          ],
+          "primary_reason": "financial_sector_excluded"
+        }
+      ],
+      "request_succeeded": true,
+      "complete_annual_rows": true,
+      "field_diagnostics": [
+        {
+          "period": "2025-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "absent",
+            "ISSUE_BOND": "value",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2024-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "absent",
+            "ISSUE_BOND": "value",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        },
+        {
+          "period": "2023-12-31",
+          "fields": {
+            "NETCASH_OPERATE": "value",
+            "CONSTRUCT_LONG_ASSET": "value",
+            "RECEIVE_LOAN_CASH": "absent",
+            "ISSUE_BOND": "value",
+            "PAY_DEBT_CASH": "value",
+            "ASSIGN_DIVIDEND_PORFIT": "value"
+          }
+        }
+      ],
+      "raw_fields_available": false,
+      "accounting_usable": false,
+      "method_applicable": false,
+      "numerical_success": false,
+      "reasons": [
+        "financial_sector_excluded",
+        "missing_borrowings",
+        "cash_interest_unverified",
+        "interest_classification_unverified",
+        "financing_disjoint_unverified",
+        "ordinary_equity_unverified",
+        "consolidated_scope_unverified",
+        "non_operating_consistent_unverified",
+        "material_changes_handled_unverified",
+        "units_verified_unverified",
+        "ordinary_equity_market_value_unverified",
+        "no_approved_saved_evidence_adapter"
+      ],
+      "primary_reason": "financial_sector_excluded",
+      "raw_sha256": "f5a3e7ceb3c1dc185329026a9d570492e16b732de9afb691681bf685aeadc7ec",
+      "captured_at": "2026-10-10T05:45:46.610488+00:00"
+    }
+  ]
+}

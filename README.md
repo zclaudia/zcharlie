@@ -11,6 +11,8 @@
 自主研究、候选发现、买卖与仓位意见、持续复核和复盘；真实交易仍由用户决定和执行。
 实现方案与阶段验收见[技术设计与交付计划](docs/product/investor-agent-architecture.md)。本 README 其余内容描述当前已交付能力。
 
+完整专题：[研究与运营](docs/product/investor-agent-research-policy.md)、[领域契约与交互](docs/product/investor-agent-contracts.md)、[估值计算](docs/product/investor-agent-valuation.md)。
+
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
 - 持久化：SQLite + Alembic（迁移 `020`）；制品目录 `data/research-runs/<run_id>/`；
@@ -35,14 +37,15 @@ ia migrate up
 # 4. 三个进程：API、worker、scheduler
 ia api serve          # 默认 127.0.0.1:8000；远程/Docker 需显式 --host 0.0.0.0
 ia worker start       # 研究执行器；调试可用 ia worker start --once
-ia scheduler start    # A 股日终自选股刷新（Asia/Shanghai，版本化交易日历）
+ia scheduler start    # A 股日终观察池刷新（Asia/Shanghai，版本化交易日历）
 
 # 5. 打开 Web UI 登录
 open http://127.0.0.1:8000/app
 # 用 .env 里的 API_KEY 登录；密钥只用于服务端验证，不写入 Cookie。
 ```
 
-Web 内即可完成日常闭环：添加自选股（代码 + 行业 + 报告年度）→ 刷新全部 →
+Web 内即可完成日常闭环：手动添加观察标的（代码 + 行业 + 报告年度 + 推荐/自选起草模板）→
+在观察池审阅、批准或驳回该股的规则草稿 → 刷新全部 →
 在 `/app/stocks/<ticker>` 阅读确定性评分、因子、指标、数据质量、缺失字段、
 freshness、Agent 解释（引用可点击定位证据）与"自上次以来的变化"。
 运行中心 `/app/runs` 展示 queued/running/success/partial/failed、阶段、
@@ -255,12 +258,12 @@ ia snapshot backfill --universe CSI300 --status                                 
 单股研究有两种数据源模式，评分内核与评分版本相同（v1.3），canonical 指标都由因子库计算（一份定义）：
 
 - **`snapshot`（默认）**：从时点快照库读 `load_snapshot_view(policy=TARGET_POOL)`，字段按来源登记表取值
-  （iFinD 已核对值 > 主来源 > 备用来源），不调用 iFinD。自选股 `provider` 为 `auto` / `snapshot` 时走此模式，
+  （iFinD 已核对值 > 主来源 > 备用来源），不调用 iFinD。观察标的 `provider` 为 `auto` / `snapshot` 时走此模式，
   `POST /research/single-stock` 默认也是它；行业与报告年度可省略（用当日申万行业组、`as_of` 时已披露的最近年报）。
   每个 canonical 字段的 `field_sources` 记录提供方与核对状态（`unverified` / `verified` / `conflict`，冲突进入
   `provider_conflicts` 并要求复核）。快照库没有该股数据（例如不在目标池）时，运行以 `partial` 结束并投递
   iFinD `missing` 核对请求；关键字段缺失（如资本支出 / 自由现金流）也投递同类请求，由核对任务在预算内执行。
-- **`ifind`**：手动深度研究（`ia research ifind`、API `provider=ifind`、自选股显式 `provider=ifind`），
+- **`ifind`**：手动深度研究（`ia research ifind`、API `provider=ifind`、观察标的显式 `provider=ifind`），
   每次 proxy 调用记入 iFinD 预算账本；需要行业与报告年度。golden corpus 仍以 iFinD fixture 逐字段重放（D3）。
 
 运行 metadata 与研究快照记录 `source_mode`。某只股票从 iFinD 切到快照后的第一次运行标记 `source_changed`：
@@ -297,7 +300,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 
 - 候选 `candidate`：`open → promoted / dismissed / expired`，同一标的最多一条 `open`。
   每次 `screen_run` 成功后，命中（`hit`，不含截断）自动建候选：已有 `open` 候选则合并来源；
-  已在自选股（启用）中、或 30 天内被忽略过的标的跳过（记入运行 metadata 的 `candidates` 段）。
+  已在观察池（启用）中、或 30 天内被忽略过的标的跳过（记入运行 metadata 的 `candidates` 段）。
   候选默认 14 天过期：每日 07:00 扫描（设置页「调度 · 候选」），每次筛选开始时也扫描一次。
   时长在设置页「候选」组调整。
 - 新候选自动投递 `rule_draft` 任务（LLM 起草规则，幂等键 `rule_draft:{candidate_id}:{template}@{version}`），
@@ -306,7 +309,7 @@ ia snapshot backfill --universe CSI300 --status                                 
   `edit_rule`、`expire`，与状态变化同一事务写入，并记录当时的筛选理由与因子值（含快照引用）。
   `dismiss`、`reject_rule` 必填理由。
 - 晋级 `POST /candidates/{id}/promote`：（可选改参数 → 新版本）→ 批准规则为 `active`（退役旧 active）→
-  写入 / 启用自选股（行业取当日申万一级名称，缺失时用证监会名称；报告年度取已披露的最近年报）→ 候选 `promoted`，
+  写入 / 启用观察池（行业取当日申万一级名称，缺失时用证监会名称；报告年度取已披露的最近年报）→ 候选 `promoted`，
   以上一个事务；随后尽力投递 iFinD `promote` 核对与一次单股研究，失败只出现在响应 `warnings` 中。
 - 接口不返回 0～100 分数；模板 `calibration_status`（目前全部 `uncalibrated`）随候选与规则返回，界面需标注"未校准"。
 
@@ -337,11 +340,11 @@ ia snapshot backfill --universe CSI300 --status                                 
 
 批量刷新：`Idempotency-Key` 重放同一批运行；单只失败不影响其他标的；
 只有 meaningful change（或数据源切换后的第一次运行）才生成一次 Markdown 通知，baseline 与噪声保持静默。
-快照模式的自选股刷新不需要 `IFIND_PROXY_API_KEY`；未配置时只有显式 `ifind` 的条目失败。
+快照模式的观察池刷新不需要 `IFIND_PROXY_API_KEY`；未配置时只有显式 `ifind` 的条目失败。
 
 ## MCP 只读接入
 
-`ia mcp serve` 以 stdio 向 Claude Desktop 等 MCP 客户端暴露只读工具：自选股、单股时点快照（因子层字段、
+`ia mcp serve` 以 stdio 向 Claude Desktop 等 MCP 客户端暴露只读工具：观察池、单股时点快照（因子层字段、
 行业、最新日线与报告期、主营构成）、日线、候选与规则、财报事件、数据健康与股票搜索（`ia mcp tools` 列清单，
 资源 `zcharlie://health`）。SQLite 以 `mode=ro` 打开，没有写工具，不加载 LLM、不入队任务；
 Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](docs/product/operations.md)「MCP 只读接入」。
@@ -391,7 +394,7 @@ mypy src/investment_agent  # strict
 离线端到端 smoke（P1-F1，`tests/integration/test_funnel_e2e.py`，默认套件内，约 11 秒）：
 空库 `ia migrate up` 后经 worker 跑真实任务处理器——成分 / 行业（证监会 + 申万）同步、日线 / 财报 /
 分红采集、两年回补、东财汇总 → 模板筛选（每条命中理由回溯到快照行）→ 候选与 LLM 规则草稿 →
-HTTP 晋级（决策日志、自选股、iFinD 晋级核对请求、研究入队）→ 快照模式研究 → iFinD 核对写回 →
+HTTP 晋级（决策日志、观察池、iFinD 晋级核对请求、研究入队）→ 快照模式研究 → iFinD 核对写回 →
 `/health/data`；最后校验同一 `as_of` 重跑筛选逐字节一致、重跑采集不产生新版本、决策日志完整且不可改。
 只在数据源边界替换：合成 baostock / 申万 / 东财（`tests/integration/_funnel_support.py`，10 只股票覆盖
 银行、公用事业、周期、成长、亏损股、次新股）、respx 桩 LLM 与假 ifind-proxy；时间冻结，结果确定。

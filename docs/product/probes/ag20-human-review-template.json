@@ -1,0 +1,92 @@
+{
+  "schema": "ag20.human-review.v1",
+  "status": "pending",
+  "product_gate_passed": false,
+  "model_assisted_review_may_sign": false,
+  "companies": [
+    {
+      "company": "招商银行",
+      "model_version": null,
+      "method_version": null,
+      "actual_material_set_hash": null,
+      "candidate_ref": null,
+      "reviewer": null,
+      "reviewed_at": null,
+      "directional_view": null,
+      "scores": {
+        "fact_conclusion_relation": null,
+        "research_depth": null,
+        "counter_evidence": null,
+        "non_flattery_revision": null,
+        "understandable_continuation": null
+      },
+      "na_reasons": {},
+      "key_fact_errors": null,
+      "hard_constraint_violations": null,
+      "located_evidence": [],
+      "user_restatement": {
+        "stance": null,
+        "basis": null,
+        "falsifier": null,
+        "next_step": null
+      },
+      "human_passed": false
+    },
+    {
+      "company": "海康威视",
+      "model_version": null,
+      "method_version": null,
+      "actual_material_set_hash": null,
+      "candidate_ref": null,
+      "reviewer": null,
+      "reviewed_at": null,
+      "directional_view": null,
+      "scores": {
+        "fact_conclusion_relation": null,
+        "research_depth": null,
+        "counter_evidence": null,
+        "non_flattery_revision": null,
+        "understandable_continuation": null
+      },
+      "na_reasons": {},
+      "key_fact_errors": null,
+      "hard_constraint_violations": null,
+      "located_evidence": [],
+      "user_restatement": {
+        "stance": null,
+        "basis": null,
+        "falsifier": null,
+        "next_step": null
+      },
+      "human_passed": false
+    },
+    {
+      "company": "国电南瑞",
+      "model_version": null,
+      "method_version": null,
+      "actual_material_set_hash": null,
+      "candidate_ref": null,
+      "reviewer": null,
+      "reviewed_at": null,
+      "directional_view": null,
+      "scores": {
+        "fact_conclusion_relation": null,
+        "research_depth": null,
+        "counter_evidence": null,
+        "non_flattery_revision": null,
+        "understandable_continuation": null
+      },
+      "na_reasons": {},
+      "key_fact_errors": null,
+      "hard_constraint_violations": null,
+      "located_evidence": [],
+      "user_restatement": {
+        "stance": null,
+        "basis": null,
+        "falsifier": null,
+        "next_step": null
+      },
+      "human_passed": false
+    }
+  ]
+}

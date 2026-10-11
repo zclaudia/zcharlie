@@ -53,7 +53,7 @@
 | 日线快照 `market_snapshot` | 周一至周五 18:30 | 交易日 | baostock；发布时间待节后首个交易日确认 |
 | 收盘快照 `close_quote` | 周一至周五 15:10 | 交易日 | 腾讯批量报价写入当日收盘（目标池 + 观察池 + 候选 + 持仓，`provider=tencent`）；cron 键 `snapshot.close_quote_cron` |
 | 收盘快照补采 | 周一至周五 16:00 | 交易日 | 同日第二次运行，只补 15:10 仍未收盘 / 未报价的标的；`snapshot.close_quote_retry_cron`。18:30 baostock 到达后读取以 baostock 为准，同日收盘价差超 0.1% 记 `conflict` |
-| 自选股研究刷新 | 周一至周五 19:30 | 交易日 | snapshot 模式，读取当天快照 |
+| 观察池研究刷新 | 周一至周五 19:30 | 交易日 | snapshot 模式，读取当天快照 |
 | 财报快照（周） | 周六 09:00 | — | baostock + 东财按期汇总；披露季内加东财现金流量表 |
 | 财报快照（截止日） | 每天 19:00 | 4/30、8/31、10/31 后首个交易日 | 同时检测逾期披露 |
 | 财报事件 `earnings_event` | 周一至周五 19:00 | 1 / 4 / 7 / 10 月的交易日 | 东财业绩预告 + 预约披露时间（目标池 + 观察池 + 候选 + 持仓）每日；主营构成（观察池 + 候选 + 持仓，逐只）每周首个交易日；cron 键 `snapshot.earnings_event_cron`。观察池 / 候选 / 持仓出现新预告或预约日在 3 个交易日内时发 `info` 通知 |
@@ -171,7 +171,7 @@
   不推送通知；非 SQLite 的 `DATABASE_URL` 直接拒绝启动。只读连接仍会与 api / worker 共享 WAL 的 `-shm` / `-wal` 文件，
   这是 SQLite 的正常行为，数据库文件本身不会被改动。
 - 日志走 stderr（Claude Desktop 的 `mcp-server-zcharlie.log`），stdout 只有 JSON-RPC。
-- 验证：重启 Claude Desktop 后，工具面板出现 9 个 `zcharlie` 工具；让助手「列出自选股」「取 600519.SH 最近 120 日收盘」。
+- 验证：重启 Claude Desktop 后，工具面板出现 9 个 `zcharlie` 工具；让助手「列出观察池」「取 600519.SH 最近 120 日收盘」。
   本机离线自检：把 `initialize` / `tools/list` 的 JSON-RPC 行通过管道送入 `ia mcp serve`。
 
 ## 8. 已知限制

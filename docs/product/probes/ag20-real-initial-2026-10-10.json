@@ -1,0 +1,566 @@
+{
+  "state": "bounded trial completed",
+  "configuration": {
+    "revision": 0,
+    "version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+    "values": {
+      "agent_credential_ref": "agent_api_key",
+      "agent_max_tokens": 4096,
+      "agent_model": "deepseek-flash",
+      "agent_output_mode": "prompted",
+      "agent_profile": "deepseek",
+      "agent_profile_model": "",
+      "agent_provider": "openai",
+      "agent_retries": 0,
+      "agent_supports_json_object": true,
+      "agent_supports_json_schema": false,
+      "agent_temperature": null,
+      "agent_thinking": "auto",
+      "agent_timeout_seconds": 45.0,
+      "agent_tool_choice_required": false,
+      "endpoint_hash": "4217b1ac5a57c64fb1cc4d0e23df8b7ff82059e438a71a8766bf59fd008147b3"
+    }
+  },
+  "material_set_hash": "942e1505c6399d5d64944a0fa51a27c8ccfa6c85a8a6997ddffcd6924e290319",
+  "results": [
+    {
+      "actual_material_receipts": [],
+      "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "model_runs": [
+        {
+          "framework_requests": 1,
+          "http_attempts": 1,
+          "http_responses": [
+            {
+              "status": 200,
+              "usage": {
+                "prompt_tokens": 11050,
+                "completion_tokens": 489,
+                "total_tokens": 11539
+              }
+            }
+          ],
+          "usage": {
+            "input_tokens": 11050,
+            "output_tokens": 489
+          },
+          "usage_unknown_reason": null,
+          "latency_ms": 2362,
+          "success": false,
+          "error_code": "InvestorError",
+          "config_version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+          "framework_version": "2.31.1",
+          "cost_usd": null,
+          "cost_unknown_reason": "price_or_usage_unknown"
+        }
+      ],
+      "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+      "packet_is_exhaustive_actual_material_set": false,
+      "actual_artifact_refs": [],
+      "company": {
+        "id": 134,
+        "ticker": "600036",
+        "market_code": "SSE",
+        "canonical_name": "招商银行",
+        "sector_code": null
+      },
+      "task": {
+        "id": "0ecb4b47-0a52-4e9c-bb1c-aee6d58dd9bf",
+        "schema_version": 1,
+        "revision": 5,
+        "created_at": "2026-10-10T11:18:10.242024Z",
+        "actor": "local_owner",
+        "origin_ref": null,
+        "parent_task_id": null,
+        "message_ref": {
+          "kind": "message",
+          "id": "1b59cea1-229e-46ea-93d9-6f014736146e",
+          "revision": 1,
+          "field_path": null
+        },
+        "binding": {
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "base_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "case",
+              "id": "80ff76eb-7ad3-4d8d-978d-7fc5a72032ba",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "as_of": "2026-10-10T04:00:00Z"
+        },
+        "status": "failed",
+        "cancel_requested": false,
+        "stop_reason": "failed",
+        "waiting": null,
+        "artifact_refs": [],
+        "usage": {
+          "tool_calls": 2,
+          "requests": 1,
+          "input_tokens": 11050,
+          "output_tokens": 489,
+          "cost": {
+            "value": null,
+            "unit": "currency",
+            "currency": "USD",
+            "unknown_reason": "price_or_usage_unknown"
+          }
+        }
+      },
+      "messages": [
+        {
+          "id": "1b59cea1-229e-46ea-93d9-6f014736146e",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:18:10.250845Z",
+          "actor": "local_owner",
+          "origin_ref": null,
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "808eb4c9-0528-4900-9402-244a9e5e2776",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 1,
+          "role": "user",
+          "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": null,
+          "client_message_id": "c943ed4d-55ad-44b3-9e0a-6dbb8cbdc249",
+          "task_ref": {
+            "kind": "task",
+            "id": "0ecb4b47-0a52-4e9c-bb1c-aee6d58dd9bf",
+            "revision": 1,
+            "field_path": null
+          },
+          "artifact_refs": []
+        }
+      ],
+      "latency_seconds": 2.554440542124212,
+      "error_type": null,
+      "semantic_acceptance": "human pending",
+      "money_cost_usd": null,
+      "attempted_actions": [
+        {
+          "state": "prepared",
+          "operation_id": "5b22c7a2-709b-4efe-aa79-f5da6cc4f58b",
+          "tool": "get_evidence",
+          "business": {
+            "ref": {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            },
+            "subject_ref": {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            },
+            "as_of": "2026-10-10T04:00:00Z"
+          }
+        }
+      ],
+      "public_errors": [
+        {
+          "code": "InvestorError",
+          "message": "Execution stopped at a trusted boundary",
+          "field_errors": [],
+          "retryable": false,
+          "current_refs": []
+        }
+      ],
+      "published_recommendations": 0
+    },
+    {
+      "actual_material_receipts": [],
+      "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "model_runs": [
+        {
+          "framework_requests": 1,
+          "http_attempts": 1,
+          "http_responses": [
+            {
+              "status": 200,
+              "usage": {
+                "prompt_tokens": 11047,
+                "completion_tokens": 516,
+                "total_tokens": 11563
+              }
+            }
+          ],
+          "usage": {
+            "input_tokens": 11047,
+            "output_tokens": 516
+          },
+          "usage_unknown_reason": null,
+          "latency_ms": 2201,
+          "success": false,
+          "error_code": "InvestorError",
+          "config_version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+          "framework_version": "2.31.1",
+          "cost_usd": null,
+          "cost_unknown_reason": "price_or_usage_unknown"
+        }
+      ],
+      "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+      "packet_is_exhaustive_actual_material_set": false,
+      "actual_artifact_refs": [],
+      "company": {
+        "id": 62,
+        "ticker": "002415",
+        "market_code": "SZSE",
+        "canonical_name": "海康威视",
+        "sector_code": null
+      },
+      "task": {
+        "id": "43635ad6-0015-43c0-ab47-83a1ec4fa0bd",
+        "schema_version": 1,
+        "revision": 5,
+        "created_at": "2026-10-10T11:18:12.816162Z",
+        "actor": "local_owner",
+        "origin_ref": null,
+        "parent_task_id": null,
+        "message_ref": {
+          "kind": "message",
+          "id": "bb6ae073-37b3-4030-b1ab-366347f9447d",
+          "revision": 1,
+          "field_path": null
+        },
+        "binding": {
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "base_refs": [
+            {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "case",
+              "id": "0da73521-2af3-4c27-8e7d-cceecfcf9318",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "as_of": "2026-10-10T04:00:00Z"
+        },
+        "status": "failed",
+        "cancel_requested": false,
+        "stop_reason": "failed",
+        "waiting": null,
+        "artifact_refs": [],
+        "usage": {
+          "tool_calls": 2,
+          "requests": 1,
+          "input_tokens": 11047,
+          "output_tokens": 516,
+          "cost": {
+            "value": null,
+            "unit": "currency",
+            "currency": "USD",
+            "unknown_reason": "price_or_usage_unknown"
+          }
+        }
+      },
+      "messages": [
+        {
+          "id": "bb6ae073-37b3-4030-b1ab-366347f9447d",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:18:12.819395Z",
+          "actor": "local_owner",
+          "origin_ref": null,
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "7d7b0634-3fe6-4f2a-b5a0-0b00a8f024d8",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 1,
+          "role": "user",
+          "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": null,
+          "client_message_id": "090965f4-9bd1-4465-a203-7af03a6033d8",
+          "task_ref": {
+            "kind": "task",
+            "id": "43635ad6-0015-43c0-ab47-83a1ec4fa0bd",
+            "revision": 1,
+            "field_path": null
+          },
+          "artifact_refs": []
+        }
+      ],
+      "latency_seconds": 2.268031209241599,
+      "error_type": null,
+      "semantic_acceptance": "human pending",
+      "money_cost_usd": null,
+      "attempted_actions": [
+        {
+          "state": "prepared",
+          "operation_id": "641ddf1c-5253-4474-b668-30e4aa1cb27e",
+          "tool": "get_evidence",
+          "business": {
+            "ref": {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            },
+            "subject_ref": {
+              "kind": "case",
+              "id": "0da73521-2af3-4c27-8e7d-cceecfcf9318",
+              "revision": 1,
+              "field_path": null
+            },
+            "as_of": "2026-10-10T04:00:00Z"
+          }
+        }
+      ],
+      "public_errors": [
+        {
+          "code": "InvestorError",
+          "message": "Execution stopped at a trusted boundary",
+          "field_errors": [],
+          "retryable": false,
+          "current_refs": []
+        }
+      ],
+      "published_recommendations": 0
+    },
+    {
+      "actual_material_receipts": [],
+      "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "model_runs": [
+        {
+          "framework_requests": 1,
+          "http_attempts": 1,
+          "http_responses": [
+            {
+              "status": 200,
+              "usage": {
+                "prompt_tokens": 11047,
+                "completion_tokens": 1800,
+                "total_tokens": 12847
+              }
+            }
+          ],
+          "usage": {
+            "input_tokens": 11047,
+            "output_tokens": 1800
+          },
+          "usage_unknown_reason": null,
+          "latency_ms": 8688,
+          "success": true,
+          "error_code": null,
+          "config_version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+          "framework_version": "2.31.1",
+          "cost_usd": null,
+          "cost_unknown_reason": "price_or_usage_unknown"
+        }
+      ],
+      "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+      "packet_is_exhaustive_actual_material_set": false,
+      "actual_artifact_refs": [],
+      "company": {
+        "id": 160,
+        "ticker": "600406",
+        "market_code": "SSE",
+        "canonical_name": "国电南瑞",
+        "sector_code": null
+      },
+      "task": {
+        "id": "fa534a79-e0b1-48ad-adfd-fb7f1f0aa1f2",
+        "schema_version": 1,
+        "revision": 4,
+        "created_at": "2026-10-10T11:18:15.096794Z",
+        "actor": "local_owner",
+        "origin_ref": null,
+        "parent_task_id": null,
+        "message_ref": {
+          "kind": "message",
+          "id": "0e48216e-9f64-4147-bd50-c21098cad299",
+          "revision": 1,
+          "field_path": null
+        },
+        "binding": {
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "base_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "case",
+              "id": "1f4136a6-0e2e-47a1-9aaa-7f98acdb05ef",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "as_of": "2026-10-10T04:00:00Z"
+        },
+        "status": "failed",
+        "cancel_requested": false,
+        "stop_reason": "evidence_blocked",
+        "waiting": null,
+        "artifact_refs": [],
+        "usage": {
+          "tool_calls": 0,
+          "requests": 1,
+          "input_tokens": 11047,
+          "output_tokens": 1800,
+          "cost": {
+            "value": null,
+            "unit": "currency",
+            "currency": "USD",
+            "unknown_reason": "price_or_usage_unknown"
+          }
+        }
+      },
+      "messages": [
+        {
+          "id": "0e48216e-9f64-4147-bd50-c21098cad299",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:18:15.100406Z",
+          "actor": "local_owner",
+          "origin_ref": null,
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "f1abcb3d-639c-460f-aec1-75fe7afe9148",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 1,
+          "role": "user",
+          "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": null,
+          "client_message_id": "0aa2e49b-cb50-40af-8267-9da7a0135bc2",
+          "task_ref": {
+            "kind": "task",
+            "id": "fa534a79-e0b1-48ad-adfd-fb7f1f0aa1f2",
+            "revision": 1,
+            "field_path": null
+          },
+          "artifact_refs": []
+        }
+      ],
+      "latency_seconds": 8.77357408311218,
+      "error_type": null,
+      "semantic_acceptance": "human pending",
+      "money_cost_usd": null,
+      "attempted_actions": [],
+      "public_errors": [
+        {
+          "code": "ExecutionDeniedError",
+          "message": "Execution stopped at a trusted boundary",
+          "field_errors": [],
+          "retryable": false,
+          "current_refs": []
+        }
+      ],
+      "published_recommendations": 0
+    }
+  ],
+  "authorization": {
+    "authorization": "User explicitly authorized temporary reuse of current legacy supplier and model for isolated three-company trial",
+    "source": "readonly effective legacy tier3 overlay/env",
+    "model": "deepseek-flash",
+    "endpoint_hash": "4217b1ac5a57c64fb1cc4d0e23df8b7ff82059e438a71a8766bf59fd008147b3",
+    "profile": "AG02-compatible prompted/json_object; required false; deepseek reasoning profile",
+    "source_before": {
+      "size": 360513536,
+      "mtime_ns": 1791489715347475627,
+      "sha256": "85c29a22e6ece11efff8f25d76f7baf886cbf8d10efeb6a4082460c112a32e3b"
+    }
+  },
+  "source_preservation": {
+    "source_before": {
+      "size": 360513536,
+      "mtime_ns": 1791489715347475627,
+      "sha256": "85c29a22e6ece11efff8f25d76f7baf886cbf8d10efeb6a4082460c112a32e3b"
+    },
+    "source_after": {
+      "size": 360513536,
+      "mtime_ns": 1791489715347475627,
+      "sha256": "85c29a22e6ece11efff8f25d76f7baf886cbf8d10efeb6a4082460c112a32e3b"
+    },
+    "unchanged": true
+  },
+  "engineering_not_semantic_acceptance": true,
+  "summary": {
+    "companies": 3,
+    "tasks_failed": 3,
+    "http_attempts": 3,
+    "input_tokens": 33144,
+    "output_tokens": 2805,
+    "actual_committed_material_receipts": 0,
+    "money_cost_usd": null,
+    "production_enabled": false,
+    "background_enabled": false,
+    "human_signed": false
+  },
+  "post_trial_cleanup": {
+    "isolated_enabled": false,
+    "isolated_background_enabled": false,
+    "temporary_agent_credential_row_removed": true,
+    "source_unchanged": true
+  }
+}

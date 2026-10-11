@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 页重设计 Mockup</title>
+<style>
+/* /app/agent 对话工作台重设计 mockup。
+   依据：现有前端 agent*.js、investor-agent-design.md「首页与对话 / 研究工作台 / 操作卡片 / 手机端」、
+   investor-agent-contracts.md「对话和页面交互 / 界面文案映射」。
+   设计 token 与 app.css、investor-agent-ui-mockup.html 一致：蓝=主信息，灰=中性，橙=警示，紫=AI；
+   不用红绿表达好坏，状态一律有文字。示例公司与数字均为虚构。自包含、无外部依赖。 */
+:root{--ink:#18202b;--ink2:#4a5462;--faint:#5f6977;--line:#dde2e9;--line2:#eef1f5;--bg:#f4f6f9;--card:#fff;
+--accent:#2357d9;--accent-ink:#163f9f;--accent-soft:#e8eefc;--warn:#9a5208;--warn-soft:#fdf1e3;--ai:#6e2f99;--ai-soft:#f5ebfa;--neu:#eef1f5;--ctl:#c4cbd5}
+*{box-sizing:border-box}
+html{background:#e9edf2;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5;scroll-behavior:smooth}
+body{margin:0}
+a{color:var(--accent);text-decoration:none}a:hover{color:var(--accent-ink)}
+button{font:inherit;cursor:pointer}
+/* ---- 文档壳 ---- */
+.mk-nav{position:sticky;top:0;z-index:50;display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:10px 16px;background:#18202b;color:#e4e8ee}
+.mk-nav b{margin-right:12px}.mk-nav a{color:#c9d1dc;padding:6px 10px;border-radius:6px;font-size:13px}.mk-nav a:hover{background:#2a313d;color:#fff}
+.mk-nav .note{margin-left:auto;font-size:12px;color:#a9b2bf}
+.sheet{max-width:1440px;margin:0 auto;padding:28px 16px 8px}
+.sheet h2.mk{margin:0 0 4px;font-size:16px;font-weight:600;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.sheet h2.mk small{font-weight:400;color:var(--faint);font-size:12.5px}
+.sheet>p.lead{margin:0 0 12px;color:var(--ink2);max-width:960px}
+.doc{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px 24px}
+.doc h3{margin:0 0 10px;font-size:15px}
+.doc table{border-collapse:collapse;width:100%;font-size:13px}
+.doc th{text-align:left;background:#f7f9fb;color:var(--ink2);font-weight:500;padding:7px 10px;border-bottom:1px solid var(--line)}
+.doc td{padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
+.doc td:first-child{white-space:nowrap;font-weight:600}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.keep{margin:0;padding-left:18px;display:grid;gap:4px;font-size:13px}
+.frame{border:1px solid #c4cbd5;border-radius:12px;overflow:hidden;background:var(--bg)}
+.callouts{display:flex;flex-wrap:wrap;gap:8px 20px;margin:10px 0 0;padding:0;list-style:none;font-size:12.5px;color:var(--ink2)}
+.callouts li{display:block;max-width:440px}.callouts li i{margin-right:6px}
+.callouts i{flex:none;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#18202b;color:#fff;font:600 11px/1 system-ui;font-style:normal}
+.pin{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#18202b;color:#fff;font:600 11px/1 system-ui;vertical-align:1px;margin-left:4px}
+/* ---- 应用外壳（与真实站点同款） ---- */
+.app{display:flex;flex-direction:column;background:var(--bg);color:var(--ink)}
+.top{display:flex;align-items:center;gap:20px;padding:0 20px;height:44px;background:#fff;border-bottom:1px solid var(--line);font-size:13px}
+.top .brand{font-weight:700;display:flex;gap:8px;align-items:center}
+.top .brand i{width:26px;height:26px;border-radius:7px;background:var(--accent);display:inline-block}
+.top nav{display:flex;gap:2px}.top nav a{color:var(--ink2);padding:6px 9px;border-radius:6px}.top nav a.on{color:var(--accent-ink);background:var(--accent-soft);font-weight:600}
+.top .sp{flex:1}
+.subtabs{display:flex;align-items:center;gap:22px;padding:0 20px;background:#fff;border-bottom:1px solid var(--line)}
+.subtabs a{color:var(--ink2);padding:10px 0;border-bottom:2px solid transparent;font-weight:500}
+.subtabs a.on{color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.subtabs .sp{flex:1}
+.subtabs .badge{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--warn-soft);color:var(--warn);font-size:11px;font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:4px;height:22px;padding:0 8px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap;background:var(--neu);color:var(--ink2)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}.chip.warn{background:var(--warn-soft);color:var(--warn)}.chip.ai{background:var(--ai-soft);color:var(--ai)}
+.chip.ln{background:#fff;border:1px solid var(--ctl)}
+.chip button{all:unset;cursor:pointer;color:inherit;opacity:.7;padding:0 2px}
+.faint{color:var(--faint);font-size:12.5px}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;height:34px;padding:0 13px;border-radius:8px;border:1px solid var(--ctl);background:#fff;color:var(--ink);font-weight:500;white-space:nowrap}
+.btn.sm{height:28px;padding:0 10px;font-size:13px}.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}.btn.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px rgba(20,30,50,.05)}
+.h3{margin:0;font-size:12.5px;font-weight:600;color:var(--ink2);letter-spacing:.02em}
+.num{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--ink);border-bottom:1px dashed var(--ink2)}
+.role{font-size:11px;color:var(--faint);margin-left:3px}
+input.f,textarea.f,select.f{font:inherit;border:1px solid var(--ctl);border-radius:8px;padding:0 10px;height:34px;background:#fff;color:var(--ink);width:100%}
+textarea.f{height:auto;padding:8px 10px}
+/* ---- 三栏 ---- */
+.ws{display:grid;grid-template-columns:268px minmax(0,1fr) 330px;gap:0;flex:1;min-height:0}
+.ws.nodrawer{grid-template-columns:268px minmax(0,1fr)}
+.ws.solo{grid-template-columns:268px minmax(0,1fr)}
+.side{background:#fff;border-right:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden}
+.side .newbtn{width:100%;justify-content:flex-start;height:36px}
+.side .grp{margin:10px 4px 2px}
+.conv{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:8px;color:inherit}
+.conv:hover{background:#f7f9fb}.conv.on{background:var(--accent-soft)}
+.conv .t{font-weight:600;font-size:13.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.conv .m{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--faint)}
+.conv .st{display:inline-flex;gap:5px;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ctl);display:inline-block}.dot.run{background:var(--ai)}.dot.wait{background:#d98a1f}
+.mid{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.thead{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--line)}
+.thead h1{margin:0;font-size:16px;font-weight:600}
+.thead .sp{flex:1}
+.thread{flex:1;min-height:0;overflow:auto;padding:20px 24px;display:flex;flex-direction:column;gap:18px}
+.uq{align-self:flex-end;max-width:68%;display:flex;flex-direction:column;gap:4px;align-items:flex-end}
+.uq .b{background:var(--accent-soft);color:var(--accent-ink);border-radius:12px 12px 2px 12px;padding:9px 14px}
+.uq .ctx{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--faint)}
+.ag{display:flex;flex-direction:column;gap:10px;max-width:780px}
+.ag .who{display:flex;gap:8px;align-items:center}
+.ag p{margin:0}
+.scope{padding:6px 10px;background:var(--neu);border-radius:8px;font-size:13px}
+.bul{margin:0;padding-left:18px;display:grid;gap:5px}
+details.ev{border:1px solid var(--line);border-radius:8px;background:#fff}
+details.ev>summary{cursor:pointer;padding:7px 12px;font-size:13px;color:var(--ink2);font-weight:500;list-style:none;display:flex;gap:8px;align-items:center}
+details.ev>summary::before{content:"▸";font-size:10px;color:var(--faint)}details.ev[open]>summary::before{content:"▾"}
+details.ev>div{padding:0 12px 10px}
+table.t{border-collapse:collapse;width:100%;font-size:13px}table.t th{text-align:left;color:var(--ink2);font-weight:500;padding:5px 8px;background:#f7f9fb;border-bottom:1px solid var(--line)}table.t td{padding:5px 8px;border-bottom:1px solid var(--line2);vertical-align:top}
+.src{color:var(--faint);font-size:11.5px}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+.acts .btn{height:28px;font-size:12.5px;padding:0 10px}
+/* 任务卡 / 计划卡 */
+.task{border:1px solid #d9c4e8;background:#fbf7fd;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.task .hd{display:flex;gap:8px;align-items:center}
+.steps{margin:0;padding:0;list-style:none;display:grid;gap:3px;font-size:13px}
+.steps li{display:flex;gap:8px;align-items:baseline}.steps .g{width:14px;text-align:center;color:var(--faint)}
+.steps .done .g{color:var(--accent)}.steps .now .g{color:var(--ai)}.steps .now{font-weight:600}
+.meter{height:4px;background:#e8dcf1;border-radius:2px;overflow:hidden}.meter i{display:block;height:100%;background:var(--ai)}
+.plan{border:1px solid var(--accent);border-radius:10px;background:#fff;overflow:hidden}
+.plan .hd{padding:9px 14px;background:var(--accent-soft);display:flex;gap:8px;align-items:center;color:var(--accent-ink);font-weight:600}
+.plan dl{margin:0;padding:10px 14px;display:grid;grid-template-columns:84px 1fr;gap:6px 12px;font-size:13px}.plan dt{color:var(--faint)}.plan dd{margin:0}
+.plan .ft{padding:10px 14px;border-top:1px solid var(--line2);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+/* 输入区 */
+.compose{background:#fff;border-top:1px solid var(--line);padding:12px 24px 14px;position:relative}
+.cbox{border:1px solid var(--ctl);border-radius:12px;background:#fff;padding:8px 10px 8px;display:flex;flex-direction:column;gap:6px}
+.cbox:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.cbox .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.cbox textarea{border:0;outline:0;resize:none;font:inherit;width:100%;min-height:42px;padding:2px 2px;background:transparent}
+.cbox .sp{flex:1}
+.mode{display:inline-flex;gap:6px;align-items:center;height:26px;padding:0 10px;border-radius:999px;border:1px solid var(--ctl);background:#fff;font-size:12.5px;color:var(--ink2)}
+.mode b{color:var(--ink);font-weight:600}
+.chint{margin-top:6px;display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--faint)}
+.pop{position:absolute;z-index:5;background:#fff;border:1px solid var(--ctl);border-radius:12px;box-shadow:0 12px 32px rgba(20,30,50,.18);padding:6px}
+.pop .it{display:flex;gap:10px;padding:8px 10px;border-radius:8px;align-items:flex-start}
+.pop .it:hover{background:#f7f9fb}.pop .it.on{background:var(--accent-soft)}.pop .it.off{opacity:.55}
+.pop .it .r{width:14px;height:14px;border-radius:50%;border:2px solid var(--ctl);flex:none;margin-top:3px}.pop .it.on .r{border-color:var(--accent);background:radial-gradient(var(--accent) 45%,#fff 50%)}
+.pop .it b{display:block;font-size:13.5px}.pop .it span{display:block;font-size:12px;color:var(--faint)}
+.pop .sep{height:1px;background:var(--line2);margin:4px 6px}
+/* 右侧档案抽屉 */
+.drawer{background:#fff;border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.dtabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--line)}
+.dtabs button{border:0;background:none;padding:8px 10px;color:var(--ink2);border-bottom:2px solid transparent;font-weight:500;font-size:13px}
+.dtabs button.on{color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.dbody{padding:14px 16px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.dpane[hidden]{display:none}
+.sec{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line2)}.sec:first-child{border-top:0;padding-top:0}
+.tile{background:#f7f9fb;border-radius:8px;padding:8px 10px}
+.banner{display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:8px;font-size:13px}
+.banner.warn{background:var(--warn-soft);color:#6f3a05}.banner.ai{background:var(--ai-soft);color:#4f2072}.banner.neu{background:var(--neu);color:var(--ink2)}
+.banner .sp{flex:1}
+/* 状态画廊 */
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(400px,1fr));gap:14px;padding:18px;background:var(--bg)}
+.gal .cell{display:flex;flex-direction:column;gap:8px}
+.gal .cap{font-size:12.5px;font-weight:600;color:var(--ink2)}
+.gal .stage{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:10px;flex:1}
+/* 页面型（组合 / 约定） */
+.page{padding:20px 24px;display:grid;gap:16px;align-content:start}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:4px 12px;margin:0;font-size:13px}.kv dt{color:var(--faint)}.kv dd{margin:0}
+.diff{display:grid;gap:6px;font-size:13px}.diff div{padding:6px 10px;border-radius:6px}.diff .o{background:#f4f5f7;color:var(--ink2);text-decoration:line-through}.diff .n{background:var(--accent-soft);color:var(--accent-ink)}
+.opt{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:#fff}
+.opt.cur{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.hr{height:1px;background:var(--line2);margin:2px 0}
+/* 手机 */
+.phones{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.phone{width:390px;height:800px;border-radius:28px;border:1px solid #b9c1cc;overflow:hidden;background:var(--bg);display:flex;flex-direction:column;position:relative;box-shadow:0 8px 24px rgba(20,30,50,.12)}
+.phone .ptop{height:48px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;padding:0 14px;flex:none}
+.phone .ptop b{font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ptabs{display:flex;background:#fff;border-bottom:1px solid var(--line);flex:none}
+.ptabs a{flex:1;text-align:center;padding:11px 0;color:var(--ink2);font-weight:500;border-bottom:2px solid transparent;min-height:44px}
+.ptabs a.on{color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.phone .thread{padding:14px;gap:14px}
+.phone .compose{padding:10px 12px 14px}
+.phone .uq{max-width:86%}
+.phone .btn{min-height:44px}
+.sheetpane{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:18px 18px 0 0;box-shadow:0 -10px 30px rgba(20,30,50,.22);padding:10px 16px 18px;display:flex;flex-direction:column;gap:10px}
+.sheetpane .grab{width:40px;height:4px;border-radius:2px;background:var(--ctl);align-self:center}
+.scrim{position:absolute;inset:0;background:rgba(24,32,43,.38)}
+.pres{display:flex;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line2);align-items:center;min-height:52px}
+.pres:last-child{border-bottom:0}.pres .nm{flex:1}.pres .nm b{display:block}
+@media(max-width:900px){.cols,.grid2,.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav class="mk-nav"><b>AI 页重设计</b>
+<a href="#why">现状与改动</a><a href="#d1">① 工作界面</a><a href="#d2">② 新对话</a><a href="#d3">③ 对象与处理方式</a><a href="#d4">④ 状态与异常</a><a href="#d5">⑤ 组合</a><a href="#d6">⑥ 约定与记忆</a><a href="#m">⑦ 手机</a>
+<span class="note">示例公司与数字均为虚构 · 仅为 mockup，未改任何代码</span></nav>
+
+<!-- ============ 现状与改动 ============ -->
+<section class="sheet" id="why">
+<h2 class="mk">现状与改动思路 <small>/app/agent · 对话工作台</small></h2>
+<p class="lead">现在这个页面是把每个后端契约各配了一块表单：对象查找、范围下拉、重取收据、投资约定、记忆、档案控制、真实组合全堆在一张页面里，对话只占其中三分之一。重设计的原则：<b>一件事一个位置</b>——对话里只做对话（连同对象、任务、计划、意见卡片），档案放右侧抽屉，账户与约定这类“设置型”功能移到同页的二级页签。</p>
+<div class="doc">
+<table>
+<tr><th style="width:150px">位置</th><th>现在</th><th>重设计</th></tr>
+<tr><td>选择对象</td><td>输入框上方独立表单：先输入名称 → 点“查找对象” → 点结果 → 勾“添加为比较对象”；绑定状态是一行字“下一条：无证券绑定”</td><td>对象是输入框里的<b>芯片</b>；输入 <span class="mono">@</span> 或代码即弹出带消歧的候选；加第二个对象即自动识别为比较；发送后固定在那条消息上</td></tr>
+<tr><td>处理方式</td><td>“本次范围”7 项下拉（解释已有材料 / 局部核查 / 完整公司研究 / 组合建议…），用户要自己判断任务类型</td><td>默认“自动”，输入框内一枚小胶囊；展开后是带一句话说明的单选，不满足前提的选项置灰并写明原因（如组合建议需先选账户快照）</td></tr>
+<tr><td>任务进度</td><td>所有任务面板堆在整串消息的最后面，与触发它的提问分离</td><td>任务卡<b>紧跟在触发它的回答之后</b>：步骤、额度用量、取消入口都在原位；完整研究先出<b>计划卡</b>，确认后才开始</td></tr>
+<tr><td>回答呈现</td><td>纯文本；观点、证据、数字来源要去右栏找</td><td>回答首屏 = 范围 + 立场 + 最重要理由 + 下一步；数字是带“事实/计算/假设”标注的节点；证据、反证、估值折叠；操作（我不同意 / 数据有误 / 记录决定）在回答下方</td></tr>
+<tr><td>状态与错误</td><td>一条 aria-live 文本“notice”承载所有状态；“重取待确认请求”“收据冲突”等工程概念直出</td><td>状态就地显示：消息气泡下的“发送结果待确认”、顶部“依据的观点已有更新”条、任务卡里的“等你处理 / 正在停止 / 部分完成”。用词全部走契约里的文案映射</td></tr>
+<tr><td>会话列表</td><td>一串同样的按钮，标题默认“新对话”</td><td>按“需要你处理 / 进行中 / 最近”分组；标题自动取“对象 + 首个问题”；带对象芯片与任务状态</td></tr>
+<tr><td>右栏</td><td>“研究对象与更新”里叠着档案视图、启用与约定、决定、记忆、档案控制；底部整宽“真实组合”</td><td>右侧只放<b>档案抽屉</b>（判断 / 过程 / 决定，可收起）；“组合”“约定与记忆”“后台研究”各成同页二级页签，不再和对话抢空间</td></tr>
+<tr><td>空状态</td><td>标题“请选择或新建对话”，必须先点“新对话”才能输入</td><td>直接可输入；给出按场景分组的示例问题，以及候选带入、待你处理的事项，并显示数据时效与已知缺口</td></tr>
+</table>
+</div>
+<div class="cols" style="margin-top:16px">
+<div class="doc"><h3>保持不变的产品约束</h3>
+<ul class="keep">
+<li>对象与版本<b>在发送时固定</b>；切换对象只影响下一条，历史消息不被追溯改变</li>
+<li>普通提问<b>不会自动启动完整公司研究</b>；完整研究先给计划，普通研究不逐步确认</li>
+<li>取消 = “正在停止”直到确认停下；断线重连只补进展，不取消任务</li>
+<li>发送未确认时不丢内容：草稿与原请求保留，只能重取同一份请求（幂等收据）</li>
+<li>引用的观点变化时：旧回答保持原样并标注“依据的观点已有更新”</li>
+<li>状态只用文字标签，颜色仅作辅助；枚举值一律用契约文案</li>
+</ul></div>
+<div class="doc"><h3>有意识的取舍（待你拍板）</h3>
+<ul class="keep">
+<li>档案抽屉默认展开，窄屏自动收起；是否默认收起可调</li>
+<li>“处理方式”仍保留但降级为胶囊——想让它彻底消失（全靠自动）也可以，代价是用户失去强制“只解释已有材料”的手段</li>
+<li>“组合 / 约定与记忆”做成同页页签而非独立路由，便于沿用现有 <span class="mono">agent:*</span> 事件与扩展挂载点；若想要独立 URL 也容易拆</li>
+<li>首屏不展示“模型指纹”“精确引用版本审计”等审计信息，移到各卡片的“详情”里</li>
+</ul></div>
+</div>
+</section>
+
+<!-- ============ ① 工作界面 ============ -->
+<section class="sheet" id="d1">
+<h2 class="mk">① 对话工作界面 <small>桌面 · 进行中的会话（可点击右侧抽屉页签与“处理方式”）</small></h2>
+<p class="lead">三栏：会话 / 对话 / 档案。对象、处理方式、草稿状态都收进输入框；任务与计划紧跟在各自的回答之后。</p>
+<div class="frame"><div class="app" style="height:1500px">
+  <div class="top"><span class="brand"><i></i>zcharlie 研究台</span>
+    <nav><a>今日概览</a><a>候选池</a><a class="on">AI</a><a>模板</a><a>观察池</a><a>运行中心</a><a>数据健康</a><a>研究方法</a><a>设置</a></nav><span class="sp"></span><a class="faint">退出</a></div>
+  <div class="subtabs"><a class="on">对话</a><a>组合</a><a>约定与记忆<span class="badge">1</span></a><span class="sp"></span>
+    <span class="chip">数据截至 2026-10-09 收盘</span><span class="chip">今日额度 ¥0.31 / ¥2.00</span></div>
+  <div class="ws" id="ws1">
+    <aside class="side" aria-label="会话">
+      <button class="btn pri newbtn">＋ 新对话</button>
+      <input class="f" type="search" placeholder="搜索对话、名称或代码" style="margin:4px 0 0">
+      <div class="h3 grp">需要你处理 · 1</div>
+      <a class="conv"><span class="t">公司乙 · 投资期限是多少？</span><span class="m"><span class="st"><span class="dot wait"></span>等你处理</span><span>·</span><span>昨天</span></span></a>
+      <div class="h3 grp">进行中 · 1</div>
+      <a class="conv on"><span class="t">公司甲 · 这次下跌改变了什么？</span><span class="m"><span class="st"><span class="dot run"></span>取证中 步骤 3/6</span></span></a>
+      <div class="h3 grp">最近</div>
+      <a class="conv"><span class="t">公司丙 · 业绩预告扭亏值得追吗</span><span class="m"><span class="st"><span class="dot"></span>已完成</span><span>·</span><span>10-08</span></span></a>
+      <a class="conv"><span class="t">比较 公司己 / 公司庚</span><span class="m"><span class="st"><span class="dot"></span>已完成</span><span>·</span><span>10-05</span></span></a>
+      <a class="conv"><span class="t">你上次的判断哪里错了？</span><span class="m"><span class="st"><span class="dot"></span>已完成</span><span>·</span><span>10-02</span></span></a>
+      <a class="conv"><span class="faint">还有 14 个 …</span></a>
+    </aside>
+
+    <main class="mid">
+      <div class="thead">
+        <h1>公司甲 · 这次下跌改变了什么？</h1>
+        <span class="chip ln">公司甲 600001</span><span class="chip">判断 v3 · 有效</span>
+        <span class="sp"></span>
+        <button class="btn sm" id="toggleDrawer" type="button">档案 ▸ 收起</button>
+      </div>
+      <div class="thread">
+        <div class="uq"><div class="b">这次下跌改变了什么？</div>
+          <div class="ctx"><span class="chip ln">公司甲 · 判断 v3</span><span>10-10 09:12 · 发送时对象已固定</span></div></div>
+
+        <div class="ag">
+          <div class="who"><span class="chip ai">Agent</span><span class="faint">基于判断 v3 · 数据截至 10-09</span></div>
+          <div class="scope"><b>本回答的范围：</b>价格下跌和三季报对现有判断的影响。公司整体长期价值仍待研究。</div>
+          <p style="font-size:15px"><b>立场：经营判断从“偏正面”改为“好坏参半”，价格判断暂不判断；回答前不发布买卖看法。</b>下跌本身不是原因，改变它的是三季报里的现金转化反证。</p>
+          <ul class="bul">
+            <li><b>关键假设出现反证。</b>累计前三季度经营现金流 <a class="num">-1.20 亿元</a><span class="role">事实</span>，与“现金转化可持续”相反——这正是我在 v2 写下的证伪条件。</li>
+            <li><b>价格依据也变了。</b>旧现金流基数不能直接沿用；先核实持续现金流，再判断价格是否有吸引力。</li>
+            <li><b>还不知道的事。</b>下滑是否来自季节性备货。需要同口径营运资金与历史季节性材料。</li>
+          </ul>
+          <details class="ev"><summary>证据 · 3 条</summary><div>
+            <table class="t"><tr><th>事实</th><th>数值</th><th>来源与时点</th></tr>
+            <tr><td>收盘价</td><td class="mono">18.42</td><td class="src">腾讯行情 · 10-09 收盘 · 已核验</td></tr>
+            <tr><td>前三季度经营现金流</td><td class="mono">-1.20 亿元</td><td class="src">东财分期表 · 2026Q3 · 取得 10-08 · 已核验</td></tr>
+            <tr><td>近三年收入增速</td><td class="mono">7.8%</td><td class="src">PIT 快照 · as_of 10-09 · 已核验</td></tr></table></div></details>
+          <details class="ev"><summary>反证与替代解释 · 2 条</summary></details>
+          <details class="ev"><summary>反向 DCF：现金流基础待核，暂不计算</summary></details>
+          <div class="acts"><button class="btn">查看判断 v3</button><button class="btn">我不同意</button><button class="btn">这个数据有误</button><button class="btn">记录我的决定</button></div>
+
+          <div class="task" id="taskA">
+            <div class="hd"><span class="chip ai">取证中</span><b>核查：现金流下滑是否为季节性备货</b><span style="flex:1"></span><button class="btn sm">取消</button></div>
+            <ul class="steps">
+              <li class="done"><span class="g">✓</span>读取同口径历史现金流</li>
+              <li class="done"><span class="g">✓</span>读取近三年营运资金变化</li>
+              <li class="now"><span class="g">●</span>检查备货与应收变动是否解释下滑</li>
+              <li><span class="g">○</span>查找原文说明（尚缺公告原文，可能受限）</li>
+              <li><span class="g">○</span>整理结论与反证</li>
+            </ul>
+            <div class="meter"><i style="width:50%"></i></div>
+            <div class="faint">步骤 3/6 · 模型调用 4/12 · 工具调用 7/24 · 已用 ¥0.31　<a>详情</a></div>
+          </div>
+        </div>
+
+        <div class="uq"><div class="b">和公司丁比，先研究哪家？</div>
+          <div class="ctx"><span class="chip ln">公司甲 · 判断 v3</span><span class="chip ln">公司丁 · 判断 v1</span><span>10-10 09:20 · 已识别为比较</span></div></div>
+
+        <div class="ag">
+          <div class="who"><span class="chip ai">Agent</span><span class="faint">比较研究需要先确认计划</span></div>
+          <p>可以比较，但两家目前口径不同：公司丁只有一份 v1 线索，没有现金流材料。我会先按下面的计划做，<b>只回答“先研究哪家”，不做总分排名</b>。</p>
+          <div class="plan">
+            <div class="hd">比较研究计划 · 待你确认</div>
+            <dl><dt>要回答</dt><dd>公司甲与公司丁，哪一家更值得先投入研究？</dd>
+              <dt>先查什么</dt><dd>两家同口径的现金转化、收入增速与财务缺口；公司丁补齐三年分期表</dd>
+              <dt>完成标准</dt><dd>给出优先顺序与各自最可能改变结论的反证</dd>
+              <dt>停止条件</dt><dd>材料无法同口径、无新增进展或达到额度</dd>
+              <dt>本次上限</dt><dd>模型调用 16 次 · 工具调用 30 次 · 约 ¥0.60（已有 1 个任务进行中，会排在其后）</dd></dl>
+            <div class="ft"><button class="btn pri">开始比较研究</button><button class="btn">缩小范围</button><button class="btn ghost">先不做</button><span class="faint" style="margin-left:auto">不确认不会消耗额度</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compose">
+        <div class="cbox">
+          <div class="row"><span class="faint">下一条的对象：</span><span class="chip acc">公司甲 600001 · 判断 v3<button aria-label="移除">✕</button></span><button class="chip ln" type="button">＋ 对象</button><span class="sp"></span>
+            <button class="mode" id="modeBtn" type="button">处理方式 <b>自动</b> ▾</button></div>
+          <textarea rows="2" placeholder="继续问：你为什么不同意我？ / 你上次的判断哪里错了？　（输入 @ 或代码可指定证券）"></textarea>
+          <div class="row"><span class="faint">草稿已保存</span><span class="sp"></span><span class="faint">Enter 发送 · Shift+Enter 换行</span><button class="btn pri" type="button">发送</button></div>
+        </div>
+        <div class="pop" id="modePop" hidden style="right:24px;bottom:132px;width:380px">
+          <div class="it on"><i class="r"></i><div><b>自动（推荐）</b><span>能用已有材料回答就直接答；需要新取证会先给你看计划</span></div></div>
+          <div class="it"><i class="r"></i><div><b>只解释已有材料</b><span>不做新取证，只说明已保存的判断和依据</span></div></div>
+          <div class="it"><i class="r"></i><div><b>局部核查</b><span>只查一个具体问题，不改动整体公司判断</span></div></div>
+          <div class="it"><i class="r"></i><div><b>完整公司研究</b><span>先出计划，你确认后开始；受本次额度限制</span></div></div>
+          <div class="it"><i class="r"></i><div><b>比较明确对象</b><span>需要两个以上对象，只回答先研究哪家</span></div></div>
+          <div class="it"><i class="r"></i><div><b>复盘</b><span>回看当时的假设、复核是否按时触发、哪一步出了错</span></div></div>
+          <div class="sep"></div>
+          <div class="it off"><i class="r"></i><div><b>组合建议</b><span>需要先选账户快照 · <a>去“组合”选择</a></span></div></div>
+        </div>
+        <div class="chint"><span>对象与版本在发送时固定，切换只影响下一条消息。</span><span>普通提问不会自动启动完整研究。</span></div>
+      </div>
+    </main>
+
+    <aside class="drawer" id="drawer1" aria-label="研究档案">
+      <div class="dtabs"><button class="on" data-t="p1">判断</button><button data-t="p2">过程</button><button data-t="p3">决定与持仓</button></div>
+      <div class="dbody">
+        <div class="dpane" data-p="p1">
+          <div class="sec"><div style="display:flex;align-items:center;gap:8px"><b style="font-size:15px">公司甲</b><span class="faint">600001</span><span class="chip">研究中</span></div>
+            <div class="acts"><span class="chip">经营 好坏参半</span><span class="chip">价格 暂不判断</span><span class="chip warn">暂不发布买卖看法</span></div>
+            <div>经营价值取决于现金转化能否恢复；旧现金流基数需复核，价格暂不判断。</div>
+            <div class="faint">研究充分度：有限 · 判断 v3 · 10-09 <a>对比 v2 与 v3</a></div></div>
+          <div class="sec"><div class="h3">关键假设</div>
+            <table class="t"><tr><td>主营收入增速维持 7% 以上</td><td><span class="chip acc">已取证</span></td></tr>
+            <tr><td>现金转化改善</td><td><span class="chip warn">反证出现</span></td></tr>
+            <tr><td>竞争优势来自渠道</td><td><span class="chip">仅定性</span></td></tr>
+            <tr><td>管理层资本配置纪律</td><td><span class="chip">尚缺材料</span></td></tr></table></div>
+          <div class="sec"><div class="h3">估值情景</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div class="tile"><div class="faint">反向 DCF</div><div class="mono" style="font-size:16px">暂不计算</div></div><div class="tile"><div class="faint">PE 五年分位</div><div class="mono" style="font-size:16px">23%</div></div></div></div>
+          <div class="sec"><div class="h3">未解决问题 · 2</div>
+            <ul class="bul"><li>现金流下滑是否为季节性备货 <span class="faint">取证中</span></li><li>一次性收益口径 <span class="faint">需公告原文，尚缺材料</span></li></ul></div>
+        </div>
+        <div class="dpane" data-p="p2" hidden>
+          <div class="sec"><div class="h3">本对话的研究过程</div>
+            <div class="opt"><div style="display:flex;gap:6px;align-items:center"><span class="chip ai">进行中</span><b>季节性备货核查</b></div><div class="faint">步骤 3/6 · 停止条件：材料无法同口径、无进展或达额度</div></div>
+            <div class="opt"><div style="display:flex;gap:6px;align-items:center"><span class="chip">待确认</span><b>比较研究：公司甲 / 公司丁</b></div><div class="faint">计划已保存，等待你开始</div></div></div>
+          <div class="sec"><div class="h3">本对话引用的观点</div>
+            <div>公司观点 v3 <span class="chip acc">当前有效</span></div><div class="faint">有效期至 2026-10-23</div></div>
+          <div class="sec"><div class="h3">已保存材料搜索</div><input class="f" placeholder="例如：净利润、竞争、风险"><div class="faint">只搜索已保存的材料，不触发新取证。</div></div>
+        </div>
+        <div class="dpane" data-p="p3" hidden>
+          <div class="sec"><div class="h3">用户决定</div><div>09-30 你决定<b>暂不行动</b>，理由：等三季报。</div>
+            <div class="acts"><button class="btn">接受</button><button class="btn">不采纳</button><button class="btn">暂缓</button><button class="btn">我自行决定</button></div>
+            <div class="faint">决定不改变持仓；“跌到某价再买”会存为条件性决定。</div></div>
+          <div class="sec"><div class="h3">实际持仓</div><div class="faint">未录入。<a>去“组合”记录</a></div></div>
+          <div class="sec"><div class="h3">档案操作</div><div class="acts"><button class="btn">固定关注</button><button class="btn">请求复核</button></div><div class="faint">暂停、静音、归档在“约定与记忆”页签，并说明各自影响。</div></div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</div></div>
+<ul class="callouts">
+<li><i>1</i>会话标题自动取“对象 + 首个问题”；列表按“需要你处理”优先</li>
+<li><i>2</i>对象是输入框内的芯片，发送后随消息固定显示</li>
+<li><i>3</i>“处理方式”降级为胶囊，默认自动（点一下看展开）</li>
+<li><i>4</i>任务卡贴在触发它的回答下；完整研究先出计划卡</li>
+<li><i>5</i>档案抽屉可收起；操作类入口集中到“决定与持仓”</li>
+</ul>
+</section>
+
+<!-- ============ ② 新对话 ============ -->
+<section class="sheet" id="d2">
+<h2 class="mk">② 新对话（空状态） <small>不再需要先点“新对话”才能输入</small></h2>
+<p class="lead">打开页面就在“新对话”里：输入框居中，下面是按场景分组的起手问题、可带入的候选、待你处理的事项，以及开始前该知道的数据时效与已知缺口。</p>
+<div class="frame"><div class="app" style="height:900px">
+  <div class="top"><span class="brand"><i></i>zcharlie 研究台</span><nav><a>今日概览</a><a>候选池</a><a class="on">AI</a><a>模板</a><a>观察池</a><a>运行中心</a><a>数据健康</a><a>研究方法</a><a>设置</a></nav><span class="sp"></span><a class="faint">退出</a></div>
+  <div class="subtabs"><a class="on">对话</a><a>组合</a><a>约定与记忆<span class="badge">1</span></a><span class="sp"></span><span class="chip">数据截至 2026-10-09 收盘</span><span class="chip">今日额度 ¥0 / ¥2.00</span></div>
+  <div class="ws solo">
+    <aside class="side">
+      <button class="btn pri newbtn">＋ 新对话</button>
+      <input class="f" type="search" placeholder="搜索对话、名称或代码" style="margin:4px 0 0">
+      <div class="h3 grp">需要你处理 · 1</div>
+      <a class="conv"><span class="t">公司乙 · 投资期限是多少？</span><span class="m"><span class="st"><span class="dot wait"></span>等你处理</span><span>·</span><span>昨天</span></span></a>
+      <div class="h3 grp">进行中 · 1</div>
+      <a class="conv"><span class="t">公司甲 · 这次下跌改变了什么？</span><span class="m"><span class="st"><span class="dot run"></span>取证中</span></span></a>
+      <div class="h3 grp">最近</div>
+      <a class="conv"><span class="t">公司丙 · 业绩预告扭亏值得追吗</span><span class="m"><span class="st"><span class="dot"></span>已完成</span><span>·</span><span>10-08</span></span></a>
+    </aside>
+    <main class="mid" style="overflow:auto">
+      <div style="max-width:820px;width:100%;margin:0 auto;padding:44px 24px 24px;display:flex;flex-direction:column;gap:22px">
+        <div><h1 style="margin:0;font-size:24px;font-weight:600">今天想研究什么？</h1>
+          <div class="faint" style="margin-top:4px">从一个具体的问题开始。涉及某家公司时输入 <span class="mono">@</span> 或代码即可指定；没有填写完整画像也能开始。</div></div>
+        <div class="cbox" style="padding:12px 14px">
+          <div class="row"><span class="faint">对象：</span><span class="chip ln">未指定</span><button class="chip ln" type="button">＋ 对象</button><span class="sp"></span><button class="mode" type="button">处理方式 <b>自动</b> ▾</button></div>
+          <textarea rows="3" placeholder="例如：600001 这家公司为什么值得关注？"></textarea>
+          <div class="row"><span class="sp"></span><button class="btn pri" type="button">开始</button></div>
+        </div>
+
+        <div class="grid3">
+          <div class="card"><div class="h3">关于一家公司</div><div style="display:grid;gap:6px;margin-top:8px">
+            <a>这家公司为什么值得关注？</a><a>这次下跌改变了什么？</a><a>你为什么不同意我？</a><a>现在价格隐含了什么预期？</a></div></div>
+          <div class="card"><div class="h3">在几家之间选</div><div style="display:grid;gap:6px;margin-top:8px">
+            <a>比较两家，先研究哪家？</a><a>候选里哪几个值得推进？</a></div></div>
+          <div class="card"><div class="h3">回头检查自己</div><div style="display:grid;gap:6px;margin-top:8px">
+            <a>你上次的判断哪里错了？</a><a>哪些判断快到复核日期？</a><a>复盘公司甲第一个研究阶段</a></div></div>
+        </div>
+
+        <div class="grid2">
+          <div class="card"><div style="display:flex;align-items:center;gap:8px"><b>从候选带入</b><span class="chip acc">3 个待处理</span></div>
+            <div class="pres"><div class="nm"><b>600519.SH 贵州茅台</b><span class="faint">稳健质量成长 v2 · 命中 8/8 项 · 到期 10-21</span></div><button class="btn sm">带入对话</button></div>
+            <div class="pres"><div class="nm"><b>000858.SZ 五粮液</b><span class="faint">稳健质量成长 v2 · 命中 7/8 项 · 到期 10-21</span></div><button class="btn sm">带入对话</button></div>
+            <a class="faint">去候选页 →</a></div>
+          <div class="card"><div style="display:flex;align-items:center;gap:8px"><b>等你处理</b><span class="chip warn">2</span></div>
+            <div class="pres"><div class="nm"><b>公司乙需要你补充投资期限</b><span class="faint">截止 10-12 · 影响价格判断</span></div><button class="btn sm">去回答</button></div>
+            <div class="pres"><div class="nm"><b>约定变更提案待审阅</b><span class="faint">来自研究任务，尚未获授权</span></div><button class="btn sm">去审阅</button></div></div>
+        </div>
+        <div class="banner neu"><span><b>开始前须知：</b>价格数据截至 10-09 收盘 · 模型能力验证已通过（9/9）· 已知缺口：公告原文尚未接入，部分问题只能回答到“证据不足”。</span><span class="sp"></span><a>详情</a></div>
+      </div>
+    </main>
+  </div>
+</div></div>
+<ul class="callouts"><li><i>1</i>“从候选带入”沿用现有 <span class="mono">?candidate=</span> 上下文：点一下即带着对象与版本开聊</li><li><i>2</i>开始前须知取自设计要求：数据时效、模型验证结果、已知缺口</li></ul>
+</section>
+
+<!-- ============ ③ 对象与处理方式 ============ -->
+<section class="sheet" id="d3">
+<h2 class="mk">③ 指定对象与处理方式 <small>输入框内完成，不再有独立表单</small></h2>
+<p class="lead">三个局部放大：@ 候选与消歧、添加第二个对象时自动识别为比较、处理方式里不满足前提的选项置灰并说明原因。</p>
+<div class="gal" style="background:transparent;padding:0">
+  <div class="cell"><div class="cap">A. 输入 @ 或代码 → 候选（含消歧、范围外提示）</div>
+    <div class="stage" style="min-height:420px;position:relative;justify-content:flex-end">
+      <div class="cbox"><div class="row"><span class="faint">下一条的对象：</span><span class="chip ln">未指定</span></div><textarea rows="2">@华</textarea><div class="row"><span class="sp"></span><button class="btn pri" type="button">发送</button></div></div>
+      <div class="pop" style="left:14px;right:14px;bottom:138px">
+        <div class="h3" style="padding:6px 10px">证券身份库 · 3 个匹配，请选择一个</div>
+        <div class="it on" style="display:flex;gap:10px;padding:8px 10px"><div style="flex:1"><b>华夏能源</b><div class="faint">600012.SH · 申万 电力</div></div><span class="faint">↵</span></div>
+        <div class="it" style="display:flex;gap:10px;padding:8px 10px"><div style="flex:1"><b>华夏能源</b><div class="faint">00012.HK · 港股</div></div><span class="chip warn">范围外 · 只能保存线索</span></div>
+        <div class="it" style="display:flex;gap:10px;padding:8px 10px"><div style="flex:1"><b>华兴材料</b><div class="faint">300088.SZ · 申万 化工</div></div></div>
+        <div class="sep"></div><div class="faint" style="padding:4px 10px 6px">没有找到？请核对完整代码或先导入证券资料。</div></div></div></div>
+  <div class="cell"><div class="cap">B. 加入第二个对象 → 自动识别为比较</div>
+    <div class="stage" style="justify-content:flex-end;min-height:420px">
+      <div class="cbox"><div class="row"><span class="faint">下一条的对象：</span><span class="chip acc">公司甲 600001 · v3<button>✕</button></span><span class="chip acc">公司丁 000004 · v1<button>✕</button></span><button class="chip ln" type="button">＋ 对象</button><span class="sp"></span><button class="mode" type="button">处理方式 <b>比较</b>（自动识别）▾</button></div>
+        <textarea rows="2">先研究哪家？</textarea><div class="row"><span class="sp"></span><button class="btn pri" type="button">发送</button></div></div>
+      <div class="banner ai"><span>已识别为比较：只回答“先研究哪家”，不做总分排名；口径不一致时会在表头提示。</span></div>
+      <div class="faint">最多可同时指定 32 个对象；超过时提示先清除再选择。</div></div></div>
+  <div class="cell"><div class="cap">C. 处理方式：前提不满足的选项置灰并写明原因</div>
+    <div class="stage" style="align-items:flex-start">
+      <div class="pop" style="position:static;width:100%;box-shadow:none">
+        <div class="it on"><i class="r"></i><div><b>自动（推荐）</b><span>能用已有材料回答就直接答；需要新取证会先给你看计划</span></div></div>
+        <div class="it"><i class="r"></i><div><b>完整公司研究</b><span>先出计划，你确认后开始；受本次额度限制</span></div></div>
+        <div class="it off"><i class="r"></i><div><b>比较明确对象</b><span>需要两个以上对象 · 现在只选了 1 个</span></div></div>
+        <div class="it off"><i class="r"></i><div><b>组合建议</b><span>需要先选账户快照 · <a>去“组合”选择</a></span></div></div>
+        <div class="it off"><i class="r"></i><div><b>复盘</b><span>该对象还没有可复盘的历史观点</span></div></div></div></div></div>
+</div>
+</section>
+
+<!-- ============ ④ 状态与异常 ============ -->
+<section class="sheet" id="d4">
+<h2 class="mk">④ 状态与异常 <small>替代现在那条统一的 notice 文本，状态就地出现</small></h2>
+<p class="lead">每种状态出现在它发生的位置，说清已经发生了什么、没有丢什么、下一步能做什么；不展示错误堆栈和工程术语。文案对应契约里的映射表。</p>
+<div class="frame"><div class="gal">
+  <div class="cell"><div class="cap">发送结果待确认（网络中断 / 5xx）</div><div class="stage">
+    <div class="uq" style="align-self:stretch;max-width:100%"><div class="b">你为什么不同意我？</div><div class="ctx"><span class="chip ln">公司甲 · 判断 v3</span></div></div>
+    <div class="banner warn"><div><b>这条消息是否已送达尚未确认。</b><div style="font-size:12px">内容和对象已原样保留，不会重复提交。</div></div><span class="sp"></span><button class="btn sm">确认是否已送达</button></div></div></div>
+  <div class="cell"><div class="cap">任务：等你处理（waiting_user）</div><div class="stage">
+    <div class="task"><div class="hd"><span class="chip warn">等你处理</span><b>公司乙：判断价格需要你的投资期限</b></div>
+      <div class="faint">截止 10-12 18:00 · 超时将按“暂不判断价格”继续</div>
+      <div style="display:flex;gap:8px"><input class="f" placeholder="例如：3 年以上，不急用"><button class="btn pri">提交</button></div>
+      <a class="faint">先跳过，价格判断保持“暂不判断”</a></div></div></div>
+  <div class="cell"><div class="cap">正在停止（cancel_requested）</div><div class="stage">
+    <div class="task"><div class="hd"><span class="chip ai">正在停止</span><b>核查：现金流下滑是否为季节性备货</b></div>
+      <div class="meter"><i style="width:50%"></i></div><div class="faint">已请求停止；确认执行已经停下前，仍可能产生一次调用。已完成的步骤会保留。</div>
+      <button class="btn sm" disabled style="align-self:flex-start">取消任务</button></div></div></div>
+  <div class="cell"><div class="cap">任务：部分完成 + 停止原因</div><div class="stage">
+    <div class="task" style="background:#fff;border-color:var(--ctl)"><div class="hd"><span class="chip warn">部分完成</span><b>核查：现金流下滑是否为季节性备货</b></div>
+      <div class="faint">停止原因：<b>证据受阻</b> · 已完成 3/6 步 · 已用 ¥0.42</div>
+      <ul class="steps"><li class="done"><span class="g">✓</span>历史现金流与营运资金</li><li><span class="g">—</span>公告原文说明（尚缺材料）</li></ul>
+      <div class="acts"><button class="btn">查看已保存的部分</button><button class="btn">补充材料后重试</button></div></div></div></div>
+  <div class="cell"><div class="cap">依据的观点已有更新（对话顶部 + 旧回答标注）</div><div class="stage">
+    <div class="banner ai"><div><b>你引用的判断 v3 已有更新（v4）</b><div style="font-size:12px">经营判断改为“偏负面”。此前的回答保持原样。</div></div><span class="sp"></span><button class="btn sm">看变化</button><button class="btn sm">并列比较</button></div>
+    <div class="ag" style="gap:6px"><div class="scope">立场：经营判断“好坏参半”…</div><div class="faint"><span class="chip warn">依据的观点已有更新</span> 引用的观点当前已被替代</div></div></div></div>
+  <div class="cell"><div class="cap">引用的观点：待复核 / 已过期</div><div class="stage">
+    <div class="banner warn"><span><b>公司丁 判断 v1 待复核</b>：有效期已到。回答可以引用，但会先说明它的历史状态。</span><span class="sp"></span><button class="btn sm">请求复核</button></div>
+    <div class="banner neu"><span class="chip">已过期</span><span>公司庚 判断 v2 已过期，不能作为当前观点。</span></div></div></div>
+  <div class="cell"><div class="cap">实时连接中断 → 轮询（后台任务继续）</div><div class="stage"><div class="banner neu"><span>实时连接未恢复，已切换为定时刷新；后台任务仍在继续，不会取消。</span></div>
+    <div class="cap" style="margin-top:6px">Agent 未启用 / 无授权</div><div class="banner warn"><div><b>Agent 目前处于关闭状态</b><div style="font-size:12px">已保存的历史仍可阅读，发送新问题前需要先启用并确认投资约定。</div></div><span class="sp"></span><button class="btn sm pri">去启用</button></div></div></div>
+  <div class="cell"><div class="cap">浏览器无法保存草稿</div><div class="stage"><div class="banner warn"><span>浏览器无法保存草稿与待确认请求。请保留本页再发送，恢复存储后再关闭。</span></div>
+    <div class="cap" style="margin-top:6px">对象或版本不可用</div><div class="banner warn"><span>公司甲 v3 已不可用。请重新选择明确的对象；输入的内容已保留。</span><span class="sp"></span><button class="btn sm">重选对象</button></div></div></div>
+</div></div>
+</section>
+
+<!-- ============ ⑤ 组合 ============ -->
+<section class="sheet" id="d5">
+<h2 class="mk">⑤ 二级页签：组合 <small>原“真实组合”整宽区块 → 独立页签</small></h2>
+<p class="lead">账户、持仓、资金用途、方案放到这里。“绑定快照到下一条消息”是它与对话的唯一接口：点击后回到对话页，输入框出现“组合快照”芯片，处理方式变为“组合建议”。</p>
+<div class="frame"><div class="app" style="height:820px">
+  <div class="top"><span class="brand"><i></i>zcharlie 研究台</span><nav><a>今日概览</a><a>候选池</a><a class="on">AI</a><a>模板</a><a>观察池</a><a>运行中心</a><a>数据健康</a><a>研究方法</a><a>设置</a></nav><span class="sp"></span><a class="faint">退出</a></div>
+  <div class="subtabs"><a>对话</a><a class="on">组合</a><a>约定与记忆<span class="badge">1</span></a><span class="sp"></span><span class="chip">实际账本 · 用户确认的事实</span></div>
+  <div class="page" style="overflow:auto">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><b style="font-size:16px">账户</b><select class="f" style="width:220px"><option>主账户（A 股）</option></select><button class="btn sm">新建账户</button><span class="faint">事实最后确认于 10-09 18:20 · 价格基础 10-09 收盘</span><span style="flex:1"></span>
+      <button class="btn pri">绑定此快照到下一条消息 →</button></div>
+    <div class="grid3">
+      <div class="card"><div class="h3">总览</div><dl class="kv" style="margin-top:8px"><dt>总资产</dt><dd class="mono">¥ 842,000</dd><dt>现金</dt><dd class="mono">¥ 126,300 <span class="role">已确认</span></dd><dt>覆盖范围</dt><dd><span class="chip acc">完整：已确认全部范围</span></dd></dl></div>
+      <div class="card"><div class="h3">已确认资金用途</div><div style="display:grid;gap:8px;margin-top:8px"><div><b>子女教育</b> <span class="faint">短期 · 必留 ¥ 60,000</span></div><div><b>长期成长</b> <span class="faint">≥ 5 年 · 预算 ¥ 300,000</span></div><a class="faint">＋ 添加资金用途</a></div></div>
+      <div class="card"><div class="h3">账户硬约束（用户确认）</div><dl class="kv" style="margin-top:8px"><dt>单股上限</dt><dd class="mono">15%</dd><dt>行业上限</dt><dd class="mono">35%</dd><dt>最低现金</dt><dd class="mono">¥ 60,000</dd></dl><div class="faint" style="margin-top:6px">自由文字约束需确认成数值后才生效。</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden"><div style="padding:12px 16px;display:flex;gap:10px;align-items:center"><b>持仓</b><span class="faint">不可变事实历史，更正用冲销</span><span style="flex:1"></span><button class="btn sm">添加确认持仓</button><button class="btn sm">记录已发生的成交</button></div>
+      <table class="t" style="font-size:13px"><tr><th style="padding-left:16px">证券</th><th>数量</th><th>市值</th><th>占比</th><th>用途</th><th>来源</th></tr>
+        <tr><td style="padding-left:16px"><b>公司己</b> 601006</td><td class="mono">3,000 股</td><td class="mono">¥ 182,400</td><td class="mono">21.7%</td><td>长期成长</td><td class="src">对账单 09-30</td></tr>
+        <tr><td style="padding-left:16px"><b>公司庚</b> 000007</td><td class="mono">未知</td><td class="mono">—</td><td class="mono">—</td><td class="faint">未关联</td><td class="src">持仓起点尚未确认</td></tr></table></div>
+    <div class="card"><div style="display:flex;gap:8px;align-items:center"><b>当前方案</b><span class="chip acc">当前有效</span><span class="faint">同一现金与价格时点下的互斥选项，含“不行动”对照</span></div>
+      <div class="grid3" style="margin-top:10px">
+        <div class="opt cur"><b>选项 A · 继续持有</b><span class="faint">不涉及交易数量</span><span>理由：现金转化反证未解决前不加仓。</span></div>
+        <div class="opt"><b>选项 B · 减仓公司己</b><span class="banner warn" style="padding:4px 8px">受限：单股占比超过用户约定</span><span class="faint">不能给出正式数量</span></div>
+        <div class="opt"><b>不行动对照</b><span class="faint">没有本次交易费用和成交价格假设</span></div></div>
+      <div class="acts" style="margin-top:10px"><button class="btn pri">接受此选项</button><button class="btn">以后再考虑</button><button class="btn">我自行决定</button><a class="faint" style="margin-left:auto">回看上一份不可变整案</a></div></div>
+  </div>
+</div></div>
+</section>
+
+<!-- ============ ⑥ 约定与记忆 ============ -->
+<section class="sheet" id="d6">
+<h2 class="mk">⑥ 二级页签：约定与记忆 <small>原“控制面板”：启用 / 约定 / 提案 / 记忆 / 档案控制</small></h2>
+<p class="lead">按“你现在需要决定什么”排序：先是待审阅的提案，其次是当前生效的约定与启用状态，再是记忆与档案操作。每个操作都写明影响；暂停 / 静音 / 归档分开列出。</p>
+<div class="frame"><div class="app" style="height:1040px">
+  <div class="top"><span class="brand"><i></i>zcharlie 研究台</span><nav><a>今日概览</a><a>候选池</a><a class="on">AI</a><a>模板</a><a>观察池</a><a>运行中心</a><a>数据健康</a><a>研究方法</a><a>设置</a></nav><span class="sp"></span><a class="faint">退出</a></div>
+  <div class="subtabs"><a>对话</a><a>组合</a><a class="on">约定与记忆<span class="badge">1</span></a></div>
+  <div class="page" style="overflow:auto">
+    <div class="card" style="border-top:3px solid #c26a12"><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b style="font-size:15px">待审阅提案 · 1</b><span class="chip warn">研究任务提出，尚未获授权</span><span class="faint">不批准则不会生效</span></div>
+      <div class="grid2" style="margin-top:10px">
+        <div><div class="h3">修改投资约定（当前版本 4 → 5）</div><div class="diff" style="margin-top:8px"><div class="o">单股占比上限：20%</div><div class="n">单股占比上限：15%</div><div class="o">后台研究：关闭</div><div class="n">后台研究：开启，范围：公司甲、公司乙，每日 ≤ ¥1.00</div></div>
+          <div class="faint" style="margin-top:8px">来源：对话“公司甲 · 这次下跌改变了什么？”中你的原话 <a>查看</a></div></div>
+        <div><div class="h3">你的决定</div><label class="faint" style="display:grid;gap:4px;margin-top:8px">理由（可选）<textarea class="f" rows="2"></textarea></label>
+          <div class="acts" style="margin-top:8px"><button class="btn pri">批准上述确切变更</button><button class="btn">拒绝此提案</button></div></div></div></div>
+    <div class="grid2">
+      <div class="card"><div style="display:flex;gap:8px;align-items:center"><b>投资约定 · v4</b><span class="chip acc">生效中</span></div>
+        <dl class="kv" style="margin-top:10px"><dt>研究目标</dt><dd>找出现金转化可靠的稳健成长公司</dd><dt>明确约束</dt><dd>单股 ≤ 20% · 不碰 ST</dd><dt>尚未知晓</dt><dd class="faint">资金用途、期限与组合信息尚未知晓</dd></dl><div class="acts" style="margin-top:10px"><button class="btn">修改约定</button></div></div>
+      <div class="card"><div style="display:flex;gap:8px;align-items:center"><b>Agent 与后台研究</b><span class="chip">后台：关闭</span></div>
+        <dl class="kv" style="margin-top:10px"><dt>交互研究</dt><dd>已启用 · 单任务上限 ¥0.60</dd><dt>后台复核</dt><dd class="faint">未配置</dd><dt>后台探索</dt><dd class="faint">关闭</dd><dt>模型</dt><dd>deepseek-v4-flash · 验证通过</dd></dl><div class="acts" style="margin-top:10px"><button class="btn">配置限额与范围</button></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><div style="display:flex;gap:8px;align-items:center"><b>记忆</b><span class="faint">只保存你明确要保存的内容</span></div>
+        <div class="pres"><div class="nm"><span class="chip acc">显式偏好</span> 不要在财报前一周给买入看法<div class="faint">全局 · 无期限</div></div><button class="btn sm">撤销</button></div>
+        <div class="pres"><div class="nm"><span class="chip">未核实观察</span> 管理层偏好回购<div class="faint">有效至 2026-12-31 · 来源：你的陈述，未核实</div></div><button class="btn sm">撤销</button></div>
+        <button class="btn sm" style="align-self:flex-start;margin-top:6px">＋ 保存一条记忆</button></div>
+      <div class="card"><b>档案操作 · 公司甲</b><div class="faint">四个操作彼此独立，各自的影响如下</div>
+        <div class="pres"><div class="nm"><b>固定关注</b><span class="faint">不被 Agent 自动整理；不改变研究范围</span></div><button class="btn sm">固定</button></div>
+        <div class="pres"><div class="nm"><b>暂停后台</b><span class="faint">下一执行边界停止后台任务；不影响你明确发起的交互研究</span></div><button class="btn sm">暂停</button></div>
+        <div class="pres"><div class="nm"><b>静音提醒</b><span class="faint">只停主动提醒；研究和过期检查照常进行</span></div><button class="btn sm">静音</button></div>
+        <div class="pres"><div class="nm"><b>归档并撤下观点</b><span class="faint">撤回当前意见并关闭自动重开；保留历史、持仓与固定标记</span></div><button class="btn sm">归档…</button></div></div>
+    </div>
+  </div>
+</div></div>
+</section>
+
+<!-- ============ ⑦ 手机 ============ -->
+<section class="sheet" id="m" style="padding-bottom:48px">
+<h2 class="mk">⑦ 手机 <small>390 宽 · 对话 / 档案 / 导航三页签；对象与记录决定用底部面板；触控目标 ≥ 44px</small></h2>
+<p class="lead">与桌面同一对象、同一状态。第一版不设底部全局标签栏。</p>
+<div class="phones">
+  <div class="cell"><div class="cap faint" style="margin-bottom:6px">对话</div>
+  <div class="phone">
+    <div class="ptop"><button class="btn sm" style="min-height:44px;border:0">‹</button><b>公司甲 · 这次下跌改变了什么？</b></div>
+    <div class="ptabs"><a class="on">对话</a><a>档案</a><a>导航</a></div>
+    <div class="thread" style="flex:1">
+      <div class="banner ai" style="font-size:12.5px"><span><b>判断 v3 已有更新（v4）</b></span><span class="sp"></span><a>看变化</a></div>
+      <div class="uq"><div class="b">这次下跌改变了什么？</div><div class="ctx"><span class="chip ln">公司甲 · v3</span></div></div>
+      <div class="ag"><div class="who"><span class="chip ai">Agent</span><span class="faint">基于判断 v3</span></div>
+        <div class="scope">范围：价格下跌与三季报的影响，不代表整体判断</div>
+        <p><b>经营判断改为“好坏参半”，价格暂不判断。</b>改变它的是现金转化反证：前三季度经营现金流 <a class="num">-1.20 亿元</a><span class="role">事实</span>。</p>
+        <p><b>最可能改变观点：</b>下滑若来自季节性备货。</p>
+        <details class="ev"><summary>证据 · 3 条</summary></details><details class="ev"><summary>反证与替代解释 · 2 条</summary></details>
+        <div class="task"><div class="hd"><span class="chip ai">取证中</span><b style="font-size:13px">核查季节性备货</b></div><div class="meter"><i style="width:50%"></i></div><div class="faint">步骤 3/6 · ¥0.31</div><button class="btn sm" style="align-self:flex-start">取消</button></div></div>
+    </div>
+    <div class="compose"><div class="cbox"><div class="row"><span class="chip acc">公司甲 · v3 ✕</span><button class="chip ln">＋ 对象</button><span class="sp"></span><button class="mode">自动 ▾</button></div><textarea rows="1" placeholder="继续问…"></textarea><div class="row"><span class="faint">草稿已保存</span><span class="sp"></span><button class="btn pri">发送</button></div></div></div>
+  </div></div>
+
+  <div class="cell"><div class="cap faint" style="margin-bottom:6px">指定对象（底部面板）</div>
+  <div class="phone">
+    <div class="ptop"><button class="btn sm" style="min-height:44px;border:0">‹</button><b>新对话</b></div>
+    <div class="ptabs"><a class="on">对话</a><a>档案</a><a>导航</a></div>
+    <div class="thread" style="flex:1"><h1 style="margin:10px 0 0;font-size:20px;font-weight:600">今天想研究什么？</h1><div class="faint">从一个具体的问题开始。</div></div>
+    <div class="scrim"></div>
+    <div class="sheetpane" style="top:210px">
+      <div class="grab"></div><input class="f" style="height:44px" value="华">
+      <div class="faint">3 个匹配 · 请选择一个</div>
+      <div class="pres"><div class="nm"><b>华夏能源</b><span class="faint">600012.SH · 电力</span></div><span class="chip acc">选择</span></div>
+      <div class="pres"><div class="nm"><b>华夏能源</b><span class="faint">00012.HK · 港股</span></div><span class="chip warn">范围外</span></div>
+      <div class="pres"><div class="nm"><b>华兴材料</b><span class="faint">300088.SZ · 化工</span></div><span class="chip acc">选择</span></div>
+      <label class="faint" style="display:flex;gap:8px;align-items:center;min-height:44px"><input type="checkbox" style="width:20px;height:20px"> 添加为比较对象（保留已选的）</label>
+    </div>
+  </div></div>
+
+  <div class="cell"><div class="cap faint" style="margin-bottom:6px">档案页签</div>
+  <div class="phone">
+    <div class="ptop"><button class="btn sm" style="min-height:44px;border:0">‹</button><b>公司甲 · 档案</b></div>
+    <div class="ptabs"><a>对话</a><a class="on">档案</a><a>导航</a></div>
+    <div class="thread" style="flex:1;gap:12px">
+      <div class="card"><div class="h3">当前判断 · v3</div><div class="acts" style="margin-top:8px"><span class="chip">经营 好坏参半</span><span class="chip">价格 暂不判断</span><span class="chip warn">暂不发布买卖看法</span></div><div style="margin-top:8px">经营价值取决于现金转化能否恢复。</div></div>
+      <div class="card"><div class="h3">关键假设</div><table class="t" style="margin-top:6px"><tr><td>收入增速 ≥ 7%</td><td><span class="chip acc">已取证</span></td></tr><tr><td>现金转化改善</td><td><span class="chip warn">反证出现</span></td></tr></table></div>
+      <div class="card"><div class="h3">未解决问题 · 2</div><ul class="bul" style="margin-top:6px"><li>现金流下滑是否为季节性备货</li><li>一次性收益口径</li></ul></div>
+      <div class="card"><div class="h3">用户决定</div><div style="margin:6px 0">09-30 你决定<b>暂不行动</b>。</div><button class="btn" style="width:100%">记录我的决定</button></div>
+    </div>
+  </div></div>
+</div>
+</section>
+
+<script>
+// 仅用于 mockup 演示：抽屉页签、收起抽屉、处理方式浮层
+document.querySelectorAll('.drawer').forEach(function(d){
+  d.querySelectorAll('.dtabs button').forEach(function(b){
+    b.addEventListener('click',function(){
+      d.querySelectorAll('.dtabs button').forEach(function(x){x.classList.toggle('on',x===b)});
+      d.querySelectorAll('.dpane').forEach(function(p){p.hidden=p.dataset.p!==b.dataset.t});
+    });
+  });
+});
+var tg=document.getElementById('toggleDrawer'),dr=document.getElementById('drawer1'),ws=document.getElementById('ws1');
+if(tg)tg.addEventListener('click',function(){var h=dr.hidden=!dr.hidden;ws.classList.toggle('nodrawer',h);tg.textContent=h?'档案 ◂ 展开':'档案 ▸ 收起';});
+var mb=document.getElementById('modeBtn'),mp=document.getElementById('modePop');
+if(mb)mb.addEventListener('click',function(){mp.hidden=!mp.hidden;});
+</script>
+</body>
+</html>

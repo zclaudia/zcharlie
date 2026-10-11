@@ -1,0 +1,862 @@
+{
+  "kind": "readonly task reconstruction + native SDK MockTransport; no network/no stored model audit",
+  "results": [
+    {
+      "company": "招商银行",
+      "remaining": {
+        "requests": 7,
+        "tokens": 38461,
+        "tools": 22,
+        "total_used_requests": 3,
+        "total_used_tokens": 35949
+      },
+      "output_bound": 4096,
+      "instructions_utf8": 4827,
+      "prompt_utf8": 223,
+      "history_utf8": 0,
+      "model_messages_json_utf8": 5580,
+      "model_parameters_repr_utf8": 40010,
+      "reservation_input": 45590,
+      "reservation_total": 49686,
+      "parameter_fields": {
+        "function_tools": 21745,
+        "native_tools": 2,
+        "tool_visibility": 4,
+        "revealed_tool_names": 5,
+        "deferred_capability_ids": 5,
+        "output_mode": 8,
+        "output_object": 13237,
+        "output_tools": 2,
+        "prompted_output_template": 4,
+        "allow_text_output": 4,
+        "allow_image_output": 5,
+        "instruction_parts": 4895,
+        "thinking": 4
+      },
+      "function_tool_repr_utf8": [
+        {
+          "name": "save_research_progress",
+          "repr_utf8": 5182,
+          "schema_json_utf8": 4606
+        },
+        {
+          "name": "get_snapshot",
+          "repr_utf8": 859,
+          "schema_json_utf8": 321
+        },
+        {
+          "name": "get_evidence",
+          "repr_utf8": 1460,
+          "schema_json_utf8": 956
+        },
+        {
+          "name": "get_event",
+          "repr_utf8": 1262,
+          "schema_json_utf8": 1024
+        },
+        {
+          "name": "compare_stocks",
+          "repr_utf8": 496,
+          "schema_json_utf8": 323
+        },
+        {
+          "name": "capture_snapshot",
+          "repr_utf8": 699,
+          "schema_json_utf8": 321
+        },
+        {
+          "name": "reverse_dcf_fcfe",
+          "repr_utf8": 2841,
+          "schema_json_utf8": 2482
+        },
+        {
+          "name": "historical_valuation_percentile",
+          "repr_utf8": 432,
+          "schema_json_utf8": 248
+        },
+        {
+          "name": "prepare_company_view",
+          "repr_utf8": 8496,
+          "schema_json_utf8": 7676
+        }
+      ],
+      "output_schema_json_utf8": 12069,
+      "sdk_request_utf8": 37822,
+      "sdk_messages_json_utf8": 19528,
+      "sdk_tools_json_utf8": 18141,
+      "sdk_message_content_utf8": [
+        {
+          "role": "system",
+          "bytes": 4827
+        },
+        {
+          "role": "system",
+          "bytes": 12319
+        },
+        {
+          "role": "user",
+          "bytes": 223
+        }
+      ],
+      "sdk_tools": [
+        {
+          "name": "save_research_progress",
+          "json_utf8": 4335,
+          "parameters_json_utf8": 4240
+        },
+        {
+          "name": "get_snapshot",
+          "json_utf8": 727,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "get_evidence",
+          "json_utf8": 1222,
+          "parameters_json_utf8": 884
+        },
+        {
+          "name": "get_event",
+          "json_utf8": 1040,
+          "parameters_json_utf8": 958
+        },
+        {
+          "name": "compare_stocks",
+          "json_utf8": 393,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "capture_snapshot",
+          "json_utf8": 567,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "reverse_dcf_fcfe",
+          "json_utf8": 2472,
+          "parameters_json_utf8": 2383
+        },
+        {
+          "name": "historical_valuation_percentile",
+          "json_utf8": 338,
+          "parameters_json_utf8": 220
+        },
+        {
+          "name": "prepare_company_view",
+          "json_utf8": 7037,
+          "parameters_json_utf8": 6944
+        }
+      ],
+      "sdk_other_json_utf8": 132,
+      "estimated_minimal_change_reservation": 36363,
+      "hypothesis": "count instructions only in params; native prepare hides company publication tool until committed seven-dimension research exists; other schemas unchanged"
+    },
+    {
+      "company": "海康威视",
+      "remaining": {
+        "requests": 7,
+        "tokens": 38437,
+        "tools": 22,
+        "total_used_requests": 3,
+        "total_used_tokens": 35949
+      },
+      "output_bound": 4096,
+      "instructions_utf8": 4824,
+      "prompt_utf8": 223,
+      "history_utf8": 0,
+      "model_messages_json_utf8": 5577,
+      "model_parameters_repr_utf8": 40007,
+      "reservation_input": 45584,
+      "reservation_total": 49680,
+      "parameter_fields": {
+        "function_tools": 21745,
+        "native_tools": 2,
+        "tool_visibility": 4,
+        "revealed_tool_names": 5,
+        "deferred_capability_ids": 5,
+        "output_mode": 8,
+        "output_object": 13237,
+        "output_tools": 2,
+        "prompted_output_template": 4,
+        "allow_text_output": 4,
+        "allow_image_output": 5,
+        "instruction_parts": 4892,
+        "thinking": 4
+      },
+      "function_tool_repr_utf8": [
+        {
+          "name": "save_research_progress",
+          "repr_utf8": 5182,
+          "schema_json_utf8": 4606
+        },
+        {
+          "name": "get_snapshot",
+          "repr_utf8": 859,
+          "schema_json_utf8": 321
+        },
+        {
+          "name": "get_evidence",
+          "repr_utf8": 1460,
+          "schema_json_utf8": 956
+        },
+        {
+          "name": "get_event",
+          "repr_utf8": 1262,
+          "schema_json_utf8": 1024
+        },
+        {
+          "name": "compare_stocks",
+          "repr_utf8": 496,
+          "schema_json_utf8": 323
+        },
+        {
+          "name": "capture_snapshot",
+          "repr_utf8": 699,
+          "schema_json_utf8": 321
+        },
+        {
+          "name": "reverse_dcf_fcfe",
+          "repr_utf8": 2841,
+          "schema_json_utf8": 2482
+        },
+        {
+          "name": "historical_valuation_percentile",
+          "repr_utf8": 432,
+          "schema_json_utf8": 248
+        },
+        {
+          "name": "prepare_company_view",
+          "repr_utf8": 8496,
+          "schema_json_utf8": 7676
+        }
+      ],
+      "output_schema_json_utf8": 12069,
+      "sdk_request_utf8": 37819,
+      "sdk_messages_json_utf8": 19525,
+      "sdk_tools_json_utf8": 18141,
+      "sdk_message_content_utf8": [
+        {
+          "role": "system",
+          "bytes": 4824
+        },
+        {
+          "role": "system",
+          "bytes": 12319
+        },
+        {
+          "role": "user",
+          "bytes": 223
+        }
+      ],
+      "sdk_tools": [
+        {
+          "name": "save_research_progress",
+          "json_utf8": 4335,
+          "parameters_json_utf8": 4240
+        },
+        {
+          "name": "get_snapshot",
+          "json_utf8": 727,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "get_evidence",
+          "json_utf8": 1222,
+          "parameters_json_utf8": 884
+        },
+        {
+          "name": "get_event",
+          "json_utf8": 1040,
+          "parameters_json_utf8": 958
+        },
+        {
+          "name": "compare_stocks",
+          "json_utf8": 393,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "capture_snapshot",
+          "json_utf8": 567,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "reverse_dcf_fcfe",
+          "json_utf8": 2472,
+          "parameters_json_utf8": 2383
+        },
+        {
+          "name": "historical_valuation_percentile",
+          "json_utf8": 338,
+          "parameters_json_utf8": 220
+        },
+        {
+          "name": "prepare_company_view",
+          "json_utf8": 7037,
+          "parameters_json_utf8": 6944
+        }
+      ],
+      "sdk_other_json_utf8": 132,
+      "estimated_minimal_change_reservation": 36360,
+      "hypothesis": "count instructions only in params; native prepare hides company publication tool until committed seven-dimension research exists; other schemas unchanged"
+    },
+    {
+      "company": "国电南瑞",
+      "remaining": {
+        "requests": 7,
+        "tokens": 37153,
+        "tools": 24,
+        "total_used_requests": 3,
+        "total_used_tokens": 35949
+      },
+      "output_bound": 4096,
+      "instructions_utf8": 4827,
+      "prompt_utf8": 223,
+      "history_utf8": 0,
+      "model_messages_json_utf8": 5580,
+      "model_parameters_repr_utf8": 40010,
+      "reservation_input": 45590,
+      "reservation_total": 49686,
+      "parameter_fields": {
+        "function_tools": 21745,
+        "native_tools": 2,
+        "tool_visibility": 4,
+        "revealed_tool_names": 5,
+        "deferred_capability_ids": 5,
+        "output_mode": 8,
+        "output_object": 13237,
+        "output_tools": 2,
+        "prompted_output_template": 4,
+        "allow_text_output": 4,
+        "allow_image_output": 5,
+        "instruction_parts": 4895,
+        "thinking": 4
+      },
+      "function_tool_repr_utf8": [
+        {
+          "name": "save_research_progress",
+          "repr_utf8": 5182,
+          "schema_json_utf8": 4606
+        },
+        {
+          "name": "get_snapshot",
+          "repr_utf8": 859,
+          "schema_json_utf8": 321
+        },
+        {
+          "name": "get_evidence",
+          "repr_utf8": 1460,
+          "schema_json_utf8": 956
+        },
+        {
+          "name": "get_event",
+          "repr_utf8": 1262,
+          "schema_json_utf8": 1024
+        },
+        {
+          "name": "compare_stocks",
+          "repr_utf8": 496,
+          "schema_json_utf8": 323
+        },
+        {
+          "name": "capture_snapshot",
+          "repr_utf8": 699,
+          "schema_json_utf8": 321
+        },
+        {
+          "name": "reverse_dcf_fcfe",
+          "repr_utf8": 2841,
+          "schema_json_utf8": 2482
+        },
+        {
+          "name": "historical_valuation_percentile",
+          "repr_utf8": 432,
+          "schema_json_utf8": 248
+        },
+        {
+          "name": "prepare_company_view",
+          "repr_utf8": 8496,
+          "schema_json_utf8": 7676
+        }
+      ],
+      "output_schema_json_utf8": 12069,
+      "sdk_request_utf8": 37822,
+      "sdk_messages_json_utf8": 19528,
+      "sdk_tools_json_utf8": 18141,
+      "sdk_message_content_utf8": [
+        {
+          "role": "system",
+          "bytes": 4827
+        },
+        {
+          "role": "system",
+          "bytes": 12319
+        },
+        {
+          "role": "user",
+          "bytes": 223
+        }
+      ],
+      "sdk_tools": [
+        {
+          "name": "save_research_progress",
+          "json_utf8": 4335,
+          "parameters_json_utf8": 4240
+        },
+        {
+          "name": "get_snapshot",
+          "json_utf8": 727,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "get_evidence",
+          "json_utf8": 1222,
+          "parameters_json_utf8": 884
+        },
+        {
+          "name": "get_event",
+          "json_utf8": 1040,
+          "parameters_json_utf8": 958
+        },
+        {
+          "name": "compare_stocks",
+          "json_utf8": 393,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "capture_snapshot",
+          "json_utf8": 567,
+          "parameters_json_utf8": 292
+        },
+        {
+          "name": "reverse_dcf_fcfe",
+          "json_utf8": 2472,
+          "parameters_json_utf8": 2383
+        },
+        {
+          "name": "historical_valuation_percentile",
+          "json_utf8": 338,
+          "parameters_json_utf8": 220
+        },
+        {
+          "name": "prepare_company_view",
+          "json_utf8": 7037,
+          "parameters_json_utf8": 6944
+        }
+      ],
+      "sdk_other_json_utf8": 132,
+      "estimated_minimal_change_reservation": 36363,
+      "hypothesis": "count instructions only in params; native prepare hides company publication tool until committed seven-dimension research exists; other schemas unchanged"
+    }
+  ],
+  "minimal_native_sdk_verification": {
+    "kind": "readonly task reconstruction + native SDK MockTransport; no network/no stored model audit",
+    "results": [
+      {
+        "company": "招商银行",
+        "remaining": {
+          "requests": 7,
+          "tokens": 38461,
+          "tools": 22,
+          "total_used_requests": 3,
+          "total_used_tokens": 35949
+        },
+        "output_bound": 4096,
+        "instructions_utf8": 4827,
+        "prompt_utf8": 223,
+        "history_utf8": 0,
+        "model_messages_json_utf8": 518,
+        "model_parameters_repr_utf8": 31512,
+        "reservation_input": 32030,
+        "reservation_total": 36126,
+        "parameter_fields": {
+          "function_tools": 13247,
+          "native_tools": 2,
+          "tool_visibility": 4,
+          "revealed_tool_names": 5,
+          "deferred_capability_ids": 5,
+          "output_mode": 8,
+          "output_object": 13237,
+          "output_tools": 2,
+          "prompted_output_template": 4,
+          "allow_text_output": 4,
+          "allow_image_output": 5,
+          "instruction_parts": 4895,
+          "thinking": 4
+        },
+        "function_tool_repr_utf8": [
+          {
+            "name": "save_research_progress",
+            "repr_utf8": 5182,
+            "schema_json_utf8": 4606
+          },
+          {
+            "name": "get_snapshot",
+            "repr_utf8": 859,
+            "schema_json_utf8": 321
+          },
+          {
+            "name": "get_evidence",
+            "repr_utf8": 1460,
+            "schema_json_utf8": 956
+          },
+          {
+            "name": "get_event",
+            "repr_utf8": 1262,
+            "schema_json_utf8": 1024
+          },
+          {
+            "name": "compare_stocks",
+            "repr_utf8": 496,
+            "schema_json_utf8": 323
+          },
+          {
+            "name": "capture_snapshot",
+            "repr_utf8": 699,
+            "schema_json_utf8": 321
+          },
+          {
+            "name": "reverse_dcf_fcfe",
+            "repr_utf8": 2841,
+            "schema_json_utf8": 2482
+          },
+          {
+            "name": "historical_valuation_percentile",
+            "repr_utf8": 432,
+            "schema_json_utf8": 248
+          }
+        ],
+        "output_schema_json_utf8": 12069,
+        "sdk_request_utf8": 30784,
+        "sdk_messages_json_utf8": 19528,
+        "sdk_tools_json_utf8": 11103,
+        "sdk_message_content_utf8": [
+          {
+            "role": "system",
+            "bytes": 4827
+          },
+          {
+            "role": "system",
+            "bytes": 12319
+          },
+          {
+            "role": "user",
+            "bytes": 223
+          }
+        ],
+        "sdk_tools": [
+          {
+            "name": "save_research_progress",
+            "json_utf8": 4335,
+            "parameters_json_utf8": 4240
+          },
+          {
+            "name": "get_snapshot",
+            "json_utf8": 727,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "get_evidence",
+            "json_utf8": 1222,
+            "parameters_json_utf8": 884
+          },
+          {
+            "name": "get_event",
+            "json_utf8": 1040,
+            "parameters_json_utf8": 958
+          },
+          {
+            "name": "compare_stocks",
+            "json_utf8": 393,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "capture_snapshot",
+            "json_utf8": 567,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "reverse_dcf_fcfe",
+            "json_utf8": 2472,
+            "parameters_json_utf8": 2383
+          },
+          {
+            "name": "historical_valuation_percentile",
+            "json_utf8": 338,
+            "parameters_json_utf8": 220
+          }
+        ],
+        "sdk_other_json_utf8": 132
+      },
+      {
+        "company": "海康威视",
+        "remaining": {
+          "requests": 7,
+          "tokens": 38437,
+          "tools": 22,
+          "total_used_requests": 3,
+          "total_used_tokens": 35949
+        },
+        "output_bound": 4096,
+        "instructions_utf8": 4824,
+        "prompt_utf8": 223,
+        "history_utf8": 0,
+        "model_messages_json_utf8": 518,
+        "model_parameters_repr_utf8": 31509,
+        "reservation_input": 32027,
+        "reservation_total": 36123,
+        "parameter_fields": {
+          "function_tools": 13247,
+          "native_tools": 2,
+          "tool_visibility": 4,
+          "revealed_tool_names": 5,
+          "deferred_capability_ids": 5,
+          "output_mode": 8,
+          "output_object": 13237,
+          "output_tools": 2,
+          "prompted_output_template": 4,
+          "allow_text_output": 4,
+          "allow_image_output": 5,
+          "instruction_parts": 4892,
+          "thinking": 4
+        },
+        "function_tool_repr_utf8": [
+          {
+            "name": "save_research_progress",
+            "repr_utf8": 5182,
+            "schema_json_utf8": 4606
+          },
+          {
+            "name": "get_snapshot",
+            "repr_utf8": 859,
+            "schema_json_utf8": 321
+          },
+          {
+            "name": "get_evidence",
+            "repr_utf8": 1460,
+            "schema_json_utf8": 956
+          },
+          {
+            "name": "get_event",
+            "repr_utf8": 1262,
+            "schema_json_utf8": 1024
+          },
+          {
+            "name": "compare_stocks",
+            "repr_utf8": 496,
+            "schema_json_utf8": 323
+          },
+          {
+            "name": "capture_snapshot",
+            "repr_utf8": 699,
+            "schema_json_utf8": 321
+          },
+          {
+            "name": "reverse_dcf_fcfe",
+            "repr_utf8": 2841,
+            "schema_json_utf8": 2482
+          },
+          {
+            "name": "historical_valuation_percentile",
+            "repr_utf8": 432,
+            "schema_json_utf8": 248
+          }
+        ],
+        "output_schema_json_utf8": 12069,
+        "sdk_request_utf8": 30781,
+        "sdk_messages_json_utf8": 19525,
+        "sdk_tools_json_utf8": 11103,
+        "sdk_message_content_utf8": [
+          {
+            "role": "system",
+            "bytes": 4824
+          },
+          {
+            "role": "system",
+            "bytes": 12319
+          },
+          {
+            "role": "user",
+            "bytes": 223
+          }
+        ],
+        "sdk_tools": [
+          {
+            "name": "save_research_progress",
+            "json_utf8": 4335,
+            "parameters_json_utf8": 4240
+          },
+          {
+            "name": "get_snapshot",
+            "json_utf8": 727,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "get_evidence",
+            "json_utf8": 1222,
+            "parameters_json_utf8": 884
+          },
+          {
+            "name": "get_event",
+            "json_utf8": 1040,
+            "parameters_json_utf8": 958
+          },
+          {
+            "name": "compare_stocks",
+            "json_utf8": 393,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "capture_snapshot",
+            "json_utf8": 567,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "reverse_dcf_fcfe",
+            "json_utf8": 2472,
+            "parameters_json_utf8": 2383
+          },
+          {
+            "name": "historical_valuation_percentile",
+            "json_utf8": 338,
+            "parameters_json_utf8": 220
+          }
+        ],
+        "sdk_other_json_utf8": 132
+      },
+      {
+        "company": "国电南瑞",
+        "remaining": {
+          "requests": 7,
+          "tokens": 37153,
+          "tools": 24,
+          "total_used_requests": 3,
+          "total_used_tokens": 35949
+        },
+        "output_bound": 4096,
+        "instructions_utf8": 4827,
+        "prompt_utf8": 223,
+        "history_utf8": 0,
+        "model_messages_json_utf8": 518,
+        "model_parameters_repr_utf8": 31512,
+        "reservation_input": 32030,
+        "reservation_total": 36126,
+        "parameter_fields": {
+          "function_tools": 13247,
+          "native_tools": 2,
+          "tool_visibility": 4,
+          "revealed_tool_names": 5,
+          "deferred_capability_ids": 5,
+          "output_mode": 8,
+          "output_object": 13237,
+          "output_tools": 2,
+          "prompted_output_template": 4,
+          "allow_text_output": 4,
+          "allow_image_output": 5,
+          "instruction_parts": 4895,
+          "thinking": 4
+        },
+        "function_tool_repr_utf8": [
+          {
+            "name": "save_research_progress",
+            "repr_utf8": 5182,
+            "schema_json_utf8": 4606
+          },
+          {
+            "name": "get_snapshot",
+            "repr_utf8": 859,
+            "schema_json_utf8": 321
+          },
+          {
+            "name": "get_evidence",
+            "repr_utf8": 1460,
+            "schema_json_utf8": 956
+          },
+          {
+            "name": "get_event",
+            "repr_utf8": 1262,
+            "schema_json_utf8": 1024
+          },
+          {
+            "name": "compare_stocks",
+            "repr_utf8": 496,
+            "schema_json_utf8": 323
+          },
+          {
+            "name": "capture_snapshot",
+            "repr_utf8": 699,
+            "schema_json_utf8": 321
+          },
+          {
+            "name": "reverse_dcf_fcfe",
+            "repr_utf8": 2841,
+            "schema_json_utf8": 2482
+          },
+          {
+            "name": "historical_valuation_percentile",
+            "repr_utf8": 432,
+            "schema_json_utf8": 248
+          }
+        ],
+        "output_schema_json_utf8": 12069,
+        "sdk_request_utf8": 30784,
+        "sdk_messages_json_utf8": 19528,
+        "sdk_tools_json_utf8": 11103,
+        "sdk_message_content_utf8": [
+          {
+            "role": "system",
+            "bytes": 4827
+          },
+          {
+            "role": "system",
+            "bytes": 12319
+          },
+          {
+            "role": "user",
+            "bytes": 223
+          }
+        ],
+        "sdk_tools": [
+          {
+            "name": "save_research_progress",
+            "json_utf8": 4335,
+            "parameters_json_utf8": 4240
+          },
+          {
+            "name": "get_snapshot",
+            "json_utf8": 727,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "get_evidence",
+            "json_utf8": 1222,
+            "parameters_json_utf8": 884
+          },
+          {
+            "name": "get_event",
+            "json_utf8": 1040,
+            "parameters_json_utf8": 958
+          },
+          {
+            "name": "compare_stocks",
+            "json_utf8": 393,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "capture_snapshot",
+            "json_utf8": 567,
+            "parameters_json_utf8": 292
+          },
+          {
+            "name": "reverse_dcf_fcfe",
+            "json_utf8": 2472,
+            "parameters_json_utf8": 2383
+          },
+          {
+            "name": "historical_valuation_percentile",
+            "json_utf8": 338,
+            "parameters_json_utf8": 220
+          }
+        ],
+        "sdk_other_json_utf8": 132
+      }
+    ]
+  }
+}

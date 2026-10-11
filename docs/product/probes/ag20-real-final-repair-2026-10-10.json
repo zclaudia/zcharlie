@@ -1,0 +1,626 @@
+{
+  "state": "bounded trial completed",
+  "configuration": {
+    "revision": 0,
+    "version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+    "values": {
+      "agent_credential_ref": "agent_api_key",
+      "agent_max_tokens": 4096,
+      "agent_model": "deepseek-flash",
+      "agent_output_mode": "prompted",
+      "agent_profile": "deepseek",
+      "agent_profile_model": "",
+      "agent_provider": "openai",
+      "agent_retries": 0,
+      "agent_supports_json_object": true,
+      "agent_supports_json_schema": false,
+      "agent_temperature": null,
+      "agent_thinking": "auto",
+      "agent_timeout_seconds": 45.0,
+      "agent_tool_choice_required": false,
+      "endpoint_hash": "4217b1ac5a57c64fb1cc4d0e23df8b7ff82059e438a71a8766bf59fd008147b3"
+    }
+  },
+  "material_set_hash": "942e1505c6399d5d64944a0fa51a27c8ccfa6c85a8a6997ddffcd6924e290319",
+  "previous_attempt": "/private/tmp/ag20-company-trial-20261010-v2/actual-results-repair-1.json",
+  "results": [
+    {
+      "previous_failed_task_id": "b966ccfc-b9d1-44aa-9610-c3180e3789f4",
+      "cumulative_remaining_before_attempt": {
+        "requests": 7,
+        "tokens": 38461,
+        "tools": 22,
+        "total_used_requests": 3,
+        "total_used_tokens": 35949
+      },
+      "actual_material_receipts": [],
+      "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "model_runs": [
+        {
+          "framework_requests": 1,
+          "http_attempts": 1,
+          "http_responses": [
+            {
+              "status": 200,
+              "usage": {
+                "prompt_tokens": 8895,
+                "completion_tokens": 4356,
+                "total_tokens": 13251
+              }
+            }
+          ],
+          "usage": {
+            "input_tokens": 8895,
+            "output_tokens": 4356
+          },
+          "usage_unknown_reason": null,
+          "latency_ms": 22007,
+          "success": true,
+          "error_code": null,
+          "config_version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+          "framework_version": "2.31.1",
+          "cost_usd": null,
+          "cost_unknown_reason": "price_or_usage_unknown"
+        }
+      ],
+      "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+      "packet_is_exhaustive_actual_material_set": false,
+      "actual_artifact_refs": [],
+      "company": {
+        "id": 134,
+        "ticker": "600036",
+        "market_code": "SSE",
+        "canonical_name": "招商银行",
+        "sector_code": null
+      },
+      "task": {
+        "id": "f0a8f5bf-e1f9-460b-88e3-6ea89bf147de",
+        "schema_version": 1,
+        "revision": 6,
+        "created_at": "2026-10-10T11:53:55.235558Z",
+        "actor": "local_owner",
+        "origin_ref": null,
+        "parent_task_id": "b966ccfc-b9d1-44aa-9610-c3180e3789f4",
+        "message_ref": {
+          "kind": "message",
+          "id": "1b6f7127-512f-4377-af9c-266e28217634",
+          "revision": 1,
+          "field_path": null
+        },
+        "binding": {
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "base_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "case",
+              "id": "80ff76eb-7ad3-4d8d-978d-7fc5a72032ba",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "as_of": "2026-10-10T04:00:00Z"
+        },
+        "status": "failed",
+        "cancel_requested": false,
+        "stop_reason": "evidence_blocked",
+        "waiting": null,
+        "artifact_refs": [],
+        "usage": {
+          "tool_calls": 0,
+          "requests": 1,
+          "input_tokens": 8895,
+          "output_tokens": 4356,
+          "cost": {
+            "value": null,
+            "unit": "currency",
+            "currency": "USD",
+            "unknown_reason": "price_or_usage_unknown"
+          }
+        }
+      },
+      "messages": [
+        {
+          "id": "1b6f7127-512f-4377-af9c-266e28217634",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:53:55.242229Z",
+          "actor": "local_owner",
+          "origin_ref": null,
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "193cab2f-540e-4a0e-b3ec-67dbef164517",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 1,
+          "role": "user",
+          "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": null,
+          "client_message_id": "aa68563c-c4df-4803-82c1-41c2c6e34c38",
+          "task_ref": {
+            "kind": "task",
+            "id": "f0a8f5bf-e1f9-460b-88e3-6ea89bf147de",
+            "revision": 1,
+            "field_path": null
+          },
+          "artifact_refs": []
+        },
+        {
+          "id": "b765997f-09c4-44ce-b5e4-f2aa10d0ee19",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:54:17.464217Z",
+          "actor": "local_owner",
+          "origin_ref": {
+            "kind": "message",
+            "id": "1b6f7127-512f-4377-af9c-266e28217634",
+            "revision": 1,
+            "field_path": null
+          },
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "193cab2f-540e-4a0e-b3ec-67dbef164517",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 2,
+          "role": "assistant",
+          "text": "研究尚未完成，候选内容没有发布。\nprogress.question：该字段含未引用数量或证券代码；使用可信 numeric_claim/entity_ref 节点，保留来源、单位和期间。\n下一步：按来源引用与授权范围修复研究进展；证据不足时明确保留缺口。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 134,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": {
+            "kind": "message",
+            "id": "1b6f7127-512f-4377-af9c-266e28217634",
+            "revision": 1,
+            "field_path": null
+          },
+          "client_message_id": null,
+          "task_ref": {
+            "kind": "task",
+            "id": "f0a8f5bf-e1f9-460b-88e3-6ea89bf147de",
+            "revision": 5,
+            "field_path": null
+          },
+          "artifact_refs": []
+        }
+      ],
+      "latency_seconds": 22.228335791267455,
+      "error_type": null,
+      "semantic_acceptance": "human pending",
+      "money_cost_usd": null,
+      "safe_rejection_diagnostic": {
+        "company": "招商银行",
+        "task_id": "f0a8f5bf-e1f9-460b-88e3-6ea89bf147de",
+        "code": "research_numeric_text_requires_reference",
+        "field_errors": [
+          {
+            "field": "progress.question",
+            "message": "该字段含未引用数量或证券代码；使用可信 numeric_claim/entity_ref 节点，保留来源、单位和期间。"
+          }
+        ],
+        "source": "persisted safe fields; private candidate omitted"
+      },
+      "requested_max_tokens": 4096,
+      "provider_reported_output_over_requested_max": true,
+      "company_cumulative_actual_tokens": 24790,
+      "company_cumulative_actual_requests": 2,
+      "company_token_limit_not_exceeded": true
+    },
+    {
+      "previous_failed_task_id": "fcb9db2d-e79e-458c-878f-f49c59a823f1",
+      "cumulative_remaining_before_attempt": {
+        "requests": 7,
+        "tokens": 38437,
+        "tools": 22,
+        "total_used_requests": 4,
+        "total_used_tokens": 49200
+      },
+      "actual_material_receipts": [],
+      "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "model_runs": [
+        {
+          "framework_requests": 1,
+          "http_attempts": 1,
+          "http_responses": [
+            {
+              "status": 200,
+              "usage": {
+                "prompt_tokens": 8894,
+                "completion_tokens": 4156,
+                "total_tokens": 13050
+              }
+            }
+          ],
+          "usage": {
+            "input_tokens": 8894,
+            "output_tokens": 4156
+          },
+          "usage_unknown_reason": null,
+          "latency_ms": 21246,
+          "success": false,
+          "error_code": "ResearchValidationError",
+          "config_version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+          "framework_version": "2.31.1",
+          "cost_usd": null,
+          "cost_unknown_reason": "price_or_usage_unknown"
+        }
+      ],
+      "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+      "packet_is_exhaustive_actual_material_set": false,
+      "actual_artifact_refs": [],
+      "company": {
+        "id": 62,
+        "ticker": "002415",
+        "market_code": "SZSE",
+        "canonical_name": "海康威视",
+        "sector_code": null
+      },
+      "task": {
+        "id": "099ce430-950c-4c71-9a06-2deaaa0c3fa4",
+        "schema_version": 1,
+        "revision": 6,
+        "created_at": "2026-10-10T11:54:17.483089Z",
+        "actor": "local_owner",
+        "origin_ref": null,
+        "parent_task_id": "fcb9db2d-e79e-458c-878f-f49c59a823f1",
+        "message_ref": {
+          "kind": "message",
+          "id": "0a5ce5df-c4f2-4c7a-ab5d-252d9c22c565",
+          "revision": 1,
+          "field_path": null
+        },
+        "binding": {
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "base_refs": [
+            {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "case",
+              "id": "0da73521-2af3-4c27-8e7d-cceecfcf9318",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "as_of": "2026-10-10T04:00:00Z"
+        },
+        "status": "failed",
+        "cancel_requested": false,
+        "stop_reason": "failed",
+        "waiting": null,
+        "artifact_refs": [],
+        "usage": {
+          "tool_calls": 1,
+          "requests": 1,
+          "input_tokens": 8894,
+          "output_tokens": 4156,
+          "cost": {
+            "value": null,
+            "unit": "currency",
+            "currency": "USD",
+            "unknown_reason": "price_or_usage_unknown"
+          }
+        }
+      },
+      "messages": [
+        {
+          "id": "0a5ce5df-c4f2-4c7a-ab5d-252d9c22c565",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:54:17.486410Z",
+          "actor": "local_owner",
+          "origin_ref": null,
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "46a568c2-033a-46aa-8ea9-cbc35392a069",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 1,
+          "role": "user",
+          "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 62,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": null,
+          "client_message_id": "65271950-cde9-4859-a81c-10b87c889e3c",
+          "task_ref": {
+            "kind": "task",
+            "id": "099ce430-950c-4c71-9a06-2deaaa0c3fa4",
+            "revision": 1,
+            "field_path": null
+          },
+          "artifact_refs": []
+        }
+      ],
+      "latency_seconds": 21.30824004113674,
+      "error_type": null,
+      "semantic_acceptance": "human pending",
+      "money_cost_usd": null,
+      "safe_rejection_diagnostic": {
+        "company": "海康威视",
+        "task_id": "099ce430-950c-4c71-9a06-2deaaa0c3fa4",
+        "code": "research_numeric_text_requires_reference",
+        "field_errors": [
+          {
+            "field": "progress.question",
+            "message": "该字段含未引用数量或证券代码；使用可信 numeric_claim/entity_ref 节点，保留来源、单位和期间。"
+          }
+        ],
+        "source": "readonly deterministic validation of preserved prepared action; not new model output"
+      },
+      "requested_max_tokens": 4096,
+      "provider_reported_output_over_requested_max": true,
+      "company_cumulative_actual_tokens": 24613,
+      "company_cumulative_actual_requests": 2,
+      "company_token_limit_not_exceeded": true
+    },
+    {
+      "previous_failed_task_id": "fe09a9b6-a297-4745-a4fd-cfc6034408d0",
+      "cumulative_remaining_before_attempt": {
+        "requests": 7,
+        "tokens": 37153,
+        "tools": 24,
+        "total_used_requests": 5,
+        "total_used_tokens": 62250
+      },
+      "actual_material_receipts": [],
+      "actual_material_receipts_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "model_runs": [
+        {
+          "framework_requests": 1,
+          "http_attempts": 1,
+          "http_responses": [
+            {
+              "status": 200,
+              "usage": {
+                "prompt_tokens": 8899,
+                "completion_tokens": 4520,
+                "total_tokens": 13419
+              }
+            }
+          ],
+          "usage": {
+            "input_tokens": 8899,
+            "output_tokens": 4520
+          },
+          "usage_unknown_reason": null,
+          "latency_ms": 21790,
+          "success": true,
+          "error_code": null,
+          "config_version": "317123a5f92685a0811dab6ab9f5d2e5e1f08f6deb4ac6999f2d00538b7179ea",
+          "framework_version": "2.31.1",
+          "cost_usd": null,
+          "cost_unknown_reason": "price_or_usage_unknown"
+        }
+      ],
+      "actual_binding_cutoff": "2026-10-10T04:00:00+00:00",
+      "packet_is_exhaustive_actual_material_set": false,
+      "actual_artifact_refs": [],
+      "company": {
+        "id": 160,
+        "ticker": "600406",
+        "market_code": "SSE",
+        "canonical_name": "国电南瑞",
+        "sector_code": null
+      },
+      "task": {
+        "id": "c128f374-8d1b-4d0b-a7f2-609213d18ea9",
+        "schema_version": 1,
+        "revision": 6,
+        "created_at": "2026-10-10T11:54:38.805482Z",
+        "actor": "local_owner",
+        "origin_ref": null,
+        "parent_task_id": "fe09a9b6-a297-4745-a4fd-cfc6034408d0",
+        "message_ref": {
+          "kind": "message",
+          "id": "4bda28ce-828a-432c-8fcb-8f55706ab8a0",
+          "revision": 1,
+          "field_path": null
+        },
+        "binding": {
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "base_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            },
+            {
+              "kind": "case",
+              "id": "1f4136a6-0e2e-47a1-9aaa-7f98acdb05ef",
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "as_of": "2026-10-10T04:00:00Z"
+        },
+        "status": "failed",
+        "cancel_requested": false,
+        "stop_reason": "evidence_blocked",
+        "waiting": null,
+        "artifact_refs": [],
+        "usage": {
+          "tool_calls": 0,
+          "requests": 1,
+          "input_tokens": 8899,
+          "output_tokens": 4520,
+          "cost": {
+            "value": null,
+            "unit": "currency",
+            "currency": "USD",
+            "unknown_reason": "price_or_usage_unknown"
+          }
+        }
+      },
+      "messages": [
+        {
+          "id": "4bda28ce-828a-432c-8fcb-8f55706ab8a0",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:54:38.809295Z",
+          "actor": "local_owner",
+          "origin_ref": null,
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "f100d8a0-781e-4221-9565-189feebeafac",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 1,
+          "role": "user",
+          "text": "深入研究这家公司。明确立场、关键依据、最可能推翻观点的反证、下一步与研究缺口。供应商候选未核验，银行不得套FCFE，DCF继续关闭，证据不足不要发表方向结论。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": null,
+          "client_message_id": "3c3fedde-17cf-40fa-a207-8c00e0bd19af",
+          "task_ref": {
+            "kind": "task",
+            "id": "c128f374-8d1b-4d0b-a7f2-609213d18ea9",
+            "revision": 1,
+            "field_path": null
+          },
+          "artifact_refs": []
+        },
+        {
+          "id": "923ee865-cc01-492d-bf65-99f6676efad0",
+          "schema_version": 1,
+          "revision": 1,
+          "created_at": "2026-10-10T11:55:00.688703Z",
+          "actor": "local_owner",
+          "origin_ref": {
+            "kind": "message",
+            "id": "4bda28ce-828a-432c-8fcb-8f55706ab8a0",
+            "revision": 1,
+            "field_path": null
+          },
+          "conversation_ref": {
+            "kind": "conversation",
+            "id": "f100d8a0-781e-4221-9565-189feebeafac",
+            "revision": 1,
+            "field_path": null
+          },
+          "sequence": 2,
+          "role": "assistant",
+          "text": "研究尚未完成，候选内容没有发布。\nprogress.question：该字段含未引用数量或证券代码；使用可信 numeric_claim/entity_ref 节点，保留来源、单位和期间。\n下一步：按来源引用与授权范围修复研究进展；证据不足时明确保留缺口。",
+          "content": [],
+          "context_refs": [
+            {
+              "kind": "listing",
+              "id": 160,
+              "revision": 1,
+              "field_path": null
+            }
+          ],
+          "reply_to": {
+            "kind": "message",
+            "id": "4bda28ce-828a-432c-8fcb-8f55706ab8a0",
+            "revision": 1,
+            "field_path": null
+          },
+          "client_message_id": null,
+          "task_ref": {
+            "kind": "task",
+            "id": "c128f374-8d1b-4d0b-a7f2-609213d18ea9",
+            "revision": 5,
+            "field_path": null
+          },
+          "artifact_refs": []
+        }
+      ],
+      "latency_seconds": 21.887506500352174,
+      "error_type": null,
+      "semantic_acceptance": "human pending",
+      "money_cost_usd": null,
+      "safe_rejection_diagnostic": {
+        "company": "国电南瑞",
+        "task_id": "c128f374-8d1b-4d0b-a7f2-609213d18ea9",
+        "code": "research_numeric_text_requires_reference",
+        "field_errors": [
+          {
+            "field": "progress.question",
+            "message": "该字段含未引用数量或证券代码；使用可信 numeric_claim/entity_ref 节点，保留来源、单位和期间。"
+          }
+        ],
+        "source": "persisted safe fields; private candidate omitted"
+      },
+      "requested_max_tokens": 4096,
+      "provider_reported_output_over_requested_max": true,
+      "company_cumulative_actual_tokens": 26266,
+      "company_cumulative_actual_requests": 2,
+      "company_token_limit_not_exceeded": true
+    }
+  ],
+  "trial_status": "real transport/schema restored; all three model research candidates rejected; no quality pass",
+  "temporary_credentials_removed": true,
+  "production_enabled": false,
+  "background_enabled": false,
+  "source_unchanged": true,
+  "cumulative_actual_requests": 6,
+  "cumulative_actual_tokens": 75669,
+  "remaining_authorized_requests": 18,
+  "remaining_authorized_tokens": 74331,
+  "total_limit_not_exceeded": true,
+  "zero_http_predecessor_audit": "ag20-real-repair-2026-10-10.json",
+  "initial_paid_attempt_audit": "ag20-real-trial-2026-10-10.json",
+  "human_acceptance": false
+}

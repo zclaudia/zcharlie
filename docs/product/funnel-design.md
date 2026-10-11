@@ -328,12 +328,20 @@ notify: { add: info, trim: info, exit_review: action_required }
 ### P2 · 操作区间、持仓与通知
 
 - 规则引擎 · 区间检测：候选区间（`buy_zone` / `drop`）与持仓区间（`add` / `trim` / `exit_review`），日频。
-- 持仓录入（手工 / 文件导入）、持仓快照、仓位类因子。
-- 通知两级 + 至少一个推送渠道 + 去重策略。
-- 复盘页（清仓 / 移出时生成）。
+  **已实现（2026-10-11，watch-holding-plan WP8）**：表 `zone_event` / `zone_interval_state`，每日 `zone_detection`
+  任务（候选/观察 scope 只在已评审交易日，持仓 scope 每日），事件引用触发时的规则版本与输入快照引用；
+  `drop` 自动归档候选；`exit_review` 只要求复核。持仓规则具备起草、审阅、批准/驳回入口，
+  "区间检测未启用"标注已移除。
+- 持仓录入（手工 / 文件导入）、持仓快照、仓位类因子。**已实现**（账本/成本/估值见 watch-holding-plan 第 5/8 节；
+  仓位因子由区间检测从当日估值派生，不在因子注册表内）。
+- 通知两级 + 至少一个推送渠道 + 去重策略。**两级与去重已实现**（`info` / `action_required`；进入通知一次、
+  连续触发不再通知、离开后再进入再通知；事件行是站内通知，标的若有 AI 案例则写入既有外发通道）；
+  独立推送渠道（企业微信 / Telegram / 邮件）仍未接。
+- 复盘页（清仓 / 移出时生成）。**仍待实现**：`zone_event` 数据已就绪，页面引用未接上。
 
-退出条件：同一快照对的区间事件可复现；每只持仓都有 active 规则；
-推送渠道连续 4 周稳定；每条通知可回溯到规则版本与触发值。
+退出条件：同一快照对的区间事件可复现（事件身份 `input_digest` 保证，已有回归测试）；每只持仓都有 active 规则
+（仍靠用户逐只批准，未自动补齐）；推送渠道连续 4 周稳定（独立渠道未接）；每条通知可回溯到规则版本与触发值
+（已实现：事件与通知都带规则版本、触发条件实际值与 `calibration_status`）。
 
 **数据源准备（2026-10-09 补充，源自对开源项目 [marketingdashboard](https://github.com/theBigGavin/marketingdashboard) 的调研，详见 15.3）**：
 
@@ -343,7 +351,7 @@ notify: { add: info, trim: info, exit_review: action_required }
 | 上游容错 | provider 级失败退避 + 负缓存（5s → 15s → 45s → 2min）与多源回退链（东财 → 新浪 → 腾讯）；mrd 2026-09-29 记录过东财 push2 全族 TLS 断连，我们的 AkShare 东财报表走同一批接口 | 推送渠道"连续 4 周稳定"的退出条件 | 中 |
 | 口径记录 | 在 `field_sources.yaml` 注释里记录各源的单位口径与实测校准日期（mrd `moneyflow.cjs` 文件头的写法） | 通知可回溯到触发值 | 低 |
 | 日线迷你图 | 手写 SVG sparkline（无图表库，满足 CSP），候选 / 观察卡片叠加区间带 | 观察端展示 | 低 |
-| 股票搜索 | 新浪 `suggest3` / 东财 `searchadapter` 联想（支持拼音） | 持仓录入、自选股添加 | 低 |
+| 股票搜索 | 新浪 `suggest3` / 东财 `searchadapter` 联想（支持拼音） | 持仓录入、观察池添加 | 低 |
 | 上游计数 | `/health/data` 增加每个 provider 的上游调用 / 失败 / 429 计数（mrd `/api/stats`） | 运维 | 低 |
 
 约束：实时报价与其他非官方接口一样须带采集时间戳落 PIT 快照，不得绕过 `LookaheadDataError` 校验；

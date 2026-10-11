@@ -3,7 +3,7 @@
 > 先读 [`00-conventions.md`](00-conventions.md)。波次 W3，可与 04 并行。**前置：05 已合并**（`search_stocks` 复用其仓库）。
 
 **目标：** `ia mcp serve`（stdio）向 Claude Desktop 等 MCP 客户端暴露只读工具与资源，
-让外部助手能查询自选股、快照、候选、规则、财报事件与数据健康，但不能写、不触发 LLM。
+让外部助手能查询观察池、快照、候选、规则、财报事件与数据健康，但不能写、不触发 LLM。
 
 **决策：** D5（stdio、只读、SQLite `mode=ro`、不挂 HTTP）。
 
@@ -11,7 +11,7 @@
 
 - `mcp` 2.3.0 已随 `pydantic-ai` 间接安装（`.venv` 可 `import mcp`），`pyproject.toml` 未声明 → 显式加 `mcp>=2,<3`。
 - CLI：`cli/main.py` 用 `add_typer` 注册子命令组，各组在 `cli/commands/<name>.py`；引擎与设置加载样板见 `cli/commands/snapshot.py::_run / run_with_engine`，`load_settings(base=bootstrap)`。
-- 数据读取可复用：自选股 `api/routes/watchlist.py` 的查询逻辑（抽成服务函数后共用）、因子视图 `factors/`（`field_sources` 解析）、日线 `MarketSnapshotRepository.series_as_of`、候选 `api/routes/candidates.py`、规则库 `rules/`、健康 `api/routes/data_health.py::compute_data_health`、搜索（05）`stock_directory` 仓库、财报事件（04）仓库（若 04 未合并，`list_earnings_events` 先不实现并在完成记录注明）。
+- 数据读取可复用：观察池 `api/routes/watchlist.py` 的查询逻辑（抽成服务函数后共用）、因子视图 `factors/`（`field_sources` 解析）、日线 `MarketSnapshotRepository.series_as_of`、候选 `api/routes/candidates.py`、规则库 `rules/`、健康 `api/routes/data_health.py::compute_data_health`、搜索（05）`stock_directory` 仓库、财报事件（04）仓库（若 04 未合并，`list_earnings_events` 先不实现并在完成记录注明）。
 - 数据库 URL 在 `config.py::Settings`（SQLite，aiosqlite）；只读打开用 URI `sqlite+aiosqlite:///file:<path>?mode=ro&uri=true`。
 - 运维文档 `docs/product/operations.md`。
 
@@ -56,7 +56,7 @@
 
 ## 验收
 
-- 本机：Claude Desktop 配置后能列出工具并查询一只自选股的快照与 120 日日线；`ia mcp tools` 输出与测试快照一致。
+- 本机：Claude Desktop 配置后能列出工具并查询一只观察池的快照与 120 日日线；`ia mcp tools` 输出与测试快照一致。
 - 门禁三条通过；写"完成记录"。
 
 ## 完成记录（2026-10-09）
@@ -98,7 +98,7 @@
 
 ### 本机验收
 
-- **未**对真实 `data/app.db` 执行任何命令。scratchpad 临时 SQLite（`create_all` + 1 只自选股 + 25 根日线）：把 `initialize` / `notifications/initialized` / `tools/list` / `tools/call`（`list_watchlist`、`get_bars` 正常与非法 ticker、`get_stock_snapshot`）/ `resources/read zcharlie://health` 八行 JSON-RPC 管道送入 `env -i … ia mcp serve --project-dir <checkout>`：stdout 只有 7 行 JSON-RPC 应答（`tools/list` 9 个工具、非法 ticker 得 `isError` 结果），日志全部在 stderr，数据库文件 SHA-256 前后一致；只读连接会在旁边建 `-shm` / 0 字节 `-wal`（WAL 库的 SQLite 常规行为）。
+- **未**对真实 `data/app.db` 执行任何命令。scratchpad 临时 SQLite（`create_all` + 1 只观察池 + 25 根日线）：把 `initialize` / `notifications/initialized` / `tools/list` / `tools/call`（`list_watchlist`、`get_bars` 正常与非法 ticker、`get_stock_snapshot`）/ `resources/read zcharlie://health` 八行 JSON-RPC 管道送入 `env -i … ia mcp serve --project-dir <checkout>`：stdout 只有 7 行 JSON-RPC 应答（`tools/list` 9 个工具、非法 ticker 得 `isError` 结果），日志全部在 stderr，数据库文件 SHA-256 前后一致；只读连接会在旁边建 `-shm` / 0 字节 `-wal`（WAL 库的 SQLite 常规行为）。
 - `ia mcp tools` 输出与测试快照一致（CLI 测试覆盖）。
 - 未做：真实 Claude Desktop 配置与对话验证（需用户在本机写 `claude_desktop_config.json` 并重启）。
 

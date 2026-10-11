@@ -15,7 +15,7 @@
 - **B4 行业**：内核的分类与公司画像不再自行匹配关键词，改读 `IndustryBasis`（`research_kernel/industry.py`）。
   用户填写的行业文字等于行业组 id 时取该组，否则沿用旧关键词表；未填写时用数据的行业组（申万优先、证监会兜底）。
   "用户文字等于申万一/二/三级名称即映射到该组"会改变 4 只 golden 的分类，按 D3 **未启用**，差异见第 3 节。
-- **B5**：新增数据源模式 `snapshot`（自选股、晋级后研究、`POST /research/single-stock` 的默认值），
+- **B5**：新增数据源模式 `snapshot`（观察池、晋级后研究、`POST /research/single-stock` 的默认值），
   从 `load_snapshot_view(policy=TARGET_POOL)` 构造 canonical bundle，不调用 iFinD；`ifind` 模式保留给手动深度研究。
 
 ## 2. 行业组 → 内核特征
@@ -41,7 +41,7 @@
    等于行业组 id（如 `utility`）→ 该组；否则 → 旧关键词表（原样保留，含"电力设备"同时命中"电力"的历史行为）。
    例外（P1-F1 修复，`623de1d`）：快照模式下，文字恰好等于该股票 `as_of` 当日自身的分类名称
    （申万一 / 二 / 三级任一级，或证监会名称）时，视为复述数据分类而非用户覆盖，按第 2 条取数据行业组，
-   来源记为数据。晋级时写入自选股的申万一级名称就属于这种情况。
+   来源记为数据。晋级时写入观察池的申万一级名称就属于这种情况。
 2. 无用户文字 → `industry_group`（快照模式 bundle 提供，`as_of` 当日申万 2021，缺失时证监会兜底）。
 3. 都没有 → 无特征（general）。
 
@@ -95,11 +95,11 @@
 
 | 入口 | 模式 |
 |---|---|
-| 自选股 `provider = auto`（默认）/ `snapshot` | snapshot（不需要 `IFIND_PROXY_API_KEY`；行业与报告年度可空） |
-| 自选股 `provider = ifind` / `ifind-proxy` | ifind（需要 key、行业、报告年度） |
+| 观察标的 `provider = auto`（默认）/ `snapshot` | snapshot（不需要 `IFIND_PROXY_API_KEY`；行业与报告年度可空） |
+| 观察标的 `provider = ifind` / `ifind-proxy` | ifind（需要 key、行业、报告年度） |
 | `POST /research/single-stock` | `provider` 默认 `snapshot`；`provider=ifind` 时需要行业与报告年度，未配置 key 返回 503 |
 | `ia research snapshot` / `ia research ifind` | 对应模式 |
-| 候选晋级后的研究 | 跟随自选股条目（新条目为 `auto`） |
+| 候选晋级后的研究 | 跟随观察池条目（新条目为 `auto`） |
 | 队列中旧 payload（无 `provider`） | ifind（与入队时语义一致） |
 
 - 运行 metadata：`source_mode`、`previous_source_mode`、`source_changed`、`verification_requested_fields`；
