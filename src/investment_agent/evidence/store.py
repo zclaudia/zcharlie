@@ -197,6 +197,68 @@ class EvidenceService:
                             "invalid_reference", f"Snapshot {name} does not match saved source"
                         )
                 actor = "snapshot_adapter"
+            elif (
+                record.source_kind == "snapshot"
+                and record.source_ref.kind == "peer_annual_snapshot"
+            ):
+                # Trusted peer-annual-field branch (WP4): the record is never
+                # trusted - every fact is re-derived from the stored immutable
+                # snapshot row and its per-field proof before it is accepted.
+                # Verified can only come out of this re-derivation, so a model
+                # or client upload claiming a peer source and verified is
+                # refused here, never relaxed.
+                from investment_agent.industry_peers.evidence import (
+                    ADAPTER_ACTOR,
+                    peer_field_evidence,
+                )
+                from investment_agent.storage.models.peer import PeerAnnualSnapshot
+
+                field_path = record.source_ref.field_path
+                if (
+                    record.source_ref.revision != 1
+                    or field_path is None
+                    or not field_path.startswith("fields.")
+                    or len(field_path) <= len("fields.")
+                ):
+                    raise InvestorError("invalid_reference", "Snapshot field is not supported")
+                metric = field_path.removeprefix("fields.")
+                snapshot = await self.session.get(PeerAnnualSnapshot, str(record.source_ref.id))
+                if snapshot is None:
+                    raise InvestorError("invalid_reference", "Snapshot version does not exist")
+                if metric not in (snapshot.fields or {}):
+                    raise InvestorError("invalid_reference", "Snapshot field is not supported")
+                materialization = peer_field_evidence(snapshot, metric)
+                peer_expected = materialization.record
+                if peer_expected is None:
+                    raise InvestorError(
+                        "invalid_reference",
+                        "Peer annual field is not materializable from this snapshot version "
+                        f"({materialization.reason}); the fact stays in the snapshot until a "
+                        "version that states its source dates exists",
+                    )
+                for name in (
+                    "subject_ref",
+                    "period",
+                    "source_ref",
+                    "locator",
+                    "value",
+                    "text",
+                    "published_at",
+                    "acquired_at",
+                    "available_from",
+                    "content_hash",
+                    "verification",
+                    "conflict",
+                    "date_precision",
+                    "document_provenance",
+                ):
+                    if getattr(peer_expected, name) != getattr(record, name):
+                        raise InvestorError(
+                            "invalid_reference",
+                            f"Peer snapshot {name} does not match saved source; "
+                            "re-materialize from the current snapshot version",
+                        )
+                actor = ADAPTER_ACTOR
             elif record.source_kind == "snapshot":
                 event_models = {
                     "earnings_forecast": EarningsForecastRecord,

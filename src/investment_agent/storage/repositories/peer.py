@@ -147,6 +147,33 @@ class PeerAnnualSnapshotRepository(Repository[PeerAnnualSnapshot]):
             )
         ).scalar_one_or_none()
 
+    async def metric_versions(
+        self,
+        *,
+        company_id: int,
+        metric: str,
+        provider: str | None = None,
+    ) -> list[PeerAnnualSnapshot]:
+        """Every saved version of the company whose ``fields`` carry ``metric``.
+
+        Read-only lookup for the WP4 conflict/correction query; versions come
+        oldest capture first. There is deliberately no mutation path here.
+        """
+
+        conditions: list[ColumnElement[bool]] = [PeerAnnualSnapshot.company_id == company_id]
+        if provider is not None:
+            conditions.append(PeerAnnualSnapshot.provider == provider)
+        rows = list(
+            (
+                await self.session.execute(
+                    select(PeerAnnualSnapshot)
+                    .where(*conditions)
+                    .order_by(PeerAnnualSnapshot.captured_at, PeerAnnualSnapshot.id)
+                )
+            ).scalars()
+        )
+        return [row for row in rows if metric in (row.fields or {})]
+
     async def versions(
         self,
         *,
