@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
 
 STATIC = Path("src/investment_agent/web/static")
 DISCLAIMER = "研究辅助，非投资建议"
 KEY = {"X-API-Key": "secret"}
 
 
-def _login(client) -> None:
+def _login(client: TestClient) -> None:
     response = client.post("/app/login", data={"api_key": "secret", "next": "/app"})
     assert response.status_code == 200
 
@@ -33,13 +34,13 @@ def _run_settings(script: str) -> Any:
     return json.loads(result.stdout)
 
 
-def test_settings_page_requires_session(api_client) -> None:
+def test_settings_page_requires_session(api_client: TestClient) -> None:
     response = api_client.get("/app/settings", follow_redirects=False)
     assert response.status_code == 302
     assert response.headers["location"] == "/app/login"
 
 
-def test_settings_page_shell(api_client) -> None:
+def test_settings_page_shell(api_client: TestClient) -> None:
     _login(api_client)
     response = api_client.get("/app/settings")
     assert response.status_code == 200
@@ -66,7 +67,7 @@ def test_settings_page_shell(api_client) -> None:
         assert fragment in html, fragment
 
 
-def test_nav_links_settings_on_every_page(api_client) -> None:
+def test_nav_links_settings_on_every_page(api_client: TestClient) -> None:
     _login(api_client)
     for path in ("/app", "/app/watchlist", "/app/runs", "/app/candidates", "/app/health"):
         html = api_client.get(path).text
@@ -143,7 +144,7 @@ console.log(JSON.stringify({
     assert out["same"] == [True, True, False]
 
 
-def test_page_input_hints_match_the_api(api_client) -> None:
+def test_page_input_hints_match_the_api(api_client: TestClient) -> None:
     """Every input type the API emits is one settings.js renders."""
 
     body = api_client.get("/settings", headers=KEY).json()
@@ -168,5 +169,5 @@ console.log(JSON.stringify({
     )
     assert out["off"] == {"text": "未启用", "ok": False, "neutral": True}
     assert out["incomplete"]["text"] == "已启用但配置不完整：未填写：注册凭证"
-    assert out["connecting"] == {"text": "连接中：AUTH_FAILED", "ok": False}
+    assert out["connecting"] == {"text": "连接中", "ok": False}
     assert out["up"] == {"text": "已连接，服务 ID abc（命名空间 ns）", "ok": True}

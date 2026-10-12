@@ -13,12 +13,9 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 import structlog
-from zclaudia_gateway import GatewayBackend
+from zclaudia_gateway import GatewayBackend, asgi_http_handler
 
 from investment_agent.config import Settings
-from investment_agent.gateway.asgi import asgi_http_handler
-from investment_agent.gateway.link import GatewayLink
-from investment_agent.gateway.streaming import serve_http_streaming
 from investment_agent.settings.loader import load_settings
 from investment_agent.storage.database import session_scope
 
@@ -87,7 +84,7 @@ class GatewayManager:
         self._backend_factory = backend_factory
         self._task: asyncio.Task[None] | None = None
         self._config: GatewayConfig | None = None
-        self._link: GatewayLink | None = None
+        self._backend: GatewayBackend | None = None
         self._status = GatewayStatus("disabled")
         self._last_logged_error: str | None = None
 
@@ -111,13 +108,10 @@ class GatewayManager:
         await self._teardown()
 
     def status(self) -> GatewayStatus:
-        link = self._link
-        if link is None or self._config is None:
+        backend = self._backend
+        if backend is None or self._config is None:
             return self._status
-        state = link.backend.state
-        detail = link.last_error
-        backend = link.backend
-        if state == "connected":
+        if backend.state == "connected":
             return GatewayStatus(
                 "connected",
                 url=self._config.url,
@@ -127,7 +121,6 @@ class GatewayManager:
             )
         return GatewayStatus(
             "connecting",
-            detail=detail,
             url=self._config.url,
             namespace=self._config.namespace,
         )
@@ -148,7 +141,7 @@ class GatewayManager:
             self._status = self._idle_status(effective)
             log.info("gateway.link_disabled", detail=self._status.detail)
             return
-        self._link = await self._build_link(config)
+        self._backend = await self._build_backend(config)
         log.info("gateway.link_configured", url=config.url, namespace=config.namespace)
 
     def _idle_status(self, settings: Settings) -> GatewayStatus:
@@ -156,7 +149,7 @@ class GatewayManager:
             return GatewayStatus("disabled")
         return GatewayStatus("incomplete", detail="未填写：" + "、".join(missing_fields(settings)))
 
-    async def _build_link(self, config: GatewayConfig) -> GatewayLink:
+    async def _build_backend(self, config: GatewayConfig) -> GatewayBackend:
         backend = self._backend_factory(
             url=config.url,
             credential=config.credential,
@@ -165,19 +158,18 @@ class GatewayManager:
         )
         # The gateway forwards no Authorization / cookie, so the API key is
         # injected here: a phone authenticates to the gateway, never to us.
-        serve_http_streaming(
-            backend, asgi_http_handler(self._app, extra_headers={"X-API-Key": self._base.api_key})
+        backend.serve_http_stream(
+            asgi_http_handler(self._app, extra_headers={"X-API-Key": self._base.api_key})
         )
-        link = GatewayLink(backend)
-        await link.start()
-        return link
+        await backend.start()
+        return backend
 
     async def _teardown(self) -> None:
-        link, self._link = self._link, None
+        backend, self._backend = self._backend, None
         self._config = None
-        if link is not None:
+        if backend is not None:
             with contextlib.suppress(Exception):
-                await link.stop()
+                await backend.close()
 
     async def _reconcile_safely(self) -> None:
         try:

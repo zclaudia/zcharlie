@@ -20,9 +20,7 @@ import pytest_asyncio
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from websockets.asyncio.client import connect
-from zclaudia_gateway import GatewayBackend
-
-from investment_agent.gateway import asgi_http_handler, serve_http_streaming
+from zclaudia_gateway import GatewayBackend, asgi_http_handler
 
 GATEWAY_DIR = os.environ.get("ZCLAUDIA_GATEWAY_DIR", "")
 ADMIN_TOKEN = "contract-test-admin"
@@ -128,10 +126,11 @@ async def proxied(
         namespace="contract",
         identity={"device_id": "host", "instance_id": "inst", "name": "contract"},
     )
-    serve_http_streaming(
-        backend, asgi_http_handler(app, extra_headers={"X-API-Key": "backend-secret"})
+    backend.serve_http_stream(
+        asgi_http_handler(app, extra_headers={"X-API-Key": "backend-secret"})
     )
-    await asyncio.wait_for(backend.connect(), 10)
+    await backend.start()
+    await asyncio.wait_for(backend.wait_connected(), 10)
     device = await _issue(gateway_url, "device")
     try:
         yield (
