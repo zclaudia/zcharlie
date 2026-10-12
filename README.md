@@ -15,7 +15,7 @@
 
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
-- 持久化：SQLite + Alembic（迁移 `020`）；制品目录 `data/research-runs/<run_id>/`；
+- 持久化：SQLite + Alembic（迁移随版本演进，head 见 `alembic/versions/`）；制品目录 `data/research-runs/<run_id>/`；
   运行时交易日历 `data/calendars/`（优先于仓库里的 `config/calendars/` 基线）
 - 界面：同源 Web UI（`/app`，会话 Cookie 登录）+ CLI + HTTP API
 
