@@ -374,3 +374,18 @@ async def test_authenticated_message_opt_in_queue_to_native_framework(
         assert (await TaskService(session).get_task(later_id)).status.value == "partial"
         assert await effective_cutoff(session, task_id) == cutoff
     assert len(http.calls) == 3
+
+
+def test_disclosure_replay_is_a_public_service_entry():
+    """P3b: the route honours saved receipts through the public
+    ``DisclosureService.replay`` (same behaviour, no private member access)."""
+
+    import inspect
+
+    from investment_agent.api.routes import disclosures
+    from investment_agent.evidence.disclosures import DisclosureService
+
+    assert isinstance(DisclosureService.replay, object) and not DisclosureService.replay.__name__.startswith("_")
+    route_source = inspect.getsource(disclosures)
+    assert "service.replay(" in route_source
+    assert "._replay" not in route_source

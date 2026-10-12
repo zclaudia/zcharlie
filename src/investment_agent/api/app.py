@@ -16,6 +16,7 @@ from investment_agent.logging import configure_logging
 from investment_agent.settings.loader import ensure_imported
 from investment_agent.snapshots.directory import initialize_directory
 from investment_agent.storage.database import engine_lifespan, session_scope
+from investment_agent.storage.repositories.stock_directory import StockDirectoryRepository
 
 log = structlog.get_logger(__name__)
 
@@ -38,14 +39,30 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         gateway = GatewayManager(_app, base=settings)
         _app.state.gateway = gateway
         await gateway.start()
-        directory_task = asyncio.create_task(initialize_directory())
+        # Directory freshness on the shared engine (one sequential read); only
+        # an actually empty directory pays for the background full sync, which
+        # runs on its own NullPool engine (initialize_directory) so startup
+        # still contributes exactly one pooled application connection.
+        directory_task: asyncio.Task[None] | None = None
+        try:
+            async with session_scope() as session:
+                _, directory_total = await StockDirectoryRepository(session).freshness()
+            if not directory_total:
+                directory_task = asyncio.create_task(
+                    initialize_directory(database_url=settings.database_url, total=0)
+                )
+        except Exception:
+            log.exception(
+                "directory_initialization_failed", hint="retry `ia snapshot sync-universe --now`"
+            )
         try:
             yield
         finally:
             await gateway.stop()
-            directory_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await directory_task
+            if directory_task is not None:
+                directory_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await directory_task
 
 
 # CSP for the /app UI: templates and app.js use no inline scripts or styles.
@@ -53,6 +70,41 @@ WEB_CONTENT_SECURITY_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self'; "
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 )
+
+MAX_REQUEST_BODY_BYTES = 1_000_000
+"""Global request-body cap (413 before a handler reads anything).
+
+Every schema field is individually bounded, but many accept free text; behind a
+reverse proxy this middleware is the single backstop against oversized bodies.
+1 MiB is far above the largest legitimate payload (portfolio import batches and
+agent messages stay in the tens of KiB) and answers 413 without buffering.
+Chunked requests without Content-Length pass through: real JSON clients always
+send the header, and capping a stream mid-read cannot produce a clean 413.
+"""
+
+_BODY_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+class RequestBodyLimitMiddleware:
+    """Reject request bodies declared over :data:`MAX_REQUEST_BODY_BYTES`."""
+
+    def __init__(self, app: Any, max_bytes: int = MAX_REQUEST_BODY_BYTES) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or scope.get("method") not in _BODY_METHODS:
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        raw_length = headers.get("content-length")
+        if raw_length is not None and raw_length.isdigit() and int(raw_length) > self.max_bytes:
+            from fastapi.responses import JSONResponse
+
+            response = JSONResponse({"detail": "request body too large"}, status_code=413)
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
 
 
 class SecurityHeadersMiddleware:
@@ -115,6 +167,9 @@ def create_app(*, settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     _register_protected_routes(app)
     _register_web(app)
+    # Added before SecurityHeadersMiddleware so the 413 response still gets
+    # the security headers (the last-added middleware is the outermost).
+    app.add_middleware(RequestBodyLimitMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     return app
 

@@ -338,3 +338,48 @@ def test_batch_refresh_skips_disabled_items(api_client, monkeypatch):
         "failed": 0,
         "items": [],
     }
+
+
+async def test_remove_has_a_proxy_safe_post_form_equivalent_to_delete(api_client):
+    """P3e: POST /watchlist/{id}/remove is the same journaled removal as the
+    legacy DELETE-with-body (kept until the web client migrates)."""
+
+    key = {"X-API-Key": "secret"}
+    async with session_scope() as session:
+        session.add(Market(code="NASDAQ", name="NASDAQ", timezone="America/New_York", currency="USD"))
+        listing_id = (
+            await ListingRepository(session).upsert_listing(
+                market_code="NASDAQ", ticker="AAPL", company_name="Apple"
+            )
+        ).id
+    assert api_client.post("/watchlist", json={"ticker": "AAPL"}, headers=key).status_code == 201
+
+    # Identical validation: the journal needs a reason on both forms.
+    assert api_client.post(f"/watchlist/{listing_id}/remove", headers=key).status_code == 422
+    assert (
+        api_client.request("DELETE", f"/watchlist/{listing_id}", headers=key).status_code == 422
+    )
+    # POST removes and journals; the legacy DELETE then sees 404 (already gone).
+    assert api_client.post(
+        f"/watchlist/{listing_id}/remove", json={"reason": "不再跟踪"}, headers=key
+    ).status_code == 204
+    assert (
+        api_client.request(
+            "DELETE", f"/watchlist/{listing_id}", json={"reason": "不再跟踪"}, headers=key
+        ).status_code
+        == 404
+    )
+    # And vice versa: the legacy DELETE removes, the POST form then sees 404.
+    assert api_client.post("/watchlist", json={"ticker": "AAPL"}, headers=key).status_code == 201
+    assert (
+        api_client.request(
+            "DELETE", f"/watchlist/{listing_id}", json={"reason": "不再跟踪"}, headers=key
+        ).status_code
+        == 204
+    )
+    assert (
+        api_client.post(
+            f"/watchlist/{listing_id}/remove", json={"reason": "不再跟踪"}, headers=key
+        ).status_code
+        == 404
+    )

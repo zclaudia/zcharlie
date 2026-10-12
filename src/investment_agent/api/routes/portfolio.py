@@ -1,6 +1,6 @@
 """Authenticated user fact endpoints; intentionally absent from model tools."""
 from collections.abc import AsyncIterator, Callable
-from datetime import UTC, date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
 from investment_agent.api.auth import get_settings, verify_api_key_or_session
-from investment_agent.config import Settings, load_app_yaml
+from investment_agent.config import Settings
 from investment_agent.evidence.contracts import CalculationRecord
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.foundations import InvestorError
@@ -43,7 +43,11 @@ from investment_agent.scheduler.trading_calendar import (
     UnknownTradingCalendarYearError,
     load_trading_calendar,
 )
-from investment_agent.settings.loader import DEFAULT_APP_YAML
+from investment_agent.settings.loader import (
+    DEFAULT_APP_YAML,
+    configured_calendar_path,
+    resolved_calendar_path,
+)
 from investment_agent.storage.database import session_scope
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(verify_api_key_or_session)])
@@ -80,10 +84,17 @@ def trading_calendar_predicate(settings: Settings) -> Callable[[date], bool | No
 
     ``None`` is not "weekday": staleness cannot be settled then, and the
     valuation reports a limitation instead (plan 2.10 / WP10).
+
+    Same source as the scheduler and the dashboard: the DATA_DIR copy applied
+    from the health page wins over the repository baseline, so an applied
+    calendar takes effect on the next staleness decision without a restart.
     """
 
     try:
-        calendar = load_trading_calendar(Path(load_app_yaml(DEFAULT_APP_YAML).scheduler.a_share_calendar_path))
+        baseline = configured_calendar_path(DEFAULT_APP_YAML)
+        calendar = load_trading_calendar(
+            resolved_calendar_path(baseline, data_dir=Path(settings.data_dir))
+        )
     except Exception as exc:
         raise InvestorError("invalid_reference", "交易日历不可用，无法确认价格时效") from exc
 
@@ -110,7 +121,9 @@ async def _enqueue_daily_valuation(
             svc.session,
             account_id=account_id,
             valuation_date=shanghai_today(),
-            knowledge_cutoff=datetime.now(UTC),
+            # No explicit cutoff: enqueue_valuation derives the deterministic
+            # day-end cutoff, so the cron and the API share one idempotency
+            # identity instead of colliding on a wall-clock payload.
             triggered_by="portfolio_api",
         )
     except Exception:

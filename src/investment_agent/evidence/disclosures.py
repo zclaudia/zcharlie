@@ -172,7 +172,12 @@ class DisclosureService:
             raise DisclosureError("unsupported_or_missing_listing")
         return listing
 
-    async def _replay(self, operation: UUID, request: Contract) -> dict[str, Any] | None:
+    async def replay(self, operation: UUID, request: Contract) -> dict[str, Any] | None:
+        """Public idempotent-replay lookup: the saved receipt for ``operation``,
+        or ``None``; mismatched owners or requests raise ``idempotency_mismatch``.
+
+        Routes call this (never a private helper) to honour a saved receipt even
+        when the feature has since been switched off."""
         receipt = await self.session.get(DisclosureReceipt, str(operation))
         if receipt:
             if receipt.owner_id != self.owner or receipt.request_hash != digest(
@@ -193,13 +198,13 @@ class DisclosureService:
             .values(owner_id=self.owner)
         )
         if self.active_request is not None:
-            return await self._replay(*self.active_request)
+            return await self.replay(*self.active_request)
         return None
 
     async def execute(
         self, operation: UUID, request: DiscoveryRequest | FetchRequest
     ) -> dict[str, Any]:
-        replay = await self._replay(operation, request)
+        replay = await self.replay(operation, request)
         if replay is not None:
             return replay
         self.active_request = (operation, request)
@@ -228,7 +233,7 @@ class DisclosureService:
             )
             .on_conflict_do_nothing()
         )
-        replay = await self._replay(operation, request)
+        replay = await self.replay(operation, request)
         assert replay is not None
         return replay
 

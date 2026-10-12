@@ -182,3 +182,41 @@ async def test_admission_commit_failure_cannot_send_accepted_response(api_client
     async with session_scope() as session:
         assert await session.scalar(select(MessageRow.id)) is None
         assert await session.scalar(select(AgentTask.id)) is None
+
+
+@pytest.mark.asyncio
+async def test_cancel_body_key_is_tolerated_but_not_required(api_client, monkeypatch):
+    """P3a: the handler ignores CancelInput.idempotency_key (the transition is
+    intrinsically idempotent); the field stays optional for web-client
+    continuity, and a body-less cancel replays the same idempotent result."""
+
+    monkeypatch.setenv("INVESTOR_AGENT_ENABLED", "true")
+    conversation, receipt, body, url = accepted(api_client)
+    task_url = f"/agent/tasks/{receipt['task']['id']}"
+    cancelled = api_client.post(task_url + "/cancel", headers=KEY, json={}).json()
+    assert cancelled["status"] == "cancelled"
+    # Same task: an empty body and no body at all both replay the transition.
+    assert api_client.post(task_url + "/cancel", headers=KEY, json={}).json() == cancelled
+    assert api_client.post(task_url + "/cancel", headers=KEY).json() == cancelled
+
+
+@pytest.mark.asyncio
+async def test_mid_stream_failure_yields_a_structured_task_error_event():
+    """P3f: past the committed 200 the stream cannot raise HTTPException; a
+    failing poll yields one in-band task_error frame (snapshot_url for client
+    recovery, mirroring cursor_expired) and ends."""
+
+    import json
+
+    from investment_agent.api.routes.agent import event_stream
+
+    class ConnectedRequest:
+        async def is_disconnected(self) -> bool:
+            return False
+
+    frames = [frame async for frame in event_stream(ConnectedRequest(), uuid4(), 0, uuid4())]
+    assert len(frames) == 1
+    assert frames[0].startswith("event: task_error\ndata: ")
+    payload = json.loads(frames[0].split("data: ", 1)[1].strip())
+    assert payload["code"] == "not_found" and payload["status_code"] == 404
+    assert payload["snapshot_url"].startswith("/agent/tasks/")

@@ -75,6 +75,30 @@ def test_non_ascii_api_key_rejected_not_crashing(api_client):
     assert _login(api_client, api_key="密钥").status_code == 401
 
 
+def test_non_ascii_session_cookie_fails_verification_not_crashing(api_client):
+    """P2-9: a raw client can put non-ASCII in the session cookie; verification
+    must fail closed (401) on every request, never raise a 500."""
+
+    from investment_agent.web.session import verify_session_token
+
+    assert verify_session_token("v2.1.2.nønce.签名", api_key="secret") is False
+    assert verify_session_token("v2.一.二.三.四", api_key="secret") is False
+    # A real token still verifies, including through the byte comparison.
+    token = api_client.post(  # nosec: straightforward login below
+        "/app/login", data={"api_key": "secret", "next": "/app"}, follow_redirects=False
+    )
+    assert token.status_code == 303
+    genuine = api_client.cookies[SESSION_COOKIE_NAME]
+    assert verify_session_token(genuine, api_key="secret") is True
+    api_client.cookies.clear()
+    # Raw clients put raw bytes on the wire; ASGI decodes them as latin-1, so
+    # the app sees a non-ASCII str cookie exactly like the forged vector.
+    forged = f"{SESSION_COOKIE_NAME}=v2.1.2.nonce.中文伪造签名".encode()
+    assert api_client.get("/dashboard/today", headers={"Cookie": forged}).status_code == 401
+    genuine_bytes = f"{SESSION_COOKIE_NAME}={genuine}".encode()
+    assert api_client.get("/dashboard/today", headers={"Cookie": genuine_bytes}).status_code == 200
+
+
 # ---- CSRF origin rules -----------------------------------------------------
 
 
@@ -195,6 +219,45 @@ def test_cookie_secure_flag_follows_setting(api_client, monkeypatch):
     assert "; secure" in secure
 
 
+def test_prod_https_public_origin_forces_secure_cookie(monkeypatch):
+    """P3g: prod behind an https WEB_PUBLIC_ORIGIN cannot emit non-Secure
+    session cookies — the setting is forced (with a warning), local dev and
+    non-https deployments keep their explicit configuration."""
+
+    from investment_agent.config import Settings
+
+    forced = Settings(
+        app_env="prod",
+        api_key=STRONG_KEY,
+        web_public_origin="https://research.example.com",
+        web_cookie_secure=False,
+    )
+    assert forced.web_cookie_secure is True
+    # An explicit True is kept, and dev / non-https deployments are untouched.
+    assert Settings(
+        app_env="prod", api_key=STRONG_KEY, web_public_origin="https://research.example.com",
+        web_cookie_secure=True,
+    ).web_cookie_secure is True
+    assert Settings(app_env="prod", api_key=STRONG_KEY, web_cookie_secure=False).web_cookie_secure is False
+    assert Settings(
+        api_key="secret", web_cookie_secure=False, web_public_origin="https://research.example.com"
+    ).web_cookie_secure is False
+
+
+def test_prod_https_public_origin_sets_secure_cookie_on_login(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from investment_agent.api.app import create_app
+
+    monkeypatch.setenv("APP_ENV", "prod")
+    monkeypatch.setenv("API_KEY", STRONG_KEY)
+    monkeypatch.setenv("WEB_PUBLIC_ORIGIN", "https://research.example.com")
+    client = TestClient(create_app())
+    response = _login(client, api_key=STRONG_KEY)
+    assert response.status_code == 303
+    assert "; secure" in response.headers["set-cookie"].lower()
+
+
 def test_web_session_secret_changes_signing_key(api_client, monkeypatch):
     _login(api_client)
     assert api_client.get("/app", follow_redirects=False).status_code == 200
@@ -203,6 +266,31 @@ def test_web_session_secret_changes_signing_key(api_client, monkeypatch):
     assert api_client.get("/app", follow_redirects=False).status_code == 302
     _login(api_client)
     assert api_client.get("/app", follow_redirects=False).status_code == 200
+
+
+def test_request_body_limit_answers_413_with_security_headers(api_client):
+    """P3h: bodies declared over the global cap are refused before any handler
+    reads them (no reverse-proxy memory amplification); the guard runs inside
+    the security-headers middleware, and legitimate requests are untouched."""
+
+    from investment_agent.api.app import MAX_REQUEST_BODY_BYTES
+
+    key = {"X-API-Key": "secret"}
+    oversized = api_client.post(
+        "/agent/conversations",
+        headers={**key, "content-type": "application/json"},
+        content=b"0" * (MAX_REQUEST_BODY_BYTES + 1),
+    )
+    assert oversized.status_code == 413
+    assert oversized.json() == {"detail": "request body too large"}
+    assert oversized.headers["x-content-type-options"] == "nosniff"
+    # Just under the cap the request reaches the normal (malformed JSON) path.
+    under = api_client.post(
+        "/agent/conversations",
+        headers={**key, "content-type": "application/json"},
+        content=b"[" * (MAX_REQUEST_BODY_BYTES - 1),
+    )
+    assert under.status_code in (400, 422)
 
 
 # ---- headers / docs --------------------------------------------------------

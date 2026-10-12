@@ -195,6 +195,43 @@ async def test_initialize_failure_leaves_empty_directory_and_logs(db_session, mo
     assert any(entry["event"] == "directory_initialization_failed" for entry in logs)
 
 
+async def test_background_bootstrap_never_pools_on_the_application_engine(
+    db_session, tmp_path, monkeypatch
+) -> None:
+    """P2-3: the API passes ``database_url`` so the full sync runs on a private
+    NullPool engine disposed on completion; the application engine's pool (the
+    engine lifecycle contract, see test_engine_lifecycle) gains no connection."""
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from investment_agent.snapshots import directory
+    from investment_agent.storage import database
+    from investment_agent.storage.models import stock_directory  # noqa: F401
+    from investment_agent.storage.models.base import Base
+
+    monkeypatch.setattr(directory, "shanghai_today", lambda: TODAY)
+    client = FakeDirectoryClient({TODAY: {"600547.SH": ("山东黄金", True)}})
+    app_url = f"sqlite+aiosqlite:///{tmp_path / 'app.db'}"
+    bootstrap_url = f"sqlite+aiosqlite:///{tmp_path / 'bootstrap.db'}"
+    bootstrap_engine = create_async_engine(bootstrap_url)
+    async with bootstrap_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await bootstrap_engine.dispose()
+    async with database.engine_lifespan(app_url) as app_engine:
+        # The application pool holds one connection after a startup read.
+        async with database.session_scope() as session:
+            await session.execute(text("SELECT 1"))
+        pool = app_engine.sync_engine.pool
+        before = pool.checkedin() + pool.checkedout()
+        await initialize_directory(client, total=0, database_url=bootstrap_url)
+        assert pool.checkedin() + pool.checkedout() == before
+        async with directory._private_session_scope(bootstrap_url) as session:
+            assert await StockDirectoryRepository(session).freshness() == (TODAY, 1)
+        assert pool.checkedin() + pool.checkedout() == before
+        assert not database._pending_disposals  # the private engine was disposed, not deferred
+
+
 # ---- search ------------------------------------------------------------------
 
 

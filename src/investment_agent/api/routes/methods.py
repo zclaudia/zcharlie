@@ -94,17 +94,28 @@ async def rollback(body: MethodRollback, svc: Service) -> dict[str, Any]:
     return await svc.rollback(body, actor="authenticated_user")
 
 
-@router.post("/offline-shadow")
-async def offline_shadow(body: ShadowRequest) -> dict[str, Any]:
+def _frozen_progress_replay(messages: Any, info: Any) -> ModelResponse:
+    """Actual native model boundary, exact saved progress. No user/model
+    supplied success flag is accepted; controller recomputes every gate.
+
+    A saved history that lost its shape (no user prompt, unparsable JSON,
+    missing frozen progress) is a domain error, never a 500: the model call
+    must not crash the API boundary on archive drift.
+    """
     import json
-    def replay(messages: Any, info: Any) -> ModelResponse:
-        # Actual native model boundary, exact saved progress. No user/model
-        # supplied success flag is accepted; controller recomputes every gate.
+
+    try:
         prompt = next(part.content for message in reversed(messages) for part in message.parts if getattr(part, "part_kind", None) == "user-prompt")
         progress = json.loads(prompt)["frozen_progress"]
-        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, progress)])
+    except (StopIteration, json.JSONDecodeError, KeyError, TypeError, ValueError, AttributeError) as exc:
+        raise InvestorError("invalid_reference", "保存的任务进度缺失或损坏，无法离线重放") from exc
+    return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, progress)])
+
+
+@router.post("/offline-shadow")
+async def offline_shadow(body: ShadowRequest) -> dict[str, Any]:
     try:
-        return await run_offline_shadow(session_scope, body, FunctionModel(replay))
+        return await run_offline_shadow(session_scope, body, FunctionModel(_frozen_progress_replay))
     except InvestorError as exc:
         raise HTTPException(422 if exc.detail.code == "invalid_reference" else 409, detail=exc.detail.model_dump(mode="json")) from exc
 

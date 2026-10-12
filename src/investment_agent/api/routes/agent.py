@@ -214,12 +214,16 @@ async def read_progress(task_id: UUID, svc: Service) -> TaskProgress:
 
 
 class CancelInput(Contract):
-    idempotency_key: UUID
+    # Optional and ignored: the cancellation transition is intrinsically
+    # idempotent, so no client-supplied key is needed; the web client still
+    # sends one (web/static/agent.js), so the field stays tolerated.
+    idempotency_key: UUID | None = None
 
 
 @router.post("/tasks/{task_id}/cancel")
-async def cancel(task_id: UUID, body: CancelInput, svc: Service) -> Task:
-    # State transition is intrinsically idempotent across every cancellation key.
+async def cancel(task_id: UUID, svc: Service, body: CancelInput | None = None) -> Task:
+    # State transition is intrinsically idempotent across every cancellation key;
+    # the body is accepted (and ignored) for contract continuity.
     return await TaskService(svc.session).cancel(task_id)
 
 
@@ -269,6 +273,17 @@ async def event_stream(request: Request, task_id: UUID, cursor: int,
                 task, events = await read_events(task_id, cursor)
             except EventCursorExpiredError as exc:
                 yield f"event: cursor_expired\ndata: {json.dumps(expired_detail(exc))}\n\n"
+                return
+            except HTTPException as exc:
+                # The 200 text/event-stream response is already committed: an
+                # HTTPException here can only truncate the stream. Report the
+                # failure as one structured in-band event, then end (the client
+                # recovers through the snapshot URL, as with cursor_expired).
+                detail = exc.detail if isinstance(exc.detail, dict) else {"code": str(exc.detail)}
+                yield ("event: task_error\ndata: "
+                    + json.dumps({**detail, "status_code": exc.status_code,
+                        "snapshot_url": f"/agent/tasks/{task_id}/snapshot"}, ensure_ascii=False)
+                    + "\n\n")
                 return
             for event in events:
                 cursor = int(str(event["event_id"]))

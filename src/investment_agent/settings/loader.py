@@ -247,11 +247,29 @@ def configured_calendar_path(app_yaml_path: Path = DEFAULT_APP_YAML) -> str:
 
 
 def runtime_data_dir() -> Path:
-    """``DATA_DIR`` as the running app sees it (env value, else the Settings default)."""
+    """``DATA_DIR`` as the running app sees it (env value, else the Settings default).
+
+    Mirrors pydantic-settings resolution for a pure ``.env`` deployment: env
+    wins, then the ``.env`` file ``Settings()`` reads, then the code default.
+    Without the ``.env`` step an applied calendar would be written to (and
+    resolved from) a directory the app itself never uses.
+    """
 
     raw = os.environ.get("DATA_DIR")
     if raw:
         return Path(raw)
+    env_file = Settings.model_config.get("env_file")
+    if env_file:
+        try:
+            from dotenv import dotenv_values
+
+            values = dotenv_values(env_file)
+        except OSError:
+            values = {}
+        for name in ("DATA_DIR", "data_dir"):
+            raw = values.get(name)
+            if raw:
+                return Path(raw)
     return Path(str(Settings.model_fields["data_dir"].default))
 
 

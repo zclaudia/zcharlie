@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 from investment_agent.api.routes import stocks
 from investment_agent.providers.baostock_market import QuarterlyFinancials
@@ -320,6 +322,35 @@ async def test_missing_annual_disclosure_is_fetched_and_cached_with_raw_source(a
         record = await FinancialSnapshotRepository(session).latest_available(listing.id, date(2026, 10, 11))
         assert record.availability == "actual" and record.fields["net_profit"] == 123
         assert record.raw_ref.startswith("snapshot-runs/stock-autofill/")
+
+
+async def test_report_year_artifact_is_deterministic_per_ticker_and_period(api_client, monkeypatch):
+    """P2-11: a repeated miss overwrites one deterministic artifact file instead
+    of accumulating a new uuid4 file per call (upstream behaviour unchanged)."""
+
+    await _seed_directory()
+    monkeypatch.setattr(stocks, "shanghai_today", lambda: date(2026, 10, 11))
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+        async def fetch_quarterly_financials(self, ticker, year, quarter):
+            return QuarterlyFinancials(
+                ticker=ticker, report_period=date(year, 12, 31), stat_date=date(year, 12, 31),
+                pub_date=date(2026, 3, 30), fields={}, source_values={}, tables=(),
+                raw_rows={"pubDate": "2026-03-30"},
+                captured_at=datetime(2026, 10, 11, tzinfo=UTC),
+            )
+
+    monkeypatch.setattr(stocks, "BaostockMarketClient", Client)
+    data_dir = Path(os.environ["DATA_DIR"])
+    for _ in range(3):
+        assert api_client.get("/stocks/600519.SH/report-year", headers=H).status_code == 200
+    artifacts = sorted((data_dir / "snapshot-runs" / "stock-autofill").rglob("annual.json"))
+    assert artifacts == [data_dir / "snapshot-runs" / "stock-autofill" / "600519.SH" / "2025-12-31" / "annual.json"]
+    body = artifacts[0].read_text(encoding="utf-8")
+    assert "600519.SH" in body and "2025-12-31" in body
 
 
 async def test_report_year_missing_or_unavailable_never_guesses_a_year(api_client, monkeypatch):

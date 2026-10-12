@@ -1,9 +1,10 @@
 """/portfolio/rule endpoint schemas (holding-scope rule review, WP8)."""
 
+import math
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from investment_agent.api.schemas.admin import (
     WatchlistRuleInstanceOut,
@@ -59,6 +60,16 @@ class HoldingRuleEditRequest(BaseModel):
     rule_instance_id: int = Field(ge=1)
     params: dict[str, float] = Field(default_factory=dict)
     reason: str | None = Field(default=None, max_length=1000)
+
+    # Same defense in depth as the admin watchlist rule schema: NaN/inf params
+    # are refused at the boundary, not left to downstream checks.
+    @field_validator("params")
+    @classmethod
+    def finite_params(cls, value: dict[str, float]) -> dict[str, float]:
+        for name, number in value.items():
+            if not math.isfinite(number):
+                raise ValueError(f"param {name!r} must be finite")
+        return value
 
 
 class HoldingRuleRejectRequest(BaseModel):

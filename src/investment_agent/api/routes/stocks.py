@@ -10,7 +10,6 @@ import asyncio
 import json
 from datetime import date
 from typing import Annotated
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select, union_all
@@ -138,7 +137,9 @@ async def stock_report_year(
                 if record.ticker != ticker or record.report_period != date(year, 12, 31):
                     raise HTTPException(status_code=503, detail="年报披露记录不匹配，请稍后重试。")
                 # Keep the full financial answer and raw source, as in the collector.
-                relative = f"snapshot-runs/stock-autofill/{uuid4()}/annual.json"
+                # Deterministic per ticker+period and overwritten: a repeated
+                # miss must not accumulate a new uuid4 artifact per call.
+                relative = f"snapshot-runs/stock-autofill/{ticker}/{record.report_period.isoformat()}/annual.json"
                 target = settings.data_dir / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(json.dumps({

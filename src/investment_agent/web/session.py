@@ -85,7 +85,10 @@ def verify_session_token(
         return False
     payload = ".".join(parts[:4])
     expected = _sign(_secret(api_key), payload)
-    if not hmac.compare_digest(parts[4], expected):
+    # Bytes, like api_key_matches: a raw client can put non-ASCII in the
+    # cookie and str comparison would raise TypeError (an unhandled 500 on
+    # every request) instead of failing verification.
+    if not hmac.compare_digest(parts[4].encode("utf-8"), expected.encode("utf-8")):
         return False
     try:
         issued_us = int(parts[1])

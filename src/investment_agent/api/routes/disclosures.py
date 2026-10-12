@@ -62,7 +62,7 @@ async def execute(body: DiscoverBody | FetchBody, settings: Settings) -> dict[st
         async with session_scope() as session:
             service = DisclosureService(session)
             # Feature shutdown preserves exact immutable receipts and history.
-            replay = await service._replay(body.idempotency_key, body.request)
+            replay = await service.replay(body.idempotency_key, body.request)
             if replay is not None:
                 return replay
             if not settings.disclosure_originals_enabled:

@@ -16,6 +16,7 @@ _log = logging.getLogger(__name__)
 PROD_MIN_API_KEY_LENGTH = 32
 _PLACEHOLDER_KEY_PREFIX = "change-me"
 _weak_key_warned = False
+_secure_cookie_warned = False
 
 
 AgentProvider = Literal["openai", "deepseek"]
@@ -238,6 +239,26 @@ class Settings(BaseSettings):
                 "API_KEY is weak (short or placeholder); acceptable for dev only, "
                 "APP_ENV=prod will refuse to start with it"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _enforce_secure_cookie_behind_https(self) -> Self:
+        # A prod deployment that publishes an https public origin must never
+        # send a non-Secure session cookie. Forced (not rejected) so an existing
+        # deployment starts instead of breaking; the warning says what changed.
+        global _secure_cookie_warned
+        if (
+            self.app_env == "prod"
+            and self.web_public_origin.startswith("https://")
+            and not self.web_cookie_secure
+        ):
+            self.web_cookie_secure = True
+            if not _secure_cookie_warned:
+                _secure_cookie_warned = True
+                _log.warning(
+                    "WEB_COOKIE_SECURE was False behind an https WEB_PUBLIC_ORIGIN in "
+                    "APP_ENV=prod; forced to True (set it explicitly to silence this)"
+                )
         return self
 
     @property

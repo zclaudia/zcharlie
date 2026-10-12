@@ -1,6 +1,10 @@
 """The correction service is reachable through the authenticated fact API."""
 
+from datetime import date
+from pathlib import Path
 from uuid import uuid4
+
+import yaml
 
 from investment_agent.api.routes.portfolio import trading_calendar_predicate
 from investment_agent.config import Settings
@@ -84,8 +88,43 @@ def test_correction_endpoint_receipt_and_write_gate(api_client, monkeypatch):
 
 
 def test_api_valuation_uses_reviewed_calendar():
-    from datetime import date
-
     predicate = trading_calendar_predicate(Settings(api_key="fixture", _env_file=None))
     assert predicate(date(2026, 10, 1)) is False  # A weekday exchange holiday.
     assert predicate(date(2026, 10, 11)) is False
+
+
+def test_applied_data_dir_calendar_overshadows_the_baseline(tmp_path):
+    """P1-7: after the health page applies a candidate calendar, the valuation
+    staleness decision uses the DATA_DIR copy, never the repository baseline
+    (the scheduler and the dashboard resolve the same way)."""
+
+    root = Path(__file__).resolve().parents[2]
+    baseline = yaml.safe_load(
+        (root / "config" / "calendars" / "a_share.yaml").read_text(encoding="utf-8")
+    )
+    year = baseline["years"][0]
+    assert date(2026, 10, 1) in year["closed_dates"]  # baseline holiday
+    applied = {
+        **baseline,
+        "calendar_id": "CN_A_SHARE_APPLIED",
+        "years": [
+            {
+                **year,
+                # Reopen the baseline holiday; close an ordinary trading day.
+                "closed_dates": (
+                    sorted(str(d) for d in year["closed_dates"] if str(d) != "2026-10-01")
+                    + ["2026-10-09"]
+                ),
+            }
+        ],
+    }
+    target = tmp_path / "calendars" / "a_share.yaml"  # baseline file name
+    target.parent.mkdir(parents=True)
+    target.write_text(yaml.safe_dump(applied, allow_unicode=True), encoding="utf-8")
+
+    predicate = trading_calendar_predicate(Settings(api_key="fixture", _env_file=None, data_dir=tmp_path))
+    assert predicate(date(2026, 10, 1)) is True
+    assert predicate(date(2026, 10, 9)) is False
+    # Without the copy in its DATA_DIR, the baseline still applies.
+    untouched = trading_calendar_predicate(Settings(api_key="fixture", _env_file=None))
+    assert untouched(date(2026, 10, 1)) is False

@@ -106,3 +106,26 @@ def test_crontab_weekdays_and_null_crons_accepted() -> None:
     )
     assert runtime.schedule.screen.cron == "0 20 * * 7"
     assert runtime.schedule.snapshot.industry_sync_cron is None
+
+
+def test_runtime_data_dir_follows_a_pure_dotenv_deployment(tmp_path, monkeypatch) -> None:
+    """P2-10: with no ``DATA_DIR`` in the process env, the resolution mirrors
+    ``Settings`` (``.env`` next, then the code default), so an applied calendar
+    is written to and resolved from the directory the app actually uses."""
+
+    from pathlib import Path
+
+    from investment_agent.settings.loader import runtime_data_dir
+
+    monkeypatch.delenv("DATA_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    # The suite's autouse ``_no_dotenv`` fixture disables Settings.env_file;
+    # this test exercises exactly that resolution, so it opts back in (the
+    # .env it reads is the one written below, never the checkout's).
+    monkeypatch.setitem(Settings.model_config, "env_file", ".env")
+    assert runtime_data_dir() == Path(str(Settings.model_fields["data_dir"].default))
+    (tmp_path / ".env").write_text(f"DATA_DIR={tmp_path / 'data'}\n", encoding="utf-8")
+    assert runtime_data_dir() == tmp_path / "data"
+    # Env still wins over .env, exactly like pydantic-settings.
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "elsewhere"))
+    assert runtime_data_dir() == tmp_path / "elsewhere"

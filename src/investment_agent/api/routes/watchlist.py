@@ -478,9 +478,13 @@ async def reject_watch_rule(
         return WatchlistRuleOut.model_validate(await rule_snapshot(session, item))
 
 
-@router.delete("/{listing_id}", status_code=204)
-async def remove_watchlist(listing_id: int, body: WatchlistRemove) -> Response:
-    """Remove an observation entry; the reason is journaled (plan 1.5 移除)."""
+async def _remove_entry_response(listing_id: int, body: WatchlistRemove) -> Response:
+    """Shared by DELETE /{listing_id} and POST /{listing_id}/remove.
+
+    ``DELETE`` with a JSON body is the legacy wire shape (some proxies drop
+    request bodies, which would 422); the POST form is the same operation
+    without that hazard. Both stay live until the web client migrates.
+    """
 
     async with session_scope() as session:
         item = await _watch_item_or_404(session, listing_id)
@@ -489,3 +493,21 @@ async def remove_watchlist(listing_id: int, body: WatchlistRemove) -> Response:
         except WatchDraftError as exc:
             raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
         return Response(status_code=204)
+
+
+@router.delete("/{listing_id}", status_code=204)
+async def remove_watchlist(listing_id: int, body: WatchlistRemove) -> Response:
+    """Remove an observation entry; the reason is journaled (plan 1.5 移除).
+
+    Legacy shape (JSON body on DELETE); kept until the web client moves to the
+    POST form below.
+    """
+
+    return await _remove_entry_response(listing_id, body)
+
+
+@router.post("/{listing_id}/remove", status_code=204)
+async def remove_watchlist_post(listing_id: int, body: WatchlistRemove) -> Response:
+    """Remove an observation entry (proxy-safe POST form of the DELETE above)."""
+
+    return await _remove_entry_response(listing_id, body)

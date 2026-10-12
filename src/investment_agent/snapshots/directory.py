@@ -18,18 +18,27 @@ first-letter search.
 from __future__ import annotations
 
 import re
-from contextlib import AbstractAsyncContextManager
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import date, timedelta
 from typing import Protocol
 
 import structlog
 from pypinyin import Style, lazy_pinyin
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
+from sqlalchemy.pool import NullPool
 
 from investment_agent.clock import shanghai_today
 from investment_agent.providers.baostock_reference import BaostockReferenceClient, DirectorySnapshot
 from investment_agent.providers.errors import ProviderDataError
-from investment_agent.storage.database import session_scope
+from investment_agent.storage.database import (
+    configure_sqlite_engine,
+    session_scope,
+)
 from investment_agent.storage.models.stock_directory import STATUS_LISTED, STATUS_SUSPENDED
 from investment_agent.storage.repositories.stock_directory import (
     DirectoryUpsert,
@@ -61,20 +70,64 @@ def pinyin_initials(name: str) -> str:
     )
 
 
-async def initialize_directory(client: DirectoryClient | None = None) -> None:
+@asynccontextmanager
+async def _private_session_scope(database_url: str) -> AsyncIterator[AsyncSession]:
+    """A committing session on a short-lived NullPool engine, disposed on exit.
+
+    The background bootstrap runs on the application's loop: a pooled engine
+    would leave a second connection on the application pool (breaking the
+    "shutdown recycles exactly one connection" contract), so the private engine
+    pools nothing and is disposed here, on the same loop that opened it.
+    """
+
+    engine = create_async_engine(database_url, future=True, poolclass=NullPool)
+    try:
+        if engine.sync_engine.url.get_backend_name() == "sqlite":
+            configure_sqlite_engine(engine)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as session:
+            try:
+                yield session
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+    finally:
+        await engine.dispose()
+
+
+async def initialize_directory(
+    client: DirectoryClient | None = None,
+    *,
+    total: int | None = None,
+    database_url: str | None = None,
+) -> None:
     """Bootstrap an empty directory independently of the weekly universe job.
 
-    The API runs this in the background so startup remains responsive. Existing
-    directories continue to use the weekly refresh, with no upstream search calls.
+    The API runs this in the background so startup remains responsive; the
+    lifespan passes the freshness ``total`` it already read on the shared
+    engine plus ``database_url``, so the (rare) full sync runs on a private
+    NullPool engine disposed on completion and never contributes a pooled
+    connection to the application engine. Without ``total`` the freshness
+    check runs on the process-wide engine (CLI path); without
+    ``database_url`` the sync uses it too (tests inject their session).
+    Existing directories continue to use the weekly refresh, with no upstream
+    search calls.
     """
     try:
-        async with session_scope() as session:
-            _, total = await StockDirectoryRepository(session).freshness()
+        if total is None:
+            async with session_scope() as session:
+                _, total = await StockDirectoryRepository(session).freshness()
         if total:
             return
         client = client or BaostockReferenceClient(timeout_seconds=30, max_attempts=1)
-        async with session_scope() as session:
-            await sync_directory(session, client, today=shanghai_today())
+        today = shanghai_today()
+        if database_url is None:
+            async with session_scope() as session:
+                await sync_directory(session, client, today=today)
+        else:
+            async with _private_session_scope(database_url) as session:
+                await sync_directory(session, client, today=today)
     except Exception:
         log.exception("directory_initialization_failed", hint="retry `ia snapshot sync-universe --now`")
 
