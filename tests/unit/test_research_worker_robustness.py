@@ -198,10 +198,19 @@ async def test_worker_heartbeats_while_runner_executes(db_session, tmp_path):
         claimed = await _get(run_id)
         assert claimed.heartbeat_at is not None
         seen.append(claimed.heartbeat_at)
-        await asyncio.sleep(0.2)
-        refreshed = await _get(run_id)
-        assert refreshed.heartbeat_at is not None
-        seen.append(refreshed.heartbeat_at)
+        # The worker tolerates transient beat failures (the next beat retries),
+        # so poll for the next successful beat instead of assuming one lands
+        # inside a fixed sleep window.
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 5.0
+        while True:
+            refreshed = await _get(run_id)
+            assert refreshed.heartbeat_at is not None
+            if refreshed.heartbeat_at > seen[-1]:
+                seen.append(refreshed.heartbeat_at)
+                break
+            assert loop.time() < deadline, "no heartbeat beat within 5s"
+            await asyncio.sleep(0.02)
         async with session_scope() as session:
             await PipelineRunRepository(session).mark_success(run_id)
         return _result(run_id, tmp_path)
