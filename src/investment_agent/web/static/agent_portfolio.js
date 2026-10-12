@@ -1,6 +1,7 @@
 // Actual user facts are never inferred from decisions. Decimal values stay strings.
 import {get, post} from './api.js';
 import {el} from './dom.js';
+import {formatDateTime} from './format.js';
 const KEY = 'zcharlie.portfolio.pending.v1';
 const labels = {published:'当前有效',review_required:'需要复核',expired:'已过期',superseded:'已被替代',buy:'买入',sell:'卖出',add:'加仓',hold:'继续持有',reduce:'减仓',exit:'退出',wait:'等待',further_research:'继续研究',company_thesis:'公司研究依据',portfolio_constraint:'账户硬约束依据',user_scenario:'用户情景假设',agent_scenario:'研究情景假设'};
 const reason = value => {
@@ -106,7 +107,6 @@ export function bootAgentPortfolio() {
     const token = ++epoch, id = account?.id || pending?.request?.account_id || selectedId;
     const [values, readiness] = await Promise.all([get('/portfolio/accounts'), get('/investor/readiness')]); if (token !== epoch) return;
     enabled = readiness.portfolio_ledger_enabled; locks();
-    if (!enabled) summary.append(el('p',{},'账本写入关闭：请在设置页明确启用真实组合账本。读取历史不会启动模型。'));
     accounts = values; account = accounts.find(x => x.id === id) || accounts[0] || null;
     selectedId = account?.id || null; try {sessionStorage.setItem(`${KEY}.account`,selectedId || '');} catch {}
     selector.replaceChildren(el('option',{value:''},'请选择明确账户'));
@@ -123,7 +123,7 @@ export function bootAgentPortfolio() {
       for (const p of purposes.version.purposes) summary.append(el('p',{},`${p.name}：分配 ${unknown(p.amount)} 元，可用于方案 ${unknown(p.available_budget)} 元；${p.horizon === 'short_term' ? '短期' : '长期'}，${p.required_on} 必留 ${unknown(p.required_cash)} 元。来源：${p.source}（${p.source_version}）${p.unknowns.length ? '；待核对：' + p.unknowns.join('、') : ''}`));
     }
     summary.append(el('p',{class:'muted'},'新的事实不会替换已绑定或待确认消息中的旧组合版本；重新研究前请明确绑定最新记录。'));
-    summary.append(el('p',{},`${account.name} · ${snapshot.coverage === 'complete' ? '完整' : '部分'}覆盖：${snapshot.asset_scope}`),el('p',{},`可确认现金：${unknown(snapshot.known_cash)} CNY；总资产：${unknown(snapshot.total_assets)} CNY`),el('p',{},`事实截至 ${snapshot.fact_as_of}；估值知识时点 ${snapshot.valuation_at}；快照版本 ${snapshot.revision}`));
+    summary.append(el('p',{},`${account.name} · ${snapshot.coverage === 'complete' ? '完整' : '部分'}覆盖：${snapshot.asset_scope}`),el('p',{},`可确认现金：${unknown(snapshot.known_cash)} CNY；总资产：${unknown(snapshot.total_assets)} CNY`),el('p',{},`事实截至 ${formatDateTime(snapshot.fact_as_of)}；估值知识时点 ${formatDateTime(snapshot.valuation_at)}；快照版本 ${snapshot.revision}`));
     for (const holding of snapshot.holdings) {
       const label = await name(holding.listing_ref); if (token !== epoch) return;
       summary.append(el('p',{},`${label} · 确认数量 ${unknown(holding.confirmed_quantity)}；市值 ${unknown(holding.market_value)} CNY；单股占比（比例）${percent(holding.weight)}；价格 ${unknown(holding.price)} / ${holding.price_date || '未知日期'}`));
@@ -236,7 +236,7 @@ export function bootAgentPortfolio() {
     const exact = requireAccount(), token = start('同一现金与价格时点下的互斥方案'), view = await get(ref ? `/portfolio/plans/${ref.id}?account_id=${exact.id}` : `/portfolio/plans/current?account_id=${exact.id}`); if (token !== epoch) return;
     if (!view) {body.append(el('p',{},'暂无已发布组合方案。选择快照绑定到下一条消息，并明确选择组合建议。读取页面不会自动研究。')); return;}
     const plan = view.plan; body.dataset.mode = 'plan';
-    body.append(el('p',{},`当前状态：${labels[view.status] || view.status}；共同价格基础 ${plan.price_basis_at}；组合记录版本 ${plan.snapshot_ref.revision}；有效至 ${plan.valid_until}`),el('p',{},'方案互斥，只能选择一个。数量是本次交易量。接受不预留资金；实际成交须单独确认录入。'));
+    body.append(el('p',{},`当前状态：${labels[view.status] || view.status}；共同价格基础 ${formatDateTime(plan.price_basis_at)}；组合记录版本 ${plan.snapshot_ref.revision}；有效至 ${formatDateTime(plan.valid_until)}`),el('p',{},'方案互斥，只能选择一个。数量是本次交易量。接受不预留资金；实际成交须单独确认录入。'));
     view.limitation_reasons.forEach(x=>body.append(el('p',{class:'notice'},reason(x))));
     const calculation = await get(`/portfolio/calculations/${plan.calculation_ref.id}?account_id=${exact.id}`); if (token !== epoch) return;
     body.append(el('h4',{},'费用与成交价格假设（不是实际成交事实）'));

@@ -79,6 +79,18 @@ def test_candidates_list_shell(api_client) -> None:
         assert f'value="{status}"' in html
 
 
+def test_nominate_ticker_input_promises_only_what_validation_accepts(api_client) -> None:
+    """占位文案不再承诺"名称/拼音"：normalizeTicker 与 pattern 只接受 6 位代码，
+    按名称搜索要经下拉选择；pattern 保留，防浏览器通用文案拦截提交。"""
+
+    _login(api_client)
+    html = api_client.get("/app/candidates").text
+    assert 'placeholder="输入代码或名称后从下拉选择；也可直接输入 6 位代码，如 600900"' in html
+    assert 'pattern="\\d{6}(\\.(SH|SZ|BJ|sh|sz|bj))?"' in html
+    assert "拼音" not in html
+    assert "cjdl" not in html
+
+
 def test_candidate_detail_shell(api_client) -> None:
     _login(api_client)
     html = api_client.get("/app/candidates/42").text

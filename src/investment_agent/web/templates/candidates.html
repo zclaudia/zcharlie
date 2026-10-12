@@ -12,8 +12,8 @@
   <details class="add-panel">
     <summary>＋ 手动提名</summary>
     <form id="candidate-nominate-form" class="inline-form" data-endpoint="/candidates" method="post">
-      <input name="ticker" placeholder="代码 / 名称 / 拼音，如 长江、600900 或 cjdl" maxlength="32" required aria-label="代码" autocomplete="off"
-             pattern="\d{6}(\.(SH|SZ|BJ|sh|sz|bj))?">
+      <input name="ticker" placeholder="输入代码或名称后从下拉选择；也可直接输入 6 位代码，如 600900" maxlength="32" required aria-label="代码" autocomplete="off"
+             pattern="\d{6}(\.(SH|SZ|BJ|sh|sz|bj))?" title="提交需要 6 位数字代码（可带 .SH/.SZ/.BJ 后缀）；按名称搜索请从下拉中选择">
       <select name="template_id" required aria-label="起草模板">
         <option value="">选择起草模板…</option>
       </select>

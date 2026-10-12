@@ -409,7 +409,7 @@ export function bootAgent() {
     function paint(value) {
       task = value; taskStates.set(taskId, value);
       const stopping = value.cancel_requested && !TERMINAL.has(value.status);
-      const detail = `${value.stop_reason ? ` · ${STOP[value.stop_reason] || "停止原因无法识别"}` : ""}${value.waiting ? ` · ${value.waiting.required_input} · 截止 ${value.waiting.deadline}` : ""}`;
+      const detail = `${value.stop_reason ? ` · ${STOP[value.stop_reason] || "停止原因无法识别"}` : ""}${value.waiting ? ` · ${value.waiting.required_input} · 截止 ${formatDateTime(value.waiting.deadline)}` : ""}`;
       label.textContent = `研究任务${detail}`;
       badge.textContent = stopping ? "正在停止" : TASK[value.status] || "任务";
       panel.classList.toggle("ai-task-done", TERMINAL.has(value.status));

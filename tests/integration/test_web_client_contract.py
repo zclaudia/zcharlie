@@ -6,6 +6,7 @@ keep the shipped JS modules parseable.
 """
 
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -13,6 +14,52 @@ from pathlib import Path
 import pytest
 
 WEB_STATIC = Path("src/investment_agent/web/static")
+
+# 供 node 驱动测试使用的最小 DOM 替身：只覆盖被测模块用到的能力
+# （createElement / 属性 / 子树 / 监听器 / dataset），绝不实现 innerHTML。
+FAKE_DOM = """
+class FakeNode {
+  constructor(tag) {
+    this.tag = tag; this.attrs = {}; this.children = []; this.listeners = {};
+    this.parentNode = null; this.textContent = undefined; this.value = "";
+    this.hidden = false; this.disabled = false; this.checked = false; this.id = "";
+    this.dataset = {}; this.classes = new Set(); this._qs = {};
+  }
+  get className() { return [...this.classes].join(" "); }
+  set className(v) { this.classes = new Set(String(v).split(/\\s+/).filter(Boolean)); }
+  get classList() { const c = this.classes; return { add: (x) => c.add(x), remove: (x) => c.delete(x), contains: (x) => c.has(x) }; }
+  setAttribute(k, v) { this.attrs[k] = String(v); if (k === "class") this.className = String(v); if (k === "id") this.id = String(v); }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  hasAttribute(k) { return k in this.attrs; }
+  removeAttribute(k) { delete this.attrs[k]; }
+  appendChild(c) { c.parentNode = this; this.children.push(c); return c; }
+  append(...nodes) { for (const n of nodes) { if (n instanceof FakeNode) this.appendChild(n); else this.children.push(String(n)); } }
+  replaceChildren(...nodes) { this.children = []; for (const n of nodes) this.appendChild(n); }
+  insertBefore(c, ref) { c.parentNode = this; const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, c); return c; }
+  remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter((c) => c !== this); }
+  after(node) { if (this.parentNode) this.parentNode.children.splice(this.parentNode.children.indexOf(this) + 1, 0, node); }
+  closest() { return null; }
+  scrollIntoView() {}
+  addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }
+  dispatch(t, event = {}) { event.target ||= this; event.preventDefault ||= () => {}; for (const f of this.listeners[t] || []) f(event); return event; }
+  click() { if (this.disabled) return; this.dispatch("click"); }
+  querySelector(sel) { if (!this._qs[sel]) { this._qs[sel] = new FakeNode(sel); this.appendChild(this._qs[sel]); } return this._qs[sel]; }
+  querySelectorAll() { return []; }
+  walk(fn) { for (const c of this.children) { if (c instanceof FakeNode) { fn(c); c.walk(fn); } } }
+  text() { const out = []; this.walk((n) => { if (typeof n.textContent === "string") out.push(n.textContent); }); return out.join("\\n"); }
+}
+"""
+
+
+def _run_node(script: str) -> dict:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+    result = subprocess.run(
+        [node, "--input-type=module", "-e", script], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    return json.loads(result.stdout)
 
 
 def _login(client):
@@ -455,7 +502,7 @@ def test_watchlist_metadata_autofill_ignores_superseded_requests():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js"],
+    ["api.js", "app.js", "dom.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")
@@ -468,3 +515,230 @@ def test_shipped_js_modules_parse(module: str):
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+# ---- P1-8：422 校验拒绝必须渲染人话文案，而不是 DOM 节点 ---------------------
+
+
+def test_portfolio_fact_error_renders_readable_text_not_a_dom_node():
+    """422 时 renderRegion 的 error 分支只接受字符串；把 errorText() 的
+    <details> 节点传进去会显示成 "[object HTMLDetailsElement]"。"""
+
+    uri = (WEB_STATIC / "portfolio.js").resolve().as_uri()
+    script = FAKE_DOM + f"""
+const URI = {json.dumps(uri)};
+import assert from 'node:assert/strict';
+const hosts = new Map();
+const host = (sel) => {{
+  if (!hosts.has(sel)) hosts.set(sel, new FakeNode(sel));
+  return hosts.get(sel);
+}};
+globalThis.document = {{
+  createElement: (tag) => new FakeNode(tag),
+  querySelector: (sel) => host(sel),
+  getElementById: (id) => host('#' + id),
+  querySelectorAll: () => [],
+}};
+const store = new Map();
+globalThis.sessionStorage = {{
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+}};
+const respond = (status, body) => ({{
+  status, ok: status >= 200 && status < 300,
+  headers: {{ get: () => "application/json" }},
+  json: async () => body, text: async () => JSON.stringify(body),
+}});
+const calls = [];
+globalThis.fetch = async (path, init = {{}}) => {{
+  calls.push(({{method: init.method || "GET"}}).method + " " + path);
+  if (path === "/portfolio/accounts") return respond(200, []);
+  if (init.method === "POST" && path === "/portfolio/events")
+    return respond(422, {{detail: {{
+      message: "rule validation failed",
+      issues: [{{code: "sell_quantity_insufficient", path: "holding.quantity", message: "确定数量不足，无法完成卖出"}}],
+    }}}});
+  throw new Error("unexpected fetch " + path);
+}};
+store.set("zcharlie.portfolio.pending.v1", JSON.stringify({{
+  path: "/portfolio/events", method: "POST",
+  request: {{account_id: "acc-1", idempotency_key: "k", fact: {{kind: "trade"}}}},
+}}));
+const m = await import(URI);
+m.bootPortfolio();
+await new Promise((r) => setTimeout(r, 20));
+const retry = host("#portfolio-pending-retry");
+assert.equal(retry.hidden, false);
+retry.click();
+await new Promise((r) => setTimeout(r, 20));
+const factResult = host("#portfolio-fact-result");
+const text = factResult.text();
+console.log(JSON.stringify({{
+  calls, state: factResult.dataset.state, text,
+  hasObjectNode: text.includes("[object"),
+}}));
+"""
+    out = _run_node(script)
+    assert out["calls"] == ["GET /portfolio/accounts", "POST /portfolio/events"]
+    assert out["state"] == "error"
+    # 422 的规则校验明细必须可见，且不能出现 "[object ...]"。
+    assert "确定数量不足，无法完成卖出" in out["text"]
+    assert "holding.quantity" in out["text"]
+    assert out["hasObjectNode"] is False
+
+
+# ---- P2-13：近 24h 快速路径必须重挂行内规则列 -------------------------------
+
+
+def test_portfolio_recent_activity_fast_path_rerenders_valuation():
+    source = (WEB_STATIC / "portfolio.js").read_text(encoding="utf-8")
+    # mountHoldingRules 只在 renderValuation 里调用：快速路径若绕过它，规则列永远"加载中…"。
+    assert "renderValuation(holdingsRegion, lastValuation, lastListings)" in source
+    assert 'renderRegion(holdingsRegion, "ready", holdingsTable(' not in source
+    assert "mountHoldingRules(region, valuation)" in source
+
+
+# ---- P2-14：观察池启用/停用与移除断网时必须渲染错误态 -----------------------
+
+
+def test_watchlist_toggle_and_remove_render_error_when_offline():
+    """两个操作改走 api.js 封装：请求被拒绝（断网）时 ApiError 落到错误态，
+    而不是 unhandled rejection 无任何提示。"""
+
+    uri = (WEB_STATIC / "watchlist.js").resolve().as_uri()
+    script = FAKE_DOM + f"""
+const URI = {json.dumps(uri)};
+import assert from 'node:assert/strict';
+const region = new FakeNode('#watchlist-list');
+region.dataset.endpoint = '/watchlist';
+globalThis.document = {{
+  createElement: (tag) => new FakeNode(tag),
+  querySelector: (sel) => (sel === '#watchlist-list' ? region : null),
+}};
+globalThis.prompt = () => '数据质量理由：已退市';
+let offline = false;
+const item = {{listing_id: 7, ticker: '600519.SH', name: '贵州茅台', enabled: true}};
+const respond = (status, body) => ({{
+  status, ok: status >= 200 && status < 300,
+  headers: {{ get: () => 'application/json' }},
+  json: async () => body, text: async () => JSON.stringify(body),
+}});
+globalThis.fetch = async (path, init = {{}}) => {{
+  if (offline) throw new TypeError('network down');
+  if (path === '/watchlist' && (init.method || 'GET') === 'GET') return respond(200, [item]);
+  throw new Error('unexpected fetch ' + path);
+}};
+const m = await import(URI);
+m.bootWatchlist();
+await new Promise((r) => setTimeout(r, 20));
+let toggle, remove;
+region.walk((n) => {{
+  if (n.tag === 'button' && n.textContent === '停用') toggle = n;
+  if (n.tag === 'button' && n.textContent === '移除') remove = n;
+}});
+assert.ok(toggle && remove, '列表必须渲染启用/停用与移除按钮');
+offline = true;
+toggle.click();
+await new Promise((r) => setTimeout(r, 20));
+const afterToggle = {{state: region.dataset.state, text: region.text()}};
+remove.click();
+await new Promise((r) => setTimeout(r, 20));
+const afterRemove = {{state: region.dataset.state, text: region.text()}};
+console.log(JSON.stringify({{afterToggle, afterRemove}}));
+"""
+    out = _run_node(script)
+    for phase in (out["afterToggle"], out["afterRemove"]):
+        assert phase["state"] == "error"
+        assert "网络请求失败或超时" in phase["text"]
+        assert "[object" not in phase["text"]
+
+
+# ---- P2-15：时间一律按北京时间渲染，不允许原样输出 UTC ISO 串 ----------------
+
+
+@pytest.mark.parametrize(
+    ("module", "present", "absent"),
+    [
+        ("agent.js", ["截止 ${formatDateTime(value.waiting.deadline)}"], ["截止 ${value.waiting.deadline}"]),
+        ("agent_controls.js", ["formatDateTime(rec.created_at)"], ["${rec.created_at}"]),
+        (
+            "agent_portfolio.js",
+            ["formatDateTime(snapshot.fact_as_of)", "formatDateTime(snapshot.valuation_at)", "formatDateTime(plan.price_basis_at)", "formatDateTime(plan.valid_until)"],
+            ["${snapshot.fact_as_of}", "${snapshot.valuation_at}", "${plan.price_basis_at}", "${plan.valid_until}"],
+        ),
+        ("methods.js", ["formatDateTime(record.created_at)"], ["${record.created_at}"]),
+        (
+            "agent_views.js",
+            ["dateLabel(decision.decided_at)", "dateLabel(entry.created_at)", "dateLabel(entry.as_of)", "dateLabel(episode.created_at)", "dateLabel(cycle.checked_at"],
+            ["${decision.decided_at}", "发布于 ${entry.created_at}", "${cycle.checked_at || cycle.started_at ||", "· ${episode.created_at}"],
+        ),
+    ],
+)
+def test_utc_timestamps_render_through_beijing_formatters(module, present, absent):
+    source = (WEB_STATIC / module).read_text(encoding="utf-8")
+    for needle in present:
+        assert needle in source, (module, needle)
+    for needle in absent:
+        assert needle not in source, (module, needle)
+
+
+def test_agent_views_delegates_dates_to_format_js():
+    """agent_views 不再自带 Intl 本地实现：dateLabel 统一来自 format.js。"""
+
+    source = (WEB_STATIC / "agent_views.js").read_text(encoding="utf-8")
+    assert "from './format.js'" in source
+    assert "formatDateTime as dateLabel" in source
+    assert "Intl.DateTimeFormat" not in source
+
+
+# ---- P3：methods 页健壮性与死代码 -------------------------------------------
+
+
+def test_methods_api_is_timeout_safe_and_guards_empty_evaluations():
+    source = (WEB_STATIC / "methods.js").read_text(encoding="utf-8")
+    # api()：超时中断 + 先按文本读取再安全解析 JSON（容忍网关 HTML/空体）。
+    assert "AbortController" in source and "setTimeout" in source
+    assert "response.text()" in source and "JSON.parse(text)" in source
+    # async onclick 包 catch 并更新 status()。
+    assert "catch (error) { status(" in source
+    # evaluations / evaluation_ids 判空后再启用按钮，空时禁用并提示。
+    assert "const latestEvaluationId = p.evaluation_ids.at(-1) || null;" in source
+    assert "if (!latestEvaluationId) shadow.disabled = true;" in source
+    assert "if (!latestEvaluationId) prospective.disabled = true;" in source
+
+
+def test_methods_module_links_with_a_stub_document():
+    """methods.js 是 ES module（IIFE 立即执行）：document 缺席时必须安静退出。"""
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+    script = (
+        "globalThis.document = {getElementById: () => null};\n"
+        f"await import({json.dumps((WEB_STATIC / 'methods.js').resolve().as_uri())});\n"
+        "console.log('linked');\n"
+    )
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "linked" in result.stdout
+
+
+def test_agent_portfolio_refresh_has_no_dead_append():
+    """summary 的"账本写入关闭"提示在 replaceChildren() 之后只 append 一次。"""
+
+    source = (WEB_STATIC / "agent_portfolio.js").read_text(encoding="utf-8")
+    assert source.count("账本写入关闭：请在设置页明确启用真实组合账本") == 1
+
+
+# ---- P3：文档不再固定漂移事实 -----------------------------------------------
+
+
+def test_docs_do_not_pin_drifting_facts():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert "迁移随版本演进" in readme
+    assert not re.search(r"Alembic（迁移 `\d+`）", readme)
+    ag30 = (Path("docs/product") / "ag30-method-evolution.md").read_text(encoding="utf-8")
+    # 代码口径是 2,000,000 字符（methods.py 的 2_000_000），不是 2 MiB。
+    assert "大于 2,000,000 字符的原始产物拒绝内联" in ag30
+    assert "2 MiB" not in ag30

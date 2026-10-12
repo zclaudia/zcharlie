@@ -103,6 +103,10 @@ export function patch(path, body, options = {}) {
   return request(path, { ...options, method: "PATCH", body, idempotency: options.idempotency ?? false });
 }
 
+export function del(path, body, options = {}) {
+  return request(path, { ...options, method: "DELETE", body, idempotency: options.idempotency ?? false });
+}
+
 export async function download(path) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);

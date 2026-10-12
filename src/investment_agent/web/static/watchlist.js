@@ -5,10 +5,10 @@
 
 import {
   ApiError,
-  FETCH_MARKER_HEADERS,
   get,
   loadRegion,
   lockWhileBusy,
+  patch,
   post,
   renderRegion,
 } from "./api.js";
@@ -152,18 +152,14 @@ function watchlistRow(region, item) {
   const actions = el("td", { class: "row-actions" });
   const toggle = el("button", { type: "button" }, item.enabled ? "停用" : "启用");
   toggle.addEventListener("click", () => {
-    const promise = fetch(`/watchlist/${item.listing_id}`, {
-      method: "PATCH",
-      headers: { ...FETCH_MARKER_HEADERS, "Content-Type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ enabled: !item.enabled }),
-    }).then((response) => {
-      if (response.ok) {
+    // 统一走 api.js（超时 + ApiError）；断网时也渲染错误态，不再静默。
+    const promise = patch(`/watchlist/${item.listing_id}`, { enabled: !item.enabled })
+      .then(() => {
         loadRegion(region, { render: loadWatchlist });
-      } else {
-        renderRegion(region, "error", `更新失败（HTTP ${response.status}）。`);
-      }
-    });
+      })
+      .catch((error) => {
+        renderRegion(region, "error", error.message);
+      });
     lockWhileBusy(toggle, promise);
   });
   actions.appendChild(toggle);
@@ -215,18 +211,16 @@ async function removeWatchlistItem(region, item, button) {
     renderRegion(region, "error", "移出观察池需要填写理由。");
     return;
   }
-  const promise = fetch(`/watchlist/${item.listing_id}`, {
-    method: "DELETE",
-    headers: { ...FETCH_MARKER_HEADERS, "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify({ reason: reason.trim() }),
-  }).then((response) => {
-    if (response.status === 204) {
+  // POST /remove keeps the reason out of a DELETE body, which some proxies
+  // drop; api.js keeps the timeout / ApiError wrapping so an offline rejection
+  // renders an error state.
+  const promise = post(`/watchlist/${item.listing_id}/remove`, { reason: reason.trim() })
+    .then(() => {
       loadRegion(region, { render: loadWatchlist });
-    } else {
-      renderRegion(region, "error", `移除失败（HTTP ${response.status}）。`);
-    }
-  });
+    })
+    .catch((error) => {
+      renderRegion(region, "error", error.message);
+    });
   lockWhileBusy(button, promise);
   await promise;
 }

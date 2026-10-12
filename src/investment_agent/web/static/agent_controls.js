@@ -1,6 +1,7 @@
 // AG19 authenticated, versioned controls. Credentials only use the encrypted settings page.
 import {get, post, patch} from './api.js';
 import {el} from './dom.js';
+import {formatDateTime} from './format.js';
 
 const ACTION_LABELS = {
   pause: '暂停后台', resume: '恢复后台', mute: '静音通知', unmute: '恢复通知',
@@ -137,7 +138,7 @@ export function bootAgentControls() {
       const view = await get(`/investor/recommendations/${ref.id}?revision=${ref.revision}`);
       const rec = view.recommendation;
       const detail = await get(`/investor/cases/${rec.case_ids[0]}`);
-      return `${await listingName(detail.case.listing_ref)} · 观点 v${ref.revision} · ${rec.created_at}`;
+      return `${await listingName(detail.case.listing_ref)} · 观点 v${ref.revision} · ${formatDateTime(rec.created_at)}`;
     }
     return `${ref.kind} · v${ref.revision}`;
   }

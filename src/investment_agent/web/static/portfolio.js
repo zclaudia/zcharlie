@@ -4,8 +4,8 @@
 // AG24：本页记录用户确认的实际买卖事实与资金流，从不提交委托。
 
 import { ApiError, get, lockWhileBusy, post, renderRegion } from "./api.js";
-import { el, errorText, table } from "./dom.js";
-import { formatDateTime } from "./format.js";
+import { el, table } from "./dom.js";
+import { describeIssues, formatDateTime } from "./format.js";
 import { percent } from "./agent_portfolio.js";
 import {
   eventsSummary,
@@ -598,8 +598,10 @@ async function loadEvents(account, token = epoch, afterRevision = 0, list = null
     }
     if (moved.size !== recentActivity.size || [...moved].some((id) => !recentActivity.has(id))) {
       recentActivity = moved;
+      // Re-render through renderValuation (not just the table) so the inline
+      // rule cells are remounted; the fast path used to leave them on 加载中….
       const holdingsRegion = document.querySelector("#portfolio-holdings");
-      if (lastValuation && holdingsRegion) renderRegion(holdingsRegion, "ready", holdingsTable(lastValuation, lastListings));
+      if (lastValuation && holdingsRegion) renderValuation(holdingsRegion, lastValuation, lastListings);
     }
     const block = el("div");
     block.append(list);
@@ -925,7 +927,13 @@ async function transmit() {
       field(document.querySelector("#portfolio-fact-form"), "user_confirmed").checked = false;
       field(document.querySelector("#portfolio-fact-form"), "balance_confirmed").checked = false;
       if (error.status === 409) await loadAccounts(fixed.request.account_id);
-      reporting(error.status === 409 ? "账本已变化。原请求被拒绝；请按最新账户版本重新核对并确认，系统不会自动重发。" : errorText(error));
+      // renderRegion 的 error 态只接受字符串：必须传人话文案，不能传 errorText()
+      // 的 DOM 节点（否则用户看到 "[object HTMLDetailsElement]"）。
+      reporting(
+        error.status === 409
+          ? "账本已变化。原请求被拒绝；请按最新账户版本重新核对并确认，系统不会自动重发。"
+          : describeIssues(error.detail).join("；") || error.message
+      );
     } else {
       reporting(`${error.message} 原请求已保留，请重取待确认请求；不要重新录入同一事实。`);
     }
