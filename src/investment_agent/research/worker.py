@@ -205,6 +205,7 @@ def default_job_handlers(
     """Every job kind a worker serves unless restricted with ``kinds``."""
 
     from investment_agent.agent.job import agent_job_handlers
+    from investment_agent.industry_peers.jobs import PeerCollectHandler
     from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
     from investment_agent.rules.zone_jobs import ZoneDetectionHandler
 
@@ -221,6 +222,7 @@ def default_job_handlers(
             calendar_path=_calendar_path(),
         ),
         ZoneDetectionHandler(settings=settings, calendar_path=_calendar_path()),
+        PeerCollectHandler(settings=settings),
     ]
 
 

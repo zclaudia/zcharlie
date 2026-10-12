@@ -297,6 +297,9 @@ class RuntimeSettings(BaseModel):
     industry_peer_context_enabled: bool = False
     peer_collect_min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
     peer_collect_retries: int = Field(default=2, ge=0, le=10)
+    peer_collect_admission_cooldown_seconds: float = Field(
+        default=86400.0, ge=0, le=30 * 86400
+    )
 
     gateway_enabled: bool = False
     gateway_url: str = ""
@@ -444,6 +447,11 @@ SPECS: tuple[SettingSpec, ...] = (
     _env(
         "peer_collect_retries", "peers", "同行采集重试次数",
         "暂态错误每家公司的额外重试次数，0–10，0 = 不重试；429 遵从 Retry-After。", "next_job",
+    ),
+    _env(
+        "peer_collect_admission_cooldown_seconds", "peers", "同行补采准入冷却（秒）",
+        "上次核查后该窗口内的重复缺口只返回原缺口不再入队；确认新年报、已知更正或显式重试不受限，0–2592000。",
+        "next_job",
     ),
     _env(
         "gateway_enabled", "gateway", "启用手机网关",

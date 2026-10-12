@@ -41,6 +41,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import socket
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -56,6 +58,14 @@ from investment_agent.cli.commands import peer_annual as peer_annual_cmd
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import parse_a_share_ticker
 from investment_agent.industry_peers.batch import DEFAULT_COHORT_KEY, submit_offline_batch
+from investment_agent.industry_peers.jobs import (
+    PEER_COLLECT_KIND,
+    PeerCollectHandler,
+    admit_peer_collect,
+    enqueue_peer_collect,
+)
+from investment_agent.providers.eastmoney_annual import ADAPTER_VERSION as ONLINE_ADAPTER_VERSION
+from investment_agent.providers.eastmoney_annual import PROVIDER as ONLINE_PROVIDER
 from investment_agent.providers.shenwan_directory import SW2021_SYSTEM
 from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.peer import PeerCohortSnapshot
@@ -584,3 +594,190 @@ def submit_offline_batch_command(
             f"(generation {summary['generation']}); reused, no new generation"
         )
     typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def _annual_period_option(raw: str) -> date:
+    """Parse ``--report-period`` into an annual (Dec 31) date."""
+
+    try:
+        period = date.fromisoformat(raw)
+    except ValueError as exc:
+        typer.echo(f"--report-period must be YYYY-MM-DD: {raw!r}", err=True)
+        raise typer.Exit(1) from exc
+    if (period.month, period.day) != (12, 31):
+        typer.echo(
+            f"--report-period must be an annual period (Dec 31), got {period.isoformat()}",
+            err=True,
+        )
+        raise typer.Exit(1)
+    return period
+
+
+@app.command("collect")
+def collect_command(
+    report_period: str = typer.Option(
+        "", "--report-period", help="Annual period as YYYY-12-31 (first acceptance year: 2025)"
+    ),
+    cohort_key: str = typer.Option(
+        COHORT_KEY, "--cohort-key", help="Cohort roster the collection covers"
+    ),
+    mode: str = typer.Option(
+        "full", "--mode", help="'full' (roster initialization) or 'refresh' (explicit retry)"
+    ),
+    provider: str = typer.Option(ONLINE_PROVIDER, "--provider", help="Collection source provider"),
+    adapter_version: str = typer.Option(
+        ONLINE_ADAPTER_VERSION, "--adapter-version", help="Collection adapter version"
+    ),
+    run_now: bool = typer.Option(
+        False, "--now", help="Also run the claimed task inline (reaches the real provider)"
+    ),
+) -> None:
+    """Enqueue one roster-year ``industry_peer_collect`` task (WP8 management).
+
+    The trusted entry point for roster initialization (``--mode full``) and
+    explicit retries (``--mode refresh``): a queued/running task of the scope
+    is reused, otherwise the next generation is derived and enqueued. The
+    tickers come from the saved roster snapshot - pass none here. Without a
+    saved roster the command fails with the ``import-roster`` hint.
+    """
+
+    if mode not in {"full", "refresh"}:
+        typer.echo(f"--mode must be 'full' or 'refresh', got {mode!r}", err=True)
+        raise typer.Exit(1)
+    period = _annual_period_option(report_period) if report_period else None
+    if period is None:
+        typer.echo("--report-period is required (annual period as YYYY-12-31)", err=True)
+        raise typer.Exit(1)
+    settings = Settings()  # type: ignore[call-arg]
+
+    async def run() -> dict[str, Any]:
+        async with session_scope() as session:
+            result = await enqueue_peer_collect(
+                session,
+                report_period=period,
+                mode=mode,  # type: ignore[arg-type]
+                triggered_by="cli",
+                data_dir=Path(settings.data_dir),
+                cohort_key=cohort_key,
+                provider=provider,
+                adapter_version=adapter_version,
+            )
+            return {
+                "kind": PEER_COLLECT_KIND,
+                "run_id": result.run.id,
+                "created": result.created,
+                "scope_reused": result.scope_reused,
+                "status": result.run.status,
+                "generation": result.generation,
+                "mode": result.payload.mode,
+                "cohort_snapshot_id": result.payload.cohort_snapshot_id,
+                "cohort_revision": result.payload.cohort_revision,
+                "report_period": result.payload.report_period.isoformat(),
+                "provider": result.payload.provider,
+                "adapter_version": result.payload.adapter_version,
+            }
+
+    try:
+        summary = run_with_engine(settings.database_url, run)
+    except ValueError as exc:
+        # enqueue_peer_collect names the import-roster hint for a missing roster.
+        typer.echo(f"collect task not enqueued: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except OperationalError as exc:
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
+        raise typer.Exit(1) from exc
+    if summary["scope_reused"]:
+        typer.echo(
+            f"an active task of this scope already exists: run #{summary['run_id']} "
+            f"(generation {summary['generation']}); reused, nothing enqueued"
+        )
+    typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+
+    if not (run_now and summary["created"] and summary["status"] == "queued"):
+        return
+    from investment_agent.research.worker import ResearchWorker
+    from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
+
+    async def run_inline() -> dict[str, Any]:
+        worker = ResearchWorker(
+            settings=settings,
+            worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
+            handlers=[PeerCollectHandler(settings=settings)],
+        )
+        await worker.run_once(run_id=summary["run_id"])
+        async with session_scope() as session:
+            finished = await PipelineRunRepository(session).get(summary["run_id"])
+            assert finished is not None
+            return {"run_id": finished.id, "status": finished.status, "error": finished.error_summary}
+
+    typer.echo(json.dumps(run_with_engine(settings.database_url, run_inline), ensure_ascii=False, indent=2))
+
+
+@app.command("admit")
+def admit_command(
+    ticker: str = typer.Argument(help="Target A-share ticker, e.g. 600519.SH"),
+    provider: str = typer.Option(ONLINE_PROVIDER, "--provider", help="Collect scope provider"),
+    adapter_version: str = typer.Option(
+        ONLINE_ADAPTER_VERSION, "--adapter-version", help="Collect scope adapter version"
+    ),
+    cooldown_seconds: float = typer.Option(
+        -1.0,
+        "--cooldown-seconds",
+        help="Cooldown window override (default: settings.peer_collect_admission_cooldown_seconds)",
+    ),
+) -> None:
+    """Run the research-submission admission check for one target (WP8).
+
+    Reads the submitted results and their coverage (never an upstream call);
+    a first gap or a known correction enqueues one roster-year task, other
+    repeated gaps or failures inside the cooldown window only return the
+    original gaps. GET endpoints and the agent never call this path.
+    """
+
+    if parse_a_share_ticker(ticker.upper()) is None:
+        typer.echo(f"ticker must be a canonical A-share code, got {ticker!r}", err=True)
+        raise typer.Exit(1)
+    settings = Settings()  # type: ignore[call-arg]
+    cooldown = (
+        settings.peer_collect_admission_cooldown_seconds if cooldown_seconds < 0 else cooldown_seconds
+    )
+
+    async def run() -> dict[str, Any]:
+        async with session_scope() as session:
+            decision = await admit_peer_collect(
+                session,
+                ticker=ticker.upper(),
+                data_dir=Path(settings.data_dir),
+                cooldown_seconds=cooldown,
+                provider=provider,
+                adapter_version=adapter_version,
+            )
+            return {
+                "outcome": decision.outcome,
+                "ticker": decision.ticker,
+                "report_period": (
+                    decision.report_period.isoformat() if decision.report_period else None
+                ),
+                "run_id": decision.run_id,
+                "generation": decision.generation,
+                "batch_run_id": decision.batch_run_id,
+                "detail": decision.detail,
+                "gaps": list(decision.gaps),
+            }
+
+    try:
+        outcome = run_with_engine(settings.database_url, run)
+    except LookupError as exc:
+        typer.echo(f"admission check failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except ValueError as exc:
+        typer.echo(f"admission check failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except OperationalError as exc:
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps(outcome, ensure_ascii=False, indent=2))

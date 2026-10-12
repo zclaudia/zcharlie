@@ -188,6 +188,13 @@ class Settings(BaseSettings):
     industry_peer_context_enabled: bool = False
     peer_collect_min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
     peer_collect_retries: int = Field(default=2, ge=0, le=10)
+    # WP8 admission cooldown: after a scope's last check (submitted batch or
+    # prior run), repeated gaps or failures inside this window only return the
+    # original gap instead of re-collecting; a confirmed new annual report,
+    # a known correction (stale) or an explicit retry bypasses it.
+    peer_collect_admission_cooldown_seconds: float = Field(
+        default=86400.0, ge=0, le=30 * 86400
+    )
 
     # Mobile gateway (zclaudia-gateway, Protocol v4): the API registers itself as
     # a Backend so a phone can reach it through the gateway's /api/proxy.
