@@ -128,7 +128,7 @@ class ParseResult:
 class MaterialAdapter(Protocol):
     source: str; adapter_version: str
     def requests(self, identity: ControlledIdentity, *, periods: Sequence[FactPeriod]) -> tuple[UpstreamRequest, ...]: ...
-    def parse(self, identity: ControlledIdentity, *, raw: Sequence[RawPayload], periods: Sequence[FactPeriod]) -> ParseResult: ...
+    def parse(self, identity: ControlledIdentity, *, raw: Sequence[RawPayload], periods: Sequence[FactPeriod], subject_id: int | None = None) -> ParseResult: ...
 
 def validate_draft(draft: DatasetDraft) -> tuple[str, ...]      # 返回违规原因，空元组表示合法
 def content_hash(draft: DatasetDraft) -> str                    # payload 规范化 JSON + raw_bytes 的 sha256
@@ -191,7 +191,7 @@ class ResearchDataset(Base, TimestampMixin):
 ```
 
 - `subject_id` 指 `company.id` 或 `listing.id`，**不建多态外键**（与设计"公司事实属于 company，证券行情和行为属于 listing"一致），在 repository 与契约层校验 `subject_kind` 与调用语义一致。
-- 两张表都加 `before_update`/`before_delete` 不可变触发器（照抄 `storage/models/evidence.py:27-33`）。
+- 两张表都加 `before_update`/`before_delete` ORM 监听；评审修复补充迁移 047 的 SQLite 触发器，防止 bulk / direct SQL 绕过。
 - `materials/__init__.py` 只放 docstring；`storage/models/__init__.py` 里加 `research_material` 的 import（保持现有空文件风格：只 import 不加逻辑）。
 - 迁移 046 建两表 + 两个索引 + 唯一约束；`downgrade()` drop 两表。
 
@@ -225,9 +225,9 @@ class ResearchDatasetRepository(Repository[ResearchDataset]):
   - 合法 `DatasetDraft` 通过；上表 8 条校验逐条各一个反例（含"ANNUAL 但只有 300 天"、"float 字面量金额"、"UNKNOWN 精度却带了日期"）。
   - `content_hash` 稳定性：同 draft 两次调用相同；改一个 `raw_value` 或 `raw_bytes` 即变化；payload 键顺序不影响结果。
   - `PERIOD_52W`：`days=371` 的 AAPL 财年通过校验；`days=364` 通过；`days=300` 被拒。
-- `tests/unit/test_research_material_repo.py`：`insert_version` 递增 revision 与 previous_id；`latest` 取最大 revision；`history` 有序；更新/删除 dataset 与 binding 抛错（不可变）；`list_for` 的 `at` 过滤（`valid_from <= at` 且 `valid_to is None or valid_to >= at`）。
+- `tests/unit/test_research_material_repo.py`：`insert_version` 递增 revision 与 previous_id；`latest` 取最大 revision；`history` 有序；更新/删除 dataset 与 binding 抛错（不可变）；`list_for` 的 `at` 过滤（`valid_from <= at` 且 `valid_to is None or valid_to > at`）。
 - `tests/unit/test_research_material_contracts.py` 还要覆盖：`fact_to_payload`→`fact_from_payload` 往返一致（含 `basis=INSTANT`、`missing_reason` 非空、`precision=UNKNOWN` 三种边界）；键集合多一个或少一个键都被 `validate_draft` 拒绝；`payload_facts` 对缺失 `facts` 抛错。
-- `tests/integration/test_migration_046.py`：照 `tests/integration/test_migration_045.py` 的写法，upgrade 后 `sqlalchemy.inspect` 断言两张表、唯一约束名、索引名；`downgrade` 后两张表消失；迁移链 head 为 `046`。
+- `tests/integration/test_migration_046.py`：照 `tests/integration/test_migration_045.py` 的写法，upgrade 后 `sqlalchemy.inspect` 断言两张表、唯一约束名、索引名；`downgrade` 后两张表消失；确认 `046` 接在 `045` 后；当前 head 由 Alembic 动态解析（评审修复新增 `047`）。
 - 全量门禁见 `00-conventions.md`（**新增迁移后必须重跑全量**，确认无新增失败）。
 
 ## 提交

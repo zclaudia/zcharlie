@@ -211,4 +211,3 @@ def _refresh_batch(sources: tuple[str, ...]) -> str:
     """
 
     return f"{'+'.join(sources)}|{date.today().isoformat()}"
-

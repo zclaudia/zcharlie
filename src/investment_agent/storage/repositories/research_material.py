@@ -42,7 +42,7 @@ class ResearchSourceBindingRepository(Repository[ResearchSourceBinding]):
         """Bindings of one subject, oldest interval first.
 
         ``at`` keeps only bindings whose interval covers that date
-        (``valid_from <= at`` and ``valid_to`` null or ``valid_to >= at``).
+        (``valid_from <= at`` and ``valid_to`` null or ``valid_to > at``).
         """
 
         _check_subject_kind(subject_kind)
@@ -55,7 +55,7 @@ class ResearchSourceBindingRepository(Repository[ResearchSourceBinding]):
             conditions.append(
                 or_(
                     ResearchSourceBinding.valid_to.is_(None),
-                    ResearchSourceBinding.valid_to >= at,
+                    ResearchSourceBinding.valid_to > at,
                 )
             )
         stmt = (
@@ -81,7 +81,7 @@ class ResearchSourceBindingRepository(Repository[ResearchSourceBinding]):
             conditions.append(
                 or_(
                     ResearchSourceBinding.valid_to.is_(None),
-                    ResearchSourceBinding.valid_to >= at,
+                    ResearchSourceBinding.valid_to > at,
                 )
             )
         stmt = (

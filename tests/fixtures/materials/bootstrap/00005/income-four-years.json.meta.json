@@ -1,0 +1,10 @@
+{
+  "url": "https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_HKF10_FN_INCOME&columns=ALL&filter=%28SECUCODE%3D%2200005.HK%22%29%28REPORT_DATE%3E%3D%272021-01-01%27%29%28REPORT_DATE%3C%3D%272024-12-31%27%29%28REPORT_TYPE%3D%22%E5%B9%B4%E6%8A%A5%22%29&pageNumber=1&pageSize=500",
+  "method": "GET",
+  "fetched_at_utc": "2026-10-11T15:47:50.746113+00:00",
+  "status": 200,
+  "final_url": "https://datacenter.eastmoney.com/securities/api/data/v1/get?reportName=RPT_HKF10_FN_INCOME&columns=ALL&filter=%28SECUCODE%3D%2200005.HK%22%29%28REPORT_DATE%3E%3D%272021-01-01%27%29%28REPORT_DATE%3C%3D%272024-12-31%27%29%28REPORT_TYPE%3D%22%E5%B9%B4%E6%8A%A5%22%29&pageNumber=1&pageSize=500",
+  "content_type": "text/plain;charset=UTF-8",
+  "bytes": 80497,
+  "sha256": "3555774fe53543f1feffe19dd869e859176903e588a235b5be28d973d2eb00d5"
+}

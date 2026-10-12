@@ -482,21 +482,19 @@ def _uncovered_view(listing: Listing, company: Company | None) -> FinancialConte
 
 
 def _current_versions(datasets: Sequence[ResearchDataset]) -> tuple[ResearchDataset, ...]:
-    """The newest stored version of every ``(source, period)`` key, oldest first.
+    """Current source/year versions, preserving legacy per-table HK rows.
 
-    ``history`` returns every version of every source for the company; the read
-    model shows the current material, so for one key only the highest revision
-    survives (the store never rewrites a version, it appends one). One dataset
-    of each ``(source, period end)`` stays, so two sources of the same period
-    both remain visible instead of one silently replacing the other, and a
-    second source with the same content does not double-count facts: datasets
-    are de-duplicated by content hash inside their key first.
+    Older imports saved the three statements as separate revisions of one key.
+    Keep the newest version of each table until a consolidated annual version
+    supersedes it. Sources remain separate and identical content is deduplicated.
     """
 
-    newest: dict[tuple[str, date | None], ResearchDataset] = {}
+    newest: dict[tuple[str, date | None, str | None], ResearchDataset] = {}
     seen_content: set[tuple[str, date | None, str]] = set()
     for dataset in sorted(datasets, key=lambda row: (row.revision, row.id)):
-        key = (dataset.source, dataset.period_end)
+        report = dataset.payload.get("report")
+        report = report if isinstance(report, str) else None
+        key = (dataset.source, dataset.period_end, report)
         content = (dataset.source, dataset.period_end, dataset.content_hash)
         if content in seen_content:
             continue
@@ -506,7 +504,12 @@ def _current_versions(datasets: Sequence[ResearchDataset]) -> tuple[ResearchData
             newest[key] = dataset
     return tuple(
         sorted(
-            newest.values(),
+            (
+                row for (source, end, report), row in newest.items()
+                if report is None
+                or (source, end, None) not in newest
+                or row.revision > newest[(source, end, None)].revision
+            ),
             key=lambda row: (row.period_end or date.min, row.source),
         )
     )
@@ -755,4 +758,3 @@ def _display_code(market_code: str, ticker: str) -> str:
     """The display form of a listing's checked code (``00005`` -> ``00005.HK``)."""
 
     return f"{ticker}{DISPLAY_SUFFIXES[market_code]}" if market_code in DISPLAY_SUFFIXES else ticker
-

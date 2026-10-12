@@ -71,38 +71,49 @@ A 股取数、评分、证据与任务流程的语义不变，港美走独立路
 ## 4. 离线导入用法
 
 首期的资料来自已保存的调研证据（每个响应体配一个 `<name>.meta.json` 边车）。
-导入走与在线路径**同一套适配器**，适配器由调用方注入，模块本身不 import 具体来源：
+先使用同一套 `DATABASE_URL`、`DATA_DIR` 和 `API_KEY` 配置迁移数据库，再登记身份并导入：
 
-```python
-from pathlib import Path
-
-from investment_agent.materials.offline_import import import_offline_evidence
-from investment_agent.materials.handlers import default_adapters
-
-report = await import_offline_evidence(
-    session,                       # AsyncSession
-    data_dir=Path("data"),         # 制品目录
-    source_dir=Path("research/market-data-validation/evidence/remaining-final-03"),
-    identities=identities,         # 受控身份（config/research_material/pilot_list.yaml）
-    company_ids=company_ids,       # company_key -> Company.id
-    adapters=default_adapters(),   # 或测试内的假适配器
-    imported_at=None,              # 省略则用真实当前时间
-)
-# report.saved / report.problems / report.skipped
+```bash
+ia migrate up
+ia materials init
+ia materials import \
+  --source-dir research/market-data-validation/evidence/remaining-final-03/raw \
+  --company-key hsbc-holdings --company-key jpmorgan-chase
 ```
 
-时间规则（`materials/offline_import.py`）：
+`init` 幂等登记八家证券、三个市场及来源绑定，不抓取数据；`import` 自动初始化，
+通过真实适配器解析选中公司的本地材料。省略 `--company-key` 则导入整份受控名单。
+可用 `--pilot-list` 指定名单文件；改变已登记的绑定会被拒绝，不自动改写旧映射。
+页面仍只覆盖应用默认的人工核对名单，传入自定义名单不会自动扩大页面覆盖范围。
 
-- 入库的 `captured_at` 是**本次导入真实发生的时刻**（`imported_at` 或当前时间），
-  绝不是边车里的历史 `fetched_at_utc`。
-- 原始抓取时间另存 `source_fetched_at`；边车缺失、无 `fetched_at_utc`
-  或该值不是带 UTC 偏移的 ISO-8601 时，该字段保持 `None`——**不回填过去**。
-- 同一份材料导入两次是一组版本（内容 hash 相同则返回既有版本），重导入是 no-op。
+文件定位：按公司 ticker / 来源 symbol 子目录查找。港股请求 `income`、`balance`、
+`cashflow` 也识别调研文件名，优先 `*-four-years.json`；现金流优先
+`cashflow-original-four-years.json`。同一别名的多个候选无法唯一定位时拒绝。
+SEC 先解析 `companyfacts.json` / `submissions.json`，再补读索引列出的历史分片；
+例如 `JPM/shards/CIK0000019617-submissions-007.json`。缺文件会明确报告。
+现有 `hsbc-companyfacts.json` / `hsbc-submissions.json` 须复制到
+`1089113/companyfacts.json` / `1089113/submissions.json`（连同边车）；保留原件。
+现有调研目录并未保留 SEC 索引列出的全部分片，因此直接重放可能退出 2。
 
-失败隔离：单个文件缺失、边车缺失或某个适配器的 `problems` 都不会中断其它来源，
-各自记进 `report.problems`，受影响的 `<company_key>/<source>` 记进 `report.skipped`，
-调用方无需解析原因文本即可区分"干净重放"与"部分导入"。
-（不满足契约校验的草稿属代码缺陷，直接抛出，不吞掉。）
+导入结果为 JSON：新增/复用版本数、身份 id、`problems`、`skipped` 与
+`informational`。退出码 **0** 表示完整导入；**2** 表示可用材料已提交、仍有缺口；
+**1** 表示初始化、数据库或参数错误。未映射条目计数只进 `informational`。
+汇丰也绑定 SEC 作为交叉核对；只有港股文件的目录会导入原币三表，同时报告 SEC 缺口。
+
+数据规则：
+
+- `captured_at` 是本次导入时刻；原始抓取时间另存 `source_fetched_at`。
+  边车缺失、时间缺失或无时区时保留未知并报告，不回填历史时间。
+- 边车明确声明非 2xx HTTP 状态（包括非法状态值）时拒绝该响应；
+  如有 SHA-256 / 字节数声明，必须与正文匹配。真实适配器也拒绝已知 HTTP 失败。
+- 港股同一来源/年度的三表合为一个版本，旧的逐表版本仍可读；重导入同内容复用版本。
+- 迁移 **047** 添加 SQLite UPDATE / DELETE / REPLACE 保护；ORM 与直接 SQL 都不能改删已保存资料。
+  绑定区间为 `[valid_from, valid_to)`，结束日不属于旧绑定。
+- 多响应构成的年度资料目前没有单文件 `raw_ref`；**必须保留原始证据目录和边车**。
+  本次补验不等于完整来源归档能力或严格历史时点能力已交付。
+
+单个文件或来源失败不阻断其它来源；契约不合法的草稿属于代码错误，抛出并回滚本次数据库导入。
+这些命令不访问上游；来源授权、付费权限与最新财报补验仍按 §3 / §6 单独验收。
 
 ## 5. 只读接口与刷新接口
 

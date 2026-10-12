@@ -79,6 +79,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | 组 | 命令 | 用途 |
 |---|---|---|
 | `ia migrate` | `up/down/current/history` | alembic 迁移（尊重 `DATABASE_URL`） |
+| `ia materials` | `init`、`import --source-dir PATH [--company-key KEY]` | 港美受控证券初始化与离线资料导入（见 [用法](docs/product/hk-us-expansion.md#4-离线导入用法)） |
 | `ia api` | `serve` | FastAPI 服务 |
 | `ia worker` | `start [--once] [--kinds ...]` | 队列 worker（研究 + 快照采集，按 kind 分派） |
 | `ia scheduler` | `start` | 日终刷新与快照采集调度 |

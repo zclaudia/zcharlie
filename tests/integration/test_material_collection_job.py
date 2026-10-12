@@ -882,45 +882,6 @@ def _adapter_problem(problem: str, *, company_key: str, source: str) -> str:
     return problem[len(label) :] if problem.startswith(label) else problem
 
 
-class _SubjectIdAdapter:
-    """The real adapter with ``subject_id`` bound, as the handler binds it.
-
-    ``import_offline_evidence`` never passes ``subject_id`` (it stamps ids on
-    the drafts it receives), while 03/04 need the target ``Company.id`` in
-    ``parse``; this wrapper is the importer-side form of the very injection the
-    handler performs.
-    """
-
-    def __init__(self, inner: HkNativeAdapter, subject_id: int) -> None:
-        self.inner = inner
-        self.subject_id = subject_id
-
-    @property
-    def source(self) -> str:
-        return self.inner.source
-
-    @property
-    def adapter_version(self) -> str:
-        return self.inner.adapter_version
-
-    def requests(
-        self, identity: ControlledIdentity, *, periods: Sequence[FactPeriod]
-    ) -> tuple[UpstreamRequest, ...]:
-        return self.inner.requests(identity, periods=periods)
-
-    def parse(
-        self,
-        identity: ControlledIdentity,
-        *,
-        raw: Sequence[RawPayload],
-        periods: Sequence[FactPeriod],
-        subject_id: int | None = None,
-    ) -> ParseResult:
-        return self.inner.parse(
-            identity, raw=raw, periods=periods, subject_id=subject_id or self.subject_id
-        )
-
-
 @needs_evidence
 async def test_the_real_adapters_import_the_saved_hsbc_evidence(
     db_session, tmp_path: Path
@@ -929,7 +890,7 @@ async def test_the_real_adapters_import_the_saved_hsbc_evidence(
     identity = _identity(HSBC)
     evidence = _hsbc_evidence_dir(tmp_path)
     data_dir = tmp_path / "data"
-    adapter = _SubjectIdAdapter(HkNativeAdapter(), subject_id=companies[HSBC])
+    adapter = HkNativeAdapter()
 
     before = datetime.now(UTC)
     report = await import_offline_evidence(
@@ -952,14 +913,12 @@ async def test_the_real_adapters_import_the_saved_hsbc_evidence(
         )
     ]
     assert structural == []
-    assert len(report.problems) == 3  # one unmapped_items counter per table
-    # The importer marks any source with reported problems as skipped (05's
-    # rule: a human should look at the counters even though material was stored).
-    assert report.skipped == (f"{HSBC}/{HK_SOURCE}",)
+    assert len(report.informational) == 3  # one unmapped counter per table
+    assert report.skipped == ()
 
     rows = await _datasets()
-    assert len(report.saved) == len(rows) == 12  # three tables x four fiscal years
-    assert [outcome.created for outcome in report.saved] == [True] * 12
+    assert len(report.saved) == len(rows) == 4  # all three tables in each fiscal year
+    assert [outcome.created for outcome in report.saved] == [True] * 4
     assert {row.kind for row in rows} == {"annual_facts"}
     assert {row.period_end for row in rows} == {
         date(2021, 12, 31),
@@ -990,10 +949,10 @@ async def test_the_real_adapters_import_the_saved_hsbc_evidence(
         source_dir=evidence,
         identities=(identity,),
         company_ids={HSBC: companies[HSBC]},
-        adapters={HK_SOURCE: _SubjectIdAdapter(HkNativeAdapter(), subject_id=companies[HSBC])},
+        adapters={HK_SOURCE: HkNativeAdapter()},
         imported_at=datetime.now(UTC),
     )
-    assert [outcome.created for outcome in again.saved] == [False] * 12
+    assert [outcome.created for outcome in again.saved] == [False] * 4
     assert [
         problem
         for problem in again.problems
@@ -1001,7 +960,7 @@ async def test_the_real_adapters_import_the_saved_hsbc_evidence(
             _adapter_problem(problem, company_key=HSBC, source=HK_SOURCE)
         )
     ] == []
-    assert await _dataset_count() == 12
+    assert await _dataset_count() == 4
 
 
 @dataclass
@@ -1063,7 +1022,7 @@ async def test_the_handler_collects_the_saved_evidence_with_the_real_adapter(
     assert len(metadata["responses"][HK_SOURCE]) == 3
 
     rows = await _datasets()
-    assert len(rows) == 12
+    assert len(rows) == 4
     # The assembly path under test: listing -> company -> Company.id -> parse.
     assert {row.subject_id for row in rows} == {companies[HSBC]}
     assert {row.period_end for row in rows} == {

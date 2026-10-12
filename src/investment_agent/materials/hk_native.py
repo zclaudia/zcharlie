@@ -351,6 +351,13 @@ class HkNativeAdapter:
                 "(resolved by the caller from identity.company_key); the controlled identity "
                 "itself carries no row id"
             )
+        rejected = tuple(
+            f"http_status_rejected: {item.name}/{item.http_status}"
+            for item in raw if item.http_status != 0 and not 200 <= item.http_status < 300
+        )
+        if rejected:
+            return ParseResult(drafts=(), problems=rejected)
+
         captured_at = datetime.now(UTC)
         problems: list[str] = []
         payloads: dict[str, RawPayload] = {}

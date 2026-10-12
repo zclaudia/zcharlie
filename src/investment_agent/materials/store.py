@@ -251,3 +251,41 @@ def _write_atomically(target: Path, content: bytes) -> None:
     tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
     tmp.write_bytes(content)
     os.replace(tmp, target)
+
+
+def coalesce_annual_tables(drafts: tuple[DatasetDraft, ...]) -> tuple[DatasetDraft, ...]:
+    """One HK source/year is one version, with all three statement tables.
+
+    The HK parser emits table drafts. Saving those independently makes income,
+    balance and cashflow supersede one another under the same dataset key.
+    Both offline and online writers combine the tables before saving a version.
+    """
+    from dataclasses import replace
+
+    from investment_agent.domain.security import SOURCE_EASTMONEY_HK
+
+    grouped: dict[tuple[int, date | None], list[DatasetDraft]] = {}
+    result: list[DatasetDraft] = []
+    for draft in drafts:
+        if (
+            draft.source == SOURCE_EASTMONEY_HK
+            and draft.kind == DatasetKind.ANNUAL_FACTS
+            and draft.payload.get("report") in {"income", "balance", "cashflow"}
+        ):
+            key = (draft.subject_id, draft.period.end if draft.period else None)
+            grouped.setdefault(key, []).append(draft)
+        else:
+            result.append(draft)
+    for group in grouped.values():
+        tables = {draft.payload["report"]: draft.payload for draft in group}
+        if len(tables) != len(group):
+            raise ValueError("duplicate HK statement table for one subject/year")
+        result.append(replace(
+            group[0],
+            payload={
+                "facts": [fact for draft in group for fact in draft.payload["facts"]],
+                "tables": tables,
+            },
+            raw_bytes=group[0].raw_bytes if len(group) == 1 else None,
+        ))
+    return tuple(result)

@@ -144,6 +144,7 @@ class FakeTableAdapter:
         *,
         raw: Sequence[RawPayload],
         periods: Sequence[FactPeriod],
+        subject_id: int | None = None,
     ) -> ParseResult:
         self.received.extend(raw)
         if self.problems:
@@ -484,3 +485,39 @@ async def test_default_import_time_is_now(db_session, evidence_dir: Path, data_d
         await db_session.execute(select(func.count()).select_from(ResearchDataset))
     ).scalar_one()
     assert total == 1
+
+
+@pytest.mark.parametrize("status", [301, 403, 429, 500, 0, "500", None])
+async def test_failed_http_evidence_never_reaches_the_adapter(
+    db_session, evidence_dir, data_dir, status
+) -> None:
+    sidecar = evidence_dir / "native" / "00005" / (INCOME_NAME + ".meta.json")
+    metadata = json.loads(sidecar.read_text())
+    metadata["status"] = status
+    sidecar.write_text(json.dumps(metadata))
+    adapter = FakeTableAdapter()
+    report = await import_offline_evidence(
+        db_session, data_dir=data_dir, source_dir=evidence_dir,
+        identities=(IDENTITY,), company_ids={IDENTITY.company_key: COMPANY_ID},
+        adapters={SOURCE: adapter},
+    )
+    assert not adapter.received and not report.saved
+    assert any("rejected HTTP status" in problem for problem in report.problems)
+    assert await load_rows(db_session) == []
+    assert not data_dir.exists()
+
+
+@pytest.mark.parametrize("field,value", [("sha256", "0" * 64), ("bytes", 1)])
+async def test_corrupted_evidence_is_refused(db_session, evidence_dir, data_dir, field, value):
+    sidecar = evidence_dir / "native" / "00005" / (INCOME_NAME + ".meta.json")
+    metadata = json.loads(sidecar.read_text())
+    metadata[field] = value
+    sidecar.write_text(json.dumps(metadata))
+    adapter = FakeTableAdapter()
+    report = await import_offline_evidence(
+        db_session, data_dir=data_dir, source_dir=evidence_dir,
+        identities=(IDENTITY,), company_ids={IDENTITY.company_key: COMPANY_ID},
+        adapters={SOURCE: adapter},
+    )
+    assert not adapter.received and not report.saved
+    assert any("mismatch" in problem for problem in report.problems)

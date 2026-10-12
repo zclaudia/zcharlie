@@ -8,6 +8,10 @@ injected as ``adapters: Mapping[str, MaterialAdapter]`` so the module never
 imports ``hk_native``/``us_sec`` itself — and writes the result through
 :class:`~investment_agent.materials.store.MaterialStore`.
 
+Both real adapters receive the resolved company id. SEC shard requests are
+rediscovered after parsing the index; HK annual table drafts are consolidated
+before saving to prevent statements superseding one another.
+
 Time discipline: the stored ``captured_at`` is the moment this import really
 ran (``imported_at`` or now), never the historical ``fetched_at_utc`` from the
 sidecar; that original research fetch time is kept in ``source_fetched_at``,
@@ -26,6 +30,7 @@ and raises out of :meth:`MaterialStore.save` instead of being swallowed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -34,7 +39,11 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.domain.security import ControlledIdentity, source_symbol
+from investment_agent.domain.security import (
+    SOURCE_EASTMONEY_HK,
+    ControlledIdentity,
+    source_symbol,
+)
 from investment_agent.materials.contracts import (
     DatasetDraft,
     MaterialAdapter,
@@ -42,7 +51,7 @@ from investment_agent.materials.contracts import (
     SubjectKind,
     UpstreamRequest,
 )
-from investment_agent.materials.store import MaterialStore, SavedDataset
+from investment_agent.materials.store import MaterialStore, SavedDataset, coalesce_annual_tables
 
 META_SUFFIX = ".meta.json"
 """Sidecar written next to every saved response (``<name>.json.meta.json``)."""
@@ -60,12 +69,14 @@ class ImportReport:
     adapter problems, or no dataset produced), so a caller can tell a clean
     replay from a partial one without parsing the reasons. A source whose
     response file is usable but whose sidecar is missing still imports — it is
-    listed in both ``problems`` and ``skipped``.
+    listed in both ``problems`` and ``skipped``. Unmapped-item counters belong
+    to ``informational`` and do not make an otherwise complete import partial.
     """
 
     saved: tuple[SavedDataset, ...]
     problems: tuple[str, ...]
     skipped: tuple[str, ...]
+    informational: tuple[str, ...] = ()
 
 
 async def import_offline_evidence(
@@ -81,8 +92,8 @@ async def import_offline_evidence(
     """Import the evidence under ``source_dir`` for ``identities``.
 
     ``company_ids`` maps ``company_key -> company.id`` (resolved by the caller
-    from the controlled pilot list); the adapter never sees database ids, so
-    this module stamps the resolved ``subject_id`` on company-level drafts.
+    from the controlled pilot list); the resolved id is supplied to
+    ``parse(subject_id=...)`` and stamped on company-level drafts before storing.
     ``source_dir`` is the evidence root (for example
     ``.../evidence/remaining-final-03/raw``); each adapter request is matched
     to ``<name>`` and ``<name>.meta.json`` inside it. Nothing is committed:
@@ -99,7 +110,10 @@ async def import_offline_evidence(
     )
     store = MaterialStore(session, data_dir=Path(data_dir))
     saved = [await store.save(draft) for draft in batch.drafts]
-    return ImportReport(saved=tuple(saved), problems=batch.problems, skipped=batch.skipped)
+    return ImportReport(
+        saved=tuple(saved), problems=batch.problems, skipped=batch.skipped,
+        informational=batch.informational,
+    )
 
 
 @dataclass(frozen=True)
@@ -109,6 +123,7 @@ class _Batch:
     drafts: tuple[DatasetDraft, ...]
     problems: tuple[str, ...]
     skipped: tuple[str, ...]
+    informational: tuple[str, ...] = ()
 
 
 def _read_evidence_batch(
@@ -126,6 +141,7 @@ def _read_evidence_batch(
     drafts: list[DatasetDraft] = []
     problems: list[str] = []
     skipped: list[str] = []
+    informational: list[str] = []
     for identity in identities:
         company_id = company_ids.get(identity.company_key)
         if company_id is None:
@@ -139,40 +155,61 @@ def _read_evidence_batch(
             if symbol is None:
                 skipped.append(f"{label}: the pilot list binds no symbol for this source")
                 continue
-            requests = tuple(adapter.requests(identity, periods=()))
-            if not requests:
-                problems.append(f"{label}: the adapter requested no evidence file")
-                skipped.append(label)
-                continue
-            symbol_dirs = _symbol_dirs(identity, symbol)
             raws: list[_LocatedRaw] = []
-            for request in requests:
-                raw, reason = _locate(root, request, symbol_dirs=symbol_dirs)
-                if raw is None:
-                    problems.append(f"{label}: {reason}")
-                    continue
-                if reason is not None:
-                    problems.append(f"{label}: {reason}")
-                raws.append(raw)
-            if not raws:
+            seen: set[str] = set()
+            result = None
+            # SEC discovers submissions shards after parsing the index. Read
+            # newly requested files too, with the same bounded rounds as the worker.
+            for _ in range(3):
+                requests = tuple(
+                    request for request in adapter.requests(identity, periods=())
+                    if request.name not in seen
+                )
+                if not requests:
+                    break
+                for request in requests:
+                    seen.add(request.name)
+                    raw, reason = _locate(
+                        root, request, symbol_dirs=_symbol_dirs(identity, symbol),
+                        source=source,
+                    )
+                    if reason is not None:
+                        problems.append(f"{label}: {reason}")
+                    if raw is not None:
+                        raws.append(raw)
+                if not raws:
+                    break
+                result = adapter.parse(
+                    identity,
+                    raw=tuple(raw.as_payload(imported_at=captured_at) for raw in raws),
+                    periods=(),
+                    subject_id=company_id,
+                )
+            pending = [
+                request.name for request in adapter.requests(identity, periods=())
+                if request.name not in seen
+            ]
+            if pending:
+                problems.append(f"{label}: evidence discovery exceeded 3 rounds: {pending}")
+            if result is None:
+                if not seen:
+                    problems.append(f"{label}: the adapter requested no evidence file")
                 skipped.append(label)
                 continue
-            result = adapter.parse(
-                identity,
-                raw=tuple(raw.as_payload(imported_at=captured_at) for raw in raws),
-                periods=(),
-            )
             for problem in result.problems:
-                problems.append(f"{label}: {problem}")
+                if problem.startswith(("unmapped_items:", "unmapped")):
+                    informational.append(f"{label}: {problem}")
+                else:
+                    problems.append(f"{label}: {problem}")
             if not result.drafts and not result.problems:
                 problems.append(f"{label}: the adapter produced no dataset")
             drafts.extend(
                 _prepare_draft(draft, company_id=company_id, raws=raws, captured_at=captured_at)
-                for draft in result.drafts
+                for draft in coalesce_annual_tables(result.drafts)
             )
             if len(problems) > source_problem_count:
                 skipped.append(label)
-    return _Batch(tuple(drafts), tuple(problems), tuple(skipped))
+    return _Batch(tuple(drafts), tuple(problems), tuple(skipped), tuple(informational))
 
 
 @dataclass(frozen=True)
@@ -211,7 +248,7 @@ class _LocatedRaw:
 
 
 def _locate(
-    root: Path, request: UpstreamRequest, *, symbol_dirs: frozenset[str]
+    root: Path, request: UpstreamRequest, *, symbol_dirs: frozenset[str], source: str
 ) -> tuple[_LocatedRaw | None, str | None]:
     """Resolve ``request`` to its evidence file, read it and read its sidecar.
 
@@ -221,6 +258,21 @@ def _locate(
     """
 
     path, reason = _resolve_file(root, request.name, symbol_dirs)
+    if path is None and source == SOURCE_EASTMONEY_HK and request.name in {
+        "income", "balance", "cashflow"
+    }:
+        # Prefer the complete four-year corpus over older single-year responses.
+        # Ambiguous matches within an alias are still refused.
+        aliases: tuple[str, ...] = (f"{request.name}-four-years.json", f"{request.name}.json")
+        if request.name == "cashflow":
+            aliases = ("cashflow-original-four-years.json", *aliases)
+        for alias in aliases:
+            candidate, alias_reason = _resolve_file(root, alias, symbol_dirs)
+            if candidate is not None:
+                path, reason = candidate, None
+                break
+            elif alias_reason and "none is unique" in alias_reason:
+                return None, alias_reason
     if path is None:
         return None, reason
     try:
@@ -253,6 +305,15 @@ def _locate(
         )
     if not isinstance(document, dict):
         return located(), f"sidecar {sidecar.name} must be a JSON object"
+    status = _sidecar_status(document)
+    if "status" in document and not 200 <= status < 300:
+        return None, f"{sidecar.name}: rejected HTTP status {status}"
+    expected_hash = document.get("sha256")
+    if expected_hash is not None and expected_hash != hashlib.sha256(content).hexdigest():
+        return None, f"{sidecar.name}: response SHA-256 mismatch"
+    expected_bytes = document.get("bytes")
+    if expected_bytes is not None and expected_bytes != len(content):
+        return None, f"{sidecar.name}: response byte count mismatch"
     fetched_at, problem = _sidecar_time(document, sidecar.name)
     url = document.get("url")
     return (
