@@ -263,7 +263,12 @@ def runtime_data_dir() -> Path:
         try:
             from dotenv import dotenv_values
 
-            values = dotenv_values(env_file)
+            # The repo configures a single path, but the setting also admits a
+            # sequence of candidates (pydantic merges those last-wins).
+            paths = [env_file] if isinstance(env_file, Path) else [Path(p) for p in env_file]
+            values: dict[str, str | None] = {}
+            for path in paths:
+                values.update(dotenv_values(path))
         except OSError:
             values = {}
         for name in ("DATA_DIR", "data_dir"):

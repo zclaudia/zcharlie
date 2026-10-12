@@ -148,7 +148,9 @@ async def enqueue_valuation(
     cutoff = knowledge_cutoff or day_knowledge_cutoff(valuation_date)
     if knowledge_watermark is None:
         knowledge_watermark = await price_knowledge_watermark(
-            session, [holding.listing_ref.id for holding in snapshot.holdings]
+            session,
+            # Listing refs carry integer ids by contract (identifier_namespace).
+            [int(holding.listing_ref.id) for holding in snapshot.holdings],
         )
     payload = ValuationJobPayload(
         account_id=account_id,

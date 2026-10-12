@@ -103,10 +103,10 @@ async def _insert_row(
         await session.flush()
     except IntegrityError:
         await nested.rollback()
-        record = await _locked(session, listing_id, scope)
-        if record is None:  # pragma: no cover - the conflict proves the row exists
+        winner = await _locked(session, listing_id, scope)
+        if winner is None:  # pragma: no cover - the conflict proves the row exists
             raise
-        return record
+        return winner
     else:
         await nested.commit()
         return record

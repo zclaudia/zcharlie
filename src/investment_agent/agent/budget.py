@@ -206,10 +206,11 @@ class BudgetService:
         if action == "release":
             row.state = "released"
         else:
-            if set(usage) != {"input_tokens", "output_tokens"} or any(type(v) is not int or v < 0 for v in usage.values()):
+            provider_usage = usage or {}
+            if set(provider_usage) != {"input_tokens", "output_tokens"} or any(type(v) is not int or v < 0 for v in provider_usage.values()):
                 raise ValueError("invalid actual usage")
             row.state = "settled"
-            row.input_tokens, row.output_tokens = usage["input_tokens"], usage["output_tokens"]
+            row.input_tokens, row.output_tokens = provider_usage["input_tokens"], provider_usage["output_tokens"]
             if row.input_price is not None and row.output_price is not None:
                 row.cost_usd = ((Decimal(row.input_tokens) * row.input_price + Decimal(row.output_tokens) * row.output_price) / Decimal(1000000)).quantize(Decimal(".000000000001"), rounding=ROUND_CEILING)
         await self.session.flush()
