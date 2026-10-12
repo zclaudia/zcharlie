@@ -1,0 +1,20 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "zcharlie 移动端 HTTP、通知、外链与应用私有配置存储权限",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "notification:default",
+    "opener:allow-default-urls",
+    "store:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://*:*" },
+        { "url": "http://*:*" }
+      ]
+    }
+  ]
+}

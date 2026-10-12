@@ -1,0 +1,22 @@
+[package]
+name = "zcharlie-mobile"
+version = "0.1.0"
+description = "zcharlie Android client"
+authors = ["zcharlie"]
+edition = "2021"
+rust-version = "1.90"
+
+[lib]
+name = "zcharlie_mobile_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "=2.12.3", features = [] }
+tauri-plugin-http = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-store = "2"
