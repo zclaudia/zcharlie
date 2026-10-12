@@ -146,6 +146,13 @@ class ResearchSnapshot(Base, TimestampMixin):
     artifact_manifest: Mapped[dict[str, object]] = mapped_column(
         JSON, nullable=False, default=dict
     )
+    industry_peer_context: Mapped[dict[str, object] | None] = mapped_column(
+        JSON, nullable=True
+    )
+    """Trusted peer-context binding saved verbatim at snapshot write time
+    (target, cohort_ref, batch_run_id, year, cutoff, metric_calculation_refs);
+    null for snapshots written before the feature and never backfilled with a
+    newer result (migration 048)."""
 
 
 class ResearchChangeSet(Base, TimestampMixin):

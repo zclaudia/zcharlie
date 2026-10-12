@@ -6,7 +6,7 @@ run specification/completion policy. Neither is inferred from model text.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -85,6 +85,11 @@ class ExecutionGrant(BaseModel):
     portfolio_valuation_ref: ObjectRef | None = None
     """The daily price basis this admission was bound to (plan 2.5). A
     calculation re-binds the current valuation explicitly - never silently."""
+    peer_context: dict[str, Any] | None = None
+    """Trusted industry-peer binding (target, cohort_ref, batch_run_id, year,
+    cutoff, metric_calculation_refs) fixed at task admission; default null so
+    grants serialized before the feature keep validating (WP1). WP11 owns the
+    typed shape and the enforcement; never a model tool schema."""
 
     @field_validator("expires_at", "memory_valid_until")
     @classmethod

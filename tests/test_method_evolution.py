@@ -274,13 +274,16 @@ async def test_native_verified_counter_and_stop_strengthening_keep_baseline_vali
 
 def test_pre040_literal_serialized_contracts_remain_unchanged():
     # Literal old complete serialized grant, rather than a new-model fixture.
-    old_grant = '{"schema_version":1,"owner":"local_owner","mode":"interactive","source":"authenticated_message","prompt":"Explain the saved question","tool_names":[],"scope_refs":[],"watchlist":false,"memory_revision":0,"memory_valid_until":null,"mandate_id":null,"expires_at":null,"task_cost_usd":null,"daily_cost_usd":null,"purpose":"interactive","current_research":false,"research_kind":"explanation","disclosure_permissions":[],"portfolio_account_id":null,"portfolio_snapshot_ref":null,"portfolio_valuation_ref":null}'
+    old_grant = '{"schema_version":1,"owner":"local_owner","mode":"interactive","source":"authenticated_message","prompt":"Explain the saved question","tool_names":[],"scope_refs":[],"watchlist":false,"memory_revision":0,"memory_valid_until":null,"mandate_id":null,"expires_at":null,"task_cost_usd":null,"daily_cost_usd":null,"purpose":"interactive","current_research":false,"research_kind":"explanation","disclosure_permissions":[],"portfolio_account_id":null,"portfolio_snapshot_ref":null,"portfolio_valuation_ref":null,"peer_context":null}'
     # The pre-valuation payload (no ``portfolio_valuation_ref``) still loads:
     # persisted grants predate the field and must not fail re-validation.
     prior_grant = old_grant.replace(',"portfolio_valuation_ref":null}', '}')
+    # The same holds for the pre-peer payload (no ``peer_context``, WP1).
+    pre_peer_grant = old_grant.replace(',"peer_context":null}', '}')
     old_task = '{"schema_version":1,"id":"00000000-0000-0000-0000-000000000001","revision":1,"actor":"local_owner","created_at":"2026-10-10T00:00:00Z","origin_ref":null,"parent_task_id":null,"message_ref":null,"binding":{"context_refs":[],"base_refs":[],"as_of":"2026-10-10T00:00:00Z"},"status":"queued","cancel_requested":false,"stop_reason":null,"waiting":null,"artifact_refs":[],"usage":{"tool_calls":0,"requests":0,"input_tokens":0,"output_tokens":0,"cost":{"value":null,"unit":"currency","currency":null,"unknown_reason":"not settled"}}}'
     assert fingerprint(ExecutionGrant.model_validate_json(old_grant).model_dump(mode='json')) == fingerprint(json.loads(old_grant))
     assert ExecutionGrant.model_validate_json(prior_grant) == ExecutionGrant.model_validate_json(old_grant)
+    assert ExecutionGrant.model_validate_json(pre_peer_grant) == ExecutionGrant.model_validate_json(old_grant)
     assert fingerprint(Task.model_validate_json(old_task).model_dump(mode='json')) == fingerprint(json.loads(old_task))
     from pydantic_ai.messages import ModelMessagesTypeAdapter
     history = b'[{"parts":[{"content":"Saved question","timestamp":"2026-10-10T00:00:00Z","part_kind":"user-prompt"}],"kind":"request"},{"parts":[{"content":"Saved answer","part_kind":"text"}],"usage":{"input_tokens":20,"output_tokens":10},"timestamp":"2026-10-10T00:00:01Z","kind":"response"}]'

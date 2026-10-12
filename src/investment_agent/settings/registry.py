@@ -61,6 +61,7 @@ GROUPS: dict[str, str] = {
     "collection": "数据采集",
     "verification": "iFinD 核验",
     "candidates": "候选池",
+    "peers": "行业与同行参照",
     "gateway": "手机网关",
     "schedule": "调度",
 }
@@ -292,6 +293,11 @@ class RuntimeSettings(BaseModel):
     candidate_expiry_days: int = Field(default=14, ge=1, le=365)
     candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
 
+    # Industry & peer context (WP1): defaults and bounds mirror ``Settings``.
+    industry_peer_context_enabled: bool = False
+    peer_collect_min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
+    peer_collect_retries: int = Field(default=2, ge=0, le=10)
+
     gateway_enabled: bool = False
     gateway_url: str = ""
     gateway_credential: str = Field(default="", repr=False)
@@ -426,6 +432,18 @@ SPECS: tuple[SettingSpec, ...] = (
     _env(
         "candidate_dismiss_cooldown_days", "candidates", "忽略冷却天数",
         "被忽略的股票在多少天内不再被筛选重新提名，0–365。", "live",
+    ),
+    _env(
+        "industry_peer_context_enabled", "peers", "启用行业与同行参照",
+        "默认关闭；打开后只暴露离线已导入的名单与结果，各边界（页面 / API / Agent）自行检查。", "live",
+    ),
+    _env(
+        "peer_collect_min_interval_seconds", "peers", "同行采集最小间隔（秒）",
+        "年度参照采集串行调用的最小间隔，0–60；具体频率随来源条件在 WP7 落地。", "next_job",
+    ),
+    _env(
+        "peer_collect_retries", "peers", "同行采集重试次数",
+        "暂态错误每家公司的额外重试次数，0–10，0 = 不重试；429 遵从 Retry-After。", "next_job",
     ),
     _env(
         "gateway_enabled", "gateway", "启用手机网关",

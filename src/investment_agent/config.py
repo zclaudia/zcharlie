@@ -181,6 +181,14 @@ class Settings(BaseSettings):
     candidate_expiry_days: int = Field(default=14, ge=1, le=365)
     candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
 
+    # Industry & peer context (WP1): off by default; the flag is enforced at
+    # the API / page / agent boundaries as its own work packages land. The
+    # collect throttle and retry placeholders follow the existing collector
+    # settings; WP7/WP8 extend them with the adapter's real knobs.
+    industry_peer_context_enabled: bool = False
+    peer_collect_min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
+    peer_collect_retries: int = Field(default=2, ge=0, le=10)
+
     # Mobile gateway (zclaudia-gateway, Protocol v4): the API registers itself as
     # a Backend so a phone can reach it through the gateway's /api/proxy.
     # ``gateway_credential`` is the enrollment token (zgb_...) issued by the
