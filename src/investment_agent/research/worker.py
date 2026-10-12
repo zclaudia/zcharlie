@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.candidates.lifecycle import CandidatePolicy
 from investment_agent.config import Settings
+from investment_agent.industry_peers.contracts import PeerContextBinding
 from investment_agent.jobs.base import (
     BaseJobHandler,
     ClaimedJob,
@@ -86,11 +87,29 @@ class ResearchJobPayload(BaseModel):
     report_year: int | None = Field(None, ge=1990, le=2100)
     as_of: date
     provider: Literal["ifind", "snapshot"] = "ifind"
+    industry_peer_context: dict[str, Any] | None = None
+    """Trusted peer-context binding frozen at enqueue time (WP9): target,
+    cohort_ref, batch_run_id, report_period, cutoff and the three actual
+    metric calculation references - stored verbatim in the snapshot's
+    ``industry_peer_context`` column. The old HTTP submit path cannot set it;
+    the trusted application builds it from a read result, and any payload
+    carrying a non-binding shape fails validation instead of running."""
 
     @model_validator(mode="after")
     def _ifind_inputs(self) -> ResearchJobPayload:
         if self.provider == "ifind" and (self.industry is None or self.report_year is None):
             raise ValueError("iFinD research needs industry and report_year")
+        return self
+
+    @model_validator(mode="after")
+    def _peer_context_binding(self) -> ResearchJobPayload:
+        if self.industry_peer_context is not None:
+            try:
+                PeerContextBinding.model_validate(self.industry_peer_context)
+            except ValueError as exc:
+                raise ValueError(
+                    f"industry_peer_context is not a valid peer-context binding: {exc}"
+                ) from exc
         return self
 
 
@@ -132,6 +151,7 @@ class IfindResearchHandler(BaseJobHandler):
                 triggered_by="worker",
                 claimed_run_id=job.run_id,
                 source_mode=payload.provider,
+                industry_peer_context=payload.industry_peer_context,
             )
 
         try:

@@ -96,3 +96,8 @@ class ResearchRunDetail(ResearchRunSummary):
     request: dict[str, object]
     result: ResearchRunResult | None
     change: ResearchChangeSetOut | None
+    industry_peer_context: dict[str, object] | None = None
+    """Trusted peer-context binding saved verbatim at snapshot write time
+    (target, cohort_ref, batch_run_id, report_period, cutoff,
+    metric_calculation_refs); null for snapshots written before the feature -
+    never backfilled with a newer result (WP9)."""

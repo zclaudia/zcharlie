@@ -11,11 +11,18 @@ string - never a JSON float - and an unknown value is null with an explicit
 
 from datetime import date, datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import model_validator
 
 from investment_agent.evidence.contracts import Period
-from investment_agent.investor.common import Contract, DecimalValue, Quantity, Text
+from investment_agent.investor.common import (
+    Contract,
+    DecimalValue,
+    ObjectRef,
+    Quantity,
+    Text,
+)
 
 SCHEMA_VERSION = 1
 
@@ -121,4 +128,66 @@ class PeerAnnualField(Contract):
     def unknown_is_explicit(self) -> "PeerAnnualField":
         if (self.value is None) != (self.missing_reason is not None):
             raise ValueError("missing values require a reason; known values cannot have one")
+        return self
+
+
+BINDING_METRIC_KEYS: tuple[str, ...] = ("roe", "contract_revenue", "cfo_parent_profit")
+"""The fixed metric keys of a peer-context binding.
+
+Mirrors ``calculations.METRIC_KEYS`` (pinned equal by a unit test - this
+contracts module must not import the calculation layer)."""
+
+
+class PeerMetricBinding(Contract):
+    """One metric's frozen reference inside a research peer-context binding.
+
+    Same shapes as the batch mapping's ``MetricMappingEntry``: ``saved`` /
+    ``reused`` carry the actual ``SavedCalculation`` reference, ``gap`` only
+    its reason. The read side re-derives coverage and values from the mapped
+    records; the binding freezes exactly *which* records a study may cite.
+    """
+
+    metric_key: str
+    state: Literal["saved", "reused", "gap"]
+    ref: ObjectRef | None = None
+    gap_reason: Text | None = None
+
+
+class PeerContextBinding(Contract):
+    """Trusted peer-context binding frozen at research enqueue time (WP9).
+
+    The structure the design fixes for the ``research_snapshot.industry_peer_context``
+    column (and, from WP11, ``ExecutionGrant.peer_context``): the target
+    ticker, the roster version, the batch holding the results, the report
+    period, the binding-time cutoff and the three actual metric calculation
+    references. The trusted application builds it from a read result; the old
+    HTTP submit path cannot set it. The snapshot column stores it verbatim and
+    it stays null for snapshots written before the feature (never backfilled
+    with a newer result).
+
+    ``cutoff`` is the research binding time: the service hides mappings and
+    records submitted after it, so a later batch never enters an older study.
+    """
+
+    target: Text
+    cohort_ref: ObjectRef
+    batch_run_id: Text
+    report_period: date
+    cutoff: datetime
+    metric_calculation_refs: tuple[PeerMetricBinding, ...]
+
+    @model_validator(mode="after")
+    def cohort_is_a_snapshot_ref(self) -> "PeerContextBinding":
+        if self.cohort_ref.kind != "peer_cohort_snapshot":
+            raise ValueError("cohort_ref must reference a peer_cohort_snapshot")
+        return self
+
+    @model_validator(mode="after")
+    def covers_the_fixed_metrics(self) -> "PeerContextBinding":
+        keys = [entry.metric_key for entry in self.metric_calculation_refs]
+        if sorted(keys) != sorted(BINDING_METRIC_KEYS):
+            raise ValueError(
+                "a peer-context binding carries exactly the three fixed metric keys "
+                f"{list(BINDING_METRIC_KEYS)}; got {keys}"
+            )
         return self

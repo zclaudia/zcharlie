@@ -154,6 +154,9 @@ async def get_research_run(run_id: int) -> ResearchRunDetail:
                 if change_set is not None
                 else None
             ),
+            industry_peer_context=(
+                snapshot.industry_peer_context if snapshot is not None else None
+            ),
         )
 
 

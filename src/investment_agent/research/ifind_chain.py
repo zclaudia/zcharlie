@@ -1205,6 +1205,7 @@ async def run_ifind_research_chain(
     idempotency_key: str | None = None,
     claimed_run_id: int | None = None,
     source_mode: str = "ifind",
+    industry_peer_context: dict[str, object] | None = None,
 ) -> ResearchChainResult:
     """Run and persist the complete data -> score -> explanation vertical slice.
 
@@ -1221,6 +1222,11 @@ async def run_ifind_research_chain(
 
     The run metadata and the snapshot's score record ``source_mode``; the
     first run after a switch carries ``source_changed`` (see change tracking).
+
+    ``industry_peer_context`` (WP9) is the trusted peer-context binding frozen
+    at enqueue time; it is stored verbatim in the snapshot's nullable
+    ``industry_peer_context`` column and returned by the run detail. It is
+    never set by the HTTP submit path - the trusted application freezes it.
     """
 
     if source_mode not in {"ifind", "snapshot"}:
@@ -1435,6 +1441,7 @@ async def run_ifind_research_chain(
                     score_json=score_item,
                     explanation_json=None,
                     artifact_manifest=artifact_manifest,
+                    industry_peer_context=industry_peer_context,
                 )
                 await PipelineRunRepository(session).mark_partial(
                     run_id,
@@ -1471,6 +1478,7 @@ async def run_ifind_research_chain(
                 score_json=score_item,
                 explanation_json=explanation.model_dump(mode="json"),
                 artifact_manifest=artifact_manifest,
+                industry_peer_context=industry_peer_context,
             )
             await PipelineRunRepository(session).mark_success(run_id, metadata)
         return ResearchChainResult(

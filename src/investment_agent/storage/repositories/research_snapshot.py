@@ -25,6 +25,26 @@ def score_item_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def artifact_manifest_paths_only(manifest: dict[str, Any]) -> dict[str, Any]:
+    """Guard: ``artifact_manifest`` stores file paths, nothing else.
+
+    The artifact download API resolves every string value as a file path; an
+    ``ObjectRef``-shaped dict, a ``UUID`` or any other non-string value would
+    either leak a record identity through the manifest or break the download
+    resolution. Callers that want to reference a calculation, snapshot or
+    batch use the snapshot's own ``industry_peer_context`` column (or the
+    evidence/calculation tables), never the manifest.
+    """
+
+    for name, value in manifest.items():
+        if not isinstance(value, str):
+            raise ValueError(
+                f"artifact_manifest[{name!r}] must be a file path string, got "
+                f"{type(value).__name__}; the manifest stores paths only"
+            )
+    return manifest
+
+
 class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
     model = ResearchSnapshot
 
@@ -44,6 +64,7 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
         score_json: dict[str, object],
         explanation_json: dict[str, object] | None,
         artifact_manifest: dict[str, object],
+        industry_peer_context: dict[str, object] | None = None,
     ) -> ResearchSnapshot:
         previous = await self.latest(symbol=symbol, market=market)
         snapshot = ResearchSnapshot(
@@ -59,7 +80,8 @@ class ResearchSnapshotRepository(Repository[ResearchSnapshot]):
             score_schema_version=score_schema_version,
             score_json=score_json,
             explanation_json=explanation_json,
-            artifact_manifest=artifact_manifest,
+            artifact_manifest=artifact_manifest_paths_only(artifact_manifest),
+            industry_peer_context=industry_peer_context,
         )
         self.session.add(snapshot)
         await self.session.flush()

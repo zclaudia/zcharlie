@@ -81,7 +81,9 @@ from investment_agent.industry_peers.calculations import (
     metric_spec,
 )
 from investment_agent.industry_peers.contracts import (
+    PeerContextBinding,
     PeerContextStatus,
+    PeerMetricBinding,
     PeerMetricStatus,
     PeerQuantity,
 )
@@ -795,6 +797,48 @@ def _missing_result(
     )
 
 
+# --- research binding (WP9) -----------------------------------------------------
+
+
+def peer_context_binding_from(result: PeerContextResult) -> PeerContextBinding | None:
+    """The trusted research binding for one read result (WP9).
+
+    The trusted application freezes this at research enqueue time: the target,
+    the roster version, the submitted batch, the period, the binding-time
+    cutoff (this read's ``data_as_of``) and the batch's actual metric
+    references. ``None`` when there is nothing to bind - no submitted batch,
+    no roster version, or a target the batch could not build (a research with
+    a recorded gap keeps the gap; it is never bound to a newer batch later).
+    """
+
+    if (
+        result.batch_run_id is None
+        or result.cohort_ref is None
+        or result.report_period is None
+        or not result.metrics
+    ):
+        return None
+    refs = tuple(
+        PeerMetricBinding(
+            metric_key=metric.metric_key,
+            state=metric.state,
+            ref=metric.calculation_ref,
+            gap_reason=metric.gap_reason if metric.state == "gap" else None,
+        )
+        for metric in result.metrics
+    )
+    if any(entry.state != "gap" and entry.ref is None for entry in refs):
+        return None
+    return PeerContextBinding(
+        target=result.target.ticker,
+        cohort_ref=result.cohort_ref,
+        batch_run_id=result.batch_run_id,
+        report_period=result.report_period,
+        cutoff=result.data_as_of,
+        metric_calculation_refs=refs,
+    )
+
+
 # --- public read API -----------------------------------------------------------
 
 
@@ -1091,14 +1135,17 @@ __all__ = [
     "PeerCompaniesResult",
     "PeerCompanyDetail",
     "PeerCompanyMetricDetail",
+    "PeerContextBinding",
     "PeerContextResult",
     "PeerFieldEvidenceLink",
     "PeerJobHint",
+    "PeerMetricBinding",
     "PeerMetricContext",
     "PeerTargetIdentity",
     "PeerTargetLookupError",
     "get_industry_peer_context",
     "list_industry_peer_companies",
+    "peer_context_binding_from",
     "resolve_cohort",
     "resolve_peer_target",
 ]
