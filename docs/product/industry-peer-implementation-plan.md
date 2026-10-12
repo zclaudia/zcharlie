@@ -1,9 +1,10 @@
 # 行业与同行参照实施拆分（sub-task 方案）
 
-日期：2026-10-12。状态：阶段 A（WP1–WP6 固定证据接入与计算）与阶段 B（WP7–WP8 后台补采，离线验证）已实现并通过各自退出条件
-（2026-10-12，门禁 3150 passed / mypy 0 错）。关键裁决：run-02 字段无披露日期依据，按设计不物化 EvidenceRecord，golden 三项统计在
-纯函数层复现，保存链路以带日期合成夹具验证，批次映射制品格式与离线提交命令由 WP6 定义、WP8 复用；WP8 在线采集数据带
-NOTICE_DATE/UPDATE_DATE → 可物化。阶段 C/D 未开始。
+日期：2026-10-12。状态：阶段 A（WP1–WP6 固定证据）、阶段 B（WP7–WP8 后台补采离线验证）、阶段 C（WP9–WP10 页面接入，含 dev 真实渲染四态走查）
+已实现并通过各自退出条件（2026-10-12，门禁 3183 passed / mypy 0 错）。关键裁决：run-02 字段无披露日期依据，按设计不物化
+EvidenceRecord，golden 三项统计在纯函数层复现，保存链路以带日期合成夹具验证，批次映射制品格式与离线提交命令由 WP6 定义、
+WP8 复用；WP8 在线采集数据带 NOTICE_DATE/UPDATE_DATE → 可物化；WP9 端点按"前缀即模块"落在
+api/routes/industry_peers.py（计划 §2 表格的 research.py 落点据此修正）。阶段 D 未开始。
 依据[技术设计](industry-peer-technical-design.md)（已经代码对照审查）与[首期范围](industry-peer-scope-draft.md)。
 本稿只做执行拆分，不修改任何设计决定；实现中发现与设计冲突时，以设计为准并回改本稿，不静默偏航。
 
