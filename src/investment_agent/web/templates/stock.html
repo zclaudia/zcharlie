@@ -186,6 +186,17 @@
   <div id="stock-spark" class="spark-host" data-ticker="{{ ticker }}"></div>
 </section>
 <section id="stock-detail" class="data-region"></section>
+<link rel="stylesheet" href="/app/static/industry_peers.css">
+<section class="card" id="peer-context-section" data-ticker="{{ ticker }}" hidden>
+  <div class="card-head">
+    <h2>行业与同行参照</h2>
+    <span class="faint">独立于评分的同行年度统计；数值全部来自服务端，缺失与不足如实显示</span>
+  </div>
+  <div id="peer-context-current" class="peer-area" aria-live="polite"></div>
+  <div id="peer-context-bound" class="peer-area" aria-live="polite"></div>
+  <aside id="peer-context-evidence" class="peer-evidence" hidden></aside>
+</section>
+<script type="module" src="/app/static/industry_peers.js"></script>
 <div class="grid-2">
   <section class="card">
     <h2>自上次以来的变化</h2>
