@@ -80,7 +80,11 @@ from investment_agent.rules.draft_policy import (
     system_prompt,
     validate_draft,
 )
-from investment_agent.rules.generation import guard_store, preflight_reason
+from investment_agent.rules.generation import (
+    RULE_HEAD_MESSAGE,
+    guard_store,
+    preflight_reason,
+)
 from investment_agent.rules.schema import TEMPLATE_ID, RuleInstance, RuleTemplate, canonical_hash
 from investment_agent.rules.store import RuleStore
 from investment_agent.storage.database import session_scope
@@ -642,7 +646,17 @@ async def _store(
     """
 
     async with session_scope() as session:
-        await session.execute(update(RuleInstanceRecord).where(RuleInstanceRecord.symbol == instance.symbol, RuleInstanceRecord.scope == instance.scope).values(status=RuleInstanceRecord.status))
+        await session.execute(
+            update(RuleInstanceRecord)
+            .where(
+                RuleInstanceRecord.symbol == instance.symbol,
+                RuleInstanceRecord.scope == instance.scope,
+            )
+            .values(
+                status=RuleInstanceRecord.status,
+                updated_at=RuleInstanceRecord.updated_at,
+            )
+        )
         refused = await guard_store(session, symbol=instance.symbol, scope=instance.scope, token=token)
         if refused is not None:
             if stale_notes is not None:
@@ -655,7 +669,21 @@ async def _store(
                 reason=refused,
             )
             return None
-        if expected_rule_head is not None and await RuleStore(session).head_token(instance.symbol, instance.scope) != expected_rule_head:
+        if (
+            expected_rule_head is not None
+            and await RuleStore(session).head_token(instance.symbol, instance.scope)
+            != expected_rule_head
+        ):
+            # Same refusal granularity as the shared-generation guard: the run
+            # result names *why* the store was rejected, not just that it was.
+            if stale_notes is not None:
+                stale_notes.append(RULE_HEAD_MESSAGE)
+            log.warning(
+                "rule_draft.store.rule_head_changed",
+                ticker=instance.symbol,
+                scope=instance.scope,
+                expected_rule_head=expected_rule_head,
+            )
             return None
         reused = await reuse_equivalent_draft(session, instance, template)
         if reused is not None:

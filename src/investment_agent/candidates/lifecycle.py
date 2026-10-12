@@ -38,7 +38,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.providers.shenwan_directory import default_shenwan_directory
-from investment_agent.rules.generation import claim_draft_generation, is_current_token
+from investment_agent.rules.generation import (
+    claim_draft_generation,
+    current_generation,
+    is_current_token,
+)
 from investment_agent.rules.store import RuleStore
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
@@ -362,6 +366,23 @@ async def enqueue_rule_draft(
     return run
 
 
+async def _newer_request_in_flight(session: AsyncSession, candidate: CandidateRecord) -> bool:
+    """``True`` when the slot's current claim is a still-live draft request of
+    this candidate (a newer one superseded the reporting run)."""
+
+    generation = await current_generation(
+        session, listing_id=candidate.listing_id, scope=CANDIDATE_SCOPE
+    )
+    if generation is None or generation.token is None:
+        return False
+    if generation.origin_kind != "candidate" or generation.origin_id != candidate.id:
+        return False
+    run = await PipelineRunRepository(session).by_idempotency_key(
+        kind=RULE_DRAFT, idempotency_key=generation.token
+    )
+    return run is not None and run.status in _LIVE_RUN_STATUSES
+
+
 async def mark_draft_result(
     candidate_id: int,
     *,
@@ -410,11 +431,25 @@ async def mark_draft_result(
         )
         # Never link this run's rule (it may be stale); show whatever the
         # shared open draft currently is - the effective_draft derivation.
-        adopted = await _adopt_open_draft(session, candidate)
-        if adopted is None and (failed or rule_instance_id is None):
-            candidate.draft_state = "failed"
-            if error:
-                log.warning("candidate.draft_failed", candidate_id=candidate_id, error=error)
+        open_draft = await _newest_open_draft(session, candidate)
+        if open_draft is not None:
+            candidate.draft_state = "ready"
+            candidate.draft_rule_instance_id = open_draft.id
+        else:
+            # No shared open draft to adopt: a stale success must not leave
+            # its own (possibly stale) rule linked, and the state only moves
+            # to "failed" when nothing newer is drafting for this candidate -
+            # while a newer request is queued/running, its "pending" stands
+            # (the slot owner reports; the stale callback is audit only,
+            # matching the watchlist side).
+            candidate.draft_rule_instance_id = None
+            if (
+                (failed or rule_instance_id is None)
+                and not await _newer_request_in_flight(session, candidate)
+            ):
+                candidate.draft_state = "failed"
+                if error:
+                    log.warning("candidate.draft_failed", candidate_id=candidate_id, error=error)
         await session.flush()
         return
     if failed or rule_instance_id is None:
@@ -454,20 +489,6 @@ async def _newest_open_draft(
     if rule is not None and as_utc(rule.created_at) >= opened:
         return rule
     return None
-
-
-async def _adopt_open_draft(
-    session: AsyncSession, candidate: CandidateRecord
-) -> RuleInstanceRecord | None:
-    """Persist the state :func:`effective_draft` would derive lazily."""
-
-    candidate.draft_state = "pending"
-    candidate.draft_rule_instance_id = None
-    rule = await _newest_open_draft(session, candidate)
-    if rule is not None:
-        candidate.draft_state = "ready"
-        candidate.draft_rule_instance_id = rule.id
-    return rule
 
 
 async def effective_draft(

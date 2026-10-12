@@ -16,7 +16,7 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
@@ -558,6 +558,18 @@ years:
   closed_dates: []
 """
 
+CALENDAR_YAML_STALE = """\
+calendar_id: fixture-stale
+timezone: Asia/Shanghai
+source:
+  title: fixture
+  url: https://example.invalid/fixture
+  published_on: 2024-12-01
+years:
+- year: 2025
+  closed_dates: []
+"""
+
 
 async def _run_handler(
     env, *, as_of: date, scope: str, reason: str = "cron", calendar_path: str | None = None
@@ -584,10 +596,12 @@ async def _enqueue(*, as_of: date, scope: str, reason: str = "cron") -> int:
 
 
 @pytest.mark.asyncio
-async def test_job_is_idempotent_per_scope_date_and_reason(env, factors) -> None:
+async def test_job_is_idempotent_per_scope_date_and_reason(env, factors, tmp_path) -> None:
     await _active_rule(scope="candidate")
     factors.set(**BUY)
-    run_id = await _run_handler(env, as_of=DAY, scope="candidate")
+    calendar = tmp_path / "calendar.yaml"
+    calendar.write_text(CALENDAR_YAML, encoding="utf-8")
+    run_id = await _run_handler(env, as_of=DAY, scope="candidate", calendar_path=str(calendar))
 
     async with session_scope() as session:
         stored = await session.get(PipelineRun, run_id)
@@ -600,7 +614,7 @@ async def test_job_is_idempotent_per_scope_date_and_reason(env, factors) -> None
         assert created is False and run.id == run_id
 
     # A different trigger token is a new run: the same inputs still insert nothing.
-    await _run_handler(env, as_of=DAY, scope="candidate", reason="close_quote")
+    await _run_handler(env, as_of=DAY, scope="candidate", reason="close_quote", calendar_path=str(calendar))
     assert len(await _events()) == 1
 
 
@@ -625,6 +639,28 @@ async def test_candidate_scope_is_gated_to_reviewed_trading_days(env, factors, t
 
 
 @pytest.mark.asyncio
+async def test_unreviewed_calendar_year_keeps_the_candidate_gate_closed(env, factors, tmp_path) -> None:
+    """A calendar without the year cannot vouch for the day: the candidate
+    gate stays closed instead of producing weekend noise events."""
+
+    await _active_rule(scope="candidate")
+    factors.set(**BUY)
+    stale = tmp_path / "calendar-stale.yaml"
+    stale.write_text(CALENDAR_YAML_STALE, encoding="utf-8")
+    run_id = await _run_handler(env, as_of=DAY, scope="candidate", calendar_path=str(stale))
+    async with session_scope() as session:
+        stored = await session.get(PipelineRun, run_id)
+        assert stored.metadata_json["skipped_reason"] == "trading_day_unknown"
+    assert await _events() == []
+
+    # Holding scope keeps its every-day semantics - the gate does not apply.
+    holding_run = await _run_handler(env, as_of=DAY, scope="holding", calendar_path=str(stale))
+    async with session_scope() as session:
+        stored = await session.get(PipelineRun, holding_run)
+        assert "skipped_reason" not in stored.metadata_json
+
+
+@pytest.mark.asyncio
 async def test_holding_scope_ignores_the_trading_day_gate(env, factors, tmp_path) -> None:
     await _ledger(env)
     await _active_rule(scope="holding")
@@ -637,6 +673,245 @@ async def test_holding_scope_ignores_the_trading_day_gate(env, factors, tmp_path
     assert [event.scope for event in events] == ["holding"]
     # The event carries the valuation's own date, not the run's Saturday.
     assert events[0].as_of == DAY
+
+
+@pytest.mark.asyncio
+async def test_zone_summaries_keep_only_each_listings_latest_event(env, factors) -> None:
+    """Multi-listing pages: the latest ``entered`` event is picked per listing
+    in the database, not by scanning every historical event."""
+
+    await _active_rule(scope="candidate")
+    factors.set(**BUY)
+    await _run(scope="candidate")
+    real_latest = (await _events())[-1].id
+
+    async with session_scope() as session:
+        rule_id = (await session.scalars(select(ZoneEventRecord.rule_instance_id).limit(1))).one()
+        company = Company(canonical_name="五粮液")
+        session.add(company)
+        await session.flush()
+        other = Listing(company_id=company.id, market_code="SSE", ticker="000858")
+        session.add(other)
+        await session.flush()
+        other_id = other.id
+
+        def raw_event(listing_id: int, ticker: str, as_of: date, zone: str) -> None:
+            session.add(
+                ZoneEventRecord(
+                    as_of=as_of,
+                    listing_id=listing_id,
+                    ticker=ticker,
+                    scope="candidate",
+                    zone=zone,
+                    transition="entered",
+                    level="info",
+                    rule_instance_id=rule_id,
+                    rule_version=1,
+                    template_id=TEMPLATE,
+                    template_version=1,
+                    calibration_status="uncalibrated",
+                    conditions_met=[],
+                    inputs={},
+                    input_digest=f"digest-{listing_id}-{as_of.isoformat()}-{zone}",
+                )
+            )
+
+        # An older entered event of the first listing must not win, and the
+        # second listing keeps its own latest (not another listing's).
+        raw_event(env.listing_id, TICKER, DAY - timedelta(days=1), "drop")
+        raw_event(other_id, "000858", DAY, "buy_zone")
+        raw_event(other_id, "000858", DAY + timedelta(days=1), "drop")
+
+    async with session_scope() as session:
+        summaries = await zd.zone_summaries(
+            session, listing_ids=[env.listing_id, other_id], scope="candidate"
+        )
+    assert summaries[env.listing_id]["latest"]["id"] == real_latest
+    assert summaries[other_id]["latest"]["zone"] == "drop"
+    assert summaries[other_id]["latest"]["as_of"] == DAY + timedelta(days=1)
+
+
+@pytest.mark.asyncio
+async def test_closing_the_position_records_left_and_clears_the_interval(env, factors) -> None:
+    """A closed position cannot leave a holding zone stuck inside forever."""
+
+    await _ledger(env)
+    rule_id = await _active_rule(scope="holding")
+    factors.set(pe_percentile_5y=0.10, gross_margin=0.60, roe=0.20, net_profit_growth_3y=0.10)
+    first = await _run(scope="holding")
+    assert first.created
+    state = await _state(zone="add", scope="holding")
+    assert state is not None and state.inside is True
+
+    # The position is fully closed: the next valuation has no holdings.
+    async with session_scope() as session:
+        account = await session.scalar(select(PortfolioAccount))
+        await PortfolioService(session).append(
+            AppendEvent(
+                account_id=account.id,
+                expected_revision=1,
+                idempotency_key=uuid4(),
+                fact=Balance(
+                    kind="reconciliation",
+                    occurred_at=T + timedelta(days=1),
+                    source="position closed",
+                    user_confirmed=True,
+                    coverage="complete",
+                    asset_scope="This explicit brokerage account",
+                    holdings=(),
+                    cash=D("51000"),
+                    unexplained_difference="all positions closed",
+                    prior_history="included_in_confirmed_balance",
+                ),
+            )
+        )
+    async with session_scope() as session:
+        account = await session.scalar(select(PortfolioAccount))
+        valuation = await ValuationService(session).ensure(
+            account.id, valuation_date=DAY + timedelta(days=1), now=T + timedelta(days=1)
+        )
+        assert valuation is not None
+
+    outcome = await _run(as_of=DAY + timedelta(days=1), scope="holding")
+    assert f"{TICKER}:not_held" in outcome.skipped
+    lefts = [event for event in await _events(scope="holding") if event.transition == "left"]
+    assert [event.zone for event in lefts] == ["add"]
+    assert lefts[0].rule_instance_id == rule_id
+    assert lefts[0].conditions_met == [] and lefts[0].notified_at is None
+    assert lefts[0].inputs["position_closed"] is True
+    state = await _state(zone="add", scope="holding")
+    assert state is not None
+    assert state.inside is False and state.entered_as_of is None
+
+    # Re-running the same day stays idempotent (the left event replays).
+    again = await _run(as_of=DAY + timedelta(days=1), scope="holding")
+    assert again.created == ()
+    lefts = [event for event in await _events(scope="holding") if event.transition == "left"]
+    assert len(lefts) == 1
+
+
+@pytest.mark.asyncio
+async def test_holding_events_read_factors_at_the_event_date(env, factors) -> None:
+    """The event's factor payload is what was knowable on the event's own
+    date (the valuation date), not on the later run date."""
+
+    await _ledger(env)  # valuation dated DAY
+    await _active_rule(scope="holding")
+    factors.set(pe_percentile_5y=0.10, gross_margin=0.60, roe=0.20, net_profit_growth_3y=0.10)
+    outcome = await _run(as_of=DAY + timedelta(days=1), scope="holding")
+    assert outcome.created
+    event = (await _events(scope="holding"))[0]
+    assert event.as_of == DAY
+    ref = event.inputs["factors"]["pe_percentile_5y"]["ref"]
+    assert ref["as_of"] == DAY.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_a_failed_notification_does_not_poison_the_run(env, factors, monkeypatch) -> None:
+    """The outbox write runs in its own savepoint: a failed notification flush
+    rolls back alone and the detection run still records its event."""
+
+    from sqlalchemy import event as sa_event
+
+    from investment_agent.investor.controls import UserControlService
+    from investment_agent.storage.models.monitoring import InvestorNotification
+
+    async def allowed(self, case_id):  # noqa: ANN001
+        return True
+
+    monkeypatch.setattr(UserControlService, "notifications_allowed", allowed)
+    await _active_rule(scope="candidate")
+    from investment_agent.storage.models.investor import InvestorCase
+
+    async with session_scope() as session:
+        session.add(
+            InvestorCase(
+                id=str(uuid4()),
+                owner_id=zd.OWNER,
+                listing_id=env.listing_id,
+                revision=1,
+                payload={},
+                source_refs=[],
+            )
+        )
+    factors.set(**BUY)
+
+    def boom(mapper, connection, target) -> None:
+        raise RuntimeError("notification write failed")
+
+    sa_event.listen(InvestorNotification, "before_insert", boom)
+    try:
+        outcome = await _run(scope="candidate", settings=env.settings)
+    finally:
+        sa_event.remove(InvestorNotification, "before_insert", boom)
+
+    assert len(outcome.created) == 1
+    async with session_scope() as session:
+        notifications = await session.scalar(
+            select(func.count()).select_from(InvestorNotification)
+        )
+        assert notifications == 0
+
+
+@pytest.mark.asyncio
+async def test_instance_zones_outside_the_whitelist_are_skipped(env, factors) -> None:
+    """A leftover or hand-edited rule row cannot invent a zone the template
+    never declared."""
+
+    from investment_agent.rules.schema import RuleInstance
+
+    async with session_scope() as session:
+        store = RuleStore(session)
+        template = await store.get_template(TEMPLATE)
+        record = await store.create_draft(
+            RuleInstance(
+                template_ref=template.ref,
+                symbol=TICKER,
+                scope="candidate",
+                params={},
+                drafted_by="user",
+            )
+        )
+        definition = dict(record.definition or {})
+        definition["zones"] = {
+            "buy_zone": {"all": [{"factor": "pe_percentile_5y", "op": "<", "value": 0.3}]},
+            "moon_zone": {"all": [{"factor": "roe", "op": ">", "value": 0.0}]},
+        }
+        record.definition = definition
+        await store.approve(record.id, approved_by="user")
+
+    async with session_scope() as session:
+        rules = await zd.active_zone_rules(session, "candidate")
+    assert len(rules) == 1
+    assert set(rules[0].zones) == {"buy_zone"}
+
+    factors.set(**BUY)
+    await _run(scope="candidate")
+    assert [event.zone for event in await _events()] == ["buy_zone"]
+
+
+@pytest.mark.asyncio
+async def test_reservation_lock_keeps_updated_at(env, factors) -> None:
+    """The SQLite writer reservation is a no-op that must not refresh the
+    state row's audit timestamp."""
+
+    await _active_rule(scope="candidate")
+    factors.set(**BUY)
+    await _run(scope="candidate")  # creates the interval state row
+    pinned = datetime(2000, 1, 1)
+
+    async with session_scope() as session:
+        await session.execute(
+            update(ZoneIntervalStateRecord).where(
+                ZoneIntervalStateRecord.scope == "candidate"
+            ).values(updated_at=pinned)
+        )
+    async with session_scope() as session:
+        state = await zd._locked_state(
+            session, listing_id=env.listing_id, scope="candidate", zone="buy_zone"
+        )
+        assert state is not None
+        assert state.updated_at == pinned
 
 
 def test_payload_rejects_unknown_scope() -> None:

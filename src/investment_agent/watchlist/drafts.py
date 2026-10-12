@@ -112,8 +112,17 @@ async def newest_request(
 
 
 async def _locked_item(session: AsyncSession, watchlist_id: int) -> WatchlistItem | None:
-    # SELECT FOR UPDATE is ignored by SQLite; reserve its writer first.
-    await session.execute(update(WatchlistItem).where(WatchlistItem.id == watchlist_id).values(draft_state=WatchlistItem.draft_state))
+    # SELECT FOR UPDATE is ignored by SQLite; reserve its writer first. The
+    # no-op self-assignment keeps ``updated_at`` in place - the lock is not a
+    # change and must not refresh the audit timestamp.
+    await session.execute(
+        update(WatchlistItem)
+        .where(WatchlistItem.id == watchlist_id)
+        .values(
+            draft_state=WatchlistItem.draft_state,
+            updated_at=WatchlistItem.updated_at,
+        )
+    )
     stmt = (
         select(WatchlistItem)
         .where(WatchlistItem.id == watchlist_id)
@@ -337,15 +346,19 @@ async def create_draft_request(
 async def _request_run(session: AsyncSession, request_id: str) -> int:
     """The ``rule_draft`` run of an already-created watchlist request."""
 
-    runs = (
-        await session.execute(
-            select(PipelineRun).where(PipelineRun.kind == RULE_DRAFT)
+    stmt = (
+        select(PipelineRun)
+        .where(
+            PipelineRun.kind == RULE_DRAFT,
+            PipelineRun.request_json["draft_request_id"].as_string() == request_id,
         )
-    ).scalars()
-    for run in runs:
-        if (run.request_json or {}).get("draft_request_id") == request_id:
-            return run.id
-    raise WatchDraftInputError(f"no rule_draft run for request {request_id}")
+        .order_by(PipelineRun.id.desc())
+        .limit(1)
+    )
+    run = (await session.execute(stmt)).scalar_one_or_none()
+    if run is None:
+        raise WatchDraftInputError(f"no rule_draft run for request {request_id}")
+    return run.id
 
 
 async def migrate_pending_entries(
@@ -556,7 +569,16 @@ async def store_watch_draft(
     from investment_agent.rules.drafting import reuse_equivalent_draft
 
     async with session_scope() as session:
-        await session.execute(update(WatchlistItem).where(WatchlistItem.draft_request_id == request_id).values(draft_state=WatchlistItem.draft_state))
+        # Reserve the writer before reading (SQLite ignores FOR UPDATE); the
+        # self-assignment keeps ``updated_at`` in place.
+        await session.execute(
+            update(WatchlistItem)
+            .where(WatchlistItem.draft_request_id == request_id)
+            .values(
+                draft_state=WatchlistItem.draft_state,
+                updated_at=WatchlistItem.updated_at,
+            )
+        )
         request = await session.get(WatchDraftRequest, request_id, with_for_update=True)
         if request is None:
             return None
@@ -572,7 +594,13 @@ async def store_watch_draft(
             return None
         assert item is not None
         if request.status == "ready" and request.rule_instance_id is not None:
-            return request.rule_instance_id, True
+            linked = await session.get(RuleInstanceRecord, request.rule_instance_id)
+            if linked is not None and linked.status == "draft":
+                return request.rule_instance_id, True
+            # The produced rule was since approved or retired: a late attempt
+            # cannot reopen the request (and "approved" itself is not a
+            # WATCH_DRAFT_REQUEST_STATUS, so the status stays "ready").
+            return None
         if request.status not in LIVE_REQUEST_STATUSES:
             return None  # A late attempt cannot reopen an approved/rejected request.
         refused = await guard_store(
@@ -711,9 +739,20 @@ async def approve_draft(
     approved = await store.approve(rule.id, approved_by=USER, now=at)
     item.draft_state = "none"
     item.draft_rule_instance_id = None
+    # The request keeps its in-enum "ready" status (its row keeps pointing at
+    # the approved rule via ``rule_instance_id``): the earlier status="approved"
+    # write fell outside WATCH_DRAFT_REQUEST_STATUSES. The approval is carried
+    # by the ``approve_rule`` decision entry and the rule's own "active"
+    # status; a late worker cannot reopen the request because the rule is no
+    # longer an open draft (:func:`store_watch_draft`).
     request = await newest_request(session, item)
     if request is not None and request.rule_instance_id == approved.id:
-        request.status = "approved"
+        log.info(
+            "watchlist.draft.request_rule_approved",
+            request_id=request.id,
+            watchlist_id=item.id,
+            rule_instance_id=approved.id,
+        )
     await session.flush()
     decision = await DecisionRepository(session).append(
         listing_id=item.listing_id,

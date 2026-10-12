@@ -10,8 +10,10 @@ and rules and writes zone events.
 
 Gates: candidate-scope detection runs on reviewed trading days only (no bars
 are published on a non-trading day, so a weekend run would re-state Friday
-with a new date and only add noise). Holding-scope detection runs every day -
-holding days and prices are part of the valuation, which is refreshed daily.
+with a new date and only add noise). A calendar that cannot decide - missing,
+broken, or without the year under review - keeps the gate closed instead of
+waving the run through. Holding-scope detection runs every day - holding days
+and prices are part of the valuation, which is refreshed daily.
 """
 
 from __future__ import annotations
@@ -127,10 +129,17 @@ class ZoneDetectionHandler(BaseJobHandler):
     async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
         payload = ZoneDetectionPayload.model_validate(job.request_json)
         skipped_reason: str | None = None
-        if payload.scope == CANDIDATE_SCOPE and (
-            is_trading_day(self.calendar_path, payload.as_of) is False
-        ):
-            skipped_reason = "non_trading_day"
+        if payload.scope == CANDIDATE_SCOPE:
+            decision = is_trading_day(self.calendar_path, payload.as_of)
+            if decision is False:
+                skipped_reason = "non_trading_day"
+            elif decision is None:
+                # An unreviewed calendar cannot vouch for the day: without the
+                # gate a weekend run would only re-state the last trading day
+                # under a new date (noise events), so candidate scope stays
+                # conservative. Holding scope still runs every day - the
+                # valuation it reads refreshes daily regardless of the gate.
+                skipped_reason = "trading_day_unknown"
         outcome: ZoneScanOutcome | None = None
 
         async def work() -> ZoneScanOutcome | None:

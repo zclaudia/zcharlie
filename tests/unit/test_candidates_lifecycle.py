@@ -15,6 +15,7 @@ from investment_agent.candidates.lifecycle import (
     create_candidates_from_screen,
     dismiss_candidate,
     effective_draft,
+    enqueue_rule_draft,
     expire_candidates,
     mark_draft_result,
     nominate_candidate,
@@ -31,6 +32,7 @@ from investment_agent.storage.models.candidates import (
 from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.models.rules import RuleInstanceRecord
 from investment_agent.storage.repositories.candidate import (
+    CandidateRepository,
     DecisionRepository,
     ReasonRequiredError,
     as_utc,
@@ -376,6 +378,64 @@ async def test_mark_draft_result_and_lazy_state() -> None:
     await mark_draft_result(candidate.id, rule_instance_id=draft_id)
     [candidate] = await _candidates()
     assert candidate.draft_state == "ready" and candidate.draft_rule_instance_id == draft_id
+
+
+async def test_stale_failure_callback_keeps_a_live_request_pending() -> None:
+    """A superseded run's failure never overwrites a newer request's pending."""
+
+    run_id, _listing_id, _ = await _seed_hit_run()
+    async with session_scope() as session:
+        await create_candidates_from_screen(session, run_id=run_id, policy=POLICY, now=NOW)
+    [candidate] = await _candidates()
+    async with session_scope() as session:
+        stale_token = (await _draft_runs())[0].idempotency_key
+        record = await CandidateRepository(session).get(candidate.id)
+        assert record is not None
+        fresh = await enqueue_rule_draft(
+            session,
+            record,
+            template_id=TEMPLATE_ID,
+            template_version=1,
+            as_of=AS_OF,
+            screen_result_id=None,
+            triggered_by="manual",
+            fresh=True,
+        )
+        fresh_token = fresh.idempotency_key
+    assert fresh_token != stale_token
+
+    # The old run fails while the re-draft is still queued: "pending" stands.
+    await mark_draft_result(
+        candidate.id,
+        rule_instance_id=None,
+        failed=True,
+        error="late boom",
+        draft_token=stale_token,
+    )
+    [candidate] = await _candidates()
+    assert candidate.draft_state == "pending"
+
+    # Once nothing newer is in flight, a stale failure is the last word: the
+    # current (fresh) request reports failure first...
+    await mark_draft_result(
+        candidate.id,
+        rule_instance_id=None,
+        failed=True,
+        error="fresh boom",
+        draft_token=fresh_token,
+    )
+    [candidate] = await _candidates()
+    assert candidate.draft_state == "failed"
+    # ...and a late stale callback changes nothing (audit only).
+    await mark_draft_result(
+        candidate.id,
+        rule_instance_id=None,
+        failed=True,
+        error="late boom",
+        draft_token=stale_token,
+    )
+    [candidate] = await _candidates()
+    assert candidate.draft_state == "failed"
 
 
 async def test_manual_nomination() -> None:

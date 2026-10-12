@@ -10,10 +10,12 @@ exercised end to end on a migrated SQLite database.
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import pytest_asyncio
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -472,7 +474,10 @@ async def test_late_store_cannot_reopen_rejected_or_approved_rule(env) -> None:
     approved = env.post(f"/watchlist/{body['listing_id']}/rule/approve", json={"rule_instance_id": next_rule, "expected_active_rule_instance_id": None}, headers=KEY)
     assert approved.status_code == 200
     assert await store_watch_draft(next_request, instance, templates[(TEMPLATE, 1)]) is None
-    assert (await _request(next_request)).status == "approved"
+    # The request keeps its in-enum "ready" status after the approval; the
+    # late store is refused because the produced rule is no longer an open
+    # draft ("approved" itself is not a WATCH_DRAFT_REQUEST_STATUS).
+    assert (await _request(next_request)).status == "ready"
 
 
 async def test_approval_requires_the_active_version_seen_by_user(env) -> None:
@@ -544,6 +549,57 @@ async def test_add_with_unknown_template_is_422(env) -> None:
     )
     assert response.status_code == 422
     assert env.get("/watchlist", headers=KEY).json() == []  # nothing half-persisted
+
+
+async def test_request_run_lookup_filters_in_sql(env) -> None:
+    """``_request_run`` pushes the request identity into the query (no full scan)."""
+
+    from investment_agent.watchlist.drafts import WatchDraftInputError, _request_run
+
+    await _sync_templates()
+    body = _add(env, template_id=TEMPLATE)
+    request_id = body["rule"]["request"]["id"]
+    async with session_scope() as session:
+        assert await _request_run(session, request_id) == await _queued_run(request_id)
+        with pytest.raises(WatchDraftInputError, match="no rule_draft run"):
+            await _request_run(session, "no-such-request")
+
+
+async def test_suggestion_daily_cap_rolls_on_the_shanghai_day(env) -> None:
+    """The advisory cap counts per Beijing day: it rolls at 16:00 UTC (08:00
+    Beijing), not at the server's UTC midnight."""
+
+    from investment_agent.rules import recommend
+    from investment_agent.storage.models.ops import LLMCall
+
+    async def seed(started_at: datetime) -> None:
+        async with session_scope() as session:
+            session.add(
+                LLMCall(
+                    purpose=recommend.SUGGEST_PURPOSE,
+                    model="stub",
+                    provider="stub",
+                    prompt_tokens=1,
+                    completion_tokens=1,
+                    cost_usd=Decimal("0"),
+                    latency_ms=1,
+                    started_at=started_at,
+                    success=True,
+                )
+            )
+
+    # 2026-09-27 15:00 UTC is still Beijing 09-27 (23:00); 16:30 UTC already
+    # belongs to Beijing 09-28 (00:30).
+    await seed(datetime(2026, 9, 27, 15, 0, tzinfo=UTC))
+    await seed(datetime(2026, 9, 27, 16, 30, tzinfo=UTC))
+
+    async def count(now: datetime) -> int:
+        async with session_scope() as session:
+            return await recommend._suggestions_today(session, now=now)
+
+    assert await count(datetime(2026, 9, 27, 15, 30, tzinfo=UTC)) == 2
+    assert await count(datetime(2026, 9, 27, 16, 0, tzinfo=UTC)) == 1
+    assert await count(datetime(2026, 9, 28, 12, 0, tzinfo=UTC)) == 1
 
 
 async def test_template_suggestion_endpoint(env, monkeypatch) -> None:

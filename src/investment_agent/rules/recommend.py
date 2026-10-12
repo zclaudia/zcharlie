@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.config import Settings
 from investment_agent.domain.protocols import LLMClient
 from investment_agent.factors.view import load_snapshot_view
@@ -58,10 +59,20 @@ def _cache_key(
     return (ticker, as_of.isoformat(), group, tuple(template.ref for template in templates))
 
 
-async def _suggestions_today(session: AsyncSession) -> int:
+def _shanghai_day_start(now: datetime | None = None) -> datetime:
+    """The UTC instant where the current Beijing day began (``now`` override
+    for tests). The advisory cap follows the A-share business date, so the
+    window rolls at 08:00 UTC - not at the server's UTC midnight."""
+
+    moment = now or datetime.now(UTC)
+    day = moment.astimezone(SHANGHAI_TZ).date()
+    return datetime.combine(day, dt_time.min, tzinfo=SHANGHAI_TZ).astimezone(UTC)
+
+
+async def _suggestions_today(session: AsyncSession, *, now: datetime | None = None) -> int:
     from investment_agent.storage.models.ops import LLMCall
 
-    start = datetime.combine(datetime.now(UTC).date(), dt_time.min, tzinfo=UTC)
+    start = _shanghai_day_start(now)
     return int(
         await session.scalar(
             select(func.count())

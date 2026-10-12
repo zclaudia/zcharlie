@@ -23,7 +23,7 @@ from typing import Any
 
 import pytest_asyncio
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text, update
 
 from investment_agent.candidates.lifecycle import enqueue_rule_draft
 from investment_agent.config import Settings
@@ -422,3 +422,97 @@ async def test_retried_enqueue_does_not_reclaim_the_generation(env) -> None:
             select(func.count()).select_from(PipelineRun).where(PipelineRun.kind == "rule_draft")
         )
         assert runs.scalar_one() == 1
+
+
+async def test_first_concurrent_claim_adopts_the_winners_row(tmp_path, monkeypatch) -> None:
+    """Two first claims race on an empty slot: the loser's insert hits the
+    primary key inside its savepoint and adopts the winner's row (P3: the
+    first-ever concurrent claim heals instead of erroring)."""
+
+    from investment_agent.rules import generation
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'race.db'}"
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATABASE_URL", url)
+    engine = init_engine(url)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with session_scope() as session:
+        listing = await ListingRepository(session).ensure_a_share_listing(TICKER)
+        listing_id = listing.id
+
+    real_locked = generation._locked
+    raced = {"done": False}
+
+    async def racing_locked(session, listing_id, scope):  # noqa: ANN001
+        record = await real_locked(session, listing_id=listing_id, scope=scope)
+        if record is None and not raced["done"]:
+            # The concurrent claimant's row becomes visible only after our
+            # snapshot was taken; the primary-key conflict then hits flush.
+            raced["done"] = True
+            await session.execute(
+                text(
+                    "INSERT INTO rule_draft_generation (listing_id, scope, generation) "
+                    "VALUES (:listing_id, :scope, 0)"
+                ),
+                {"listing_id": listing_id, "scope": scope},
+            )
+            return None
+        return record
+
+    monkeypatch.setattr(generation, "_locked", racing_locked)
+    try:
+        async with session_scope() as session:
+            state = await generation.claim_draft_generation(
+                session,
+                listing_id=listing_id,
+                symbol=TICKER,
+                scope="candidate",
+                token="claim-b",
+                origin_kind="candidate",
+                origin_id=2,
+            )
+        assert state.generation == 1 and state.token == "claim-b"
+        claim = await _generation()
+        assert claim is not None and claim.current_token == "claim-b"
+    finally:
+        await engine.dispose()
+
+
+async def test_reservation_lock_keeps_updated_at(tmp_path, monkeypatch) -> None:
+    """The SQLite writer reservation is a no-op that must not refresh the
+    generation row's audit timestamp."""
+
+    from investment_agent.rules import generation
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'lock.db'}"
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATABASE_URL", url)
+    engine = init_engine(url)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    try:
+        async with session_scope() as session:
+            listing = await ListingRepository(session).ensure_a_share_listing(TICKER)
+            await generation.claim_draft_generation(
+                session,
+                listing_id=listing.id,
+                symbol=TICKER,
+                scope="candidate",
+                token="claim-a",
+                origin_kind="candidate",
+                origin_id=1,
+            )
+        pinned = datetime(2000, 1, 1)
+        async with session_scope() as session:
+            await session.execute(
+                update(RuleDraftGenerationRecord).values(updated_at=pinned)
+            )
+        async with session_scope() as session:
+            record = await generation._locked(session, listing.id, "candidate")
+            assert record is not None
+            assert record.updated_at == pinned
+    finally:
+        await engine.dispose()

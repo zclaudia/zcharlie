@@ -46,7 +46,8 @@ from investment_agent.rules.drafting import (
     notify_draft_result,
     rule_draft_idempotency_key,
 )
-from investment_agent.rules.schema import RuleTemplate
+from investment_agent.rules.generation import RULE_HEAD_MESSAGE
+from investment_agent.rules.schema import RuleInstance, RuleTemplate
 from investment_agent.rules.store import RuleStore, instance_from_record
 from investment_agent.rules.templates import load_templates
 from investment_agent.rules.validation import check_instance
@@ -54,7 +55,7 @@ from investment_agent.storage.database import get_engine, init_engine, session_s
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.ops import LLMCall
-from investment_agent.storage.models.rules import RuleInstanceRecord
+from investment_agent.storage.models.rules import RuleDraftGenerationRecord, RuleInstanceRecord
 from investment_agent.storage.repositories.listing import ListingRepository
 
 BASE_URL = "https://llm.stub.test/v1"
@@ -686,6 +687,113 @@ def test_cli_rules_draft_now(draft_db) -> None:
     assert changed.exit_code == 1 and "--rerun" in changed.output
     missing = runner.invoke(app, ["rules", "draft", "--ticker", "600519.SH", "--template", "nope"])
     assert missing.exit_code == 1 and "Unknown template" in missing.output
+
+
+def test_cli_manual_draft_claims_the_generation(draft_db) -> None:
+    """A stock that ever went through the funnel owns a generation row; the
+    manual CLI draft claims it like every other origin and stores (P1: the
+    tokenless payload used to be refused as "superseded")."""
+
+    from investment_agent.cli.main import app
+    from investment_agent.rules.generation import claim_draft_generation
+
+    template = draft_db["quality_growth"]
+
+    async def seed_funnel_claim() -> None:
+        async with session_scope() as session:
+            listing = await ListingRepository(session).ensure_a_share_listing("600519.SH")
+            await claim_draft_generation(
+                session,
+                listing_id=listing.id,
+                symbol="600519.SH",
+                scope="candidate",
+                token="rule_draft:99:quality_growth@1",
+                origin_kind="candidate",
+                origin_id=99,
+                template_ref="quality_growth@1",
+            )
+
+    asyncio.run(seed_funnel_claim())
+
+    stub = StubLLM([valid_output(template)])
+    with respx.mock() as router:
+        router.post(f"{BASE_URL}/chat/completions").mock(side_effect=stub)
+        result = CliRunner().invoke(
+            app,
+            [
+                "rules", "draft", "--ticker", "600519.SH", "--template", "quality_growth",
+                "--as-of", "2026-09-30", "--now",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    assert "finished: status=success" in result.output
+
+    async def verify() -> None:
+        engine = init_engine(os.environ["DATABASE_URL"])
+        try:
+            async with session_scope() as session:
+                claim = (
+                    await session.execute(select(RuleDraftGenerationRecord))
+                ).scalar_one()
+                assert claim.generation == 2
+                assert claim.current_token == "rule_draft:0:quality_growth@1:600519.SH:2026-09-30"
+                assert claim.current_origin_kind == "candidate"
+                runs = list(
+                    (
+                        await session.execute(
+                            select(PipelineRun).where(PipelineRun.kind == RULE_DRAFT)
+                        )
+                    ).scalars()
+                )
+                assert len(runs) == 1
+                assert runs[0].request_json["draft_token"] == claim.current_token
+                records = await RuleStore(session).instances(status="draft")
+                assert len(records) == 1
+        finally:
+            await engine.dispose()
+
+    asyncio.run(verify())
+
+
+def test_store_reports_the_rule_head_change_in_stale_notes(draft_db) -> None:
+    """A frozen rule head that changed at store time refuses with the same
+    granularity as the shared-generation guard (not a bare ``None``)."""
+
+    template = draft_db["quality_growth"]
+
+    async def scenario() -> None:
+        async with session_scope() as session:
+            frozen_head = await RuleStore(session).head_token("600519.SH", "candidate")
+            # A rule store change after the head was frozen (here: a manual
+            # draft row) makes the request stale.
+            await RuleStore(session).create_draft(
+                RuleInstance(
+                    template_ref=f"quality_growth@{template.version}",
+                    symbol="600519.SH",
+                    scope="candidate",
+                    params={},
+                    drafted_by="user",
+                )
+            )
+        stale_notes: list[str] = []
+        stored = await drafting._store(
+            RuleInstance(
+                template_ref=f"quality_growth@{template.version}",
+                symbol="600519.SH",
+                scope="candidate",
+                params={},
+                drafted_by="llm:stub-model",
+            ),
+            template,
+            now=None,
+            expected_rule_head=frozen_head,
+            token=None,
+            stale_notes=stale_notes,
+        )
+        assert stored is None
+        assert stale_notes == [RULE_HEAD_MESSAGE]
+
+    _run(scenario)
 
 
 def test_load_stock_context_from_a_snapshot_view(monkeypatch) -> None:

@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.rules.store import RuleStore
@@ -59,14 +60,18 @@ def _state(record: RuleDraftGenerationRecord) -> DraftGeneration:
 async def _locked(
     session: AsyncSession, listing_id: int, scope: str
 ) -> RuleDraftGenerationRecord | None:
-    # SQLite ignores SELECT FOR UPDATE; reserve its writer first.
+    # SQLite ignores SELECT FOR UPDATE; reserve its writer first. The no-op
+    # self-assignment keeps ``updated_at`` in place - the lock is not a change.
     await session.execute(
         update(RuleDraftGenerationRecord)
         .where(
             RuleDraftGenerationRecord.listing_id == listing_id,
             RuleDraftGenerationRecord.scope == scope,
         )
-        .values(generation=RuleDraftGenerationRecord.generation)
+        .values(
+            generation=RuleDraftGenerationRecord.generation,
+            updated_at=RuleDraftGenerationRecord.updated_at,
+        )
     )
     stmt = (
         select(RuleDraftGenerationRecord)
@@ -80,6 +85,33 @@ async def _locked(
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def _insert_row(
+    session: AsyncSession, *, listing_id: int, scope: str
+) -> RuleDraftGenerationRecord:
+    """First claim of a slot: insert the row, or adopt the winner's row.
+
+    Two concurrent first claims both read "no row" (the reservation is a no-op
+    on an empty slot) and both insert; the loser hits the primary key inside
+    its own savepoint, re-reads and adopts the row the winner committed, so
+    the first-ever concurrent claim heals instead of erroring.
+    """
+
+    nested = await session.begin_nested()
+    try:
+        record = RuleDraftGenerationRecord(listing_id=listing_id, scope=scope, generation=0)
+        session.add(record)
+        await session.flush()
+    except IntegrityError:
+        await nested.rollback()
+        record = await _locked(session, listing_id, scope)
+        if record is None:  # pragma: no cover - the conflict proves the row exists
+            raise
+        return record
+    else:
+        await nested.commit()
+        return record
+
+
 async def claim_draft_generation(
     session: AsyncSession,
     *,
@@ -88,7 +120,7 @@ async def claim_draft_generation(
     scope: str,
     token: str,
     origin_kind: str,
-    origin_id: int,
+    origin_id: int | None,
     template_ref: str | None = None,
 ) -> DraftGeneration:
     """Make ``token`` the current request of the slot (caller's transaction).
@@ -100,9 +132,7 @@ async def claim_draft_generation(
 
     record = await _locked(session, listing_id, scope)
     if record is None:
-        record = RuleDraftGenerationRecord(listing_id=listing_id, scope=scope, generation=0)
-        session.add(record)
-        await session.flush()
+        record = await _insert_row(session, listing_id=listing_id, scope=scope)
     record.generation += 1
     record.current_token = token
     record.current_origin_kind = origin_kind

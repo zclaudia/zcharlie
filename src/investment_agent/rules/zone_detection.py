@@ -60,7 +60,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.config import Settings
@@ -133,12 +133,27 @@ class ZoneRule:
 def _record_zones(
     record: RuleInstanceRecord, template: Any, scope: str
 ) -> dict[str, ConditionGroup]:
-    """The rule's zones: the instance's own definitions, else the template's."""
+    """The rule's zones: the instance's own definitions, else the template's.
+
+    Instance-defined zones go through the same zone-name whitelist as authored
+    templates (``template.zones_for``): a leftover or hand-edited row cannot
+    invent a zone the template never declared - unknown names are skipped with
+    a warning instead of generating events.
+    """
 
     raw = (record.definition or {}).get("zones")
     if isinstance(raw, dict) and raw:
+        allowed = set(template.zones_for(scope))
         zones: dict[str, ConditionGroup] = {}
         for name, node in raw.items():
+            if name not in allowed:
+                log.warning(
+                    "zone_detection.zone_unknown",
+                    rule_instance_id=record.id,
+                    zone=name,
+                    scope=scope,
+                )
+                continue
             try:
                 zones[name] = ConditionGroup.model_validate(node)
             except ValueError:
@@ -514,6 +529,8 @@ async def _locked_state(
     session: AsyncSession, *, listing_id: int, scope: str, zone: str
 ) -> ZoneIntervalStateRecord:
     # Reserve the writer before reading (SQLite ignores SELECT FOR UPDATE).
+    # The no-op self-assignment keeps ``updated_at`` in place - the lock is
+    # not a change and must not refresh the audit timestamp.
     await session.execute(
         update(ZoneIntervalStateRecord)
         .where(
@@ -521,7 +538,10 @@ async def _locked_state(
             ZoneIntervalStateRecord.scope == scope,
             ZoneIntervalStateRecord.zone == zone,
         )
-        .values(inside=ZoneIntervalStateRecord.inside)
+        .values(
+            inside=ZoneIntervalStateRecord.inside,
+            updated_at=ZoneIntervalStateRecord.updated_at,
+        )
     )
     stmt = (
         select(ZoneIntervalStateRecord)
@@ -671,6 +691,80 @@ async def record_evaluations(
     )
 
 
+async def _close_intervals(
+    session: AsyncSession, rule: ZoneRule, *, as_of: date, at: datetime
+) -> None:
+    """Record ``left`` for zones a rule still shows as inside when its listing
+    no longer has a position to evaluate (plan 6.2 WP8).
+
+    Without an evaluation there are no factors or valuations to freeze, so the
+    event's inputs say so explicitly; the identity stays reproducible (same
+    rule, date and empty inputs -> same digest), and leaving notifies nothing,
+    like every other ``left``.
+    """
+
+    inputs: dict[str, Any] = {
+        "rule_ref": rule.rule_ref,
+        "rule_instance_id": rule.rule_instance_id,
+        "rule_version": rule.rule_version,
+        "template_ref": rule.template_ref,
+        "factors": {},
+        "valuation": None,
+        "position_closed": True,
+    }
+    digest = input_digest({"as_of": as_of, **inputs})
+    states = list(
+        (
+            await session.scalars(
+                select(ZoneIntervalStateRecord).where(
+                    ZoneIntervalStateRecord.listing_id == rule.listing_id,
+                    ZoneIntervalStateRecord.scope == rule.scope,
+                    ZoneIntervalStateRecord.rule_instance_id == rule.rule_instance_id,
+                    ZoneIntervalStateRecord.zone.in_(sorted(rule.zones)),
+                    ZoneIntervalStateRecord.inside.is_(True),
+                )
+            )
+        ).all()
+    )
+    for state in states:
+        state.last_evaluated_as_of = as_of
+        state.last_evaluated_at = at
+        event = ZoneEventRecord(
+            as_of=as_of,
+            listing_id=rule.listing_id,
+            ticker=rule.ticker,
+            scope=rule.scope,
+            zone=state.zone,
+            transition="left",
+            level=zone_level(state.zone),
+            rule_instance_id=rule.rule_instance_id,
+            rule_version=rule.rule_version,
+            template_id=rule.template_id,
+            template_version=rule.template_version,
+            calibration_status=rule.calibration_status,
+            conditions_met=[],
+            inputs=dict(inputs),
+            input_digest=digest,
+        )
+        stored = await _existing_event(session, event)
+        if stored is None:
+            session.add(event)
+            await session.flush()
+            stored = event
+        state.last_event_id = stored.id
+        state.inside = False
+        state.entered_as_of = None
+        state.entered_at = None
+        await session.flush()
+    if states:
+        log.info(
+            "zone_detection.position_closed_left",
+            ticker=rule.ticker,
+            zones=[state.zone for state in states],
+            as_of=as_of.isoformat(),
+        )
+
+
 async def notify_zone_entry(
     session: AsyncSession, event: ZoneEventRecord, *, at: datetime, settings: Settings | None
 ) -> None:
@@ -685,6 +779,10 @@ async def notify_zone_entry(
 
     if settings is None:
         return
+    # The notification is best effort: it runs in its own savepoint so a failed
+    # write (or delivery hiccup) rolls back alone instead of poisoning the
+    # detection run's outer transaction.
+    nested = await session.begin_nested()
     try:
         from investment_agent.investor.controls import UserControlService
         from investment_agent.investor.notifications import freeze
@@ -739,7 +837,9 @@ async def notify_zone_entry(
         )
         if current is not None:
             await freeze(session, settings, current)
+        await nested.commit()
     except Exception:
+        await nested.rollback()
         # A delivery hiccup never loses the event or blocks the detection run.
         log.exception("zone_detection.notify_failed", event_id=event.id, zone=event.zone)
 
@@ -847,12 +947,23 @@ async def scan_scope(
         rule_positions = positions.get(rule.listing_id, [])
         if scope == HOLDING_SCOPE and not rule_positions:
             # A holding rule for a listing the user no longer holds has
-            # nothing to evaluate; the rule itself stays approved.
+            # nothing to evaluate; the rule itself stays approved. Zones it
+            # still shows as inside get their ``left`` event, so a closed
+            # position cannot leave the interval state stuck.
             skipped.append(f"{rule.ticker}:not_held")
+            await _close_intervals(session, rule, as_of=as_of, at=at)
             continue
+        # The event date (the valuation's own date for a holding rule) is also
+        # the knowledge point of the factors: what the rule sees must be what
+        # was knowable on that date, not on the later run date.
+        event_date = (
+            max(position.valuation_date for position in rule_positions)
+            if rule_positions
+            else as_of
+        )
         try:
             factors: dict[str, FactorValue] = dict(
-                await candidate_factor_values(session, rule.ticker, as_of, registry_names)
+                await candidate_factor_values(session, rule.ticker, event_date, registry_names)
             )
         except Exception:
             log.warning(
@@ -868,11 +979,6 @@ async def scan_scope(
                     if name in position_names
                 }
             )
-        event_date = (
-            max(position.valuation_date for position in rule_positions)
-            if rule_positions
-            else as_of
-        )
         evaluation = evaluate_rule_zones(
             rule, as_of=event_date, factors=factors, positions=rule_positions
         )
@@ -988,17 +1094,34 @@ async def zone_summaries(
     for row in states:
         by_listing.setdefault(row.listing_id, []).append(row)
     latest: dict[int, ZoneEventRecord] = {}
-    recent = await session.scalars(
-        select(ZoneEventRecord)
+    # One latest ``entered`` event per listing, ranked in the database: the
+    # list pages call this per item, so pulling every historical entered event
+    # only to keep the first per listing would grow without bound.
+    ranked = (
+        select(
+            ZoneEventRecord.id,
+            func.row_number()
+            .over(
+                partition_by=ZoneEventRecord.listing_id,
+                order_by=(ZoneEventRecord.as_of.desc(), ZoneEventRecord.id.desc()),
+            )
+            .label("rn"),
+        )
         .where(
             ZoneEventRecord.listing_id.in_(ids),
             ZoneEventRecord.scope == scope,
             ZoneEventRecord.transition == "entered",
         )
+        .subquery()
+    )
+    recent = await session.scalars(
+        select(ZoneEventRecord)
+        .join(ranked, ZoneEventRecord.id == ranked.c.id)
+        .where(ranked.c.rn == 1)
         .order_by(ZoneEventRecord.as_of.desc(), ZoneEventRecord.id.desc())
     )
     for event in recent.all():
-        latest.setdefault(event.listing_id, event)
+        latest[event.listing_id] = event
     summaries: dict[int, dict[str, Any]] = {}
     for listing_id in ids:
         rows = by_listing.get(listing_id, [])

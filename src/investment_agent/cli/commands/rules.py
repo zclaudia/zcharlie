@@ -220,6 +220,7 @@ def draft(
             enqueue_rule_draft,
             rule_draft_idempotency_key,
         )
+        from investment_agent.rules.generation import claim_draft_generation
         from investment_agent.rules.store import RuleStore, instance_from_record
         from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.pipeline_run import (
@@ -232,9 +233,10 @@ def draft(
         if stored is None:
             rprint(f"[red]Unknown template[/red] {escape(template)}; run `ia rules sync`")
             return 1
+        symbol = ticker.strip().upper()
         payload = RuleDraftPayload(
             candidate_id=candidate_id,
-            ticker=ticker.strip().upper(),
+            ticker=symbol,
             template_id=stored.id,
             template_version=stored.version,
             as_of=day,
@@ -243,14 +245,30 @@ def draft(
         )
         key = rule_draft_idempotency_key(payload)
         if candidate_id == 0:
-            key = f"{key}:{payload.ticker}:{day.isoformat()}"
+            key = f"{key}:{symbol}:{day.isoformat()}"
         if rerun:
             key = f"{key}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
+        # A manual draft claims the shared (listing, scope) generation exactly
+        # like the scheduled origins (plan 7.2 WP9), so both paths share the
+        # slot discipline: without the claim the store guard would refuse any
+        # stock that has ever been through the funnel ("superseded").
+        payload = payload.model_copy(update={"draft_token": key})
         try:
             async with session_scope() as session:
                 queued, created = await enqueue_rule_draft(
                     session, payload, triggered_by="cli", key=key
                 )
+                if created and queued.listing_id is not None:
+                    await claim_draft_generation(
+                        session,
+                        listing_id=queued.listing_id,
+                        symbol=symbol,
+                        scope=payload.scope,
+                        token=key,
+                        origin_kind=payload.origin_kind,
+                        origin_id=candidate_id or None,
+                        template_ref=payload.template_ref,
+                    )
                 run_id, status = queued.id, queued.status
         except IdempotencyPayloadMismatchError:
             rprint(f"[red]Run {escape(key)} exists with different input[/red]; use --rerun")
