@@ -354,6 +354,13 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
         raise ResearchValidationError("research_depth_outside_admission", "progress.kind", "研究类型必须与可信任务授权一致。")
     cutoff = await effective_cutoff(session, task_id)
     subjects = {r for r in grant.scope_refs if r.kind == "listing"}
+    # WP12: the peer-context method entry validates its own calculations
+    # against the trusted binding; every other method keeps the generic path.
+    from investment_agent.industry_peers.resolver import PeerContextResolver, peer_method_payload
+    peer_resolver = None
+    peer_calc_refs: list[ObjectRef] = []
+    if grant.peer_context is not None:
+        peer_resolver = PeerContextResolver(session, binding=grant.peer_context)
     ref_fields = {ref: f"progress.dimensions.{i}.refs.{j}" for i, d in enumerate(progress.dimensions) for j, ref in enumerate(d.refs)}
     ref_fields.update({ref: f"progress.counter_refs.{i}" for i, ref in enumerate(progress.counter_refs)})
     ref_fields.update({ref: f"progress.fact_refs.{i}" for i, ref in enumerate(progress.fact_refs)})
@@ -368,7 +375,20 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
         row: Any = await session.get(model, (str(ref.id), ref.revision)) if model else None
         if row is None or row.owner_id != grant.owner:
             raise ResearchValidationError("research_reference_unavailable", ref_fields[ref], "引用必须来自当前已保存、可定位的 evidence/calculation；身份引用不是证据。")
-        if ref.kind == "evidence":
+        peer_payload = await peer_method_payload(session, grant.owner, ref) if ref.kind == "calculation" else None
+        if peer_payload is not None:
+            # WP12 method branch: the trusted binding owns the target identity;
+            # every result's real multi-company dependencies are verified per
+            # real subject. A peer-method calculation never falls through to
+            # the single-subject reconstruction below.
+            if peer_resolver is None:
+                raise ExecutionDeniedError("peer_calculation_not_bound")
+            try:
+                subject = await peer_resolver.bind_subject(ref)
+            except InvestorError as exc:
+                raise ResearchValidationError("research_reference_validation_failed", ref_fields[ref], exc.detail.message) from exc
+            peer_calc_refs.append(ref)
+        elif ref.kind == "evidence":
             subject = ObjectRef.model_validate(row.payload["subject_ref"])
         else:
             # Reconstruct calculation scope from saved evidence facts.
@@ -383,13 +403,24 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
         try:
             if ref.kind == "evidence":
                 records.append(await resolver.fact(ref, require_fresh=False))
-            else:
+            elif peer_payload is None:
                 await resolver.calculation(ref, require_fresh=False)
         except InvestorError as exc:
             raise ResearchValidationError("research_reference_validation_failed", ref_fields[ref], exc.detail.message) from exc
     if progress.kind == "comparison" and progress.answered:
         keys = {(r.period.model_dump_json() if r.period else None, r.source_ref.field_path, r.value.unit if r.value else None) for r in records}
-        if len(keys) != 1 or len({r.subject_ref for r in records}) < 2 or any(r.period is None or r.source_ref.field_path is None or r.value is None for r in records):
+        malformed = any(r.period is None or r.source_ref.field_path is None or r.value is None for r in records)
+        # WP12 narrow branch: one authorized target whose comparison cites the
+        # bound peer-context calculations validates by the fixed-sample
+        # statistics (verified above); the model need not gather peer raw
+        # evidence. Every other multi-company comparison keeps the original
+        # two-subject same-period rule, and mixing arbitrary peer facts in is
+        # still refused by the scope check above.
+        peer_backed = peer_resolver is not None and len(subjects) == 1 and bool(peer_calc_refs)
+        if peer_backed:
+            if records and (len(keys) != 1 or malformed):
+                raise ExecutionDeniedError("comparison_period_or_basis_differs")
+        elif len(keys) != 1 or len({r.subject_ref for r in records}) < 2 or malformed:
             raise ExecutionDeniedError("comparison_period_or_basis_differs")
     config = method_config if method_config is not None else (await task_method(session, task_id)).config
     await enforce_steps(session, config, progress, cutoff, final=final, formal_directional=formal_directional)
@@ -427,6 +458,19 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
                 continue
             if isinstance(node, EntityNode) or node.ref.kind == "listing":
                 subject = node.ref.model_copy(update={"field_path": None})
+            elif node.ref.kind == "calculation" and await peer_method_payload(session, grant.owner, node.ref) is not None:
+                # WP12: peer results render through the method entry as output
+                # nodes; the entity scope below never sees a peer identity.
+                if peer_resolver is None:
+                    raise ExecutionDeniedError("peer_calculation_not_bound")
+                if not isinstance(node, NumericNode):
+                    raise ResearchValidationError("peer_numeric_output_required", f"progress.content.{index}.ref", "同行参照结果以 numeric_claim 输出节点（calculation_output 角色）引用。")
+                try:
+                    rendered.append((await peer_resolver.numeric_output(node)).text)
+                except InvestorError as exc:
+                    raise ResearchValidationError("research_content_reference_validation_failed", f"progress.content.{index}.ref", exc.detail.message) from exc
+                node_refs.append(node.ref)
+                continue
             else:
                 model = SavedEvidence if node.ref.kind == "evidence" else SavedCalculation
                 row = await session.get(model, (str(node.ref.id), node.ref.revision))

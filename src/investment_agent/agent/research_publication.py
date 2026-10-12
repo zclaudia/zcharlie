@@ -108,6 +108,10 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
     mandate = await foundation.get_mandate("local_owner")
     cutoff = await effective_cutoff(session, task_id)
     resolver = NumericResolver(EvidenceService(session), case.listing_ref, cutoff)
+    # WP12: the peer-context method entry verifies its own calculations and
+    # provides the review material; other methods keep the original expansion.
+    from investment_agent.industry_peers.resolver import PeerContextResolver, peer_method_payload
+    peer_resolver = PeerContextResolver(session, binding=grant.peer_context) if grant.peer_context is not None else None
     materials = []
     claims = []
     for index, claim in enumerate(business.claims):
@@ -118,6 +122,10 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
                     record = await resolver.fact(ref, require_fresh=False)
                     materials.append(record.model_dump(mode="json"))
                     verified = verified and record.verification == "verified" and record.conflict != "unresolved"
+                elif ref.kind == "calculation" and peer_resolver is not None and await peer_method_payload(session, grant.owner, ref) is not None:
+                    material = await peer_resolver.review_material(ref)
+                    materials.append(material.material)
+                    verified = verified and material.verified
                 elif ref.kind == "calculation":
                     calculation = await resolver.calculation(ref, require_fresh=False)
                     materials.append(calculation.model_dump(mode="json"))

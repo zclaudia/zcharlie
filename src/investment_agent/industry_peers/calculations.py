@@ -928,6 +928,92 @@ def _required_fact_keys(spec: MetricSpec, outcome: MetricOutcome) -> list[tuple[
     return sorted(keys)
 
 
+def metric_results(spec: MetricSpec, outcome: MetricOutcome) -> dict[str, Quantity]:
+    """The result quantities of one metric outcome (pure; shared by the build
+    and the save-path verification hook)."""
+
+    results: dict[str, Quantity] = {}
+    if outcome.target_value is not None:
+        results["target"] = Quantity(value=outcome.target_value, unit=spec.unit)
+    if outcome.peer_median is not None:
+        results["peer_median"] = Quantity(value=outcome.peer_median, unit=spec.unit)
+    if outcome.ascending_position is not None:
+        results["ascending_position"] = Quantity(
+            value=outcome.ascending_position, unit=_POSITION_UNIT
+        )
+    results["valid_peer_count"] = Quantity(
+        value=Decimal(outcome.valid_peer_count), unit=_COUNT_UNIT
+    )
+    results["candidate_peer_count"] = Quantity(
+        value=Decimal(outcome.candidate_peer_count), unit=_COUNT_UNIT
+    )
+    return results
+
+
+def verify_built_metric_record(
+    batch: FrozenBatch, metric_key: str, record: CalculationRecord
+) -> None:
+    """The trusted save-path recheck (WP12): recompute before persisting.
+
+    The record is rebuilt from the same frozen batch by an independent
+    computation and compared field by field: the input hash, the deterministic
+    record identity derived from it, every result quantity and unit, and the
+    per-metric details (status, target, period, cohort). A mismatch is a
+    caller/build error - the record is never saved. The pure helper is the
+    seam WP8's final transaction and the offline submission both run through
+    (:func:`save_peer_calculations`).
+    """
+
+    outcome = compute_peer_metric(batch, metric_key)
+    if isinstance(outcome, MetricGap):
+        raise ValueError(
+            f"peer metric {metric_key} recomputes to a gap ({outcome.reason}); "
+            "no ok record may be saved for it"
+        )
+    spec = metric_spec(metric_key)
+    if record.method != METHOD or record.method_version != METHOD_VERSION:
+        raise ValueError("peer metric record carries a foreign method or version")
+    expected_hash = outcome_input_hash(batch, metric_key, outcome)
+    if record.input_hash != expected_hash:
+        raise ValueError("peer metric record input_hash does not match the recomputed input hash")
+    if record.id != uuid5(NAMESPACE_URL, f"peer-metric-record/{record.input_hash}"):
+        raise ValueError("peer metric record identity does not match its input hash derivation")
+    if record.results != metric_results(spec, outcome):
+        raise ValueError("peer metric record results do not match the recomputed outcome")
+    details = record.details if isinstance(record.details, dict) else {}
+    target = batch.target_company
+    expected_details = {
+        "metric_key": metric_key,
+        "metric_status": outcome.metric_status.value,
+        "report_period": batch.report_period.isoformat(),
+        "target_value": None if outcome.target_value is None else str(outcome.target_value),
+        "target.company_id": target.company_id,
+        "target.listing_id": target.listing_id,
+        "target.ticker": target.ticker,
+        "cohort.content_hash": batch.cohort_content_hash,
+    }
+    actual_details = {
+        "metric_key": details.get("metric_key"),
+        "metric_status": details.get("metric_status"),
+        "report_period": details.get("report_period"),
+        "target_value": details.get("target_value"),
+        "target.company_id": (details.get("target") or {}).get("company_id")
+        if isinstance(details.get("target"), dict)
+        else None,
+        "target.listing_id": (details.get("target") or {}).get("listing_id")
+        if isinstance(details.get("target"), dict)
+        else None,
+        "target.ticker": (details.get("target") or {}).get("ticker")
+        if isinstance(details.get("target"), dict)
+        else None,
+        "cohort.content_hash": (details.get("cohort") or {}).get("content_hash")
+        if isinstance(details.get("cohort"), dict)
+        else None,
+    }
+    if actual_details != expected_details:
+        raise ValueError("peer metric record details do not match the recomputed outcome")
+
+
 def build_peer_metric_record(
     batch: FrozenBatch,
     metric_key: str,
@@ -986,21 +1072,7 @@ def build_peer_metric_record(
             }
         )
 
-    results: dict[str, Quantity] = {}
-    if outcome.target_value is not None:
-        results["target"] = Quantity(value=outcome.target_value, unit=spec.unit)
-    if outcome.peer_median is not None:
-        results["peer_median"] = Quantity(value=outcome.peer_median, unit=spec.unit)
-    if outcome.ascending_position is not None:
-        results["ascending_position"] = Quantity(
-            value=outcome.ascending_position, unit=_POSITION_UNIT
-        )
-    results["valid_peer_count"] = Quantity(
-        value=Decimal(outcome.valid_peer_count), unit=_COUNT_UNIT
-    )
-    results["candidate_peer_count"] = Quantity(
-        value=Decimal(outcome.candidate_peer_count), unit=_COUNT_UNIT
-    )
+    results = metric_results(spec, outcome)
 
     target = batch.target_company
     input_hash = outcome_input_hash(batch, metric_key, outcome)
@@ -1268,6 +1340,9 @@ async def save_peer_calculations(
                 MetricCalculationRef(metric_key=metric_key, state="gap", gap_reason=gap_reason)
             )
             continue
+        # Trusted save-path recheck (WP12): an independent recomputation from
+        # the same frozen batch must reproduce the built record exactly.
+        verify_built_metric_record(batch, metric_key, built.record)
         existing = await find_peer_calculations(
             session,
             owner_id=owner_id,
@@ -1339,7 +1414,9 @@ __all__ = [
     "compute_peer_metric",
     "find_peer_calculations",
     "metric_input_hash",
+    "metric_results",
     "metric_spec",
     "outcome_input_hash",
     "save_peer_calculations",
+    "verify_built_metric_record",
 ]

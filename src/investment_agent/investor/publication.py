@@ -22,6 +22,7 @@ from investment_agent.investor.contracts import (
     Claim,
     CompanyRecommendation,
     MonitorSpec,
+    NumericNode,
     PublicationCheck,
     RecommendationEvent,
     RecommendationView,
@@ -36,6 +37,11 @@ from investment_agent.investor.publication_numbers import (
     NumericResolver,
     ResolvedNode,
     resolve_assumption,
+)
+from investment_agent.industry_peers.contracts import PeerContextBinding
+from investment_agent.industry_peers.resolver import (
+    PeerContextResolver,
+    peer_method_payload,
 )
 from investment_agent.storage.models.evidence import SavedEvidence
 from investment_agent.storage.models.investor import InvestorCase
@@ -138,11 +144,16 @@ class PublicationService:
         # Checks/drafts are queried internally; reference schema deliberately stays stable.
         return ObjectRef(kind=kind, id=identifier, revision=revision)  # type: ignore[arg-type]
 
-    async def _reference(self, resolver: NumericResolver, ref: ObjectRef, candidate: PublicationCandidate) -> None:
+    async def _reference(self, resolver: NumericResolver, ref: ObjectRef, candidate: PublicationCandidate, *, peer: PeerContextResolver | None = None) -> None:
         if ref.kind == "evidence":
             await resolver.fact(ref)
         elif ref.kind == "calculation":
-            await resolver.calculation(ref)
+            if peer is not None and await peer_method_payload(self.session, "local_owner", ref) is not None:
+                # WP12: the method entry validates its own records; the
+                # generic single-company calculation path keeps its rules.
+                await peer.verify(ref)
+            else:
+                await resolver.calculation(ref)
         elif ref.kind == "listing":
             if ref != resolver.subject:
                 raise InvestorError("invalid_reference", "Listing identity differs")
@@ -164,13 +175,14 @@ class PublicationService:
         else:
             raise InvestorError("invalid_reference", "Reference kind is not usable research evidence")
 
-    async def check(self, candidate: PublicationCandidate, semantic: SemanticReview) -> tuple[PublicationCheck, dict[str, ResolvedNode]]:
+    async def check(self, candidate: PublicationCandidate, semantic: SemanticReview, *, peer_context: PeerContextBinding | None = None) -> tuple[PublicationCheck, dict[str, ResolvedNode]]:
         thesis, recommendation = candidate.thesis, candidate.recommendation
         errors: dict[str, str] = {}
         resolved: dict[str, ResolvedNode] = {}
         case = await self.foundation.get_case("local_owner", thesis.case_ref.id)  # type: ignore[arg-type]
         subject = case.listing_ref
         resolver = NumericResolver(EvidenceService(self.session), subject, recommendation.as_of)
+        peer = PeerContextResolver(self.session, binding=peer_context) if peer_context is not None else None
         now = datetime.now(UTC)
         if candidate.research_kind != "company_research":
             errors["research_kind"] = "Local checks do not replace the company's current view"
@@ -263,6 +275,10 @@ class PublicationService:
             try:
                 if ref.kind == "evidence":
                     await resolver.fact(ref, require_verified=True)
+                elif ref.kind == "calculation" and peer is not None and await peer_method_payload(self.session, "local_owner", ref) is not None:
+                    # WP12: the metric's whole input checklist runs in the method
+                    # entry; critical sources additionally demand verified inputs.
+                    await peer.verify(ref, require_verified_inputs=True)
                 elif ref.kind == "calculation":
                     calculation = await resolver.calculation(ref, require_fresh=False)
                     for fact in calculation.fact_refs:
@@ -271,7 +287,7 @@ class PublicationService:
                 errors[f"critical_source:{ref.kind}:{ref.id}"] = str(exc)
         for path, ref in refs:
             try:
-                await self._reference(resolver, ref, candidate)
+                await self._reference(resolver, ref, candidate, peer=peer)
             except (InvestorError, LookupError) as exc:
                 errors[path] = str(exc)
         monitor_ids = {ObjectRef(kind="monitor", id=m.id, revision=m.revision) for m in candidate.monitors}
@@ -309,7 +325,13 @@ class PublicationService:
                         if node_claim is not None and node.ref.model_copy(update={"field_path": None}) not in {r.model_copy(update={"field_path": None}) for r in (*node_claim.support_refs, *node_claim.assumption_refs)}:
                             errors[f"{path}.{i}.ref"] = "Claim node must bind its declared premise"
                         try:
-                            resolved[f"{path}.{i}"] = await resolver.resolve(node)
+                            if peer is not None and node.ref.kind == "calculation" and await peer_method_payload(self.session, "local_owner", node.ref) is not None:
+                                # WP12: peer statistics render as output nodes
+                                # through the method entry.
+                                assert isinstance(node, NumericNode)
+                                resolved[f"{path}.{i}"] = await peer.numeric_output(node)
+                            else:
+                                resolved[f"{path}.{i}"] = await resolver.resolve(node)
                         except (InvestorError, LookupError) as exc:
                             errors[f"{path}.{i}"] = str(exc)
         return PublicationCheck(rule_version="company-publication.v1", passed=() if errors else ("identity_scope", "references_time", "claims_numbers", "research_semantic_record", "company_scope"), failures=tuple(errors), field_errors=errors, semantic_review_ref=None), resolved
@@ -350,7 +372,8 @@ class PublicationService:
             from investment_agent.agent.observation import effective_cutoff
             if candidate.recommendation.as_of > await effective_cutoff(session, claim.task_id):
                 raise InvestorError("invalid_reference", "Publication exceeds trusted research observation cutoff")
-            check, resolved = await self.check(candidate, semantic)
+            peer_context = await self._task_peer_context(claim.task_id)
+            check, resolved = await self.check(candidate, semantic, peer_context=peer_context)
             from investment_agent.investor.methods import MethodConfig
             if method.config != MethodConfig():
                 # Native completion commits this exact final progress before
@@ -485,6 +508,27 @@ class PublicationService:
             status = RecommendationStatus.REVIEW_REQUIRED
         return RecommendationView(recommendation=recommendation, status=status, effective_valid_until=until, effective_next_review_at=next_review, limitation_reasons=tuple(dict.fromkeys(limitations)), replacement_ref=replacement)
 
+    async def _task_peer_context(self, task_id: UUID) -> PeerContextBinding | None:
+        """The saved trusted peer-context binding of one task's grant, if any."""
+
+        from investment_agent.agent.execution import ExecutionGrant
+        from investment_agent.storage.models.agent import ExecutionGrantRow
+        row = await self.session.get(ExecutionGrantRow, str(task_id))
+        return ExecutionGrant.model_validate(row.payload).peer_context if row is not None else None
+
+    async def saved_peer_binding(self, recommendation: CompanyRecommendation) -> PeerContextBinding | None:
+        """The trusted saved binding behind a published recommendation.
+
+        A formal opinion read has no current-session grant: the recheck
+        validates against the publishing origin task's saved grant binding
+        (design §统一方法入口), never against a model-supplied reference.
+        """
+
+        origin = recommendation.origin_ref
+        if origin is None or origin.kind != "task":
+            return None
+        return await self._task_peer_context(origin.id)  # type: ignore[arg-type]
+
     async def _dependency_limits(self, recommendation: CompanyRecommendation, at: datetime) -> list[str]:
         case = await self.foundation.get_case("local_owner", recommendation.case_ids[0])
         resolver = NumericResolver(EvidenceService(self.session), case.listing_ref, at)
@@ -497,6 +541,10 @@ class PublicationService:
                 if ref.kind == "evidence":
                     evidence = await resolver.fact(ref, require_fresh=False)
                     limitations.extend(await self._evidence_changes(evidence, dependency.fields, at))
+                elif ref.kind == "calculation" and await peer_method_payload(self.session, "local_owner", ref) is not None:
+                    # WP12: peer dependencies recheck through the method entry
+                    # (per real subject, current correction states).
+                    limitations.extend(await self._peer_dependency_limits(recommendation, ref))
                 elif ref.kind == "calculation":
                     calculation = await resolver.calculation(ref, require_fresh=False)
                     for fact in calculation.fact_refs:
@@ -525,6 +573,23 @@ class PublicationService:
             except (InvestorError, LookupError) as exc:
                 limitations.append(f"dependency_unavailable:{ref.kind}:{ref.id}:{exc}")
         return limitations
+
+    async def _peer_dependency_limits(self, recommendation: CompanyRecommendation, ref: ObjectRef) -> list[str]:
+        """WP12 current_limits: the method-scoped dependency recheck.
+
+        Renewal blocking for critical peer dependencies belongs to WP13; this
+        answers the recheck against the saved origin-task binding with the
+        current correction states.
+        """
+
+        binding = await self.saved_peer_binding(recommendation)
+        if binding is None:
+            return [f"peer_dependency_unbound:{ref.id}"]
+        try:
+            limits = await PeerContextResolver(self.session, binding=binding).current_limits(ref)
+        except (InvestorError, LookupError, ValueError) as exc:
+            return [f"peer_dependency_unavailable:{ref.id}:{exc}"]
+        return list(limits)
 
     async def _evidence_changes(self, evidence: EvidenceRecord, fields: tuple[str, ...], at: datetime) -> list[str]:
         limits = []

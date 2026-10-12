@@ -437,6 +437,24 @@ async def verify_unchanged_review(session: AsyncSession, task_id: UUID, review: 
     for dependency in view.recommendation.dependency_refs:
         if dependency.materiality != "critical":
             continue
+        if dependency.ref.kind == "calculation":
+            from investment_agent.industry_peers.resolver import (
+                PeerContextResolver,
+                peer_method_payload,
+            )
+            if await peer_method_payload(session, "local_owner", dependency.ref) is not None:
+                # WP12: the dependency recheck goes through the method entry;
+                # renewal blocking for critical peer dependencies is WP13.
+                binding = await publication.saved_peer_binding(view.recommendation)
+                if binding is None:
+                    raise InvestorError("invalid_reference", "Peer dependency recheck requires its saved origin-task binding")
+                try:
+                    validation = await PeerContextResolver(session, binding=binding).verify(dependency.ref)
+                except (InvestorError, LookupError, ValueError) as exc:
+                    raise InvestorError("invalid_reference", f"Peer dependency no longer verifies: {exc}") from exc
+                if validation.inconsistent_sources:
+                    raise InvestorError("invalid_reference", "Peer inputs await re-check; this cannot be an unchanged review")
+                continue
         from investment_agent.evidence.store import EvidenceService
         from investment_agent.investor.publication_numbers import NumericResolver
         case = await publication.foundation.get_case("local_owner", view.recommendation.case_ids[0])
