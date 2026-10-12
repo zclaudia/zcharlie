@@ -145,12 +145,13 @@ async def test_worker_marks_corrupt_payload_failed(db_session, tmp_path):
         assert persisted is not None
         assert persisted.status == "failed"
         assert persisted.stage == "failed"
-        assert "validation errors" in (persisted.error_summary or "")
+        # _safe_error_summary persists the exception type name only.
+        assert persisted.error_summary == "ValidationError"
         item = await WatchlistRepository(session).get_by_listing(listing_id)
         assert item is not None
         assert item.last_refresh_status == "failed"
         assert item.last_research_run_id == run_id
-        assert "validation errors" in (item.last_refresh_error or "")
+        assert item.last_refresh_error == "ValidationError"
 
 
 async def test_worker_preserves_partial_status_from_runner(db_session, tmp_path):
@@ -322,7 +323,7 @@ async def test_one_watchlist_job_failure_does_not_block_the_next(db_session, tmp
         assert first_item is not None
         assert second_item is not None
         assert first_item.last_refresh_status == "failed"
-        assert "provider rejected first symbol" in (first_item.last_refresh_error or "")
+        assert first_item.last_refresh_error == "RuntimeError"
         assert second_item.last_refresh_status == "success"
         assert second_item.last_refresh_error is None
 
@@ -398,7 +399,7 @@ async def test_transient_failure_retries_with_same_run_and_bounded_attempts(
         assert queued.attempt_count == 1
         assert "retry scheduled" in (queued.error_summary or "")
         assert item.last_refresh_status == "queued"
-        assert "proxy timeout" in (item.last_refresh_error or "")
+        assert item.last_refresh_error == "retry scheduled: ReadTimeout"
 
     assert await worker.run_once() == run_id
     async with session_scope() as session:

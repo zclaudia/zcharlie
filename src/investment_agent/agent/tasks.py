@@ -531,6 +531,13 @@ class TaskService:
             await self._state_event(row, claim.attempt_id)
         return Task.model_validate(row.payload)
 
+    async def patch_checkpoint(self, claim: TaskClaim, *, data: dict[str, Any]) -> None:
+        """CAS private-checkpoint update; never touches status or public events."""
+        async with self.session.begin_nested():
+            row = await self.fence(claim)
+            row.checkpoint = {"schema_version": 1, "data": data}
+            await self._save(row, Task.model_validate(row.payload))
+
     async def resume(
         self,
         task_id: UUID,

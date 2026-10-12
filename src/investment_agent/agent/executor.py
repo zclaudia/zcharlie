@@ -21,7 +21,7 @@ from pydantic_ai.usage import UsageLimits
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.agent.budget import BudgetService
+from investment_agent.agent.budget import BudgetExceededError, BudgetService
 from investment_agent.agent.contracts import WaitRequirement
 from investment_agent.agent.execution import (
     ExecutionDeniedError,
@@ -49,6 +49,23 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import AgentModelRun, AgentTask, BudgetEntry
 
 DEFERRED = TypeAdapter(DeferredToolRequests)
+
+# Structured stop classification: exception types and safe codes only, never
+# error text. The safe code spellings cover boundary errors that carry their
+# code as the message (e.g. "time_budget_exhausted").
+BUDGET_STOP_CODES = frozenset({"BudgetExceededError", "UsageLimitExceeded",
+                               "TimeBudgetExceededError", "TimeoutError"})
+RESEARCH_STOP_CODE_PREFIXES = ("research_", "comparison_")
+
+
+def _stop_reason(error: BaseException, code: str) -> StopReason:
+    if isinstance(error, NoProgressError) or code == "NoProgressError" or "no_progress" in code:
+        return StopReason.NO_PROGRESS
+    if isinstance(error, BudgetExceededError) or code in BUDGET_STOP_CODES or "budget" in code:
+        return StopReason.BUDGET_EXHAUSTED
+    if isinstance(error, ResearchValidationError) or code.startswith(RESEARCH_STOP_CODE_PREFIXES):
+        return StopReason.EVIDENCE_BLOCKED
+    return StopReason.FAILED
 
 
 class UnpublishedDraft(BaseModel):
@@ -203,6 +220,11 @@ class AgentExecutor:
                     if exc.repairable and run_context.retry < config.values["agent_retries"]:
                         lifecycle.output_repair_pending = True
                         raise ModelRetry(exc.repair_message()) from exc
+                    if exc.repairable and config.values["agent_retries"] == 0:
+                        # The model was never offered a correction round: defer
+                        # the disposition to completion (which re-checks before
+                        # any write) instead of failing it outright.
+                        return output
                     raise
                 return output
             output_type = self.specification.output_type
@@ -227,16 +249,23 @@ class AgentExecutor:
                         task_id=claim.task_id, attempt_id=claim.attempt_id,
                         model=self.model, transport=self.transport,
                         request_lifecycle=lifecycle, timeout_seconds=remaining,
-                        output_validator=validate_output if self.specification.output_check is not None and config.values["agent_retries"] > 0 else None)
+                        # The validator always runs so output_check gates every
+                        # completion; with zero retries its ModelRetry branch
+                        # raises directly instead of silently skipping.
+                        output_validator=validate_output if self.specification.output_check is not None else None)
                 except BaseException as exc:
                     error = exc  # commit audit before propagating cancellation/failure
                 call_id = outcome.call_id if outcome else error.call_id if isinstance(error, AgentRunError) else None
                 if call_id is not None:
                     audit_row = await audit.get(AgentModelRun, str(call_id))
                     assert audit_row is not None
-                    retryable = (isinstance(error, AgentRunError) and error.code == "ModelHTTPError" and
-                        audit_row.usage is not None and bool(audit_row.http_responses) and
-                        (audit_row.http_responses[-1]["status"] in {408, 429} or audit_row.http_responses[-1]["status"] >= 500))
+                    if isinstance(error, AgentRunError):
+                        # Connection/timeout-class failures retry through the
+                        # worker; HTTP status retries additionally require the
+                        # failed response to have settled known usage.
+                        retryable = error.transient or (error.code == "ModelHTTPError" and
+                            audit_row.usage is not None and bool(audit_row.http_responses) and
+                            (audit_row.http_responses[-1]["status"] in {408, 429} or audit_row.http_responses[-1]["status"] >= 500))
                     receipts = (await audit.scalars(select(BudgetEntry).where(
                         BudgetEntry.id.in_(list(map(str, lifecycle.reservations))), BudgetEntry.state != "released"
                     ))).all()
@@ -258,8 +287,9 @@ class AgentExecutor:
                             "draft": rejected_draft.model_dump(mode="json")}
                         await service.checkpoint(claim, checkpoint=data)
                 if retryable:
-                    # The shared worker performs bounded retry/backoff. Missing
-                    # usage is never automatically retried, and the same task's
+                    # The shared worker performs bounded retry/backoff. A run
+                    # with persisted unknown usage is never retried here (the
+                    # budget check below fails closed), and the same task's
                     # durable request/token/cost allowance is checked first.
                     async with self.sessions() as session:
                         await BudgetService(session, self.base).check(claim)
@@ -344,11 +374,16 @@ class AgentExecutor:
             if task.cancel_requested:
                 await service.ack_cancel(claim)
                 return
-            code = error.code if isinstance(error, AgentRunError | ResearchValidationError) else type(error).__name__
+            if isinstance(error, AgentRunError | ResearchValidationError):
+                code = error.code
+            elif isinstance(error, TaskBoundaryError):
+                code = str(error)  # boundary errors carry their safe code as the message
+            else:
+                code = type(error).__name__
             field_errors = error.field_errors if isinstance(error, AgentRunError | ResearchValidationError) else ()
-            reason = StopReason.NO_PROGRESS if isinstance(error, NoProgressError) or code == "NoProgressError" or "no_progress" in str(error) else StopReason.BUDGET_EXHAUSTED if code in {"BudgetExceededError", "UsageLimitExceeded", "TimeBudgetExceededError", "TimeoutError"} or "budget" in str(error) else StopReason.EVIDENCE_BLOCKED if "research_" in str(error) or "comparison_" in str(error) else StopReason.FAILED
+            reason = _stop_reason(error, code)
             await service.append_event(claim.task_id, claim.attempt_id, "error",
-                {"code": code, "message": "Memory context changed; start a new task with rebuilt trusted context" if "memory_" in str(error) else "Execution stopped at a trusted boundary", "retryable": False, "field_errors": [e.model_dump(mode="json") for e in field_errors]})
+                {"code": code, "message": "Memory context changed; start a new task with rebuilt trusted context" if code.startswith("memory_") else "Execution stopped at a trusted boundary", "retryable": False, "field_errors": [e.model_dump(mode="json") for e in field_errors]})
             if field_errors and task.message_ref is not None:
                 from investment_agent.agent.conversations import ConversationService
                 await ConversationService(session, self.base).save_assistant(claim,

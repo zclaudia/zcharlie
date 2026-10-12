@@ -185,6 +185,12 @@ is only a proposal; you cannot approve it or modify authority. For explicitly ad
 
 
 def classify(text: str, requested: str = "auto") -> ResearchKind:
+    """Trusted server-side default research depth, chosen from message keywords.
+
+    The Chinese/English keyword heuristic is only a conservative default: an
+    explicit ``MessageInput.research_kind`` always overrides it, and the kind
+    actually admitted is reported back on task progress.
+    """
     if requested != "auto":
         return cast(ResearchKind, requested)
     lowered = text.lower()
@@ -677,11 +683,10 @@ async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:
     data = dict(row.checkpoint.get("data", {}))
     dependencies = sorted(data.get("deferred_results", {}))
     signature = fingerprint({"dependencies": dependencies, "material": sorted(material), "resolved": sorted(set(resolved)), "refs": [r.model_dump(mode="json") for r in task.artifact_refs if r.kind in {"evidence", "calculation"}]})
-    data = dict(row.checkpoint.get("data", {}))
     last = data.get("progress_guard")
     stagnant = last["stagnant"] + 1 if last and last["signature"] == signature else 0
     if stagnant >= 2:
         raise NoProgressError("no_progress_two_model_rounds")
     data["progress_guard"] = {"signature": signature, "stagnant": stagnant}
-    row.checkpoint = {"schema_version": 1, "data": data}
-    await session.flush()
+    # Persist through the CAS checkpoint channel, never a direct row write.
+    await service.patch_checkpoint(claim, data=data)

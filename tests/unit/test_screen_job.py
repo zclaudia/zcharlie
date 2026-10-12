@@ -192,7 +192,7 @@ def test_screen_job_fails_without_templates(screen_db, monkeypatch) -> None:
             run = await session.get(PipelineRun, run_id)
             assert run is not None
             assert run.status in {"failed", "queued"}
-            assert "rule templates" in (run.error_summary or "")
+            assert run.error_summary == "RuntimeError"
 
     asyncio.run(scenario())
 

@@ -290,5 +290,6 @@ async def test_research_run_fails_without_retry_on_quota(db_session, tmp_path, m
         finished = await PipelineRunRepository(session).get(run_id)
     assert finished.status == "failed"
     assert finished.attempt_count == 1
-    assert "iFinD quota exhausted" in (finished.error_summary or "")
+    # Persisted summaries carry the exception type only (no provider text).
+    assert finished.error_summary == "QuotaExhaustedError"
     assert "retry scheduled" not in (finished.error_summary or "")

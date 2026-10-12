@@ -179,7 +179,10 @@ async def test_terminal_handler_error_fails_the_run(db_session, tmp_path):
     await worker.run_once()
     run = await _get(run_id)
     assert run.status == "failed"
-    assert run.error_summary == "bad payload"
+    # The worker persists a sanitized summary (the exception type, never raw
+    # provider text - research/worker._safe_error_summary), so the message
+    # stays in the log only.
+    assert run.error_summary == "ValueError"
 
 
 async def test_recover_stale_covers_all_registered_kinds(db_session, tmp_path):

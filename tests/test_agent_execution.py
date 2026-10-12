@@ -214,6 +214,95 @@ async def test_unknown_or_actual_overage_is_preserved_and_stops(execution_db, un
             await BudgetService(session, base).check(claim)
 
 
+async def test_unknown_budget_entries_settle_through_trusted_reconciliation(execution_db):
+    base = priced()
+    task, claim = await admitted(base)
+    async with session_scope() as session:
+        budget = BudgetService(session, base)
+        reservation = await budget.reserve(claim, estimated_tokens=20)
+        await budget.settle(reservation, None, sent=True)
+    from investment_agent.agent.operations import reconcile_budget
+    async with session_scope() as session:
+        row = (await session.scalars(select(BudgetEntry).where(BudgetEntry.state == "unknown"))).one()
+        budget = BudgetService(session, base)
+        with pytest.raises(BudgetExceededError):
+            await budget.check(claim)
+        with pytest.raises(ValueError, match="actual provider usage"):
+            await reconcile_budget(session, base=base, entry_id=UUID(row.id), action="settle",
+                operator="ops", reason="console check")
+        fixed = await reconcile_budget(session, base=base, entry_id=UUID(row.id), action="settle",
+            usage={"input_tokens": 12, "output_tokens": 8}, operator="ops", reason="provider console")
+        assert fixed.state == "settled" and fixed.input_tokens == 12 and fixed.output_tokens == 8
+        assert fixed.cost_usd == Decimal("0.000028")
+        await budget.check(claim)
+        with pytest.raises(ValueError, match="only unknown"):
+            await reconcile_budget(session, base=base, entry_id=UUID(row.id), action="release",
+                operator="ops", reason="again")
+    async with session_scope() as session:
+        usage = (await TaskService(session).get_task(task.id)).usage
+        assert usage.input_tokens == 12 and usage.output_tokens == 8
+        events = await TaskService(session).get_events(task.id)
+        assert any("provider console" in str(event.payload) and "ops" in str(event.payload) for event in events)
+
+
+async def test_unknown_budget_entries_release_with_operator_audit(execution_db):
+    base = settings()
+    task, claim = await admitted(base)
+    async with session_scope() as session:
+        budget = BudgetService(session, base)
+        reservation = await budget.reserve(claim, estimated_tokens=20)
+        await budget.settle(reservation, None, sent=True)
+    from investment_agent.agent.operations import reconcile_budget
+    async with session_scope() as session:
+        row = (await session.scalars(select(BudgetEntry).where(BudgetEntry.state == "unknown"))).one()
+        with pytest.raises(BudgetExceededError):
+            await BudgetService(session, base).check(claim)
+        released = await reconcile_budget(session, base=base, entry_id=UUID(row.id), action="release",
+            operator="ops", reason="request never reached the provider")
+        assert released.state == "released"
+    async with session_scope() as session:
+        budget = BudgetService(session, base)
+        await budget.check(claim)
+        await budget.reserve(claim, estimated_tokens=50)  # release unblocks the day
+        usage = (await TaskService(session).get_task(task.id)).usage
+        assert usage.requests == 0  # the released reservation no longer counts
+        events = await TaskService(session).get_events(task.id)
+        assert any("never reached the provider" in str(event.payload) for event in events)
+
+
+async def test_transient_connect_failure_releases_reservation_and_retries(execution_db):
+    base = priced()
+    task = await admitted(base, claim=False)
+    calls = []
+    def respond(request):
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ConnectError("connection refused", request=request)
+        return http_result()
+    executor = AgentExecutor(base, transport=httpx.MockTransport(respond))
+    worker = ResearchWorker(settings=base, worker_id="fixture", retry_base_delay_seconds=0,
+                            handlers=[AgentJobHandler("agent_turn", executor)])
+    await worker.run_once()
+    async with session_scope() as session:
+        actual = await TaskService(session).get_task(task.id)
+        assert actual.status == TaskStatus.RUNNING  # scheduled retry, not a permanent failure
+        from investment_agent.storage.models.analysis import PipelineRun
+        run = await session.scalar(select(PipelineRun))
+        assert run.status == "queued" and run.attempt_count == 1
+        entries = (await session.scalars(select(BudgetEntry))).all()
+        assert len(entries) == 1 and entries[0].state == "released"  # nothing was consumed
+    await worker.run_once()
+    async with session_scope() as session:
+        final = await TaskService(session).get_task(task.id)
+        assert final.status == TaskStatus.FAILED and final.usage.requests == 1
+        assert final.usage.input_tokens == 20
+        audit = await session.scalar(select(AgentModelRun).where(AgentModelRun.error_code.is_not(None)))
+        assert audit.error_code and "refused" not in audit.error_code and "fixture.invalid" not in audit.error_code
+        events = await TaskService(session).get_events(task.id)
+        assert "refused" not in str(events) and "fixture.invalid" not in str(events)
+    assert calls == [1, 1]
+
+
 async def test_sent_rechecks_lowered_budget_after_reservation(execution_db):
     base = settings()
     task, claim = await admitted(base)

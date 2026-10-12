@@ -61,7 +61,9 @@ async def _event_occurred_at(session: AsyncSession, task_id: UUID, *, event_type
     )
     if matches is not None:
         query = query.where(matches)
-    occurred = await session.scalar(query)
+    # The latest matching event wins (explicit order, never table order): the
+    # terminal state and each artifact save are the last event of their kind.
+    occurred = await session.scalar(query.order_by(PublicTaskEvent.event_id.desc()))
     return stored_time(occurred) if occurred is not None else None
 
 

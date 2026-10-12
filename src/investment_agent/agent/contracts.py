@@ -37,7 +37,9 @@ class MessageInput(Contract):
     text: Text
     context_refs: tuple[ObjectRef, ...]
     reply_to: ObjectRef | None = None
-    research_kind: Literal["auto", "explanation", "local_check", "company_research", "comparison", "review", "portfolio_action"] = "auto"
+    research_kind: Literal["auto", "explanation", "local_check", "company_research", "comparison", "review", "portfolio_action"] = Field(
+        default="auto",
+        description="Explicit user override of the research depth. 'auto' lets the server-side keyword classifier choose a conservative default; any explicit value always wins, and the admitted kind is visible on task progress.")
     research_at: datetime | None = None
     disclosure_access: tuple[DisclosureAccess, ...] = Field(default=(), max_length=3)
 

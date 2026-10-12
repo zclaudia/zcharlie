@@ -7,6 +7,7 @@ separate connections cannot both spend the same remaining allowance.
 
 from datetime import UTC, datetime
 from decimal import ROUND_CEILING, Decimal
+from typing import Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
@@ -168,6 +169,55 @@ class BudgetService:
         row.state = "sent"
         await self.session.flush()
 
+    async def _record_usage(self, task_id: str, attempt_id: str) -> Usage:
+        """Publish the task's current usage total after a ledger change."""
+        total = await self.usage(UUID(task_id))
+        service = TaskService(self.session)
+        task_row = await service._row(UUID(task_id))
+        task = await service.get_task(UUID(task_id))
+        await service._save(task_row, task.model_copy(update={"usage": total}))
+        await service.append_event(UUID(task_id), UUID(attempt_id), "usage", total.model_dump(mode="json"))
+        return total
+
+    async def reconcile(self, entry_id: UUID, *, action: Literal["settle", "release"],
+                        operator: str, reason: str, usage: dict[str, int] | None = None) -> BudgetEntry:
+        """Trusted operator exit for fail-closed unknown entries.
+
+        Unknown usage never recovers by itself: an operator either settles the
+        real provider-reported usage (from the provider console) or releases a
+        request that provably never reached the provider. Both leave a durable
+        audit event with the operator and reason on the owning task. Any other
+        state is refused, so the default stays fail-closed.
+        """
+        if action not in {"settle", "release"}:
+            raise ValueError("reconciliation action must be settle or release")
+        if not operator.strip() or not reason.strip():
+            raise ValueError("operator and reason are required for the audit trail")
+        if action == "settle" and usage is None:
+            raise ValueError("settling requires the actual provider usage")
+        # Acquire a writer lock before reading the mutable row.
+        await self.session.execute(update(BudgetEntry).where(BudgetEntry.id == str(entry_id))
+                                   .values(state=BudgetEntry.state))
+        row = await self.session.get(BudgetEntry, str(entry_id), populate_existing=True)
+        if row is None:
+            raise LookupError("budget entry not found")
+        if row.state != "unknown":
+            raise ValueError("only unknown entries can be reconciled")
+        if action == "release":
+            row.state = "released"
+        else:
+            if set(usage) != {"input_tokens", "output_tokens"} or any(type(v) is not int or v < 0 for v in usage.values()):
+                raise ValueError("invalid actual usage")
+            row.state = "settled"
+            row.input_tokens, row.output_tokens = usage["input_tokens"], usage["output_tokens"]
+            if row.input_price is not None and row.output_price is not None:
+                row.cost_usd = ((Decimal(row.input_tokens) * row.input_price + Decimal(row.output_tokens) * row.output_price) / Decimal(1000000)).quantize(Decimal(".000000000001"), rounding=ROUND_CEILING)
+        await self.session.flush()
+        await self._record_usage(row.task_id, row.attempt_id)
+        await TaskService(self.session).append_event(UUID(row.task_id), UUID(row.attempt_id), "progress",
+            {"summary": f"Unknown usage entry {row.id} {action}d by {operator}: {reason}"[:500]})
+        return row
+
     async def settle(self, reservation: UUID, usage: dict[str, int] | None, *, sent: bool,
                      reason: str = "provider_usage_missing_or_incomplete") -> Usage:
         # Never fence expenses: revoked/cancelled/in-flight attempts still owe
@@ -196,13 +246,7 @@ class BudgetService:
             if row.input_price is not None and row.output_price is not None:
                 row.cost_usd = ((Decimal(row.input_tokens) * row.input_price + Decimal(row.output_tokens) * row.output_price) / Decimal(1000000)).quantize(Decimal(".000000000001"), rounding=ROUND_CEILING)
         await self.session.flush()
-        total = await self.usage(UUID(row.task_id))
-        service = TaskService(self.session)
-        task_row = await service._row(UUID(row.task_id))
-        task = await service.get_task(UUID(row.task_id))
-        await service._save(task_row, task.model_copy(update={"usage": total}))
-        await service.append_event(UUID(row.task_id), UUID(row.attempt_id), "usage", total.model_dump(mode="json"))
-        return total
+        return await self._record_usage(row.task_id, row.attempt_id)
 
     async def usage(self, task_id: UUID) -> Usage:
         rows = (await self.session.scalars(select(BudgetEntry).where(
@@ -244,12 +288,7 @@ class BudgetService:
             cost_usd=Decimal(0), unknown_reason=None)
         self.session.add(row)
         await self.session.flush()
-        total = await self.usage(claim.task_id)
-        service = TaskService(self.session)
-        task_row = await service._row(claim.task_id)
-        task = await service.get_task(claim.task_id)
-        await service._save(task_row, task.model_copy(update={"usage": total}))
-        await service.append_event(claim.task_id, claim.attempt_id, "usage", total.model_dump(mode="json"))
+        await self._record_usage(str(claim.task_id), str(claim.attempt_id))
 
     async def recover(self, claim: TaskClaim) -> None:
         await TaskService(self.session).fence(claim)

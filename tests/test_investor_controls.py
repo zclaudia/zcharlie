@@ -166,7 +166,7 @@ async def test_concurrent_actions_exact_replay_and_case_cas(controls_db):
 
 
 @pytest.mark.asyncio
-async def test_exact_user_authority_proposals_consumption_params_expiry_and_rollback(controls_db):
+async def test_exact_user_authority_proposals_consumption_params_expiry_and_rollback(controls_db, monkeypatch):
     candidate, _, _ = await fixture()
     ref = await case_ref(candidate)
     action = CaseAction(case_ref=ref, action="pause", reason="Suggested pause")
@@ -191,9 +191,14 @@ async def test_exact_user_authority_proposals_consumption_params_expiry_and_roll
     async with session_scope() as session:
         assert (await UserControlService(session).get_case("local_owner", ref.id)).revision == ref.revision
         assert not await UserControlService(session).list_objects("proposal")
-        # Persist a proposal, simulate UTC passage without mutating a receipt.
-        proposal = await UserControlService(session).prepare(PrepareRequest(parameters=action, idempotency_key=uuid4(), expires_at=datetime.now(UTC) + timedelta(seconds=1)))
-    await asyncio.sleep(1.05)
+        # Persist a proposal, then simulate UTC passage with the injected clock
+        # instead of a real-time sleep (repo convention, see the memory expiry test).
+        proposal = await UserControlService(session).prepare(PrepareRequest(parameters=action, idempotency_key=uuid4(), expires_at=datetime.now(UTC) + timedelta(hours=1)))
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.now(UTC) + timedelta(hours=2)
+    monkeypatch.setattr("investment_agent.investor.controls.datetime", Clock)
     async with session_scope() as session:
         with pytest.raises(InvestorError, match="expired"):
             await UserControlService(session).resolve(proposal.id, resolve, authenticated_request(action))

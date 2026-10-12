@@ -422,7 +422,8 @@ async def test_terminal_total_failure_fails_the_run(db_session, tmp_path):
     await worker.run_once()
     run = await _run(run_id)
     assert run.status == "failed"
-    assert (run.error_summary or "").startswith("snapshot collection failed")
+    # Persisted summaries carry the exception type only (no provider text).
+    assert run.error_summary == "ProviderError"
     notes = list((tmp_path / "notifications").rglob("*.md"))
     assert len(notes) == 1 and "action_required" in notes[0].read_text()
 

@@ -5,6 +5,7 @@ No default handler is registered until AG08 supplies an authorized executor.
 
 from collections.abc import Awaitable, Callable
 from contextlib import AbstractAsyncContextManager
+from contextvars import ContextVar
 from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -26,6 +27,10 @@ if TYPE_CHECKING:
 SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
 Executor = Callable[[TaskClaim, JobContext], Awaitable[JobOutcome]]
 
+# The claim travels with the job's own asyncio context (on_claimed and execute
+# run in the same task), never in handler instance state shared across jobs.
+_CLAIM: ContextVar[TaskClaim | None] = ContextVar("agent_job_claim", default=None)
+
 
 class AgentJobHandler(BaseJobHandler):
     def __init__(
@@ -36,15 +41,15 @@ class AgentJobHandler(BaseJobHandler):
         self.kind = kind
         self.executor = executor
         self.sessions = sessions
-        self.claims: dict[int, TaskClaim | None] = {}
 
     async def on_claimed(self, session: AsyncSession, job: ClaimedJob) -> None:
-        self.claims[job.run_id] = await TaskService(session).claim(
+        _CLAIM.set(await TaskService(session).claim(
             UUID(str(job.request_json["task_id"])), job.lease
-        )
+        ))
 
     async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
-        claim = self.claims.pop(job.run_id)
+        claim = _CLAIM.get()
+        _CLAIM.set(None)
         if claim is None:
             return "completed"
 

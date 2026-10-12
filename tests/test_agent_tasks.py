@@ -17,7 +17,7 @@ from investment_agent.config import Settings
 from investment_agent.investor.enums import StopReason, TaskStatus
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.storage.database import session_scope
-from investment_agent.storage.models.agent import ToolAction
+from investment_agent.storage.models.agent import AgentTask, ToolAction
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.investor import MandateHead
 from investment_agent.storage.repositories.pipeline_run import (
@@ -170,15 +170,20 @@ async def test_cancel_preserves_committed_result_and_stops_new_writes(db_session
 
 @pytest.mark.asyncio
 async def test_duplicate_input_and_terminal_cannot_reopen(db_session):
-    service, task, claim = await claimed(db_session)
-    assert (
-        await service.create(input_key=(await service._row(task.id)).input_key, binding=BINDING)
-    ).id == task.id
+    service = TaskService(db_session)
+    input_key = "duplicate-probe"
+    task = await service.create(input_key=input_key, binding=BINDING)
+    assert (await service.create(input_key=input_key, binding=BINDING)).id == task.id
     with pytest.raises(IdempotencyPayloadMismatchError):
         await service.create(
-            input_key=(await service._row(task.id)).input_key,
+            input_key=input_key,
             binding=BINDING.model_copy(update={"as_of": NOW + timedelta(days=1)}),
         )
+    row = await db_session.get(AgentTask, str(task.id))
+    run = await PipelineRunRepository(db_session).claim_next(
+        worker_id="worker", run_id=row.run_id
+    )
+    claim = await service.claim(task.id, RunLease(run.id, "worker", run.attempt_count))
     await service.checkpoint(
         claim, checkpoint={}, terminal="succeeded", stop_reason=StopReason.ANSWERED
     )

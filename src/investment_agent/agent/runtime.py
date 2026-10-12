@@ -20,6 +20,7 @@ import httpx
 from pydantic import BaseModel, ConfigDict, TypeAdapter
 from pydantic_ai import CancellationToken, DeferredToolResults, RunContext
 from pydantic_ai.agent import EventStreamHandler
+from pydantic_ai.exceptions import ModelHTTPError
 from pydantic_ai.messages import (
     ModelMessage,
     ModelMessagesTypeAdapter,
@@ -71,13 +72,37 @@ class RunOutcome(BaseModel):
 
 
 class AgentRunError(RuntimeError):
-    """Only safe classification and correlation ID cross the application boundary."""
+    """Only safe classification and correlation ID cross the application boundary.
 
-    def __init__(self, call_id: UUID, code: str, *, field_errors: tuple[FieldError, ...] = ()) -> None:
+    ``transient`` marks connection/timeout-class provider failures that the
+    shared worker retry policy would retry; the executor converts them into a
+    worker retry instead of a permanent task failure.
+    """
+
+    def __init__(self, call_id: UUID, code: str, *, field_errors: tuple[FieldError, ...] = (),
+                 transient: bool = False) -> None:
         self.call_id = call_id
         self.code = code
         self.field_errors = field_errors
+        self.transient = transient
         super().__init__(f"Agent run {call_id}: {code}")
+
+
+def _undelivered_request(exc: BaseException | None) -> bool:
+    """Whether a failed request never reached the provider.
+
+    Only connection-establishment failures prove no request bytes were
+    delivered, so nothing can have been consumed. Read/write failures after
+    connecting stay fail-closed (persisted as unknown usage).
+    """
+    current = exc
+    for _ in range(5):
+        if current is None:
+            return False
+        if isinstance(current, httpx.ConnectError | httpx.ConnectTimeout):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 class RequestLifecycle(Protocol):
@@ -148,18 +173,29 @@ class _BudgetedModel(WrapperModel):
                      "output_tokens": metadata[0]["usage"]["completion_tokens"]}
         if self.injected and sent:
             self.fixture_usage.append(usage)
-        await self.lifecycle.settle(reservation, usage,
-            sent=sent if self.injected else self.trace.attempts > attempts)
+        await self.lifecycle.settle(reservation, usage, sent=sent)
         self.active = None
         if response is not None:
             count = sum(isinstance(part, ToolCallPart) and part.tool_name != "final_result" for part in response.parts)
             await self.lifecycle.observe_tools(count)
 
+    @staticmethod
+    def _delivered(sent: bool, attempts_now: int, attempts_baseline: int,
+                   failure: BaseException | None) -> bool:
+        """Whether the request actually went out, so its usage is owed.
+
+        A request whose connection never established delivered nothing and
+        cannot have been consumed: its reservation settles released instead of
+        blocking the ledger as unknown. Later-stage transport failures keep the
+        conservative unknown outcome.
+        """
+        return sent or (attempts_now > attempts_baseline and not _undelivered_request(failure))
+
     async def request(self, messages: list[ModelMessage], model_settings: ModelSettings | None,
                       model_request_parameters: ModelRequestParameters) -> ModelResponse:
         reservation = await self._begin(messages, model_request_parameters)
         attempts, responses = self.trace.attempts, len(self.trace.responses)
-        result, sent = None, False
+        result, sent, failure = None, False, None
         try:
             if self.injected:
                 await self.before_send()
@@ -169,9 +205,13 @@ class _BudgetedModel(WrapperModel):
                                      "projected_history_bytes": len(ModelMessagesTypeAdapter.dump_json(projected))}
             result = await self.wrapped.request(projected, model_settings, model_request_parameters)
             return result
+        except BaseException as exc:
+            failure = exc
+            raise
         finally:
             with anyio.CancelScope(shield=True):
-                await self._settle(reservation, result, attempts, responses, sent)
+                await self._settle(reservation, result, attempts, responses,
+                                   self._delivered(sent, self.trace.attempts, attempts, failure))
 
     @asynccontextmanager
     async def request_stream(self, messages: list[ModelMessage], model_settings: ModelSettings | None,
@@ -179,18 +219,24 @@ class _BudgetedModel(WrapperModel):
                              run_context: RunContext[Any] | None = None) -> AsyncIterator[StreamedResponse]:
         reservation = await self._begin(messages, model_request_parameters)
         attempts, responses = self.trace.attempts, len(self.trace.responses)
-        sent = False
+        sent, failure = False, None
         try:
             if self.injected:
                 await self.before_send()
                 sent = True
-            async with self.wrapped.request_stream(project_history(messages), model_settings, model_request_parameters, run_context) as stream:
-                yield stream
+            projected = messages if self.injected else project_history(messages)
+            try:
+                async with self.wrapped.request_stream(projected, model_settings, model_request_parameters, run_context) as stream:
+                    yield stream
+            except BaseException as exc:
+                failure = exc
+                raise
         finally:
             # No independent production streaming usage observer yet: unknown
             # is persisted and blocks subsequent requests/tools.
             with anyio.CancelScope(shield=True):
-                await self._settle(reservation, None, attempts, responses, sent)
+                await self._settle(reservation, None, attempts, responses,
+                                   self._delivered(sent, self.trace.attempts, attempts, failure))
 
 
 async def run_agent(
@@ -232,6 +278,7 @@ async def run_agent(
     result = None
     failure: str | None = None
     field_errors: tuple[FieldError, ...] = ()
+    transient = False
     cancelled = False
     injected = model is not None
     guarded: _BudgetedModel | None = None
@@ -274,6 +321,12 @@ async def run_agent(
             field_errors = exc.field_errors
         else:
             failure = trace.guard_error or type(exc).__name__
+            # Keep the shared worker retry classification: connection/timeout
+            # failures must reach the worker retry path instead of failing the
+            # task permanently. HTTP status retries stay executor-owned.
+            from investment_agent.research.retry_policy import is_transient_error
+            transient = (trace.guard_error is None and not isinstance(exc, ModelHTTPError)
+                         and is_transient_error(exc))
     finally:
         if client is not None:
             await client.close()
@@ -308,7 +361,8 @@ async def run_agent(
     if cancelled:
         raise asyncio.CancelledError
     if result is None:
-        raise AgentRunError(call_id, failure or "unknown_failure", field_errors=field_errors) from None
+        raise AgentRunError(call_id, failure or "unknown_failure", field_errors=field_errors,
+                            transient=transient) from None
     return RunOutcome(call_id=call_id, output=result.output, usage=usage_data,
                       history=PrivateHistory(config_version=config.version,
                                              messages_json=result.all_messages_json().decode()))

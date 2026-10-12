@@ -43,7 +43,7 @@ from investment_agent.research.ifind_chain import (
     ResearchPartialError,
     run_ifind_research_chain,
 )
-from investment_agent.research.retry_policy import is_transient_error
+from investment_agent.research.retry_policy import ResearchRetryableError, is_transient_error
 from investment_agent.rules.drafting import RuleDraftHandler
 from investment_agent.rules.screen_job import ScreenRunHandler
 from investment_agent.settings.loader import import_and_load, load_settings, store_for
@@ -233,6 +233,21 @@ def _calendar_path() -> str | None:
         return None
 
 
+def _safe_error_summary(exc: BaseException) -> str:
+    """Type name plus our own safe boundary codes, for persisted run summaries.
+
+    Raw exception text can carry provider payloads and URLs and flows into
+    watchlist display; full details belong to the worker log only.
+    """
+    from investment_agent.agent.tasks import TaskBoundaryError
+
+    if isinstance(exc, ResearchRetryableError):
+        return f"{type(exc).__name__}: {exc.reason}"
+    if isinstance(exc, TaskBoundaryError):
+        return f"{type(exc).__name__}: {exc}"
+    return type(exc).__name__
+
+
 class ResearchWorker:
     """Claim and execute one queued job at a time, dispatching by ``kind``."""
 
@@ -244,6 +259,7 @@ class ResearchWorker:
         runner: ResearchRunner = run_ifind_research_chain,
         retry_base_delay_seconds: float = 5.0,
         heartbeat_interval_seconds: float = 30.0,
+        maintenance_interval_seconds: float = 30.0,
         handlers: Sequence[JobHandler] | None = None,
         kinds: Collection[str] | None = None,
         settings_revision: int | None = None,
@@ -256,12 +272,14 @@ class ResearchWorker:
         self.runner = runner
         self.retry_base_delay_seconds = retry_base_delay_seconds
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
+        self.maintenance_interval_seconds = maintenance_interval_seconds
         # A reload overlays the stored runtime layer onto these settings
         # (every runtime field is replaced, so they may be loaded ones).
         self._base_settings = settings
         self._kinds = kinds
         self._reloads_settings = handlers is None
         self._settings_revision = settings_revision
+        self._maintenance_at = 0.0  # monotonic due time; 0.0 = immediately due
         self.handlers: dict[str, JobHandler] = self._registry(
             handlers if handlers is not None else default_job_handlers(settings, runner=runner)
         )
@@ -329,6 +347,21 @@ class ResearchWorker:
                     await handler.on_recovered(session, run, requeued=was_requeued, now=now)
             return requeued, failed
 
+    def _maintenance_due(self) -> bool:
+        """Whether the poll should run the maintenance block now.
+
+        Idle polls skip the full scans until ``maintenance_interval_seconds``
+        elapsed, so an empty queue no longer pays a group of maintenance
+        transactions every second. A claimed run resets the interval: follower
+        work it enqueues (collectors, reviews, discovery) must be visible on
+        the next poll without waiting out the idle window.
+        """
+        now = time.monotonic()
+        if now < self._maintenance_at:
+            return False
+        self._maintenance_at = now + self.maintenance_interval_seconds
+        return True
+
     async def run_once(self, *, run_id: int | None = None) -> int | None:
         """Claim and run one job; ``run_id`` claims that specific queued run."""
 
@@ -337,7 +370,7 @@ class ResearchWorker:
             await deliver_one(self.settings)
         async with session_scope() as session:
             await self.refresh_settings(session)
-            if self._reloads_settings:
+            if self._reloads_settings and self._maintenance_due():
                 from investment_agent.agent.tasks import TaskService
 
                 await TaskService(session).expire_due(now=datetime.now(UTC), limit=100)
@@ -370,6 +403,10 @@ class ResearchWorker:
             handler = self.handlers[job.kind]
             await handler.on_claimed(session, job)
 
+        if run is not None:
+            # The claimed run may enqueue follower work; maintain on the next
+            # poll instead of waiting out the idle interval.
+            self._maintenance_at = 0.0
         try:
             # Every lifecycle update made for this run is fenced by the lease,
             # so a worker that lost its claim cannot clobber a newer attempt.
@@ -471,7 +508,7 @@ class ResearchWorker:
             async with session_scope() as session:
                 repository = PipelineRunRepository(session)
                 if is_transient_error(exc):
-                    error = f"retry scheduled: {type(exc).__name__}: {exc}"
+                    error = f"retry scheduled: {_safe_error_summary(exc)}"
                     retry_at = datetime.now(UTC) + timedelta(
                         seconds=self.retry_base_delay_seconds
                         * (2 ** max(lease.attempt - 1, 0))
@@ -485,7 +522,7 @@ class ResearchWorker:
                     if retry_scheduled:
                         await handler.on_retry_scheduled(session, job, error)
                 if not retry_scheduled:
-                    await repository.mark_failed(run_id, str(exc), lease=lease)
+                    await repository.mark_failed(run_id, _safe_error_summary(exc), lease=lease)
         except LeaseLostError as lost:
             log.warning(
                 "research.worker.lease_lost",
@@ -605,6 +642,7 @@ async def run_worker(
     once: bool = False,
     recovery_interval_seconds: float | None = None,
     heartbeat_interval_seconds: float | None = None,
+    maintenance_interval_seconds: float = 30.0,
     worker: ResearchWorker | None = None,
     kinds: Collection[str] | None = None,
 ) -> None:
@@ -628,6 +666,7 @@ async def run_worker(
                 if heartbeat_interval_seconds is not None
                 else max(stale_after_seconds / 4, 1.0)
             ),
+            maintenance_interval_seconds=maintenance_interval_seconds,
             kinds=kinds,
         )
     recovery_interval = (

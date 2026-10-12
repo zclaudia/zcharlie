@@ -289,6 +289,39 @@ async def test_default_worker_runs_bounded_event_maintenance(conversation_db):
 
 
 @pytest.mark.asyncio
+async def test_idle_polls_throttle_maintenance_until_interval_elapsed(conversation_db, monkeypatch):
+    from investment_agent.agent.tasks import TaskService as Service
+
+    worker = ResearchWorker(settings=base(investor_agent_enabled=False), worker_id="throttle")
+    monotonic = [1000.0]
+    monkeypatch.setattr("investment_agent.research.worker.time.monotonic", lambda: monotonic[0])
+    calls = []
+    original = Service.retain_events
+    async def counted(self, *, now=None, limit=500):
+        calls.append(1)
+        return await original(self, now=now, limit=limit)
+    monkeypatch.setattr(Service, "retain_events", counted)
+    assert await worker.run_once() is None  # first poll maintains immediately
+    assert await worker.run_once() is None  # idle poll inside the interval skips it
+    assert len(calls) == 1
+    monotonic[0] += 30.0
+    assert await worker.run_once() is None  # interval elapsed: maintained again
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_research_kind_keyword_classification_is_documented_and_overridable(conversation_db):
+    conversation = await new_conversation()
+    auto = await submit(conversation, message(text="比较这两家公司的现金流"))
+    override = await submit(conversation, message(text="比较这两家公司的现金流", research_kind="local_check"))
+    async with session_scope() as session:
+        auto_grant = (await session.get(ExecutionGrantRow, str(auto.task.id))).payload
+        override_grant = (await session.get(ExecutionGrantRow, str(override.task.id))).payload
+        assert auto_grant["research_kind"] == "comparison"  # server-side keyword default
+        assert override_grant["research_kind"] == "local_check"  # explicit input wins
+
+
+@pytest.mark.asyncio
 async def test_snapshot_real_read_transaction_cannot_skip_concurrent_terminal(conversation_db, monkeypatch):
     from investment_agent.api.routes.agent import snapshot
     conversation = await new_conversation()

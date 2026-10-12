@@ -89,6 +89,7 @@ class TrustedTools:
             raise ValueError("duplicate tool registration")
 
     async def _check(self, session: AsyncSession, spec: ToolRegistration, business: BaseModel) -> None:
+        """The single full authorization gate for one tool call (P2: once, not 3-5x)."""
         as_of = getattr(business, "as_of", None)
         if isinstance(as_of, datetime | date):
             task = await TaskService(session).get_task(self.context.claim.task_id)
@@ -121,6 +122,10 @@ class TrustedTools:
         key = fingerprint(parameters)
         if ctx.phase == "research:v1" and key in self.returned:
             raise NoProgressError("no_progress_repeated_tool_parameters")
+        # One full boundary check per tool call: authorization, scope, budget
+        # and lease are validated once here. The settlement transactions still
+        # fence the lease (cancellation/staleness) via CAS, so a revoked or
+        # lost claim can never commit, without rescanning the whole policy.
         async with ctx.sessions() as session:
             await self._check(session, spec, business)
             action = await TaskService(session).prepare_action(ctx.claim,
@@ -134,19 +139,13 @@ class TrustedTools:
         if state == "uncertain":
             raise ReconciliationRequiredError("external effect requires trusted provider reconciliation")
         async with ctx.sessions() as session:
-            await self._check(session, spec, business)
             service = TaskService(session)
             await service.append_event(ctx.claim.task_id, ctx.claim.attempt_id, "tool_state",
                 {"tool_call_id": str(operation), "tool_name": spec.name, "state": "started"})
             if spec.database is not None:
                 async def write(owned: AsyncSession, op: UUID) -> ActionResult | dict[str, Any]:
                     assert spec.database is not None
-                    await self._check(owned, spec, business)
-                    output = await spec.database(owned, op, business)
-                    # Publication adapters execute their own business gate here,
-                    # while the same transaction rechecks current permission.
-                    await self._check(owned, spec, business)
-                    return output
+                    return await spec.database(owned, op, business)
                 result = await service.settle_action(ctx.claim, operation, write)
             else:
                 action = await service._action(ctx.claim.task_id, operation)

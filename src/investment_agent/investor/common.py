@@ -27,7 +27,7 @@ DecimalValue = Annotated[
     PlainSerializer(str, return_type=str, when_used="json"),
 ]
 Revision = Annotated[int, Field(strict=True, ge=1)]
-Text = Annotated[str, Field(min_length=1)]
+Text = Annotated[str, Field(min_length=1, max_length=20_000)]
 
 
 class Contract(BaseModel):

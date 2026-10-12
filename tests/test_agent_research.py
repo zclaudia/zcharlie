@@ -1,6 +1,7 @@
 """AG13 native Agent, trusted completion, persisted research and collector PIT."""
 import json
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -29,7 +30,7 @@ from investment_agent.investor.contracts import TextNode
 from investment_agent.investor.enums import StopReason, TaskStatus
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.storage.database import session_scope
-from investment_agent.storage.models.agent import ToolAction
+from investment_agent.storage.models.agent import AgentTask, ExecutionGrantRow, ToolAction
 from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.models.publication import PublicationEvent
 from investment_agent.storage.models.user_domain import WatchlistItem
@@ -58,11 +59,11 @@ def response(output):
     return ModelResponse([TextPart(output.model_dump_json())], usage=RequestUsage(input_tokens=20, output_tokens=10))
 
 
-async def run(receipt, model, settings=None):
+async def run(receipt, model, settings=None, run_id=None):
     selected = settings or base()
     executor = AgentExecutor(selected, model=model, registrations=registrations(), specification=ResearchPolicy(selected).specification())
     worker = ResearchWorker(settings=selected, worker_id="research-fixture", handlers=[AgentJobHandler("agent_turn", executor)])
-    await worker.run_once()
+    await worker.run_once(run_id=run_id)
     async with session_scope() as session:
         return await TaskService(session).get_task(receipt.task.id)
 
@@ -156,6 +157,21 @@ async def test_no_progress_ignores_changed_metadata(conversation_db):
             else:
                 with pytest.raises(NoProgressError):
                     await check_progress_round(session, trusted)
+
+
+@pytest.mark.asyncio
+async def test_progress_guard_round_persists_through_cas_checkpoint(conversation_db):
+    conversation = await new_conversation()
+    receipt = await submit(conversation)
+    trusted = await claim(receipt.task)
+    async with session_scope() as session:
+        before = (await TaskService(session).get_task(receipt.task.id)).revision
+        await check_progress_round(session, trusted)
+    async with session_scope() as session:
+        service = TaskService(session)
+        assert (await service.get_task(receipt.task.id)).revision > before  # CAS revision moved
+        envelope, _ = await service.get_checkpoint(receipt.task.id)
+        assert envelope["data"]["progress_guard"]["stagnant"] == 0
 
 
 @pytest.mark.asyncio
@@ -459,8 +475,7 @@ async def test_real_http_cancel_settles_sent_usage_without_publishing(conversati
 
 
 @pytest.mark.asyncio
-async def test_natural_memory_expiry_filters_original_and_derived_context(conversation_db):
-    import asyncio
+async def test_natural_memory_expiry_filters_original_and_derived_context(conversation_db, monkeypatch):
     from datetime import timedelta
 
     from investment_agent.investor.controls import (
@@ -472,11 +487,18 @@ async def test_natural_memory_expiry_filters_original_and_derived_context(conver
     conversation = await new_conversation()
     source = await submit(conversation, message(text="EXPIRED_SOURCE_MARKER"))
     await run(source, FunctionModel(lambda messages,info: response(ResearchOutput(progress=progress(kind="local_check",content=(TextNode(type="text",text="EXPIRED_DERIVED_MARKER"),))))))
+    anchor = datetime.now(UTC)
     async with session_scope() as session:
         operation = MemoryAction(kind="explicit_preference",text="EXPIRED_PREFERENCE_MARKER",
-            source_refs=(ObjectRef(kind="message",id=source.message.id,revision=1),), valid_until=datetime.now(UTC)+timedelta(seconds=.1))
+            source_refs=(ObjectRef(kind="message",id=source.message.id,revision=1),), valid_until=anchor+timedelta(seconds=60))
         await UserControlService(session).execute(ExecuteRequest(parameters=operation,idempotency_key=uuid4()),authenticated_request(operation))
-    await asyncio.sleep(.15)
+    # Injected clock instead of a real sleep (repo convention, test_investor_controls).
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return anchor + timedelta(seconds=120)
+    monkeypatch.setattr("investment_agent.agent.execution.datetime", Clock)
+    monkeypatch.setattr("investment_agent.investor.controls.datetime", Clock)
     receipt = await submit(conversation)
     def model(messages,info):
         assert "EXPIRED_SOURCE_MARKER" not in info.instructions
@@ -694,10 +716,16 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
     async with session_scope() as session:
         await SettingsStore(session).apply({"investor_agent_task_requests": 1}, actor="fixture")
     continuation = await submit(conversation, message(text='深入研究并完成结论', context_refs=(subject,), research_at=cutoff), settings=final_settings)
+    # Public continuation admission: the same grant, re-admitted as a child of
+    # the finished research through admit() rather than private row writes.
+    from investment_agent.agent.execution import ExecutionGrant, admit
     async with session_scope() as session:
-        service = TaskService(session)
-        row = await service._row(continuation.task.id)
-        await service._save(row, continuation.task.model_copy(update={"parent_task_id": task.id}))
+        grant = ExecutionGrant.model_validate(
+            (await session.get(ExecutionGrantRow, str(continuation.task.id))).payload)
+        child = await admit(session, base=final_settings, input_key=f"continuation:{uuid4()}",
+            binding=continuation.task.binding, grant=grant, parent_task_id=task.id,
+            message_ref=continuation.task.message_ref)
+        child_run = (await session.get(AgentTask, str(child.id))).run_id
     def conclude(messages, info):
         assert not info.function_tools
         assert 'recovered_evidence' in info.instructions
@@ -710,7 +738,7 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
             'gaps': ('Original business disclosures remain unavailable.',),
             'stopped_because': 'Conclude without a directional opinion while original evidence is missing.'})
         return response(ResearchOutput(progress=final))
-    finished = await run(continuation, FunctionModel(conclude), final_settings)
+    finished = await run(SimpleNamespace(task=child), FunctionModel(conclude), final_settings, run_id=child_run)
     assert finished.status == TaskStatus.PARTIAL and finished.stop_reason == StopReason.EVIDENCE_BLOCKED
     assert finished.usage.requests == 1 and finished.usage.tool_calls == 0
 

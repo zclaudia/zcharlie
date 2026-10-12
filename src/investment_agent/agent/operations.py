@@ -7,18 +7,41 @@ order. Retries never reset the cursor, task identity or lifetime budget.
 """
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
+from uuid import UUID
 
 from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.storage.models.agent import AgentTask, ExecutionGrantRow
+from investment_agent.storage.models.agent import AgentTask, BudgetEntry, ExecutionGrantRow
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.app_settings import AppSetting
 from investment_agent.storage.models.monitoring import OperationsCursor
 
+if TYPE_CHECKING:
+    from investment_agent.config import Settings
+
 AGENT_KINDS = ("agent_turn", "agent_research", "agent_review", "agent_discovery")
+
+
+async def reconcile_budget(
+    session: AsyncSession, *, base: "Settings", entry_id: UUID,
+    action: Literal["settle", "release"], operator: str, reason: str,
+    usage: dict[str, int] | None = None,
+) -> BudgetEntry:
+    """Trusted operator seam over the budget ledger's fail-closed unknown entries.
+
+    Nothing here runs automatically or from model output: an operator settles
+    real provider-reported usage or releases a request that provably never
+    reached the provider, always with an operator+reason audit event on the
+    owning task. Only ``state == "unknown"`` rows are accepted.
+    """
+    from investment_agent.agent.budget import BudgetService
+
+    return await BudgetService(session, base).reconcile(
+        entry_id, action=action, operator=operator, reason=reason, usage=usage
+    )
 SLOTS = ("interactive", "interactive", "interactive", "review", "exploration", "legacy")
 # Four total native executions, one slot reserved from all background work.
 CONCURRENCY = {"interactive": 4, "review": 2, "exploration": 1, "legacy": 4}
