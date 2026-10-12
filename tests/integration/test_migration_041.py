@@ -78,11 +78,11 @@ def test_backfill_mixed_offsets_order_and_subject_projection(tmp_path, monkeypat
         assert {"last_activity_at", "title_revision", "subject_refs"}.isdisjoint(columns)
         assert conn.execute("SELECT payload FROM agent_conversation WHERE id=?", (CONVERSATION_ID,)).fetchone() is not None
     # Re-applying the migration after the downgrade proves 041 is re-entrant on
-    # the already-backfilled rows, and the database is left at head (045) rather
+    # the already-backfilled rows, and the database is left at head rather
     # than parked on a mid version.
     command.upgrade(config, "head")
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
         row = conn.execute(
             "SELECT last_activity_at, title_revision, subject_refs FROM agent_conversation WHERE id=?",
             (CONVERSATION_ID,),

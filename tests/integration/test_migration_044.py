@@ -7,9 +7,14 @@ from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 
 from investment_agent.storage.models.base import Base
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def _config() -> Config:
@@ -49,8 +54,8 @@ def test_rule_draft_generation_roundtrip(tmp_path, monkeypatch):
         assert row == (0, None), row
     command.upgrade(config, "head")
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
-        # 045 only adds its own tables; the 044 claim survives untouched.
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
+        # later migrations only add their own tables; the 044 claim survives untouched.
         assert conn.execute(
             "SELECT generation,current_token FROM rule_draft_generation WHERE listing_id=9"
         ).fetchone() == (0, None)
@@ -73,5 +78,5 @@ def test_rule_draft_generation_roundtrip(tmp_path, monkeypatch):
         assert "rule_draft_generation" not in tables
     command.upgrade(config, "head")
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
         assert conn.execute("SELECT count(*) FROM rule_draft_generation").fetchone()[0] == 0

@@ -5,6 +5,11 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
+
+CURRENT_HEAD = ScriptDirectory(
+    str(Path(__file__).resolve().parents[2] / "alembic")
+).get_current_head()
 
 
 def test_database_url_with_percent_upgrades(tmp_path: Path, monkeypatch) -> None:
@@ -19,5 +24,5 @@ def test_database_url_with_percent_upgrades(tmp_path: Path, monkeypatch) -> None
     command.upgrade(config, "head")
     with sqlite3.connect(db) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (
-            "045",
+            CURRENT_HEAD,
         )
