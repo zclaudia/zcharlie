@@ -1,6 +1,6 @@
 """Migration 046 (research material): upgrade from 045 creates the two tables
 with their named unique constraints and index, fresh head matches the models,
-downgrade restores 045, and the script head is 046."""
+downgrade restores 045, and revision 046 follows 045."""
 
 from __future__ import annotations
 
@@ -118,10 +118,9 @@ def _constraints(db_path: Path, table: str) -> tuple[set[str], set[str]]:
     return uniques, indexes
 
 
-def test_script_head_is_046() -> None:
+def test_revision_046_follows_045() -> None:
     script = ScriptDirectory(str(REPO_ROOT / "alembic"))
-    assert script.get_heads() == ["046"]
-    assert script.get_current_head() == "046"
+    assert script.get_revision("046").down_revision == PREVIOUS_REVISION
 
 
 def test_upgrade_from_024_creates_the_tables_and_downgrade(

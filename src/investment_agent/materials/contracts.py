@@ -311,7 +311,11 @@ class UpstreamRequest:
 
 @dataclass(frozen=True)
 class RawPayload:
-    """An upstream response as saved evidence: bytes, not a parsed structure."""
+    """An upstream response as saved evidence: bytes, not a parsed structure.
+
+    ``http_status=0`` means unknown (legacy evidence without a status);
+    known non-2xx responses must not produce financial drafts.
+    """
 
     name: str
     content: bytes
@@ -342,15 +346,23 @@ class MaterialAdapter(Protocol):
     other; implementations annotate the concrete type.
     """
 
-    source: str
-    adapter_version: str
+    @property
+    def source(self) -> str: ...
+
+    @property
+    def adapter_version(self) -> str: ...
 
     def requests(
         self, identity: Any, *, periods: Sequence[FactPeriod]
     ) -> tuple[UpstreamRequest, ...]: ...
 
     def parse(
-        self, identity: Any, *, raw: Sequence[RawPayload], periods: Sequence[FactPeriod]
+        self,
+        identity: Any,
+        *,
+        raw: Sequence[RawPayload],
+        periods: Sequence[FactPeriod],
+        subject_id: int | None = None,
     ) -> ParseResult: ...
 
 

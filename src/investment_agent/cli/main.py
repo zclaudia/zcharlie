@@ -4,6 +4,7 @@ import typer
 
 from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import api as api_cmd
+from investment_agent.cli.commands import materials as materials_cmd
 from investment_agent.cli.commands import mcp as mcp_cmd
 from investment_agent.cli.commands import migrate as migrate_cmd
 from investment_agent.cli.commands import research as research_cmd
@@ -17,6 +18,7 @@ from investment_agent.cli.commands import worker as worker_cmd
 
 app = typer.Typer(help="Investment Agent CLI")
 app.add_typer(admin_cmd.app, name="admin", help="Admin and ops commands")
+app.add_typer(materials_cmd.app, name="materials", help="Controlled HK/US offline material")
 app.add_typer(research_cmd.app, name="research", help="Evidence-first research commands")
 app.add_typer(api_cmd.app, name="api", help="API server commands")
 app.add_typer(scheduler_cmd.app, name="scheduler", help="Scheduler commands")

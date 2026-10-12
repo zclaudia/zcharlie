@@ -66,7 +66,7 @@ from investment_agent.materials.jobs import (
     MATERIAL_COLLECTION,
     MaterialCollectionPayload,
 )
-from investment_agent.materials.store import MaterialStore, SavedDataset
+from investment_agent.materials.store import MaterialStore, SavedDataset, coalesce_annual_tables
 from investment_agent.providers.errors import ProviderDataError, ProviderTransientError
 from investment_agent.snapshots.throttle import AsyncRateLimiter
 from investment_agent.storage.database import session_scope
@@ -164,14 +164,10 @@ class MaterialFetcher(Protocol):
 
 
 class MaterialSourceAdapter(Protocol):
-    """What this handler needs from an adapter: the 03/04 calling convention.
+    """Material adapter with a concrete controlled identity annotation.
 
-    Task 02's ``MaterialAdapter`` types ``identity`` as ``Any`` (wave-1 modules
-    must not import each other) and has no ``subject_id``, while tasks 03/04
-    annotate the concrete identity and require the target ``Company.id`` (a
-    controlled identity carries no database id of its own). This protocol is
-    that convention — identity plus ``subject_id=company.id`` — and is the
-    shape :func:`default_adapters` and every injected adapter must satisfy.
+    Both offline and worker paths supply ``subject_id=company.id``; controlled
+    identities contain no database id. This mirrors ``MaterialAdapter``.
     """
 
     @property
@@ -477,7 +473,7 @@ class MaterialCollectionHandler(BaseJobHandler):
             else:
                 state.note_problem(f"{source}: {problem}")
         if drafts:
-            storeable = _attach_raw(drafts, raw)
+            storeable = _attach_raw(coalesce_annual_tables(drafts), raw)
             state.record_saved(source, [await store.save(draft) for draft in storeable])
         elif not structural:
             state.note_problem(

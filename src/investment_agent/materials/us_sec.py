@@ -859,6 +859,13 @@ class SecFactsAdapter:
                 "instance or per parse() call"
             )
 
+        rejected = tuple(
+            f"http_status_rejected: {item.name}/{item.http_status}"
+            for item in raw if item.http_status != 0 and not 200 <= item.http_status < 300
+        )
+        if rejected:
+            return ParseResult(drafts=(), problems=rejected)
+
         fatal: list[str] = []
         soft: list[str] = []
         facts_doc = _document(raw, FACTS_DOCUMENT)

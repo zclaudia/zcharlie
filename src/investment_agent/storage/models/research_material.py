@@ -16,14 +16,15 @@
   and ``payload`` always carries the canonical ``{"facts": [...]}`` shape from
   ``investment_agent.materials.contracts``.
 
-Rows are never updated or deleted: the ORM refuses flushes that would
-(``before_update`` / ``before_delete`` listeners), like the decision journal.
+Rows are append-only: ORM listeners refuse updates/deletes, and SQLite
+triggers also block bulk SQL and direct database mutations (migration 047).
 """
 
 from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    DDL,
     JSON,
     Date,
     DateTime,
@@ -125,6 +126,45 @@ def _immutable(*args: object) -> None:
     raise ImmutableResearchMaterialError("saved research material is immutable")
 
 
+_INSERT_CONFLICT_KEYS = {
+    "research_source_binding": (
+        "subject_kind", "subject_id", "source", "source_symbol", "valid_from",
+    ),
+    "research_dataset": (
+        "kind", "subject_kind", "subject_id", "source", "period_end", "content_hash",
+    ),
+}
+
+
 for _model in (ResearchSourceBinding, ResearchDataset):
     event.listen(_model, "before_update", _immutable)
     event.listen(_model, "before_delete", _immutable)
+
+    # create_all-based environments get the same database protection as 047.
+    for _operation in ("UPDATE", "DELETE"):
+        event.listen(
+            _model.__table__,
+            "after_create",
+            DDL(  # type: ignore[no-untyped-call]
+                f"CREATE TRIGGER IF NOT EXISTS trg_{_model.__tablename__}_immutable_{_operation.lower()} "
+                f"BEFORE {_operation} ON {_model.__tablename__} "
+                "BEGIN SELECT RAISE(ABORT, 'saved research material is immutable'); END"
+            ).execute_if(dialect="sqlite"),
+        )
+
+    # INSERT OR REPLACE bypasses DELETE triggers unless recursive_triggers is
+    # enabled. Refuse a conflicting insertion before SQLite can remove a row.
+    _key_match = " AND ".join(
+        f"{column} IS NEW.{column}" for column in _INSERT_CONFLICT_KEYS[_model.__tablename__]
+    )
+    event.listen(
+        _model.__table__,
+        "after_create",
+        DDL(  # type: ignore[no-untyped-call]
+            f"CREATE TRIGGER IF NOT EXISTS trg_{_model.__tablename__}_immutable_insert "
+            f"BEFORE INSERT ON {_model.__tablename__} "
+            f"WHEN EXISTS (SELECT 1 FROM {_model.__tablename__} "
+            f"WHERE id = NEW.id OR ({_key_match})) "
+            "BEGIN SELECT RAISE(ABORT, 'saved research material is immutable'); END"
+        ).execute_if(dialect="sqlite"),
+    )

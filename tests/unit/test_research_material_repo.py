@@ -219,10 +219,10 @@ async def test_list_for_orders_intervals_and_filters_by_date(db_session) -> None
         row.source_symbol for row in await repo.list_for("company", 7, at=date(2025, 6, 1))
     ] == ["00700.HK"]
     assert await repo.list_for("company", 7, at=date(2023, 12, 31)) == []
-    # Interval boundaries are inclusive on both ends.
+    # Start is inclusive; the end is exclusive.
     assert [
         row.source_symbol for row in await repo.list_for("company", 7, at=date(2024, 12, 31))
-    ] == ["0700.HK"]
+    ] == []
     assert [
         row.source_symbol for row in await repo.list_for("company", 7, at=date(2025, 1, 1))
     ] == ["00700.HK"]
@@ -264,3 +264,42 @@ async def test_repositories_reject_unknown_vocabulary(db_session) -> None:
         await dataset_repo.latest(kind="annual", subject_kind="company", subject_id=7)
     with pytest.raises(ValueError, match="content_hash"):
         await dataset_repo.insert_version(make_dataset(content_hash=""))
+
+
+async def test_source_binding_expiry_and_handover_are_exclusive(db_session) -> None:
+    handover = date(2025, 1, 1)
+    db_session.add_all([
+        make_binding(source_symbol="old", valid_from=date(2024, 1, 1), valid_to=handover),
+        make_binding(source_symbol="new", valid_from=handover),
+    ])
+    await db_session.flush()
+    repo = ResearchSourceBindingRepository(db_session)
+    assert [row.source_symbol for row in await repo.list_for("company", 7, at=handover)] == ["new"]
+    assert await repo.symbol_for("company", 7, "eastmoney_hk", at=handover) == "new"
+    assert await repo.symbol_for("company", 7, "eastmoney_hk", at=date(2024, 12, 31)) == "old"
+
+
+@pytest.mark.parametrize("model_name", ["dataset", "binding"])
+@pytest.mark.parametrize("operation", ["update", "delete", "replace"])
+async def test_bulk_sql_cannot_mutate_saved_material(db_session, model_name, operation) -> None:
+    from sqlalchemy import delete, text, update
+    from sqlalchemy.exc import IntegrityError
+
+    model = ResearchDataset if model_name == "dataset" else ResearchSourceBinding
+    row = make_dataset(revision=1) if model_name == "dataset" else make_binding()
+    db_session.add(row)
+    await db_session.commit()
+    row_id = row.id
+    statement = (
+        update(model).where(model.id == row_id).values(payload={"tampered": True})
+        if operation == "update" else (
+            delete(model).where(model.id == row_id) if operation == "delete"
+            else text(f"INSERT OR REPLACE INTO {model.__tablename__} "
+                      f"SELECT * FROM {model.__tablename__} WHERE id = :id").bindparams(id=row_id)
+        )
+    )
+    with pytest.raises(IntegrityError, match="immutable"):
+        await db_session.execute(statement)
+    await db_session.rollback()
+    saved = await db_session.get(model, row_id)
+    assert saved is not None and "tampered" not in saved.payload
