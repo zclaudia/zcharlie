@@ -44,7 +44,7 @@ import json
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,8 +52,10 @@ import typer
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.cli.commands import peer_annual as peer_annual_cmd
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import parse_a_share_ticker
+from investment_agent.industry_peers.batch import DEFAULT_COHORT_KEY, submit_offline_batch
 from investment_agent.providers.shenwan_directory import SW2021_SYSTEM
 from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.peer import PeerCohortSnapshot
@@ -478,5 +480,107 @@ def import_roster(
         typer.echo(
             f"identical content already saved as revision {summary['revision']}; "
             "no new revision appended"
+        )
+    typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+@app.command("submit-offline-batch")
+def submit_offline_batch_command(
+    cohort_key: str = typer.Option(
+        DEFAULT_COHORT_KEY, "--cohort-key", help="Cohort roster the batch is built against"
+    ),
+    ticker: list[str] = typer.Option(  # noqa: B008
+        [],
+        "--ticker",
+        help="Target ticker(s); repeat for several. Default: every roster member is a target.",
+    ),
+    report_period: str = typer.Option(
+        "",
+        "--report-period",
+        help="Batch period as YYYY-MM-DD (default: the latest period with imported snapshots)",
+    ),
+    provider: str = typer.Option(
+        peer_annual_cmd.PROVIDER, "--provider", help="Source scope the batch freezes inputs in"
+    ),
+    adapter_version: str = typer.Option(
+        peer_annual_cmd.ADAPTER_VERSION,
+        "--adapter-version",
+        help="Adapter scope the batch freezes inputs in",
+    ),
+    batch_run_id: str = typer.Option(
+        "", "--batch-run-id", help="Batch identity (default: a generated peer-offline-... id)"
+    ),
+) -> None:
+    """Freeze, compute, save and submit one offline peer batch (WP6).
+
+    Reads the imported roster and annual snapshots, freezes the batch inputs
+    (conflicted fields excluded through the WP4 conflict query), materializes
+    the field evidence that has a date basis, saves the three metric records
+    per target through the WP5 idempotent path, and writes the batch mapping
+    artifact under ``<DATA_DIR>/research-runs/<batch_run_id>/``. No HTTP, no
+    worker, no upstream request. Identical inputs already submitted in the
+    same scope are reused: no new generation, no new artifact.
+    """
+
+    period: date | None = None
+    if report_period:
+        try:
+            period = date.fromisoformat(report_period)
+        except ValueError as exc:
+            typer.echo(f"--report-period must be YYYY-MM-DD: {report_period!r}", err=True)
+            raise typer.Exit(1) from exc
+    for item in ticker:
+        if parse_a_share_ticker(item.upper()) is None:
+            typer.echo(f"--ticker must be a canonical A-share code, got {item!r}", err=True)
+            raise typer.Exit(1)
+    settings = Settings()  # type: ignore[call-arg]
+
+    async def run() -> dict[str, Any]:
+        async with session_scope() as session:
+            submission = await submit_offline_batch(
+                session,
+                data_dir=settings.data_dir,
+                cohort_key=cohort_key,
+                tickers=[item.upper() for item in ticker] or None,
+                provider=provider,
+                adapter_version=adapter_version,
+                report_period=period,
+                batch_run_id=batch_run_id or None,
+            )
+            mapping = submission.mapping
+            return {
+                "batch_run_id": mapping.batch_run_id,
+                "created": submission.created,
+                "generation": mapping.generation,
+                "status": mapping.status,
+                "cohort_ref": mapping.cohort_ref.model_dump(mode="json"),
+                "report_period": mapping.report_period.isoformat(),
+                "provider": mapping.provider,
+                "adapter_version": mapping.adapter_version,
+                "targets": len(mapping.targets),
+                "saved_records": submission.saved_records,
+                "reused_records": submission.reused_records,
+                "gap_metrics": submission.gap_metrics,
+                "frozen_companies": submission.frozen_companies,
+                "target_gaps": [gap.ticker for gap in mapping.manifest.target_gaps],
+                "missing_companies": [item.ticker for item in mapping.manifest.missing_companies],
+                "artifact": str(submission.path),
+                "submitted_at": mapping.submitted_at.isoformat(),
+            }
+
+    try:
+        summary = run_with_engine(settings.database_url, run)
+    except ValueError as exc:
+        typer.echo(f"offline batch submission failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    except OperationalError as exc:
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
+        raise typer.Exit(1) from exc
+    if not summary["created"]:
+        typer.echo(
+            f"identical inputs already submitted as batch {summary['batch_run_id']} "
+            f"(generation {summary['generation']}); reused, no new generation"
         )
     typer.echo(json.dumps(summary, ensure_ascii=False, indent=2))

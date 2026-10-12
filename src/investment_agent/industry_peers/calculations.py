@@ -935,6 +935,7 @@ def build_peer_metric_record(
     evidence_refs: Mapping[tuple[int, str], ObjectRef],
     as_of: datetime,
     batch_run_id: str | None = None,
+    require_fact_refs: bool = True,
 ) -> BuiltMetricCalculation:
     """Build one metric's ``CalculationRecord`` (pure; computes internally).
 
@@ -944,6 +945,15 @@ def build_peer_metric_record(
     must have a reference - a missing one is a caller error, because the record
     would cite facts it cannot support. Missing and conflicted inputs are not
     referenced: they live in the exclusion audit inside ``details`` only.
+
+    ``require_fact_refs=False`` is the declared-inputs submission mode (WP6's
+    offline path, reused by WP8): an input without a materialized reference is
+    *declared* instead of failing the build - the record then cites only the
+    refs it has, counts the rest in ``details["unmaterialized_inputs"]`` and
+    says so in ``quality``. Nothing is hidden: the read side treats a record
+    that used inputs but cites none of them as an evidence gap and shows it
+    partial. The default keeps the strict raising behaviour for existing
+    callers.
     """
 
     outcome = compute_peer_metric(batch, metric_key)
@@ -955,13 +965,17 @@ def build_peer_metric_record(
 
     refs: list[ObjectRef] = []
     fact_evidence: list[dict[str, Any]] = []
+    unmaterialized = 0
     for company_id, field_name, role in _required_fact_keys(spec, outcome):
         ref = evidence_refs.get((company_id, field_name))
         if ref is None:
-            raise ValueError(
-                f"no saved evidence reference for company {company_id} field {field_name}; "
-                "materialize the field before saving the metric calculation"
-            )
+            if require_fact_refs:
+                raise ValueError(
+                    f"no saved evidence reference for company {company_id} field {field_name}; "
+                    "materialize the field before saving the metric calculation"
+                )
+            unmaterialized += 1
+            continue
         refs.append(ref)
         fact_evidence.append(
             {
@@ -1046,8 +1060,17 @@ def build_peer_metric_record(
             else []
         ),
         "fact_evidence": fact_evidence,
+        "unmaterialized_inputs": unmaterialized,
         "input_hash": input_hash,
     }
+    quality = outcome.quality
+    if unmaterialized:
+        quality = (
+            *quality,
+            f"{unmaterialized} of the metric's used inputs have no materialized evidence "
+            "reference (snapshot-only inputs); the record cites only the refs it has and "
+            "the read side must show this as an evidence gap",
+        )
     record = CalculationRecord(
         # Pre-save identity only: save_calculation assigns the persisted id,
         # revision, created_at and actor. The derivation stays deterministic
@@ -1069,7 +1092,7 @@ def build_peer_metric_record(
         applicable=True,
         status=CalculationStatus.OK,
         results=results,
-        quality=outcome.quality,
+        quality=quality,
         errors=(),
         details=details,
     )
@@ -1212,6 +1235,7 @@ async def save_peer_calculations(
     evidence_refs: Mapping[tuple[int, str], ObjectRef],
     as_of: datetime,
     batch_run_id: str | None = None,
+    require_fact_refs: bool = True,
 ) -> TargetCalculationRefs:
     """Compute all three metrics and submit their records idempotently.
 
@@ -1220,6 +1244,10 @@ async def save_peer_calculations(
     re-verified before reuse; the old record keeps its original batch
     identity). A changed input appends a new record. A metric without any
     usable source fact keeps its gap and creates no ``ok`` record.
+
+    ``require_fact_refs`` is passed through to :func:`build_peer_metric_record`
+    (see there): only the declared-inputs submission path (WP6 offline / WP8
+    batch finalize) sets it to ``False``.
     """
 
     service = EvidenceService(session)
@@ -1232,6 +1260,7 @@ async def save_peer_calculations(
             evidence_refs=evidence_refs,
             as_of=as_of,
             batch_run_id=batch_run_id,
+            require_fact_refs=require_fact_refs,
         )
         if built.record is None:
             gap_reason = built.gap.reason if built.gap is not None else "unusable input"
