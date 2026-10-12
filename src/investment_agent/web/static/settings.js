@@ -441,7 +441,7 @@ export function gatewayStatusText(status) {
     case "connected":
       return { text: `已连接，服务 ID ${status.backend_id}（命名空间 ${status.namespace}）`, ok: true };
     case "connecting":
-      return { text: "连接中", ok: false };
+      return { text: `连接中${detail}`, ok: false };
     case "incomplete":
       return { text: `已启用但配置不完整${detail}`, ok: false };
     case "error":

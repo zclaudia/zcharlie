@@ -119,8 +119,15 @@ class GatewayManager:
                 backend_id=backend.backend_id,
                 epoch=backend.epoch,
             )
+        last_error = backend.last_error
+        detail = (
+            f"{last_error.code}: {last_error.message}"
+            if last_error is not None
+            else None
+        )
         return GatewayStatus(
             "connecting",
+            detail=detail,
             url=self._config.url,
             namespace=self._config.namespace,
         )

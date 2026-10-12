@@ -169,5 +169,5 @@ console.log(JSON.stringify({
     )
     assert out["off"] == {"text": "未启用", "ok": False, "neutral": True}
     assert out["incomplete"]["text"] == "已启用但配置不完整：未填写：注册凭证"
-    assert out["connecting"] == {"text": "连接中", "ok": False}
+    assert out["connecting"] == {"text": "连接中：AUTH_FAILED", "ok": False}
     assert out["up"] == {"text": "已连接，服务 ID abc（命名空间 ns）", "ok": True}

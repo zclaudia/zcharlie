@@ -130,17 +130,20 @@ async def test_connects_serves_the_app_and_follows_setting_changes(
     assert manager._backend is None
 
 
-async def test_unreachable_gateway_reports_connecting_without_a_reason(
+async def test_unreachable_gateway_reports_connecting_with_last_error(
     manager: GatewayManager, gateway: FakeGateway
 ) -> None:
-    gateway.handshake_error = ("AUTH_FAILED", "credential revoked")
+    # The gateway refuses the credential with its wire code; the SDK classifies
+    # UNAUTHORIZED as the client-side AUTH_FAILED backend error.
+    gateway.handshake_error = ("UNAUTHORIZED", "credential revoked")
     await save(connection_settings(gateway))
     await manager.reconcile()
     await gateway.wait_for_hellos(1)
     await asyncio.sleep(0.05)
     status = manager.status()
     assert status.state == "connecting"
-    assert status.detail is None
+    assert status.detail is not None
+    assert status.detail.startswith("AUTH_FAILED:")
 
 
 async def test_a_failing_settings_read_is_reported_and_retried(
