@@ -529,6 +529,39 @@ class PublicationService:
             return None
         return await self._task_peer_context(origin.id)  # type: ignore[arg-type]
 
+    async def peer_renewal_block(self, recommendation: CompanyRecommendation, ref: ObjectRef) -> InvestorError:
+        """The WP13 structured renewal refusal for one critical peer dependency.
+
+        An opinion resting on peer-context statistics is never attested
+        "unchanged" and never extended (design §更新与历史可追溯性): peer
+        statistics are fixed-sample descriptive computations whose inputs await
+        backend re-verification, so only a new study bound to current results
+        and a newly published opinion renews one. The error carries structured
+        reasons - the dependency plus its current ``current_limits`` reasons
+        (known change limits stay visible). Reading the old summary with the
+        peer tool does not renew anything. The original opinion keeps its
+        established validity dates and its known limitation reasons.
+        """
+
+        from investment_agent.industry_peers.resolver import RENEWAL_BLOCK_REASON
+        binding = await self.saved_peer_binding(recommendation)
+        reasons = [f"{RENEWAL_BLOCK_REASON}:{ref.id}"]
+        if binding is None:
+            reasons.append(f"{RENEWAL_BLOCK_REASON}:unbound:{ref.id}")
+        else:
+            try:
+                limits = await PeerContextResolver(self.session, binding=binding).current_limits(ref)
+                reasons.extend(f"{RENEWAL_BLOCK_REASON}:{reason}" for reason in limits)
+            except (InvestorError, LookupError, ValueError) as exc:
+                reasons.append(f"{RENEWAL_BLOCK_REASON}:unverifiable:{exc}")
+        return InvestorError(
+            "invalid_reference",
+            "critical peer-context dependencies cannot support an unchanged review or an "
+            f"extension ({'; '.join(reasons)}); run new research bound to current results and "
+            "publish a new recommendation - the original opinion keeps its validity dates and "
+            "known limitations",
+        )
+
     async def _dependency_limits(self, recommendation: CompanyRecommendation, at: datetime) -> list[str]:
         case = await self.foundation.get_case("local_owner", recommendation.case_ids[0])
         resolver = NumericResolver(EvidenceService(self.session), case.listing_ref, at)
@@ -770,6 +803,16 @@ class PublicationService:
             now = datetime.now(UTC)
             case = await self.foundation.get_case("local_owner", case_id)
             view = await self.get_recommendation(ref, at=now)
+            # WP13: a critical peer dependency refuses the renewal with its
+            # structured reasons before any generic unrestricted-view refusal -
+            # the opinion keeps its validity and known limitations either way.
+            for dependency in view.recommendation.dependency_refs:
+                if (
+                    dependency.materiality == "critical"
+                    and dependency.ref.kind == "calculation"
+                    and await peer_method_payload(self.session, "local_owner", dependency.ref) is not None
+                ):
+                    raise await self.peer_renewal_block(view.recommendation, dependency.ref)
             await self._check_method_renewal(claim.task_id, view.recommendation)
             from investment_agent.investor.monitoring import verify_unchanged_review
             await verify_unchanged_review(session, claim.task_id, review, self)

@@ -11,11 +11,15 @@ method entry (technical design §多公司计算的专用校验):
   listing; peer facts are never scope.
 * ``verify`` - the full backend checklist for one bound calculation reference.
 * ``numeric_output`` - render one ``calculation.results.*`` ``NumericNode``
-  (role ``output``) of a verified record.
-* ``review_material`` - backend verification for semantic-review material;
-  the model-visible metric-summary formatter belongs to WP13.
+  (role ``output``) of a verified record through the WP13 registered display
+  rules (the page and the agent format one quantity identically).
+* ``review_material`` - backend verification plus the WP13 fixed formatter:
+  the model receives the bounded metric digest (:func:`metric_digest`),
+  never the expanded fact references.
 * ``current_limits`` - the dependency recheck of a published opinion: the
-  record must still verify *now*, with current correction states.
+  record must still verify *now*, with current correction states, the full
+  input manifest, the bound method version and the newest roster revision
+  (WP13 completed the re-check situations).
 
 Registration is a single fixed mapping for this one method
 (:func:`peer_method_entry`); every other method keeps the generic resolver and
@@ -82,6 +86,8 @@ arrived after a previous validation is seen by the next request's resolver.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
@@ -89,6 +95,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, NoReturn
 
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.evidence.contracts import CalculationRecord, EvidenceRecord, Period
@@ -105,6 +112,7 @@ from investment_agent.industry_peers.calculations import (
     METRIC_KEYS,
     MIN_VALID_PEERS,
     PeerExclusion,
+    POSITION_RULE,
     _APPLICABILITY_REASONS,
     _metric_status,
     ascending_position,
@@ -138,6 +146,73 @@ _STOCK_FIELDS = frozenset({"equity_parent", "contract_liabilities"})
 _RATIO_FIELDS = frozenset({"roe_weighted_annual"})
 """Per-field period/basis semantics (the WP3 importer's field kinds; pinned
 by a unit test against ``cli.commands.peer_annual.FIELD_SPECS``)."""
+
+DIGEST_SCHEMA = "industry_peer_metric_digest/1"
+"""Schema tag of the WP13 fixed review-material formatter output.
+
+The backend runs the complete input checklist (:meth:`verify`); the model
+receives only this bounded per-metric digest - definition, target, period,
+results with units, sample counts, inclusion/exclusion rules as reason
+categories with counts (never a per-company value table), check coverage,
+limitations and hashes."""
+
+MANIFEST_HASH_SCHEMA = "industry_peer_manifest_hash/1"
+"""Schema tag of the full-manifest hash bound into the material set hash.
+
+It covers the complete metric input list (the cited ``fact_evidence``
+manifest) and the whole inclusion/exclusion audit - the material set hash of
+a review therefore binds the exact inputs, while the model-visible digest
+carries its own separate summary hash."""
+
+RENEWAL_BLOCK_REASON = "peer_renewal_research_required"
+"""Structured renewal-refusal prefix (WP13): an opinion with critical
+peer-context dependencies is never "maintained unchanged" or extended. The
+reason carries the dependency reference plus the dependency's current
+``current_limits`` reasons; a new study bound to current results and a newly
+published opinion is the only renewal path. The original opinion keeps its
+established validity dates and its known limitation reasons."""
+
+INCLUSION_RULE = (
+    "bound roster members other than the target whose same-period metric inputs "
+    "are usable; exclusions below carry their audited reason categories"
+)
+"""The fixed inclusion rule sentence of the digest (no per-company table)."""
+
+DISPLAY_RULES: dict[tuple[str, str], tuple[str, int]] = {
+    ("value", "fraction"): ("percent", 2),
+    ("value", "ratio"): ("decimal", 4),
+    ("position", "percent"): ("percent", 2),
+    ("value", "count"): ("decimal", 0),
+}
+"""The WP13 registered publication display rules of this method.
+
+The page (WP10 ``industry_peers.js`` ``formatMetricNumber``) and the agent
+must never render the same quantity differently, so the method entry owns a
+canonical ``(display, precision)`` per result kind and :meth:`numeric_output`
+always formats through it - the model's ``display_format`` cannot produce a
+diverging number: ROE and the contract-liabilities ratio are saved as
+fraction and shown as percent with two decimals (``32.53%``), the cash-flow
+ratio shows four decimals (``0.5792``), the ascending position shows percent
+with two decimals (``94.44%``), counts stay whole numbers. No other method
+is registered; every other caller keeps the two-decimal default of
+:func:`format_quantity`."""
+
+
+def registered_display(result_key: str, unit: str) -> tuple[str, int]:
+    """The registered ``(display, precision)`` for one result kind."""
+
+    kind = "position" if result_key == "ascending_position" else "value"
+    rule = DISPLAY_RULES.get((kind, unit))
+    if rule is None:
+        raise InvestorError("invalid_reference", f"result kind {result_key} ({unit}) has no registered display rule")
+    return rule
+
+
+def _canonical_hash(payload: dict[str, Any]) -> str:
+    """sha256 over the canonical JSON of ``payload`` (sorted keys, no float)."""
+
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _expected_period(field: str, report_period: date) -> Period:
@@ -221,12 +296,27 @@ class PeerMetricValidation:
 
 @dataclass(frozen=True)
 class PeerReviewMaterial:
-    """One metric's semantic-review material (backend-verified)."""
+    """One metric's semantic-review material (WP13 fixed formatter).
+
+    The backend verified the complete input checklist; the model receives the
+    bounded digest only. The two hashes keep the two bindings apart: the
+    *material set hash* (computed by the caller over the delivered materials)
+    binds the complete input manifest and exclusion audit through
+    :attr:`material`'s ``manifest_hash``, while the model-summary hash
+    :attr:`summary_hash` records exactly what the model was shown.
+    """
 
     material: dict[str, Any]
-    """The bounded calculation summary (the existing projection keys); the
-    WP13 fixed formatter replaces this with the model-facing metric digest."""
+    """The fixed metric digest (:data:`DIGEST_SCHEMA`) - no per-company value
+    table, no raw fact payloads, no peer identities beyond the target."""
+    summary_hash: str
+    """sha256 over the canonical digest; recorded separately from the
+    material set hash."""
+    manifest_hash: str
+    """sha256 over the complete input manifest and the exclusion audit."""
     verified: bool
+    """``inputs_verified`` of the checklist - a digest never promotes a
+    pending source to verified."""
     validation: PeerMetricValidation
 
 
@@ -416,8 +506,11 @@ class PeerContextResolver:
 
         Peer medians and positions are derived statistics: they enter as
         ``NumericNode.role = output`` and resolve against the bound target's
-        identity. Publication display formats are registered by WP13; the
-        existing :func:`format_quantity` rules apply here unchanged.
+        identity. The display comes from this method's WP13 registered rules
+        (:func:`registered_display`), not from the model's ``display_format``:
+        the page (WP10) and the agent format the same quantity identically -
+        fraction metrics show percent with two decimals, the cash-flow ratio
+        shows four decimals, positions show percent with two decimals.
         """
 
         if node.role is not NumericRole.OUTPUT:
@@ -427,10 +520,12 @@ class PeerContextResolver:
         if ref.kind != "calculation" or not path.startswith("results."):
             self._reject("a peer numeric node references calculation.results.* only")
         validation = await self.verify(ref)
-        quantity = validation.record.results.get(path[len("results.") :])
+        result_key = path[len("results.") :]
+        quantity = validation.record.results.get(result_key)
         if quantity is None or quantity.value is None:
             self._reject("result key is absent from the verified peer calculation")
-        text, unit, precision, value = format_quantity(quantity, node.display_format)
+        display, precision = registered_display(result_key, quantity.unit)
+        text, unit, precision, value = format_quantity(quantity, display, precision=precision)
         return ResolvedNode(
             ref=ref,
             role=node.role.value,
@@ -446,54 +541,75 @@ class PeerContextResolver:
     async def review_material(
         self, ref: ObjectRef, *, require_verified_inputs: bool = False
     ) -> PeerReviewMaterial:
-        """``review_material``: backend verification for semantic review.
+        """``review_material``: the WP13 fixed formatter over a verified record.
 
         The complete metric input checklist runs here (all fact references,
-        exclusion audits, proof states); the model receives the bounded
-        calculation summary. The WP13 fixed formatter owns the model-facing
-        digest and the separate summary hash - this operation deliberately
-        provides the verified backend result only.
+        exclusion audits, proof states) exactly as in :meth:`verify`; the model
+        then receives the bounded digest built by :func:`metric_digest` -
+        definition, target, period, results with units, sample counts,
+        inclusion/exclusion rules as reason categories with counts (never a
+        per-company value table), check coverage, limitations and the input
+        manifest / digest hashes. The digest never promotes a pending source:
+        :attr:`PeerReviewMaterial.verified` stays the checklist's honest
+        ``inputs_verified`` answer.
         """
 
         validation = await self.verify(ref, require_verified_inputs=require_verified_inputs)
-        record = validation.record.model_dump(mode="json")
-        material: dict[str, Any] = {
-            key: record[key]
-            for key in (
-                "id",
-                "revision",
-                "method_version",
-                "as_of",
-                "results",
-                "quality",
-                "assumptions",
-                "errors",
-                "input_hash",
-            )
-            if key in record
-        }
+        digest, summary_hash, manifest_hash = metric_digest(validation)
         return PeerReviewMaterial(
-            material=material, verified=validation.inputs_verified, validation=validation
+            material=digest,
+            summary_hash=summary_hash,
+            manifest_hash=manifest_hash,
+            verified=validation.inputs_verified,
+            validation=validation,
         )
 
     async def current_limits(self, ref: ObjectRef) -> tuple[str, ...]:
         """``current_limits``: dependency recheck of a published opinion.
 
-        The record must still verify against its saved binding *now*; cited
-        fields whose current correction state awaits re-check are reported as
-        limitation reasons. Renewal blocking for critical peer dependencies
-        belongs to WP13 - this operation only answers the recheck.
+        The record must still verify against its saved binding *now*, with the
+        current correction states and the full input manifest. WP13 completes
+        the re-check situations of the technical design (§更新与历史可追溯性):
+
+        * ``peer_method_version_changed:<version>`` - the cited record was
+          built by another method version (reported, not refused: the reason
+          is the point);
+        * ``peer_field_recheck:<ticker>:<field>:<state>`` - a cited peer
+          field's current version state awaits re-check, conflicts or was
+          superseded by a declared correction (verification invalidated);
+        * ``peer_inputs_unverified:<metric>`` - the record cites only part of
+          its inputs (the declared-inputs mode), so the check coverage never
+          reaches verified;
+        * ``peer_cohort_revision:<revision>`` - a newer roster revision was
+          imported after the bound one (a new cohort), so the published peer
+          set may be outdated.
+
+        Renewal blocking for critical peer dependencies belongs to the WP13
+        guard in ``verify_unchanged_review`` (see :data:`RENEWAL_BLOCK_REASON`);
+        this operation only answers the recheck.
         """
 
+        row = await self.session.get(SavedCalculation, (str(ref.id), ref.revision))
+        if row is None or row.owner_id != self.owner_id:
+            self._reject("the peer-context calculation is unavailable for this owner")
+        payload = row.payload
+        if not isinstance(payload, dict) or payload.get("method") != METHOD:
+            self._reject("the calculation is not this method's record")
+        if payload.get("method_version") != METHOD_VERSION:
+            return (f"peer_method_version_changed:{payload.get('method_version')}",)
         validation = await self.verify(ref, require_consistent_sources=False)
+        limits: list[str] = []
         if validation.inconsistent_sources:
-            return tuple(
+            limits.extend(
                 f"peer_field_recheck:{ticker}:{field}:{state}"
                 for ticker, field, state in validation.inconsistent_sources
             )
         if not validation.inputs_verified:
-            return (f"peer_inputs_unverified:{validation.metric_key}",)
-        return ()
+            limits.append(f"peer_inputs_unverified:{validation.metric_key}")
+        newer_revision = await self._newer_cohort_revision()
+        if newer_revision is not None:
+            limits.append(f"peer_cohort_revision:{newer_revision}")
+        return tuple(limits)
 
     async def bind_subject(self, ref: ObjectRef) -> ObjectRef:
         """The verified record's trusted target subject (the pre-check seam)."""
@@ -715,6 +831,26 @@ class PeerContextResolver:
         ):
             self._reject(f"company {company_id} audit listing differs from its roster listing")
         return member
+
+    async def _newer_cohort_revision(self) -> int | None:
+        """The roster's newest revision when it is newer than the bound one.
+
+        A roster change is a new snapshot row with ``revision + 1`` under the
+        same ``cohort_key``; it never rewrites the bound snapshot. A published
+        opinion resting on the old roster must go back to review.
+        """
+
+        bound = await self.session.get(PeerCohortSnapshot, str(self.binding.cohort_ref.id))
+        if bound is None or bound.revision != self.binding.cohort_ref.revision:
+            return None  # the version check itself belongs to verify (rejects)
+        latest = await self.session.scalar(
+            select(func.max(PeerCohortSnapshot.revision)).where(
+                PeerCohortSnapshot.cohort_key == bound.cohort_key
+            )
+        )
+        if latest is None or latest <= self.binding.cohort_ref.revision:
+            return None
+        return int(latest)
 
     def _exclusion_bases(
         self,
@@ -1038,6 +1174,89 @@ class PeerContextResolver:
         return PeerFactValidation(ref=ref, record=fact, company_id=company_id, field=field, role=role)
 
 
+def metric_digest(
+    validation: PeerMetricValidation,
+) -> tuple[dict[str, Any], str, str]:
+    """The WP13 fixed model-facing digest of one verified metric record.
+
+    Returns ``(digest, summary_hash, manifest_hash)``. The digest carries the
+    metric definition, target, period, results with units, sample counts, the
+    inclusion rule, exclusion reason categories with counts (never a
+    per-company value table - the identity table stays page-only), check
+    coverage, limitations and the three hashes. No strength ranking
+    (stronger/weaker), no derived channel-inventory / sales / competitive
+    advantage / expected-return field exists: the digest describes the fixed
+    sample statistics and their audit only.
+
+    * ``manifest_hash`` covers the complete input manifest and exclusion
+      audit - the caller's material set hash binds it (delivered inside the
+      digest), so a changed input list changes the material set hash even
+      though the model-visible text did not grow.
+    * ``summary_hash`` covers exactly the digest without its own hash - the
+      model-summary hash recorded separately from the material set hash.
+    """
+
+    record = validation.record
+    details = record.details if isinstance(record.details, dict) else {}
+    spec = metric_spec(validation.metric_key)
+    raw_target = details.get("target")
+    target: dict[str, Any] = raw_target if isinstance(raw_target, dict) else {}
+    exclusion_counts: dict[str, int] = {}
+    for entry in details.get("excluded_companies", []) if isinstance(details.get("excluded_companies"), list) else []:
+        if isinstance(entry, dict) and isinstance(entry.get("reason"), str):
+            exclusion_counts[entry["reason"]] = exclusion_counts.get(entry["reason"], 0) + 1
+    verification_counts: dict[str, int] = {}
+    for fact in validation.facts:
+        verification_counts[fact.record.verification] = (
+            verification_counts.get(fact.record.verification, 0) + 1
+        )
+    unmaterialized = int(details.get("unmaterialized_inputs", 0) or 0)
+    manifest_payload = {
+        "schema": MANIFEST_HASH_SCHEMA,
+        "input_hash": record.input_hash,
+        "fact_evidence": details.get("fact_evidence", []),
+        "included_companies": details.get("included_companies", []),
+        "excluded_companies": details.get("excluded_companies", []),
+        "unmaterialized_inputs": unmaterialized,
+    }
+    manifest_hash = _canonical_hash(manifest_payload)
+    valid_quantity = record.results["valid_peer_count"]
+    candidate_quantity = record.results["candidate_peer_count"]
+    assert valid_quantity.value is not None and candidate_quantity.value is not None
+    digest: dict[str, Any] = {
+        "summary_schema": DIGEST_SCHEMA,
+        "id": str(record.id),
+        "revision": record.revision,
+        "method": METHOD,
+        "method_version": record.method_version,
+        "metric_key": validation.metric_key,
+        "definition": spec.formula,
+        "unit": spec.unit,
+        "position_rule": POSITION_RULE,
+        "target_ticker": str(target.get("ticker", "")),
+        "report_period": details.get("report_period"),
+        "metric_status": details.get("metric_status"),
+        "results": {
+            key: {"value": None if quantity.value is None else str(quantity.value), "unit": quantity.unit}
+            for key, quantity in record.results.items()
+        },
+        "sample": {
+            "valid_peer_count": int(valid_quantity.value),
+            "candidate_peer_count": int(candidate_quantity.value),
+        },
+        "inclusion_rule": INCLUSION_RULE,
+        "exclusion_reasons": dict(sorted(exclusion_counts.items())),
+        "verification_counts": dict(sorted(verification_counts.items())),
+        "unmaterialized_inputs": unmaterialized,
+        "limitations": tuple(record.quality),
+        "input_hash": record.input_hash,
+        "manifest_hash": manifest_hash,
+    }
+    summary_hash = _canonical_hash(digest)
+    digest["summary_hash"] = summary_hash
+    return digest, summary_hash, manifest_hash
+
+
 _METHOD_ENTRIES: dict[str, type[PeerContextResolver]] = {METHOD: PeerContextResolver}
 """The whole unified-method-entry registration: exactly this one method.
 No other method is registered, and there is no runtime registration API."""
@@ -1045,11 +1264,18 @@ No other method is registered, and there is no runtime registration API."""
 
 __all__ = [
     "CLEAN_VERSION_STATES",
+    "DIGEST_SCHEMA",
+    "DISPLAY_RULES",
+    "INCLUSION_RULE",
+    "MANIFEST_HASH_SCHEMA",
     "RESULT_KEYS",
+    "RENEWAL_BLOCK_REASON",
     "PeerContextResolver",
     "PeerFactValidation",
     "PeerMetricValidation",
     "PeerReviewMaterial",
+    "metric_digest",
     "peer_method_entry",
     "peer_method_payload",
+    "registered_display",
 ]

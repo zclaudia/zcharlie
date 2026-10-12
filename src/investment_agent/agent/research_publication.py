@@ -123,6 +123,12 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
                     materials.append(record.model_dump(mode="json"))
                     verified = verified and record.verification == "verified" and record.conflict != "unresolved"
                 elif ref.kind == "calculation" and peer_resolver is not None and await peer_method_payload(session, grant.owner, ref) is not None:
+                    # WP13: the method entry runs the complete input checklist
+                    # and returns the fixed model-facing digest; the digest's
+                    # manifest_hash (delivered inside it) binds the material
+                    # set hash to the full manifest and audit, and `verified`
+                    # stays the honest checklist answer - a digest never
+                    # promotes a pending source.
                     material = await peer_resolver.review_material(ref)
                     materials.append(material.material)
                     verified = verified and material.verified
@@ -161,9 +167,17 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
     material_records = {(r["id"], r["revision"]): r for r in materials}
     materials = sorted(material_records.values(), key=lambda r: (r["id"], r["revision"]))
     material_hash = fingerprint(materials)
+    from investment_agent.industry_peers.resolver import DIGEST_SCHEMA
+
     summaries: list[dict[str, Any]] = []
     for material_record in materials:
-        if "fact_refs" in material_record:
+        if material_record.get("summary_schema") == DIGEST_SCHEMA:
+            # WP13 fixed peer formatter: the digest *is* the bounded summary
+            # (its manifest_hash inside binds the material set hash to the
+            # complete input manifest and exclusion audit; its summary_hash
+            # records the model-visible digest separately). No re-projection.
+            summaries.append(material_record)
+        elif "fact_refs" in material_record:
             summaries.append({key: material_record[key] for key in ("id", "revision", "method_version", "as_of", "results", "quality", "assumptions", "errors", "input_hash") if key in material_record})
         else:
             summaries.append({key: material_record[key] for key in ("id", "revision", "subject_ref", "period", "source_ref", "content_hash", "verification", "conflict", "value", "text", "published_at", "acquired_at", "available_from") if key in material_record})

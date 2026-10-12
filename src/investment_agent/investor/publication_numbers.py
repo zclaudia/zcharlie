@@ -50,7 +50,14 @@ def _stated_currency(unit: str) -> str | None:
     return unit.partition("/")[0] if unit in PER_SHARE_UNITS else None
 
 
-def format_quantity(quantity: Quantity, display: str) -> tuple[str, str, int, str]:
+def format_quantity(quantity: Quantity, display: str, *, precision: int | None = None) -> tuple[str, str, int, str]:
+    """Render one quantity under the deterministic display rules.
+
+    ``precision`` is the WP13 registered-format seam: a method entry may pass
+    its registered decimal places for one result kind (the peer-context method
+    registers four for its cash-flow ratio). Every caller that omits it keeps
+    the historical default (whole numbers or two decimals) byte for byte.
+    """
     value, unit = quantity.value, quantity.unit
     if value is None:
         raise InvestorError("invalid_reference", "Unknown quantity cannot be rendered")
@@ -78,7 +85,8 @@ def format_quantity(quantity: Quantity, display: str) -> tuple[str, str, int, st
         raise InvestorError("invalid_reference", "Quantity display format is incompatible")
     if unit not in DISPLAY_UNITS:
         raise InvestorError("invalid_reference", "Unit has no deterministic display rule")
-    precision = 0 if unit in {"shares", "years", "days", "count"} else 2
+    default_precision = 0 if unit in {"shares", "years", "days", "count"} else 2
+    precision = default_precision if precision is None else precision
     rounded = value.quantize(Decimal(1).scaleb(-precision), rounding=ROUND_HALF_UP)
     return f"{rounded}{'%' if unit == 'percent' else ' ' + unit}", unit, precision, str(rounded)
 
