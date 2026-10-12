@@ -197,7 +197,10 @@ async def test_real_collector_deferred_resumption_preserves_pit_and_budget(conve
         assert await resume_collectors(session) == 1
         assert await resume_collectors(session) == 0
         observed = await effective_cutoff(session, task.id)
-        assert observed == task.binding.as_of if historical else observed > acquired > task.binding.as_of
+        if historical:
+            assert observed == task.binding.as_of
+        else:
+            assert observed > acquired > task.binding.as_of
         snapshots = (await session.scalars(select(MarketSnapshot))).all()
         assert snapshots and all(r.captured_at.replace(tzinfo=UTC) == acquired for r in snapshots)
     def resumed(messages, info):

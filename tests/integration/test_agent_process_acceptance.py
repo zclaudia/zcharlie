@@ -126,7 +126,12 @@ def test_real_http_commit_lost_ack_restart_exact_body_and_disabled_replay(tmp_pa
         stop(child)
     # Deactivate new admission in this isolated store; committed receipts remain available.
     with sqlite3.connect(tmp_path / "process.db") as db:
-        db.execute("update app_setting set value_json='false' where key='investor_agent_enabled'")
+        # Assert the row actually flipped: a silent no-op here would mask the
+        # real cause of the 409 assertion below.
+        changed = db.execute(
+            "update app_setting set value_json='false' where key='investor_agent_enabled'"
+        ).rowcount
+        assert changed == 1
     child = spawn(tmp_path, "api-recover", port)
     try:
         until(ready)
