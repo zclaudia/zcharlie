@@ -41,6 +41,13 @@ def test_upgrade_downgrade_and_fresh_head(tmp_path: Path, monkeypatch: pytest.Mo
                 for r in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
             }
             assert "investor_mutation" in tables and "investor_episode_revision" in tables
+            # The case detail path queries both revision tables by case_id; the
+            # index must exist at the storage level, not only in the metadata.
+            for table in ("investor_episode_revision", "investor_plan_revision"):
+                indexes = {
+                    row[1] for row in connection.execute(f"PRAGMA index_list({table})")
+                }
+                assert f"ix_{table}_case_id" in indexes, indexes
         command.downgrade(config, "024")
         with sqlite3.connect(db) as connection:
             assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (

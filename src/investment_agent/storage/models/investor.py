@@ -47,7 +47,7 @@ class EpisodeRevision(Base):
     __tablename__ = "investor_episode_revision"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     revision: Mapped[int] = mapped_column(primary_key=True)
-    case_id: Mapped[str] = mapped_column(ForeignKey("investor_case.id"))
+    case_id: Mapped[str] = mapped_column(ForeignKey("investor_case.id"), index=True)
     number: Mapped[int]
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
@@ -56,7 +56,7 @@ class PlanRevision(Base):
     __tablename__ = "investor_plan_revision"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     revision: Mapped[int] = mapped_column(primary_key=True)
-    case_id: Mapped[str] = mapped_column(ForeignKey("investor_case.id"))
+    case_id: Mapped[str] = mapped_column(ForeignKey("investor_case.id"), index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 

@@ -26,6 +26,8 @@ def upgrade() -> None:
         sa.Column("wait_token", sa.String(36), nullable=True),
         sa.UniqueConstraint("owner_id", "input_key"),
     )
+    # The scheduler tick claims rows by status; keep it off the full scan.
+    op.create_index("ix_agent_task_status", "agent_task", ["status"])
     op.create_table(
         "agent_task_attempt",
         sa.Column("id", sa.String(36), primary_key=True),

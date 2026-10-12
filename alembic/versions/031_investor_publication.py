@@ -34,6 +34,8 @@ def upgrade() -> None:
         sa.Column("owner_id", sa.String(32), nullable=False),
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("state", sa.String(16), nullable=False))
+    # Outbox dispatch polls pending rows by state; keep it off the full scan.
+    op.create_index("ix_investor_publication_outbox_state", "investor_publication_outbox", ["state"])
 
 
 def downgrade() -> None:

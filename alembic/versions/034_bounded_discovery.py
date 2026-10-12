@@ -8,13 +8,28 @@ branch_labels = None
 depends_on = None
 
 
+def _has_column(bind, table: str, column: str) -> bool:
+    return any(row[1] == column for row in bind.execute(sa.text(f"PRAGMA table_info({table})")))
+
+
 def upgrade() -> None:
-    op.add_column("agent_budget_entry", sa.Column("purpose", sa.String(16), nullable=False, server_default="interactive"))
+    bind = op.get_bind()
+    # Resolve both review backfill sets BEFORE any DDL: the pysqlite driver
+    # autocommits DDL, so a late failure could not roll the column back and a
+    # plain re-run would die on the duplicate column.
     # Trusted queue kind identifies legacy reviews; global totals retain all rows.
-    op.execute("UPDATE agent_budget_entry SET purpose='review' WHERE task_id IN (SELECT agent_task.id FROM agent_task JOIN pipeline_run ON pipeline_run.id=agent_task.run_id WHERE pipeline_run.kind='agent_review')")
+    review_task_ids = set(bind.execute(sa.text(
+        "SELECT agent_task.id FROM agent_task JOIN pipeline_run ON pipeline_run.id=agent_task.run_id WHERE pipeline_run.kind='agent_review'")).scalars())
     # Authenticated review messages used agent_turn, so also recover the saved
     # server-owned research_kind. Never infer purpose from user/model text.
-    op.execute("UPDATE agent_budget_entry SET purpose='review' WHERE task_id IN (SELECT task_id FROM agent_execution_grant WHERE json_extract(payload, '$.research_kind')='review')")
+    review_task_ids.update(bind.execute(sa.text(
+        "SELECT task_id FROM agent_execution_grant WHERE json_extract(payload, '$.research_kind')='review'")).scalars())
+    # An aborted earlier attempt may already have committed the column; this
+    # guard keeps such a re-run going instead of failing on a duplicate column.
+    if not _has_column(bind, "agent_budget_entry", "purpose"):
+        op.add_column("agent_budget_entry", sa.Column("purpose", sa.String(16), nullable=False, server_default="interactive"))
+    for task_id in review_task_ids:
+        bind.execute(sa.text("UPDATE agent_budget_entry SET purpose='review' WHERE task_id=:task_id"), {"task_id": task_id})
     op.create_table("investor_discovery_cursor",
         sa.Column("listing_id", sa.Integer(), sa.ForeignKey("listing.id"), primary_key=True),
         sa.Column("payload", sa.JSON(), nullable=False))

@@ -2,6 +2,10 @@
 
 Revision ID: 025
 Revises: 024
+
+Foreign keys here and in the following migrations are declarative only:
+SQLite runs without ``PRAGMA foreign_keys``, so nothing enforces them at the
+storage layer and the application layer owns the deletion order.
 """
 
 import sqlalchemy as sa
@@ -65,6 +69,10 @@ def upgrade() -> None:
         sa.Column("request_hash", sa.String(64), nullable=False),
         sa.Column("result", sa.JSON(), nullable=False),
     )
+    # The case detail page queries both append-only revision tables by case_id;
+    # without these indexes every lookup degrades to a full table scan.
+    op.create_index("ix_investor_episode_revision_case_id", "investor_episode_revision", ["case_id"])
+    op.create_index("ix_investor_plan_revision_case_id", "investor_plan_revision", ["case_id"])
 
 
 def downgrade() -> None:

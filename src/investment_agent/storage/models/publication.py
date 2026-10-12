@@ -40,7 +40,7 @@ class PublicationOutbox(Base):
     notification_key: Mapped[str] = mapped_column(String(160))
     owner_id: Mapped[str] = mapped_column(String(32))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
-    state: Mapped[str] = mapped_column(String(16), default="pending")
+    state: Mapped[str] = mapped_column(String(16), default="pending", index=True)
 
 
 def _immutable(*args: object) -> None:

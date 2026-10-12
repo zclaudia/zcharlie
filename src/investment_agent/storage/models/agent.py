@@ -19,7 +19,7 @@ class AgentTask(Base):
     input_hash: Mapped[str] = mapped_column(String(64))
     event_floor: Mapped[int] = mapped_column(default=0, server_default="0")
     revision: Mapped[int]
-    status: Mapped[str] = mapped_column(String(24))
+    status: Mapped[str] = mapped_column(String(24), index=True)
     run_id: Mapped[int] = mapped_column(ForeignKey("pipeline_run.id"))
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
     checkpoint: Mapped[dict[str, Any]] = mapped_column(JSON)

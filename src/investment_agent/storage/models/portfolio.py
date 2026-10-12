@@ -2,7 +2,7 @@
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from investment_agent.storage.models.base import Base

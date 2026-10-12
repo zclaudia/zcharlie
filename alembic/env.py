@@ -45,7 +45,9 @@ if config.config_file_name is not None:
 # A clean-environment deployment configures the database through DATABASE_URL;
 # the ini value stays the fallback for local defaults.
 if os.getenv("DATABASE_URL"):
-    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+    # Alembic reads the ini back through configparser interpolation, so a bare
+    # % in a password or file path must be doubled to survive the round trip.
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"].replace("%", "%%"))
 
 target_metadata = Base.metadata
 
