@@ -14,6 +14,7 @@ from investment_agent.api.auth import get_settings
 from investment_agent.config import Settings
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.foundations import InvestorError
+from investment_agent.portfolio import service as portfolio_service
 from investment_agent.portfolio.contracts import (
     AppendEvent,
     Balance,
@@ -203,6 +204,27 @@ async def test_owner_currency_listing_and_missing_price(ledger):
     first = await append(account, balance(ref, occurred_at=T - timedelta(days=1)), 0)
     assert first.snapshot.price_coverage == "partial" and first.snapshot.total_assets is None
     assert first.snapshot.known_subtotal == D(1000)
+
+
+@pytest.mark.asyncio
+async def test_snapshot_price_window_uses_the_shanghai_date(ledger, monkeypatch):
+    """Recorded 00:30 Beijing (16:30 UTC) must already see that Beijing day's close."""
+    account, ref = ledger
+    frozen = T + timedelta(hours=16, minutes=30)  # UTC 16:30 = Beijing next-day 00:30
+
+    class FrozenClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen if tz is None else frozen.astimezone(tz)
+
+    monkeypatch.setattr(portfolio_service, "datetime", FrozenClock)
+    async with session_scope() as session:
+        session.add(MarketSnapshot(listing_id=int(ref.id), trade_date=T.date() + timedelta(days=1), open=D(20), high=D(20), low=D(20), close=D(20), volume=D(1), adjust="none", provider="fixture", captured_at=frozen - timedelta(minutes=30), version=1))
+    await append(account, balance(ref), 0)
+    transfer = await append(account, CashFact(kind="cash_transfer", occurred_at=T + timedelta(hours=1), source="user", user_confirmed=True, amount=D(1)), 1)
+    # The UTC date of `recorded` is still 2025-01-01; the Beijing day is 01-02.
+    assert transfer.snapshot.holdings[0].price == D(20)
+    assert transfer.snapshot.holdings[0].price_date == T.date() + timedelta(days=1)
 
 
 @pytest.mark.asyncio

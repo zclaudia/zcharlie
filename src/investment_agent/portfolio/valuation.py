@@ -33,10 +33,18 @@ MAX_PRICE_STALENESS_DAYS = 5
 """Trading days after the last close before a price counts as stale (plan 2.10)."""
 
 
-def default_knowledge_cutoff(valuation_date: date) -> datetime:
-    """Beijing day-end for historical dates, capped at actual knowledge now."""
+def day_knowledge_cutoff(valuation_date: date) -> datetime:
+    """Deterministic Beijing day-end knowledge boundary (no wall clock).
 
-    end_of_day = datetime(
+    A queued job's payload must be a pure function of its idempotency key: the
+    same (account, revision, date) enqueued twice on one day must carry the
+    same cutoff, or the second enqueue raises an idempotency payload mismatch
+    and aborts the fan-out. Unlike :func:`default_knowledge_cutoff` it never
+    caps at the current time, so today's run may name today's still-future
+    day-end and keep that identity all day.
+    """
+
+    return datetime(
         valuation_date.year,
         valuation_date.month,
         valuation_date.day,
@@ -45,8 +53,13 @@ def default_knowledge_cutoff(valuation_date: date) -> datetime:
         59,
         999999,
         tzinfo=SHANGHAI_TZ,
-    )
-    return min(end_of_day.astimezone(UTC), datetime.now(UTC))
+    ).astimezone(UTC)
+
+
+def default_knowledge_cutoff(valuation_date: date) -> datetime:
+    """Beijing day-end for historical dates, capped at actual knowledge now."""
+
+    return min(day_knowledge_cutoff(valuation_date), datetime.now(UTC))
 
 
 class ValuationHolding(Contract):
@@ -467,14 +480,39 @@ class ValuationService:
         """The newest valuation the knowledge ``cutoff`` could know (plan 2.10).
 
         Historical research binds this instead of today's valuation; a later
-        one would import knowledge after the task's cutoff.
+        one would import knowledge after the task's cutoff. The selection runs
+        in SQL instead of inside the newest-200 window: ``knowledge_cutoff``
+        lives only in the payload JSON, where every writer stores an aware UTC
+        ISO string, so the ISO text comparison is exact. The winner is
+        re-checked in Python, and a hypothetical non-UTC legacy payload falls
+        back to the exact in-memory selection instead of returning a wrong row.
         """
 
         await self._account(account_id)
         if cutoff.tzinfo is None:
             raise InvestorError("invalid_reference", "A valuation cutoff must be timezone-aware")
+        stored_cutoff = PortfolioValuation.payload["knowledge_cutoff"].as_string()
+        # pydantic serializes aware UTC datetimes with a "Z" suffix; matching it
+        # keeps the text comparison exact at the boundary.
+        bound = cutoff.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        row = await self.session.scalar(
+            select(PortfolioValuation)
+            .where(
+                PortfolioValuation.account_id == str(account_id),
+                stored_cutoff <= bound,
+            )
+            .order_by(PortfolioValuation.valuation_date.desc(), stored_cutoff.desc())
+            .limit(1)
+        )
+        if row is not None:
+            candidate = Valuation.model_validate(row.payload)
+            if candidate.knowledge_cutoff <= cutoff:
+                return candidate
         best: Valuation | None = None
-        for valuation in await self.history(account_id, limit=200):
+        for row in await self.session.scalars(
+            select(PortfolioValuation).where(PortfolioValuation.account_id == str(account_id))
+        ):
+            valuation = Valuation.model_validate(row.payload)
             if valuation.knowledge_cutoff > cutoff:
                 continue
             if best is None or (valuation.valuation_date, valuation.knowledge_cutoff) > (

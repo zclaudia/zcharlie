@@ -276,6 +276,40 @@ async def test_percentile_exact_existing_algorithm_and_versioned_inputs(db_sessi
     assert len(str(summary)) < 3000
 
 
+@pytest.mark.asyncio
+async def test_percentile_matches_a_hand_computed_oracle(db_session):
+    """Hard-coded oracle, independent of the factor implementation.
+
+    260 in-window sessions: 100 with pe_ttm=8, 159 with pe_ttm=12 and the
+    latest with pe_ttm=10. Inclusive percentile of the latest (10):
+    count(value <= 10) / valid_sessions = (100 + 1) / 260 = 0.388462.
+    """
+    listing = await ListingRepository(db_session).ensure_a_share_listing("600519.SH", company_name="Fictional fixture")
+    repository = MarketSnapshotRepository(db_session)
+    end = date(2026, 9, 30)
+    count = 260
+
+    def pe(index: int) -> D:
+        if index < 100:
+            return D(8)
+        if index < count - 1:
+            return D(12)
+        return D(10)
+
+    for index in range(count):
+        await repository.insert(listing_id=listing.id, trade_date=end - timedelta(days=count - 1 - index),
+            open=D(10), high=D(10), low=D(10), close=D(10), volume=D(100),
+            pe_ttm=pe(index), pb_mrq=D("1.2"), provider="baostock",
+            captured_at=AS_OF - timedelta(days=1), is_backfill=False)
+    output = await ValuationService(db_session).percentile("local_owner",
+        PercentileRequest(ticker="600519.SH", as_of=AS_OF, metric="pe"), uuid4())
+    assert output["status"] == "ok"
+    assert D(output["result"]["percentile"]["value"]) == D("0.388462")
+    ref = output["calculation"]["details"]["factor"]["inputs_ref"]
+    assert ref["valid_sessions"] == 260 and ref["current"] == 10.0
+    assert ref["excluded_non_positive"] == 0 and ref["sessions"] == 260
+
+
 @pytest.mark.parametrize("options,status,flag", [
     ({"negative": True}, "not_applicable", "negative_earnings"),
     ({"count": 239}, "missing_inputs", "short_history"),

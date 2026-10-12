@@ -7,7 +7,7 @@ silently re-prices the old plan.
 """
 
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal as D
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -15,9 +15,9 @@ import pytest
 from investment_agent.agent.contracts import ContextBinding
 from investment_agent.agent.execution import ExecutionDeniedError, ExecutionGrant, admit
 from investment_agent.agent.portfolio_tools import _require_usable_valuation
+from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.contracts import PortfolioConstraints, TextNode
 from investment_agent.investor.foundations import InvestorError, InvestorService
-from investment_agent.investor.common import ObjectRef
 from investment_agent.portfolio.calculation_contracts import PortfolioCalculationRequest, Scenario
 from investment_agent.portfolio.calculations import PortfolioCalculationService
 from investment_agent.portfolio.plan_contracts import OptionInput, PlanInput, PortfolioAction
@@ -46,14 +46,14 @@ async def _seed(ledger, *, later_close="12"):
     snapshot = (await append(account, balance(ref, cash="1000", quantity="100", occurred_at=T0), 0)).snapshot
     async with session_scope() as session:
         later = T0 + timedelta(days=1)
-        session.add(MarketSnapshot(listing_id=ref.id, trade_date=later.date(), open=D(later_close), high=D(later_close), low=D(later_close), close=D(later_close), volume=D(1), adjust="none", provider="fixture", captured_at=later, version=1))
+        session.add(MarketSnapshot(listing_id=ref.id, trade_date=later.date(), open=Decimal(later_close), high=Decimal(later_close), low=Decimal(later_close), close=Decimal(later_close), volume=Decimal(1), adjust="none", provider="fixture", captured_at=later, version=1))
         session.add(IndustryClassification(listing_id=ref.id, system="CSRC", code="fixture-sector", name="Fixture", valid_from=later.date(), source="fixture", captured_at=later))
-        m = await InvestorService(session).create_mandate("local_owner", mandate().model_copy(update={"scope_refs": (ref,), "hard_constraints": (), "portfolio_constraints": PortfolioConstraints(account_id=account, max_single_weight=D("0.3"), max_sector_weight=D("0.6"), minimum_cash=D(0))}), uuid4())
+        m = await InvestorService(session).create_mandate("local_owner", mandate().model_copy(update={"scope_refs": (ref,), "hard_constraints": (), "portfolio_constraints": PortfolioConstraints(account_id=account, max_single_weight=Decimal("0.3"), max_sector_weight=Decimal("0.6"), minimum_cash=Decimal(0))}), uuid4())
     async with session_scope() as session:
         valuation = await ValuationService(session).ensure(account, valuation_date=DAY + timedelta(days=1), now=T0 + timedelta(days=1), is_trading_day=lambda day: True)
     assert valuation is not None
-    assert valuation.holdings[0].price == D(later_close)
-    assert D(snapshot.holdings[0].price) == D(10)  # the snapshot's older frozen basis
+    assert valuation.holdings[0].price == Decimal(later_close)
+    assert Decimal(snapshot.holdings[0].price) == Decimal(10)  # the snapshot's older frozen basis
     return snapshot, ref, valuation, m
 
 
@@ -64,7 +64,7 @@ def _request(snapshot, ref, m, *, valuation_ref):
         snapshot_ref=snapshot.reference,
         valuation_ref=valuation_ref,
         mandate_ref=ObjectRef(kind="mandate", id=m.id, revision=m.revision),
-        scenarios=(Scenario(name="reduce_risk", actions=(action(ref, direction="sell", quantity=D(10), fixed_fee=D(1)),)),),
+        scenarios=(Scenario(name="reduce_risk", actions=(action(ref, direction="sell", quantity=Decimal(10), fixed_fee=Decimal(1)),)),),
     )
 
 
@@ -105,10 +105,10 @@ async def test_valuation_bound_calculation_freezes_the_valuation_price_basis(led
     assert calc.details["valuation"]["knowledge_cutoff"] == valuation.knowledge_cutoff.isoformat()
     # The frozen snapshot (price 10) stays untouched; the calculation is priced
     # on the valuation (12) and says so.
-    assert D(calc.details["snapshot"]["holdings"][0]["price"]) == D(10)
-    assert D(calc.details["sources"][0]["price"]) == D(12)
+    assert Decimal(calc.details["snapshot"]["holdings"][0]["price"]) == Decimal(10)
+    assert Decimal(calc.details["sources"][0]["price"]) == Decimal(12)
     assert calc.details["sources"][0]["price_date"] == (DAY + timedelta(days=1)).isoformat()
-    assert D(calc.details["scenarios"][0]["nav"]) == D(2200)
+    assert Decimal(calc.details["scenarios"][0]["nav"]) == Decimal(2200)
     assert calc.details["price_basis_at"] == valuation.knowledge_cutoff.isoformat()
 
 
@@ -132,7 +132,7 @@ async def test_plan_binds_the_same_valuation_and_marks_a_newer_one(ledger):
     # reference and is marked limited, never silently re-priced.
     async with session_scope() as session:
         later = T0 + timedelta(days=2)
-        session.add(MarketSnapshot(listing_id=ref.id, trade_date=later.date(), open=D(13), high=D(13), low=D(13), close=D(13), volume=D(1), adjust="none", provider="fixture", captured_at=later, version=1))
+        session.add(MarketSnapshot(listing_id=ref.id, trade_date=later.date(), open=Decimal(13), high=Decimal(13), low=Decimal(13), close=Decimal(13), volume=Decimal(1), adjust="none", provider="fixture", captured_at=later, version=1))
     async with session_scope() as session:
         newer = await ValuationService(session).ensure(snapshot.account_id, valuation_date=DAY + timedelta(days=2), now=T0 + timedelta(days=2), is_trading_day=lambda day: True)
     assert newer is not None and newer.reference != valuation.reference
@@ -167,7 +167,7 @@ async def test_legacy_contract_stays_v1_and_rejects_a_valuation_claim(ledger):
     assert calc.method_version == "ag22-v1"
     assert calc.as_of == snapshot.valuation_at
     assert "valuation" not in calc.details
-    assert D(calc.details["sources"][0]["price"]) == D(10)  # the snapshot's frozen basis
+    assert Decimal(calc.details["sources"][0]["price"]) == Decimal(10)  # the snapshot's frozen basis
 
     candidate = _candidate(snapshot, ref, calc, valuation_ref=valuation.reference)
     async with session_scope() as session:
@@ -247,7 +247,7 @@ async def test_calculate_tool_requires_the_current_or_pit_usable_valuation(ledge
     # must refresh the context instead of consuming the older prices.
     async with session_scope() as session:
         later = T0 + timedelta(days=2)
-        session.add(MarketSnapshot(listing_id=ref.id, trade_date=later.date(), open=D(13), high=D(13), low=D(13), close=D(13), volume=D(1), adjust="none", provider="fixture", captured_at=later, version=1))
+        session.add(MarketSnapshot(listing_id=ref.id, trade_date=later.date(), open=Decimal(13), high=Decimal(13), low=Decimal(13), close=Decimal(13), volume=Decimal(1), adjust="none", provider="fixture", captured_at=later, version=1))
     async with session_scope() as session:
         await ValuationService(session).ensure(snapshot.account_id, valuation_date=DAY + timedelta(days=2), now=T0 + timedelta(days=2), is_trading_day=lambda day: True)
     async with session_scope() as session:

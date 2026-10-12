@@ -380,6 +380,11 @@ class ValuationService:
             latest_fin[row.report_period] = row
         overdue = await ReportOverdueRepository(self.session).open_as_of(listing.id, day)
         column = "pe_ttm" if request.metric == "pe" else "pb_mrq"
+        # Decimal -> float here is deliberate and rank-only: the v1 percentile
+        # factor (factors/valuation.py) only compares bar values (`value > 0`,
+        # `value <= current`) and never does money arithmetic on them, and the
+        # stored 2-4 digit fixed-point ratios map order-preserving into float.
+        # The saved result is converted back through Decimal(str(...)) below.
         bars = [Bar(trade_date=r.trade_date, close=float(r.close),
                     pe_ttm=float(r.pe_ttm) if r.pe_ttm is not None else None,
                     pb_mrq=float(r.pb_mrq) if r.pb_mrq is not None else None,

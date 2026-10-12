@@ -7,6 +7,7 @@ untouched) when facts advanced during the computation.
 """
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
 
@@ -14,10 +15,13 @@ import pytest
 from sqlalchemy import func, select
 
 from investment_agent.config import Settings
+from investment_agent.portfolio.contracts import CreateAccount
+from investment_agent.portfolio.service import PortfolioService
 from investment_agent.portfolio.valuation import ValuationService, trading_days_after
 from investment_agent.portfolio.valuation_jobs import (
     PortfolioValuationHandler,
     _max_staleness_days,
+    enqueue_due_valuations,
     enqueue_valuation,
     required_valuation_date,
 )
@@ -25,10 +29,13 @@ from investment_agent.research.worker import ResearchWorker
 from investment_agent.settings.loader import ensure_imported, load_settings, store_for
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
+from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.models.portfolio import PortfolioValuation
-from tests.test_portfolio_ledger import append, balance, ledger as ledger_fixture
+from tests.test_portfolio_ledger import append, balance
+from tests.test_portfolio_ledger import ledger as ledger_fixture
 
 ledger = ledger_fixture
+D = Decimal
 KEY = {"X-API-Key": "secret"}
 
 
@@ -156,6 +163,101 @@ async def test_unreviewed_calendar_year_blocks_full_nav(ledger):
     assert value is not None
     assert any(u.startswith("price_staleness_unreviewed:") for u in value.unknowns)
     assert value.total_assets is None and value.weight_available is False
+
+
+@pytest.mark.asyncio
+async def test_same_day_cron_and_ingestion_enqueue_reuse_one_run(ledger):
+    """The 00:05 cron and a later snapshot hook share one (account, revision,
+    date) identity: the payload's cutoff is the deterministic day-end, so the
+    second enqueue reuses the run instead of raising a payload mismatch."""
+    account, ref = ledger
+    await append(account, balance(ref), 0)
+    async with session_scope() as session:
+        created = await enqueue_due_valuations(session, triggered_by="scheduler")
+    assert len(created) == 1
+    async with session_scope() as session:
+        again = await enqueue_due_valuations(session, triggered_by="snapshot_close")
+    assert again == []  # same key, same payload: reused, never a mismatch
+    async with session_scope() as session:
+        runs = await _valuation_runs()
+    assert len(runs) == 1
+    assert runs[0].triggered_by == "scheduler"  # the cron's run is the one kept
+
+
+@pytest.mark.asyncio
+async def test_new_close_price_mints_a_new_identity_and_recomputes(ledger):
+    """Once the close price is ingested, the next hook's enqueue creates a new
+    run for the same (account, revision, date) via the price watermark (WP6)."""
+    account, ref = ledger
+    await append(account, balance(ref), 0)
+    day = date(2025, 1, 2)
+    async with session_scope() as session:
+        first, created = await enqueue_valuation(
+            session, account_id=account, valuation_date=day, triggered_by="scheduler"
+        )
+        assert created
+    # The day's close lands: new relevant price knowledge for this holding.
+    async with session_scope() as session:
+        session.add(MarketSnapshot(listing_id=int(ref.id), trade_date=day, open=D(11), high=D(11), low=D(11), close=D(11), volume=D(1), adjust="none", provider="fixture", captured_at=datetime(2025, 1, 2, 7, 15, tzinfo=UTC), version=1))
+    async with session_scope() as session:
+        second, created = await enqueue_valuation(
+            session, account_id=account, valuation_date=day, triggered_by="snapshot_close"
+        )
+        assert created and second.id != first.id
+    assert await _worker().run_once(run_id=second.id) == second.id
+    async with session_scope() as session:
+        current = await ValuationService(session).current(account)
+    assert current is not None and current.valuation_date == day
+    assert current.holdings[0].price == D(11)  # the day's close, not the morning price
+
+
+@pytest.mark.asyncio
+async def test_zone_backstop_survives_a_failed_valuation_enqueue(ledger, monkeypatch):
+    """The runner's zone enqueue has its own error boundary (P1: no guilty chain)."""
+    account, ref = ledger
+    await append(account, balance(ref), 0)
+    import investment_agent.portfolio.valuation_jobs as valuation_jobs
+    import investment_agent.rules.zone_jobs as zone_jobs
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError("valuation enqueue unavailable")
+
+    monkeypatch.setattr(valuation_jobs, "enqueue_due_valuations", broken)
+    seen: dict[str, object] = {}
+
+    async def zone(session, **kwargs):
+        seen["as_of"] = kwargs.get("as_of")
+        return []
+
+    monkeypatch.setattr(zone_jobs, "enqueue_due_zone_detections", zone)
+    from investment_agent.scheduler.runner import _enqueue_portfolio_valuations_after_ingestion
+
+    await _enqueue_portfolio_valuations_after_ingestion("close_quote", today=date(2025, 1, 2))
+    assert seen["as_of"] == date(2025, 1, 2)
+
+
+@pytest.mark.asyncio
+async def test_fanout_isolates_one_account_failure(ledger, monkeypatch):
+    """One account's enqueue failure logs and continues; the rest still run."""
+    account, ref = ledger
+    await append(account, balance(ref), 0)
+    async with session_scope() as session:
+        broken = await PortfolioService(session).create_account(
+            CreateAccount(idempotency_key=uuid4(), name="Broken enqueue")
+        )
+    import investment_agent.portfolio.valuation_jobs as valuation_jobs
+
+    real = valuation_jobs.enqueue_valuation
+
+    async def flaky(session, *, account_id, **kwargs):
+        if str(account_id) == str(broken.id):
+            raise RuntimeError("enqueue blew up for this account")
+        return await real(session, account_id=account_id, **kwargs)
+
+    monkeypatch.setattr(valuation_jobs, "enqueue_valuation", flaky)
+    async with session_scope() as session:
+        created = await enqueue_due_valuations(session, triggered_by="test")
+    assert len(created) == 1  # the healthy account's run was still created
 
 
 def test_required_valuation_date_uses_the_calendar():

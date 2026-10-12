@@ -16,6 +16,8 @@ import pytest
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.portfolio.contracts import (
     AppendEvent,
+    Balance,
+    CreateAccount,
     Holding,
     ImportBatch,
     ImportRow,
@@ -24,7 +26,8 @@ from investment_agent.portfolio.contracts import (
 )
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.storage.database import session_scope
-from tests.test_portfolio_ledger import append, balance, ledger as ledger_fixture, trade
+from tests.test_portfolio_ledger import append, balance, trade
+from tests.test_portfolio_ledger import ledger as ledger_fixture
 
 ledger = ledger_fixture
 D = Decimal
@@ -173,6 +176,74 @@ async def test_stale_base_revision_is_refused_and_a_lost_receipt_replays(ledger)
     async with session_scope() as session:
         snapshot = await PortfolioService(session).snapshot(account)
     assert snapshot.revision == 3
+
+
+@pytest.mark.asyncio
+async def test_first_import_into_an_empty_account_opens_the_balance(ledger):
+    """A brand-new account (revision 0, no facts) imports its opening balance."""
+    account, ref = ledger
+    async with session_scope() as session:
+        fresh = await PortfolioService(session).create_account(
+            CreateAccount(idempotency_key=uuid4(), name="Fresh import")
+        )
+    opening = Balance(
+        kind="opening_balance",
+        occurred_at=datetime(2025, 1, 1, tzinfo=UTC),
+        source="user statement",
+        user_confirmed=True,
+        coverage="complete",
+        asset_scope="explicit account",
+        holdings=(Holding(listing_ref=ref, quantity=D(100), average_cost=D(20)),),
+        cash=D(10000),
+        prior_history="included_in_confirmed_balance",
+    )
+    request = _batch(fresh.id, 0, [("opening", opening)])
+    async with session_scope() as session:
+        preview = await PortfolioService(session).preview_import(request)
+    assert preview.ready, preview.conflicts
+    assert preview.resulting_revision == 1
+    # The empty-history guard still names a batch that does not open the balance.
+    late = _batch(
+        fresh.id,
+        0,
+        [("buy", _trade(ref, occurred_at=datetime(2025, 1, 10, tzinfo=UTC)))],
+    )
+    async with session_scope() as session:
+        rejected = await PortfolioService(session).preview_import(late)
+    assert not rejected.ready
+    assert any(
+        conflict.startswith("first_fact_must_be_opening_balance")
+        for conflict in rejected.conflicts
+    )
+
+    async with session_scope() as session:
+        result = await PortfolioService(session).apply_import(request)
+    assert result.snapshot.revision == 1
+    held = next(h for h in result.snapshot.holdings if h.listing_ref == ref)
+    assert held.confirmed_quantity == D(100)
+    assert result.snapshot.known_cash == D(10000)
+    assert result.audit_only_row_ids == ()
+
+
+@pytest.mark.asyncio
+async def test_lost_receipt_replay_audits_against_the_whole_history(ledger):
+    """A replayed import names the same audit-only rows as the first commit."""
+    account, ref = ledger
+    # The confirmed balance is *after* the imported segment: history only.
+    await append(account, balance(ref, occurred_at=datetime(2025, 2, 1, tzinfo=UTC), quantity="100", cash="1000"), 0)
+    request = _batch(
+        account,
+        1,
+        [("old-buy", _trade(ref, occurred_at=datetime(2025, 1, 1, tzinfo=UTC), direction="buy", quantity="50"))],
+    )
+    async with session_scope() as session:
+        first = await PortfolioService(session).apply_import(request)
+    assert first.audit_only_row_ids == ("old-buy",)
+    # The identical retry (lost receipt) must reproduce the same audit set.
+    async with session_scope() as session:
+        replay = await PortfolioService(session).apply_import(request)
+    assert [event.id for event in replay.events] == [event.id for event in first.events]
+    assert replay.audit_only_row_ids == first.audit_only_row_ids == ("old-buy",)
 
 
 def test_reversals_belong_to_corrections_not_imports():

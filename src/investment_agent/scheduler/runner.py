@@ -363,10 +363,16 @@ async def _enqueue_portfolio_valuations_after_ingestion(
 ) -> None:
     """Close prices / evening bars are in: queue the day's valuations (plan 2.10).
 
-    A stored valuation chains into the holding zone detection (WP8); the
-    explicit zone enqueue below is the backstop for a day whose valuations were
-    already stored by an earlier trigger. Both use the ingested day, not the
-    wall clock, so a catch-up after midnight still detects the right date.
+    The valuation identity includes the account's price-knowledge watermark, so
+    a fire that lands after this job's prices were ingested mints a new
+    (account, revision, date) identity and recomputes, while an earlier fire at
+    the same knowledge reuses the queued run instead of raising an idempotency
+    mismatch. A stored valuation chains into the holding zone detection (WP8);
+    the explicit zone enqueue below is the backstop for a day whose valuations
+    were already stored by an earlier trigger. Both use the ingested day, not
+    the wall clock, so a catch-up after midnight still detects the right date.
+    Each chain gets its own error boundary: a failed valuation enqueue must not
+    skip the zone backstop.
     """
 
     from investment_agent.portfolio.valuation_jobs import (
@@ -383,12 +389,15 @@ async def _enqueue_portfolio_valuations_after_ingestion(
                 session, triggered_by="snapshot_close", valuation_date=today
             )
         log.info("scheduler.portfolio_valuation.after_ingestion", job=job, created_runs=len(created))
+    except Exception:
+        log.exception("scheduler.portfolio_valuation.after_ingestion_failed", job=job)
+    try:
         async with session_scope() as session:
             await enqueue_due_zone_detections(
                 session, triggered_by="snapshot_close", as_of=today, reason=str(job)
             )
     except Exception:
-        log.exception("scheduler.portfolio_valuation.after_ingestion_failed", job=job)
+        log.exception("scheduler.zone_detection.after_ingestion_failed", job=job)
 
 
 async def run_zone_detection_job() -> int | None:

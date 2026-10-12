@@ -1,6 +1,6 @@
 """Plan 2.10 daily valuation: NAV discipline, reuse, revision guard."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, localcontext
 from uuid import uuid4
 
@@ -18,13 +18,16 @@ from investment_agent.portfolio.contracts import (
 )
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.portfolio.valuation import (
+    Valuation,
     ValuationService,
+    day_knowledge_cutoff,
     default_knowledge_cutoff,
     trading_days_after,
 )
 from investment_agent.storage.database import engine_lifespan, session_scope
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.pit_snapshot import MarketSnapshot
+from investment_agent.storage.models.portfolio import PortfolioValuation
 from investment_agent.storage.models.reference import Company, Listing, Market
 
 T = datetime(2025, 1, 1, tzinfo=UTC)
@@ -248,3 +251,55 @@ def test_live_default_cutoff_never_claims_future_knowledge():
     from investment_agent.clock import SHANGHAI_TZ
     cutoff = default_knowledge_cutoff(before.astimezone(SHANGHAI_TZ).date())
     assert cutoff <= datetime.now(UTC)
+
+
+def test_day_knowledge_cutoff_is_a_deterministic_day_end():
+    """The queued job's payload must not depend on the wall clock (P1: fan-out)."""
+    from investment_agent.clock import SHANGHAI_TZ
+    day = date(2030, 6, 7)
+    assert day_knowledge_cutoff(day) == day_knowledge_cutoff(day)
+    assert day_knowledge_cutoff(day) == datetime(2030, 6, 7, 23, 59, 59, 999999, tzinfo=SHANGHAI_TZ).astimezone(UTC)
+    assert day_knowledge_cutoff(day) > datetime.now(UTC)  # today's run may claim the whole session
+    # The service default keeps the never-claim-future-knowledge cap.
+    assert default_knowledge_cutoff(day) <= datetime.now(UTC)
+
+
+@pytest.mark.asyncio
+async def test_latest_at_selects_in_sql_beyond_the_200_row_window(ledger):
+    account, ref = ledger
+    await append(account, opening(ref), 0)
+    async with session_scope() as session:
+        snapshot = await PortfolioService(session).snapshot(account)
+    day = DAY + timedelta(days=4)
+
+    def row(knowledge_cutoff: datetime, *, revision: int) -> PortfolioValuation:
+        value = Valuation(
+            id=uuid4(), account_id=account, snapshot_id=snapshot.id, ledger_revision=revision,
+            valuation_date=day, knowledge_cutoff=knowledge_cutoff, algorithm_version="daily_valuation_v1",
+            input_digest=uuid4().hex, coverage="complete", known_cash=D(10000), holdings=(),
+            market_value_subtotal=D(0), total_assets=D(10000), weight_available=True, unknowns=(),
+            created_at=knowledge_cutoff,
+            reference=ObjectRef(kind="portfolio_valuation", id=uuid4(), revision=1),
+        )
+        return PortfolioValuation(
+            id=str(value.id), account_id=str(account), snapshot_id=str(snapshot.id),
+            ledger_revision=revision, valuation_date=day, algorithm_version=value.algorithm_version,
+            input_digest=value.input_digest, payload=value.model_dump(mode="json"),
+        )
+
+    winner_cutoff = datetime(2025, 1, 5, 15, 59, 59, tzinfo=UTC)
+    async with session_scope() as session:
+        # 250 newer-revision noise rows push the true winner out of any
+        # "newest 200" window; only an SQL cutoff filter finds it.
+        for index in range(250):
+            session.add(row(datetime(2025, 1, 5, 12, tzinfo=UTC) + timedelta(minutes=index), revision=2))
+        session.add(row(winner_cutoff, revision=1))
+        await session.flush()
+    async with session_scope() as session:
+        service = ValuationService(session)
+        best = await service.latest_at(account, cutoff=winner_cutoff)
+        assert best is not None and best.ledger_revision == 1
+        assert best.knowledge_cutoff == winner_cutoff
+        earlier = await service.latest_at(account, cutoff=datetime(2025, 1, 5, 12, tzinfo=UTC))
+        assert earlier is not None and earlier.knowledge_cutoff <= datetime(2025, 1, 5, 12, tzinfo=UTC)
+        assert await service.latest_at(account, cutoff=T - timedelta(seconds=1)) is None

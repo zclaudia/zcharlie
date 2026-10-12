@@ -335,7 +335,9 @@ class PortfolioService:
         new_records = self._import_records(request, records[-1].revision if records else 0, recorded=now)
         conflicts = await self._import_conflicts(records, new_records, now=now)
         trace: dict[UUID, dict[str, Any]] = {record.id: {} for record in new_records}
-        before = await self._project(request.account_id, records, now, trace=None)
+        # An empty account has no before-state to project: its first batch must
+        # open the balance (checked above), so the replay starts from the batch.
+        before = await self._project(request.account_id, records, now, trace=None) if records else None
         after = await self._project(
             request.account_id,
             records + new_records,
@@ -343,7 +345,7 @@ class PortfolioService:
             new_event_ids=frozenset(trace),
             trace=trace,
         )
-        baseline = set(before.snapshot.conflicts)
+        baseline = set(before.snapshot.conflicts) if before is not None else set()
         introduced = [issue for issue in after.snapshot.conflicts if issue not in baseline]
         conflicts.extend(f"projection:{issue}" for issue in introduced)
         row_of = {record.id: record.request.row_id for record in new_records}
@@ -442,7 +444,9 @@ class PortfolioService:
             if snapshot_row is None:
                 raise RuntimeError("committed import has no atomic snapshot")
             events = tuple(EventRecord.model_validate(row.payload) for row in stored)
-            audit = await self._audit_row_ids(events[-len(request.rows) :], list(events))
+            # The audit replay must use the same projection basis as the first
+            # commit - the account's whole history, not just this batch's rows.
+            audit = await self._audit_row_ids(events, await self._records(account.id))
             return ImportResult(
                 operation_id=request.operation_id,
                 events=events,
@@ -951,7 +955,7 @@ class PortfolioService:
             confirmed = quantity if ref not in restricted else None
             if confirmed is None:
                 unknowns.add(f"unknown_quantity:{ref.id}")
-            price = await self.session.scalar(select(MarketSnapshot).where(MarketSnapshot.listing_id == ref.id, MarketSnapshot.adjust == "none", MarketSnapshot.trade_date <= recorded.date(), MarketSnapshot.captured_at <= recorded, MarketSnapshot.close > 0).order_by(MarketSnapshot.trade_date.desc(), MarketSnapshot.version.desc(), MarketSnapshot.id.desc()).limit(1))
+            price = await self.session.scalar(select(MarketSnapshot).where(MarketSnapshot.listing_id == ref.id, MarketSnapshot.adjust == "none", MarketSnapshot.trade_date <= recorded.astimezone(SHANGHAI_TZ).date(), MarketSnapshot.captured_at <= recorded, MarketSnapshot.close > 0).order_by(MarketSnapshot.trade_date.desc(), MarketSnapshot.version.desc(), MarketSnapshot.id.desc()).limit(1))
             if price is None and confirmed != 0:
                 price_complete = False
                 unknowns.add(f"missing_price:{ref.id}")
@@ -993,10 +997,15 @@ class PortfolioService:
                 ratio_context.prec = 40
                 holdings = [h.model_copy(update={"weight": h.market_value / total if h.market_value is not None else None}) for h in holdings]
         snapshot_id = uuid4()
+        # An empty records list has no facts to name: fall back to sentinels
+        # (the projection instant itself, revision 0) instead of crashing, so a
+        # first import's before-projection can replay an empty account.
+        fact_as_of = max((r.request.fact.occurred_at for r in records), default=recorded)
+        head_revision = records[-1].revision if records else 0
         snapshot = Snapshot(
             id=snapshot_id,
             account_id=account_id,
-            revision=records[-1].revision,
+            revision=head_revision,
             recorded_at=recorded,
             fact_as_of=fact_as_of,
             valuation_at=recorded,
@@ -1013,7 +1022,7 @@ class PortfolioService:
             conflicts=tuple(conflicts),
             source_event_ids=tuple(r.id for r in records),
             excluded_prior_event_ids=tuple(excluded),
-            reference=ObjectRef(kind="portfolio_snapshot", id=snapshot_id, revision=records[-1].revision),
+            reference=ObjectRef(kind="portfolio_snapshot", id=snapshot_id, revision=head_revision),
             price_coverage="complete" if price_complete else "partial",
             cost_method_version=COST_METHOD_VERSION,
             realized=tuple(realized_records),
