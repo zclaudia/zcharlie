@@ -6,7 +6,7 @@ run specification/completion policy. Neither is inferred from model text.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -17,6 +17,7 @@ from investment_agent.agent.contracts import ContextBinding, Task
 from investment_agent.agent.tasks import TaskBoundaryError, TaskClaim, TaskService
 from investment_agent.config import Settings
 from investment_agent.evidence.disclosures import DisclosurePermission
+from investment_agent.industry_peers.contracts import PeerContextBinding
 from investment_agent.investor.common import ObjectRef, utc_timestamp
 from investment_agent.settings.loader import load_settings
 from investment_agent.storage.models.agent import AgentTask, ExecutionGrantRow
@@ -85,11 +86,14 @@ class ExecutionGrant(BaseModel):
     portfolio_valuation_ref: ObjectRef | None = None
     """The daily price basis this admission was bound to (plan 2.5). A
     calculation re-binds the current valuation explicitly - never silently."""
-    peer_context: dict[str, Any] | None = None
+    peer_context: PeerContextBinding | None = None
     """Trusted industry-peer binding (target, cohort_ref, batch_run_id, year,
     cutoff, metric_calculation_refs) fixed at task admission; default null so
-    grants serialized before the feature keep validating (WP1). WP11 owns the
-    typed shape and the enforcement; never a model tool schema."""
+    grants serialized before the feature keep validating (WP1). WP11 typed the
+    placeholder as the exact :class:`PeerContextBinding` contract the research
+    snapshot stores - one strongly typed shape for snapshot column, API DTO and
+    grant, never a second drifting dict form. It is the only peer-read
+    authorization source and never a model tool schema."""
 
     @field_validator("expires_at", "memory_valid_until")
     @classmethod
@@ -267,6 +271,12 @@ async def admit(
     existing = await session.get(ExecutionGrantRow, str(task.id))
     if existing is not None:
         previous = ExecutionGrant.model_validate(existing.payload)
+        # WP11: a same-task re-admission never re-binds. The original
+        # admission's peer-context binding stays authoritative even when the
+        # trusted application's fresh read would now freeze a newer batch; the
+        # worker-level retries of one task reuse this same immutable row.
+        if grant.peer_context != previous.peer_context:
+            grant = grant.model_copy(update={"peer_context": previous.peer_context})
         previous = previous.model_copy(update={"purpose": budget_purpose(previous)})
         if previous.model_dump(mode="json") != grant.model_dump(mode="json"):
             from investment_agent.storage.repositories.pipeline_run import (
@@ -276,6 +286,8 @@ async def admit(
     else:
         from investment_agent.investor.methods import MethodService
         await MethodService(session, grant.owner).freeze_task(task.id, grant.scope_refs, grant.research_kind)
+        from investment_agent.agent.peer_tools import inherit_peer_context
+        grant = await inherit_peer_context(session, grant, task=task, parent_task_id=parent_task_id, data_dir=base.data_dir)
         session.add(ExecutionGrantRow(task_id=str(task.id), payload=grant.model_dump(mode="json")))
         await session.flush()
     return task

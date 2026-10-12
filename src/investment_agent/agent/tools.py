@@ -241,11 +241,14 @@ class TrustedTools:
                             headroom = await BudgetService(session, self.context.base).research_headroom(self.context.claim)
                         if headroom["finish_only"]:
                             return None
-                    if spec.name in {"discover_disclosures", "fetch_disclosure_original", "parse_disclosure_original", "read_disclosure_original"}:
+                    if spec.name in {"discover_disclosures", "fetch_disclosure_original", "parse_disclosure_original", "read_disclosure_original", "get_industry_peer_context"}:
                         from investment_agent.settings.loader import load_settings
                         async with self.context.sessions() as session:
                             selected = await load_settings(session, base=self.context.base)
-                            if not selected.disclosure_originals_enabled:
+                            if spec.name == "get_industry_peer_context":
+                                if not selected.industry_peer_context_enabled:
+                                    return None
+                            elif not selected.disclosure_originals_enabled:
                                 return None
                     if spec.ready is not None:
                         async with self.context.sessions() as session:

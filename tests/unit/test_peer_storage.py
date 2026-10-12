@@ -16,9 +16,12 @@ from investment_agent.agent.execution import ExecutionGrant
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import Period
 from investment_agent.industry_peers.contracts import (
+    BINDING_METRIC_KEYS,
     PeerAnnualField,
+    PeerContextBinding,
     PeerContextStatus,
     PeerFieldVerification,
+    PeerMetricBinding,
     PeerMetricStatus,
     PeerQuantity,
 )
@@ -413,12 +416,40 @@ def test_execution_grant_defaults_peer_context_to_null() -> None:
     del dumped["peer_context"]
     assert ExecutionGrant.model_validate(dumped).peer_context is None
 
+    # WP11 typed the reserved placeholder as the exact PeerContextBinding
+    # contract: a bound grant round-trips that one strongly typed shape, and a
+    # partial dict (any drifted second form) is rejected.
     bound = grant.model_copy(
-        update={"peer_context": {"target": "600809.SH", "batch_run_id": "r1"}}
+        update={
+            "peer_context": PeerContextBinding(
+                target="600809.SH",
+                cohort_ref=ObjectRef(
+                    kind="peer_cohort_snapshot", id=uuid.UUID(int=1), revision=1
+                ),
+                batch_run_id="r1",
+                report_period=date(2025, 12, 31),
+                cutoff=datetime(2026, 10, 12, 4, 0, tzinfo=UTC),
+                metric_calculation_refs=(
+                    PeerMetricBinding(
+                        metric_key=key,
+                        state="gap",
+                        ref=None,
+                        gap_reason="fixture",
+                    )
+                    for key in BINDING_METRIC_KEYS
+                ),
+            )
+        }
     )
-    assert ExecutionGrant.model_validate(bound.model_dump(mode="json")).peer_context == {
-        "target": "600809.SH", "batch_run_id": "r1",
-    }
+    restored = ExecutionGrant.model_validate(bound.model_dump(mode="json"))
+    assert restored.peer_context is not None
+    assert restored.peer_context.target == "600809.SH"
+    assert restored.peer_context.batch_run_id == "r1"
+    assert bound.model_dump(mode="json") == restored.model_dump(mode="json")
+    with pytest.raises(ValidationError):
+        ExecutionGrant.model_validate(
+            {**bound.model_dump(mode="json"), "peer_context": {"target": "600809.SH"}}
+        )
 
 
 async def test_research_snapshot_row_keeps_a_null_binding(db_session) -> None:

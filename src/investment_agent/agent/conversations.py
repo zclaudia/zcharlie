@@ -390,6 +390,17 @@ class ConversationService:
                 tools += ("discover_disclosures", "fetch_disclosure_original", "parse_disclosure_original", "read_disclosure_original")
             if securities:
                 tools += ("compare_saved_sources", "search_saved_sources", "get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "reverse_dcf_fcfe", "historical_valuation_percentile")
+            # WP11: exactly one in-scope security is a peer-context target; the
+            # trusted binding is frozen below from the read at this message's
+            # cutoff, and the tool whitelist follows the feature gate.
+            peer_context = None
+            if len(securities) == 1:
+                from investment_agent.settings.loader import load_settings
+                selected = await load_settings(self.session, base=self.base)
+                if selected.industry_peer_context_enabled:
+                    from investment_agent.agent.peer_tools import admission_peer_binding
+                    tools += ("get_industry_peer_context",)
+                    peer_context = await admission_peer_binding(self.session, settings=selected, listing=securities[0], cutoff=cutoff)
             if case_refs and kind in {"company_research", "review"}:
                 tools += ("prepare_company_view", "publish_recommendation", "extend_recommendation")
             # Existing collectors collect the WHOLE watchlist. Grant only when
@@ -408,7 +419,8 @@ class ConversationService:
                     scope_refs=(*securities, *case_refs, *portfolio_snapshots, *portfolio_valuations), tool_names=tools, watchlist=watchlist,
                     portfolio_account_id=portfolio_account_id, portfolio_snapshot_ref=portfolio_snapshot_ref,
                     portfolio_valuation_ref=portfolio_valuation_ref,
-                    current_research=body.research_at is None, research_kind=kind, disclosure_permissions=disclosure_permissions))
+                    current_research=body.research_at is None, research_kind=kind, disclosure_permissions=disclosure_permissions,
+                    peer_context=peer_context))
             message = Message(id=message_id, revision=1, created_at=datetime.now(UTC), actor=self.owner,
                 origin_ref=None, conversation_ref=ObjectRef(kind="conversation", id=conversation_id, revision=1),
                 sequence=conversation.next_sequence, role="user", text=body.text, context_refs=body.context_refs,

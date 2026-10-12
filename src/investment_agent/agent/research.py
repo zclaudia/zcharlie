@@ -493,8 +493,9 @@ async def capture(session: AsyncSession, operation: UUID, business: Any) -> Acti
 def registrations() -> tuple[ToolRegistration, ...]:
     from investment_agent.agent.disclosure_tools import registrations as disclosure_registrations
     from investment_agent.agent.document_tools import registrations as document_registrations
+    from investment_agent.agent.peer_tools import registrations as peer_registrations
     from investment_agent.agent.portfolio_tools import registrations as portfolio_registrations
-    return (*builtin_registrations(), *valuation_registrations(), registration(), *portfolio_registrations(), *disclosure_registrations(), *document_registrations(),
+    return (*builtin_registrations(), *valuation_registrations(), registration(), *portfolio_registrations(), *disclosure_registrations(), *document_registrations(), *peer_registrations(),
         ToolRegistration("capture_snapshot", SnapshotParameters, listing_scope, database=capture, description="Read and save one stored field directly (no get_snapshot prerequisite): close, roe, operating_cash_flow, capital_expenditure, net_profit_parent, net_profit_total, revenue_main, revenue_total. Returns exact saved evidence refs AND records with source/period/unit/cutoff, missing values and conflicts. Never upgrades candidate verification."),
         ToolRegistration("save_research_progress", ResearchProgress, progress_scope, database=save_progress))
 
@@ -676,7 +677,7 @@ async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:
                 elif isinstance(value, list):
                     for child in value:
                         collect(child)
-            if action.parameters.get("tool") in {"get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "historical_valuation_percentile", "reverse_dcf_fcfe", "get_portfolio_context", "calculate_portfolio_options"}:
+            if action.parameters.get("tool") in {"get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "historical_valuation_percentile", "reverse_dcf_fcfe", "get_portfolio_context", "calculate_portfolio_options", "get_industry_peer_context"}:
                 collect(result)
         if action.parameters.get("tool") == "save_research_progress":
             resolved.extend(result.get("progress", {}).get("completed_steps", []))
