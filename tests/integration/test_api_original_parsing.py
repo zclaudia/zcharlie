@@ -21,8 +21,8 @@ from investment_agent.evidence.documents import OriginalRequest
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import ToolAction
-from tests.test_agent_execution import settings
-from tests.test_original_parsing import original, snapshot
+from tests.support.execution import settings
+from tests.support.originals import original, snapshot
 
 KEY = {"X-API-Key": "secret"}
 

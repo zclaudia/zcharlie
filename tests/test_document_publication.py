@@ -15,10 +15,10 @@ from investment_agent.investor.foundations import CreateCase, InvestorService
 from investment_agent.investor.publication import PublicationCandidate, PublicationService
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.monitoring import ReviewCycle
-from tests.test_disclosure_originals import FixtureHTTP
-from tests.test_investor_publication import base, fixture, prepared, publish
-from tests.test_investor_publication import publication_db as publication_db
-from tests.test_original_parsing import html, original, snapshot
+from tests.support.disclosure import FixtureHTTP
+from tests.support.originals import html, original, snapshot
+from tests.support.publication import base, fixture, prepared, publish
+from tests.support.publication import publication_db as publication_db
 
 
 async def test_real_document_discrepancy_limits_old_opinion_and_idempotent_ag15_review(

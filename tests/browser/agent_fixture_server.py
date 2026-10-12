@@ -89,17 +89,11 @@ async def main():
         import sys
 
         sys.path.insert(0, str(Path.cwd()))
-        from tests.test_agent_research import (
-            ResearchOutput,
-            message,
-            new_conversation,
-            progress,
-            response,
-            run,
-            submit,
-        )
-        from tests.test_original_parsing import html, original, snapshot
+        from tests.support.conversations import message, new_conversation, submit
+        from tests.support.originals import html, original, snapshot
+        from tests.support.research import progress, response, run
 
+        from investment_agent.agent.research import ResearchOutput
         from investment_agent.evidence.documents import parse_staged, save_candidates
         from investment_agent.investor.common import ObjectRef
 

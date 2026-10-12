@@ -16,9 +16,9 @@ from investment_agent.investor.common import ObjectRef
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import ToolAction
 from investment_agent.storage.models.evidence import SavedEvidence
-from tests.test_agent_execution import admitted, grant, settings
-from tests.test_agent_execution import execution_db as execution_db
-from tests.test_original_parsing import html, original, snapshot
+from tests.support.execution import admitted, grant, settings
+from tests.support.execution import execution_db as execution_db
+from tests.support.originals import html, original, snapshot
 
 pytestmark = pytest.mark.usefixtures("execution_db")
 

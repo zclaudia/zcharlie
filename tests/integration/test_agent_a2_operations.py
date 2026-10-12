@@ -15,10 +15,10 @@ from investment_agent.investor.notifications import deliver_one
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import AgentModelRun, AgentTask
 from investment_agent.storage.models.monitoring import InvestorNotification, NotificationDelivery
-from tests.test_agent_execution import execution_db as execution_db
-from tests.test_disclosure_originals import PUBLISHED, FixtureHTTP, discovery
-from tests.test_external_notifications import FixtureTransport, enable
-from tests.test_original_parsing import html, original, snapshot
+from tests.support.disclosure import PUBLISHED, FixtureHTTP, discovery
+from tests.support.execution import execution_db as execution_db
+from tests.support.notifications import FixtureTransport, enable
+from tests.support.originals import html, original, snapshot
 
 
 async def test_s13_actual_original_conflict_correction_search_no_false_delivery(execution_db):

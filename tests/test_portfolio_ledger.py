@@ -1,7 +1,6 @@
 """S12 user facts, immutable revisions and file SQLite concurrency."""
 import asyncio
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from uuid import uuid4
 
 import httpx
@@ -21,52 +20,24 @@ from investment_agent.portfolio.contracts import (
     CashFact,
     CorporateAction,
     CreateAccount,
-    Holding,
     Reversal,
     Trade,
 )
 from investment_agent.portfolio.service import PortfolioService
-from investment_agent.storage.database import engine_lifespan, session_scope
-from investment_agent.storage.models.base import Base
+from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.models.portfolio import PortfolioEvent, PortfolioSnapshot
-from investment_agent.storage.models.reference import Company, Listing, Market
-
-T = datetime(2025, 1, 1, tzinfo=UTC)
-D = Decimal
-
-
-@pytest.fixture
-async def ledger(tmp_path):
-    async with engine_lifespan(f"sqlite+aiosqlite:///{tmp_path / 'ledger.db'}") as engine:
-        async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
-        async with session_scope() as session:
-            session.add(Market(code="SH", name="Fixture", timezone="UTC", currency="CNY"))
-            company = Company(canonical_name="Fixture")
-            session.add(company)
-            await session.flush()
-            listing = Listing(company_id=company.id, market_code="SH", ticker="600000.SH")
-            session.add(listing)
-            await session.flush()
-            ref = ObjectRef(kind="listing", id=listing.id, revision=1)
-            session.add(MarketSnapshot(listing_id=listing.id, trade_date=T.date(), open=D(10), high=D(10), low=D(10), close=D(10), volume=D(1), adjust="none", provider="fixture", captured_at=T, version=1))
-            account = await PortfolioService(session).create_account(CreateAccount(idempotency_key=uuid4(), name="Actual confirmed account"))
-        yield account.id, ref
-
-
-def balance(ref, *, occurred_at=T, kind="opening_balance", coverage="complete", cash="1000", quantity="10"):
-    return Balance(kind=kind, occurred_at=occurred_at, source="user statement", user_confirmed=True, coverage=coverage, asset_scope="This explicit brokerage account", holdings=(Holding(listing_ref=ref, quantity=D(quantity)),), cash=D(cash) if cash is not None else None, prior_history="included_in_confirmed_balance", unexplained_difference="unexplained: 12 CNY; no synthetic transfer" if kind == "reconciliation" else None)
-
-
-def trade(ref, *, occurred_at=T + timedelta(days=1), fee="1", direction="buy", quantity="3"):
-    return Trade(kind="trade", occurred_at=occurred_at, source="actual execution statement", user_confirmed=True, holding=Holding(listing_ref=ref, quantity=D(quantity)), direction=direction, actual_price=D(10), fee=D(fee) if fee is not None else None)
-
-
-async def append(account, fact, revision, **kw):
-    request = AppendEvent(account_id=account, expected_revision=revision, idempotency_key=kw.pop("idempotency_key", uuid4()), fact=fact, **kw)
-    async with session_scope() as session:
-        return await PortfolioService(session).append(request)
+from investment_agent.storage.models.reference import Listing
+from tests.support.portfolio import (  # noqa: F401
+    D,
+    T,
+    append,
+    balance,
+    trade,
+)
+from tests.support.portfolio import (
+    ledger as ledger,
+)
 
 
 @pytest.mark.asyncio

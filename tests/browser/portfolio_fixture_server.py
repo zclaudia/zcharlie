@@ -15,8 +15,7 @@ from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolRetu
 from pydantic_ai.models.function import FunctionModel  # noqa: E402
 from pydantic_ai.usage import RequestUsage  # noqa: E402
 from sqlalchemy import select  # noqa: E402
-from tests.test_investor_foundations import mandate
-from tests.test_portfolio_calculations import action, rule  # noqa: E402
+from tests.support.portfolio import action, mandate, rule  # noqa: E402
 
 from investment_agent.agent.executor import AgentExecutor  # noqa: E402
 from investment_agent.agent.job import AgentJobHandler  # noqa: E402

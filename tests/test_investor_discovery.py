@@ -29,10 +29,10 @@ from investment_agent.storage.models.investor import InvestorCase
 from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
-from tests.test_agent_conversations import base
-from tests.test_investor_controls import execute
-from tests.test_investor_publication import fixture
-from tests.test_investor_publication import publication_db as publication_db
+from tests.support.conversations import base
+from tests.support.investor import execute
+from tests.support.publication import fixture
+from tests.support.publication import publication_db as publication_db
 
 
 def priced(**overrides):
@@ -390,7 +390,7 @@ async def test_pending_coverage_reads_real_ag13_committed_progress_and_versioned
     from investment_agent.evidence.store import EvidenceService
     from investment_agent.investor.enums import StopReason
     from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
-    from tests.test_investor_monitoring import full_progress
+    from tests.support.investor import full_progress
     candidate,subjects=await setup()
     selected=priced()
     async with session_scope() as session:

@@ -25,7 +25,7 @@ from investment_agent.scheduler.runner import (
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.candidates import CandidateRecord, DecisionRecord
-from tests.unit.test_screen_job import AS_OF, _run_job, screen_db  # noqa: F401 - fixture
+from tests.support.screen_job import AS_OF, _run_job, screen_db  # noqa: F401 - fixture
 
 pytestmark = pytest.mark.usefixtures("screen_db")
 

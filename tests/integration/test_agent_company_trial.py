@@ -12,8 +12,8 @@ from investment_agent.agent.research import ResearchOutput
 from investment_agent.investor.contracts import DIMENSIONS, DimensionAssessment
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Company, Listing, Market
-from tests.test_agent_research import full_progress
-from tests.test_investor_publication import publication_db as publication_db
+from tests.support.publication import publication_db as publication_db
+from tests.support.research import full_progress
 
 
 @pytest.mark.asyncio

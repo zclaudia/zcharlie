@@ -31,8 +31,8 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.models.portfolio import PortfolioValuation
-from tests.test_portfolio_ledger import append, balance
-from tests.test_portfolio_ledger import ledger as ledger_fixture
+from tests.support.portfolio import append, balance
+from tests.support.portfolio import ledger as ledger_fixture
 
 ledger = ledger_fixture
 D = Decimal

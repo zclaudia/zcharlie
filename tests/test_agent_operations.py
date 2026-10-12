@@ -16,7 +16,7 @@ from investment_agent.storage.models.agent import AgentTask
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.monitoring import OperationsCursor
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
-from tests.test_investor_publication import publication_db as publication_db
+from tests.support.publication import publication_db as publication_db
 
 NOW = datetime(2026, 10, 11, 8, tzinfo=UTC)
 
@@ -198,7 +198,7 @@ async def test_mixed_legacy_background_saturation_reserves_interactive(publicati
 
 async def test_persisted_reduced_capacity_runtime_knobs(publication_db):
     from investment_agent.settings.loader import store_for
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
 
     async with session_scope() as session:
         await store_for(session, base()).apply(

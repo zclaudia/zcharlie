@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from freezegun import freeze_time
 
-from tests.integration.test_api_data_health import FROZEN, KEY, _seed_basic
+from tests.support.data_health import FROZEN, KEY, _seed_basic
 
 
 async def test_dashboard_merges_data_health_warnings(api_client) -> None:

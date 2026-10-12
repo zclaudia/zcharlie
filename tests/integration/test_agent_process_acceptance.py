@@ -31,6 +31,36 @@ def until(predicate, timeout=15):
     raise AssertionError("child boundary timeout")
 
 
+def await_sqlite_write_access(path, timeout=5.0):
+    """Poll until a write transaction succeeds instead of sleeping a guess.
+
+    A SIGKILLed child releases its SQLite locks only once the kernel reaps it
+    and the next connection replays journal recovery; a fixed sleep is either
+    wasteful or flaky. Runs one real write transaction (BEGIN IMMEDIATE plus a
+    no-op UPDATE) and fails with the last lock error if the deadline passes.
+    """
+
+    deadline = time.monotonic() + timeout
+    failure = None
+    while time.monotonic() < deadline:
+        try:
+            connection = sqlite3.connect(path, timeout=0.05)
+            try:
+                connection.execute("begin immediate")
+                connection.execute("update app_setting set value_json = value_json")
+                connection.commit()
+            finally:
+                connection.close()
+            return
+        except sqlite3.OperationalError as error:
+            failure = error
+            time.sleep(0.03)
+    raise AssertionError(
+        f"SQLite {path} did not accept a write transaction within {timeout}s"
+        f" after SIGKILL (last error: {failure})"
+    )
+
+
 def stop(child):
     if child.poll() is None:
         child.kill()
@@ -48,7 +78,7 @@ def test_os_sigkill_after_publication_and_notification_commit_replays_once(tmp_p
         stop(child)
     assert child.returncode < 0  # actual OS signal, rather than a simulated exception
     committed = json.loads((tmp_path / "committed.json").read_text())
-    time.sleep(0.15)
+    await_sqlite_write_access(tmp_path / "process.db")
     replacement = spawn(tmp_path, "recover")
     try:
         assert replacement.wait(timeout=15) == 0, (tmp_path / "recover.log").read_text()

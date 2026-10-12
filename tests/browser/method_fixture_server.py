@@ -11,9 +11,9 @@ from pydantic_ai.models.function import FunctionModel
 
 # Explicitly register every referenced model before metadata creation.
 from tests import conftest  # noqa: F401
-from tests.test_agent_conversations import message, new_conversation, submit
-from tests.test_agent_research import progress, response, run
-from tests.test_method_evolution import fresh_native_tasks, samples
+from tests.support.conversations import message, new_conversation, submit
+from tests.support.methods import fresh_native_tasks, samples
+from tests.support.research import progress, response, run
 
 from investment_agent.agent.research import ResearchOutput
 from investment_agent.api.app import create_app

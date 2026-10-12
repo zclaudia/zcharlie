@@ -72,7 +72,17 @@ def test_backfill_mixed_offsets_order_and_subject_projection(tmp_path, monkeypat
         columns = {row[1] for row in conn.execute("PRAGMA table_info(agent_conversation)")}
         assert {"last_activity_at", "title_revision", "subject_refs"}.isdisjoint(columns)
         assert conn.execute("SELECT payload FROM agent_conversation WHERE id=?", (CONVERSATION_ID,)).fetchone() is not None
-    command.upgrade(config, "041")
+    # Re-applying the migration after the downgrade proves 041 is re-entrant on
+    # the already-backfilled rows, and the database is left at head (045) rather
+    # than parked on a mid version.
+    command.upgrade(config, "head")
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchone() == ("045",)
+        row = conn.execute(
+            "SELECT last_activity_at, title_revision, subject_refs FROM agent_conversation WHERE id=?",
+            (CONVERSATION_ID,),
+        ).fetchone()
+        assert row[0] == "2026-03-01 05:10:00.999999" and row[1] == 1
 
 
 def test_naive_payload_time_fails_upgrade_and_rolls_back(tmp_path, monkeypatch):

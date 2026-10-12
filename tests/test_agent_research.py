@@ -18,7 +18,6 @@ from investment_agent.agent.observation import effective_cutoff, resume_collecto
 from investment_agent.agent.research import (
     ResearchOutput,
     ResearchPolicy,
-    ResearchProgress,
     check_progress_round,
     registrations,
     research_artifacts,
@@ -35,37 +34,18 @@ from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.models.publication import PublicationEvent
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
-from tests.test_agent_conversations import (
+from tests.support.conversations import (
     base,
     claim,
     message,
     new_conversation,
     submit,
 )
-from tests.test_agent_conversations import (
+from tests.support.conversations import (
     conversation_db as conversation_db,
 )
-from tests.test_investor_publication import fixture, publish
-
-
-def progress(kind="explanation", **updates):
-    data = dict(kind=kind, question="Explain the bounded question", content=(TextNode(type="text", text="The available material has limits."),), answered=True,
-        limitations=("This is a bounded answer, not a company-wide judgment.",))
-    data.update(updates)
-    return ResearchProgress(**data)
-
-
-def response(output):
-    return ModelResponse([TextPart(output.model_dump_json())], usage=RequestUsage(input_tokens=20, output_tokens=10))
-
-
-async def run(receipt, model, settings=None, run_id=None):
-    selected = settings or base()
-    executor = AgentExecutor(selected, model=model, registrations=registrations(), specification=ResearchPolicy(selected).specification())
-    worker = ResearchWorker(settings=selected, worker_id="research-fixture", handlers=[AgentJobHandler("agent_turn", executor)])
-    await worker.run_once(run_id=run_id)
-    async with session_scope() as session:
-        return await TaskService(session).get_task(receipt.task.id)
+from tests.support.publication import fixture, publish
+from tests.support.research import full_progress, progress, response, run
 
 
 @pytest.mark.asyncio
@@ -240,13 +220,6 @@ async def test_real_collector_deferred_resumption_preserves_pit_and_budget(conve
             saved = (await session.scalars(select(SavedEvidence))).all()
             fresh = [r for r in saved if r.payload["source_ref"]["kind"] == "market_snapshot"]
             assert fresh and all(r.payload["acquired_at"] == acquired.isoformat().replace("+00:00", "Z") for r in fresh)
-
-
-def full_progress(dimensions, **updates):
-    from investment_agent.agent.research import ResearchHypothesis
-    return progress(kind="company_research", hypotheses=(ResearchHypothesis(question="Is cash durable?", explanation="Operating cash may recur", alternative="Temporary working capital release", falsification_condition="Cash reverses without operating growth", evidence_priority="Check cash components first"),),
-        evidence_steps=("Check reported cash and opposing explanations",), completion_criteria=("Explain scope and material gaps",),
-        stop_conditions=("Stop when critical source unavailable",), dimensions=dimensions, completed_steps=("Clarified scope and alternatives",), **updates)
 
 
 @pytest.mark.asyncio

@@ -30,7 +30,7 @@ from investment_agent.storage.repositories.pipeline_run import PipelineRunReposi
 from investment_agent.storage.repositories.research_change import ResearchChangeRepository
 from investment_agent.storage.repositories.research_snapshot import ResearchSnapshotRepository
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
-from tests.unit.test_factor_view_db import AS_OF, TICKER, _seed
+from tests.support.factor_view import AS_OF, TICKER, _seed
 
 EXPLANATION = ResearchExplanation(
     summary="fixture",

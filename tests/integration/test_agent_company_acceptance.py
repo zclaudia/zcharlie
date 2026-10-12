@@ -8,10 +8,10 @@ from pydantic_ai.usage import RequestUsage
 
 from investment_agent.agent.research import ResearchOutput, research_artifacts
 from investment_agent.storage.database import session_scope
-from tests.test_agent_conversations import conversation_db as conversation_db
-from tests.test_agent_conversations import message, new_conversation, submit
-from tests.test_agent_research import full_progress, run
-from tests.test_investor_publication import fixture
+from tests.support.conversations import conversation_db as conversation_db
+from tests.support.conversations import message, new_conversation, submit
+from tests.support.publication import fixture
+from tests.support.research import full_progress, run
 
 
 @pytest.mark.asyncio
@@ -51,7 +51,7 @@ async def test_native_wrong_ref_repairs_discovers_captures_real_source_and_keeps
     from investment_agent.agent.conversations import ConversationService
     from investment_agent.investor.contracts import NumericNode
     from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
     candidate, _, subject = await fixture()
     cutoff = datetime.now(UTC)
     async with session_scope() as session:
@@ -109,7 +109,7 @@ async def test_native_wrong_ref_repairs_discovers_captures_real_source_and_keeps
 async def test_rejected_numeric_field_is_private_diagnostic_with_safe_public_gap(conversation_db):
     from investment_agent.agent.conversations import ConversationService
     from investment_agent.agent.tasks import TaskService
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
     candidate, _, subject = await fixture()
     conversation = await new_conversation()
     receipt = await submit(conversation, message(text="深入研究", context_refs=(subject,), research_kind="company_research"))
@@ -132,7 +132,7 @@ async def test_rejected_numeric_field_is_private_diagnostic_with_safe_public_gap
 @pytest.mark.asyncio
 async def test_last_request_concludes_and_persists_without_an_extra_save_tool_round(conversation_db):
     from investment_agent.agent.research import ResearchOutput
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
     candidate, _, subject = await fixture()
     plan = full_progress(candidate.thesis.assessed_dimensions, answered=False, gaps=("Official source unavailable",))
     conversation = await new_conversation()
@@ -164,7 +164,7 @@ async def test_native_sdk_instruction_estimate_matches_priority_and_keeps_fallba
 
     from investment_agent.agent.model import AgentModelConfig, HTTPTrace, create_model
     from investment_agent.agent.runtime import _BudgetedModel
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
     captured, estimates, wire_sizes = [], [], []
     async def respond(request):
         import json
@@ -206,7 +206,7 @@ async def test_native_tool_validation_preserves_safe_field_and_private_action(co
     from investment_agent.agent.conversations import ConversationService
     from investment_agent.agent.tasks import TaskService
     from investment_agent.storage.models.agent import AgentModelRun, ToolAction
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
     candidate, _, subject = await fixture()
     plan = full_progress(candidate.thesis.assessed_dimensions, answered=False, question="PRIVATE_UNVALIDATED 999999", gaps=("Official source unavailable",))
     conversation = await new_conversation()
@@ -257,7 +257,7 @@ async def test_default_native_worker_authorized_identity_reads_exact_source(conv
     from investment_agent.research.worker import ResearchWorker
     from investment_agent.storage.models.reference import Company, Listing, Market
     from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
-    from tests.test_agent_conversations import base
+    from tests.support.conversations import base
 
     candidate, _, subject = await fixture()
     cutoff = datetime.now(UTC) - timedelta(hours=1)

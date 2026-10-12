@@ -24,11 +24,17 @@ from investment_agent.portfolio.purposes import (
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.portfolio import PortfolioEvent
-from tests.test_portfolio_calculations import action, request
-from tests.test_portfolio_ledger import T, append, balance
-from tests.test_portfolio_ledger import ledger as ledger_fixture
+from tests.support.portfolio import (
+    T,
+    action,
+    append,
+    balance,
+    request,
+)
+from tests.support.portfolio import (
+    ledger as ledger,
+)
 
-ledger = ledger_fixture
 D = Decimal
 
 
@@ -178,7 +184,7 @@ async def test_user_message_native_purposes_calculation_plan_and_adoption_no_act
     from investment_agent.portfolio.plans import PortfolioPlanService
     from investment_agent.research.worker import ResearchWorker
     from investment_agent.storage.models.agent import ExecutionGrantRow, ToolAction
-    from tests.test_portfolio_plans import base, semantic, setup
+    from tests.support.portfolio import base, semantic, setup
     candidate, ref, calc = await setup(ledger, movement=False, trusted=False)
     async with session_scope() as session:
         snap = await PortfolioService(session).snapshot(candidate.account_id)
@@ -303,7 +309,7 @@ async def test_two_writers_purpose_cas_and_actual_cash_cas(ledger):
 async def test_pre_purpose_plan_limited_and_review_outbox_coalesces(ledger):
     from investment_agent.portfolio.plans import PortfolioPlanService
     from investment_agent.storage.models.portfolio_plan import PortfolioPlanOutbox
-    from tests.test_portfolio_plans import publish, setup
+    from tests.support.portfolio import publish, setup
     candidate, ref, _ = await setup(ledger, movement=False)
     result = await publish(candidate)
     async with session_scope() as session:
@@ -343,7 +349,7 @@ async def test_native_purpose_knowledge_cutoff_requires_fresh_user_message(ledge
     from investment_agent.portfolio.plans import PortfolioPlanService
     from investment_agent.research.worker import ResearchWorker
     from investment_agent.storage.models.agent import ToolAction
-    from tests.test_portfolio_plans import base, setup
+    from tests.support.portfolio import base, setup
 
     candidate, _, _ = await setup(ledger, movement=False)
     async with session_scope() as session:
@@ -401,7 +407,7 @@ async def test_serialized_pre_ag29_calculation_replay_rebuild_and_plan_compatibi
     from investment_agent.portfolio.calculations import PortfolioCalculationService
     from investment_agent.portfolio.service import digest
     from investment_agent.storage.models.evidence import SavedCalculation
-    from tests.test_portfolio_plans import setup
+    from tests.support.portfolio import setup
     candidate, _, record = await setup(ledger, movement=True, trusted=False)
     raw = record.model_dump(mode="json")
     legacy_request = raw["details"]["request"]

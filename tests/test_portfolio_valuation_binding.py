@@ -26,11 +26,16 @@ from investment_agent.portfolio.valuation import ValuationService
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import ToolAction
 from investment_agent.storage.models.pit_snapshot import IndustryClassification, MarketSnapshot
-from tests.test_investor_foundations import mandate
-from tests.test_portfolio_calculations import action
-from tests.test_portfolio_ledger import append, balance
-from tests.test_portfolio_ledger import ledger as ledger_fixture
-from tests.test_portfolio_plans import Rules, base, publish
+from tests.support.portfolio import (
+    Rules,
+    action,
+    append,
+    balance,
+    base,
+    mandate,
+    publish,
+)
+from tests.support.portfolio import ledger as ledger_fixture
 
 # Anchored near the real clock: publication-price staleness is measured
 # against "now", so fixtures must not sit a year in the past.
@@ -148,7 +153,7 @@ async def test_plan_binds_the_same_valuation_and_marks_a_newer_one(ledger):
 @pytest.mark.asyncio
 async def test_calculation_rejects_a_valuation_of_another_ledger_version(ledger):
     snapshot, ref, valuation, m = await _seed(ledger)
-    from tests.test_portfolio_ledger import trade
+    from tests.support.portfolio import trade
 
     moved = (await append(snapshot.account_id, trade(ref), 1)).snapshot
     assert moved.revision == 2

@@ -20,7 +20,6 @@ from investment_agent.investor.common import Mutation, ObjectRef
 from investment_agent.investor.controls import (
     CaseAction,
     DecisionAction,
-    ExecuteRequest,
     MandateAction,
     MemoryAction,
     PrepareRequest,
@@ -41,7 +40,8 @@ from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.investor import UserObject, UserObjectRevision
 from investment_agent.storage.models.user_domain import HoldingItem, WatchlistItem
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
-from tests.test_investor_publication import base, fixture, publish
+from tests.support.investor import case_ref, execute, request  # noqa: F401
+from tests.support.publication import base, fixture, publish
 
 
 @pytest_asyncio.fixture
@@ -51,20 +51,6 @@ async def controls_db(tmp_path):
         await connection.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
-
-
-def request(parameters, key=None):
-    return ExecuteRequest(parameters=parameters, idempotency_key=key or uuid4())
-
-
-async def execute(session, parameters, key=None):
-    return await UserControlService(session).execute(request(parameters, key), authenticated_request(parameters))
-
-
-async def case_ref(candidate):
-    async with session_scope() as session:
-        case = await InvestorService(session).get_case("local_owner", candidate.thesis.case_ref.id)
-        return ObjectRef(kind="case", id=case.id, revision=case.revision)
 
 
 @pytest.mark.asyncio
@@ -434,7 +420,7 @@ async def test_inflight_memory_revocation_settles_model_cost_blocks_tools_and_pu
     from investment_agent.agent.tools import ToolRegistration
     from investment_agent.investor.enums import TaskStatus
     from investment_agent.storage.models.agent import AgentModelRun, BudgetEntry
-    from tests.test_agent_execution import (
+    from tests.support.execution import (
         Value,
         admitted,
         grant,

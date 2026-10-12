@@ -18,16 +18,16 @@ from investment_agent.investor.common import ObjectRef
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import ToolAction
 from investment_agent.storage.models.disclosure import DisclosureBlob, DisclosureOriginal
-from tests import test_agent_execution as execution_helpers
-from tests.test_agent_execution import (  # noqa: F401
+from tests.support.disclosure import NOW, FixtureHTTP, discovery, seed
+from tests.support.execution import (
     admitted,
+    execution_db,
     grant,
     run_worker,
     settings,
 )
-from tests.test_disclosure_originals import NOW, FixtureHTTP, discovery, seed
 
-disclosure_db = execution_helpers.execution_db
+disclosure_db = execution_db
 pytestmark = pytest.mark.usefixtures("disclosure_db")
 
 

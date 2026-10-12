@@ -20,8 +20,8 @@ from investment_agent.agent.tasks import TaskService
 from investment_agent.evidence.documents import parse_staged, save_candidates
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.storage.database import session_scope
-from tests.test_agent_execution import settings
-from tests.test_original_parsing import original
+from tests.support.execution import settings
+from tests.support.originals import original
 
 KEY = {"X-API-Key": "secret"}
 

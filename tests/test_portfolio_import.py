@@ -26,8 +26,8 @@ from investment_agent.portfolio.contracts import (
 )
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.storage.database import session_scope
-from tests.test_portfolio_ledger import append, balance, trade
-from tests.test_portfolio_ledger import ledger as ledger_fixture
+from tests.support.portfolio import append, balance, trade
+from tests.support.portfolio import ledger as ledger_fixture
 
 ledger = ledger_fixture
 D = Decimal

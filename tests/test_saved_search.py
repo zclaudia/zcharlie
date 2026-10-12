@@ -10,8 +10,8 @@ from investment_agent.evidence.documents import parse_staged, save_candidates
 from investment_agent.evidence.search import SearchRequest, search_saved
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.evidence import SavedEvidence
-from tests.test_agent_execution import execution_db as execution_db
-from tests.test_original_parsing import html, original, pdf
+from tests.support.execution import execution_db as execution_db
+from tests.support.originals import html, original, pdf
 
 pytestmark = pytest.mark.usefixtures("execution_db")
 
@@ -112,7 +112,7 @@ async def test_exact_saved_comparison_period_scope_and_effective_correction():
     from investment_agent.evidence.contracts import EvidenceRecord, Period
     from investment_agent.evidence.search import SavedComparisonRequest, compare_saved
     from investment_agent.investor.common import ObjectRef
-    from tests.test_original_parsing import snapshot
+    from tests.support.originals import snapshot
 
     async with session_scope() as session:
         payload, exact, request = await original(session)

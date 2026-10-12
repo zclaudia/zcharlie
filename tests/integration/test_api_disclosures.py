@@ -7,7 +7,7 @@ import pytest
 
 from investment_agent.evidence.disclosure_http import OfficialHTTPS
 from investment_agent.storage.database import session_scope
-from tests.test_disclosure_originals import NOW, FixtureHTTP, discovery, seed
+from tests.support.disclosure import NOW, FixtureHTTP, discovery, seed
 
 KEY = {"X-API-Key": "secret"}
 
@@ -144,7 +144,7 @@ async def test_authenticated_message_opt_in_queue_to_native_framework(
     from investment_agent.investor.common import ObjectRef
     from investment_agent.research.worker import ResearchWorker
     from investment_agent.storage.models.agent import ExecutionGrantRow, ToolAction
-    from tests.test_agent_execution import settings
+    from tests.support.execution import settings
 
     monkeypatch.setenv("INVESTOR_AGENT_ENABLED", "true")
     monkeypatch.setenv("DISCLOSURE_ORIGINALS_ENABLED", "true")

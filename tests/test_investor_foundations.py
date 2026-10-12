@@ -6,34 +6,13 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import select
 
-from investment_agent.investor.common import Mutation, ObjectRef, Quantity
-from investment_agent.investor.contracts import Mandate, ResearchAuthorization, ResearchPlan
+from investment_agent.investor.common import Mutation, ObjectRef
+from investment_agent.investor.contracts import ResearchPlan
 from investment_agent.investor.foundations import CreateCase, InvestorError, InvestorService
 from investment_agent.storage.models.investor import MandateRevision
 from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.user_domain import WatchlistItem
-
-
-def mandate() -> Mandate:
-    unknown = Quantity(value=None, unit="CNY", unknown_reason="budget not provided")
-    return Mandate(
-        id=uuid4(),
-        revision=1,
-        created_at=datetime.now(UTC),
-        actor="untrusted_client",
-        origin_ref=None,
-        goals=(),
-        scope_refs=(),
-        hard_constraints=(),
-        unknowns=("investment horizon",),
-        authorization=ResearchAuthorization(
-            daily_budget=unknown,
-            per_task_budget=unknown,
-            max_leads_per_batch=0,
-            max_new_tasks_per_batch=0,
-            source_refs=(),
-        ),
-    )
+from tests.support.investor import mandate  # noqa: F401
 
 
 async def listing(session):

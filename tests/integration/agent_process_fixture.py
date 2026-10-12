@@ -25,7 +25,7 @@ from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.monitoring import InvestorNotification
 from investment_agent.storage.models.publication import PublicationEvent, PublicationOutbox
 from investment_agent.storage.repositories.pipeline_run import LeaseLostError, RunLease
-from tests.test_investor_publication import base, fixture, prepared
+from tests.support.publication import base, fixture, prepared
 
 
 async def work(directory: Path, mode: str):

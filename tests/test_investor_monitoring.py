@@ -11,7 +11,7 @@ from pydantic_ai.usage import RequestUsage
 from sqlalchemy import func, select
 
 from investment_agent.agent.executor import AgentExecutor
-from investment_agent.agent.research import ResearchHypothesis, ResearchOutput, ResearchProgress
+from investment_agent.agent.research import ResearchOutput
 from investment_agent.agent.tasks import TaskService
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.contracts import TextNode
@@ -29,16 +29,10 @@ from investment_agent.storage.models.monitoring import (
 )
 from investment_agent.storage.models.publication import PublicationOutbox
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
-from tests.test_agent_conversations import base
-from tests.test_investor_controls import case_ref, execute
-from tests.test_investor_publication import fixture, publish, unchanged_review
-from tests.test_investor_publication import publication_db as publication_db
-
-
-async def saved():
-    candidate, evidence, subject = await fixture()
-    result = await publish(candidate)
-    return candidate, evidence, subject, result
+from tests.support.conversations import base
+from tests.support.investor import case_ref, execute, full_progress, saved  # noqa: F401
+from tests.support.publication import fixture, publish, unchanged_review
+from tests.support.publication import publication_db as publication_db
 
 
 async def stats():
@@ -140,12 +134,6 @@ async def test_outbox_delivery_checks_current_mute_and_consumes_without_unmute_r
         await execute(session, CaseAction(case_ref=await case_ref(candidate), action="unmute", reason="Enable future reminders"))
         await MonitoringService(session, base()).consume_outbox()
         assert await session.scalar(select(func.count()).select_from(InvestorNotification)) == 0
-
-
-def full_progress(candidate, evidence):
-    return ResearchProgress(kind="review", question="Review unchanged premises", hypotheses=(ResearchHypothesis(question="Are cash premises unchanged?", explanation="Historical cash supports a bounded view", alternative="Temporary cash explains it", falsification_condition="New verified contradiction", evidence_priority="Query exact cash evidence"),),
-        evidence_steps=("Query exact evidence",), completion_criteria=("All critical premises checked",), stop_conditions=("Missing evidence",), dimensions=candidate.thesis.assessed_dimensions,
-        fact_refs=(evidence,), completed_steps=("Query exact evidence",), content=(TextNode(type="text", text="The bounded view is maintained after checking its premises."),), answered=True)
 
 
 @pytest.mark.asyncio
@@ -367,7 +355,7 @@ async def test_native_capture_receipt_old_snapshot_unknown_cannot_extend(publica
     from decimal import Decimal
 
     from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
-    from tests.test_investor_publication import market_candidate
+    from tests.support.publication import market_candidate
     candidate, evidence, old_evidence, old_bar = await market_candidate()
     published = await publish(candidate)
     selected = base()

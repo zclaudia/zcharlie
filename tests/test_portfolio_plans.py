@@ -2,20 +2,19 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import httpx
 import pytest
 from sqlalchemy import func, select
 
-from investment_agent.agent.contracts import ContextBinding
-from investment_agent.agent.execution import ExecutionDeniedError, ExecutionGrant, admit
-from investment_agent.agent.tasks import TaskService, fingerprint
+from investment_agent.agent.execution import ExecutionDeniedError, ExecutionGrant
+from investment_agent.agent.tasks import TaskService
 from investment_agent.api.app import create_app
 from investment_agent.api.auth import get_bootstrap_settings, get_settings
 from investment_agent.config import Settings
 from investment_agent.investor.common import Mutation, ObjectRef
-from investment_agent.investor.contracts import NumericNode, PortfolioConstraints, TextNode
+from investment_agent.investor.contracts import NumericNode, TextNode
 from investment_agent.investor.controls import (
     DecisionAction,
     ExecuteRequest,
@@ -23,18 +22,9 @@ from investment_agent.investor.controls import (
     authenticated_request,
 )
 from investment_agent.investor.foundations import InvestorError, InvestorService
-from investment_agent.portfolio.calculation_contracts import PortfolioCalculationRequest, Scenario
-from investment_agent.portfolio.calculations import PortfolioCalculationService, TrustedTradingRule
-from investment_agent.portfolio.plan_contracts import (
-    OptionInput,
-    PlanInput,
-    PlanSemanticReview,
-    PortfolioAction,
-)
 from investment_agent.portfolio.plans import PortfolioPlanService, maintain_portfolio_plans
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import ToolAction
-from investment_agent.storage.models.pit_snapshot import IndustryClassification, MarketSnapshot
 from investment_agent.storage.models.portfolio import PortfolioEvent
 from investment_agent.storage.models.portfolio_plan import (
     PortfolioPlanArtifact,
@@ -42,67 +32,19 @@ from investment_agent.storage.models.portfolio_plan import (
     PortfolioPlanHead,
     PortfolioPlanOutbox,
 )
-from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
-from tests.test_investor_foundations import mandate
-from tests.test_portfolio_calculations import action, rule
-from tests.test_portfolio_ledger import append, balance, trade
-from tests.test_portfolio_ledger import ledger as ledger_fixture
+from tests.support.portfolio import (
+    Rules,
+    append,
+    base,
+    prepared,
+    publish,
+    semantic,
+    setup,
+    trade,
+)
+from tests.support.portfolio import ledger as ledger
 
-ledger = ledger_fixture
 D = Decimal
-
-
-def base(**kw):
-    # Native-agent requests are reserved at wire utf8 bytes, a deliberately
-    # conservative estimate; the synthetic fixture flow sits near the default
-    # task token cap, so give it headroom (real budget behaviour has its own
-    # dedicated tests).
-    return Settings(_env_file=None, api_key="ci-inert-api-key", investor_agent_enabled=True, portfolio_ledger_enabled=True, investor_agent_task_seconds=600, investor_agent_task_tokens=400000, **kw)
-
-
-class Rules:
-    async def resolve(self, ref, as_of):
-        return TrustedTradingRule(rule=rule(ref), market_code="SH", valid_from=(as_of - timedelta(days=30)).date(), available_from=as_of - timedelta(days=30), trusted_source="fixture verified exchange seam", source_version="fixture")
-
-
-async def setup(ledger, *, cash="1000", coverage="complete", quantity="100", fee="1", movement=True, trusted=True):
-    account, ref = ledger
-    now = datetime.now(UTC) - timedelta(days=1)
-    async with session_scope() as session:
-        session.add(MarketSnapshot(listing_id=ref.id, trade_date=now.date(), open=D(10), high=D(10), low=D(10), close=D(10), volume=D(1), adjust="none", provider="fixture", captured_at=now, version=1))
-        session.add(IndustryClassification(listing_id=ref.id, system="CSRC", code="fixture-sector", name="Fixture", valid_from=now.date(), source="fixture", captured_at=now))
-        m = await InvestorService(session).create_mandate("local_owner", mandate().model_copy(update={"scope_refs": (ref,), "hard_constraints": (), "portfolio_constraints": PortfolioConstraints(account_id=account, max_single_weight=D("0.3"), max_sector_weight=D("0.6"), minimum_cash=D(0))}), uuid4())
-    snapshot = (await append(account, balance(ref, cash=cash, coverage=coverage, quantity=quantity), 0)).snapshot
-    req = PortfolioCalculationRequest(operation_id=uuid4(), account_id=account, snapshot_ref=snapshot.reference, mandate_ref=ObjectRef(kind="mandate", id=m.id, revision=m.revision), scenarios=(Scenario(name="reduce_risk" if movement else "wait", actions=(action(ref, direction="sell", quantity=D(10), fixed_fee=D(fee) if fee is not None else None),) if movement else ()),))
-    async with session_scope() as session:
-        calc = await PortfolioCalculationService(session, rules=Rules() if trusted else None).save(req)
-    a = PortfolioAction(id=uuid4(), listing_ref=ref, stance="reduce" if movement else "wait", basis="portfolio_constraint", constraint="max_single_weight", research_gap="Company durability has not been researched", target_ref=ObjectRef(kind="calculation", id=calc.id, revision=1, field_path="results.scenario_1_action_0_quantity") if movement else None, content=(TextNode(type="text", text="Reduce confirmed concentration"),))
-    candidate = PlanInput(account_id=account, snapshot_ref=snapshot.reference, mandate_ref=req.mandate_ref, calculation_ref=ObjectRef(kind="calculation", id=calc.id, revision=1), previous_ref=None, options=(OptionInput(id=uuid4(), scenario_index=1, actions=(a,)),), question_scope="Whole confirmed account alternatives")
-    return candidate, ref, calc
-
-
-def semantic(candidate, **updates):
-    actions = [a for o in candidate.options for a in o.actions]
-    value = PlanSemanticReview(candidate_hash=fingerprint(candidate.model_dump(mode="json")), assessments={str(a.id): ("Confirmed exposure exceeds exact user limit", "Missing business evidence remains a research gap", "Risk reduction improves concentration; residual violations remain explicit") for a in actions}, checked_sources=(candidate.snapshot_ref, candidate.mandate_ref, candidate.calculation_ref, *(r for a in actions for r in a.company_view_refs)), unresolved_questions=(), conclusion="pass")
-    return value.model_copy(update=updates)
-
-
-async def prepared(candidate, *, review=None, permission=True, scope=None):
-    review = review or semantic(candidate)
-    async with session_scope() as session:
-        refs = scope or (candidate.snapshot_ref, *(a.listing_ref for o in candidate.options for a in o.actions))
-        grant = ExecutionGrant(mode="interactive", source="authenticated_message", prompt="Recheck portfolio risk", tool_names=("publish_portfolio_plan",) if permission else (), scope_refs=refs, mandate_id=candidate.mandate_ref.id, research_kind="portfolio_action", portfolio_account_id=candidate.account_id, portfolio_snapshot_ref=candidate.snapshot_ref)
-        task = await admit(session, base=base(), input_key=str(uuid4()), binding=ContextBinding(context_refs=(candidate.snapshot_ref,), base_refs=refs, as_of=datetime.now(UTC)), grant=grant)
-        run = await PipelineRunRepository(session).claim_next(worker_id=str(task.id), kinds=["agent_turn"])
-        claim = await TaskService(session).claim(task.id, RunLease(run.id, str(task.id), run.attempt_count))
-        operation = await TaskService(session).prepare_action(claim, intent_key="publish", parameters={"candidate": candidate.model_dump(mode="json"), "semantic": review.model_dump(mode="json")})
-    return claim, UUID(operation.operation_id), review
-
-
-async def publish(candidate, prepared_action=None, *, trusted=True):
-    claim, operation, review = prepared_action or await prepared(candidate)
-    async with session_scope() as session:
-        return await PortfolioPlanService(session, rules=Rules() if trusted else None).publish(claim, operation, candidate, review, base=base())
 
 
 @pytest.mark.asyncio

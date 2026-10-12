@@ -14,10 +14,8 @@ from investment_agent.config import Settings
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.foundations import InvestorError, InvestorService
 from investment_agent.portfolio.calculation_contracts import (
-    PortfolioCalculationRequest,
     PriceSelection,
     Scenario,
-    ScenarioAction,
     ScenarioConstraints,
     TradingRule,
 )
@@ -27,25 +25,20 @@ from investment_agent.storage.models.evidence import SavedCalculation
 from investment_agent.storage.models.pit_snapshot import IndustryClassification, MarketSnapshot
 from investment_agent.storage.models.portfolio import PortfolioEvent
 from investment_agent.storage.models.reference import Company, Listing, Market
-from tests.test_investor_foundations import mandate
-from tests.test_portfolio_ledger import T, append, balance
-from tests.test_portfolio_ledger import ledger as ledger_fixture
-
-ledger = ledger_fixture
+from tests.support.portfolio import (
+    T,
+    action,
+    append,
+    balance,
+    mandate,
+    request,
+    rule,
+)
+from tests.support.portfolio import (
+    ledger as ledger,
+)
 
 D = Decimal
-
-
-def rule(ref, **updates):
-    return TradingRule(listing_ref=ref, source="explicit fixture assumption; no exchange certification", version="fixture-v1", nature="user_scenario", buy_minimum=D(1), buy_increment=D(1), sell_minimum=D(1), sell_increment=D(1), full_odd_lot_sell=True).model_copy(update=updates)
-
-
-def action(ref, **updates):
-    return ScenarioAction(listing_ref=ref, direction="buy", quantity=D(60), execution_price=D(10), fixed_fee=D(1), fee_rate=D(0), assumption_source="user_scenario fixture").model_copy(update=updates)
-
-
-def request(snapshot, ref, **updates):
-    return PortfolioCalculationRequest(operation_id=uuid4(), account_id=snapshot.account_id, snapshot_ref=snapshot.reference, mandate_ref=ObjectRef(kind="mandate", id=uuid4(), revision=1), constraints=ScenarioConstraints(nature="agent_scenario", source="fixture only", max_single_weight=D("0.5"), max_sector_weight=D("0.5"), minimum_cash=D(0)), rules=(rule(ref),), scenarios=(Scenario(name="buy", actions=(action(ref),)),)).model_copy(update=updates)
 
 
 async def setup(ledger):
@@ -218,7 +211,7 @@ async def test_snapshot_weight_precision_independent_of_event_count(ledger):
     snapshot, ref = await setup(ledger)
     from investment_agent.portfolio.contracts import CashFact
     from investment_agent.portfolio.service import PortfolioService
-    from tests.test_portfolio_ledger import balance as make_balance
+    from tests.support.portfolio import balance as make_balance
     # Exercise real projection under the event-count monetary precision context.
     async with session_scope() as session:
         records = list((await PortfolioService(session).events(snapshot.account_id)).items)

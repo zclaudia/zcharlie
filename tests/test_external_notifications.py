@@ -4,7 +4,6 @@ import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from cryptography.fernet import Fernet
 from sqlalchemy import func, select
 
 from investment_agent.investor.controls import CaseAction
@@ -15,38 +14,11 @@ from investment_agent.settings.loader import env_import_values, store_for
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.app_settings import AppSetting
 from investment_agent.storage.models.monitoring import InvestorNotification, NotificationDelivery
-from tests.test_agent_conversations import base
-from tests.test_investor_controls import case_ref, execute
-from tests.test_investor_monitoring import saved
-from tests.test_investor_publication import publication_db as publication_db
-
-
-class FixtureTransport:
-    def __init__(self, outcomes=("delivered",)):
-        self.calls = []
-        self.outcomes = iter(outcomes)
-
-    async def send(self, **kwargs):
-        self.calls.append(kwargs)
-        result = next(self.outcomes)
-        if isinstance(result, Exception):
-            raise result
-        return result
-
-
-async def enable(*, idempotent=False, actor="api"):
-    settings = base(settings_encryption_key=Fernet.generate_key().decode())
-    async with session_scope() as session:
-        await store_for(session, settings).apply(
-            {
-                "notification_external_enabled": True,
-                "notification_webhook_url": "https://receiver.example/notify",
-                "notification_webhook_token": "fixture-token",
-                "notification_webhook_idempotent": idempotent,
-            },
-            actor=actor,
-        )
-    return settings
+from tests.support.conversations import base
+from tests.support.investor import case_ref, execute, saved
+from tests.support.notifications import FixtureTransport as FixtureTransport
+from tests.support.notifications import enable as enable
+from tests.support.publication import publication_db as publication_db
 
 
 async def fresh_change(settings, case_id, *, stage="review_required"):
