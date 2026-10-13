@@ -1,5 +1,7 @@
 # 行业与同行参照 首期验收日志（WP14，2026-10-12）
 
+本记录保留当时的测试结果，不能作为当前验收结论。后续审查发现批次发布、原件核验及实际引用等六项遗漏，已修复；当前结论与升级说明见[2026-10-13 修复和复验记录](industry-peer-fix-acceptance-2026-10-13.md)。
+
 - **范围**：WP14 开关统一 enforcement 与端到端离线验收（首期最后一个工作包）。基线为 WP1–WP13（`5acff79`）。
 - **方法**：逐条核对[技术设计](../product/industry-peer-technical-design.md)"验证重点"清单（§验收与后续开发顺序，27 条）到具体测试；缺一条补一条。端到端场景全部离线：真实 alembic 迁移建库、run-02 固定证据导入、`FunctionModel` 假模型驱动真实 worker，不访问生产库、不调真实 LLM、不发任何在线请求。
 - **门禁**：全量 pytest（`DATA_DIR`/`DATABASE_URL`/`API_KEY`/`LLM_TIER3_API_KEY` 覆盖）+ `mypy src`，结果见文末。

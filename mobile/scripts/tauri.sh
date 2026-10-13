@@ -10,6 +10,11 @@ if [[ "${1:-}" == "android" && ( "${2:-}" == "build" || "${2:-}" == "dev" ) ]]; 
   if [[ ! -f src-tauri/gen/android/gradlew ]]; then
     cargo tauri android init
   fi
+  # gen/android is ignored; restore the committed brand icons after every init/build.
+  cp -R src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
+  # Native overrides: system-bar insets handling + window background (gen/ is regenerated).
+  cp -R src-tauri/android-overlay/java/. src-tauri/gen/android/app/src/main/java/
+  cp -R src-tauri/android-overlay/res/. src-tauri/gen/android/app/src/main/res/
   # Android merges this overlay into debug APKs only; release remains HTTPS-only.
   mkdir -p src-tauri/gen/android/app/src/debug
   cat > src-tauri/gen/android/app/src/debug/AndroidManifest.xml <<'EOF'

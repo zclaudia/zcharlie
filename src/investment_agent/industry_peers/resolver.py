@@ -89,7 +89,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from statistics import median
@@ -106,14 +106,14 @@ from investment_agent.industry_peers.artifacts import (
     read_batch_mapping,
 )
 from investment_agent.industry_peers.calculations import (
+    _APPLICABILITY_REASONS,
     DETAILS_SCHEMA,
     METHOD,
     METHOD_VERSION,
     METRIC_KEYS,
     MIN_VALID_PEERS,
-    PeerExclusion,
     POSITION_RULE,
-    _APPLICABILITY_REASONS,
+    PeerExclusion,
     _metric_status,
     ascending_position,
     metric_spec,
@@ -231,7 +231,7 @@ def _expected_field_unit(field: str) -> tuple[str, str | None]:
     return ("fraction", None) if field in _RATIO_FIELDS else ("CNY", "CNY")
 
 
-def peer_method_entry(method: str) -> "type[PeerContextResolver] | None":
+def peer_method_entry(method: str) -> type[PeerContextResolver] | None:
     """The registered entry of one method, or ``None``.
 
     This is the whole registration of the unified method entry: exactly one
@@ -625,6 +625,9 @@ class PeerContextResolver:
         require_consistent_sources: bool,
         require_verified_inputs: bool,
     ) -> PeerMetricValidation:
+        from investment_agent.industry_peers.artifacts import batch_is_committed
+        if not await batch_is_committed(self.session, self._batch_mapping(), owner=self.owner_id):
+            self._reject("the bound batch has no committed submission receipt")
         record = await self._load_record(ref)
         details = self._details(record)
         metric_key = self._metric_key(details)
@@ -643,6 +646,8 @@ class PeerContextResolver:
             require_verified_inputs=require_verified_inputs,
         )
         self._exclusion_bases(details, spec, facts, audit)
+        if full_citation:
+            self._values_from_facts(details, spec, facts, audit)
         self._statistics(record, details, spec, audit)
         inputs_verified = (
             full_citation
@@ -882,15 +887,37 @@ class PeerContextResolver:
                     "by a non-positive saved field value"
                 )
         target_exclusion = audit["target_exclusion"]
-        if details.get("metric_status") == "target_not_applicable":
-            if (
+        if details.get("metric_status") == "target_not_applicable" and (
                 target_exclusion is None
                 or target_exclusion.get("reason") not in _APPLICABILITY_REASONS
-            ):
-                self._reject(
-                    "target_not_applicable requires an evidence-backed applicability exclusion; "
-                    "a collection gap only proves the field was not obtained this time"
-                )
+        ):
+            self._reject(
+                "target_not_applicable requires an evidence-backed applicability exclusion; "
+                "a collection gap only proves the field was not obtained this time"
+            )
+
+    def _values_from_facts(self, details: dict[str, Any], spec: Any, facts: list[PeerFactValidation], audit: dict[str, Any]) -> None:
+        """The audit cannot certify its own numeric values independently of facts."""
+        values = {(f.company_id, f.field): f.record.value.value for f in facts if f.record.value is not None}
+        entries = [(int(e["company_id"]), Decimal(e["value"])) for e in audit["included"]]
+        if details.get("target_value") is not None:
+            entries.append((audit["target_id"], Decimal(details["target_value"])))
+        for company_id, claimed in entries:
+            numerator = values.get((company_id, spec.numerator_field))
+            if numerator is None:
+                self._reject("the metric value has no numeric source fact")
+            expected = numerator
+            if spec.denominator_field is not None:
+                denominator = values.get((company_id, spec.denominator_field))
+                if denominator is None or denominator <= 0:
+                    self._reject("the metric value has no applicable denominator fact")
+                expected = numerator / denominator
+            if spec.needs_applicability_ref:
+                eligibility = values.get((company_id, spec.applicability_field))
+                if eligibility is None or eligibility <= 0:
+                    self._reject("the metric value has no applicable equity fact")
+            if claimed != expected:
+                self._reject("the metric audit value disagrees with its source facts")
 
     def _statistics(
         self, record: CalculationRecord, details: dict[str, Any], spec: Any, audit: dict[str, Any]
@@ -1124,6 +1151,10 @@ class PeerContextResolver:
         ):
             self._reject("the cited fact's snapshot version does not match the bound period and roster")
         rederived = peer_field_evidence(snapshot, field)
+        if rederived.record is not None and rederived.record.verification == "verified":
+            from investment_agent.industry_peers.originals import validate_field_original
+            if not await validate_field_original(self.session, snapshot, field, cutoff=self.binding.cutoff):
+                self._reject("peer original proof does not match the saved original bytes")
         expected = rederived.record
         # The store's own trusted-branch comparison: the persisted fact must
         # re-derive from its snapshot field byte for byte (identity fields

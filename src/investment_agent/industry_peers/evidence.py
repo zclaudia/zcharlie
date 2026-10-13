@@ -59,6 +59,7 @@ Same reason string as the material layer's adapter, so pages can treat both
 "stays in its own layer" outcomes uniformly."""
 
 VERIFIED_PROOF_KEYS: tuple[str, ...] = (
+    "original_ref", "pdf_hash", "report_identity", "accounting_scope", "checked_at", "check_rule_version",
     "pdf_page",
     "header",
     "raw_value",
@@ -71,10 +72,9 @@ VERIFIED_PROOF_KEYS: tuple[str, ...] = (
 
 The items bind the saved value to the checked original (page, header, the
 number as printed, the parsed value, the located excerpt with its hash and
-the audit-record binding). Proof keys the source does not carry (original
-ObjectRef, PDF hash, report identity, check time, checker, rule version) are
-recorded as explicit ``None`` by the importer and are deliberately not
-required here - absence is stated, never invented."""
+the audit-record binding). Original identity, hash, period, accounting scope
+and check time are mandatory. Non-empty metadata is only a prerequisite:
+storage and publication re-read the owner-scoped original bytes and locator."""
 
 _CORRECTION_KEY = "corrects"
 """Optional proof key declaring an explicit correction basis.
@@ -297,6 +297,7 @@ async def peer_field_states(
     currency: str | None = None,
     period_basis: str | None = None,
     accounting_scope: str | None = None,
+    cutoff: datetime | None = None,
 ) -> PeerFieldConflictReport:
     """Conflict/correction lookup over saved versions (read-only, awaited).
 
@@ -322,6 +323,8 @@ async def peer_field_states(
     entries: list[tuple[PeerAnnualSnapshot, PeerAnnualField, dict[str, object]]] = []
     warnings: list[str] = []
     for row in rows:
+        if cutoff is not None and _aware(row.captured_at) > cutoff:
+            continue
         field = PeerAnnualField.model_validate(row.fields[metric])
         proof = row.verification.get(metric)
         proof = proof if isinstance(proof, dict) else {}

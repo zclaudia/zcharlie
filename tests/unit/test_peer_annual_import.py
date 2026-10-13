@@ -273,12 +273,12 @@ async def test_all_114_checks_reproduce_and_trace_to_audit_records(seeded, sessi
             assert proof["locator_excerpt_sha256"] == hashlib.sha256(
                 matched["excerpt"].encode("utf-8")
             ).hexdigest()
-            # Everything the audit does not carry is explicitly None, never invented.
+            # Missing audit metadata is now proven by the actual stored original.
             for absent in (
                 "original_ref", "pdf_hash", "report_identity",
                 "accounting_scope", "checked_at", "checked_by", "check_rule_version",
             ):
-                assert proof[absent] is None, (code, metric, absent)
+                assert proof[absent] is not None, (code, metric, absent)
             traced += 1
     assert traced == 114
 
@@ -637,7 +637,7 @@ async def test_value_change_appends_new_version_and_keeps_the_old_readable(
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     first = await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT, originals_root=None
     )
     await session.commit()
 
@@ -652,7 +652,7 @@ async def test_value_change_appends_new_version_and_keeps_the_old_readable(
     record["matched_row"]["parsed_first_value"] = new_value
     record["matched_row"]["raw_number"] = "168,838,102,514.80"
     second = await import_peer_annual_snapshots(
-        session, sample=v2_sample, audit=v2_audit, acquired_at=LATER_ACQUIRED_AT
+        session, sample=v2_sample, audit=v2_audit, acquired_at=LATER_ACQUIRED_AT, originals_root=None
     )
     await session.commit()
     assert (second.inserted, second.skipped_existing) == (1, 18)
@@ -684,7 +684,7 @@ async def test_proof_change_alone_appends_new_version(seeded, session) -> None:
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     first = await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT, originals_root=None
     )
     await session.commit()
 
@@ -695,7 +695,7 @@ async def test_proof_change_alone_appends_new_version(seeded, session) -> None:
         r for r in v2_audit if r["code"] == "600809.SH" and r["field"] == "归母净资产"
     )["matched_row"]["alias"] = "归属于上市公司股东的净资产（更正后）"
     second = await import_peer_annual_snapshots(
-        session, sample=sample, audit=v2_audit, acquired_at=LATER_ACQUIRED_AT
+        session, sample=sample, audit=v2_audit, acquired_at=LATER_ACQUIRED_AT, originals_root=None
     )
     await session.commit()
     assert (second.inserted, second.skipped_existing) == (1, 18)

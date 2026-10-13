@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "icons": "bash ./scripts/icons.sh",
     "tauri": "./scripts/tauri.sh",
     "tauri:android:debug": "./scripts/tauri.sh android build --debug --apk --target aarch64",
     "tauri:android:dev": "./scripts/tauri.sh android dev"

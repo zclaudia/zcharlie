@@ -140,6 +140,10 @@ const state = {
   edits: new Map(), // key -> value | INVALID
   nodes: new Map(), // key -> { root, issues, read, setDirty }
   cleared: new Set(), // secret keys marked for clearing
+  raw: new Map(), // key -> control value, survives leaving the topic
+  sections: [],
+  place: { sectionId: null, topicId: null },
+  query: "",
 };
 
 function redirectOn401(error) {
@@ -158,17 +162,51 @@ function dirtyCount() {
   return state.edits.size;
 }
 
+function placeTopic() {
+  const section = state.sections.find((item) => item.id === state.place.sectionId) || null;
+  const topic = section ? section.topics.find((item) => item.id === state.place.topicId) || null : null;
+  return { section, topic };
+}
+
+function topicDirtyKeys(topic) {
+  if (!topic) return [];
+  return topicKeys(topic).filter((key) => state.edits.has(key));
+}
+
+function sectionDirtyCount(section) {
+  const keys = new Set(section.topics.flatMap((topic) => topicKeys(topic)));
+  let count = 0;
+  for (const key of state.edits.keys()) if (keys.has(key)) count += 1;
+  return count;
+}
+
 function updateSavebar() {
-  const count = dirtyCount();
+  const { topic } = placeTopic();
+  const count = topic ? topicDirtyKeys(topic).length : 0;
   const counter = document.getElementById("settings-dirty-count");
   const save = document.getElementById("settings-save");
   const discard = document.getElementById("settings-discard");
+  const bar = document.getElementById("settings-savebar");
+  const result = document.getElementById("settings-save-result");
+  const hasResult = Boolean(result && result.textContent.trim());
   if (counter) {
     counter.textContent = count ? `未保存 ${count} 项` : "没有未保存的修改";
     counter.classList.toggle("has-dirty", count > 0);
   }
   if (save) save.disabled = count === 0;
   if (discard) discard.disabled = count === 0;
+  if (bar) bar.hidden = count === 0 && !hasResult;
+}
+
+function refreshDirtyLabels() {
+  for (const node of document.querySelectorAll("[data-dirty-for]")) {
+    const section = state.sections.find((item) => item.id === node.getAttribute("data-dirty-for"));
+    const count = section ? sectionDirtyCount(section) : 0;
+    const badge = node.querySelector("[data-dirty-count]");
+    if (!badge) continue;
+    badge.hidden = count === 0;
+    badge.textContent = count ? String(count) : "";
+  }
 }
 
 function showIssues(key, messages) {
@@ -183,6 +221,7 @@ function onEdit(key) {
   const item = state.items.get(key);
   const node = state.nodes.get(key);
   if (!item || !node) return;
+  state.raw.set(key, node.read());
   if (item.secret) {
     const raw = node.read();
     if (state.cleared.has(key)) state.edits.set(key, "");
@@ -202,9 +241,14 @@ function onEdit(key) {
   }
   node.setDirty(state.edits.has(key));
   updateSavebar();
+  refreshDirtyLabels();
 }
 
 // ---- 控件 -------------------------------------------------------------------
+
+function remembered(item) {
+  return state.raw.has(item.key) ? state.raw.get(item.key) : item.value;
+}
 
 function numberControl(item) {
   const meta = item.input;
@@ -216,15 +260,17 @@ function numberControl(item) {
     min: typeof meta.min === "number" && !meta.min_exclusive ? meta.min : undefined,
     max: typeof meta.max === "number" && !meta.max_exclusive ? meta.max : undefined,
   });
-  input.value = item.value === null || item.value === undefined ? "" : String(item.value);
+  const value = remembered(item);
+  input.value = value === null || value === undefined ? "" : String(value);
   return { control: input, root: input, read: () => input.value };
 }
 
 function selectControl(item) {
   const select = el("select", { id: inputId(item.key) });
+  const value = remembered(item);
   for (const option of item.input.options || []) {
     const node = el("option", { value: option }, option);
-    if (option === item.value) node.selected = true;
+    if (option === value) node.selected = true;
     select.appendChild(node);
   }
   return { control: select, root: select, read: () => select.value };
@@ -233,7 +279,8 @@ function selectControl(item) {
 function multiControl(item) {
   const box = el("fieldset", { class: "setting-multi", id: inputId(item.key) });
   box.appendChild(el("legend", { class: "visually-hidden" }, item.label));
-  const current = new Set(Array.isArray(item.value) ? item.value : []);
+  const rememberedValue = remembered(item);
+  const current = new Set(Array.isArray(rememberedValue) ? rememberedValue : []);
   const boxes = [];
   for (const option of item.input.options || []) {
     const wrap = el("label", { class: "setting-check" });
@@ -261,7 +308,8 @@ function textControl(item) {
     autocomplete: "off",
     placeholder: type === "cron" ? "留空 = 停用，例如 0 20 * * sun" : undefined,
   });
-  input.value = item.value === null || item.value === undefined ? "" : String(item.value);
+  const value = remembered(item);
+  input.value = value === null || value === undefined ? "" : String(value);
   return { control: input, root: input, read: () => input.value };
 }
 
@@ -275,6 +323,9 @@ function secretControl(item, encryptionReady) {
     placeholder: encryptionReady ? "留空 = 不修改" : "需先配置 SETTINGS_ENCRYPTION_KEY",
     disabled: encryptionReady ? undefined : "disabled",
   });
+  const seeded = state.raw.get(item.key);
+  if (state.cleared.has(item.key)) input.disabled = true;
+  else if (typeof seeded === "string" && seeded) input.value = seeded;
   wrap.appendChild(input);
   const status = el("span", { class: `secret-status${item.decrypt_error ? " is-error" : ""}` }, secretStatusText(item));
   if (item.decrypt_error) status.setAttribute("title", item.decrypt_error);
@@ -295,6 +346,7 @@ function secretControl(item, encryptionReady) {
       }
       onEdit(item.key);
     });
+    if (state.cleared.has(item.key)) clearButton.textContent = "撤销清除";
     wrap.appendChild(clearButton);
   }
   return { control: input, root: wrap, read: () => input.value, input };
@@ -305,7 +357,7 @@ function controlFor(item, encryptionReady) {
   if (item.secret) return secretControl(item, encryptionReady);
   if (typeof item.default === "boolean") {
     const control = el("input", {id: inputId(item.key), type: "checkbox"});
-    control.checked = Boolean(item.value);
+    control.checked = Boolean(remembered(item));
     return {control, root: control, read: () => control.checked};
   }
   if (type === "int" || type === "float") return numberControl(item);
@@ -330,14 +382,6 @@ function settingRow(item, encryptionReady) {
   const root = el("div", { class: "setting", "data-key": item.key });
   const head = el("div", { class: "setting-head" });
   head.appendChild(el("label", { for: inputId(item.key), class: "setting-label" }, item.label));
-  head.appendChild(
-    el("span", { class: `badge apply-${item.apply}`, title: label(APPLY_TITLES, item.apply) }, label(APPLY_LABELS, item.apply))
-  );
-  if (!item.is_default) {
-    head.appendChild(el("span", { class: "badge accent", title: "当前值与默认值不同" }, "已修改"));
-  }
-  const pending = el("span", { class: "badge warn setting-pending", hidden: "hidden" }, "未保存");
-  head.appendChild(pending);
   root.appendChild(head);
   root.appendChild(el("p", { class: "setting-help faint" }, item.help));
 
@@ -366,13 +410,13 @@ function settingRow(item, encryptionReady) {
     read: control.read,
     setDirty(dirty) {
       root.classList.toggle("dirty", dirty);
-      pending.hidden = !dirty;
       if (isCron) {
         meta.textContent = dirty ? `${metaLine({ ...item, next_run: null })} · 保存后重新计算下次触发时间` : metaLine(item);
       }
     },
   };
   state.nodes.set(item.key, node);
+  node.setDirty(state.edits.has(item.key));
   const events = control.control.tagName === "SELECT" || control.control.tagName === "FIELDSET" ? ["change"] : ["input", "change"];
   for (const name of events) {
     control.control.addEventListener(name, () => {
@@ -530,51 +574,663 @@ function renderEncryptionNotice(data) {
   );
 }
 
-function renderForm(region, data) {
-  state.data = data;
-  state.items = new Map();
-  state.edits = new Map();
-  state.nodes = new Map();
-  state.cleared = new Set();
-  renderEncryptionNotice(data);
-  const encryptionReady = Boolean(data.encryption_key_configured);
-  const root = el("div", { class: "settings-groups" });
-  for (const group of data.groups || []) {
-    const card = el("section", { class: "card settings-group", "data-group": group.key });
-    const head = el("div", { class: "card-head" });
-    head.appendChild(el("h2", {}, group.title));
-    head.appendChild(el("span", { class: "faint" }, `${group.items.length} 项`));
-    card.appendChild(head);
-    if (group.key === "agent") {
-      card.id = "agent-settings";
-      card.appendChild(el("p", {class: "notice"}, "Agent 模型与旧解释模型独立。保存仅更新配置，不代表供应商网络或研究质量已经验证；后台运行开关与投资约定授权须分别明确开启。"));
-      card.appendChild(el("a", {href: "/app/agent"}, "查看投资约定、USD 金额上限与本地 readiness / 当前配置指纹"));
-    }
-    for (const notice of groupNotices(group)) card.appendChild(notice);
-    if (group.key === "llm" || group.key === "ifind") card.appendChild(connectionTest(group.key));
-    const list = el("div", { class: "setting-list" });
-    const advanced = el("details");
-    advanced.appendChild(el("summary", {}, "高级模型参数与执行限额"));
-    const basicAgent = new Set(["agent_provider", "agent_base_url", "agent_model", "agent_api_key",
-      "agent_profile", "agent_profile_model", "agent_output_mode", "investor_agent_enabled",
-      "investor_agent_background_enabled", "investor_agent_input_usd_per_million",
-      "investor_agent_output_usd_per_million", "investor_agent_price_model",
-      "investor_agent_price_version", "investor_agent_price_config_version"]);
-    for (const item of group.items) {
-      state.items.set(item.key, item);
-      const row = settingRow(item, encryptionReady);
-      if (group.key === "agent" && !basicAgent.has(item.key)) advanced.appendChild(row);
-      else list.appendChild(row);
-    }
-    if (group.key === "agent") list.appendChild(advanced);
-    card.appendChild(list);
-    root.appendChild(card);
+// 目录 → 主题 → 字段。未列入的新配置落到该分组的「其他」，避免被藏起来。
+
+const NAV_GROUPS = ["研究", "数据", "运行", "系统", "其他"];
+const CRON_SUMMARIES = Object.freeze({
+  "0 8 * * 1": "每周一 08:00",
+  "0 8 * * *": "每天 08:00",
+  "30 18 * * 1-5": "工作日 18:30",
+  "10 15 * * 1-5": "工作日 15:10",
+  "0 16 * * 1-5": "工作日 16:00",
+  "0 9 * * 6": "周六 09:00",
+  "0 19 * * *": "每天 19:00",
+  "0 19 * * 1-5": "工作日 19:00",
+  "0 20 * * sun": "周日 20:00",
+  "0 7 * * *": "每天 07:00",
+  "*/30 * * * *": "每 30 分钟",
+  "0 21 * * 0": "周日 21:00",
+});
+const SNAPSHOT_TZ = "schedule.snapshot.timezone";
+const VERIFY_TZ = "schedule.verification.timezone";
+
+function blocks(title, keys) {
+  return { title, keys };
+}
+
+function job(id, title, note, keys) {
+  return { id, title, note, keys };
+}
+
+export const SETTINGS_SECTIONS = Object.freeze([
+  {
+    id: "agent",
+    navGroup: "研究",
+    groups: ["agent"],
+    title: "投资 Agent",
+    blurb: "模型、价格、开关分开保存。保存只更新配置，不代表供应商或研究质量已经验证。",
+    topicGroups: [
+      { label: "模型与计费", topicIds: ["model", "price"] },
+      { label: "能不能跑", topicIds: ["switches", "quota"] },
+      { label: "不常改", topicIds: ["advanced"] },
+    ],
+    links: [{ href: "/app/agent", title: "投资约定", detail: "金额上限、readiness 与当前配置指纹" }],
+    topics: [
+      {
+        id: "switches",
+        title: "开关",
+        note: "后台研究和投资约定仍要各自明确打开。",
+        keys: [
+          "investor_agent_enabled",
+          "investor_agent_background_enabled",
+          "disclosure_originals_enabled",
+          "portfolio_ledger_enabled",
+          "portfolio_valuation_max_staleness_days",
+        ],
+      },
+      {
+        id: "model",
+        title: "模型",
+        note: "与解释模型独立。密钥加密保存，只写不读。",
+        keys: ["agent_provider", "agent_base_url", "agent_model", "agent_api_key", "agent_profile", "agent_profile_model", "agent_output_mode"],
+      },
+      {
+        id: "price",
+        title: "计费核验",
+        note: "价格未知就留空，计费保持停用。绑定模型必须和执行模型相同。",
+        keys: [
+          "investor_agent_input_usd_per_million",
+          "investor_agent_output_usd_per_million",
+          "investor_agent_price_model",
+          "investor_agent_price_version",
+          "investor_agent_price_config_version",
+        ],
+      },
+      {
+        id: "quota",
+        title: "额度",
+        note: "仍与投资约定取较小值。每批上限不是产出目标。",
+        blocks: [
+          blocks("单任务", ["investor_agent_task_requests", "investor_agent_task_tokens", "investor_agent_task_seconds", "investor_agent_task_tool_calls"]),
+          blocks("每日", ["investor_agent_daily_requests", "investor_agent_daily_tokens", "investor_agent_daily_tool_calls"]),
+          blocks("每批", ["investor_agent_max_leads_per_batch", "investor_agent_max_new_tasks_per_batch"]),
+        ],
+      },
+      {
+        id: "advanced",
+        title: "队列与端点",
+        note: "队列满时拒绝新任务，不重建已有任务。",
+        blocks: [
+          blocks("队列", ["agent_queue_max_running", "agent_queue_interactive_capacity", "agent_queue_review_capacity", "agent_queue_exploration_capacity"]),
+          blocks("端点", [
+            "agent_credential_ref", "agent_supports_json_schema", "agent_supports_json_object", "agent_tool_choice_required",
+            "agent_thinking", "agent_timeout_seconds", "agent_temperature", "agent_max_tokens", "agent_retries",
+          ]),
+        ],
+      },
+    ],
+  },
+  {
+    id: "llm",
+    navGroup: "研究",
+    groups: ["llm"],
+    title: "解释模型",
+    blurb: "研究解释和规则草拟用这一组，与投资 Agent 的模型无关。",
+    topics: [{
+      id: "llm",
+      title: "解释模型",
+      note: "未配置 Key 时，解释和规则草拟会直接失败。",
+      keys: ["llm_tier3_base_url", "llm_tier3_model", "llm_tier3_api_key", "llm_tier3_thinking", "llm_rule_draft_thinking", "llm_request_timeout_seconds"],
+    }],
+  },
+  {
+    id: "notify",
+    navGroup: "研究",
+    groups: ["notifications"],
+    title: "通知",
+    blurb: "默认只在站内提醒。打开外部推送后，只发送新变化的状态和引用。",
+    topics: [{
+      id: "notify",
+      title: "通知",
+      note: "关闭、静音或暂停会抑制还没发出的提醒，恢复后不补发。",
+      keys: ["notification_external_enabled", "notification_webhook_url", "notification_webhook_token", "notification_webhook_idempotent"],
+    }],
+  },
+  {
+    id: "candidates",
+    navGroup: "研究",
+    groups: ["candidates"],
+    title: "候选池",
+    blurb: "未处理多久过期，以及忽略之后多久才能再被提名。过期扫描的时刻在定时任务里。",
+    topics: [{
+      id: "candidates",
+      title: "候选池",
+      keys: ["candidate_expiry_days", "candidate_dismiss_cooldown_days"],
+    }],
+  },
+  {
+    id: "data",
+    navGroup: "数据",
+    groups: ["ifind", "collection", "verification", "peers"],
+    title: "数据源",
+    blurb: "连接、采集速度、核验预算、同行参照。各管一件事。",
+    topics: [
+      { id: "ifind", title: "iFinD 连接", note: "地址和密钥改完，用这一屏的测试。", keys: ["ifind_proxy_url", "ifind_proxy_api_key"] },
+      {
+        id: "collection",
+        title: "采集",
+        keys: ["ifind_collect_rate_per_minute", "ifind_collect_batch_retries", "akshare_min_interval_seconds", "snapshot_completeness_threshold"],
+      },
+      {
+        id: "verification",
+        title: "核验预算",
+        note: "超出预算的核验任务顺延。派发时刻在定时任务里。",
+        keys: ["ifind_budget_per_5h", "ifind_budget_window_hours", "ifind_verify_max_requests"],
+      },
+      {
+        id: "peers",
+        title: "同行参照",
+        note: "开关立即生效。间隔、重试和冷却在下个任务生效。",
+        keys: ["industry_peer_context_enabled", "peer_collect_min_interval_seconds", "peer_collect_retries", "peer_collect_admission_cooldown_seconds"],
+      },
+    ],
+  },
+  {
+    id: "schedule",
+    navGroup: "运行",
+    groups: ["schedule"],
+    title: "定时任务",
+    blurb: "一个任务一行。点进去才改 cron 和时区。留空即停用。",
+    topicGroups: [
+      { label: "范围", topicIds: ["pools"] },
+      { label: "日常", topicIds: ["watchlist", "portfolio", "zone", "expiry"] },
+      { label: "行情与财务", topicIds: ["universe", "industry", "market", "close", "close-retry", "financial-week", "financial-deadline", "earnings", "calendar"] },
+      { label: "研究", topicIds: ["screen", "dispatch", "calibration"] },
+    ],
+    topics: [
+      job("pools", "股票池", "时区不在这里改，跟在各自的任务里。", ["schedule.snapshot.universes", "schedule.screen.universes"]),
+      job("watchlist", "观察池刷新", "留空即停用。", ["schedule.watchlist.cron", "schedule.watchlist.timezone"]),
+      job("portfolio", "持仓估值", "留空即停用。", ["schedule.portfolio.cron", "schedule.portfolio.timezone"]),
+      job("zone", "区间检测", "留空即停用。", ["schedule.zone_detection.cron", "schedule.zone_detection.timezone"]),
+      job("expiry", "候选过期扫描", "每次筛选开始时也会扫一次。", ["schedule.candidates.expiry_sweep_cron", "schedule.candidates.timezone"]),
+      job("universe", "成分股同步", "按 cron 触发。", ["schedule.snapshot.universe_sync_cron", SNAPSHOT_TZ]),
+      job("industry", "行业同步", "仅在每月首个交易日执行。", ["schedule.snapshot.industry_sync_cron", SNAPSHOT_TZ]),
+      job("market", "行情快照", "仅在交易日执行。", ["schedule.snapshot.market_snapshot_cron", SNAPSHOT_TZ]),
+      job("close", "收盘快照", "仅在交易日、收盘之后执行。", ["schedule.snapshot.close_quote_cron", SNAPSHOT_TZ]),
+      job("close-retry", "收盘补采", "补仍未收盘或未报价的标的。", ["schedule.snapshot.close_quote_retry_cron", SNAPSHOT_TZ]),
+      job("financial-week", "财务周采", "按 cron 触发。", ["schedule.snapshot.financial_weekly_cron", SNAPSHOT_TZ]),
+      job("financial-deadline", "披露截止后采集", "仅在披露截止日后的首个交易日执行，并检查逾期报告。", ["schedule.snapshot.financial_deadline_cron", SNAPSHOT_TZ]),
+      job("earnings", "财报事件", "仅在 1、4、7、10 月的交易日执行。", ["schedule.snapshot.earnings_event_cron", SNAPSHOT_TZ]),
+      job("calendar", "交易日历核对", "只在日历到期前 60 天内真正核对。", ["schedule.snapshot.calendar_probe_cron", SNAPSHOT_TZ]),
+      job("screen", "每周筛选", "星期建议写 sun、mon。", ["schedule.screen.cron", "schedule.screen.timezone", "schedule.screen.hit_cap"]),
+      job("dispatch", "核验派发", "有到期请求时派发一次核验。", ["schedule.verification.dispatch_cron", VERIFY_TZ]),
+      job("calibration", "每周校准", "每周抽观察池股票做校准。", ["schedule.verification.calibration_cron", VERIFY_TZ, "schedule.verification.calibration_count"]),
+    ],
+  },
+  {
+    id: "gateway",
+    navGroup: "运行",
+    groups: ["gateway"],
+    title: "手机网关",
+    blurb: "手机持网关签发的设备凭证进来。本服务的 API Key 不下发。",
+    topics: [{
+      id: "gateway",
+      title: "手机网关",
+      note: "保存后大约 10 秒内连接、断开或更换凭证。",
+      keys: ["gateway_enabled", "gateway_url", "gateway_credential", "gateway_namespace", "gateway_instance_id"],
+    }],
+  },
+  {
+    id: "system",
+    navGroup: "系统",
+    groups: [],
+    title: "记录与启动配置",
+    blurb: "变更历史和启动配置都是只读。",
+    topics: [
+      { id: "history", title: "最近变更", kind: "history", note: "密钥只显示已设置和末 4 位。" },
+      { id: "bootstrap", title: "启动配置", kind: "bootstrap", note: "来自环境变量，修改后需重启服务。" },
+    ],
+  },
+]);
+
+export function topicKeys(topic) {
+  if (Array.isArray(topic.blocks) && topic.blocks.length) return topic.blocks.flatMap((block) => block.keys || []);
+  return topic.keys || [];
+}
+
+export function settingsCatalogKeys() {
+  return [...new Set(SETTINGS_SECTIONS.flatMap((section) => section.topics.flatMap((topic) => topicKeys(topic))))];
+}
+
+export function parseSettingsHash(hash) {
+  const raw = String(hash || "").replace(/^#/, "");
+  if (raw === "agent-settings") return { sectionId: "agent", topicId: null };
+  const [sectionId, topicId] = raw.split("/").filter(Boolean);
+  return { sectionId: sectionId || null, topicId: topicId || null };
+}
+
+export function resolveSettingsPlace(hash, sections = SETTINGS_SECTIONS) {
+  const parsed = parseSettingsHash(hash);
+  const section = sections.find((item) => item.id === parsed.sectionId);
+  if (!section) return { sectionId: null, topicId: null };
+  if (parsed.topicId && section.topics.some((topic) => topic.id === parsed.topicId)) {
+    return { sectionId: section.id, topicId: parsed.topicId };
   }
+  if (section.topics.length === 1) return { sectionId: section.id, topicId: section.topics[0].id };
+  return { sectionId: section.id, topicId: null };
+}
+
+export function cronSummary(raw) {
+  if (raw === null || raw === undefined || String(raw).trim() === "") return "已停用";
+  const text = String(raw).trim();
+  return CRON_SUMMARIES[text] || text;
+}
+
+function blankValue(value) {
+  return value === null || value === undefined || value === "";
+}
+
+export function topicSummary(topic, read) {
+  const value = (key) => read(key);
+  switch (topic.id) {
+    case "switches": {
+      const toggles = ["investor_agent_enabled", "investor_agent_background_enabled", "disclosure_originals_enabled", "portfolio_ledger_enabled"];
+      const on = toggles.filter((key) => value(key) === true).length;
+      return on === 0 ? "全部关闭" : `${on} 项开启`;
+    }
+    case "model":
+      return String(value("agent_model") || "").trim() || "未填写";
+    case "price":
+      return blankValue(value("investor_agent_input_usd_per_million")) ? "为空则停用" : "价格已填";
+    case "quota":
+      return `每批 ${value("investor_agent_max_leads_per_batch")} 条线索`;
+    case "advanced":
+      return `并发 ${value("agent_queue_max_running")}`;
+    case "llm":
+      return String(value("llm_tier3_model") || "").trim() || "未填模型";
+    case "notify":
+      return value("notification_external_enabled") ? "外部推送" : "仅站内";
+    case "candidates":
+      return `${value("candidate_expiry_days")} 天过期`;
+    case "ifind":
+      return String(value("ifind_proxy_url") || "").replace(/^https?:\/\//, "") || "未填写";
+    case "collection":
+      return `${value("ifind_collect_rate_per_minute")} 次/分钟`;
+    case "verification":
+      return `${value("ifind_budget_window_hours")} 小时 ${value("ifind_budget_per_5h")} 次`;
+    case "peers":
+      return value("industry_peer_context_enabled") ? "已开启" : "关闭";
+    case "pools": {
+      const pools = value("schedule.snapshot.universes");
+      return Array.isArray(pools) && pools.length ? pools.join("、") : "未选";
+    }
+    case "gateway":
+      return value("gateway_enabled") ? "已启用" : "未启用";
+    case "history":
+      return "只读";
+    case "bootstrap":
+      return "需重启";
+    default: {
+      const cronKey = topicKeys(topic).find((key) => key.endsWith("cron"));
+      return cronKey ? cronSummary(value(cronKey)) : "";
+    }
+  }
+}
+
+export function sectionHome(section, read, lookup) {
+  const value = (key) => read(key);
+  const row = (key) => lookup(key);
+  switch (section.id) {
+    case "agent": {
+      const model = String(value("agent_model") || "").trim();
+      const price = blankValue(value("investor_agent_input_usd_per_million")) ? "价格为空" : "价格已填";
+      return { value: value("investor_agent_enabled") === true ? "已开启" : "已关闭", detail: `${model || "模型未填"} · ${price}` };
+    }
+    case "llm":
+      return {
+        value: String(value("llm_tier3_model") || "未填模型"),
+        detail: row("llm_tier3_api_key")?.configured ? "Key 已设置" : "Key 未配置",
+      };
+    case "notify":
+      return { value: value("notification_external_enabled") ? "外部推送" : "仅站内", detail: "只发新变化的状态和引用" };
+    case "data":
+      return { value: value("industry_peer_context_enabled") ? "同行已开" : "同行关闭", detail: "连接、采集、核验、同行" };
+    case "candidates":
+      return { value: `${value("candidate_expiry_days")} 天过期`, detail: `忽略冷却 ${value("candidate_dismiss_cooldown_days")} 天` };
+    case "schedule": {
+      const jobs = section.topics.filter((topic) => topicKeys(topic).some((key) => key.endsWith("cron")));
+      const off = jobs.filter((topic) => blankValue(value(topicKeys(topic).find((key) => key.endsWith("cron"))))).length;
+      return { value: `${jobs.length} 个任务`, detail: off ? `${off} 个停用` : "全部已排期" };
+    }
+    case "gateway":
+      return { value: value("gateway_enabled") ? "已启用" : "未启用", detail: "凭证只留在服务端" };
+    default:
+      return { value: "只读", detail: "变更历史与启动配置" };
+  }
+}
+
+function materializeSections() {
+  const sections = SETTINGS_SECTIONS.map((section) => ({
+    ...section,
+    topicGroups: section.topicGroups ? section.topicGroups.map((group) => ({ ...group, topicIds: [...group.topicIds] })) : undefined,
+    topics: section.topics.map((topic) => ({
+      ...topic,
+      keys: [...topicKeys(topic)],
+      blocks: topic.blocks ? topic.blocks.map((block) => ({ ...block, keys: [...block.keys] })) : undefined,
+    })),
+  }));
+  const placed = new Set(sections.flatMap((section) => section.topics.flatMap((topic) => topic.keys)));
+  for (const item of state.items.values()) {
+    if (placed.has(item.key)) continue;
+    let section = sections.find((entry) => (entry.groups || []).includes(item.group));
+    if (!section) {
+      section = { id: item.group, navGroup: "其他", title: item.group, blurb: "", groups: [item.group], topics: [] };
+      sections.push(section);
+    }
+    let extra = section.topics.find((topic) => topic.id === "extra");
+    if (!extra) {
+      extra = { id: "extra", title: "其他", keys: [], note: "这些配置还没有单独的主题。" };
+      section.topics.push(extra);
+      section.topicGroups = [...(section.topicGroups || []), { label: "其他", topicIds: ["extra"] }];
+    }
+    extra.keys.push(item.key);
+    placed.add(item.key);
+  }
+  return sections;
+}
+
+function indexItems(data) {
+  state.items = new Map();
+  for (const group of data.groups || []) {
+    for (const item of group.items || []) state.items.set(item.key, item);
+  }
+  state.sections = materializeSections();
+}
+
+function readNow(key) {
+  return currentValue(key);
+}
+
+function shownValue(item) {
+  if (item.secret) {
+    if (state.cleared.has(item.key)) return "将清除";
+    if (state.edits.has(item.key) && state.edits.get(item.key)) return "已填写";
+    return secretStatusText(item);
+  }
+  return formatSettingValue(currentValue(item.key));
+}
+
+function jumpRow({ title, detail, value, dirty, href, onClick }) {
+  const node = href ? el("a", { class: "settings-jump", href }) : el("button", { type: "button", class: "settings-jump" });
+  const text = el("span", { class: "settings-jump-text" });
+  text.appendChild(el("span", { class: "settings-jump-title" }, title));
+  if (detail) text.appendChild(el("span", { class: "settings-jump-detail" }, detail));
+  node.appendChild(text);
+  if (value) node.appendChild(el("span", { class: dirty ? "settings-jump-value is-dirty" : "settings-jump-value" }, value));
+  node.appendChild(el("span", { class: "settings-jump-chevron", "aria-hidden": "true" }));
+  if (onClick) node.addEventListener("click", onClick);
+  return node;
+}
+
+function groupedTopics(section) {
+  if (!section.topicGroups) return [{ label: "", topics: section.topics }];
+  return section.topicGroups
+    .map((group) => ({
+      label: group.label,
+      topics: group.topicIds.map((id) => section.topics.find((topic) => topic.id === id)).filter(Boolean),
+    }))
+    .filter((group) => group.topics.length);
+}
+
+function renderDirectory() {
+  const root = el("div", { class: "settings-browse" });
+  for (const name of NAV_GROUPS) {
+    const sections = state.sections.filter((section) => section.navGroup === name);
+    if (!sections.length) continue;
+    root.appendChild(el("h2", { class: "settings-kicker" }, name));
+    const list = el("div", { class: "settings-jump-list" });
+    for (const section of sections) {
+      const home = sectionHome(section, readNow, (key) => state.items.get(key));
+      const dirty = sectionDirtyCount(section);
+      list.appendChild(jumpRow({
+        title: section.title,
+        detail: home.detail,
+        value: dirty ? `未保存 ${dirty} 项` : home.value,
+        dirty: dirty > 0,
+        onClick: () => openPlace(section.id, section.topics.length === 1 ? section.topics[0].id : null),
+      }));
+    }
+    root.appendChild(list);
+  }
+  return root;
+}
+
+function renderTopicList(section) {
+  const root = el("div", { class: "settings-browse" });
+  if (section.id === "agent") root.id = "agent-settings";
+  if (section.id === "schedule") {
+    for (const notice of groupNotices({ key: "schedule", items: [] })) root.appendChild(notice);
+  }
+  for (const group of groupedTopics(section)) {
+    if (group.label) root.appendChild(el("h2", { class: "settings-kicker" }, group.label));
+    const list = el("div", { class: "settings-jump-list" });
+    for (const topic of group.topics) {
+      const dirty = topicDirtyKeys(topic).length;
+      list.appendChild(jumpRow({
+        title: topic.title,
+        value: dirty ? `未保存 ${dirty} 项` : topicSummary(topic, readNow),
+        dirty: dirty > 0,
+        onClick: () => openPlace(section.id, topic.id),
+      }));
+    }
+    root.appendChild(list);
+  }
+  if (section.links && section.links.length) {
+    root.appendChild(el("h2", { class: "settings-kicker" }, "相关"));
+    const list = el("div", { class: "settings-jump-list" });
+    for (const link of section.links) {
+      list.appendChild(jumpRow({ title: link.title, detail: link.detail, href: link.href }));
+    }
+    root.appendChild(list);
+  }
+  return root;
+}
+
+function topicNoticeKey(topic) {
+  if (topic.id === "llm") return "llm";
+  if (topic.id === "ifind") return "ifind";
+  if (topic.id === "notify") return "notifications";
+  if (topic.id === "gateway") return "gateway";
+  return null;
+}
+
+function renderTopic(topic, section) {
+  const root = el("div", { class: "settings-topic" });
+  if (section.id === "agent") root.id = "agent-settings";
+  if (topic.kind === "history" || topic.kind === "bootstrap") {
+    if (topic.note) root.appendChild(el("p", { class: "faint" }, topic.note));
+    return root;
+  }
+  const keys = topicKeys(topic);
+  const applies = new Set(keys.map((key) => state.items.get(key)?.apply).filter(Boolean));
+  if (applies.size === 1) {
+    const apply = [...applies][0];
+    root.appendChild(el("p", { class: "settings-apply" }, `生效：${label(APPLY_LABELS, apply)}。${label(APPLY_TITLES, apply)}`));
+  }
+  if (topic.note) root.appendChild(el("p", { class: "faint" }, topic.note));
+  const noticeKey = topicNoticeKey(topic);
+  if (noticeKey) {
+    const items = keys.map((key) => state.items.get(key)).filter(Boolean);
+    for (const notice of groupNotices({ key: noticeKey, items })) root.appendChild(notice);
+  }
+  if (topic.id === "llm" || topic.id === "ifind") root.appendChild(connectionTest(topic.id));
+  const encryptionReady = Boolean(state.data && state.data.encryption_key_configured);
+  const fieldBlocks = topic.blocks && topic.blocks.length ? topic.blocks : [{ keys }];
+  for (const block of fieldBlocks) {
+    if (block.title) root.appendChild(el("h2", { class: "settings-kicker" }, block.title));
+    const list = el("div", { class: "setting-list settings-fields" });
+    for (const key of block.keys || []) {
+      const item = state.items.get(key);
+      if (item) list.appendChild(settingRow(item, encryptionReady));
+    }
+    root.appendChild(list);
+  }
+  return root;
+}
+
+function renderHits() {
+  const root = el("div", { class: "settings-browse" });
+  const needle = state.query.trim().toLowerCase();
+  const hits = [];
+  const seen = new Set();
+  for (const section of state.sections) {
+    for (const topic of section.topics) {
+      for (const key of topicKeys(topic)) {
+        if (seen.has(key)) continue;
+        const item = state.items.get(key);
+        if (!item) continue;
+        const hay = `${item.label} ${item.help || ""} ${section.title} ${topic.title} ${key}`.toLowerCase();
+        if (!hay.includes(needle)) continue;
+        seen.add(key);
+        hits.push({ key, item, section, topic });
+        if (hits.length >= 24) break;
+      }
+      if (hits.length >= 24) break;
+    }
+    if (hits.length >= 24) break;
+  }
+  if (!hits.length) {
+    root.appendChild(el("p", { class: "notice" }, "没有这项配置。"));
+    return root;
+  }
+  const list = el("div", { class: "settings-jump-list" });
+  for (const hit of hits) {
+    list.appendChild(jumpRow({
+      title: hit.item.label,
+      detail: `${hit.section.title} / ${hit.topic.title}`,
+      value: shownValue(hit.item),
+      onClick: () => openPlace(hit.section.id, hit.topic.id),
+    }));
+  }
+  root.appendChild(list);
+  return root;
+}
+
+function renderNav() {
+  const nav = document.getElementById("settings-nav");
+  if (!nav) return;
+  clear(nav);
+  nav.appendChild(el("div", { class: "settings-kicker" }, "目录"));
+  for (const section of state.sections) {
+    const button = el("button", { type: "button", class: "settings-nav-item", "data-dirty-for": section.id });
+    if (section.id === state.place.sectionId && !state.query.trim()) button.classList.add("is-current");
+    const labelNode = el("span", {}, section.title);
+    labelNode.style.flex = "1";
+    button.appendChild(labelNode);
+    button.appendChild(el("span", { class: "settings-nav-dirty", "data-dirty-count": section.id, hidden: "hidden" }));
+    button.addEventListener("click", () => openPlace(section.id, section.topics.length === 1 ? section.topics[0].id : null));
+    nav.appendChild(button);
+  }
+}
+
+function syncSearchVisibility(searching) {
+  const wrap = document.getElementById("settings-search-wrap");
+  if (!wrap) return;
+  const desktop = globalThis.matchMedia("(min-width: 48rem)").matches;
+  wrap.hidden = !(desktop || searching || !state.place.sectionId);
+}
+
+function updateChrome(searching) {
+  const { section, topic } = placeTopic();
+  const title = document.getElementById("settings-title");
+  const lead = document.getElementById("settings-lead");
+  const back = document.getElementById("settings-back");
+  if (title) title.textContent = searching ? "搜索" : topic ? topic.title : section ? section.title : "设置";
+  if (lead) {
+    const text = searching
+      ? "点一条进入那个主题。"
+      : !section
+        ? "改完不用重启。生效方式写在每个主题里，只写一次。"
+        : !topic
+          ? section.blurb || ""
+          : "";
+    lead.textContent = text;
+    lead.hidden = !text;
+  }
+  if (back) {
+    back.hidden = !section || searching;
+    back.textContent = topic && section && section.topics.length > 1 ? section.title : "设置";
+  }
+  syncSearchVisibility(searching);
+}
+
+function captureMounted() {
+  for (const [key, node] of state.nodes) state.raw.set(key, node.read());
+}
+
+function paint() {
+  captureMounted();
+  state.nodes = new Map();
+  const hash = globalThis.location ? globalThis.location.hash : "";
+  state.place = resolveSettingsPlace(hash, state.sections);
+  const searching = state.query.trim().length > 0;
+  updateChrome(searching);
+  renderNav();
+  const region = document.getElementById("settings-form");
+  if (!region || !state.data) return;
+  const { section, topic } = placeTopic();
+  let root;
+  if (searching) root = renderHits();
+  else if (!section) root = renderDirectory();
+  else if (!topic) root = renderTopicList(section);
+  else root = renderTopic(topic, section);
   renderRegion(region, "ready", root);
-  const bar = document.getElementById("settings-savebar");
-  if (bar) bar.hidden = false;
+  const history = document.getElementById("settings-history-card");
+  const bootstrap = document.getElementById("settings-bootstrap-card");
+  if (history) history.hidden = !(topic && topic.kind === "history");
+  if (bootstrap) bootstrap.hidden = !(topic && topic.kind === "bootstrap");
   updateSavebar();
+  refreshDirtyLabels();
+}
+
+function openPlace(sectionId, topicId) {
+  state.query = "";
+  const input = document.getElementById("settings-search");
+  if (input) input.value = "";
+  const next = topicId ? `${sectionId}/${topicId}` : sectionId || "";
+  if ((globalThis.location.hash || "").replace(/^#/, "") === next) paint();
+  else globalThis.location.hash = next;
+}
+
+function goBack() {
+  const { section, topic } = placeTopic();
+  if (topic && section && section.topics.length > 1) openPlace(section.id, null);
+  else openPlace("", null);
+}
+
+function adoptSettings(data, { resetEdits }) {
+  if (resetEdits) {
+    state.edits = new Map();
+    state.raw = new Map();
+    state.cleared = new Set();
+    state.nodes = new Map();
+  }
+  state.data = data;
+  indexItems(data);
+  renderEncryptionNotice(data);
   renderBootstrap(data.bootstrap || []);
+  paint();
+}
+
+function commitSettings(data, savedKeys) {
+  // Drop the mounted controls first so paint does not copy the old input back into raw.
+  state.nodes = new Map();
+  for (const key of savedKeys) {
+    state.edits.delete(key);
+    state.raw.delete(key);
+    state.cleared.delete(key);
+  }
+  adoptSettings(data, { resetEdits: false });
 }
 
 function renderBootstrap(items) {
@@ -642,7 +1298,7 @@ async function loadForm() {
   if (!region) return;
   renderRegion(region, "loading");
   try {
-    renderForm(region, await get(ENDPOINT));
+    adoptSettings(await get(ENDPOINT), { resetEdits: true });
   } catch (error) {
     if (redirectOn401(error)) return;
     renderRegion(region, "error", error.message);
@@ -669,19 +1325,21 @@ function setSaveResult(lines, kind) {
 }
 
 async function save(button) {
-  const invalid = [...state.edits].filter(([, value]) => value === INVALID).map(([key]) => key);
+  const { topic } = placeTopic();
+  const keys = topicDirtyKeys(topic);
+  const invalid = keys.filter((key) => state.edits.get(key) === INVALID);
+  if (!keys.length) return;
   if (invalid.length) {
     setSaveResult([`有 ${invalid.length} 项输入不合法，请先修正。`], "warn");
     state.nodes.get(invalid[0])?.control?.focus();
     return;
   }
-  const values = Object.fromEntries(state.edits);
+  const values = Object.fromEntries(keys.map((key) => [key, state.edits.get(key)]));
   const noteInput = document.getElementById("settings-note");
   const note = noteInput && noteInput.value.trim() ? noteInput.value.trim() : null;
   const promise = patch(ENDPOINT, { values, note })
     .then((result) => {
-      const region = document.getElementById("settings-form");
-      renderForm(region, result.settings);
+      commitSettings(result.settings, keys);
       if (noteInput) noteInput.value = "";
       const changed = result.changed || [];
       const labels = changed.map((key) => state.items.get(key)?.label || key);
@@ -716,9 +1374,15 @@ async function save(button) {
 }
 
 function discard() {
-  const region = document.getElementById("settings-form");
-  if (region && state.data) renderForm(region, state.data);
+  const { topic } = placeTopic();
+  state.nodes = new Map();
+  for (const key of topic ? topicKeys(topic) : []) {
+    state.edits.delete(key);
+    state.raw.delete(key);
+    state.cleared.delete(key);
+  }
   setSaveResult([], "");
+  paint();
 }
 
 export function bootSettings() {
@@ -728,6 +1392,20 @@ export function bootSettings() {
   if (saveButton) saveButton.addEventListener("click", () => save(saveButton));
   const discardButton = document.getElementById("settings-discard");
   if (discardButton) discardButton.addEventListener("click", discard);
+  const back = document.getElementById("settings-back");
+  if (back) back.addEventListener("click", goBack);
+  const search = document.getElementById("settings-search");
+  if (search) {
+    search.addEventListener("input", () => {
+      state.query = search.value;
+      paint();
+    });
+  }
+  globalThis.addEventListener("hashchange", () => {
+    setSaveResult([], "");
+    paint();
+  });
+  globalThis.addEventListener("resize", () => syncSearchVisibility(state.query.trim().length > 0));
   globalThis.addEventListener("beforeunload", (event) => {
     if (dirtyCount()) event.preventDefault();
   });

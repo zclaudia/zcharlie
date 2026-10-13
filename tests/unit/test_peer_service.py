@@ -266,6 +266,13 @@ async def store_snapshot(
 
     from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
 
+    from tests.support.peer_originals import synthetic_original_proofs
+    fields = {metric: synthetic_field(metric, value, period_end=report_period) for metric, value in values.items()}
+    from investment_agent.storage.models.reference import Listing
+    from investment_agent.domain.a_share import format_listing_ticker
+    listing = await session.get(Listing, listing_id)
+    ticker = format_listing_ticker(ticker=listing.ticker, market_code=listing.market_code)
+    proofs = await synthetic_original_proofs(session, ticker, listing_id, fields, captured_at)
     return await PeerAnnualSnapshotRepository(session).add(
         PeerAnnualSnapshot(
             id=str(uuid4()),
@@ -283,9 +290,7 @@ async def store_snapshot(
                 )
                 for metric, value in values.items()
             },
-            verification={
-                metric: synthetic_proof(metric, value) for metric, value in values.items()
-            },
+            verification=proofs,
         )
     )
 
@@ -468,7 +473,7 @@ async def test_no_submission_is_missing_with_job_hint_slot(db_session, synthetic
 # --- status table: the run-02 offline batch -------------------------------------
 
 
-async def test_run02_offline_batch_reads_partial_with_honest_gaps(db_session, golden, tmp_path) -> None:
+async def test_run02_offline_batch_reads_verified_with_originals(db_session, golden, tmp_path) -> None:
     submission = await submit_offline_batch(
         db_session, data_dir=tmp_path, submitted_at=SUBMITTED_AT
     )
@@ -481,9 +486,8 @@ async def test_run02_offline_batch_reads_partial_with_honest_gaps(db_session, go
     result = await get_industry_peer_context(
         db_session, ticker=MAOTAI, data_dir=tmp_path
     )
-    # The run-02 records cite no materialized evidence (no date basis), so the
-    # read is honest: per-metric values are there, the overall state is partial.
-    assert result.status is PeerContextStatus.PARTIAL
+    # Imported originals and publication metadata back the core field evidence.
+    assert result.status is PeerContextStatus.READY
     assert result.batch_run_id == submission.mapping.batch_run_id
     assert result.generation == 1
     assert result.batch_status == "success"
@@ -497,9 +501,9 @@ async def test_run02_offline_batch_reads_partial_with_honest_gaps(db_session, go
     assert roe.ascending_position is not None
     assert roe.ascending_position.value.quantize(Decimal("0.01")) == dec("94.44")
     assert (roe.valid_peer_count, roe.candidate_peer_count) == (18, 18)
-    assert roe.cites_no_evidence is True
-    assert roe.verification_counts == {}
-    assert any("snapshot-only" in note for note in roe.quality_notes)
+    assert roe.cites_no_evidence is False
+    assert roe.verification_counts == {"verified": 38}
+    assert not any("snapshot-only" in note for note in roe.quality_notes)
     assert roe.calculation_ref is not None
     assert set(roe.result_refs) >= {"target", "peer_median", "ascending_position"}
 
@@ -679,13 +683,13 @@ async def test_batch_submitted_after_cutoff_is_invisible(db_session, golden, tmp
     naive = await get_industry_peer_context(
         db_session, ticker=MAOTAI, data_dir=tmp_path, cutoff=datetime(2026, 1, 1, tzinfo=UTC)
     )
-    assert naive.status is PeerContextStatus.MISSING
-    assert any("cannot determine the target year" in gap for gap in naive.gaps)
+    assert naive.status is PeerContextStatus.NOT_SUPPORTED
+    assert any("does not cover it yet" in gap for gap in naive.gaps)
 
     after = await get_industry_peer_context(
         db_session, ticker=MAOTAI, data_dir=tmp_path, cutoff=_after_everything()
     )
-    assert after.status is PeerContextStatus.PARTIAL
+    assert after.status is PeerContextStatus.READY
 
 
 async def test_record_created_after_cutoff_is_excluded_per_metric(
@@ -808,6 +812,8 @@ async def test_record_created_after_cutoff_is_excluded_per_metric(
         targets=tuple(targets),
         manifest=previous.manifest,
     )
+    from investment_agent.industry_peers.artifacts import register_batch_commit
+    await register_batch_commit(db_session, reshaped)
     write_batch_mapping(tmp_path, reshaped)
 
     # A research bound just after the wall-clock save time: the future record
@@ -1123,7 +1129,7 @@ async def test_known_recheck_marks_current_read_stale_history_stays_readable(
         batch_run_id=submission.mapping.batch_run_id,
         data_dir=tmp_path,
     )
-    assert history.status is PeerContextStatus.PARTIAL
+    assert history.status is PeerContextStatus.READY
     assert history.stale_reasons == ()
 
 
@@ -1258,7 +1264,7 @@ async def test_companies_endpoint_lists_fixed_versions(db_session, golden, tmp_p
     companies = await list_industry_peer_companies(
         db_session, ticker=MAOTAI, batch_run_id=submission.mapping.batch_run_id, data_dir=tmp_path
     )
-    assert companies.status is PeerContextStatus.PARTIAL
+    assert companies.status is PeerContextStatus.READY
     assert companies.report_period == PERIOD_END
     assert len(companies.companies) == 19
     maotai = next(row for row in companies.companies if row.ticker == MAOTAI)

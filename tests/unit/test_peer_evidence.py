@@ -104,7 +104,7 @@ def audit_proof(metric: str = METRIC, **overrides: Any) -> dict[str, Any]:
         "raw_unit": "CNY",
         "parsed_value": "25731010647.32",
         "period": PERIOD_END.isoformat(),
-        "accounting_scope": None,
+        "accounting_scope": "consolidated",
         "locator_excerpt": EXCERPT,
         "locator_excerpt_sha256": hashlib.sha256(EXCERPT.encode("utf-8")).hexdigest(),
         "checked_at": None,
@@ -169,6 +169,9 @@ async def store_snapshot(
         if proofs is not None
         else {METRIC: audit_proof(METRIC)}
     )
+    if proofs is None:
+        from tests.support.peer_originals import synthetic_original_proofs
+        proof_map = await synthetic_original_proofs(session, "600519.SH", listing.id, field_map, captured_at)
     return await PeerAnnualSnapshotRepository(session).add(
         PeerAnnualSnapshot(
             id=str(uuid4()),
@@ -759,7 +762,7 @@ async def test_query_filters_by_period_provider_unit_and_scope(db_session, maota
     other = await ListingRepository(db_session).ensure_a_share_listing(
         "000568.SZ", company_name="泸州老窖"
     )
-    await store_snapshot(db_session, maotai, semantic_hash="b0" * 32)
+    await store_snapshot(db_session, maotai, semantic_hash="b0" * 32, proofs={METRIC: audit_proof(accounting_scope=None)})
     # Same company, same metric semantics, but a different unit: a different
     # comparability group, never a value conflict.
     await store_snapshot(
@@ -770,7 +773,7 @@ async def test_query_filters_by_period_provider_unit_and_scope(db_session, maota
                 value="25731010.64732", unit="CNY/million", currency="CNY", raw_unit="million CNY"
             )
         },
-        proofs={METRIC: audit_proof(METRIC, raw_unit="million CNY",
+        proofs={METRIC: audit_proof(METRIC, raw_unit="million CNY", accounting_scope=None,
                                     raw_value="25,731,010.64732",
                                     parsed_value="25731010.64732")},
         semantic_hash="b1" * 32,

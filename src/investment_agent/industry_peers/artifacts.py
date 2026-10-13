@@ -21,7 +21,7 @@ so a string id cannot collide with one.
 
 Schema ``peer_batch_mapping/1`` (WP8 writes through :func:`write_batch_mapping`
 or the submission orchestrator in :mod:`investment_agent.industry_peers.batch`;
-readers share :func:`read_batch_mapping` / :func:`scan_batch_mappings`):
+readers require :func:`scan_committed_batch_mappings` and immutable DB receipts):
 
 * identity - ``batch_run_id``, ``cohort_ref`` (snapshot UUID + revision) and
   ``cohort_content_hash``, ``report_period``, ``provider``,
@@ -55,11 +55,15 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Literal
+from uuid import NAMESPACE_URL, uuid5
 
 from pydantic import Field, model_validator
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.industry_peers.calculations import METRIC_KEYS
-from investment_agent.investor.common import Contract, ObjectRef, Text
+from investment_agent.investor.common import Contract, ObjectRef, OwnerId, Text
+from investment_agent.storage.models.investor import InvestorMutation
 
 MAPPING_SCHEMA: Literal["peer_batch_mapping/1"] = "peer_batch_mapping/1"
 """Schema tag of the batch mapping artifact."""
@@ -75,6 +79,67 @@ compared across provider or adapter versions."""
 
 MAPPING_FILENAME = "peer-batch-mapping.json"
 """File name inside the batch's run directory under ``research-runs``."""
+
+
+async def reserve_batch_transaction(session: AsyncSession) -> None:
+    """Start SQLite's physical outer transaction before evidence savepoints."""
+    connection = await session.connection()
+    if connection.dialect.name == "sqlite":
+        active = await connection.run_sync(
+            lambda c: bool(getattr(c.connection.driver_connection, "in_transaction", False))
+        )
+        if not active:
+            await connection.exec_driver_sql("BEGIN IMMEDIATE")
+
+
+class BatchCommitReceipt(Contract):
+    operation: Literal["peer_batch_submission/1"] = "peer_batch_submission/1"
+    batch_run_id: str
+    content_hash: str
+
+
+async def register_batch_commit(
+    session: AsyncSession, mapping: PeerBatchMapping, *, owner: OwnerId = "local_owner"
+) -> None:
+    """Anchor the immutable file to the caller's outer DB transaction.
+
+    A renamed file without this committed receipt is never published. Reuse
+    the existing immutable operation receipts; no new table or mutable head.
+    """
+    from investment_agent.investor.foundations import InvestorService
+
+    service = InvestorService(session)
+    key = uuid5(NAMESPACE_URL, f"peer-batch-commit/{owner}/{mapping.batch_run_id}")
+    receipt = BatchCommitReceipt(batch_run_id=mapping.batch_run_id, content_hash=mapping.content_hash)
+    request = receipt.model_dump(mode="json")
+    if await service._replay(owner, key, request) is None:
+        service._receipt(owner, key, request, receipt)
+        await session.flush()
+
+
+async def batch_is_committed(
+    session: AsyncSession, mapping: PeerBatchMapping, *, owner: str = "local_owner"
+) -> bool:
+    key = uuid5(NAMESPACE_URL, f"peer-batch-commit/{owner}/{mapping.batch_run_id}")
+    row = await session.get(InvestorMutation, (owner, str(key)))
+    return row is not None and row.result == BatchCommitReceipt(
+        batch_run_id=mapping.batch_run_id, content_hash=mapping.content_hash
+    ).model_dump(mode="json")
+
+
+async def scan_committed_batch_mappings(
+    session: AsyncSession, data_dir: Path, *, owner: str = "local_owner"
+) -> BatchMappingScan:
+    scan = scan_batch_mappings(data_dir)
+    rows = await session.scalars(select(InvestorMutation).where(
+        InvestorMutation.owner_id == owner,
+        InvestorMutation.result["operation"].as_string() == "peer_batch_submission/1",
+    ))
+    anchors = {(r.result["batch_run_id"], r.result["content_hash"]) for r in rows}
+    return BatchMappingScan(
+        valid=tuple(m for m in scan.valid if (m.batch_run_id, m.content_hash) in anchors),
+        unreadable=scan.unreadable,
+    )
 
 
 class MappingArtifactError(ValueError):

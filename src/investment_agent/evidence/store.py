@@ -229,6 +229,10 @@ class EvidenceService:
                     raise InvestorError("invalid_reference", "Snapshot field is not supported")
                 materialization = peer_field_evidence(snapshot, metric)
                 peer_expected = materialization.record
+                if peer_expected is not None and peer_expected.verification == "verified":
+                    from investment_agent.industry_peers.originals import validate_field_original
+                    if not await validate_field_original(self.session, snapshot, metric):
+                        raise InvestorError("invalid_reference", "Peer original proof does not match the saved original bytes")
                 if peer_expected is None:
                     raise InvestorError(
                         "invalid_reference",

@@ -67,10 +67,11 @@ from investment_agent.industry_peers.artifacts import (
     MappingArtifactError,
     PeerBatchMapping,
     TargetMapping,
+    batch_is_committed,
     mapping_artifact_path,
     mappings_in_scope,
     read_batch_mapping,
-    scan_batch_mappings,
+    scan_committed_batch_mappings,
     select_current_mapping,
 )
 from investment_agent.industry_peers.calculations import (
@@ -304,17 +305,24 @@ async def resolve_peer_target(session: AsyncSession, *, ticker: str) -> PeerTarg
     )
 
 
-async def resolve_cohort(session: AsyncSession, *, company_id: int) -> PeerCohortSnapshot | None:
-    """The roster version that covers the company (latest revision per key).
+async def resolve_cohort(session: AsyncSession, *, company_id: int, cutoff: datetime | None = None) -> PeerCohortSnapshot | None:
+    """Select the latest known revision per key, then test target membership.
 
-    Several cohort keys may exist over time; the company's latest roster per
-    key wins, and across keys the most recently acquired one. ``None`` means
+    A removal never falls back to an older roster. Across current covering
+    keys the most recently acquired one wins. ``None`` means
     the feature does not cover the company (``not_supported``).
     """
 
     rows = list((await session.execute(select(PeerCohortSnapshot))).scalars())
     latest_by_key: dict[str, PeerCohortSnapshot] = {}
     for row in rows:
+        if cutoff is not None and _as_utc(row.acquired_at) > _as_utc(cutoff):
+            continue
+        current = latest_by_key.get(row.cohort_key)
+        if current is None or (row.revision, row.id) > (current.revision, current.id):
+            latest_by_key[row.cohort_key] = row
+    covered: list[PeerCohortSnapshot] = []
+    for row in latest_by_key.values():
         entries = row.payload.get("entries") if isinstance(row.payload, dict) else None
         if not isinstance(entries, list):
             continue
@@ -322,12 +330,10 @@ async def resolve_cohort(session: AsyncSession, *, company_id: int) -> PeerCohor
             isinstance(entry, dict) and entry.get("company_id") == company_id for entry in entries
         ):
             continue
-        current = latest_by_key.get(row.cohort_key)
-        if current is None or (row.revision, row.id) > (current.revision, current.id):
-            latest_by_key[row.cohort_key] = row
-    if not latest_by_key:
+        covered.append(row)
+    if not covered:
         return None
-    return max(latest_by_key.values(), key=lambda row: (row.acquired_at, row.cohort_key))
+    return max(covered, key=lambda row: (row.acquired_at, row.cohort_key))
 
 
 async def _latest_local_annual_period(
@@ -870,7 +876,14 @@ async def get_industry_peer_context(
     root = _artifacts_root(data_dir)
 
     identity = await resolve_peer_target(session, ticker=ticker)
-    cohort = await resolve_cohort(session, company_id=identity.company_id)
+    if batch_run_id is not None:
+        try:
+            historical = read_batch_mapping(mapping_artifact_path(root, batch_run_id))
+        except MappingArtifactError as exc:
+            return _missing_result(identity=identity, as_of=as_of, gaps=[str(exc)])
+        cohort = await session.get(PeerCohortSnapshot, str(historical.cohort_ref.id))
+    else:
+        cohort = await resolve_cohort(session, company_id=identity.company_id, cutoff=cutoff)
     if cohort is None:
         return PeerContextResult(
             status=PeerContextStatus.NOT_SUPPORTED,
@@ -885,7 +898,7 @@ async def get_industry_peer_context(
         kind="peer_cohort_snapshot", id=UUID(cohort.id), revision=cohort.revision
     )
 
-    scan = scan_batch_mappings(root)
+    scan = await scan_committed_batch_mappings(session, root, owner=owner_id)
     warnings = list(scan.warnings)
     old_reference = False
     current_period: date | None = None
@@ -907,6 +920,8 @@ async def get_industry_peer_context(
             raise PeerTargetLookupError(
                 f"batch {batch_run_id} holds no result for target {identity.ticker}"
             )
+        if not await batch_is_committed(session, mapping, owner=owner_id):
+            return _missing_result(identity=identity, as_of=as_of, gaps=["batch has no committed submission receipt"])
         if mapping.cohort_ref != cohort_ref:
             warnings.append(
                 f"batch {batch_run_id} was built against roster revision "

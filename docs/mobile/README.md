@@ -29,3 +29,11 @@ cd mobile && pnpm install --frozen-lockfile && pnpm tauri:android:debug
 本次执行结果：`pnpm typecheck` 通过；`pnpm test` 的 6 个传输层测试通过；`pnpm tauri:android:debug` 构建成功。APK 输出在 `mobile/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk`。安装要求、环境变量与 Debug 明文 HTTP 限制见 [mobile/README.md](../../mobile/README.md)。
 
 Python 全量套件本次为 `2390 passed, 6 deselected, 1 failed`；唯一失败是已知不稳定的 `tests/unit/test_engine_lifecycle.py::test_api_lifespan_disposes_the_engine_on_shutdown`，单独重跑通过。改动文件的 Ruff 和 mypy 检查均通过。
+
+## 2026-10-12 晚间复验（第二轮）
+
+同日稍晚从干净构建目录重打 Debug APK（`pnpm typecheck`、`pnpm test` 6 例、`pnpm tauri:android:debug` 全绿；注意 `scripts/env.sh` 在本机会回退到 `~/Library/Android/sdk`，需显式 `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools` 及对应 NDK_HOME）并重跑端到端验收。本轮改用独立临时网关（临时数据目录 + 临时签发的 `zgb_`/`zgd_` 凭证）与无 `--reload` 的隔离后端实例：共享 dev API 带 `--reload`，并行开发保存文件会触发整进程重启、网关链路反复重建，不能作为联调基线。
+
+全部场景再次通过：配对表单、配对成功空会话已连接、发送消息收到实时任务状态（LLM 真实响应，问候语按设计以 `evidence_blocked` 部分完成收尾）、运行中取消任务经事件流显示已取消、会话列表重开、设置页读取网关与运行参数、修改 Agent 最大并发 4→3 后经服务端 `GET /settings` 确认为 3、停止网关出现离线横幅、重启网关自动恢复、设置页"重新配对"换绑新服务 ID。调试后临时凭证、临时数据目录与模拟器应用配对均已清除；dev 库运行设置已还原，仅"注册凭证"无法复原（历史只存掩码），需从签发记录重新粘贴。
+
+联调中发现的两条环境事实：dev API 进程对局域网 LLM 的访问可能被 macOS 本地网络隐私静默拒绝（重启 dev API 即恢复）；agent 对话需运行时设置 `investor_agent_enabled=true` 及 `agent_base_url` / `agent_model` / `agent_api_key` / `agent_max_tokens` 齐备，缺前者每条消息 409 `execution_denied`，缺后者任务以配置错误失败。

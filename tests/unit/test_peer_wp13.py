@@ -260,7 +260,7 @@ async def test_manifest_hash_binds_the_complete_input_manifest(conversation_db, 
 
     async with session_scope() as session:
         mutated = await clone_calculation(session, refs[ROE], reverse_manifest)
-    write_craft_mapping(
+    await write_craft_mapping(
         peer_env,
         batch_run_id="peer-offline-craft-wp13-manifest",
         record=record,
@@ -719,7 +719,7 @@ async def test_insufficient_source_verification_stays_pending_despite_the_digest
             return data
 
         mutated = await clone_calculation(session, refs[ROE], strip_all_facts)
-    write_craft_mapping(
+    await write_craft_mapping(
         peer_env,
         batch_run_id="peer-offline-craft-wp13-pending",
         record=record,
@@ -1038,7 +1038,7 @@ async def test_current_limits_answers_the_new_recheck_situations(conversation_db
 
     async with session_scope() as session:
         mutated = await clone_calculation(session, refs[ROE], reversion)
-    write_craft_mapping(
+    await write_craft_mapping(
         peer_env,
         batch_run_id="peer-offline-craft-wp13-version",
         record=record,
@@ -1087,7 +1087,7 @@ async def test_current_limits_answers_the_new_recheck_situations(conversation_db
 
     async with session_scope() as session:
         stripped = await clone_calculation(session, refs[ROE], strip_all_facts, revision=3)
-    write_craft_mapping(
+    await write_craft_mapping(
         peer_env,
         batch_run_id="peer-offline-craft-wp13-limits",
         record=record,

@@ -353,20 +353,20 @@ async def test_every_golden_peer_row_reproduces(golden, db_session) -> None:
             )
 
 
-async def test_run02_fields_stay_out_of_the_materialized_path(golden, db_session) -> None:
-    """No run-02 field carries a date basis: nothing becomes an EvidenceRecord.
-
-    That is why the golden numbers are a pure-layer reproduction and the saved
-    chain is validated on the dated synthetic fixture only.
-    """
+async def test_run02_original_backed_fields_are_materialized(golden, db_session) -> None:
+    """Official metadata supplies real dates; only core original-backed fields materialize."""
 
     rows = list((await db_session.execute(select(PeerAnnualSnapshot))).scalars())
     assert len(rows) == 19
     for row in rows:
         for metric in row.fields:
             materialization = peer_field_evidence(row, metric)
-            assert not materialization.materialized
-            assert materialization.record is None
+            if metric == "revenue_total_check":
+                assert not materialization.materialized
+            else:
+                assert materialization.materialized
+                assert materialization.record.verification == "verified"
+
 
 
 # --- failure boundaries (design verification points) --------------------------

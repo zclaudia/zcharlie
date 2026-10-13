@@ -262,6 +262,37 @@ async def research_single_stock(
     request_json["as_of"] = (body.as_of or shanghai_today()).isoformat()
     try:
         async with session_scope() as session:
+            if settings.industry_peer_context_enabled:
+                from investment_agent.industry_peers.artifacts import reserve_batch_transaction
+                await reserve_batch_transaction(session)
+            runs = PipelineRunRepository(session)
+            existing = await runs.by_idempotency_key(kind="ifind_research", idempotency_key=idempotency_key) if idempotency_key else None
+            if existing is not None and {
+                k: v for k, v in existing.request_json.items() if k != "industry_peer_context"
+            } == request_json:
+                # Replays keep the original binding and cutoff, even after a refresh.
+                request_json = dict(existing.request_json)
+            elif existing is None and settings.industry_peer_context_enabled:
+                from datetime import UTC, datetime, time
+                from zoneinfo import ZoneInfo
+
+                from investment_agent.industry_peers.service import (
+                    PeerTargetLookupError,
+                    get_industry_peer_context,
+                    peer_context_binding_from,
+                )
+                cutoff = datetime.now(UTC)
+                if body.as_of is not None:
+                    cutoff = min(cutoff, datetime.combine(body.as_of, time.max, ZoneInfo("Asia/Shanghai")))
+                try:
+                    context = await get_industry_peer_context(
+                        session, ticker=body.ticker, data_dir=settings.data_dir, cutoff=cutoff,
+                    )
+                    binding = peer_context_binding_from(context)
+                    if binding is not None and (body.report_year is None or binding.report_period.year == body.report_year):
+                        request_json["industry_peer_context"] = binding.model_dump(mode="json")
+                except PeerTargetLookupError:
+                    pass  # no supported identity/result: preserve the existing research path
             run, created = await PipelineRunRepository(session).enqueue(
                 kind="ifind_research",
                 idempotency_key=idempotency_key,

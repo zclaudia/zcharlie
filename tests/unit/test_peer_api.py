@@ -49,6 +49,7 @@ from investment_agent.industry_peers.contracts import (
     PeerAnnualField,
     PeerContextBinding,
     PeerContextStatus,
+    PeerFieldVerification,
     PeerMetricBinding,
 )
 from investment_agent.industry_peers.service import (
@@ -173,7 +174,7 @@ def seed_two_generations(tmp_path: Path) -> tuple[str, str]:
             fields = dict(original.fields)
             entry = PeerAnnualField.model_validate(fields["roe_weighted_annual"])
             fields["roe_weighted_annual"] = entry.model_copy(
-                update={"value": Decimal("0.99"), "raw_value": "99"}
+                update={"value": Decimal("0.99"), "raw_value": "99", "verification": PeerFieldVerification.CANDIDATE}
             ).model_dump(mode="json")
             await repo.add(
                 PeerAnnualSnapshot(
@@ -262,7 +263,7 @@ def test_golden_chain_reads_partial_with_maotai_values(api_client, tmp_path) -> 
     body = response.json()
     assert _pipeline_run_count() == 0  # the GET never enqueues a collection
     assert body["schema_version"] == 1
-    assert body["status"] == "partial"
+    assert body["status"] == "ready"
     assert body["target"]["ticker"] == MAOTAI
     assert isinstance(body["target"]["company_id"], int)
     assert isinstance(body["target"]["listing_id"], int)
@@ -294,8 +295,8 @@ def test_golden_chain_reads_partial_with_maotai_values(api_client, tmp_path) -> 
     assert (roe["valid_peer_count"], roe["candidate_peer_count"]) == (18, 18)
     assert roe["target_value"]["unit"] == "fraction"
     assert roe["target_value"]["currency"] is None
-    assert roe["cites_no_evidence"] is True  # run-02 facts carry no date basis
-    assert roe["verification_counts"] == {}
+    assert roe["cites_no_evidence"] is False
+    assert roe["verification_counts"] == {"verified": 38}
     assert roe["calculation_ref"] is not None
     assert set(roe["result_refs"]) >= {"target", "peer_median", "ascending_position"}
 
@@ -337,7 +338,7 @@ def test_golden_companies_endpoint_returns_fixed_version_detail(
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["status"] == "partial"
+    assert body["status"] == "ready"
     assert body["batch_run_id"] == batch_run_id
     assert body["report_period"] == "2025-12-31"
     assert len(body["companies"]) == 19
@@ -351,7 +352,7 @@ def test_golden_companies_endpoint_returns_fixed_version_detail(
     ]
     assert {c["ticker"] for c in excluded} >= {"000799.SZ", "000860.SZ", "600199.SH"}
     # run-02 facts carry no disclosure-date basis: no materialized evidence.
-    assert body["field_evidence"] == []
+    assert len(body["field_evidence"]) > 0
     assert _pipeline_run_count() == 0
 
     missing_param = _get(api_client, f"/stocks/{MAOTAI}/industry-peer-context/companies")
@@ -525,7 +526,7 @@ def test_feature_enabled_reads_normally(api_client, tmp_path) -> None:
 
     response = _get(api_client, f"/stocks/{MAOTAI}/industry-peer-context")
     assert response.status_code == 200
-    assert response.json()["status"] == "partial"
+    assert response.json()["status"] == "ready"
 
 
 # --- research binding (WP9) ------------------------------------------------------

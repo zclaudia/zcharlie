@@ -945,7 +945,7 @@ async function transmit() {
 
 function addBalanceRow(value = {}) {
   field(document.querySelector("#portfolio-fact-form"), "balance_confirmed").checked = false;
-  const row = el("div", { class: "inline-form", "data-balance-row": "true" });
+  const row = el("div", { class: "balance-row", "data-balance-row": "true" });
   for (const [name, label, type, initial] of [
     ["balance_ticker", "余额持仓标的", "text", value.ticker || ""],
     ["balance_quantity", "余额持仓数量", "number", value.quantity ?? ""],
@@ -997,6 +997,8 @@ function updateKind() {
     if (node.id) form.querySelector(`label[for="${node.id}"]`).hidden = !show;
     const wrapping = node.closest("label");
     if (wrapping && !node.id) wrapping.hidden = !show;
+    const fieldBox = node.closest(".field");
+    if (fieldBox) fieldBox.hidden = !show;
   }
 }
 

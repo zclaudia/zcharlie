@@ -1,3 +1,24 @@
+{%- set NAV_ICONS = {
+  "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
+  "close": '<path d="M6 6l12 12M18 6L6 18"/>',
+  "overview": '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
+  "agent": '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 16v4M17 18h4"/>',
+  "candidates": '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  "templates": '<rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="8" height="7" rx="1"/><rect x="15" y="14" width="6" height="7" rx="1"/>',
+  "watchlist": '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  "portfolio": '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
+  "runs": '<path d="M7 4l13 8-13 8z"/>',
+  "health": '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  "methods": '<path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/>',
+  "settings": '<path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+} -%}
+{%- macro icon(name) -%}
+<svg class="nav-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ NAV_ICONS[name]|safe }}</svg>
+{%- endmacro -%}
+{%- macro nav_link(key, href, text) -%}
+<a href="{{ href }}"{% if active_nav == key %} class="active" aria-current="page"{% endif %}>{{ icon(key) }}<span>{{ text }}</span></a>
+{%- endmacro -%}
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -10,26 +31,46 @@
   <link rel="icon" type="image/png" sizes="512x512" href="/app/static/brand/icon-512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/app/static/brand/icon-180.png">
   <link rel="stylesheet" href="/app/static/app.css">
+  <script src="/app/static/nav.js"></script>
 </head>
 <body>
   <header class="app-header">
+    <button type="button" class="nav-toggle" aria-label="打开导航" aria-expanded="false" aria-controls="app-nav">{{ icon("menu") }}</button>
     <a class="brand" href="/app">
       <img class="brand-icon" src="/app/static/brand/icon-64.png" width="40" height="40" alt="">
       <span>ZCHARLIE 研究台</span>
     </a>
-    <nav class="app-nav" aria-label="主导航">
-      <a href="/app" {% if active_nav == "overview" %}class="active" aria-current="page"{% endif %}>今日概览</a>
-      <a href="/app/agent" {% if active_nav == "agent" %}class="active" aria-current="page"{% endif %}>AI</a>
-      <a href="/app/candidates" {% if active_nav == "candidates" %}class="active" aria-current="page"{% endif %}>候选池</a>
-      <a href="/app/templates" {% if active_nav == "templates" %}class="active" aria-current="page"{% endif %}>模板</a>
-      <a href="/app/watchlist" {% if active_nav == "watchlist" %}class="active" aria-current="page"{% endif %}>观察池</a>
-      <a href="/app/portfolio" {% if active_nav == "portfolio" %}class="active" aria-current="page"{% endif %}>持仓池</a>
-      <a href="/app/runs" {% if active_nav == "runs" %}class="active" aria-current="page"{% endif %}>运行中心</a>
-      <a href="/app/health" {% if active_nav == "health" %}class="active" aria-current="page"{% endif %}>数据健康</a>
-      <a href="/app/methods" {% if active_nav == "methods" %}class="active" aria-current="page"{% endif %}>研究方法</a>
-      <a href="/app/settings" {% if active_nav == "settings" %}class="active" aria-current="page"{% endif %}>设置</a>
+    <span class="topbar-title">ZCHARLIE 研究台</span>
+    <div class="nav-scrim" aria-hidden="true"></div>
+    <nav class="app-nav" id="app-nav" aria-label="主导航">
+      <div class="drawer-head">
+        <a class="brand" href="/app">
+          <img class="brand-icon" src="/app/static/brand/icon-64.png" width="32" height="32" alt="">
+          <span>ZCHARLIE 研究台</span>
+        </a>
+        <button type="button" class="nav-close" aria-label="收起导航">{{ icon("close") }}</button>
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">研究</span>
+        {{ nav_link("overview", "/app", "今日概览") }}
+        {{ nav_link("agent", "/app/agent", "AI") }}
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">股票池</span>
+        {{ nav_link("candidates", "/app/candidates", "候选池") }}
+        {{ nav_link("templates", "/app/templates", "模板") }}
+        {{ nav_link("watchlist", "/app/watchlist", "观察池") }}
+        {{ nav_link("portfolio", "/app/portfolio", "持仓池") }}
+      </div>
+      <div class="nav-group">
+        <span class="nav-label">系统</span>
+        {{ nav_link("runs", "/app/runs", "运行中心") }}
+        {{ nav_link("health", "/app/health", "数据健康") }}
+        {{ nav_link("methods", "/app/methods", "研究方法") }}
+        {{ nav_link("settings", "/app/settings", "设置") }}
+      </div>
       <form method="post" action="/app/logout" class="logout-form">
-        <button type="submit" class="link-button">退出</button>
+        <button type="submit" class="link-button">{{ icon("logout") }}<span>退出</span></button>
       </form>
     </nav>
   </header>

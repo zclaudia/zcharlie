@@ -90,7 +90,9 @@ from investment_agent.industry_peers.artifacts import (
     mapping_artifact_path,
     mappings_in_scope,
     next_generation,
-    scan_batch_mappings,
+    register_batch_commit,
+    reserve_batch_transaction,
+    scan_committed_batch_mappings,
     select_current_mapping,
     targets_signature,
     write_batch_mapping,
@@ -105,26 +107,26 @@ from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, J
 from investment_agent.providers.eastmoney_annual import (
     ADAPTER_VERSION,
     ANNUAL_METRICS,
+    CTYPE_PATH,
+    MAIN_FINADATA_PATH,
+    OPERATIONS,
+    PROVIDER,
+    STATEMENT_PATHS,
     AnnualRequestRecord,
     CompanyAnnualCollection,
     CompanyTypeUnknownError,
-    CTYPE_PATH,
     EastmoneyAnnualCollector,
     EastmoneyAnnualDataError,
     EastmoneyAnnualError,
     EastmoneyAnnualSource,
     EastmoneyAnnualTransientError,
-    MAIN_FINADATA_PATH,
-    OPERATIONS,
-    PROVIDER,
     RawAnnualResponse,
-    STATEMENT_PATHS,
 )
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.peer import PeerAnnualSnapshot, PeerCohortSnapshot
-from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
+from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
 log = structlog.get_logger(__name__)
 
@@ -388,7 +390,7 @@ async def enqueue_peer_collect(
             generation=active_payload.generation,
         )
 
-    scan = scan_batch_mappings(data_dir)
+    scan = await scan_committed_batch_mappings(session, data_dir)
     scope_mappings = mappings_in_scope(
         scan.valid,
         cohort_ref=ObjectRef(
@@ -1071,6 +1073,7 @@ class PeerCollectHandler(BaseJobHandler):
                     f"cohort snapshot {payload.cohort_snapshot_id} revision "
                     f"{payload.cohort_revision} does not exist"
                 )
+            await reserve_batch_transaction(session)
             # The functions below are the WP6 offline submission pipeline,
             # reused function-for-function: freeze -> materialize -> build+save.
             frozen, missing_companies = await peer_batch._freeze_companies(
@@ -1079,6 +1082,13 @@ class PeerCollectHandler(BaseJobHandler):
                 report_period=payload.report_period,
                 provider=payload.provider,
                 adapter_version=payload.adapter_version,
+                snapshot_ids={
+                    int(entry["company_id"]): (
+                        index["companies"].get(str(entry["ticker"]), {}).get("snapshot_id")
+                        or index.get("frozen_inputs", {}).get(str(entry["ticker"]), {}).get("existing_snapshot_id")
+                    )
+                    for entry in cohort_row.payload["entries"]
+                },
             )
             entries = sorted(
                 (e for e in cohort_row.payload["entries"]),
@@ -1126,7 +1136,7 @@ class PeerCollectHandler(BaseJobHandler):
                 for entry in buildable
             ]
 
-            scan = scan_batch_mappings(self.settings.data_dir)
+            scan = await scan_committed_batch_mappings(session, self.settings.data_dir)
             scope = mappings_in_scope(
                 scan.valid,
                 cohort_ref=payload.cohort_ref(),
@@ -1140,9 +1150,8 @@ class PeerCollectHandler(BaseJobHandler):
                 report_period=payload.report_period,
                 provider=payload.provider,
                 adapter_version=payload.adapter_version,
-                # Always max(existing)+1: this run can never rewrite or
-                # demote an already-submitted generation of the scope.
-                generation=next_generation(scope),
+                # Keep the admission generation: a late old run stays old.
+                generation=payload.generation,
                 submitted_at=now,
                 results=results,
                 frozen=frozen,
@@ -1154,6 +1163,7 @@ class PeerCollectHandler(BaseJobHandler):
             if existing is not None:
                 mapping, created = existing, False
             else:
+                await register_batch_commit(session, draft)
                 write_batch_mapping(self.settings.data_dir, draft)
                 mapping, created = draft, True
 
@@ -1330,7 +1340,7 @@ async def admit_peer_collect(
     # the submitted batch's own coverage gaps (missing companies, targets
     # that could not be built) - the cooldown returns exactly these.
     gaps = list(result.gaps)
-    scan = scan_batch_mappings(data_dir)
+    scan = await scan_committed_batch_mappings(session, data_dir)
     mapping = select_current_mapping(
         mappings_in_scope(
             scan.valid,
@@ -1411,7 +1421,7 @@ async def _last_scope_check(
     ``submitted_at`` or any prior run's terminal/creation time."""
 
     times: list[datetime] = []
-    scan = scan_batch_mappings(data_dir)
+    scan = await scan_committed_batch_mappings(session, data_dir)
     mapping = select_current_mapping(
         mappings_in_scope(
             scan.valid,

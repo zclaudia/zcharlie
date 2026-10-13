@@ -229,8 +229,9 @@ def make_binding(
     )
 
 
-def write_craft_mapping(
+async def write_craft_mapping(
     tmp_path,
+    session=None,
     *,
     batch_run_id: str,
     record: CalculationRecord,
@@ -272,6 +273,12 @@ def write_craft_mapping(
         ),
         manifest=BatchManifest(),
     )
+    from investment_agent.industry_peers.artifacts import register_batch_commit
+    if session is None:
+        async with session_scope() as owned:
+            await register_batch_commit(owned, mapping)
+    else:
+        await register_batch_commit(session, mapping)
     write_batch_mapping(tmp_path, mapping)
     return mapping
 
@@ -416,8 +423,8 @@ async def test_subject_ref_rewrite_cannot_disguise_a_peer_fact(conversation_db, 
             return data
 
         mutated = await clone_calculation(session, refs[ROE], rewrite)
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-rewrite",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -464,8 +471,8 @@ async def test_fabricated_or_unmapped_calculation_refs_are_rejected(conversation
             await PeerContextResolver(session, binding=swapped).verify(refs[ROE])
 
         # A bound batch whose submitted mapping does not carry the reference.
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-gap",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -508,8 +515,8 @@ async def test_audit_company_outside_the_roster_is_rejected(conversation_db, pee
             return data
 
         mutated = await clone_calculation(session, refs[ROE], add_outsider)
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-outsider",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -536,8 +543,8 @@ async def test_reused_uuid_passes_a_new_mapping_and_restores_nothing(conversatio
         # The old record keeps its original batch identity: its
         # details.batch_run_id differs from the new binding's batch.
         assert record.details["batch_run_id"] == submission.mapping.batch_run_id
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-reuse",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -557,8 +564,8 @@ async def test_reused_uuid_passes_a_new_mapping_and_restores_nothing(conversatio
 
         # A metric the new mapping did not submit is not rescued by the old
         # record itself: its batch field never restores authorization.
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-reuse2",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -683,8 +690,8 @@ async def test_applicability_exclusion_requires_its_field_evidence(conversation_
             return data
 
         mutated = await clone_calculation(session, contract_ref, strip_applicability)
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-strip",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -707,8 +714,8 @@ async def test_applicability_exclusion_requires_its_field_evidence(conversation_
             return data
 
         mutated2 = await clone_calculation(session, contract_ref, claim_not_applicable, revision=3)
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-gapclaim",
             record=record,
             target_company_id=synthetic["ids"][TARGET],
@@ -740,8 +747,8 @@ async def test_declared_inputs_stay_citable_but_never_verified(conversation_db, 
             return data
 
         mutated = await clone_calculation(session, refs[ROE], strip_all_facts)
-        write_craft_mapping(
-            peer_env,
+        await write_craft_mapping(
+            peer_env, session,
             batch_run_id="peer-offline-craft-declared",
             record=record,
             target_company_id=synthetic["ids"][TARGET],

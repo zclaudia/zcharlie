@@ -155,6 +155,38 @@ def test_page_input_hints_match_the_api(api_client: TestClient) -> None:
         assert f'"{kind}"' in source, kind
 
 
+def test_settings_catalog_covers_every_key(api_client: TestClient) -> None:
+    body = api_client.get("/settings", headers=KEY).json()
+    keys = {item["key"] for group in body["groups"] for item in group["items"]}
+    covered = set(_run_settings("console.log(JSON.stringify(s.settingsCatalogKeys()))"))
+    assert keys == covered
+
+
+def test_settings_navigation_helpers() -> None:
+    out = _run_settings(
+        """
+console.log(JSON.stringify({
+  home: s.resolveSettingsPlace(""),
+  legacy: s.resolveSettingsPlace("#agent-settings"),
+  model: s.resolveSettingsPlace("#agent/model"),
+  llm: s.resolveSettingsPlace("#llm"),
+  cron: [s.cronSummary(""), s.cronSummary("10 15 * * 1-5"), s.cronSummary("1 2 3 4 5")],
+  agent: s.sectionHome(
+    s.SETTINGS_SECTIONS.find((section) => section.id === "agent"),
+    () => false,
+    () => null,
+  ),
+}));
+"""
+    )
+    assert out["home"] == {"sectionId": None, "topicId": None}
+    assert out["legacy"] == {"sectionId": "agent", "topicId": None}
+    assert out["model"] == {"sectionId": "agent", "topicId": "model"}
+    assert out["llm"] == {"sectionId": "llm", "topicId": "llm"}
+    assert out["cron"] == ["已停用", "工作日 15:10", "1 2 3 4 5"]
+    assert out["agent"]["value"] == "已关闭"
+
+
 def test_gateway_status_text() -> None:
     out = _run_settings(
         """

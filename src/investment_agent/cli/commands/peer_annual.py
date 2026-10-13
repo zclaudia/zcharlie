@@ -53,6 +53,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import typer
 from sqlalchemy.exc import OperationalError
@@ -573,7 +574,7 @@ def _build_field(
         # invented. The absence is recorded in the proof below.
         acquired_at=acquired_at,
         verification=(
-            PeerFieldVerification.VERIFIED if spec.audited else PeerFieldVerification.CANDIDATE
+            PeerFieldVerification.CANDIDATE
         ),
     )
     if spec.audited:
@@ -611,7 +612,7 @@ def _proof_from_audit(
     excerpt: str = matched["excerpt"]
     return {
         "metric": spec.metric,
-        "status": "verified",
+        "status": "candidate",
         "original_ref": None,  # ObjectRef arrives when WP4 materializes evidence
         "pdf_hash": None,  # not present in the run-02 audit record
         "report_identity": None,  # not present in the run-02 audit record
@@ -692,7 +693,7 @@ def _hashes(
             metric: {k: v for k, v in entry.model_dump(mode="json").items() if k != "acquired_at"}
             for metric, entry in fields.items()
         },
-        "verification": proofs,
+        "verification": {metric: {k: v for k, v in proof.items() if k != "checked_at"} for metric, proof in proofs.items()},
     }
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -744,6 +745,7 @@ async def import_peer_annual_snapshots(
     adapter_version: str = ADAPTER_VERSION,
     audit_source: str = _AUDIT_JSON_NAME,
     missing_reasons: Mapping[tuple[str, str], str] | None = None,
+    originals_root: Path | None = _DERIVED.parent,
 ) -> ImportReport:
     """Validate and append the whole batch, or write nothing.
 
@@ -763,18 +765,64 @@ async def import_peer_annual_snapshots(
         missing_reasons=missing_reasons,
     )
 
+    from investment_agent.industry_peers.artifacts import reserve_batch_transaction
+    from investment_agent.industry_peers.originals import (
+        checked_locator,
+        load_annual_original,
+        store_annual_original,
+    )
+    originals = {}
+    checks: dict[tuple[str, str], dict[str, Any]] = {}
+    # Validate every available original before any write, including the cover
+    # identity, official publication metadata and bounded statement headings.
+    for plan in plans:
+        if originals_root is None:
+            continue
+        try:
+            original = load_annual_original(originals_root, plan.code, plan.report_period)
+            if original.published_at > acquired_at:
+                raise ValueError("original was published after this import cutoff")
+            for metric in AUDITED_METRICS:
+                checks[(plan.code, metric)] = checked_locator(original, metric, plan.verification[metric])
+            originals[plan.code] = original
+        except FileNotFoundError:
+            continue  # explicit candidate; missing bytes cannot certify a field
+        except (ValueError, KeyError, TypeError, ImportError) as exc:
+            raise PeerAnnualImportError([f"{plan.code}: original verification failed: {exc}"]) from exc
+
+    await reserve_batch_transaction(session)
+    for plan in plans:
+        if plan.code not in originals:
+            continue
+        original = originals[plan.code]
+        saved_original = await store_annual_original(session, original, plan.listing_id, acquired_at)
+        for metric in AUDITED_METRICS:
+            proof = plan.verification[metric]
+            proof.update(checks[(plan.code, metric)])
+            proof.update({
+                "status": "verified", "pdf_hash": original.pdf_hash,
+                "original_ref": {"kind": "disclosure_original", "id": saved_original.id, "revision": 1},
+                "report_identity": {"code": plan.code, "period": plan.report_period.isoformat(), "disclosure_id": original.metadata["chosen"]["announcementId"]},
+                "checked_at": acquired_at.isoformat(), "checked_by": "peer_annual_original_adapter",
+            })
+            plan.fields[metric] = plan.fields[metric].model_copy(update={
+                "verification": PeerFieldVerification.VERIFIED,
+                "disclosed_on": original.published_at.astimezone(ZoneInfo("Asia/Shanghai")).date(),
+            })
+
     repo = PeerAnnualSnapshotRepository(session)
     inserted = 0
     skipped = 0
     semantic_hashes: dict[str, str] = {}
     for plan in plans:
-        semantic_hashes[plan.code] = plan.semantic_hash
+        semantic_hash, content_hash = _hashes(plan.fields, plan.verification)
+        semantic_hashes[plan.code] = semantic_hash
         existing = await repo.by_unique_key(
             company_id=plan.company_id,
             report_period=plan.report_period,
             provider=provider,
             adapter_version=adapter_version,
-            semantic_hash=plan.semantic_hash,
+            semantic_hash=semantic_hash,
         )
         if existing is not None:
             skipped += 1
@@ -788,8 +836,8 @@ async def import_peer_annual_snapshots(
                 provider=provider,
                 adapter_version=adapter_version,
                 captured_at=acquired_at,
-                content_hash=plan.content_hash,
-                semantic_hash=plan.semantic_hash,
+                content_hash=content_hash,
+                semantic_hash=semantic_hash,
                 fields={metric: f.model_dump(mode="json") for metric, f in plan.fields.items()},
                 verification=plan.verification,
             )
@@ -841,6 +889,10 @@ def import_annual(
         DEFAULT_AUDIT_PATH, exists=True, dir_okay=False,
         help="Official audit JSON with the per-field original checks (run-02 derived)",
     ),
+    originals_root: Path = typer.Option(  # noqa: B008
+        _DERIVED.parent, file_okay=False,
+        help="Offline evidence root containing raw/official PDFs and derived/filings metadata; unavailable originals remain candidate",
+    ),
     provider: str = typer.Option(  # noqa: B008
         PROVIDER, help="Source provider recorded on every snapshot row"
     ),
@@ -875,6 +927,7 @@ def import_annual(
                 adapter_version=adapter_version,
                 audit_source=Path(audit).name,
                 missing_reasons=reasons,
+                originals_root=originals_root,
             )
 
     try:

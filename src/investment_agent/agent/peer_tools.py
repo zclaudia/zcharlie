@@ -198,10 +198,11 @@ async def _binding_source_available(
     if await session.get(PeerCohortSnapshot, str(binding.cohort_ref.id)) is None:
         return False
     try:
-        read_batch_mapping(mapping_artifact_path(data_dir, binding.batch_run_id))
+        mapping = read_batch_mapping(mapping_artifact_path(data_dir, binding.batch_run_id))
     except MappingArtifactError:
         return False
-    return True
+    from investment_agent.industry_peers.artifacts import batch_is_committed
+    return await batch_is_committed(session, mapping)
 
 
 async def inherit_peer_context(

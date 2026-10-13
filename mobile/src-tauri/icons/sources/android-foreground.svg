@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254">
+  <!-- Vector rendering of the approved v2 C-frame and three candlesticks.
+       Original .68 scale reduced by 15%, centered on the same canvas. -->
+  <g fill="#fff" transform="translate(264.594 264.594) scale(.578)">
+    <path d="M431 242H1023L917 348H464Q452 348 443 357L353 437V835Q353 847 363 856L448 929H914L1017 1030H426Q406 1030 391 1017L256 900Q235 882 235 851V424Q235 402 252 387L398 255Q412 242 431 242Z"/>
+    <path d="M474 611H507V667H557V833H507V885H474V833H425V667H474Z"/>
+    <path d="M655 511H688V571H738V778H688V834H655V778H606V571H655Z"/>
+    <path d="M834 401H867V461H916V697H867V755H834V697H785V461H834Z"/>
+  </g>
+</svg>

@@ -34,6 +34,7 @@ Scenarios (design §验收与后续开发顺序, stage D exit conditions):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -52,6 +53,7 @@ from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelResponse, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.usage import RequestUsage
+from sqlalchemy import select
 
 from investment_agent.agent.research import ResearchOutput, research_artifacts
 from investment_agent.industry_peers.artifacts import (
@@ -236,7 +238,7 @@ def api_client_of() -> TestClient:
     return TestClient(create_app())
 
 
-def peer_tool_model(ticker: str, sink: dict):
+def peer_tool_model(ticker: str, sink: dict, *, cite: bool = False):
     """A fake model: call the peer tool once, answer from the return."""
 
     turns = 0
@@ -263,6 +265,17 @@ def peer_tool_model(ticker: str, sink: dict):
                 ):
                     sink.clear()
                     sink.update(part.content)
+        if cite:
+            from investment_agent.investor.contracts import NumericNode
+            from investment_agent.investor.enums import NumericRole
+            metrics = sink["data"]["metrics"]
+            refs = tuple(ObjectRef.model_validate(m["calculation_ref"]) for m in metrics)
+            nodes = tuple(
+                NumericNode(type="numeric_claim", role=NumericRole.OUTPUT, display_format="decimal",
+                            ref=ObjectRef.model_validate(m["result_refs"]["target"]))
+                for m in metrics
+            )
+            return response(ResearchOutput(progress=progress(fact_refs=refs, content=nodes)))
         return response(ResearchOutput(progress=progress()))
 
     return model
@@ -328,7 +341,7 @@ async def test_golden_chain_migration_to_agent_tool_reads_one_batch(peer_world) 
         service = await get_industry_peer_context(
             session, ticker=MAOTAI, data_dir=world.data_dir, cutoff=cutoff
         )
-    assert service.status is PeerContextStatus.PARTIAL  # run-02 has no dated facts
+    assert service.status is PeerContextStatus.READY
     assert service.batch_run_id == batch_run_id
     assert service.report_period == PERIOD_END
     assert_golden_metrics(json.loads(json.dumps(service.model_dump(mode="json")))["metrics"])
@@ -337,7 +350,7 @@ async def test_golden_chain_migration_to_agent_tool_reads_one_batch(peer_world) 
     # WP9: the HTTP API serves the same batch with the same references.
     client = api_client_of()
     body = client.get(f"/stocks/{MAOTAI}/industry-peer-context", headers=AUTH).json()
-    assert body["status"] == "partial"
+    assert body["status"] == "ready"
     assert body["batch_run_id"] == batch_run_id
     assert body["report_period"] == PERIOD_END.isoformat()
     api_refs = {
@@ -377,13 +390,17 @@ async def test_golden_chain_migration_to_agent_tool_reads_one_batch(peer_world) 
 
     sink: dict = {}
     task = await run(
-        receipt, FunctionModel(peer_tool_model(MAOTAI, sink)), settings=base(**FEATURE)
+        receipt, FunctionModel(peer_tool_model(MAOTAI, sink, cite=True)), settings=base(**FEATURE)
     )
     assert task.status is TaskStatus.SUCCEEDED
+    async with session_scope() as session:
+        saved_progress = await research_artifacts(session, task.id)
+        assert saved_progress
+        assert any("0.7474" in item["text"] for item in saved_progress)
     payload = sink
-    assert payload["status"] == "ok"  # partial coverage stays a plain ok answer
+    assert payload["status"] == "ok"
     assert payload["status"] != "pending" and payload["dependency_id"] is None
-    assert payload["data"]["coverage"] == "partial"
+    assert payload["data"]["coverage"] == "ready"
     assert payload["data"]["target_ticker"] == MAOTAI
     assert payload["data"]["report_period"] == PERIOD_END.isoformat()
     assert_golden_metrics(payload["data"]["metrics"])
@@ -521,11 +538,10 @@ async def test_forged_verified_peer_evidence_is_refused_at_the_research_save(pee
         with pytest.raises(InvestorError) as error:
             await EvidenceService(session).save_evidence("local_owner", forged, uuid4())
         assert error.value.detail.code == "invalid_reference"
-        # Nothing entered the store: the run-02 chain materializes no evidence
-        # at all (undated facts), so no verified peer fact exists to cite.
+        # The forged row was refused; only the 114 genuine core facts remain.
         assert (
             await session.execute(select(func.count()).select_from(SavedEvidence))
-        ).scalar() == 0
+        ).scalar() == 114
 
 
 async def test_cited_forged_peer_evidence_fails_the_task_validation(peer_world) -> None:
@@ -650,7 +666,7 @@ async def test_backup_restore_preserves_the_peer_chain(peer_world, tmp_path) -> 
         return {"read": result.model_dump(mode="json"), "rows": rows}
 
     before = await service_read(world.data_dir)
-    assert before["read"]["status"] == "partial"
+    assert before["read"]["status"] == "ready"
     assert before["read"]["batch_run_id"] == batch_run_id
     assert len(before["rows"]["annuals"]) == 19
     assert len(before["rows"]["calcs"]) == 57  # 19 targets x 3 metrics
@@ -682,16 +698,26 @@ async def test_backup_restore_preserves_the_peer_chain(peer_world, tmp_path) -> 
     mapping_after = read_batch_mapping(mapping_artifact_path(restored_data_dir, batch_run_id))
     assert mapping_after == mapping_before
 
-    # Originals: run-02 proofs carry no original ObjectRefs (original_ref is
-    # None everywhere); every locator/PDF hash that exists survives the round
-    # trip intact (the candidate check-only field keeps explicit Nones).
-    for _id, _company, _listing, _content, _semantic, _fields, verification in after["rows"][
-        "annuals"
-    ]:
-        for proof in verification.values():
-            assert proof["original_ref"] is None
-            digest = proof.get("locator_excerpt_sha256")
-            assert digest is None or len(digest) == 64
+    # Restore real originals, read their bytes via the production readback path,
+    # and revalidate every core field's original proof in the restored database.
+    from investment_agent.evidence.disclosures import DisclosureService
+    from investment_agent.industry_peers.originals import validate_field_original
+    from investment_agent.storage.models.peer import PeerAnnualSnapshot
+    async with session_scope() as session:
+        rows = (await session.scalars(select(PeerAnnualSnapshot))).all()
+        assert len(rows) == 19
+        seen_originals = set()
+        for row in rows:
+            for metric, proof in row.verification.items():
+                if metric == "revenue_total_check":
+                    assert proof["original_ref"] is None
+                    continue
+                ref = ObjectRef.model_validate(proof["original_ref"])
+                metadata, body = await DisclosureService(session).read(ref.id, read_cutoff())
+                assert hashlib.sha256(body).hexdigest() == proof["pdf_hash"]
+                assert await validate_field_original(session, row, metric)
+                seen_originals.add(ref.id)
+        assert len(seen_originals) == 19
 
     # Back to the original engine (this test's world stays consistent).
     init_engine(f"sqlite+aiosqlite:///{world.db_path}")
@@ -786,7 +812,7 @@ async def test_flag_on_exposes_only_the_imported_results(peer_world) -> None:
     world = peer_world
     # Flag on, roster imported but nothing submitted yet: the covered target
     # reads as missing - nothing is fabricated, nothing is fetched.
-    from investment_agent.cli.commands.peer_annual import load_audit_json, load_sample_json
+    from investment_agent.cli.commands.peer_annual import load_sample_json
     from investment_agent.cli.commands.peer_cohort import import_sample_roster
     from investment_agent.storage.repositories.listing import ListingRepository
 
@@ -810,5 +836,5 @@ async def test_flag_on_exposes_only_the_imported_results(peer_world) -> None:
     batch_run_id = await build_chain(world.data_dir)
     body = client.get(f"/stocks/{MAOTAI}/industry-peer-context", headers=AUTH).json()
     assert body["batch_run_id"] == batch_run_id
-    assert body["status"] == "partial"
+    assert body["status"] == "ready"
     await no_collect_run_was_enqueued()

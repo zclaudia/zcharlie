@@ -59,7 +59,9 @@ from investment_agent.industry_peers.artifacts import (
     mapping_artifact_path,
     mappings_in_scope,
     next_generation,
-    scan_batch_mappings,
+    register_batch_commit,
+    reserve_batch_transaction,
+    scan_committed_batch_mappings,
     targets_signature,
     write_batch_mapping,
 )
@@ -178,6 +180,7 @@ async def _freeze_companies(
     report_period: date,
     provider: str,
     adapter_version: str,
+    snapshot_ids: dict[int, str | None] | None = None,
 ) -> tuple[dict[int, FrozenCompany], list[MissingCompany]]:
     """Freeze the roster once per batch: latest snapshot version per member.
 
@@ -190,13 +193,16 @@ async def _freeze_companies(
     missing: list[MissingCompany] = []
     for entry in sorted(cohort_row.payload["entries"], key=lambda item: item["company_id"]):
         company_id = int(entry["company_id"])
-        row = await _latest_version(
-            session,
-            company_id=company_id,
-            report_period=report_period,
-            provider=provider,
-            adapter_version=adapter_version,
-        )
+        if snapshot_ids is None:
+            row = await _latest_version(
+                session, company_id=company_id, report_period=report_period,
+                provider=provider, adapter_version=adapter_version,
+            )
+        else:
+            snapshot_id = snapshot_ids.get(company_id)
+            row = await session.get(PeerAnnualSnapshot, snapshot_id) if snapshot_id else None
+        if row is not None and (row.company_id != company_id or row.listing_id != int(entry["listing_id"]) or row.report_period != report_period or row.provider != provider or row.adapter_version != adapter_version):
+            raise ValueError("frozen company snapshot is outside this batch scope")
         if row is None:
             missing.append(
                 MissingCompany(
@@ -421,6 +427,7 @@ async def submit_offline_batch(
     if submitted_at is not None and submitted_at.tzinfo is None:
         raise ValueError("submitted_at must be timezone-aware")
     now = submitted_at or datetime.now(UTC)
+    await reserve_batch_transaction(session)
 
     cohort_row = await PeerCohortSnapshotRepository(session).latest(cohort_key=cohort_key)
     if cohort_row is None:
@@ -499,7 +506,7 @@ async def submit_offline_batch(
         for entry in buildable
     ]
 
-    scan = scan_batch_mappings(data_dir)
+    scan = await scan_committed_batch_mappings(session, data_dir)
     scope_cohort_ref = ObjectRef(
         kind="peer_cohort_snapshot", id=UUID(cohort_row.id), revision=cohort_row.revision
     )
@@ -547,6 +554,7 @@ async def submit_offline_batch(
             frozen_companies=len(frozen),
         )
 
+    await register_batch_commit(session, draft, owner=owner_id)
     path = write_batch_mapping(data_dir, draft)
     saved = sum(1 for result in results for ref in result.metric_refs if ref.state == "saved")
     reused_records = sum(

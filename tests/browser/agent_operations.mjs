@@ -21,7 +21,7 @@ try {
     assert.ok(disable.ok);
     const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(String(e)));
-    await page.goto(base+'/app/settings');await page.locator('[name=api_key]').fill('ag17-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/settings');
+    await page.goto(base+'/app/settings');await page.locator('[name=api_key]').fill('ag17-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/settings#notify');
     const enabled=page.locator('#setting-notification_external_enabled');await enabled.waitFor();assert.equal(await enabled.isChecked(),false);
     assert.match(await page.locator('body').innerText(),/默认只在站内提醒/);
     assert.equal((await api('/investor/operations')).external_notifications_ready,false);

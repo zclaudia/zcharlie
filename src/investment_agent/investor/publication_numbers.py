@@ -109,6 +109,18 @@ class NumericResolver:
             from investment_agent.evidence.documents import document_limits
             if await document_limits(self.evidence.session, record, self.as_of):
                 raise InvestorError("invalid_reference", "Document fact has a known correction or conflict")
+        if record.source_ref.kind == "peer_annual_snapshot":
+            from investment_agent.industry_peers.evidence import peer_field_states
+            from investment_agent.industry_peers.originals import validate_field_original
+            from investment_agent.storage.models.peer import PeerAnnualSnapshot
+            source = await self.evidence.session.get(PeerAnnualSnapshot, str(record.source_ref.id))
+            field = (record.source_ref.field_path or "").removeprefix("fields.")
+            if source is None or (record.verification == "verified" and not await validate_field_original(self.evidence.session, source, field, cutoff=self.as_of)):
+                raise InvestorError("invalid_reference", "Annual fact original proof is unavailable")
+            state = await peer_field_states(self.evidence.session, company_id=source.company_id, metric=field, report_period=source.report_period, cutoff=self.as_of)
+            version = next((v for v in state.versions if v.source_ref == record.source_ref), None)
+            if version is None or version.state not in {"consistent", "correction"}:
+                raise InvestorError("invalid_reference", "Annual fact has a known change or conflict")
         rows = (await self.evidence.session.scalars(select(SavedEvidence).where(SavedEvidence.owner_id == "local_owner"))).all()
         for row in rows:
             newer = EvidenceRecord.model_validate(row.payload)
