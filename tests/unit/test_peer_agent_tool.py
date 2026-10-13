@@ -95,10 +95,17 @@ FEATURE = dict(industry_peer_context_enabled=True)
 
 @pytest.fixture
 def peer_env(tmp_path, monkeypatch):
-    """The service resolves its artifact root from the environment at call time."""
+    """The service resolves its artifact root from the environment at call time.
+
+    The flag is pinned in the environment too: since WP14 the tool's settlement
+    re-reads the *current* configuration (env bootstrap + runtime store), so a
+    direct ``read_peer_context`` call answers from the same source the run's
+    ``base(**FEATURE)`` settings express.
+    """
 
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("API_KEY", "fixture-key")
+    monkeypatch.setenv("INDUSTRY_PEER_CONTEXT_ENABLED", "true")
     return tmp_path
 
 
@@ -697,8 +704,13 @@ async def test_disabled_feature_neither_whitelists_nor_binds(conversation_db, pe
         synthetic, _submission = await peer_world(session, peer_env, with_batch=True)
         target = listing_ref(synthetic, TARGET)
     conversation = await new_conversation()
+    # The gate at admission is the *effective* settings (base over runtime
+    # store); the flag is explicitly off here even though the process
+    # environment pins it on for the settlement-level tests below.
     receipt = await submit(
-        conversation, message(text="Explain this company", context_refs=(target,))
+        conversation,
+        message(text="Explain this company", context_refs=(target,)),
+        settings=base(industry_peer_context_enabled=False),
     )
     async with session_scope() as session:
         grant = ExecutionGrant.model_validate(

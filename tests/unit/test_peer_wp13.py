@@ -116,8 +116,11 @@ CFO = "cfo_parent_profit"
 
 @pytest.fixture
 def peer_env(tmp_path, monkeypatch):
+    """The service and the settlement re-read this environment (WP14 gate)."""
+
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("API_KEY", "fixture-key")
+    monkeypatch.setenv("INDUSTRY_PEER_CONTEXT_ENABLED", "true")
     return tmp_path
 
 

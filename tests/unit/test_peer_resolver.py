@@ -484,6 +484,50 @@ async def test_fabricated_or_unmapped_calculation_refs_are_rejected(conversation
 
 
 @pytest.mark.asyncio
+async def test_audit_company_outside_the_roster_is_rejected(conversation_db, peer_env):
+    """WP14 acceptance mapping (跨行业补样本 → WP12 名单成员校验): a crafted
+    record whose inclusion audit carries a company outside the bound roster -
+    the cross-industry sample - is rejected at verification time, not just
+    excluded by the trusted builder (WP5's roster-limit test)."""
+
+    async with session_scope() as session:
+        synthetic, submission = await seed_world(session, peer_env)
+        refs = await metric_refs(submission, synthetic)
+        record = await record_of(session, refs[ROE])
+
+        def add_outsider(data):
+            data["details"]["included_companies"] = [
+                *data["details"]["included_companies"],
+                {
+                    "company_id": 999999,
+                    "listing_id": 999999,
+                    "ticker": "999999.SH",
+                    "name": "跨界样本",
+                },
+            ]
+            return data
+
+        mutated = await clone_calculation(session, refs[ROE], add_outsider)
+        write_craft_mapping(
+            peer_env,
+            batch_run_id="peer-offline-craft-outsider",
+            record=record,
+            target_company_id=synthetic["ids"][TARGET],
+            target_listing_id=synthetic["listings"][TARGET],
+            refs_by_metric={ROE: mutated},
+            submitted_at=datetime.now(UTC) - timedelta(minutes=30),
+        )
+        binding = make_binding(
+            record=record,
+            batch_run_id="peer-offline-craft-outsider",
+            refs_by_metric={ROE: mutated},
+            cutoff=datetime.now(UTC),
+        )
+        with pytest.raises(InvestorError, match="not a member of the bound"):
+            await PeerContextResolver(session, binding=binding).verify(mutated)
+
+
+@pytest.mark.asyncio
 async def test_reused_uuid_passes_a_new_mapping_and_restores_nothing(conversation_db, peer_env):
     async with session_scope() as session:
         synthetic, submission = await seed_world(session, peer_env)

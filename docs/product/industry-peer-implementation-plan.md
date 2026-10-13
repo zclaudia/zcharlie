@@ -4,7 +4,11 @@
 已实现并通过各自退出条件（2026-10-12，门禁 3183 passed / mypy 0 错）。关键裁决：run-02 字段无披露日期依据，按设计不物化
 EvidenceRecord，golden 三项统计在纯函数层复现，保存链路以带日期合成夹具验证，批次映射制品格式与离线提交命令由 WP6 定义、
 WP8 复用；WP8 在线采集数据带 NOTICE_DATE/UPDATE_DATE → 可物化；WP9 端点按"前缀即模块"落在
-api/routes/industry_peers.py（计划 §2 表格的 research.py 落点据此修正）。阶段 D 未开始。
+api/routes/industry_peers.py（计划 §2 表格的 research.py 落点据此修正）。阶段 D（WP11–WP13）已实现并通过各自退出条件；
+WP14 开关统一 enforcement 与端到端离线验收完成（2026-10-13，门禁 3248 passed / mypy 0 错，验收日志见
+[docs/review/industry-peer-acceptance-2026-10-12.md](../review/industry-peer-acceptance-2026-10-12.md)：设计"验证重点"27 条
+全部映射到具体测试，三入口开关一致，备份恢复 e2e 通过；补 WP12 名单成员校验一测，修复 test_peer_service 固定截点的定时炸弹）。
+在线采集与真实 Agent 的启用条件见 §10，不在此实现。
 依据[技术设计](industry-peer-technical-design.md)（已经代码对照审查）与[首期范围](industry-peer-scope-draft.md)。
 本稿只做执行拆分，不修改任何设计决定；实现中发现与设计冲突时，以设计为准并回改本稿，不静默偏航。
 

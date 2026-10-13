@@ -47,6 +47,16 @@ class PeerContextStatus(StrEnum):
     FAILED = "failed"
 
 
+FEATURE_DISABLED_GAP: str = (
+    "industry peer context is disabled; the feature does not cover this stock yet"
+)
+"""The feature-gate gap text, canonical for every entry point (WP14).
+
+The flag defaults to off; API, page and the agent tool answer the same
+``not_supported`` business state with this exact gap, so the three entries
+cannot drift into different wording for the same uncovered stock."""
+
+
 class PeerMetricStatus(StrEnum):
     """Per-metric state; never inferred from one overall success flag.
 

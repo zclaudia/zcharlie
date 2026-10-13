@@ -19,6 +19,12 @@ The authorization discipline is fixed by the technical design (§Agent 工具与
   reads the exact bound batch at the binding cutoff through the WP6 service, so
   a mapping or record submitted/created after the cutoff never enters an old
   task.
+* **Feature gate (WP14).** The flag is enforced at every layer: admission does
+  not whitelist the tool or bind anything while
+  ``industry_peer_context_enabled`` is off; the run-time ``prepare`` gate drops
+  the tool from the model's toolset; and the settlement itself re-reads the
+  *current* setting and answers the not-covered state (the same body as the
+  API's, never a value) instead of honoring a permission frozen at admission.
 * **Reduced return.** The normal return carries the three metrics' available
   values, units, report period, sample counts, check coverage, limitations and
   the ``calculation.results.*`` references - never the raw source responses,
@@ -30,7 +36,7 @@ The authorization discipline is fixed by the technical design (§Agent 工具与
   ``pending``/``dependency_id`` answer that would trigger the deferred wait.
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
@@ -42,6 +48,7 @@ from investment_agent.agent.contracts import Task
 from investment_agent.agent.execution import ExecutionDeniedError, ExecutionGrant
 from investment_agent.agent.tools import ToolRegistration
 from investment_agent.industry_peers.contracts import (
+    FEATURE_DISABLED_GAP,
     PeerContextBinding,
     PeerContextStatus,
     PeerQuantity,
@@ -75,6 +82,11 @@ UNBOUND_COVERAGE = (
 UNBOUND_GAP = (
     "no peer-context result was bound to this task at admission; a batch "
     "submitted later never enters an older task - a new message binds anew"
+)
+DISABLED_COVERAGE = (
+    "the feature flag is currently off; the peer reference is not covered for "
+    "any stock until it is enabled again - the same state the page and the API "
+    "answer"
 )
 
 
@@ -378,6 +390,20 @@ async def _unbound_read(session: AsyncSession, grant: ExecutionGrant, ticker: st
     ).model_dump(mode="json")
 
 
+async def _feature_enabled(session: AsyncSession) -> bool:
+    """The current ``industry_peer_context_enabled`` (env bootstrap + runtime DB).
+
+    WP14: the read answers the *current* configuration, never a permission
+    frozen at admission - the design's 数据用途 rule ("不把一个入队时许可布尔值
+    永久当作有效授权"). The admission whitelist and the run-time ``prepare``
+    gate stay in place; this is the last fence inside the settlement itself.
+    """
+
+    from investment_agent.settings.loader import load_settings
+
+    return (await load_settings(session)).industry_peer_context_enabled
+
+
 async def read_peer_context(
     session: AsyncSession, operation: UUID, business: BaseModel
 ) -> dict[str, Any]:
@@ -391,12 +417,36 @@ async def read_peer_context(
         raise ExecutionDeniedError("trusted_admission_required")
     grant = ExecutionGrant.model_validate(row.payload)
     ticker = business.ticker.strip().upper()
+    if not await _feature_enabled(session):
+        return _disabled_read(ticker)
     binding = grant.peer_context
     if binding is None:
         return await _unbound_read(session, grant, ticker)
     if ticker != binding.target.strip().upper():
         raise ExecutionDeniedError("peer_context_target_not_bound")
     return await _bound_read(session, grant, binding, ticker)
+
+
+def _disabled_read(ticker: str) -> dict[str, Any]:
+    """The flag-off answer: the not-covered state, no values, no service read.
+
+    Identical in shape and gap text to the WP9 API's disabled body (the page
+    renders the same state as 尚未覆盖), so all three entries answer one thing.
+    """
+
+    from investment_agent.evidence.contracts import ToolResult
+
+    return ToolResult(
+        status="missing",
+        data=PeerAgentContext(
+            coverage=PeerContextStatus.NOT_SUPPORTED,
+            target_ticker=ticker,
+            gaps=(FEATURE_DISABLED_GAP,),
+        ),
+        refs=(),
+        as_of=datetime.now(UTC),
+        coverage=DISABLED_COVERAGE,
+    ).model_dump(mode="json")
 
 
 async def _bound_read(

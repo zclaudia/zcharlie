@@ -20,8 +20,8 @@ Discipline (fixed by the design; the service enforces the data part):
   table maps onto the body, never onto an HTTP error.
 * **Feature gate.** ``industry_peer_context_enabled`` (default off) returns the
   not-yet-covered business state for every stock without touching the
-  database - the minimal gate until WP14 unifies enforcement across API, page
-  and agent.
+  database; WP14 unified the gate across API, page and agent, and the gap text
+  is the shared ``FEATURE_DISABLED_GAP`` contract.
 """
 
 from datetime import UTC, datetime
@@ -38,7 +38,10 @@ from investment_agent.api.schemas.industry_peers import (
 )
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import parse_a_share_ticker
-from investment_agent.industry_peers.contracts import PeerContextStatus
+from investment_agent.industry_peers.contracts import (
+    FEATURE_DISABLED_GAP,
+    PeerContextStatus,
+)
 from investment_agent.industry_peers.service import (
     SERVICE_SCHEMA_VERSION,
     PeerContextResult,
@@ -54,9 +57,9 @@ router = APIRouter(
     dependencies=[Depends(verify_api_key_or_session)],
 )
 
-_NOT_ENABLED_GAP = (
-    "industry peer context is disabled; the feature does not cover this stock yet"
-)
+_NOT_ENABLED_GAP = FEATURE_DISABLED_GAP
+"""The canonical gate text (shared with the agent tool so the entries stay
+word-for-word identical); defined in the peer contracts module (WP14)."""
 
 
 @router.get("/{ticker}/industry-peer-context", response_model=IndustryPeerContextOut)

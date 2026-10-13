@@ -434,7 +434,17 @@ def _tmpdir() -> Path:
 
 
 def _after_everything() -> datetime:
-    return datetime(2026, 10, 12, 23, 59, tzinfo=UTC)
+    """A research binding time after everything the fixtures create.
+
+    Clock-derived: the trusted save path stamps every saved record with the
+    real wall clock (``EvidenceService.save_calculation``), so a fixed
+    "after everything" timestamp turns into the past once the calendar moves
+    past it (the run-02 fixture date). WP14 acceptance: this fired at
+    2026-10-12T23:59Z and is fixed to the same relative-time convention the
+    resolver/agent-tool fixtures use.
+    """
+
+    return datetime.now(UTC) + timedelta(hours=6)
 
 
 # --- status table: no submission ------------------------------------------------
