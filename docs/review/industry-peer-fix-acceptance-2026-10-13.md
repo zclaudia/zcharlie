@@ -25,7 +25,7 @@
 - mypy：330 个源文件，0 错误；修改范围的 Ruff 和 diff whitespace 检查通过。
 - 最后复审核对了事务/文件一致性、失租约时回滚、generation、名单当前与历史分离、原件与字段绑定、统计与事实一致性、原始事实引用、普通研究绑定及重试。没有发现阻止上述离线验收的遗留问题。
 
-没有执行生产迁移、修改真实数据目录、访问在线数据源或调用真实 LLM。工作区已有移动端、导航与页面样式修改保持原样。
+上述修复门禁阶段没有执行生产迁移、修改真实数据目录、访问在线数据源或调用真实 LLM。后续按用户要求完成了以下本地和 Docker 数据升级。工作区已有移动端、导航与页面样式修改保持原样。
 
 ## 已有数据升级
 
@@ -44,7 +44,7 @@ ia peers submit-offline-batch --report-period 2025-12-31
 
 ## 本地固定样本升级复验
 
-2026-10-13 23:23 起，在 `.dev/data/app.db`（schema 048）执行固定样本升级，通过现有本地 API `http://127.0.0.1:8002` 验证页面。8001 的 Docker 服务仍为旧版本，本次没有部署或升级该环境。本地库原先没有同行名单和年度快照，因此先补齐首次导入条件：按现有 `stock_directory` 的精确代码为 11 家公司建立 listing 身份，再导入 19 家白酒固定样本名单。
+2026-10-13 23:23 起，在 `.dev/data/app.db`（schema 048）执行固定样本升级，通过现有本地 API `http://127.0.0.1:8002` 验证页面。当时 8001 的 Docker 服务仍为旧版本，该次本地复验没有部署或升级该环境。本地库原先没有同行名单和年度快照，因此先补齐首次导入条件：按现有 `stock_directory` 的精确代码为 11 家公司建立 listing 身份，再导入 19 家白酒固定样本名单。
 
 导入前已生成[备份清单](../../.dev/backups/peer-before-import-2026-10-13/manifest.json)，175 个文件的大小和 SHA-256 全部通过校验。数据库、研究制品和通知均在备份内。导入沿用本地已有 schema，无数据库迁移。
 
@@ -66,3 +66,28 @@ ia peers submit-offline-batch --report-period 2025-12-31
 浏览器复验发现并修复一个既有股票页错误：`app.js` 调用未导入的 `loadBars`。现已导出并复用 `watchlist.js` 的本地日线读取函数；桌面和手机浏览器重新通过，相关页面测试 **48 passed**，两项 JS 语法检查和 `git diff --check` 通过。
 
 本地可复查材料：[年度导入](../../.dev/peer-upgrade-2026-10-13/annual-import.json)、[批次提交](../../.dev/peer-upgrade-2026-10-13/batch-submit.json)、[页面复验](../../.dev/peer-upgrade-2026-10-13/page-check.json)、[原件下载复验](../../.dev/peer-upgrade-2026-10-13/original-download-check.json)、[Agent 引用复验](../../.dev/peer-upgrade-2026-10-13/agent-check.json)。这些本地运行材料和备份保存在 `.dev`，不加入 Git。
+
+## Docker 部署和固定样本升级复验
+
+2026-10-13 晚至 2026-10-14 凌晨，按用户授权提交工作区改动、备份并升级 8001 的 Docker 环境。部署代码提交为 `aee8493`，包含 `b6ab18e` 的页面修复和本地复验记录、`9cf34ec` 的构建目录排除，以及 Docker 原件解析依赖修复。运行镜像为 `sha256:291addfb2456bfb34edb2be0dfc8a0e9135796fe95841f4682bb3b2365fa3974`；容器内原件校验模块和两个页面模块的字节 hash 与工作区代码一致。
+
+升级前停止 API、worker 和 scheduler，在容器内备份具名卷 `/app/db/app.db` 及完整 `/app/data`。未从宿主机打开正在使用的 Docker SQLite。备份位于 `.dev/backups/docker-before-peer-2026-10-13`，共 **6,597 个文件、4,352,076,025 字节**，全部大小和 SHA-256 校验通过，见[备份清单](../../.dev/backups/docker-before-peer-2026-10-13/manifest.json)。旧镜像保留为 `investment-agent:pre-peer-20261013`。
+
+数据库从 **024 迁移到 048**。旧库的证券目录为空，离线补入固定样本对应的 19 条已有缓存目录记录，保留原来源、状态和取得时间；按精确证券代码补齐 11 个 listing。目录已有记录后，API 首次启动没有触发目录初始化联网采集。19 家名单仍为候选观察名单，不提升为已核验的官方历史成分。
+
+首次导入被原件核验拒绝：默认 Docker 镜像未装 `pypdf`。已将 Docker 构建改为安装现有 `original-parsing` extra，重新构建后的运行镜像包含 `pypdf==6.20.0`。没有通过跳过原件验证完成部署。
+
+| 验收项 | Docker 实际结果 |
+| --- | --- |
+| 年度导入 | FY2025，19 条年度快照；114 个核心字段及 19 份 PDF 原件通过真实字节和字段核验 |
+| 新批次 | `peer-offline-20261013T155659Z-d901909d`，generation 1，success；19 个目标、57 条计算记录、0 个指标缺口 |
+| 实际页面 | 8001 API 健康；1440px 桌面和 390px 手机的三项固定数值、19 家明细、计算和 verified 证据详情正常，无 JS 报错、无横向溢出 |
+| 原件下载 | 19 个鉴权附件下载均 HTTP 200，PDF 字节 hash 与数据库原件一致 |
+| 关键引用 | 对实际 Docker 数据库的茅台和酒鬼酒共六项计算执行 `require_verified_inputs=True`，全部通过 |
+| 假模型 Agent | 在同一新镜像中使用生产库的独立副本、FunctionModel 和真实 worker，仅执行指定 run；任务 succeeded，三项引用与 8001 页面 API 一致，回答保存 `0.7474 ratio`、`4.74%` 和 `32.53%` |
+| 既有数据保留 | 16 条研究快照、3 个观察池条目、257 条运行记录的数量与升级前一致 |
+| 启用状态 | API 运行且 healthy；新镜像的 worker、scheduler 容器仅创建、未启动；实际 Agent 任务为 0，同行在线采集任务为 0 |
+
+生产库只开启离线结果读取开关 `industry_peer_context_enabled`；`investor_agent_enabled`、`investor_agent_background_enabled` 均保持 false。旧队列保留，不在本次验证中消费。导入及假模型验证禁止所有 IPv4/IPv6 socket 连接；假模型的启用状态、凭据和新任务仅写入 `.dev/docker-peer-deploy-2026-10-13/agent-sandbox/app.db`。原件验证和引用校验继续执行；真实外部 Agent 及在线采集没有启用。
+
+复查材料：[部署结果](../../.dev/docker-peer-deploy-2026-10-13/deployment-result.json)、[导入及新批次](../../.dev/docker-peer-deploy-2026-10-13/import-result.json)、[页面复验](../../.dev/docker-peer-deploy-2026-10-13/page-check.json)、[原件下载复验](../../.dev/docker-peer-deploy-2026-10-13/original-download-check.json)、[Agent 引用复验](../../.dev/docker-peer-deploy-2026-10-13/agent-check.json)。
