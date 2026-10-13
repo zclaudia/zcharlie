@@ -11,7 +11,7 @@ COPY src/ src/
 # (web templates/static are resolved relative to the installed module), so
 # the code lives in the image and compose no longer bind-mounts src/.
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e '.[original-parsing]'
 
 # ---- Runtime ----
 FROM python:3.13-slim
