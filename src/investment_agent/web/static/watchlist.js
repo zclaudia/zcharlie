@@ -29,7 +29,7 @@ export const WATCHLIST_REGIONS = new Set(["watchlist-list"]);
 // 日线迷你图（B3）：占位先渲染，再按行异步替换；只画收盘价，不评判。
 const SPARK_DAYS = 120;
 
-function loadBars(ticker, days) {
+export function loadBars(ticker, days) {
   return get(`/market/${encodeURIComponent(ticker)}/bars?days=${days}`);
 }
 
