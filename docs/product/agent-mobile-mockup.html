@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 页移动端设计稿</title>
+<style>
+:root {
+  --c-bg:#f4f6f9; --c-surface:#fff; --c-surface-2:#f7f9fb;
+  --c-ink:#18202b; --c-ink-2:#4a5462; --c-ink-3:#7b8594;
+  --c-line:#dde2e9; --c-line-strong:#c4cbd5;
+  --c-accent:#2357d9; --c-accent-soft:#e8eefc; --c-accent-strong:#163f9f;
+  --c-warn:#c26a12; --c-warn-soft:#fdf1e3;
+  --c-ai:#8b3dbf; --c-ai-soft:#f5ebfa;
+  --font:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:#e9ecf1; color:var(--c-ink); font:14px/1.6 var(--font); }
+.doc { max-width:1240px; margin:0 auto; padding:32px 16px 64px; }
+.doc > h1 { margin:0 0 4px; font-size:24px; }
+.doc > .lead { margin:0 0 24px; color:var(--c-ink-2); }
+.why { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-bottom:36px; }
+.why div { background:#fff; border-radius:12px; padding:14px 16px; }
+.why b { display:block; margin-bottom:4px; }
+.why s { color:var(--c-ink-3); }
+.why span { color:var(--c-ink-2); font-size:13px; }
+
+.screens { display:grid; grid-template-columns:repeat(auto-fill,minmax(380px,1fr)); gap:40px 28px; justify-items:start; }
+.screen > h2 { margin:0 0 2px; font-size:16px; }
+.screen > .cap { margin:0 0 12px; color:var(--c-ink-3); font-size:13px; }
+.notes { margin:14px 0 0; padding-left:18px; color:var(--c-ink-2); font-size:13px; }
+.notes li { margin:3px 0; }
+
+/* ---- 手机框 ---- */
+.phone { position:relative; width:360px; height:760px; border:9px solid #14181f; border-radius:44px; background:var(--c-surface); overflow:hidden; display:flex; flex-direction:column; box-shadow:0 18px 40px rgba(20,30,50,.18); }
+.sb { flex:none; height:34px; display:flex; align-items:center; justify-content:space-between; padding:0 26px; font-size:13px; font-weight:600; }
+.sb i { font-style:normal; letter-spacing:1px; font-size:11px; }
+.home { position:absolute; bottom:7px; left:50%; width:120px; height:4px; margin-left:-60px; border-radius:4px; background:#14181f; opacity:.85; z-index:9; }
+
+/* 顶栏 */
+.top { flex:none; height:52px; display:flex; align-items:center; gap:2px; padding:0 6px; border-bottom:1px solid transparent; }
+.top.line { border-color:var(--c-line); }
+.ib { flex:none; position:relative; width:40px; height:40px; display:grid; place-items:center; border-radius:12px; color:var(--c-ink); }
+.ib svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.ib .dot { position:absolute; top:8px; right:8px; width:8px; height:8px; border-radius:50%; background:var(--c-ai); border:2px solid #fff; }
+.ttl { flex:1; min-width:0; text-align:center; }
+.ttl b { display:block; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ttl small { display:block; font-size:11px; color:var(--c-ink-3); line-height:1.2; }
+
+/* 正文 */
+.body { flex:1; min-height:0; overflow:hidden; padding:12px 16px; display:flex; flex-direction:column; gap:14px; background:var(--c-surface); }
+
+/* 空状态 */
+.hello { margin-top:56px; text-align:center; }
+.spark { display:inline-grid; place-items:center; width:44px; height:44px; border-radius:14px; background:var(--c-ai-soft); color:var(--c-ai); font-size:22px; }
+.hello h3 { margin:12px 0 4px; font-size:21px; }
+.hello p { margin:0; color:var(--c-ink-3); font-size:13px; }
+.due { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:var(--c-warn-soft); font-size:13px; }
+.due b { color:var(--c-warn); }
+.due span { flex:1; }
+.grow { flex:1; }
+.sugs { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.sug { padding:10px 12px; border-radius:14px; background:var(--c-surface-2); border:1px solid var(--c-line); font-size:13.5px; line-height:1.4; }
+.sug small { display:block; margin-bottom:3px; font-size:11px; color:var(--c-ink-3); }
+
+/* 消息 */
+.u { align-self:flex-end; max-width:82%; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
+.bub { padding:9px 14px; border-radius:18px 18px 4px 18px; background:var(--c-accent-soft); color:var(--c-accent-strong); font-size:15px; }
+.pin { font-size:11px; color:var(--c-ink-3); }
+.a { display:flex; flex-direction:column; gap:8px; font-size:15px; line-height:1.7; }
+.who { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--c-ink-3); }
+.who b { color:var(--c-ai); font-weight:600; }
+.a p { margin:0; }
+.ref { display:inline-block; min-width:16px; padding:0 4px; margin:0 1px; border-radius:6px; background:var(--c-accent-soft); color:var(--c-accent); font-size:11px; line-height:16px; text-align:center; vertical-align:2px; }
+.src { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--c-ink-2); }
+.src i { font-style:normal; color:var(--c-ink-3); }
+.task { border:1px solid color-mix(in srgb,var(--c-ai) 30%,var(--c-line)); background:var(--c-ai-soft); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:8px; font-size:13px; }
+.task-h { display:flex; align-items:center; gap:8px; }
+.task-h b { flex:1; font-size:14px; }
+.tag { padding:1px 8px; border-radius:999px; font-size:11.5px; background:#fff; color:var(--c-ai); }
+.bar { height:4px; border-radius:4px; background:#e5d4f0; overflow:hidden; }
+.bar i { display:block; width:60%; height:100%; background:var(--c-ai); }
+.task-f { display:flex; gap:8px; color:var(--c-ink-2); }
+.task-f span:first-child { flex:1; }
+.lnk { color:var(--c-accent); }
+
+/* 输入框 */
+.cmp { flex:none; padding:8px 12px 22px; background:var(--c-surface); }
+.cbox { border:1px solid var(--c-line-strong); border-radius:22px; padding:8px 8px 8px 14px; display:flex; flex-direction:column; gap:6px; box-shadow:0 2px 10px rgba(20,30,50,.06); }
+.objs { display:flex; gap:6px; }
+.obj { display:inline-flex; align-items:center; gap:6px; padding:3px 6px 3px 10px; border-radius:999px; background:var(--c-accent-soft); color:var(--c-accent-strong); font-size:12.5px; }
+.obj i { font-style:normal; opacity:.6; }
+.ph { color:var(--c-ink-3); font-size:16px; padding:2px 0; }
+.tools { display:flex; align-items:center; gap:6px; margin-left:-6px; }
+.round { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; border:1px solid var(--c-line-strong); color:var(--c-ink-2); font-size:20px; line-height:1; }
+.mode { padding:5px 10px; border-radius:999px; background:var(--c-surface-2); border:1px solid var(--c-line); font-size:12.5px; color:var(--c-ink-2); }
+.send { width:34px; height:34px; border-radius:50%; display:grid; place-items:center; background:var(--c-accent); color:#fff; font-size:17px; font-weight:700; }
+.send.off { background:var(--c-line); color:#fff; }
+.disc { margin:6px 0 0; text-align:center; font-size:11px; color:var(--c-ink-3); }
+
+/* 遮罩 / 抽屉 / 底部面板 */
+.dim { position:absolute; inset:0; background:rgba(10,15,25,.42); z-index:3; }
+.drawer { position:absolute; z-index:4; top:0; bottom:0; left:0; width:300px; background:var(--c-surface); display:flex; flex-direction:column; padding-top:34px; }
+.dr-search { margin:8px 14px; padding:9px 12px; border-radius:12px; background:var(--c-surface-2); color:var(--c-ink-3); font-size:14px; }
+.dr-new { margin:4px 14px 6px; padding:10px 12px; border-radius:12px; display:flex; align-items:center; gap:10px; font-weight:600; }
+.dr-new span { width:26px; height:26px; border-radius:8px; display:grid; place-items:center; background:var(--c-accent); color:#fff; }
+.dr-list { flex:1; overflow:hidden; padding:0 8px; }
+.grp { padding:12px 8px 4px; font-size:11.5px; color:var(--c-ink-3); }
+.cv { padding:8px 10px; border-radius:10px; }
+.cv b { display:block; font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cv small { display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--c-ink-3); }
+.cv.on { background:var(--c-accent-soft); }
+.cv .run { width:7px; height:7px; border-radius:50%; background:var(--c-ai); }
+.dr-foot { border-top:1px solid var(--c-line); padding:6px 8px 24px; }
+.row { display:flex; align-items:center; gap:12px; padding:10px; border-radius:10px; font-size:14.5px; }
+.row svg { width:20px; height:20px; fill:none; stroke:var(--c-ink-2); stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+.row span { flex:1; }
+.badge { padding:0 7px; border-radius:999px; background:var(--c-warn-soft); color:var(--c-warn); font-size:11.5px; font-weight:600; }
+.row.faint { color:var(--c-ink-3); font-size:13.5px; }
+
+.sheet { position:absolute; z-index:4; left:0; right:0; bottom:0; background:var(--c-surface); border-radius:20px 20px 0 0; padding:8px 16px 26px; display:flex; flex-direction:column; gap:10px; }
+.sheet.tall { top:70px; }
+.handle { align-self:center; width:36px; height:5px; border-radius:5px; background:var(--c-line-strong); }
+.sh-h { display:flex; align-items:center; }
+.sh-h b { flex:1; font-size:16px; }
+.sh-h span { color:var(--c-accent); font-size:14px; }
+.search { padding:10px 12px; border-radius:12px; background:var(--c-surface-2); border:1px solid var(--c-line); color:var(--c-ink-3); font-size:15px; }
+.lbl { margin-top:4px; font-size:11.5px; color:var(--c-ink-3); }
+.pick { display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--c-line); font-size:14.5px; }
+.pick span { flex:1; }
+.pick small { color:var(--c-ink-3); font-size:12px; margin-left:6px; }
+.chk { width:22px; height:22px; border-radius:50%; border:2px solid var(--c-line-strong); display:grid; place-items:center; font-size:12px; color:#fff; }
+.chk.on { background:var(--c-accent); border-color:var(--c-accent); }
+.modes { display:flex; flex-direction:column; border:1px solid var(--c-line); border-radius:14px; overflow:hidden; }
+.md { display:flex; gap:10px; padding:9px 12px; border-top:1px solid var(--c-line); }
+.md:first-child { border-top:0; }
+.md.on { background:var(--c-accent-soft); }
+.md b { display:block; font-size:14px; font-weight:600; }
+.md small { display:block; font-size:12px; color:var(--c-ink-3); line-height:1.4; }
+.md i { flex:none; margin-top:3px; width:16px; height:16px; border-radius:50%; border:2px solid var(--c-line-strong); }
+.md.on i { border:5px solid var(--c-accent); }
+
+.seg { display:flex; gap:6px; overflow:hidden; }
+.seg span { flex:none; padding:6px 12px; border-radius:999px; background:var(--c-surface-2); border:1px solid var(--c-line); font-size:13px; color:var(--c-ink-2); }
+.seg span.on { background:var(--c-ink); border-color:var(--c-ink); color:#fff; }
+.card { border:1px solid var(--c-line); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:4px; font-size:13px; }
+.card b { font-size:14.5px; }
+.card .meta { display:flex; gap:8px; align-items:center; color:var(--c-ink-3); font-size:12px; }
+.ok { color:var(--c-accent); font-weight:600; }
+
+.prop { border:1px solid color-mix(in srgb,var(--c-warn) 35%,var(--c-line)); background:var(--c-warn-soft); border-radius:14px; padding:12px; display:flex; flex-direction:column; gap:6px; font-size:13px; }
+.prop b { font-size:14.5px; }
+.btns { display:flex; gap:8px; margin-top:2px; }
+.btn { flex:1; text-align:center; padding:8px; border-radius:10px; background:#fff; border:1px solid var(--c-line-strong); font-size:13.5px; }
+.btn.pri { background:var(--c-accent); border-color:var(--c-accent); color:#fff; }
+.sw { width:40px; height:24px; border-radius:24px; background:var(--c-accent); position:relative; flex:none; }
+.sw::after { content:""; position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%; background:#fff; }
+.sw.off { background:var(--c-line-strong); }
+.sw.off::after { right:auto; left:3px; }
+.list { border:1px solid var(--c-line); border-radius:14px; overflow:hidden; }
+.li { display:flex; align-items:center; gap:10px; padding:11px 12px; border-top:1px solid var(--c-line); font-size:14px; }
+.li:first-child { border-top:0; }
+.li span { flex:1; min-width:0; }
+.li > .ref { flex:none; }
+.body > * { flex-shrink:0; }
+.li small { display:block; color:var(--c-ink-3); font-size:12px; }
+.chev { color:var(--c-ink-3); }
+.h4 { margin:6px 2px -6px; font-size:12px; font-weight:600; color:var(--c-ink-2); }
+
+.decide { margin-top:44px; background:#fff; border-radius:14px; padding:18px 20px; }
+.decide h2 { margin:0 0 8px; font-size:17px; }
+.decide ol { margin:0; padding-left:20px; color:var(--c-ink-2); }
+.decide li { margin:6px 0; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>AI 页 · 移动端重设计（稿）</h1>
+  <p class="lead">对标手机上的主流 AI 对话 App：一屏只做一件事——对话。会话、档案、组合、约定都从对话里“拉出来”，看完就回到对话。宽度 ≥ 56rem 的桌面三栏布局不变。</p>
+
+  <div class="why">
+    <div><b>三层导航 → 一层顶栏</b><s>站点顶栏 + 对话/组合/约定页签 + 会话/对话/档案页签</s><br><span>AI 页用自己的顶栏：☰ 会话抽屉 · 标题 · 档案 · 新建。</span></div>
+    <div><b>组合 / 约定不再是页签</b><s>和“对话”平级，抢首屏</s><br><span>放进抽屉底部；需要绑定组合快照时，直接在输入框「＋」里选。</span></div>
+    <div><b>输入框 = 手机输入习惯</b><s>对象行、提示语、快捷键、草稿状态四五行</s><br><span>文字在上，下方一行工具：＋ · 处理方式 · 发送。对象以 chip 出现在框内。</span></div>
+    <div><b>起手问题靠近拇指</b><s>三张大卡片占满整屏</s><br><span>问候居中，4 个建议在输入框正上方；有到期复核时给一条提醒。</span></div>
+  </div>
+
+  <div class="screens">
+
+    <!-- ① 空状态 -->
+    <section class="screen">
+      <h2>① 新对话</h2>
+      <p class="cap">进入 AI 页的默认样子</p>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><i>●●● ▮</i></div>
+        <div class="top">
+          <div class="ib"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+          <div class="ttl"><b>AI</b></div>
+          <div class="ib"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="hello">
+            <span class="spark">✦</span>
+            <h3>今天想研究什么？</h3>
+            <p>直接提问，或从下面选一个起点</p>
+          </div>
+          <div class="grow"></div>
+          <div class="due"><b>⏰</b><span><b>2 个判断</b>本周到期复核</span><span class="lnk">看看 ›</span></div>
+          <div class="sugs">
+            <div class="sug"><small>一家公司</small>为什么值得关注？</div>
+            <div class="sug"><small>一家公司</small>这次下跌改变了什么？</div>
+            <div class="sug"><small>几家之间</small>比较两家，先研究哪家？</div>
+            <div class="sug"><small>复盘</small>上次的判断哪里错了？</div>
+          </div>
+        </div>
+        <div class="cmp">
+          <div class="cbox">
+            <div class="ph">问点什么…</div>
+            <div class="tools"><span class="round">＋</span><span class="mode">自动 ▾</span><span class="grow"></span><span class="send off">↑</span></div>
+          </div>
+          <p class="disc">回答只基于已保存材料与所列来源；交易决定由你作出</p>
+        </div>
+        <div class="home"></div>
+      </div>
+      <ul class="notes">
+        <li>站点通用顶栏在此页隐藏，AI 页顶栏只有 3 个元素。</li>
+        <li>建议问题 4 个即可（2×2），需要证券的问题点了会自动打开「＋」选对象。</li>
+        <li>“到期复核”提醒只在有数据时出现，替代原“哪些判断快到复核日期？”这个静态问题。</li>
+      </ul>
+    </section>
+
+    <!-- ② 对话中 -->
+    <section class="screen">
+      <h2>② 对话进行中</h2>
+      <p class="cap">回答 + 后台研究任务</p>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><i>●●● ▮</i></div>
+        <div class="top line">
+          <div class="ib"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></div>
+          <div class="ttl"><b>贵州茅台 · 这次下跌改变了什么</b><small>600519.SH</small></div>
+          <div class="ib"><svg viewBox="0 0 24 24"><path d="M4 4h11l5 5v11H4z"/><path d="M8 13h8M8 17h5"/></svg><span class="dot"></span></div>
+          <div class="ib"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div>
+        </div>
+        <div class="body">
+          <div class="u">
+            <div class="bub">这次下跌改变了什么？</div>
+            <div class="pin">📌 贵州茅台 · v3</div>
+          </div>
+          <div class="a">
+            <div class="who"><b>✦ AI</b>· 自动 · 用已有材料回答</div>
+            <p>从已保存材料看，下跌主要来自渠道库存调整<span class="ref">1</span>，而不是需求端变化。批价回落幅度小于 2019 年那轮<span class="ref">2</span>。</p>
+            <p>真正需要核实的是三季度预收款下降是否持续<span class="ref">3</span>——这会改变“现金流稳定”这一假设。</p>
+            <div class="src">📄 依据 3 条材料 <i>›</i></div>
+          </div>
+          <div class="task">
+            <div class="task-h"><b>局部核查：预收款变化</b><span class="tag">进行中 3/5</span></div>
+            <div class="bar"><i></i></div>
+            <div class="task-f"><span>正在读 Q3 报告附注…</span><span class="lnk">过程</span><span class="lnk">停止</span></div>
+          </div>
+        </div>
+        <div class="cmp">
+          <div class="cbox">
+            <div class="objs"><span class="obj">贵州茅台 600519 <i>✕</i></span></div>
+            <div class="ph">继续追问…</div>
+            <div class="tools"><span class="round">＋</span><span class="mode">自动 ▾</span><span class="grow"></span><span class="send off">↑</span></div>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+      <ul class="notes">
+        <li>AI 回答不加气泡、通栏排版；用户消息是右侧气泡，下面一行小字标明发送时固定的对象。</li>
+        <li>引用是行内小角标，点开到档案面板对应来源；任务卡只保留状态、进度、当前一步和两个动作。</li>
+        <li>顶栏“档案”图标带紫点 = 有新产物；标题两行：对话名 + 证券代码。</li>
+      </ul>
+    </section>
+
+    <!-- ③ 抽屉 -->
+    <section class="screen">
+      <h2>③ 会话抽屉（点 ☰）</h2>
+      <p class="cap">历史会话 + 组合 / 约定入口</p>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><i>●●● ▮</i></div>
+        <div class="top line"><div class="ib"></div><div class="ttl"><b>贵州茅台 · 这次下跌…</b></div></div>
+        <div class="body"></div>
+        <div class="dim"></div>
+        <div class="drawer">
+          <div class="dr-search">🔍 搜索会话</div>
+          <div class="dr-new"><span>＋</span>新对话</div>
+          <div class="dr-list">
+            <div class="grp">今天</div>
+            <div class="cv on"><b>贵州茅台 · 这次下跌改变了什么</b><small><span class="run"></span>研究中 · 14:20</small></div>
+            <div class="cv"><b>宁德时代 vs 比亚迪，先研究哪家</b><small>10:02</small></div>
+            <div class="grp">本周</div>
+            <div class="cv"><b>招商银行 · 上次判断哪里错了</b><small>周一</small></div>
+            <div class="cv"><b>美的集团为什么值得关注</b><small>周一</small></div>
+            <div class="cv"><b>组合：现金用途复核</b><small>周日</small></div>
+          </div>
+          <div class="dr-foot">
+            <div class="row"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></svg><span>组合与账户</span><i class="chev">›</i></div>
+            <div class="row"><svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/></svg><span>约定与记忆</span><span class="badge">2 待审阅</span></div>
+            <div class="row faint"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg><span>研究台主菜单</span></div>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+      <ul class="notes">
+        <li>从左侧滑出、可右滑关闭，和其他 AI App 一致；不再占一个页签。</li>
+        <li>进行中的会话带紫点，标题单行省略；按日期分组。</li>
+        <li>“组合与账户”“约定与记忆”降为二级页，待审阅数用角标提示。</li>
+        <li>“研究台主菜单”打开原有全站导航，保证从 AI 页能去别的页面。</li>
+      </ul>
+    </section>
+
+    <!-- ④ ＋ 面板 -->
+    <section class="screen">
+      <h2>④ 「＋」底部面板</h2>
+      <p class="cap">选对象 · 绑定组合 · 处理方式</p>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><i>●●● ▮</i></div>
+        <div class="top line"><div class="ib"></div><div class="ttl"><b>新对话</b></div></div>
+        <div class="body"></div>
+        <div class="dim"></div>
+        <div class="sheet tall">
+          <div class="handle"></div>
+          <div class="sh-h"><b>这条消息关于</b><span>完成</span></div>
+          <div class="search">🔍 证券名称、拼音或代码</div>
+          <div class="lbl">最近</div>
+          <div class="pick"><span>贵州茅台<small>600519.SH</small></span><i class="chk on">✓</i></div>
+          <div class="pick"><span>宁德时代<small>300750.SZ</small></span><i class="chk"></i></div>
+          <div class="pick"><span>招商银行<small>600036.SH</small></span><i class="chk"></i></div>
+          <div class="pick"><span>💼 绑定组合快照<small>主账户 · 10-12</small></span><i class="chev">›</i></div>
+          <div class="lbl">处理方式</div>
+          <div class="modes">
+            <div class="md on"><i></i><div><b>自动（推荐）</b><small>能用已有材料就直接答，需要时在额度内取证</small></div></div>
+            <div class="md"><i></i><div><b>只解释已有材料</b><small>不做新取证</small></div></div>
+            <div class="md"><i></i><div><b>局部核查</b><small>只查一个具体问题</small></div></div>
+            <div class="md"><i></i><div><b>完整公司研究</b><small>系统取证，耗时较长</small></div></div>
+          </div>
+          <div class="lbl">选 2 个以上证券会自动切换为“比较”；还有“复盘”“组合建议”向下滚动可见</div>
+        </div>
+        <div class="home"></div>
+      </div>
+      <ul class="notes">
+        <li>原来的“＋ 对象”弹层、“处理方式”弹层、组合页签的“绑定快照”合并成一个底部面板。</li>
+        <li>点输入框里的“自动 ▾”也打开这个面板，直接定位到“处理方式”。</li>
+        <li>多选即比较，勾选状态一目了然；“发送时固定对象与版本”放在这里一行说明即可。</li>
+      </ul>
+    </section>
+
+    <!-- ⑤ 档案 -->
+    <section class="screen">
+      <h2>⑤ 档案面板（点顶栏档案图标）</h2>
+      <p class="cap">当前对话的研究产物与来源</p>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><i>●●● ▮</i></div>
+        <div class="top line"><div class="ib"></div><div class="ttl"><b>贵州茅台 · 这次下跌…</b></div></div>
+        <div class="body"></div>
+        <div class="dim"></div>
+        <div class="sheet tall">
+          <div class="handle"></div>
+          <div class="sh-h"><b>研究档案</b><span>关闭</span></div>
+          <div class="seg"><span class="on">本次对话</span><span>保存材料</span><span>公司档案</span><span>提醒</span><span>线索</span></div>
+          <div class="card">
+            <div class="meta"><span class="tag">进行中 3/5</span>14:22 开始</div>
+            <b>局部核查：预收款变化</b>
+            <span>已完成：读取 Q2/Q3 报告 · 对比预收款 · 找渠道口径</span>
+          </div>
+          <div class="card">
+            <div class="meta"><span class="ok">有效</span>观点 · 10-02 发布 · 11-02 复核</div>
+            <b>现金流质量稳定</b>
+            <span>假设：预收款同比不低于 -10%</span>
+          </div>
+          <div class="h4">本次回答引用的来源</div>
+          <div class="list">
+            <div class="li"><span class="ref">1</span><span>渠道调研纪要<small>保存于 10-08 · 第 2 节</small></span><i class="chev">›</i></div>
+            <div class="li"><span class="ref">2</span><span>批价历史序列<small>数据源 · 至 10-12</small></span><i class="chev">›</i></div>
+            <div class="li"><span class="ref">3</span><span>2026 半年报<small>附注 21 · 合同负债</small></span><i class="chev">›</i></div>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+      <ul class="notes">
+        <li>档案从“第三个页签”改为可上拉的面板，看完下滑即回到对话，不丢阅读位置。</li>
+        <li>原档案里的 5 个分区用横向胶囊切换；默认“本次对话”。</li>
+        <li>回答里的角标 [1][2][3] 与这里的来源一一对应。</li>
+      </ul>
+    </section>
+
+    <!-- ⑥ 约定与记忆 -->
+    <section class="screen">
+      <h2>⑥ 约定与记忆（二级页）</h2>
+      <p class="cap">从抽屉进入，左上返回；组合页同理</p>
+      <div class="phone">
+        <div class="sb"><span>9:41</span><i>●●● ▮</i></div>
+        <div class="top line">
+          <div class="ib"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></div>
+          <div class="ttl"><b>约定与记忆</b></div>
+          <div class="ib"></div>
+        </div>
+        <div class="body">
+          <div class="h4">待你审阅 · 2</div>
+          <div class="prop">
+            <b>新约定：单只持仓不超过 15%</b>
+            <span>来自 10-12 对话“组合：现金用途复核”</span>
+            <div class="btns"><span class="btn">不采纳</span><span class="btn pri">采纳</span></div>
+          </div>
+          <div class="prop">
+            <b>记忆：偏好先看现金流再看估值</b>
+            <div class="btns"><span class="btn">不采纳</span><span class="btn pri">采纳</span></div>
+          </div>
+          <div class="h4">AI 在后台工作</div>
+          <div class="list">
+            <div class="li"><span>到期自动复核<small>到复核日时自动重查观点</small></span><i class="sw"></i></div>
+            <div class="li"><span>站内提醒<small>证据变化时通知我</small></span><i class="sw off"></i></div>
+          </div>
+          <div class="h4">生效中</div>
+          <div class="list">
+            <div class="li"><span>投资约定<small>5 条</small></span><i class="chev">›</i></div>
+            <div class="li"><span>记忆<small>12 条</small></span><i class="chev">›</i></div>
+            <div class="li"><span>已归档<small>3 条</small></span><i class="chev">›</i></div>
+          </div>
+        </div>
+        <div class="home"></div>
+      </div>
+      <ul class="notes">
+        <li>先处理待审阅，再看开关和清单——和原“约定与记忆”页签的信息顺序一致，只是改成移动端列表样式。</li>
+        <li>“组合与账户”页做法相同：账户 → 快照列表，每个快照有“用它提问”，点了回到对话并自动绑定。</li>
+      </ul>
+    </section>
+
+  </div>
+
+  <div class="decide">
+    <h2>需要你拍板的几点</h2>
+    <ol>
+      <li><b>AI 页隐藏站点通用顶栏</b>，用自己的顶栏（☰ 打开会话抽屉，抽屉底部才进主菜单）。还是保留站点顶栏、会话改放到右上角？</li>
+      <li><b>组合、约定与记忆降为二级页</b>（从抽屉进入），桌面端仍保留页签。可以吗？</li>
+      <li><b>“＋”面板合并对象、组合快照、处理方式</b>，还是处理方式单独一个面板？</li>
+      <li>空状态的<b>到期复核提醒</b>需要新接一个接口（读快到期的观点数），先做静态问题也行。</li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>

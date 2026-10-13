@@ -19,12 +19,17 @@ const MODES = [
   {value:"comparison", label:"比较", title:"比较明确对象", desc:"需要两个以上对象；只回答先研究哪家，不做总分排名"},
   {value:"review", label:"复盘", title:"复盘", desc:"回看当时的假设、复核是否按时触发、哪一步出了错"},
   {sep:true},
-  {value:"portfolio_action", label:"组合建议", title:"组合建议", desc:"需要先在“组合”页签选择账户快照"},
+  {value:"portfolio_action", label:"组合建议", title:"组合建议", desc:"需要先绑定一个组合快照"},
 ];
+// need：问题需要的证券数；core 为窄屏保留的 4 个（2×2）。
 const STARTERS = [
-  {title:"关于一家公司", items:["这家公司为什么值得关注？","这次下跌改变了什么？","你为什么不同意我？","现在价格隐含了什么预期？"]},
-  {title:"在几家之间选", items:["比较这两家，先研究哪家？"]},
-  {title:"回头检查自己", items:["你上次的判断哪里错了？","哪些判断快到复核日期？"]},
+  {group:"一家公司", text:"这家公司为什么值得关注？", need:1, core:true},
+  {group:"一家公司", text:"这次下跌改变了什么？", need:1, core:true},
+  {group:"几家之间", text:"比较这两家，先研究哪家？", need:2, core:true},
+  {group:"复盘", text:"你上次的判断哪里错了？", need:0, core:true},
+  {group:"一家公司", text:"你为什么不同意我？", need:1},
+  {group:"一家公司", text:"现在价格隐含了什么预期？", need:1},
+  {group:"复盘", text:"哪些判断快到复核日期？", need:0},
 ];
 const SUBJECT_KINDS = new Set(["listing","case"]);
 const PORTFOLIO_KINDS = new Set(["portfolio_snapshot","portfolio_plan"]);
@@ -73,10 +78,14 @@ export function bootAgent() {
     root.querySelectorAll("[data-panel]").forEach(panel => { panel.hidden = panel.dataset.panel !== tab; });
     if (url) history.replaceState(null, "", urlFor());
   }
+  // 窄屏：会话是左侧抽屉、档案与「＋」是底部面板，共用一层遮罩。
+  const narrow = () => window.matchMedia("(max-width: 56rem)").matches;
   function setPane(pane) {
     if (!PANES.includes(pane)) pane = "chat";
+    if (pane !== "chat") openPlus(false);
     root.dataset.pane = pane;
-    root.querySelectorAll("[data-agent-pane]").forEach(button => button.setAttribute("aria-pressed", String(button.dataset.agentPane === pane)));
+    const scroller = pane === "list" ? root.querySelector(".ai-side") : pane === "drawer" ? $("artifact-panel") : null;
+    if (scroller) scroller.scrollTop = 0;
   }
   function setDrawer(open) {
     root.dataset.drawer = open ? "open" : "closed";
@@ -92,6 +101,20 @@ export function bootAgent() {
     });
   });
   root.querySelectorAll("[data-agent-pane]").forEach(button => button.addEventListener("click", () => setPane(button.dataset.agentPane)));
+  root.querySelectorAll("[data-agent-go]").forEach(button => button.addEventListener("click", () => {
+    if (button.dataset.agentGo === "new") createConversation().catch(showError); else setPane(button.dataset.agentGo);
+  }));
+  root.querySelectorAll("[data-agent-tab-go]").forEach(button => button.addEventListener("click", () => { setPane("chat"); setTab(button.dataset.agentTabGo); }));
+  root.querySelectorAll("[data-agent-tab-back]").forEach(button => button.addEventListener("click", () => setTab("chat")));
+  root.querySelector("[data-agent-mainnav]").addEventListener("click", () => { setPane("chat"); document.querySelector(".nav-toggle")?.click(); });
+  root.querySelector("[data-agent-plus-close]").addEventListener("click", () => openPlus(false));
+  root.querySelector("[data-agent-plus-portfolio]").addEventListener("click", () => { openPlus(false); setTab("portfolio"); });
+  $("scrim").addEventListener("click", () => { openPlus(false); setPane("chat"); });
+  root.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || !narrow() || (root.dataset.pane === "chat" && !root.dataset.sheet)) return;
+    openPlus(false); setPane("chat");
+  });
+  $("conv-filter").addEventListener("input", () => renderList());
   $("drawer-toggle").addEventListener("click", () => setDrawer(root.dataset.drawer !== "open"));
   $("drawer-wide").addEventListener("click", () => {
     const panel = $("artifact-panel"), wide = panel.dataset.wide !== "true";
@@ -126,7 +149,7 @@ export function bootAgent() {
       if (mode.sep) { pop.append(el("div", {class:"ai-opt-sep", role:"separator"})); continue; }
       let reason = "";
       if (mode.value === "comparison" && count < 2) reason = `需要两个以上对象 · 现在选了 ${count} 个`;
-      if (mode.value === "portfolio_action" && !hasPortfolio()) reason = "需要先在“组合”页签选择账户快照";
+      if (mode.value === "portfolio_action" && !hasPortfolio()) reason = "需要先绑定一个组合快照";
       const option = el("button", {type:"button", class:"ai-opt", role:"option", "aria-selected":String($("kind").value === mode.value), "data-mode":mode.value});
       option.disabled = !!reason;
       option.append(el("i", {class:"ai-opt-r", "aria-hidden":"true"}), el("span", {}));
@@ -137,20 +160,29 @@ export function bootAgent() {
       pop.append(option);
     }
   }
+  function openPlus(open, focus) {
+    if (open) renderModePop();
+    if (open) root.dataset.sheet = "plus"; else delete root.dataset.sheet;
+    $("picker").hidden = !open; $("mode-pop").hidden = !open;
+    $("add-object").setAttribute("aria-expanded", String(open)); $("mode-btn").setAttribute("aria-expanded", String(open));
+    if (open && focus === "mode") $("mode-pop").scrollIntoView({block:"nearest"});
+  }
   function openMode(open) {
+    if (narrow()) { openPlus(open, "mode"); return; }
     if (open) { openPicker(false); renderModePop(); }
     $("mode-pop").hidden = !open; $("mode-btn").setAttribute("aria-expanded", String(open));
   }
   function openPicker(open) {
+    if (narrow()) { openPlus(open, "search"); return; }
     if (open) openMode(false);
     $("picker").hidden = !open; $("add-object").setAttribute("aria-expanded", String(open));
     if (open) $("search").focus();
   }
   function renderChips() {
     const box = $("binding"); box.replaceChildren();
-    if (!refs.length) { box.append(el("span", {class:"ai-chip"}, "未指定证券")); return; }
+    if (!refs.length) { box.append(el("span", {class:"ai-chip ai-chip-empty"}, "未指定证券")); return; }
     for (const ref of refs) {
-      const chip = el("span", {class:"ai-chip ai-chip-accent"}, refLabel(ref));
+      const chip = el("span", {class:"ai-chip ai-chip-accent"}); chip.append(el("span", {class:"ai-chip-t"}, refLabel(ref)));
       const remove = el("button", {type:"button", class:"ai-chip-x", "aria-label":`移除 ${refLabel(ref)}`}, "✕");
       remove.addEventListener("click", () => {
         refs = refs.filter(r => !(r.kind === ref.kind && r.id === ref.id && r.revision === ref.revision));
@@ -218,7 +250,10 @@ export function bootAgent() {
     const box = $("conversations");
     box.replaceChildren();
     let group = null;
-    conversations.forEach(c => {
+    const query = $("conv-filter").value.trim().toLowerCase();
+    const shown = query ? conversations.filter(c => (c.title || "").toLowerCase().includes(query)) : conversations;
+    if (query && !shown.length) box.append(el("p", {class:"ai-faint ai-conv-none"}, "没有匹配的会话"));
+    shown.forEach(c => {
       const name = groupOf(c.created_at);
       if (name !== group) { group = name; box.append(el("div", {class:"ai-group"}, name)); }
       const button = el("button", {type:"button", class:"ai-conv", "aria-current":c.id === current ? "true" : undefined, "data-conversation-id":c.id});
@@ -260,19 +295,20 @@ export function bootAgent() {
   // ---- 对话流 -----------------------------------------------------------------
   function emptyState() {
     const box = el("div", {class:"ai-empty"});
-    box.append(el("h3", {}, "今天想研究什么？"), el("p", {class:"ai-faint"}, "从一个具体的问题开始。涉及某家公司时，点输入框里的“＋ 对象”指定证券；没有填写完整画像也能开始。"));
+    const hello = el("div", {class:"ai-hello"});
+    hello.append(el("span", {class:"ai-spark", "aria-hidden":"true"}, "✦"), el("h3", {}, "今天想研究什么？"),
+      el("p", {class:"ai-faint"}, "直接提问，或从下面选一个起点。涉及某家公司时，用“＋”指定证券。"));
     const cards = el("div", {class:"ai-starters"});
-    for (const group of STARTERS) {
-      const card = el("div", {class:"ai-starter-card"}, undefined);
-      card.append(el("h4", {}, group.title));
-      for (const text of group.items) {
-        const button = el("button", {type:"button"}, text);
-        button.addEventListener("click", () => { $("input").value = text; saveDraft(); $("input").focus(); });
-        card.append(button);
-      }
-      cards.append(card);
+    for (const item of STARTERS) {
+      const button = el("button", {type:"button", class:`ai-sug${item.core ? "" : " ai-sug-extra"}`});
+      button.append(el("small", {}, item.group), document.createTextNode(item.text));
+      button.addEventListener("click", () => {
+        $("input").value = item.text; saveDraft();
+        if (subjectCount() < item.need) openPicker(true); else $("input").focus();
+      });
+      cards.append(button);
     }
-    box.append(cards, el("p", {class:"ai-faint"}, "回答只基于已保存的材料与所列来源，包含假设与不确定性；交易决定由你作出。"));
+    box.append(hello, cards, el("p", {class:"ai-faint ai-disc"}, "回答只基于已保存的材料与所列来源，包含假设与不确定性；交易决定由你作出。"));
     return box;
   }
   function renderMessages() {
@@ -310,8 +346,10 @@ export function bootAgent() {
       if (panel) { thread.append(panel); placed.add(m.task_ref.id); }
     }
     tasks.forEach((panel, id) => { if (!placed.has(id)) thread.append(panel); });
-    if (!messages.length && !tasks.size) thread.append(emptyState());
-    if (nearBottom) thread.scrollTop = thread.scrollHeight;
+    const empty = !messages.length && !tasks.size;
+    if (empty) thread.append(emptyState());
+    if (empty) thread.scrollTop = 0;
+    else if (nearBottom) thread.scrollTop = thread.scrollHeight;
     root.dispatchEvent(new CustomEvent("agent:messages", {detail:{conversationId:current,messages}}));
   }
   async function reloadMessages(id, token) {
@@ -328,7 +366,7 @@ export function bootAgent() {
     for (const m of messages) if (m.task_ref && !tasks.has(m.task_ref.id)) watchTask(m.task_ref.id, id, token);
   }
   async function selectConversation(id) {
-    saveDraft(); stopWatching(); taskStates.clear(); current = id; state.current = id; const token = ++generation;
+    saveDraft(); stopWatching(); taskStates.clear(); current = id; state.current = id; root.dataset.conversation = "1"; const token = ++generation;
     history.replaceState(null,"",urlFor(id));
     $("search-results").replaceChildren(); openPicker(false); openMode(false);
     messages = []; opinionViews.clear(); $("messages").replaceChildren(); $("updates").replaceChildren();
@@ -574,6 +612,7 @@ export function bootAgent() {
 
   async function init() {
     const params = new URLSearchParams(location.search);
+    if (narrow()) $("input").placeholder = "问点什么…";
     setDrawer((state.ui.drawer || "open") === "open");
     setPane(params.get("pane") || "chat");
     setTab(params.get("tab") || "chat", {url:false});

@@ -6,6 +6,18 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+// 窄屏：页签收进会话抽屉，二级页用返回键；宽屏直接点页签。
+async function agentTab(page, name) {
+  const direct = page.locator(`[data-agent-tab="${name}"]`);
+  if (await direct.isVisible()) return direct.click();
+  const back = page.locator('[data-agent-tab-back]').filter({visible:true});
+  if (await back.count()) await back.first().click();
+  const close = page.locator('[data-agent-go="chat"]').filter({visible:true});
+  if (await close.count()) await close.first().click();
+  if (name === 'chat') return;
+  await page.locator('[data-agent-pane="list"]').click();
+  await page.locator(`[data-agent-tab-go="${name}"]`).click();
+}
 const require = createRequire(process.env.AG17_NODE_MODULES + '/package.json');
 const {chromium} = require('playwright');
 const browser = await chromium.launch({headless:true,executablePath:process.env.AG17_CHROMIUM_EXECUTABLE});
@@ -23,8 +35,8 @@ try {
       const r = await fetch(base+path,{method:body ? 'POST':'GET',headers,body:body ? JSON.stringify(body):undefined});
       assert.ok(r.ok,(await r.clone().text())+logs); return r.json();
     }
-    const ui = page.locator('#agent-portfolio'), tab = name => page.locator(`[data-agent-tab="${name}"]`).click(), open = async name => {await tab('portfolio'); await ui.getByRole('button',{name,exact:true}).click();};
-    const goChat = async () => {await tab('chat'); const list = page.locator('[data-agent-pane="list"]'); if (await list.isVisible()) await list.click();};
+    const ui = page.locator('#agent-portfolio'), tab = name => agentTab(page, name), open = async name => {await tab('portfolio'); await ui.getByRole('button',{name,exact:true}).click();};
+    const goChat = async () => {await tab('chat'); const back = page.locator('[data-agent-go="chat"]').filter({visible:true}); if (await back.count()) await back.first().click(); const list = page.locator('[data-agent-pane="list"]'); if (await list.isVisible()) await list.click();};
     const saved = () => ui.getByRole('status').filter({hasText:'服务器已确认保存'}).waitFor();
     const fillFacts = async time => {
       await ui.getByLabel('事实日期与时间').fill(time.slice(0,19));await ui.getByLabel('事实时间的时区').selectOption('+00:00');

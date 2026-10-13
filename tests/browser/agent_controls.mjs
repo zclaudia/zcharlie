@@ -6,6 +6,18 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+// 窄屏：页签收进会话抽屉，二级页用返回键；宽屏直接点页签。
+async function agentTab(page, name) {
+  const direct = page.locator(`[data-agent-tab="${name}"]`);
+  if (await direct.isVisible()) return direct.click();
+  const back = page.locator('[data-agent-tab-back]').filter({visible:true});
+  if (await back.count()) await back.first().click();
+  const close = page.locator('[data-agent-go="chat"]').filter({visible:true});
+  if (await close.count()) await close.first().click();
+  if (name === 'chat') return;
+  await page.locator('[data-agent-pane="list"]').click();
+  await page.locator(`[data-agent-tab-go="${name}"]`).click();
+}
 const require = createRequire(process.env.AG17_NODE_MODULES + '/package.json');
 const {chromium} = require('playwright');
 const browser = await chromium.launch({headless: true, executablePath: process.env.AG17_CHROMIUM_EXECUTABLE});
@@ -33,9 +45,9 @@ try {
     // Views live in the chat tab's research drawer; controls have their own tab.
     const open = async name => {
       const button = page.getByRole('button', {name, exact: true});
-      await page.locator('[data-agent-tab="chat"]').click();
+      await agentTab(page, 'chat');
       const drawer = page.locator('[data-agent-pane="drawer"]'); if (await drawer.isVisible()) await drawer.click();
-      if (!(await button.first().isVisible())) await page.locator('[data-agent-tab="controls"]').click();
+      if (!(await button.first().isVisible())) await agentTab(page, 'controls');
       await button.click();
     };
     const confirmed = () => page.waitForFunction(() => document.querySelector('#agent-controls-extension [role=status]').textContent.includes('服务器已确认'));
@@ -55,20 +67,25 @@ try {
       assert.equal((await api('/investor/readiness')).network_verified, false);
       assert.match(await control.getByLabel('尚未知晓的信息（每行一项）').inputValue(), /尚未知晓/);
       // Encrypted settings: changed fields only, legacy model unchanged, no Agent network-test imitation.
-      await page.goto(base + '/app/settings');
+      await page.goto(base + '/app/settings#agent/switches');
       await page.locator('#setting-investor_agent_enabled').waitFor();
       const before = await api('/settings');
       const legacyBefore = before.groups.flatMap(g => g.items).find(x => x.key === 'llm_tier3_model').value;
       await page.locator('#setting-investor_agent_enabled').check();
+      await page.locator('#settings-save').click();
+      await page.waitForFunction(() => document.querySelector('#settings-save-result').textContent.includes('已保存'));
+      await page.goto(base + '/app/settings#agent/model');
+      await page.locator('#setting-agent_api_key').waitFor();
       await page.locator('#setting-agent_api_key').fill('ag19-secret-do-not-store');
       let patchBody;
       page.on('request', r => {if (r.method() === 'PATCH' && r.url().endsWith('/settings')) patchBody = r.postDataJSON();});
       await page.locator('#settings-save').click();
       await page.waitForFunction(() => document.querySelector('#settings-save-result').textContent.includes('已保存'));
-      assert.deepEqual(Object.keys(patchBody.values).sort(), ['agent_api_key', 'investor_agent_enabled']);
+      assert.deepEqual(Object.keys(patchBody.values).sort(), ['agent_api_key']);
       assert.equal('expected_revision' in patchBody, false);
       const after = await api('/settings');
       assert.equal(after.groups.flatMap(g => g.items).find(x => x.key === 'llm_tier3_model').value, legacyBefore);
+      assert.equal(after.groups.flatMap(g => g.items).find(x => x.key === 'investor_agent_enabled').value, true);
       assert.ok(!JSON.stringify(after).includes('ag19-secret-do-not-store'));
       assert.ok(!JSON.stringify(await api('/settings/history')).includes('ag19-secret-do-not-store'));
       assert.equal(await page.locator('#agent-settings button').filter({hasText: '测试连接'}).count(), 0);
@@ -93,8 +110,8 @@ try {
       assert.equal(mandate.authorization.exploration_daily_budget, null);
       assert.ok(mandate.scope_refs.some(r => r.id === 78));
       // A question is accepted while BOTH background switches are off.
-      await page.locator('[data-agent-tab="chat"]').click();
-      {const list = page.locator('[data-agent-pane="list"]'); if (await list.isVisible()) await list.click();}
+      await agentTab(page, 'chat');
+      {const back = page.locator('[data-agent-go="chat"]').filter({visible:true}); if (await back.count()) await back.first().click(); const list = page.locator('[data-agent-pane="list"]'); if (await list.isVisible()) await list.click();}
       await page.locator('#agent-new').click();
       await page.waitForFunction(() => !document.querySelector('#agent-send').disabled);
       await page.locator('#agent-add-object').click();
@@ -134,8 +151,8 @@ try {
       })));
       assert.ok(!(await page.locator('#agent-controls-extension [role=status]').innerText()).includes('对象已变化'));
       await page.evaluate(refs => document.querySelector('#agent-workbench').dispatchEvent(new CustomEvent('agent:control-context', {detail: {refs}})), fixture.recommendations);
-      await page.locator('[data-agent-tab="chat"]').click();
-      {const chatPane = page.locator('[data-agent-pane="chat"]'); if (await chatPane.isVisible()) await chatPane.click();}
+      await agentTab(page, 'chat');
+      {const chatPane = page.locator('[data-agent-go="chat"]').filter({visible:true}).first(); if (await chatPane.isVisible()) await chatPane.click();}
       await page.locator('#agent-add-object').click();
       await page.locator('#agent-search').fill('600001.SH');
       await page.locator('#agent-subject-form button[type=submit]').click();
