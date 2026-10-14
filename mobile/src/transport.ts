@@ -367,11 +367,3 @@ export async function watchTask(
     }
   }
 }
-
-export async function createConnectionConfig(input: {
-  gatewayUrl: string;
-  backendId: string;
-  deviceToken: string;
-}): Promise<Pairing> {
-  return pairDevice(input);
-}
