@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block page_css %}<link rel="stylesheet" href="/app/static/pages/candidates.css">{% endblock %}
 {% block content %}
 <div id="candidate-detail" class="data-region"
      data-endpoint="/candidates/{{ candidate_id }}"

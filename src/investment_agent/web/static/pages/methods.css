@@ -1,0 +1,10 @@
+/* pages/methods.css — 研究方法
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
+
+.method-workbench { max-width: 1080px; margin: 0 auto; overflow-wrap: anywhere; }
+.method-panel, .method-card { padding: 1rem; margin: 1rem 0; border: 1px solid var(--border, #d9dfe8); border-radius: 8px; }
+.method-panel form { display: grid; gap: .65rem; }
+.method-workbench select, .method-workbench textarea, .method-workbench input:not([type="checkbox"]) { display: block; width: 100%; min-width: 0; max-width: 100%; padding: .6rem; box-sizing: border-box; }
+.method-workbench textarea { min-height: 5rem; }
+.method-workbench button { margin: .4rem .4rem .4rem 0; white-space: normal; }
+.method-workbench details { padding: .6rem; border-left: 3px solid #7b91ad; margin: .5rem 0; }

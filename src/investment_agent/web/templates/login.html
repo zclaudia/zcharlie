@@ -1,17 +1,22 @@
 {% extends "base.html" %}
 {% block title %}登录{% endblock %}
-{% block content %}
-<section class="login-card card">
-  <img class="login-brand-icon" src="/app/static/brand/icon-180.png" width="80" height="80" alt="zcharlie">
-  <h1>登录研究台</h1>
-  <p class="muted">输入与 API 相同的 API Key；密钥只用于服务端验证，不会写入 Cookie。</p>
-  {% if error %}<p class="notice notice-error" role="alert">{{ error }}</p>{% endif %}
-  <form method="post" action="/app/login">
-    <label for="api_key">API Key</label>
-    <input id="api_key" name="api_key" type="password" autocomplete="current-password" required>
-    <input type="hidden" name="next" value="{{ next_url or "/app" }}">
-    <button type="submit" class="primary">登录</button>
-  </form>
-  <p class="muted small">{{ disclaimer }}</p>
-</section>
+{% block body_class %} login-page{% endblock %}
+{% block body %}
+<main class="login-shell" id="main">
+  <section class="login-card card">
+    <img class="login-brand-icon" src="/app/static/brand/icon-180.png" width="48" height="48" alt="zcharlie">
+    <h1>登录研究台</h1>
+    <p class="muted">输入与 API 相同的 API Key；密钥只用于服务端验证，不会写入 Cookie。</p>
+    {% if error %}<p class="notice notice-error" role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="/app/login">
+      <div class="field">
+        <label for="api_key">API Key</label>
+        <input id="api_key" name="api_key" type="password" autocomplete="current-password" required>
+      </div>
+      <input type="hidden" name="next" value="{{ next_url or "/app" }}">
+      <button type="submit" class="btn btn-primary btn-lg">登录</button>
+    </form>
+    <p class="faint small">{{ disclaimer }}</p>
+  </section>
+</main>
 {% endblock %}

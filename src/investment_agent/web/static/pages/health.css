@@ -1,0 +1,64 @@
+/* pages/health.css — 数据健康
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
+
+.health-section[hidden] { display: none; }
+.health-section h3 { font-size: var(--fs-md); }
+.accumulation-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); margin: var(--sp-1) 0; }
+.accumulation-count { font-size: 1.6rem; font-weight: 700; }
+progress, meter { accent-color: var(--c-accent); }
+progress.accumulation-progress { width: 100%; height: 0.8rem; }
+.health-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-width: 0; }
+.health-bar meter { flex: 1 1 8rem; max-width: 20rem; height: 0.8rem; }
+.health-bar-text { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+meter::-webkit-meter-bar, progress::-webkit-progress-bar { background: var(--c-track); border: none; border-radius: var(--r-pill); }
+meter::-webkit-meter-optimum-value, meter::-webkit-meter-suboptimum-value,
+meter::-webkit-meter-even-less-good-value, progress::-webkit-progress-value { background: var(--c-accent); border-radius: var(--r-pill); }
+meter::-webkit-meter-suboptimum-value { background: var(--c-aging); }
+meter::-webkit-meter-even-less-good-value { background: var(--c-warn); }
+meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--c-accent); }
+
+.collection-list, .backfill-list { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+.collection-item, .backfill-item { border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3); min-width: 0; background: var(--c-surface-2); }
+.collection-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.collection-title { margin: 0; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.collection-meta { margin: 2px 0; overflow-wrap: anywhere; }
+.trend { margin: var(--sp-1) 0; }
+.trend .chip { margin-right: var(--sp-1); }
+.health-section details summary { color: var(--c-accent); margin: var(--sp-1) 0; }
+.ticker-list { overflow-wrap: anywhere; }
+.ticker-list a { margin-right: 6px; }
+.health-table td { overflow-wrap: anywhere; }
+.health-warnings .notice { margin: 6px 0; }
+.calendar-candidate { margin: var(--sp-2) 0; }
+.calendar-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
+.calendar-messages .notice { margin: var(--sp-2) 0 0; }
+
+.run-success, .week-qualified { color: var(--c-accent); border-color: color-mix(in srgb, var(--c-accent) 40%, var(--c-line)); background: var(--c-accent-soft); }
+.run-partial, .week-below_threshold { color: var(--c-ai); border-color: color-mix(in srgb, var(--c-ai) 35%, var(--c-line)); background: var(--c-ai-soft); }
+.run-failed, .week-missing { color: var(--c-warn); border-color: color-mix(in srgb, var(--c-warn) 40%, var(--c-line)); background: var(--c-warn-soft); }
+.run-queued, .run-running, .week-in_progress { color: var(--c-ink-2); }
+.week-no_trading { color: var(--c-ink-3); }
+
+/* ---- 数据健康 ---------------------------------------------------------------------- */
+
+.summary-meta { margin: calc(-1 * var(--sp-1)) 0 var(--sp-4); }
+.collection-ratio { margin: var(--sp-2) 0 0; }
+.collection-ratio-value { font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
+.collection-ratio-value.below { color: var(--c-warn); }
+.trend { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.trend-cell {
+  font-size: 10.5px;
+  padding: 0 5px;
+  line-height: 16px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-line);
+  font-variant-numeric: tabular-nums;
+}
+.backfill-item h4, .collection-head h4 { margin: 0; font-size: var(--fs-md); color: var(--c-ink); }
+.collection-head .status { margin-left: auto; }
+.basis { margin-top: var(--sp-3); }
+.basis summary, .conflicts summary { color: var(--c-accent); font-size: var(--fs-sm); }
+.accumulation-headline .muted { font-size: var(--fs-sm); }
+.health-section .kpis { margin-bottom: var(--sp-2); }
+
+.health-warnings .alerts { margin: 6px 0; }

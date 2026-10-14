@@ -1,0 +1,20 @@
+/* pages/runs.css — 运行中心
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
+
+.run-detail { padding: var(--sp-2) 0; }
+.run-detail a { margin-right: var(--sp-2); }
+
+.load-more { margin-top: var(--sp-3); }
+
+.runs-table tr.has-error td { border-bottom: 0; padding-bottom: 2px; }
+.runs-table tr.error-row td { padding-top: 0; }
+.runs-table tr.error-row:hover, .runs-table tr.has-error:hover { background: transparent; }
+.runs-table .stock-cell .stock-code:first-child { margin-bottom: 1px; }
+.artifact-links { display: flex; flex-wrap: wrap; gap: 4px; }
+.artifact-links .chip { text-decoration: none; color: var(--c-accent); }
+
+@media (max-width: 40rem) {
+  .runs-table tr.has-error { border-bottom: 0; padding-bottom: 0; }
+  .runs-table tr.error-row { padding-top: 0; }
+  .stack-table .stock-cell .stock-name, .stack-table .stock-cell .stock-code { display: inline; margin-right: 6px; }
+}

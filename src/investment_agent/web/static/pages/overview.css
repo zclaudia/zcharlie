@@ -1,0 +1,10 @@
+/* pages/overview.css — 今日概览
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
+
+.bucket-title { display: flex; align-items: baseline; gap: var(--sp-2); }
+.bucket-title a { margin-left: auto; font-size: var(--fs-sm); }
+
+/* 旧计数条（health.js / candidates.js 的 bucket） */
+.bucket-counts { list-style: none; margin: var(--sp-1) 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+.bucket-counts li { display: flex; align-items: baseline; gap: 6px; color: var(--c-ink-2); }
+.count { font-size: 1.4rem; font-weight: 700; color: var(--c-ink); font-variant-numeric: tabular-nums; }

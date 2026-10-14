@@ -1,29 +1,36 @@
-{%- set NAV_ICONS = {
-  "menu": '<path d="M4 6h16M4 12h16M4 18h16"/>',
-  "close": '<path d="M6 6l12 12M18 6L6 18"/>',
-  "overview": '<rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>',
-  "agent": '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 16v4M17 18h4"/>',
-  "candidates": '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
-  "templates": '<rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="8" height="7" rx="1"/><rect x="15" y="14" width="6" height="7" rx="1"/>',
-  "watchlist": '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
-  "portfolio": '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/>',
-  "runs": '<path d="M7 4l13 8-13 8z"/>',
-  "health": '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
-  "methods": '<path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/>',
-  "settings": '<path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
-  "logout": '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+{#- App shell (UI v2). Blocks for page templates:
+      title, page_css (page stylesheet <link>), content, appbar_actions (mobile app-bar buttons),
+      mobile_back (detail pages: one <a href> to the parent page; shows a back link and hides the tab bar),
+      body_class.
+    Layout: desktop (>=56rem) sidebar + top bar; mobile (<56rem) app bar + bottom tab bar + "更多" sheet. -#}
+{% from "_icons.html" import icon %}
+{%- set NAV = {
+  "overview": {"group": "工作台", "label": "今日概览"},
+  "agent": {"group": "工作台", "label": "AI"},
+  "candidates": {"group": "研究漏斗", "label": "候选池"},
+  "watchlist": {"group": "研究漏斗", "label": "观察池"},
+  "portfolio": {"group": "研究漏斗", "label": "持仓池"},
+  "templates": {"group": "规则与方法", "label": "模板"},
+  "methods": {"group": "规则与方法", "label": "研究方法"},
+  "runs": {"group": "系统", "label": "运行中心"},
+  "health": {"group": "系统", "label": "数据健康"},
+  "settings": {"group": "系统", "label": "设置"},
 } -%}
-{%- macro icon(name) -%}
-<svg class="nav-ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ NAV_ICONS[name]|safe }}</svg>
-{%- endmacro -%}
 {%- macro nav_link(key, href, text) -%}
-<a href="{{ href }}"{% if active_nav == key %} class="active" aria-current="page"{% endif %}>{{ icon(key) }}<span>{{ text }}</span></a>
+<a href="{{ href }}"{% if active_nav == key %} class="active" aria-current="page"{% endif %}>{{ icon(key, "nav-ico") }}<span>{{ text }}</span>{% if key == "candidates" %}<em class="nav-count" data-nav-count="candidates" hidden></em>{% elif key == "health" %}<em class="nav-dot" data-nav-dot="health" hidden></em>{% endif %}</a>
 {%- endmacro -%}
+{%- macro more_link(key, href, text) -%}
+<a href="{{ href }}" class="more-item{% if active_nav == key %} on{% endif %}"{% if active_nav == key %} aria-current="page"{% endif %}>{{ icon(key, "ico", 22) }}<span>{{ text }}</span>{% if key == "health" %}<em class="more-dot" data-nav-dot="health" hidden></em>{% endif %}</a>
+{%- endmacro -%}
+{%- set _back %}{% block mobile_back %}{% endblock %}{% endset -%}
+{%- set _has_back = (_back | trim | length) > 0 -%}
+{%- set _nav = NAV.get(active_nav | default("")) -%}
+{%- set _title = (page_title if (_has_back and page_title) else (_nav.label if _nav else (page_title | default("研究台")))) -%}
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ page_title or "个人投资研究台" }}{% endblock %} · zcharlie</title>
   <link rel="icon" type="image/png" sizes="16x16" href="/app/static/brand/icon-16.png">
@@ -31,61 +38,160 @@
   <link rel="icon" type="image/png" sizes="512x512" href="/app/static/brand/icon-512.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/app/static/brand/icon-180.png">
   <link rel="stylesheet" href="/app/static/app.css">
+  {% block page_css %}{% endblock %}
   <script src="/app/static/nav.js"></script>
 </head>
-<body>
-  <header class="app-header">
-    <button type="button" class="nav-toggle" aria-label="打开导航" aria-expanded="false" aria-controls="app-nav">{{ icon("menu") }}</button>
-    <a class="brand" href="/app">
-      <img class="brand-icon" src="/app/static/brand/icon-64.png" width="40" height="40" alt="">
-      <span>ZCHARLIE 研究台</span>
-    </a>
-    <span class="topbar-title">ZCHARLIE 研究台</span>
-    <div class="nav-scrim" aria-hidden="true"></div>
-    <nav class="app-nav" id="app-nav" aria-label="主导航">
-      <div class="drawer-head">
+<body class="{{ 'has-back' if _has_back else 'has-tabbar' }}{% block body_class %}{% endblock %}">
+{% block body %}
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="app-shell" id="app-shell">
+    <aside class="sidebar" aria-label="侧栏">
+      <div class="sb-brand">
         <a class="brand" href="/app">
-          <img class="brand-icon" src="/app/static/brand/icon-64.png" width="32" height="32" alt="">
-          <span>ZCHARLIE 研究台</span>
+          <img class="brand-icon" src="/app/static/brand/icon-64.png" width="28" height="28" alt="">
+          <span class="sb-name">zcharlie<small>个人研究台</small></span>
         </a>
-        <button type="button" class="nav-close" aria-label="收起导航">{{ icon("close") }}</button>
+        <button type="button" class="icon-btn sb-collapse" id="sb-collapse" aria-label="收起侧栏" aria-pressed="false">{{ icon("panel") }}</button>
       </div>
-      <div class="nav-group">
-        <span class="nav-label">研究</span>
-        {{ nav_link("overview", "/app", "今日概览") }}
-        {{ nav_link("agent", "/app/agent", "AI") }}
+      <nav class="nav" id="app-nav" aria-label="主导航">
+        <div class="nav-group">
+          <span class="nav-label">工作台</span>
+          {{ nav_link("overview", "/app", "今日概览") }}
+          {{ nav_link("agent", "/app/agent", "AI") }}
+        </div>
+        <div class="nav-group">
+          <span class="nav-label">研究漏斗</span>
+          {{ nav_link("candidates", "/app/candidates", "候选池") }}
+          <i class="funnel-arrow" aria-hidden="true"></i>
+          {{ nav_link("watchlist", "/app/watchlist", "观察池") }}
+          <i class="funnel-arrow" aria-hidden="true"></i>
+          {{ nav_link("portfolio", "/app/portfolio", "持仓池") }}
+        </div>
+        <div class="nav-group">
+          <span class="nav-label">规则与方法</span>
+          {{ nav_link("templates", "/app/templates", "模板") }}
+          {{ nav_link("methods", "/app/methods", "研究方法") }}
+        </div>
+        <div class="nav-group">
+          <span class="nav-label">系统</span>
+          {{ nav_link("runs", "/app/runs", "运行中心") }}
+          {{ nav_link("health", "/app/health", "数据健康") }}
+          {{ nav_link("settings", "/app/settings", "设置") }}
+        </div>
+      </nav>
+      <div class="sb-foot">
+        <a class="sb-status" href="/app/health" data-shell-status hidden>{{ icon("alert") }}<span class="sb-status-text"><b data-shell-status-title></b><span data-shell-status-sub></span></span></a>
+        <div class="sb-user">
+          <span class="sb-disclaimer">{{ disclaimer }}</span>
+          <form method="post" action="/app/logout" class="logout-form">
+            <button type="submit" class="icon-btn" aria-label="退出登录">{{ icon("logout") }}</button>
+          </form>
+        </div>
       </div>
-      <div class="nav-group">
-        <span class="nav-label">股票池</span>
-        {{ nav_link("candidates", "/app/candidates", "候选池") }}
-        {{ nav_link("templates", "/app/templates", "模板") }}
-        {{ nav_link("watchlist", "/app/watchlist", "观察池") }}
-        {{ nav_link("portfolio", "/app/portfolio", "持仓池") }}
+    </aside>
+
+    <div class="app-body">
+      <header class="topbar" id="topbar">
+        <nav class="crumbs" aria-label="位置">
+          {%- if _nav %}
+          <span>{{ _nav.group }}</span>{{ icon("chev", "ico crumb-sep", 14) }}
+          {%- if _has_back %}<span>{{ _nav.label }}</span>{{ icon("chev", "ico crumb-sep", 14) }}<b>{{ page_title }}</b>
+          {%- else %}<b>{{ _nav.label }}</b>{% endif %}
+          {%- else %}<b>{{ page_title | default("研究台") }}</b>{% endif %}
+        </nav>
+        <span class="spacer"></span>
+        <button type="button" class="search-btn" data-palette-open aria-label="搜索股票" aria-keyshortcuts="Control+K Meta+K">{{ icon("search") }}<span>搜索股票、代码或简拼</span><kbd data-shortcut-hint>⌘K</kbd></button>
+        <button type="button" class="icon-btn theme-toggle" data-theme-toggle aria-label="切换主题">{{ icon("moon", "ico ico-moon", 18) }}{{ icon("sun", "ico ico-sun", 18) }}</button>
+      </header>
+
+      <header class="appbar">
+        {%- if _has_back %}
+        <div class="appbar-back">{{ _back | safe }}</div>
+        <div class="appbar-title appbar-title--center" data-appbar-title>{{ _title }}</div>
+        {%- else %}
+        <div class="appbar-title" data-appbar-title>{{ _title }}</div>
+        {%- endif %}
+        <div class="appbar-actions">
+          {% block appbar_actions %}{% endblock %}
+          <button type="button" class="icon-btn" data-palette-open aria-label="搜索股票">{{ icon("search", "ico", 21) }}</button>
+        </div>
+      </header>
+
+      <main class="app-main" id="main">
+        {% block content %}{% endblock %}
+        <noscript>
+          <p class="notice notice-warn">
+            此页面的动态数据需要 JavaScript；当前未启用。页面框架与错误提示仍可阅读，
+            完整数据请启用 JavaScript 或使用 CLI / HTTP API。
+          </p>
+        </noscript>
+      </main>
+      <footer class="app-footer">
+        {% if active_nav == "agent" %}<p>{{ disclaimer }}；研究观点是基于所列来源与当时材料的分析，包含假设与不确定性。交易决定由你作出。</p>{% else %}<p>{{ disclaimer }}；所有结论以数据库中的确定性结果为准。</p>{% endif %}
+      </footer>
+    </div>
+  </div>
+
+  {%- if not _has_back %}
+  <nav class="tabbar" aria-label="底部导航">
+    <a href="/app"{% if active_nav == "overview" %} class="on" aria-current="page"{% endif %}>{{ icon("overview", "ico", 24) }}<span>今日</span></a>
+    <a href="/app/candidates"{% if active_nav in ["candidates", "watchlist", "portfolio"] %} class="on" aria-current="page"{% endif %}>{{ icon("candidates", "ico", 24) }}<span>漏斗</span><em class="tab-badge" data-tab-badge="funnel" hidden></em></a>
+    <a href="/app/agent"{% if active_nav == "agent" %} class="on" aria-current="page"{% endif %}>{{ icon("agent", "ico", 24) }}<span>AI</span></a>
+    <button type="button" class="nav-toggle{% if active_nav not in ["overview", "candidates", "watchlist", "portfolio", "agent"] %} on{% endif %}" aria-haspopup="dialog" aria-expanded="false" aria-controls="more-sheet" data-overlay-open="more-sheet">{{ icon("more", "ico", 24) }}<span>更多</span><em class="tab-dot" data-nav-dot="health" hidden></em></button>
+  </nav>
+  {%- endif %}
+
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+  <aside class="sheet more-sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="更多">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="more-grid">
+      {{ more_link("runs", "/app/runs", "运行中心") }}
+      {{ more_link("health", "/app/health", "数据健康") }}
+      {{ more_link("templates", "/app/templates", "模板") }}
+      {{ more_link("methods", "/app/methods", "研究方法") }}
+      {{ more_link("settings", "/app/settings", "设置") }}
+      <button type="button" class="more-item" data-theme-toggle>{{ icon("moon", "ico ico-moon", 22) }}{{ icon("sun", "ico ico-sun", 22) }}<span>外观</span></button>
+    </div>
+    <div class="list-group more-foot">
+      <a class="list-row" href="/app/health" data-shell-status-row hidden><span class="list-row-icon warn">{{ icon("alert") }}</span><span class="list-row-main"><b data-shell-status-title></b><small data-shell-status-sub></small></span>{{ icon("chev", "ico list-row-chev", 18) }}</a>
+      <form method="post" action="/app/logout" class="logout-form"><button type="submit" class="list-row list-row-button danger"><span class="list-row-icon">{{ icon("logout") }}</span><span class="list-row-main"><b>退出登录</b></span></button></form>
+    </div>
+    <p class="more-disclaimer">{{ disclaimer }}：研究观点基于所列来源与当时材料，包含假设与不确定性；交易决定由你作出。</p>
+  </aside>
+
+  <div class="palette" id="palette" role="dialog" aria-modal="true" aria-label="搜索">
+    <div class="palette-in">
+      {{ icon("search", "ico", 18) }}
+      <input id="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list" aria-autocomplete="list" placeholder="搜索股票、代码或简拼" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" data-autofocus>
+      <kbd class="palette-esc">Esc</kbd>
+      <button type="button" class="btn btn-ghost palette-cancel" data-overlay-close>取消</button>
+    </div>
+    <div class="palette-res" id="palette-list" role="listbox" aria-label="搜索结果">
+      <div id="palette-stock-group" hidden>
+        <div class="palette-grp">股票</div>
+        <div id="palette-stocks"></div>
       </div>
-      <div class="nav-group">
-        <span class="nav-label">系统</span>
-        {{ nav_link("runs", "/app/runs", "运行中心") }}
-        {{ nav_link("health", "/app/health", "数据健康") }}
-        {{ nav_link("methods", "/app/methods", "研究方法") }}
-        {{ nav_link("settings", "/app/settings", "设置") }}
+      <p class="palette-note" id="palette-note" hidden></p>
+      <div id="palette-pages">
+      <div class="palette-grp">页面</div>
+      <a class="palette-item" role="option" href="/app" data-palette-page data-k="今日概览 jrgl gzt overview home">{{ icon("overview", "ico", 16) }}<span>今日概览</span></a>
+      <a class="palette-item" role="option" href="/app/agent" data-palette-page data-k="ai 对话 duihua agent">{{ icon("agent", "ico", 16) }}<span>AI</span></a>
+      <a class="palette-item" role="option" href="/app/candidates" data-palette-page data-k="候选池 hxc candidates">{{ icon("candidates", "ico", 16) }}<span>候选池</span></a>
+      <a class="palette-item" role="option" href="/app/watchlist" data-palette-page data-k="观察池 gcc watchlist 自选">{{ icon("watchlist", "ico", 16) }}<span>观察池</span></a>
+      <a class="palette-item" role="option" href="/app/portfolio" data-palette-page data-k="持仓池 ccc portfolio">{{ icon("portfolio", "ico", 16) }}<span>持仓池</span></a>
+      <a class="palette-item" role="option" href="/app/templates" data-palette-page data-k="模板 mb templates 规则模板">{{ icon("templates", "ico", 16) }}<span>模板</span></a>
+      <a class="palette-item" role="option" href="/app/methods" data-palette-page data-k="研究方法 yjff methods">{{ icon("methods", "ico", 16) }}<span>研究方法</span></a>
+      <a class="palette-item" role="option" href="/app/runs" data-palette-page data-k="运行中心 yxzx runs">{{ icon("runs", "ico", 16) }}<span>运行中心</span></a>
+      <a class="palette-item" role="option" href="/app/health" data-palette-page data-k="数据健康 sjjk health">{{ icon("health", "ico", 16) }}<span>数据健康</span></a>
+      <a class="palette-item" role="option" href="/app/settings" data-palette-page data-k="设置 sz settings">{{ icon("settings", "ico", 16) }}<span>设置</span></a>
       </div>
-      <form method="post" action="/app/logout" class="logout-form">
-        <button type="submit" class="link-button">{{ icon("logout") }}<span>退出</span></button>
-      </form>
-    </nav>
-  </header>
-  <main class="app-main">
-    {% block content %}{% endblock %}
-    <noscript>
-      <p class="notice notice-warn">
-        此页面的动态数据需要 JavaScript；当前未启用。页面框架与错误提示仍可阅读，
-        完整数据请启用 JavaScript 或使用 CLI / HTTP API。
-      </p>
-    </noscript>
-  </main>
-  <footer class="app-footer">
-    {% if active_nav == "agent" %}<p>{{ disclaimer }}；研究观点是基于所列来源与当时材料的分析，包含假设与不确定性。交易决定由你作出。</p>{% else %}<p>{{ disclaimer }}；所有结论以数据库中的确定性结果为准。</p>{% endif %}
-  </footer>
+    </div>
+    <div class="palette-foot"><span>↑↓ 选择</span><span>↵ 打开</span><span>Esc 关闭</span></div>
+  </div>
+
   <script type="module" src="/app/static/app.js"></script>
+  <script type="module" src="/app/static/shell.js"></script>
+{% endblock %}
 </body>
 </html>

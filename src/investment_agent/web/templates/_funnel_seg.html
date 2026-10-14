@@ -1,0 +1,8 @@
+{#- Funnel stage switcher (候选 / 观察 / 持仓) for mobile. Include at the top of the candidates, watchlist
+    and portfolio pages:  {% include "_funnel_seg.html" %}
+    The current stage comes from `active_nav`; the control is hidden on desktop (the sidebar has the funnel). -#}
+<nav class="seg seg--block funnel-seg only-mobile" aria-label="漏斗阶段">
+  <a href="/app/candidates"{% if active_nav == "candidates" %} class="on" aria-current="page"{% endif %}>候选<span class="c" data-nav-count="candidates" hidden></span></a>
+  <a href="/app/watchlist"{% if active_nav == "watchlist" %} class="on" aria-current="page"{% endif %}>观察</a>
+  <a href="/app/portfolio"{% if active_nav == "portfolio" %} class="on" aria-current="page"{% endif %}>持仓</a>
+</nav>
