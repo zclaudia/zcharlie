@@ -24,7 +24,7 @@ import {
   zoneEventLine,
   zonesBlock,
 } from "./rule_review.js";
-import { fillSparklines, svg } from "./ui.js";
+import { fillSparklines, thinBar } from "./ui.js";
 
 export const WATCHLIST_REGIONS = new Set(["watchlist-list"]);
 
@@ -162,14 +162,6 @@ function freshnessCell(latest) {
   return cell;
 }
 
-function scoreBar(value) {
-  const width = Math.max(0, Math.min(100, value));
-  const root = svg("svg", { class: "wl-bar", viewBox: "0 0 100 4", preserveAspectRatio: "none", "aria-hidden": "true" });
-  root.appendChild(svg("rect", { class: "wl-bar-track", width: 100, height: 4, rx: 2 }));
-  root.appendChild(svg("rect", { class: "wl-bar-fill", width: width.toFixed(1), height: 4, rx: 2 }));
-  return root;
-}
-
 function ruleButton(text, onClick) {
   const button = el("button", { type: "button", class: "link-button" }, text);
   button.addEventListener("click", onClick);
@@ -302,9 +294,9 @@ function watchlistRow(region, item, dropUp) {
 
   const score = el("td", { class: "score-cell" });
   if (hasScore(item)) {
-    const box = el("div", { class: "scorecell" });
+    const box = el("div", { class: "score-inline" });
     box.appendChild(el("b", { class: "num" }, fmtNumber(latest.investment_score, 1)));
-    box.appendChild(scoreBar(latest.investment_score));
+    box.appendChild(thinBar(latest.investment_score));
     score.appendChild(box);
   } else {
     score.appendChild(el("span", { class: "faint" }, "未研究"));
@@ -380,7 +372,7 @@ function mobileRow(region, item) {
   const score = el("div", { class: "wl-score" });
   if (hasScore(item)) {
     score.appendChild(el("b", { class: "num" }, fmtNumber(item.latest_research.investment_score, 1)));
-    score.appendChild(scoreBar(item.latest_research.investment_score));
+    score.appendChild(thinBar(item.latest_research.investment_score));
   } else {
     score.appendChild(el("small", {}, "未研究"));
   }

@@ -96,6 +96,27 @@ export function bar(value, max = 100) {
   return root;
 }
 
+// 名称 + 代码两行的股票标识（概览 / 运行中心共用）；有链接时整块可点。样式 = app.css .stock-ident。
+export function stockIdent(name, ticker, { link = true } = {}) {
+  const linked = link && ticker;
+  const node = el(linked ? "a" : "span", {
+    class: "stock-ident",
+    href: linked ? `/app/stocks/${encodeURIComponent(ticker)}` : undefined,
+  });
+  node.appendChild(el("span", { class: "stock-name" }, name || ticker || "—"));
+  if (name && ticker) node.appendChild(el("span", { class: "stock-code" }, ticker));
+  return node;
+}
+
+// 细分数条（0–100，SVG 百分比坐标）：概览 / 观察池 / 股票页分项评分共用，样式 = app.css .tbar。
+export function thinBar(value, { height = 4, weak = false } = {}) {
+  const root = svg("svg", { class: "tbar", viewBox: `0 0 100 ${height}`, preserveAspectRatio: "none", "aria-hidden": "true" });
+  root.appendChild(svg("rect", { class: "tr", x: 0, y: 0, width: 100, height, rx: height / 2 }));
+  const width = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+  if (width > 0) root.appendChild(svg("rect", { class: weak ? "fl weak" : "fl", x: 0, y: 0, width, height, rx: height / 2 }));
+  return root;
+}
+
 // 圆环（如投资分 / 100）。
 export function ring(value, max = 100, { caption = "" } = {}) {
   const box = el("div", { class: "score-ring" });

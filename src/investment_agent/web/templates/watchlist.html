@@ -10,7 +10,7 @@
 <header class="page-head">
   <h1>观察池</h1>
   <p class="muted">长期跟踪的标的：规则起草与审批、最新评分、数据新鲜度与变化。</p>
-  <div class="page-actions wp-desk">
+  <div class="page-actions only-desktop">
     <button type="button" class="btn btn-sm" data-overlay-open="watchlist-add-drawer" aria-controls="watchlist-add-drawer" aria-expanded="false">{{ icon("plus", "ico", 14) }}添加</button>
     <button id="watchlist-refresh-all" type="button" class="btn btn-sm"
             data-endpoint="/watchlist/refresh">刷新全部</button>
@@ -18,7 +18,7 @@
 </header>
 
 <div id="watchlist-filters" class="wl-filters">
-  <div class="toolbar wp-desk">
+  <div class="toolbar only-desktop">
     <div class="seg" role="group" aria-label="筛选观察池">
       <button type="button" class="on" aria-pressed="true" data-watch-filter="all">全部 <span class="c" data-filter-count="all"></span></button>
       <button type="button" aria-pressed="false" data-watch-filter="changed">有变化 <span class="c" data-filter-count="changed"></span></button>
@@ -28,7 +28,7 @@
     <input type="search" id="watchlist-filter-text" class="wl-search" placeholder="筛选股票" aria-label="按名称、代码或行业筛选" autocomplete="off">
     <span id="watchlist-count" class="faint wl-count" aria-live="polite"></span>
   </div>
-  <div class="chip-scroll wp-mob" role="group" aria-label="筛选观察池">
+  <div class="chip-scroll only-mobile" role="group" aria-label="筛选观察池">
     <button type="button" class="filter-chip on" aria-pressed="true" data-watch-filter="all">全部 <span class="c" data-filter-count="all"></span></button>
     <button type="button" class="filter-chip" aria-pressed="false" data-watch-filter="changed">有变化 <span class="c" data-filter-count="changed"></span></button>
     <button type="button" class="filter-chip" aria-pressed="false" data-watch-filter="pending">待研究 <span class="c" data-filter-count="pending"></span></button>
@@ -46,7 +46,7 @@
 </section>
 
 <aside class="drawer" id="watchlist-add-drawer" role="dialog" aria-modal="true" aria-labelledby="watchlist-add-title">
-  <form id="watchlist-add-form" class="wl-add-form" data-endpoint="/watchlist" method="post">
+  <form id="watchlist-add-form" class="drawer-form wl-add-form" data-endpoint="/watchlist" method="post">
     <div class="drawer-head">
       <div><h2 id="watchlist-add-title">添加到观察池</h2><div class="sub">跟踪一只 A 股：自动带出行业与年报年度，并起草规则</div></div>
       <span class="spacer"></span>

@@ -208,10 +208,10 @@ function facts(pairs) {
 }
 
 function stat(labelText, value, { foot, kind = "" } = {}) {
-  const node = el("div", { class: `health-stat ${kind}`.trim() });
-  node.appendChild(el("div", { class: "health-stat-label" }, labelText));
-  node.appendChild(putValue(el("div", { class: "health-stat-value num" }), value));
-  if (foot) node.appendChild(el("div", { class: "health-stat-foot" }, foot));
+  const node = el("div", { class: `stat ${kind}`.trim() });
+  node.appendChild(el("div", { class: "stat-label" }, labelText));
+  node.appendChild(putValue(el("div", { class: "stat-value num" }), value));
+  if (foot) node.appendChild(el("div", { class: "stat-foot" }, foot));
   return node;
 }
 
@@ -266,16 +266,16 @@ function splitAlert(message) {
 
 function alertRow(warning) {
   const isAlert = ["error", "warn"].includes(warning.level);
-  const row = el("li", { class: `health-alert health-alert-${warning.level}` });
+  const row = el("li", { class: `attn-row health-alert-${warning.level}` });
   const icon = el("span", { class: `list-row-icon${isAlert ? " warn" : ""}`, "aria-hidden": "true" });
   const glyph = iconNode(isAlert ? "alert" : "info");
   if (glyph) icon.appendChild(glyph);
   row.appendChild(icon);
-  const main = el("div", { class: "health-alert-main" });
+  const main = el("div", { class: "attn-main" });
   const [heading, detail] = splitAlert(warning.message);
-  main.appendChild(el("b", {}, isAlert ? heading : `${label(LEVEL_LABELS, "info")}：${heading}`));
+  main.appendChild(el("b", { class: "attn-title" }, isAlert ? heading : `${label(LEVEL_LABELS, "info")}：${heading}`));
   if (detail) {
-    const detailNode = el("small", { class: "health-alert-detail", title: "点击展开 / 收起", tabindex: "0" }, detail);
+    const detailNode = el("small", { class: "attn-detail", title: "点击展开 / 收起", tabindex: "0" }, detail);
     const toggle = () => detailNode.classList.toggle("is-open");
     detailNode.addEventListener("click", toggle);
     detailNode.addEventListener("keydown", (event) => {
@@ -289,7 +289,7 @@ function alertRow(warning) {
   row.appendChild(main);
   const known = warning.section && SECTION_LABELS[warning.section];
   if (known) {
-    const link = el("a", { class: "btn btn-sm health-alert-link", href: `#health-${warning.section}`, "aria-label": `查看${SECTION_LABELS[warning.section]}` }, "查看");
+    const link = el("a", { class: "btn btn-sm attn-act", href: `#health-${warning.section}`, "aria-label": `查看${SECTION_LABELS[warning.section]}` }, "查看");
     row.appendChild(link);
   }
   return row;
@@ -303,7 +303,7 @@ function renderWarnings(warnings) {
   }
   const rank = (level) => (level === "error" ? 0 : level === "warn" ? 1 : 2);
   const sorted = [...warnings].sort((a, b) => rank(a.level) - rank(b.level));
-  const list = el("ul", { class: "health-alerts" });
+  const list = el("ul", { class: "attn-list" });
   const nodes = sorted.map((warning, index) => {
     const row = alertRow(warning);
     if (index >= ALERT_VISIBLE) row.hidden = true;
@@ -591,7 +591,7 @@ function collectionListRow(item, threshold) {
   const head = el(detail ? "summary" : "div", { class: "list-row" });
   const run = item.last_run;
   const bad = runIsBad(item);
-  head.appendChild(el("span", { class: `health-dot${bad ? " warn" : run ? "" : " idle"}`, "aria-hidden": "true" }));
+  head.appendChild(el("span", { class: `sdot${bad ? " warn" : run ? "" : " mute"}`, "aria-hidden": "true" }));
   const main = el("div", { class: "list-row-main" });
   main.appendChild(el("b", {}, collectionName(item)));
   const stamp = run ? `${collectionSource(item)} · #${run.run_id} · ${localTime(run.finished_at).slice(5, 10)}` : `${collectionSource(item)} · 未运行`;

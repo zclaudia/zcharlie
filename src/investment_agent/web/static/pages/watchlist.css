@@ -2,10 +2,6 @@
    Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css.
    桌面：表格 + ⋯ 行菜单；移动端（< 56rem）：两行列表 + 底部操作表（见 watchlist.js）。 */
 
-/* 只在某一端出现的区块（不能用 .only-desktop：它会把 flex/grid 容器改成 inline） */
-@media (max-width: 56rem) { .wp-desk { display: none !important; } }
-@media (min-width: 56.01rem) { .wp-mob { display: none !important; } }
-
 .funnel-seg { margin-bottom: var(--sp-3); }
 
 /* ---- 筛选 -------------------------------------------------------------------- */
@@ -23,14 +19,18 @@
 .watch-table th:last-child { width: 44px; font-size: 0; }
 .watch-table th:nth-child(5) { text-align: right; }
 .watch-table td { vertical-align: middle; }
+/* 表格约 960px 宽；卡片要 overflow: visible 才能放 ⋯ 菜单，所以窄桌面直接收掉次要列：
+   < 80rem 去掉 置信度 / 刷新，< 66rem 再去掉 近 120 日 / 最近变化 */
+@media (min-width: 56.01rem) and (max-width: 80rem) {
+  .watch-table :is(th, td):nth-child(5), .watch-table :is(th, td):nth-child(9) { display: none; }
+  .watch-table :is(th, td) { padding-left: 8px; padding-right: 8px; }
+}
+@media (min-width: 56.01rem) and (max-width: 70rem) {
+  .watch-table :is(th, td):nth-child(2), .watch-table :is(th, td):nth-child(7) { display: none; }
+}
 .watch-table .spark-cell { width: 8rem; min-width: 7.5rem; }
 .spark-cell .spark { display: block; }
 .score-cell { min-width: 7.5rem; }
-.scorecell { display: flex; align-items: center; gap: 8px; }
-.scorecell b { min-width: 2.4rem; font-weight: 600; font-size: var(--fs-md); }
-.wl-bar { display: block; flex: none; width: 4.5rem; height: 4px; }
-.wl-bar-track { fill: var(--line); }
-.wl-bar-fill { fill: var(--accent); }
 .watch-table .cell-sub .badge, .watch-table td .badge + .cell-sub { margin-top: 2px; }
 .watch-table td > .badge { margin: 0; }
 .watch-table td > .badge + .badge, .watch-table td > .cell-sub + .badge { margin-top: 3px; }
@@ -54,7 +54,6 @@
   background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-md); box-shadow: var(--sh-pop);
 }
 .row-menu.up { top: auto; bottom: calc(100% + 4px); }
-.row-menu[hidden] { display: none; }
 .row-menu .menu-item {
   display: flex; width: 100%; justify-content: flex-start; padding: 7px 10px;
   border: 0; border-radius: var(--r-xs); background: transparent; box-shadow: none;
@@ -67,7 +66,6 @@
 
 /* ---- 添加抽屉 ---------------------------------------------------------------- */
 
-.wl-add-form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .wl-add-form .drawer-body { display: flex; flex-direction: column; gap: var(--sp-3); }
 .wl-add-form .drawer-body .field { margin: 0; }
 .wl-add-form .combo { flex: none; }
@@ -87,7 +85,6 @@
 /* ---- 移动端列表（< 56rem） ---------------------------------------------------- */
 
 @media (max-width: 56rem) {
-  .page-head > p { display: none; }
   .wl-card { border: 0; background: none; box-shadow: none; border-radius: 0; }
   .wl-card > .data-region > .notice { margin: var(--sp-2) 0; }
   .wl-list { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
@@ -106,7 +103,7 @@
   .wl-score { text-align: right; }
   .wl-score b { display: block; font-size: 17px; font-weight: 650; line-height: 1.25; }
   .wl-score small { color: var(--ink-3); font-size: 11px; }
-  .wl-score .wl-bar { width: 100%; height: 3px; margin-top: 3px; }
+  .wl-score .tbar { width: 100%; height: 3px; margin-top: 3px; }
   .wl-more { width: 34px; height: 40px; font-size: 20px; color: var(--ink-3); }
   .wl-row.row-disabled .wl-main b { color: var(--ink-3); }
   .wl-row.row-disabled .wl-spark { opacity: 0.5; }

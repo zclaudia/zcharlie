@@ -47,8 +47,8 @@
 .method-step-body .field { margin: 0 0 var(--sp-3); }
 .method-checks { display: grid; gap: var(--sp-2); }
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+@media (max-width: 56rem) { .check-row { min-height: 36px; } .check-row input { width: 18px; height: 18px; } }
 .check-row input { flex: none; margin: 0; }
-.btn-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .method-none { margin: 0; padding: 8px 0; text-align: center; }
 
 /* 提案 / 版本记录卡片（步骤 3 与右侧记录卡共用） */
@@ -71,7 +71,6 @@
 .method-records-body { padding: 14px 16px 16px; }
 .method-records .hint { margin: 0 0 var(--sp-3); color: var(--ink-3); font-size: 12px; }
 .method-empty { padding: 24px 8px; }
-.method-empty[hidden] { display: none; }
 .method-callout { margin-top: var(--sp-4); }
 
 @media (min-width: 56rem) {

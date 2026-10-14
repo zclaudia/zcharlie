@@ -31,6 +31,7 @@
 .tpl-stats { display: flex; align-items: baseline; gap: var(--sp-1) var(--sp-3); margin-top: auto; padding-top: var(--sp-1); font-size: var(--fs-sm); color: var(--ink-3); min-width: 0; }
 .tpl-stat b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tpl-stat-groups { display: none; }
+.tpl-opt { margin-left: 0.25em; }
 .tpl-stat { flex: none; white-space: nowrap; }
 
 @media (max-width: 56rem) {
@@ -40,15 +41,13 @@
   .tpl-ver { display: inline; }
   .tpl-stat-groups { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tpl-notice-long { display: none; }
-  .page-head > p { display: none; }
   .tpl-opt { display: none; }
   #templates-notice .tpl-notice-counts { margin: 0; }
 }
 
 /* ---- 详情页 ------------------------------------------------------------------- */
 
-.tpl-back { margin-bottom: var(--sp-1); }
-.tpl-d-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.tpl-d-grid { display: grid; gap: var(--sp-4); grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 .tpl-d-grid > .card { margin: 0; }
 .tpl-wide { grid-column: 1 / -1; }
 .tpl-card-title { margin-bottom: var(--sp-2); }
@@ -84,9 +83,8 @@
 tr.is-current td { background: var(--accent-soft); }
 
 @media (max-width: 56rem) {
-  .tpl-d-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .tpl-d-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
   .tpl-d-grid > .card { padding: var(--sp-3); }
-  .tpl-back { display: none; }
   .tpl-d-head h1 { display: none; }
   .tpl-d-head { margin: 0; }
   .tpl-card-title .faint { flex-basis: 100%; margin-left: 0; text-align: left; }

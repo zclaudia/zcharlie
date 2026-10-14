@@ -1,16 +1,6 @@
 /* pages/runs.css — 运行中心
    Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
 
-.sdot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.sdot.mute { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
-.sdot.warn { background: var(--warn); }
-
-.stk { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; color: var(--ink); }
-.stk b { font-weight: 600; color: var(--ink); }
-.stk span { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-3); }
-a.stk:hover { text-decoration: none; }
-a.stk:hover b { color: var(--accent); }
-
 .runs-kpis { margin-bottom: 0; }
 .runs-card { margin-bottom: 0; }
 .runs-filter { flex-wrap: wrap; }
@@ -25,7 +15,6 @@ a.stk:hover b { color: var(--accent); }
 .runs-table tr.is-open .run-toggle .ico { transform: rotate(90deg); }
 .run-err { display: block; max-width: 24rem; margin-top: 2px; overflow: hidden; color: var(--warn); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
 .runs-table tr.run-exp-row > td, .runs-table tr.run-exp-row:hover > td { padding: 14px 16px 18px; background: var(--surface-2); }
-.runs-table tr.run-exp-row[hidden] { display: none; }
 .runs-table tr.is-open > td { background: var(--surface-2); }
 
 .run-detail { max-width: 60rem; }
@@ -68,7 +57,6 @@ a.stk:hover b { color: var(--accent); }
 .run-detail-loading { margin: 8px 0 0; font-size: 12.5px; }
 
 @media (max-width: 56rem) {
-  .page-head > .only-desktop-flex, .page-head > p { display: none; }
   .runs-desktop { display: none; }
   .runs-mobile { display: block; border: 0; border-radius: 0; background: transparent; }
   .runs-kpis { margin-bottom: 0; }

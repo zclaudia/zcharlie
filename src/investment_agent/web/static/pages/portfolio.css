@@ -6,9 +6,12 @@
 
 .pf-actions select { width: auto; min-width: 9.5rem; max-width: 16rem; padding-top: 3px; padding-bottom: 3px; font-size: 12.5px; }
 .pf-actions .btn svg { margin-right: -2px; }
+/* 没有账户时，视图里唯一的主按钮是空状态里的「新建账户」 */
+.page-head:has(~ #portfolio-empty:not([hidden])) .pf-actions .btn-primary {
+  background: var(--surface); border-color: var(--line-2); color: var(--ink); box-shadow: var(--sh-1);
+}
 .pf-metaline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-2); }
 .pf-metaline + .kpis { margin-top: var(--sp-2); }
-.kpis[hidden], #portfolio-ledger[hidden], #portfolio-empty[hidden] { display: none; }
 .kpi-value.up { color: var(--up); }
 .kpi-value.down { color: var(--down); }
 
@@ -65,21 +68,16 @@
 
 /* ---- 抽屉：录入事实 / 纠错 / 新建账户 ------------------------------------------ */
 
-.pf-drawer .pf-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.pf-drawer .pf-pane[hidden] { display: none; }
 .pf-tabs { flex: none; padding: 0 var(--sp-4); }
 .pf-status > .data-region:not(:empty) { margin: var(--sp-3) var(--sp-4) 0; }
 .pf-status > .data-region .notice { margin: 0; }
 .pf-status > button { margin: var(--sp-2) var(--sp-4) 0; }
-.pf-status > [hidden] { display: none; }
 .pf-status > details { margin: var(--sp-2) var(--sp-4) 0; }
-.pf-status > details[hidden] { display: none; }
 .pf-status pre { max-height: 10rem; overflow: auto; font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
 .pf-selected { margin: 0 0 var(--sp-3); color: var(--ink-2); font-weight: 500; }
 
 /* 事实类型：芯片是界面，隐藏的 <select name="kind"> 仍是数据来源（见 portfolio.js wireKindChips） */
 .pf-kinds { flex-wrap: wrap; overflow: visible; margin: 0 0 var(--sp-3); padding: 0; }
-.pf-kind-field { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin: 0 0 var(--sp-3); }
 .field-grid .field { margin: 0; }

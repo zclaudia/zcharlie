@@ -41,7 +41,7 @@ import {
   pathLabel,
   scoreFactorLabel,
 } from "./research_format.js";
-import { aiStamp, ring, svg } from "./ui.js";
+import { aiStamp, ring, stockIdent, svg, thinBar } from "./ui.js";
 import { bootAgent } from "./agent.js";
 import { bootAgentPortfolio } from "./agent_portfolio.js";
 import { bootFinancials } from "./financials.js";
@@ -93,26 +93,6 @@ function icon(name, size = 16) {
 function shortStamp(value) {
   const text = formatDateTime(value);
   return text === "—" ? "—" : text.slice(5);
-}
-
-// 名称 + 代码两行的股票标识；有链接时整块可点。
-function stockIdent(name, ticker, { link = true } = {}) {
-  const linked = link && ticker;
-  const node = el(linked ? "a" : "span", {
-    class: "stk",
-    href: linked ? `/app/stocks/${encodeURIComponent(ticker)}` : undefined,
-  });
-  node.appendChild(el("b", {}, name || ticker || "—"));
-  if (name && ticker) node.appendChild(el("span", {}, ticker));
-  return node;
-}
-
-function thinBar(value, { height = 4, weak = false } = {}) {
-  const root = svg("svg", { class: "tbar", viewBox: `0 0 100 ${height}`, preserveAspectRatio: "none", "aria-hidden": "true" });
-  root.appendChild(svg("rect", { class: "tr", x: 0, y: 0, width: 100, height, rx: height / 2 }));
-  const width = typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
-  if (width > 0) root.appendChild(svg("rect", { class: weak ? "fl weak" : "fl", x: 0, y: 0, width, height, rx: height / 2 }));
-  return root;
 }
 
 // 只放不含交易含义的研究优先级文案（与后端 SUGGESTION_LABELS 对应）。
@@ -227,16 +207,16 @@ function overviewAlertRows(data) {
 
 function alertRowNode(row) {
   const tone = row.level === "ai" ? "ai" : row.level === "error" ? "error" : "warn";
-  const li = el("li", { class: `ov-alert ov-alert-${tone}` });
+  const li = el("li", { class: `attn-row ov-alert-${tone}` });
   const ico = el("span", { class: `list-row-icon ${tone === "ai" ? "ai" : "warn"}`, "aria-hidden": "true" });
   ico.appendChild(icon(row.icon, 16));
   li.appendChild(ico);
-  const body = el("div", { class: "ov-alert-body" });
-  body.appendChild(el("div", { class: "ov-alert-title" }, row.title));
-  if (row.detail) body.appendChild(el("div", { class: "ov-alert-detail", title: row.detail }, row.detail));
+  const body = el("div", { class: "attn-main" });
+  body.appendChild(el("div", { class: "attn-title" }, row.title));
+  if (row.detail) body.appendChild(el("div", { class: "attn-detail", title: row.detail }, row.detail));
   li.appendChild(body);
   if (row.href) {
-    const act = el("a", { class: `btn btn-sm ov-alert-act${row.primary ? " btn-primary" : ""}`, href: row.href });
+    const act = el("a", { class: `btn btn-sm attn-act ov-alert-act${row.primary ? " btn-primary" : ""}`, href: row.href });
     act.appendChild(el("span", { class: "ov-act-text" }, row.action));
     const chev = icon("chev", 16);
     chev.classList.add("ov-act-chev");
@@ -263,7 +243,7 @@ function alertsCard(rows, data) {
   card.appendChild(head);
 
   const visible = isCompactViewport() ? ALERTS_VISIBLE_COMPACT : ALERTS_VISIBLE;
-  const list = el("ul", { class: "ov-alert-list" });
+  const list = el("ul", { class: "attn-list" });
   const nodes = rows.map((row, index) => {
     const node = alertRowNode(row);
     if (index >= visible) node.hidden = true;
@@ -456,7 +436,7 @@ function conclusionsCard(runs, strategies) {
     tr.appendChild(nameCell);
     tr.appendChild(el("td", {}, strategyOf(run)));
     const scoreCell = el("td");
-    const score = el("div", { class: "ov-score" });
+    const score = el("div", { class: "score-inline" });
     score.appendChild(el("b", { class: "num" }, fmtNumber(run.business_score, 1)));
     score.appendChild(thinBar(run.business_score));
     scoreCell.appendChild(score);

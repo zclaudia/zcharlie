@@ -3,7 +3,6 @@
 
 /* ---- 候选池：提示条 / 工具栏 ------------------------------------------------- */
 
-#candidates-calibration[hidden] { display: none; }
 .cand-callout-text { flex: 1; min-width: 0; }
 .cand-callout-text .badge { margin: 0 4px; }
 .cand-callout-short { display: none; }
@@ -11,10 +10,6 @@
 
 .cand-toolbar { margin: var(--sp-3) 0; gap: var(--sp-2); }
 .cand-status-chips { display: none; }
-.cand-status-select {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
-  clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none;
-}
 .cand-selects { display: contents; }
 .cand-select { width: auto; min-width: 9.5rem; }
 .cand-callout-text b { font-weight: 600; }
@@ -70,7 +65,7 @@
 @media (max-width: 56rem) {
   .cand-callout-long { display: none; }
   .cand-callout-short { display: inline; }
-  .page-head > .page-actions, .page-head > p { display: none; }
+  .page-head > .page-actions { display: none; }
   .cand-toolbar { gap: 6px var(--sp-2); margin: var(--sp-2) 0; }
   .cand-status-seg { display: none; }
   .cand-status-chips { display: flex; flex: 0 0 100%; }
@@ -105,18 +100,15 @@
   .cand-meta, .cand-why, .cand-rets, .cand .cand-ver, .cand .cand-uncal { display: none; }
   .cand-badges { margin-top: 6px; gap: 4px; }
   .cand-nm { gap: 6px; }
-  .cand-title { font-size: 16px; }
+  .cand-title { display: inline-block; padding: 6px 0; margin: -6px 0; font-size: 16px; }
 }
 
-.drawer-form { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
 .cand-sheet-btns .btn { flex: 1; }
 .cand-sheet-sub { white-space: pre-line; }
 .sheet-head .sub { margin-top: 2px; }
 .sheet .issues { margin-top: var(--sp-2); }
 
 /* ---- 候选详情：头部 ----------------------------------------------------------- */
-
-.entity-head { display: flex; flex-wrap: wrap; gap: var(--sp-3) var(--sp-5); align-items: flex-start; justify-content: space-between; }
 
 .timeline-mini { min-width: 200px; flex: 0 1 280px; font-size: var(--fs-sm); }
 .timeline-mini svg { display: block; width: 100%; height: 6px; margin: 6px 0 4px; }
@@ -265,7 +257,6 @@ input[aria-invalid="true"] + .range-hint { color: var(--c-warn); }
 
 /* ---- 候选详情：页头 / 身份区 / 分区标签 ---------------------------------------- */
 
-.cand-back { margin: 0 0 var(--sp-1); }
 .cand-idcard { padding: 16px 18px; }
 .cand-idcard .notice { margin: var(--sp-3) 0 0; }
 .cand-idhead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-3) var(--sp-5); }
@@ -280,13 +271,8 @@ input[aria-invalid="true"] + .range-hint { color: var(--c-warn); }
 
 .cand-tabs { margin: 0 0 var(--sp-3); }
 .cand-panel { min-width: 0; }
-.cand-panel[hidden] { display: none; }
-.cand-panel > .card { margin-bottom: var(--sp-3); }
+.cand-panel > .card { margin-bottom: var(--sp-4); }
 .cand-chart-card .pc-head { flex-wrap: wrap; }
-.cand-chart-card .pc-tabs { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
-.cand-chart-card .pc-tabs::-webkit-scrollbar { display: none; }
-.cand-chart-card .pc-tab { flex: none; }
-@media (max-width: 40rem) { .cand-chart-card .pc-tab { padding: 2px 6px; } .cand-chart-card .pc-tabs { gap: 3px; } }
 
 .cand-summary { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
 .cand-summary:empty { display: none; }
@@ -308,7 +294,7 @@ input[aria-invalid="true"] + .range-hint { color: var(--c-warn); }
 .cand-actions-card .issues { margin-top: var(--sp-2); }
 
 @media (max-width: 56rem) {
-  .cand-back, .cand-d-head h1 { display: none; }
+  .cand-d-head h1 { display: none; }
   .cand-d-head { margin: 0; }
   .cand-d-head .page-actions { display: none; }
   .cand-idcard { padding: 14px; }
@@ -317,7 +303,7 @@ input[aria-invalid="true"] + .range-hint { color: var(--c-warn); }
   .cand-idhead .timeline-mini { flex: none; width: 100%; }
   .cand-summary { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
   .cand-sum-side { gap: var(--sp-2); }
-  .cand-panel > .card { margin-bottom: var(--sp-2); }
+  .cand-panel > .card { margin-bottom: var(--sp-3); }
   .cand-action-row { gap: var(--sp-2); }
   .cand-action-info { display: none; }
   .cand-action-btns { flex: 1; }

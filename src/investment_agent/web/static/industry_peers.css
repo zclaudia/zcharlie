@@ -117,7 +117,6 @@
 
 /* 引用面板（证据 / 计算记录详情）：页面底部的独立 aside。 */
 #peer-context-section .peer-evidence { margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
-#peer-context-section .peer-evidence[hidden] { display: none; }
 #peer-context-section .peer-evidence-panel .kv-list { margin-bottom: 0; }
 
 @media (min-width: 56.01rem) {

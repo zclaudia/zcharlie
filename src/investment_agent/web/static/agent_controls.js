@@ -468,6 +468,13 @@ export function bootAgentControls() {
   nav.append(button('启用与投资约定', () => load(setup)), button('档案控制', () => load(cases)),
     button('录入决定', () => load(decision)), button('记忆管理', () => load(memories)),
     button('操作提案', () => load(proposals)));
+  // The toolbar switches between views: keep the current one highlighted (aria-pressed styles it).
+  for (const node of nav.children) node.setAttribute('aria-pressed', 'false');
+  nav.addEventListener('click', ({target}) => {
+    const clicked = target.closest('button');
+    if (!clicked || !nav.contains(clicked)) return;
+    for (const node of nav.children) node.setAttribute('aria-pressed', String(node === clicked));
+  });
   // History messages do not choose an operation target. Only explicit current
   // bindings or the AG18 card/page chosen by the user may supply candidates.
   root.addEventListener('agent:binding', ({detail}) => {

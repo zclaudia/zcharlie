@@ -3,7 +3,6 @@
    桌面：KPI 条 → 提醒 + 交易日历（8/4）→ 采集任务表 → 两两并排的分区卡片。
    手机（< 56rem）：2×2 KPI → 提醒 → 采集任务列表 → “更多”：其余分区折叠成一行列表（<details>）。 */
 
-.health-section[hidden] { display: none; }
 .health-page { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
 .health-page .card { margin-bottom: 0; }
 .health-top, .health-pair { display: grid; gap: var(--sp-4); grid-template-columns: minmax(0, 1fr); min-width: 0; }
@@ -19,18 +18,6 @@ progress, meter { accent-color: var(--accent); }
 
 /* ---- 提醒 -------------------------------------------------------------------------------- */
 
-.health-alerts { list-style: none; margin: 0; padding: 0; }
-.health-alert { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
-.health-alert:first-child { border-top: 0; }
-.health-alert[hidden] { display: none; }
-.health-alert-main { flex: 1; min-width: 0; }
-.health-alert-main b { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.health-alert-detail {
-  display: block; margin-top: 2px; color: var(--ink-3); font-size: 12px; line-height: 1.45;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
-}
-.health-alert-detail.is-open { white-space: normal; overflow-wrap: anywhere; }
-.health-alert-link { flex: none; }
 .health-alerts-more { margin: 2px 12px 12px; }
 .health-ok { margin: 0; padding: 14px 16px; color: var(--ink-2); }
 .health-warnings .card-head .cluster { margin-left: auto; }
@@ -74,11 +61,6 @@ progress, meter { accent-color: var(--accent); }
 .health-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .health-facts { margin: 0; }
 .health-stats { display: grid; gap: var(--sp-3) var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
-.health-stat-label { font-size: 12.5px; color: var(--ink-3); }
-.health-stat-value { margin-top: 2px; font-size: 22px; font-weight: 600; line-height: 30px; letter-spacing: -0.02em; overflow-wrap: anywhere; }
-.health-stat-foot { font-size: 12px; color: var(--ink-3); }
-.health-stat.attention .health-stat-value { color: var(--warn); }
-.health-stat.zero .health-stat-value { color: var(--ink-3); }
 .health-acc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
 .health-acc-count { font-size: 28px; font-weight: 600; line-height: 34px; letter-spacing: -0.02em; }
 progress.accumulation-progress { width: 100%; height: 8px; }
@@ -119,7 +101,6 @@ meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--accent); 
 .health-cov b.below { color: var(--warn); }
 .health-cov-meter { flex: 1; width: auto; min-width: 3rem; height: 5px; }
 .health-detail-row > td { padding: 12px 16px 14px; background: var(--surface-2); white-space: normal; }
-.health-detail-row[hidden] { display: none; }
 tbody tr.health-detail-row:hover > td { background: var(--surface-2); }
 .health-coll-detail { display: grid; gap: var(--sp-2); }
 .health-coll-detail p { margin: 0; }
@@ -136,9 +117,6 @@ tbody tr.health-detail-row:hover > td { background: var(--surface-2); }
 .health-coll-m .health-chev { transition: transform 0.15s ease; }
 .health-coll-m[open] .health-chev { transform: rotate(90deg); }
 .health-coll-m-body { padding: 2px 14px 14px 34px; }
-.health-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.health-dot.warn { background: var(--warn); }
-.health-dot.idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
 .list-row-end.warn-text { color: var(--warn); }
 
 /* 状态 / 周状态 / 趋势单元 */
@@ -192,9 +170,9 @@ tbody tr.health-detail-row:hover > td { background: var(--surface-2); }
   .health-page > #health-collections { order: 2; }
   .health-fold { order: 3; }
   #health-collections .card-head { padding-top: 12px; }
-  .health-alert { padding: 10px 14px; }
-  .health-alert-link { min-height: 32px; }
+  .health-warnings .attn-row { padding: 10px 14px; }
   .health-row { grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr); }
   .health-fold-body { padding: 12px 14px 14px; }
+  .health-fold-body details > summary, .health-coll-detail details > summary, .health-coll-m-body details > summary { padding: 9px 0; margin: 0; }
   .health-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

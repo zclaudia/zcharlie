@@ -154,7 +154,6 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
 .ai-send svg { width: 18px; height: 18px; }
 .ai-hint { margin: 0; text-align: center; font-size: var(--fs-xs); line-height: 1.5; }
 .ai-pop { position: absolute; z-index: 20; bottom: 100%; max-height: min(32rem, 70dvh); overflow: auto; padding: 6px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface); box-shadow: var(--sh-pop); }
-.ai-pop[hidden] { display: none; }
 .ai-picker { left: max(var(--sp-5), calc((100% - 760px) / 2)); display: flex; flex-direction: column; gap: var(--sp-2); width: min(34rem, calc(100% - 3rem)); padding: var(--sp-3); }
 .ai-picker-form { display: flex; gap: var(--sp-2); }
 .ai-picker-form input { flex: 1 1 auto; min-width: 0; }
@@ -182,7 +181,6 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
 
 /* 页签页：组合 / 约定与记忆 */
 .ai-page { flex: 1; min-height: 0; overflow: auto; padding: var(--sp-5); background: var(--bg); }
-.ai-page[hidden], .ai-chat[hidden] { display: none; }
 .ai-page > * { width: 100%; max-width: 1120px; margin-inline: 0; }
 .ai-page-head { margin-bottom: var(--sp-4); }
 .ai-page-bar { display: flex; align-items: center; gap: var(--sp-1); }
@@ -391,6 +389,7 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
 /* 两个页签页的顶部：操作按钮行 + 状态行 */
 #agent-controls-extension > .toolbar, #agent-portfolio > .toolbar { gap: 6px; margin: 0 0 var(--sp-3); padding: 0; }
 #agent-controls-extension > .toolbar button, #agent-portfolio > .toolbar button { padding: 3px 12px; font-size: 12.5px; }
+#agent-controls-extension > .toolbar button[aria-pressed="true"] { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--accent-ink); }
 #agent-controls-extension > [role="status"], #agent-portfolio > [role="status"] { margin: 0 0 var(--sp-3); padding: 8px var(--sp-3); border-radius: var(--r-sm); background: var(--sunken); color: var(--ink-2); font-size: var(--fs-sm); line-height: 1.55; overflow-wrap: anywhere; }
 #agent-controls-extension > [role="status"]:empty, #agent-portfolio > [role="status"]:empty { display: none; }
 #agent-controls-extension > :is(button, a), #agent-portfolio > button { margin: 0 var(--sp-2) var(--sp-3) 0; }

@@ -98,7 +98,7 @@
     <details id="portfolio-pending-audit" hidden><summary>待确认请求详情</summary><pre></pre></details>
   </div>
 
-  <form id="portfolio-fact-form" class="portfolio-fact-form pf-pane" data-pf-pane="fact">
+  <form id="portfolio-fact-form" class="portfolio-fact-form pf-pane drawer-form" data-pf-pane="fact">
     <div class="drawer-body">
       <div class="pf-kinds chip-scroll" role="group" aria-label="事实类型">
         <button type="button" class="filter-chip on" aria-pressed="true" data-kind-chip="opening_balance">期初余额</button>
@@ -109,7 +109,7 @@
         <button type="button" class="filter-chip" aria-pressed="false" data-kind-chip="corporate_action">公司行动</button>
       </div>
       <div class="field-grid">
-        <div class="field field-wide pf-kind-field">
+        <div class="field field-wide visually-hidden">
           <label for="portfolio-fact-kind">类型</label>
           <select id="portfolio-fact-kind" name="kind" aria-label="事实类型" class="pf-kind-select" tabindex="-1">
             <option value="opening_balance">期初余额</option>
@@ -215,7 +215,7 @@
     </div>
   </form>
 
-  <div class="pf-pane" data-pf-pane="correction" hidden>
+  <div class="pf-pane drawer-form" data-pf-pane="correction" hidden>
     <div class="drawer-body">
       <p class="small faint">冲销与替代在同一事务提交；页面只显示最终状态，历史不被改写。先在时间线里勾选要冲销的事实。</p>
       <p id="portfolio-correction-selected" class="pf-selected small" aria-live="polite">未选择事实</p>
@@ -258,7 +258,7 @@
 </aside>
 
 <aside class="drawer pf-drawer" id="portfolio-account-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-account-title">
-  <form id="portfolio-create-form" class="pf-pane">
+  <form id="portfolio-create-form" class="pf-pane drawer-form">
     <div class="drawer-head">
       <div><h2 id="portfolio-account-title">新建账户</h2><div class="sub">之后录入期初余额，持仓由账本事实派生</div></div>
       <span class="spacer"></span>
