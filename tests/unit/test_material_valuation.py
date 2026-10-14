@@ -47,10 +47,11 @@ from investment_agent.materials.valuation import (
     ads_pe_gap,
     annual_pe,
 )
+from tests.support.purity import assert_no_io_imports, text_of_strings_and_docstrings
 
-VALUATION_SOURCE = (
+VALUATION_PATH = (
     Path(__file__).resolve().parents[2] / "src" / "investment_agent" / "materials" / "valuation.py"
-).read_text(encoding="utf-8")
+)
 
 
 # --- constructed inputs ---------------------------------------------------------
@@ -558,22 +559,31 @@ def test_unsupported_valuations_are_listed_and_free_of_the_banned_name() -> None
 
 
 def test_module_source_has_no_ttm_wording_and_is_pure() -> None:
-    assert "ttm" not in VALUATION_SOURCE.lower()
-    forbidden_imports = (
-        "import httpx",
-        "import requests",
-        "import aiohttp",
-        "import sqlalchemy",
-        "import socket",
-        "import urllib",
-        "import psycopg",
-        "import asyncpg",
-        "from sqlalchemy",
-        "from httpx",
-        "from requests",
+    """No trailing-twelve-month wording and no IO/network/database imports.
+
+    The guards are AST-based, not text-substring based, so they survive a
+    module split — a future refactor can move the discipline along with the
+    code and this test still follows it — and so a comment that merely
+    mentions a library is not a build failure: only a real import counts. The
+    wording guard reads string constants and docstrings, which is what the
+    module can actually emit to a user; a comment is not output.
+    """
+
+    emitted = text_of_strings_and_docstrings(VALUATION_PATH)
+    assert "ttm" not in emitted.lower()
+    assert_no_io_imports(
+        VALUATION_PATH,
+        forbidden=(
+            "httpx",
+            "requests",
+            "aiohttp",
+            "sqlalchemy",
+            "socket",
+            "urllib",
+            "psycopg",
+            "asyncpg",
+        ),
     )
-    for needle in forbidden_imports:
-        assert needle not in VALUATION_SOURCE, needle
     for word in ("买入", "卖出", "评分", "推荐", "建议"):
-        assert word not in VALUATION_SOURCE, word
-    assert "no network, no HTTP client" in VALUATION_SOURCE
+        assert word not in emitted, word
+    assert "no network, no HTTP client" in emitted

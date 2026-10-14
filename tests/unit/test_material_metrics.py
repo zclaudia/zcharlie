@@ -65,14 +65,15 @@ from investment_agent.materials.metrics import (
     compute_metrics,
     profile_from_identity,
 )
+from tests.support.purity import assert_no_io_imports, text_of_strings_and_docstrings
 
 FIXTURE_PATH = (
     Path(__file__).resolve().parents[1] / "fixtures" / "materials" / "metrics" / "pilots.json"
 )
 FIXTURE: dict[str, Any] = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-METRICS_SOURCE = (
+METRICS_PATH = (
     Path(__file__).resolve().parents[2] / "src" / "investment_agent" / "materials" / "metrics.py"
-).read_text(encoding="utf-8")
+)
 
 
 @dataclass(frozen=True)
@@ -833,24 +834,32 @@ def test_gaps_state_the_fixed_margin_holes_and_every_reason() -> None:
 
 
 def test_module_is_pure_and_free_of_advice_wording() -> None:
-    """No IO/network/database imports, no trading advice, no equity-FCF naming."""
+    """No IO/network/database imports, no trading advice, no equity-FCF naming.
 
-    forbidden_imports = (
-        "import httpx",
-        "import requests",
-        "import aiohttp",
-        "import sqlalchemy",
-        "import socket",
-        "import urllib",
-        "import psycopg",
-        "import asyncpg",
-        "from sqlalchemy",
-        "from httpx",
-        "from requests",
+    The guards are AST-based, not text-substring based, so they survive a
+    module split — a future refactor can move the discipline along with the
+    code and this test still follows it — and so a comment that merely
+    mentions a library (say, in a note about why one is not used) is not a
+    build failure: only a real import counts. The wording guard reads string
+    constants and docstrings, which is what the module can actually emit to a
+    user; a comment is not output.
+    """
+
+    assert_no_io_imports(
+        METRICS_PATH,
+        forbidden=(
+            "httpx",
+            "requests",
+            "aiohttp",
+            "sqlalchemy",
+            "socket",
+            "urllib",
+            "psycopg",
+            "asyncpg",
+        ),
     )
-    for needle in forbidden_imports:
-        assert needle not in METRICS_SOURCE, needle
+    emitted = text_of_strings_and_docstrings(METRICS_PATH)
     for word in ("买入", "卖出", "评分", "推荐", "建议"):
-        assert word not in METRICS_SOURCE, word
-    assert "FCFE" not in METRICS_SOURCE
-    assert "not an equity" in METRICS_SOURCE
+        assert word not in emitted, word
+    assert "FCFE" not in emitted
+    assert "not an equity" in emitted
