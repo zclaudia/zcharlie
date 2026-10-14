@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.evidence.contracts import EvidenceRecord, ToolResult
-from investment_agent.evidence.events import event_material
+from investment_agent.evidence.events import EventRow, event_material, event_model
 from investment_agent.evidence.snapshots import materialize
 from investment_agent.evidence.store import EvidenceService
 from investment_agent.factors.field_sources import beyond_tolerance, default_field_sources
@@ -21,11 +21,6 @@ from investment_agent.snapshots.jobs import (
     MARKET_SNAPSHOT,
     FinancialSnapshotPayload,
     MarketSnapshotPayload,
-)
-from investment_agent.storage.models.earnings_events import (
-    BusinessSegmentRecord,
-    DisclosureScheduleRecord,
-    EarningsForecastRecord,
 )
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
 from investment_agent.storage.models.reference import Company, Market
@@ -234,18 +229,11 @@ class SnapshotQueryService:
 
     async def get_event(self, ref: ObjectRef, as_of: datetime) -> ToolResult[EvidenceRecord]:
         as_of = utc_timestamp(as_of)
-        models = {
-            "earnings_forecast": EarningsForecastRecord,
-            "disclosure_schedule": DisclosureScheduleRecord,
-            "business_segment": BusinessSegmentRecord,
-        }
-        model = models.get(ref.kind)
+        model = event_model(ref.kind)
         if model is None or ref.revision != 1:
             raise InvestorError("invalid_reference", "A saved event reference is required")
         row = await self.session.get(model, ref.id)
-        if not isinstance(
-            row, EarningsForecastRecord | DisclosureScheduleRecord | BusinessSegmentRecord
-        ):
+        if not isinstance(row, EventRow):
             return ToolResult(
                 status="missing", data=None, refs=(), as_of=as_of, coverage="event absent"
             )

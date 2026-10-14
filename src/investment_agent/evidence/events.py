@@ -18,6 +18,21 @@ from investment_agent.storage.models.earnings_events import (
 
 EventRow = EarningsForecastRecord | DisclosureScheduleRecord | BusinessSegmentRecord
 
+EventModel = type[EventRow]
+"""The concrete row classes behind :data:`EventRow`, as values for ``session.get``."""
+
+EVENT_MODELS: dict[str, EventModel] = {
+    "earnings_forecast": EarningsForecastRecord,
+    "disclosure_schedule": DisclosureScheduleRecord,
+    "business_segment": BusinessSegmentRecord,
+}
+"""The single home of the saved-event object-kind -> row-model mapping."""
+
+
+def event_model(kind: str) -> EventModel | None:
+    """The saved-event row model for an object kind, or ``None`` when it is not one."""
+    return EVENT_MODELS.get(kind)
+
 
 def event_material(row: EventRow, field: str) -> EvidenceRecord:
     if row.provider != "akshare":
