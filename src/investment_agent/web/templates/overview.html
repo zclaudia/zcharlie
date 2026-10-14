@@ -1,9 +1,15 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/overview.css">{% endblock %}
+{% block appbar_actions %}<button type="button" class="icon-btn" id="overview-refresh-m" aria-label="刷新">{{ icon("refresh", "ico", 20) }}</button>{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>今日概览</h1>
-  <p class="muted">本周候选、数据健康，以及失败、部分成功、待复核与重要变化的研究运行。</p>
+  <p class="muted" id="overview-sub">本周候选、数据健康，以及失败、部分成功、待复核与重要变化的研究运行。</p>
+  <div class="page-actions">
+    <button type="button" class="btn btn-sm" id="overview-refresh">{{ icon("refresh", "ico", 14) }}刷新</button>
+    <a class="btn btn-sm btn-primary" href="/app/agent">{{ icon("agent", "ico", 14) }}问 AI</a>
+  </div>
 </header>
 <div id="dashboard-today" class="data-region"
      data-endpoint="/dashboard/today"

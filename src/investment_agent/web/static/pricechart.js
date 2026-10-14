@@ -26,8 +26,9 @@ function pct(value) {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
-export function mountPriceChart(host, ticker, load, { title = null } = {}) {
-  let days = DEFAULT_DAYS;
+// ranges：可选的区间按钮（默认全部）；onData({ bars, days })：每次画完（或数据不足）后回调，页头用它回填最新价。
+export function mountPriceChart(host, ticker, load, { title = null, ranges = PRICE_RANGES, onData = null } = {}) {
+  let days = ranges.some((range) => range.days === DEFAULT_DAYS) ? DEFAULT_DAYS : ranges[ranges.length - 1].days;
   let token = 0;
 
   const head = el("div", { class: "pc-head" });
@@ -42,7 +43,7 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
   host.replaceChildren(head, plot);
   host.removeAttribute("aria-hidden");
 
-  const buttons = PRICE_RANGES.map((range) => {
+  const buttons = ranges.map((range) => {
     const button = el("button", { type: "button", class: "pc-tab" }, range.label);
     button.addEventListener("click", () => {
       if (days === range.days) return;
@@ -193,6 +194,7 @@ export function mountPriceChart(host, ticker, load, { title = null } = {}) {
     bars = bars.filter((bar) => bar && Number.isFinite(bar.close) && bar.trade_date);
     if (bars.length < 2) showEmpty("暂无足够的已入库日线。");
     else draw(bars);
+    if (onData && bars.length) onData({ bars, days });
   }
 
   refresh();

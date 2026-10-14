@@ -7,76 +7,80 @@
 #peer-context-section .peer-area + .peer-area {
   margin-top: var(--sp-4);
   padding-top: var(--sp-3);
-  border-top: 1px dashed var(--c-line);
+  border-top: 1px solid var(--line);
 }
 
 #peer-context-section .peer-area-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sp-2);
-  margin-bottom: var(--sp-2);
+  margin-bottom: var(--sp-3);
 }
 
-#peer-context-section .peer-area-head h3 { margin: 0; }
+#peer-context-section .peer-area-head h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+#peer-context-section .peer-area-head .badge, #peer-context-section .peer-context > .badge { margin: 0; }
 
 /* 整体状态徽标：蓝 = 可用，橙 = 需要注意，默认灰 = 中性。 */
 #peer-context-section .peer-status-ready,
 #peer-context-section .peer-status-partial {
-  background: var(--c-accent-soft);
-  color: var(--c-accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 #peer-context-section .peer-status-stale,
 #peer-context-section .peer-status-conflict,
 #peer-context-section .peer-status-failed {
-  background: var(--c-warn-soft);
-  color: var(--c-warn);
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 #peer-context-section .peer-context > .badge { margin-bottom: var(--sp-2); }
 
-/* 三项指标卡。 */
+/* 三项指标卡：桌面三列并排，手机单列。 */
 #peer-context-section .peer-metric-list {
   list-style: none;
   margin: var(--sp-2) 0 var(--sp-3);
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
 }
 
 #peer-context-section .peer-metric {
-  border: 1px solid var(--c-line);
+  border: 1px solid var(--line);
   border-radius: var(--r-md);
-  padding: var(--sp-3);
+  background: var(--surface-2);
+  padding: var(--sp-3) var(--sp-4);
   min-width: 0;
 }
 
 #peer-context-section .peer-metric-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: var(--sp-2);
   margin-bottom: var(--sp-2);
 }
 
+#peer-context-section .peer-metric-head .badge { margin: 0; }
 #peer-context-section .peer-metric-name { font-weight: 600; }
 
 #peer-context-section .peer-metric-status-comparable {
-  background: var(--c-accent-soft);
-  color: var(--c-accent);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 
 #peer-context-section .peer-metric-status-conflict {
-  background: var(--c-warn-soft);
-  color: var(--c-warn);
+  background: var(--warn-soft);
+  color: var(--warn);
 }
 
 #peer-context-section .peer-metric-status-target_not_applicable,
 #peer-context-section .peer-metric-status-insufficient_peers,
 #peer-context-section .peer-metric-status-missing {
-  background: var(--c-neutral-soft);
-  color: var(--c-ink-2);
+  background: var(--sunken);
+  color: var(--ink-2);
 }
 
 #peer-context-section .peer-metric-facts { margin-bottom: 0; }
@@ -86,21 +90,36 @@
 #peer-context-section .peer-excluded,
 #peer-context-section .peer-companies { margin-top: var(--sp-2); }
 
+#peer-context-section .peer-excluded > summary,
+#peer-context-section .peer-companies > summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
 #peer-context-section .peer-excluded ul,
-#peer-context-section .peer-messages ul { margin: var(--sp-1) 0 0; }
+#peer-context-section .peer-messages ul { margin: var(--sp-1) 0 0; padding-left: 1.1rem; }
 
 /* 提示 / 缺口 / 待复核原因列表：弱化呈现，不与结论混排。 */
 #peer-context-section .peer-messages { margin-top: var(--sp-3); }
-#peer-context-section .peer-messages.peer-stale h4 { color: var(--c-warn); }
+#peer-context-section .peer-messages h4 { margin: 0 0 var(--sp-1); }
+#peer-context-section .peer-messages.peer-stale h4 { color: var(--warn); }
 
 /* 同行明细表：目标公司行加底色（蓝 = 本公司，非好坏）。 */
 #peer-context-section .peer-companies-table { margin-top: var(--sp-2); }
-#peer-context-section .peer-target-row { background: var(--c-accent-soft); }
+#peer-context-section .peer-companies-table th, #peer-context-section .peer-companies-table td { padding: 8px 12px; }
+#peer-context-section .peer-target-row, #peer-context-section .peer-target-row > td { background: var(--accent-soft); }
 
 #peer-context-section .peer-evidence-links { margin-top: var(--sp-3); }
 #peer-context-section .peer-evidence-links .peer-evidence-chip { margin: 0 var(--sp-1) var(--sp-1) 0; }
 
 /* 引用面板（证据 / 计算记录详情）：页面底部的独立 aside。 */
-#peer-context-section .peer-evidence { margin-top: var(--sp-4); }
+#peer-context-section .peer-evidence { margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
 #peer-context-section .peer-evidence[hidden] { display: none; }
 #peer-context-section .peer-evidence-panel .kv-list { margin-bottom: 0; }
+
+@media (min-width: 56.01rem) {
+  #peer-context-section .peer-metric-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

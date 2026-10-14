@@ -1,26 +1,55 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/runs.css">{% endblock %}
+{% block appbar_actions %}<button type="button" class="icon-btn" id="runs-refresh-m" aria-label="刷新">{{ icon("refresh", "ico", 20) }}</button>{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>运行中心</h1>
-  <p class="muted">研究任务的状态、阶段、重试与制品。</p>
+  <p class="muted">研究任务的状态、阶段、重试与耗时。</p>
+  <div class="page-actions only-desktop-flex">
+    <button type="button" class="btn btn-sm" id="runs-refresh">{{ icon("refresh", "ico", 14) }}刷新</button>
+  </div>
 </header>
-<section class="card">
-  <div class="toolbar">
-    <label for="runs-status-filter">状态筛选</label>
-    <select id="runs-status-filter">
-      <option value="">全部</option>
-      <option value="queued">排队中</option>
-      <option value="running">运行中</option>
-      <option value="success">成功</option>
-      <option value="partial">部分成功</option>
-      <option value="failed">失败</option>
-    </select>
+<div class="stack">
+  <div id="runs-kpis" class="kpis kpis--4 runs-kpis" aria-live="polite"></div>
+  <section class="card card--flush runs-card">
+    <div class="card-head card-head--rule runs-filter">
+      <label for="runs-status-filter" class="visually-hidden">状态筛选</label>
+      <select id="runs-status-filter" class="visually-hidden" tabindex="-1" aria-hidden="true">
+        <option value="">全部</option>
+        <option value="queued">排队中</option>
+        <option value="running">运行中</option>
+        <option value="success">成功</option>
+        <option value="partial">部分成功</option>
+        <option value="failed">失败</option>
+      </select>
+      <div class="seg runs-seg" id="runs-seg" role="group" aria-label="状态筛选">
+        <button type="button" data-status="" class="on" aria-pressed="true">全部</button>
+        <button type="button" data-status="queued" aria-pressed="false">排队<span class="c" data-count="queued"></span></button>
+        <button type="button" data-status="running" aria-pressed="false">运行中<span class="c" data-count="running"></span></button>
+        <button type="button" data-status="success" aria-pressed="false">成功</button>
+        <button type="button" data-status="partial" aria-pressed="false">部分成功<span class="c" data-count="partial"></span></button>
+        <button type="button" data-status="failed" aria-pressed="false">失败<span class="c" data-count="failed"></span></button>
+      </div>
+    </div>
+    <div id="runs-list" class="data-region"
+         data-endpoint="/research/runs"
+         data-empty-text="没有研究运行记录。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+</div>
+<div class="sheet run-sheet" id="run-sheet" role="dialog" aria-modal="true" aria-labelledby="run-sheet-title">
+  <div class="sheet-grab"></div>
+  <div class="sheet-head">
+    <div class="run-sheet-title">
+      <h2 id="run-sheet-title">运行详情</h2>
+      <div class="faint" id="run-sheet-sub"></div>
+    </div>
+    <span class="spacer"></span>
+    <span id="run-sheet-status"></span>
+    <button type="button" class="btn btn-sm btn-ghost" data-overlay-close>关闭</button>
   </div>
-  <div id="runs-list" class="data-region"
-       data-endpoint="/research/runs"
-       data-empty-text="没有研究运行记录。">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
-  </div>
-</section>
+  <div id="run-sheet-body"></div>
+</div>
 {% endblock %}
