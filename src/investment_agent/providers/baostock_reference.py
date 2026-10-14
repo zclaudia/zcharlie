@@ -33,7 +33,6 @@ from __future__ import annotations
 import asyncio
 import re
 import threading
-import time
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -49,9 +48,14 @@ from investment_agent.providers.errors import (
     ProviderDataError,
     ProviderError,
     ProviderTransientError,
-    ProviderUnavailableError,
 )
-from investment_agent.providers.ledger import CallOutcome, ProviderCallEvent, ProviderCallHook
+from investment_agent.providers.ledger import ProviderCallHook
+from investment_agent.providers.transport import (
+    Attempt,
+    ProviderCallPipeline,
+    RetryPolicy,
+    classify_errors,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -317,11 +321,14 @@ class BaostockReferenceClient:
         self._backend = backend
         self._clock = clock
         self._timeout_seconds = timeout_seconds
-        self._max_attempts = max_attempts
-        self._retry_backoff_seconds = retry_backoff_seconds
-        self._circuit = circuit
-        self._on_call = on_call
         self._session_depth = 0
+        self._pipeline = ProviderCallPipeline(
+            provider=PROVIDER,
+            retry=RetryPolicy(max_attempts=max_attempts, backoff_seconds=retry_backoff_seconds),
+            circuit=circuit,
+            on_call=on_call,
+            classify=classify_errors(BaostockTransientError),
+        )
 
     # -- session ----------------------------------------------------------- #
 
@@ -604,82 +611,58 @@ class BaostockReferenceClient:
     ) -> T:
         """Run blocking ``call`` in a thread with a timeout and transient retries.
 
-        The circuit breaker (when wired) is checked once before the first
-        attempt and told the final outcome once: in-call retries are unchanged
-        and the breaker counts logical calls that failed for good. ``on_call``
-        (the provider ledger) gets one event per logical call.
+        The shared pipeline (``transport.py``) owns the circuit check before
+        the first attempt, the retry/backoff loop and the one ledger event per
+        logical call. The session/IO locks, the re-login *between* attempts
+        and the error construction below stay client-specific: the pipeline
+        only gets a plain attempt callable.
         """
 
-        started = time.monotonic()
-        outcome: CallOutcome = "terminal"
-        try:
-            if self._circuit is not None:
-                self._circuit.check(PROVIDER, operation)
-            result = await self._attempts(operation, call, relogin=relogin)
-        except ProviderUnavailableError:
-            outcome = "skipped_open"
-            raise
-        except BaseException as exc:
-            outcome = "transient" if isinstance(exc, ProviderTransientError) else "terminal"
-            if self._circuit is not None:
-                self._circuit.record_failure(PROVIDER, operation, exc)
-            raise
-        else:
-            outcome = "ok"
-            if self._circuit is not None:
-                self._circuit.record_success(PROVIDER, operation)
-            return result
-        finally:
-            if self._on_call is not None:
-                duration_ms = (
-                    None
-                    if outcome == "skipped_open"
-                    else max(int((time.monotonic() - started) * 1000), 0)
-                )
-                await self._on_call(
-                    ProviderCallEvent(PROVIDER, operation, outcome, duration_ms, ticker_count)
-                )
+        async def attempt(_context: Attempt) -> T:
+            return await self._attempt(operation, call)
 
-    async def _attempts[T](
-        self,
-        operation: str,
-        call: Callable[[], T],
-        *,
-        relogin: Callable[[], None] | None,
-    ) -> T:
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                return await asyncio.wait_for(
-                    asyncio.to_thread(call), timeout=self._timeout_seconds
-                )
-            except TimeoutError as exc:
-                error: BaostockTransientError = BaostockTransientError(
-                    f"baostock {operation} timed out after {self._timeout_seconds}s",
-                    provider=PROVIDER,
-                )
-                error.__cause__ = exc
-            except BaostockTransientError as exc:
-                error = exc
-            if attempt >= self._max_attempts:
-                raise error
+        def log_retry(context: Attempt, exc: BaseException) -> None:
             log.warning(
                 "baostock_transient_retry",
                 operation=operation,
-                attempt=attempt,
-                error=str(error),
+                attempt=context.number,
+                error=str(exc),
             )
-            await asyncio.sleep(self._retry_backoff_seconds * attempt)
-            if relogin is not None:
-                # The session may be gone (10001001 / dropped socket): log in
-                # again before retrying; a failed re-login uses up an attempt.
-                try:
-                    await asyncio.wait_for(
-                        asyncio.to_thread(relogin), timeout=self._timeout_seconds
-                    )
-                except (TimeoutError, BaostockTransientError) as exc:
-                    log.warning("baostock_relogin_failed", operation=operation, error=str(exc))
+
+        async def retry_relogin(_context: Attempt, _exc: BaseException) -> None:
+            if relogin is None:
+                return
+            # The session may be gone (10001001 / dropped socket): log in
+            # again before retrying; a failed re-login only logs.
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(relogin), timeout=self._timeout_seconds
+                )
+            except (TimeoutError, BaostockTransientError) as exc:
+                log.warning("baostock_relogin_failed", operation=operation, error=str(exc))
+
+        return await self._pipeline.run(
+            operation,
+            attempt,
+            ticker_count=ticker_count,
+            on_retry=log_retry,
+            after_backoff=retry_relogin,
+        )
+
+    async def _attempt[T](self, operation: str, call: Callable[[], T]) -> T:
+        """One attempt: the blocking baostock call in a worker thread, timed out."""
+
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(call), timeout=self._timeout_seconds
+            )
+        except TimeoutError as exc:
+            error: BaostockTransientError = BaostockTransientError(
+                f"baostock {operation} timed out after {self._timeout_seconds}s",
+                provider=PROVIDER,
+            )
+            error.__cause__ = exc
+        raise error
 
 
 async def _acquire_session_lock() -> None:

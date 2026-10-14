@@ -105,9 +105,16 @@ from investment_agent.providers.errors import (
     ProviderDataError,
     ProviderError,
     ProviderTransientError,
-    ProviderUnavailableError,
 )
-from investment_agent.providers.ledger import CallOutcome, ProviderCallEvent, ProviderCallHook
+from investment_agent.providers.ledger import ProviderCallHook
+from investment_agent.providers.transport import (
+    Attempt,
+    ProviderCallPipeline,
+    RetryPolicy,
+    Reused,
+    Throttle,
+    classify_errors,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -755,15 +762,27 @@ class EastmoneyAnnualCollector:
         self._cache = cache
         self._clock = clock
         self._timeout_seconds = timeout_seconds
-        self._max_retries = max_retries
-        self._retry_backoff_seconds = retry_backoff_seconds
-        self.min_interval_seconds = min_interval_seconds
-        self._sleep = sleep
         self._monotonic = monotonic
-        self._circuit = circuit
-        self._on_call = on_call
         self.request_log: list[AnnualRequestRecord] = []
-        self._last_call: float | None = None
+        self._throttle = Throttle(
+            min_interval_seconds=min_interval_seconds, sleep=sleep, monotonic=monotonic
+        )
+        self._pipeline = ProviderCallPipeline(
+            provider=PROVIDER,
+            retry=RetryPolicy(max_attempts=max_retries + 1, backoff_seconds=retry_backoff_seconds),
+            circuit=circuit,
+            on_call=on_call,
+            classify=classify_errors(EastmoneyAnnualTransientError),
+            throttle=self._throttle,
+            monotonic=monotonic,
+            sleep=sleep,
+        )
+
+    @property
+    def min_interval_seconds(self) -> float:
+        """Minimum spacing between requests (the shared :class:`Throttle` owns it)."""
+
+        return self._throttle.min_interval_seconds
 
     # -- public ------------------------------------------------------------ #
 
@@ -974,13 +993,6 @@ class EastmoneyAnnualCollector:
             raise ValueError("clock must return a timezone-aware datetime")
         return now
 
-    async def _throttle(self) -> None:
-        if self._last_call is not None and self.min_interval_seconds > 0:
-            wait = self._last_call + self.min_interval_seconds - self._monotonic()
-            if wait > 0:
-                await self._sleep(wait)
-        self._last_call = self._monotonic()
-
     def _record(
         self,
         *,
@@ -1020,142 +1032,130 @@ class EastmoneyAnnualCollector:
     ) -> T:
         """One logical call - request **and** parse - with one ledger event.
 
-        Reuse check, circuit, retries and 429 handling happen here; the parse
-        callback runs inside the call so a schema/data failure is reported as
-        ``terminal`` (never retried, never a circuit opener) and the provider
-        ledger sees exactly one event per logical call.
+        The shared pipeline (``transport.py``) owns the circuit, the retries,
+        the 429 handling and the single ledger event. This method keeps the
+        two eastmoney-specific side channels: the saved-response reuse check
+        (before the circuit - a reused answer never touches the provider) and
+        the ``request_log`` records, which the attempt itself writes.
         """
 
         started = self._monotonic()
-        outcome: CallOutcome = "terminal"
-        try:
-            if self._cache is not None:
-                saved = self._cache.saved_response(operation, params)
-                if saved is not None:
-                    self._record(
-                        operation=operation,
-                        url=url,
-                        params=params,
-                        attempt=0,
-                        status=None,
-                        outcome="reused",
-                        response_sha256=_sha256(saved),
-                    )
-                    # A reused response never touches the provider: no circuit.
-                    return parse(RawAnnualResponse(status=200, body=saved))
-            if self._circuit is not None:
-                self._circuit.check(PROVIDER, operation)
-            result = parse(await self._attempts(operation, url, params))
-        except ProviderUnavailableError:
-            outcome = "skipped_open"
-            raise
-        except BaseException as exc:
-            outcome = "transient" if isinstance(exc, ProviderTransientError) else "terminal"
-            if self._circuit is not None:
-                self._circuit.record_failure(PROVIDER, operation, exc)
-            raise
-        else:
-            outcome = "ok"
-            if self._circuit is not None:
-                self._circuit.record_success(PROVIDER, operation)
-            return result
-        finally:
-            await self._report(operation, outcome, started)
 
-    async def _report(self, operation: str, outcome: CallOutcome, started: float) -> None:
-        if self._on_call is None:
-            return
-        duration_ms = (
-            None if outcome == "skipped_open" else max(int((self._monotonic() - started) * 1000), 0)
-        )
-        await self._on_call(ProviderCallEvent(PROVIDER, operation, outcome, duration_ms, 1))
-
-    async def _attempts(
-        self, operation: str, url: str, params: Mapping[str, str]
-    ) -> RawAnnualResponse:
-        attempt = 0
-        while True:
-            attempt += 1
-            await self._throttle()
-            started = self._monotonic()
-            try:
-                response = await self._source_for(operation).fetch(url, params)
-            except EastmoneyAnnualTransientError as exc:
-                self._record(
-                    operation=operation,
-                    url=url,
-                    params=params,
-                    attempt=attempt,
-                    status=None,
-                    outcome="transient",
-                    response_sha256=None,
-                    duration_ms=self._duration(started),
-                    error=f"{type(exc).__name__}: {exc}",
-                )
-                if attempt > self._max_retries:
-                    raise
-                await self._sleep(self._retry_backoff_seconds * attempt)
-                continue
-            hash_hex = _sha256(response.body)
-            retry_after = (
-                _parse_retry_after(response.retry_after, self._now())
-                if response.status == 429
-                else None
-            )
-            duration_ms = self._duration(started)
-            if response.status == 200:
-                self._record(
-                    operation=operation,
-                    url=url,
-                    params=params,
-                    attempt=attempt,
-                    status=200,
-                    outcome="ok",
-                    response_sha256=hash_hex,
-                    duration_ms=duration_ms,
-                )
-                return response
-            if response.status == 429 or response.status >= 500:
-                self._record(
-                    operation=operation,
-                    url=url,
-                    params=params,
-                    attempt=attempt,
-                    status=response.status,
-                    outcome="transient",
-                    response_sha256=hash_hex,
-                    retry_after_seconds=retry_after,
-                    duration_ms=duration_ms,
-                    error=f"HTTP {response.status}",
-                )
-                if attempt > self._max_retries:
-                    raise EastmoneyAnnualTransientError(
-                        f"eastmoney {operation} HTTP {response.status} after {attempt} attempts",
-                        provider=PROVIDER,
-                        error_code=str(response.status),
-                    )
-                if response.status == 429 and retry_after is not None:
-                    wait = retry_after  # obey what upstream announced
-                else:
-                    wait = self._retry_backoff_seconds * attempt
-                await self._sleep(wait)
-                continue
+        def reuse() -> Reused[T] | None:
+            if self._cache is None:
+                return None
+            saved = self._cache.saved_response(operation, params)
+            if saved is None:
+                return None
             self._record(
                 operation=operation,
                 url=url,
                 params=params,
-                attempt=attempt,
-                status=response.status,
-                outcome="terminal",
+                attempt=0,
+                status=None,
+                outcome="reused",
+                response_sha256=_sha256(saved),
+            )
+            return Reused(parse(RawAnnualResponse(status=200, body=saved)))
+
+        async def attempt(context: Attempt) -> T:
+            return await self._attempt(operation, url, params, parse, context)
+
+        return await self._pipeline.run(
+            operation, attempt, before=reuse, started=started, ticker_count=1
+        )
+
+    async def _attempt[T](
+        self,
+        operation: str,
+        url: str,
+        params: Mapping[str, str],
+        parse: Callable[[RawAnnualResponse], T],
+        context: Attempt,
+    ) -> T:
+        """One attempt: fetch (recording every request), classify HTTP, parse.
+
+        The parse runs inside the attempt - as it always has - so a schema /
+        data failure is reported once as ``terminal`` (never retried, never a
+        circuit opener) and cannot escape the logical call.
+        """
+
+        started = self._monotonic()
+        try:
+            response = await self._source_for(operation).fetch(url, params)
+        except EastmoneyAnnualTransientError as exc:
+            self._record(
+                operation=operation,
+                url=url,
+                params=params,
+                attempt=context.number,
+                status=None,
+                outcome="transient",
+                response_sha256=None,
+                duration_ms=self._duration(started),
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            raise
+        hash_hex = _sha256(response.body)
+        retry_after = (
+            _parse_retry_after(response.retry_after, self._now())
+            if response.status == 429
+            else None
+        )
+        duration_ms = self._duration(started)
+        if response.status == 200:
+            self._record(
+                operation=operation,
+                url=url,
+                params=params,
+                attempt=context.number,
+                status=200,
+                outcome="ok",
                 response_sha256=hash_hex,
+                duration_ms=duration_ms,
+            )
+            return parse(RawAnnualResponse(status=200, body=response.body))
+        if response.status == 429 or response.status >= 500:
+            self._record(
+                operation=operation,
+                url=url,
+                params=params,
+                attempt=context.number,
+                status=response.status,
+                outcome="transient",
+                response_sha256=hash_hex,
+                retry_after_seconds=retry_after,
                 duration_ms=duration_ms,
                 error=f"HTTP {response.status}",
             )
-            raise EastmoneyAnnualError(
+            context.retry_after_seconds = retry_after
+            if context.last:
+                raise EastmoneyAnnualTransientError(
+                    f"eastmoney {operation} HTTP {response.status} after {context.number} attempts",
+                    provider=PROVIDER,
+                    error_code=str(response.status),
+                )
+            raise EastmoneyAnnualTransientError(
                 f"eastmoney {operation} HTTP {response.status}",
                 provider=PROVIDER,
                 error_code=str(response.status),
             )
+        self._record(
+            operation=operation,
+            url=url,
+            params=params,
+            attempt=context.number,
+            status=response.status,
+            outcome="terminal",
+            response_sha256=hash_hex,
+            duration_ms=duration_ms,
+            error=f"HTTP {response.status}",
+        )
+        raise EastmoneyAnnualError(
+            f"eastmoney {operation} HTTP {response.status}",
+            provider=PROVIDER,
+            error_code=str(response.status),
+        )
 
     def _source_for(self, operation: str) -> EastmoneyAnnualSource:
         if self._source is None:

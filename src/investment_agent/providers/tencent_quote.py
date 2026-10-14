@@ -87,9 +87,9 @@ from investment_agent.providers.errors import (
     LookaheadDataError,
     ProviderDataError,
     ProviderTransientError,
-    ProviderUnavailableError,
 )
-from investment_agent.providers.ledger import CallOutcome, ProviderCallEvent, ProviderCallHook
+from investment_agent.providers.ledger import ProviderCallHook
+from investment_agent.providers.transport import Attempt, ProviderCallPipeline, RetryPolicy
 
 log = structlog.get_logger(__name__)
 
@@ -385,16 +385,20 @@ class TencentQuoteClient:
             raise ValueError("max_attempts must be >= 1")
         self._clock = clock
         self._transport = transport
-        self._on_call = on_call
-        self._circuit = circuit
         self._timeout_seconds = timeout_seconds
         self.chunk_size = chunk_size
         self._base_url = base_url.rstrip("/")
-        self._max_attempts = max_attempts
-        self._retry_backoff_seconds = retry_backoff_seconds
-        self._sleep = sleep
-        self._monotonic = monotonic
         self.requests = 0
+        # No throttle here (deliberate): the quote feed answers chunks
+        # back-to-back, and the client never updated a ``_last_call`` either.
+        self._pipeline = ProviderCallPipeline(
+            provider=PROVIDER,
+            retry=RetryPolicy(max_attempts=max_attempts, backoff_seconds=retry_backoff_seconds),
+            circuit=circuit,
+            on_call=on_call,
+            monotonic=monotonic,
+            sleep=sleep,
+        )
 
     def _now(self) -> datetime:
         now = self._clock()
@@ -450,59 +454,31 @@ class TencentQuoteClient:
     # -- plumbing ---------------------------------------------------------- #
 
     async def _request(self, codes: Sequence[str]) -> str:
-        """One logical request: circuit-guarded, retried once on transient errors."""
+        """One logical request: circuit-guarded, retried once on transient errors.
 
-        started = self._monotonic()
-        outcome: CallOutcome = "terminal"
-        try:
-            if self._circuit is not None:
-                self._circuit.check(PROVIDER, ENDPOINT)
-            text = await self._attempts(codes)
-        except ProviderUnavailableError:
-            outcome = "skipped_open"
-            raise
-        except BaseException as exc:
-            outcome = "transient" if isinstance(exc, ProviderTransientError) else "terminal"
-            if self._circuit is not None:
-                self._circuit.record_failure(PROVIDER, ENDPOINT, exc)
-            raise
-        else:
-            outcome = "ok"
-            if self._circuit is not None:
-                self._circuit.record_success(PROVIDER, ENDPOINT)
-            return text
-        finally:
-            await self._report(outcome, started, len(codes))
+        The shared pipeline (``transport.py``) owns the circuit check before
+        the first attempt, the retry/backoff loop and the one ledger event per
+        logical request; the attempt below stays native-async httpx.
+        """
 
-    async def _report(self, outcome: CallOutcome, started: float, ticker_count: int) -> None:
-        if self._on_call is None:
-            return
-        duration_ms = (
-            None
-            if outcome == "skipped_open"
-            else max(int((self._monotonic() - started) * 1000), 0)
-        )
-        await self._on_call(
-            ProviderCallEvent(PROVIDER, ENDPOINT, outcome, duration_ms, ticker_count)
+        async def attempt(_context: Attempt) -> str:
+            return await self._attempt(codes)
+
+        def log_retry(context: Attempt, exc: BaseException) -> None:
+            log.warning(
+                "tencent_quote.retry",
+                attempt=context.number,
+                codes=len(codes),
+                error=f"{type(exc).__name__}: {exc}",
+            )
+
+        return await self._pipeline.run(
+            ENDPOINT, attempt, ticker_count=len(codes), on_retry=log_retry
         )
 
-    async def _attempts(self, codes: Sequence[str]) -> str:
-        attempt = 0
-        while True:
-            attempt += 1
-            self.requests += 1
-            try:
-                return await self._get(codes)
-            except ProviderTransientError as exc:
-                if attempt >= self._max_attempts:
-                    raise
-                log.warning(
-                    "tencent_quote.retry",
-                    attempt=attempt,
-                    codes=len(codes),
-                    error=f"{type(exc).__name__}: {exc}",
-                )
-                await self._sleep(self._retry_backoff_seconds * attempt)
+    async def _attempt(self, codes: Sequence[str]) -> str:
+        self.requests += 1
+        return await self._get(codes)
 
     async def _get(self, codes: Sequence[str]) -> str:
         url = f"{self._base_url}/q={','.join(codes)}"

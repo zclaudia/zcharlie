@@ -167,9 +167,15 @@ from investment_agent.providers.errors import (
     ProviderDataError,
     ProviderError,
     ProviderTransientError,
-    ProviderUnavailableError,
 )
-from investment_agent.providers.ledger import CallOutcome, ProviderCallEvent, ProviderCallHook
+from investment_agent.providers.ledger import ProviderCallHook
+from investment_agent.providers.transport import (
+    Attempt,
+    ProviderCallPipeline,
+    RetryPolicy,
+    Throttle,
+    classify_errors,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -1236,18 +1242,30 @@ class AkshareEastmoneyClient:
         if min_interval_seconds < 0:
             raise ValueError("min_interval_seconds must be >= 0")
         self._backend = backend
-        self._circuit = circuit
-        self._on_call = on_call
         self._clock = clock
-        self.min_interval_seconds = min_interval_seconds
         self._timeout_seconds = timeout_seconds
-        self._max_attempts = max_attempts
-        self._retry_backoff_seconds = retry_backoff_seconds
-        self._sleep = sleep
-        self._monotonic = monotonic
         self._lock: asyncio.Lock | None = None
-        self._last_call: float | None = None
         self.calls = 0
+        self._throttle = Throttle(
+            min_interval_seconds=min_interval_seconds, sleep=sleep, monotonic=monotonic
+        )
+        self._pipeline = ProviderCallPipeline(
+            provider=PROVIDER,
+            retry=RetryPolicy(max_attempts=max_attempts, backoff_seconds=retry_backoff_seconds),
+            circuit=circuit,
+            on_call=on_call,
+            classify=classify_errors(EastmoneyTransientError),
+            throttle=self._throttle,
+            mark_after_attempt=True,
+            monotonic=monotonic,
+            sleep=sleep,
+        )
+
+    @property
+    def min_interval_seconds(self) -> float:
+        """Minimum spacing between calls (the shared :class:`Throttle` owns it)."""
+
+        return self._throttle.min_interval_seconds
 
     async def fetch_period_summaries(self, report_period: date) -> PeriodSummaries:
         """Whole-market summaries of ``report_period`` (three calls)."""
@@ -1351,91 +1369,51 @@ class AkshareEastmoneyClient:
             self._backend = AkshareEastmoneyBackend()
         return self._backend
 
-    async def _throttle(self) -> None:
-        if self._last_call is not None and self.min_interval_seconds > 0:
-            wait = self._last_call + self.min_interval_seconds - self._monotonic()
-            if wait > 0:
-                await self._sleep(wait)
-        self._last_call = self._monotonic()
-
     async def _call[T](
         self, operation: str, call: Callable[[], T], *, ticker_count: int = 0
     ) -> T:
         """One logical call: throttled, retried on transient errors, circuit-guarded.
 
-        The circuit breaker is consulted once per logical call (before the
-        first attempt) and told the final outcome once, so in-call retries
-        stay as they are and the breaker counts calls that failed for good.
-        ``on_call`` (the provider ledger) gets one event per logical call:
-        ``ok`` / ``transient`` / ``terminal`` / ``skipped_open``.
+        The shared pipeline (``transport.py``) owns the circuit check before
+        the first attempt, the retry/backoff loop and the one ledger event per
+        logical call; this method keeps the client's execution model: the
+        blocking backend call runs through ``asyncio.to_thread`` under
+        ``asyncio.wait_for`` *inside a per-client* :class:`asyncio.Lock`, so
+        one slow call serialises this client's other calls.
         """
 
         if self._lock is None:
             self._lock = asyncio.Lock()
         endpoint = operation.split("(", 1)[0]
-        async with self._lock:
-            started = self._monotonic()
-            outcome: CallOutcome = "terminal"
-            try:
-                if self._circuit is not None:
-                    self._circuit.check(PROVIDER, endpoint)
-                result = await self._attempts(operation, call)
-            except ProviderUnavailableError:
-                outcome = "skipped_open"
-                raise
-            except BaseException as exc:
-                outcome = "transient" if isinstance(exc, ProviderTransientError) else "terminal"
-                if self._circuit is not None:
-                    self._circuit.record_failure(PROVIDER, endpoint, exc)
-                raise
-            else:
-                outcome = "ok"
-                if self._circuit is not None:
-                    self._circuit.record_success(PROVIDER, endpoint)
-                return result
-            finally:
-                await self._report(endpoint, outcome, started, ticker_count)
 
-    async def _report(
-        self, endpoint: str, outcome: CallOutcome, started: float, ticker_count: int
-    ) -> None:
-        if self._on_call is None:
-            return
-        duration_ms = (
-            None
-            if outcome == "skipped_open"
-            else max(int((self._monotonic() - started) * 1000), 0)
-        )
-        await self._on_call(
-            ProviderCallEvent(PROVIDER, endpoint, outcome, duration_ms, ticker_count)
-        )
+        async def attempt(context: Attempt) -> T:
+            return await self._attempt(operation, call, context)
 
-    async def _attempts[T](self, operation: str, call: Callable[[], T]) -> T:
-        attempt = 0
-        while True:
-            attempt += 1
-            await self._throttle()
-            self.calls += 1
-            try:
-                return await asyncio.wait_for(
-                    asyncio.to_thread(call), timeout=self._timeout_seconds
-                )
-            except TimeoutError as exc:
-                error: EastmoneyTransientError = EastmoneyTransientError(
-                    f"akshare {operation} timed out after {self._timeout_seconds}s",
-                    provider=PROVIDER,
-                )
-                error.__cause__ = exc
-            except EastmoneyTransientError as exc:
-                error = exc
-            finally:
-                self._last_call = self._monotonic()
-            if attempt >= self._max_attempts:
-                raise error
+        def log_retry(context: Attempt, exc: BaseException) -> None:
             log.warning(
                 "akshare_transient_retry",
                 operation=operation,
-                attempt=attempt,
-                error=str(error),
+                attempt=context.number,
+                error=str(exc),
             )
-            await self._sleep(self._retry_backoff_seconds * attempt)
+
+        async with self._lock:
+            return await self._pipeline.run(
+                endpoint, attempt, ticker_count=ticker_count, on_retry=log_retry
+            )
+
+    async def _attempt[T](self, operation: str, call: Callable[[], T], _context: Attempt) -> T:
+        """One attempt: the blocking AkShare call in a worker thread, timed out."""
+
+        self.calls += 1
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(call), timeout=self._timeout_seconds
+            )
+        except TimeoutError as exc:
+            error: EastmoneyTransientError = EastmoneyTransientError(
+                f"akshare {operation} timed out after {self._timeout_seconds}s",
+                provider=PROVIDER,
+            )
+            error.__cause__ = exc
+        raise error

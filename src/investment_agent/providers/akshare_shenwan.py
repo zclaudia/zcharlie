@@ -77,6 +77,12 @@ from investment_agent.providers.shenwan_directory import (
     is_sw_code,
     level_codes,
 )
+from investment_agent.providers.transport import (
+    Attempt,
+    ProviderCallPipeline,
+    RetryPolicy,
+    classify_errors,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -657,10 +663,16 @@ class AkshareShenwanClient:
         self._backend = backend
         self._clock = clock
         self._timeout_seconds = timeout_seconds
-        self._max_attempts = max_attempts
-        self._retry_backoff_seconds = retry_backoff_seconds
         self._constituent_pause_seconds = constituent_pause_seconds
         self._sleep = sleep
+        # No circuit / ledger wiring here (unchanged): this client is only
+        # called from the shenwan snapshot job, which owns its own breaker.
+        self._pipeline = ProviderCallPipeline(
+            provider=PROVIDER,
+            retry=RetryPolicy(max_attempts=max_attempts, backoff_seconds=retry_backoff_seconds),
+            classify=classify_errors(ShenwanTransientError),
+            sleep=sleep,
+        )
 
     async def fetch_industry_history(self) -> ShenwanHistory:
         backend = self._resolve_backend()
@@ -776,24 +788,36 @@ class AkshareShenwanClient:
         return self._backend
 
     async def _with_retries[T](self, operation: str, call: Callable[[], T]) -> T:
-        attempt = 0
-        while True:
-            attempt += 1
-            try:
-                return await asyncio.wait_for(
-                    asyncio.to_thread(call), timeout=self._timeout_seconds
-                )
-            except TimeoutError as exc:
-                error: ShenwanTransientError = ShenwanTransientError(
-                    f"akshare {operation} timed out after {self._timeout_seconds}s",
-                    provider=PROVIDER,
-                )
-                error.__cause__ = exc
-            except ShenwanTransientError as exc:
-                error = exc
-            if attempt >= self._max_attempts:
-                raise error
+        """Run blocking ``call`` in a thread with a timeout and transient retries.
+
+        The shared pipeline (``transport.py``) owns the retry/backoff loop;
+        with no circuit / ``on_call`` wired this client only uses that part.
+        """
+
+        async def attempt(_context: Attempt) -> T:
+            return await self._attempt(operation, call)
+
+        def log_retry(context: Attempt, exc: BaseException) -> None:
             log.warning(
-                "akshare_transient_retry", operation=operation, attempt=attempt, error=str(error)
+                "akshare_transient_retry",
+                operation=operation,
+                attempt=context.number,
+                error=str(exc),
             )
-            await self._sleep(self._retry_backoff_seconds * attempt)
+
+        return await self._pipeline.run(operation, attempt, on_retry=log_retry)
+
+    async def _attempt[T](self, operation: str, call: Callable[[], T]) -> T:
+        """One attempt: the blocking AkShare call in a worker thread, timed out."""
+
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(call), timeout=self._timeout_seconds
+            )
+        except TimeoutError as exc:
+            error: ShenwanTransientError = ShenwanTransientError(
+                f"akshare {operation} timed out after {self._timeout_seconds}s",
+                provider=PROVIDER,
+            )
+            error.__cause__ = exc
+        raise error
