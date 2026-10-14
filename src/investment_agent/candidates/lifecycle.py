@@ -22,19 +22,40 @@ and its decision together.
 Rule drafting (decision D1): creating a candidate enqueues a ``rule_draft``
 job (the drafting module consumes it) and sets ``draft_state = pending``;
 the job reports back through :func:`mark_draft_result`.
+
+Candidate intake from screen runs lives in
+:mod:`investment_agent.candidates.screen_intake`; the names this module's own
+importers use are re-exported below.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Any
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Screen intake lives in candidates.screen_intake (B5 split); the block both serves
+# nominate_candidate and re-exports the moved names so this module's existing importers
+# (rules/, api/, cli/, watchlist/, scheduler/, tests) keep working unchanged.
+from investment_agent.candidates.screen_intake import (
+    ScreenCandidatesOutcome as ScreenCandidatesOutcome,
+)
+from investment_agent.candidates.screen_intake import (
+    _merge_source,
+    _new_candidate,
+    _watchlisted,
+)
+from investment_agent.candidates.screen_intake import (
+    create_candidates_from_screen as create_candidates_from_screen,
+)
+from investment_agent.candidates.screen_intake import (
+    latest_screen_results as latest_screen_results,
+)
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.providers.shenwan_directory import default_shenwan_directory
@@ -48,7 +69,6 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.candidates import CandidateRecord, DecisionRecord
 from investment_agent.storage.models.rules import RuleInstanceRecord, ScreenResultRecord
-from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.candidate import (
     CandidateRepository,
     DecisionRepository,
@@ -164,40 +184,6 @@ def context_with_industry_name(context: Mapping[str, Any] | None) -> dict[str, A
         if name:
             result["industry"] = {**industry, "name": name}
     return result
-
-
-async def latest_screen_results(
-    session: AsyncSession, candidate: CandidateRecord
-) -> list[ScreenResultRecord]:
-    """The newest screen result per template among the candidate's sources.
-
-    Looked up by (run, template version, listing) - stable across a retried
-    screen run that rewrote its rows - with the stored id as fallback.
-    """
-
-    newest: dict[str, ScreenResultRecord] = {}
-    for source in candidate.sources or []:
-        if source.get("kind") != "screen":
-            continue
-        row: ScreenResultRecord | None = None
-        run_id, template_id = source.get("screen_run_id"), source.get("template_id")
-        version = source.get("template_version")
-        if run_id is not None and template_id and version is not None:
-            stmt = select(ScreenResultRecord).where(
-                ScreenResultRecord.screen_run_id == run_id,
-                ScreenResultRecord.template_id == template_id,
-                ScreenResultRecord.template_version == version,
-                ScreenResultRecord.listing_id == candidate.listing_id,
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-        if row is None and source.get("screen_result_id") is not None:
-            row = await session.get(ScreenResultRecord, source["screen_result_id"])
-        if row is None:
-            continue
-        current = newest.get(row.template_id)
-        if current is None or (row.as_of, row.id) >= (current.as_of, current.id):
-            newest[row.template_id] = row
-    return sorted(newest.values(), key=lambda item: (item.as_of, item.id), reverse=True)
 
 
 async def candidate_context(
@@ -510,208 +496,8 @@ async def effective_draft(
 # --------------------------------------------------------------------------- #
 # Creation from screen runs
 # --------------------------------------------------------------------------- #
-
-
-def _screen_source(row: ScreenResultRecord) -> dict[str, Any]:
-    return {
-        "kind": "screen",
-        "screen_run_id": row.screen_run_id,
-        "template_id": row.template_id,
-        "template_version": row.template_version,
-        "screen_result_id": row.id,
-        "as_of": row.as_of.isoformat(),
-    }
-
-
-def _merge_source(candidate: CandidateRecord, source: dict[str, Any]) -> bool:
-    """Append ``source``; a source of the same run and template is replaced
-    (retried run). Returns True when a new source was added."""
-
-    sources = list(candidate.sources or [])
-    for index, existing in enumerate(sources):
-        if (
-            existing.get("kind") == "screen"
-            and source.get("kind") == "screen"
-            and existing.get("screen_run_id") == source.get("screen_run_id")
-            and existing.get("template_id") == source.get("template_id")
-        ):
-            sources[index] = source
-            candidate.sources = sources
-            return False
-    sources.append(source)
-    candidate.sources = sources
-    return True
-
-
-@dataclass
-class ScreenCandidatesOutcome:
-    created: list[dict[str, Any]] = field(default_factory=list)
-    merged: list[dict[str, Any]] = field(default_factory=list)
-    skipped_watchlist: list[str] = field(default_factory=list)
-    skipped_cooldown: list[dict[str, Any]] = field(default_factory=list)
-    expired: list[int] = field(default_factory=list)
-    drafts_enqueued: int = 0
-
-    def to_metadata(self) -> dict[str, Any]:
-        return {
-            "created": self.created,
-            "merged": self.merged,
-            "skipped_watchlist": self.skipped_watchlist,
-            "skipped_cooldown": self.skipped_cooldown,
-            "expired": self.expired,
-            "drafts_enqueued": self.drafts_enqueued,
-        }
-
-
-async def _watchlisted(session: AsyncSession, listing_ids: Sequence[int]) -> set[int]:
-    if not listing_ids:
-        return set()
-    stmt = select(WatchlistItem.listing_id).where(
-        WatchlistItem.listing_id.in_(list(listing_ids)), WatchlistItem.enabled.is_(True)
-    )
-    return set((await session.execute(stmt)).scalars())
-
-
-def _new_candidate(
-    *,
-    listing_id: int,
-    ticker: str,
-    source: dict[str, Any],
-    now: datetime,
-    policy: CandidatePolicy,
-    last_screen_result_id: int | None = None,
-    note: str | None = None,
-) -> CandidateRecord:
-    return CandidateRecord(
-        listing_id=listing_id,
-        ticker=ticker,
-        status="open",
-        opened_at=now,
-        expires_at=now + timedelta(days=policy.expiry_days),
-        sources=[source],
-        last_screen_result_id=last_screen_result_id,
-        draft_state="none",
-        note=note,
-    )
-
-
-async def create_candidates_from_screen(
-    session: AsyncSession,
-    *,
-    run_id: int,
-    policy: CandidatePolicy,
-    now: datetime | None = None,
-) -> ScreenCandidatesOutcome:
-    """Open / merge candidates from the ``hit`` rows of one screen run.
-
-    Per listing (several templates may hit it): an open candidate gets the
-    sources appended; a listing on the active watchlist or dismissed within
-    the cooldown is skipped; otherwise a candidate is opened with a system
-    ``nominate`` decision and a ``rule_draft`` job for its strongest hit.
-    """
-
-    at = now or _now()
-    stmt = (
-        select(ScreenResultRecord)
-        .where(ScreenResultRecord.screen_run_id == run_id, ScreenResultRecord.outcome == "hit")
-        .order_by(ScreenResultRecord.listing_id, ScreenResultRecord.template_id)
-    )
-    by_listing: dict[int, list[ScreenResultRecord]] = {}
-    for row in (await session.execute(stmt)).scalars():
-        by_listing.setdefault(row.listing_id, []).append(row)
-    outcome = ScreenCandidatesOutcome()
-    if not by_listing:
-        return outcome
-    listing_ids = sorted(by_listing)
-    repo = CandidateRepository(session)
-    decisions = DecisionRepository(session)
-    watchlisted = await _watchlisted(session, listing_ids)
-    open_map = await repo.open_by_listing(listing_ids)
-    cooldown_since = at - timedelta(days=policy.dismiss_cooldown_days)
-    dismissed = (
-        await repo.dismissed_since(listing_ids, cooldown_since)
-        if policy.dismiss_cooldown_days > 0
-        else {}
-    )
-    for listing_id in listing_ids:
-        rows = sorted(
-            by_listing[listing_id],
-            key=lambda item: (-(item.strength or 0.0), item.template_id),
-        )
-        primary = rows[0]
-        ticker = primary.ticker
-        if listing_id in watchlisted:
-            outcome.skipped_watchlist.append(ticker)
-            continue
-        existing = open_map.get(listing_id)
-        if existing is not None:
-            added = [row.template_id for row in rows if _merge_source(existing, _screen_source(row))]
-            existing.last_screen_result_id = primary.id
-            outcome.merged.append(
-                {"candidate_id": existing.id, "ticker": ticker, "added_templates": added}
-            )
-            continue
-        if listing_id in dismissed:
-            previous = dismissed[listing_id]
-            outcome.skipped_cooldown.append(
-                {
-                    "ticker": ticker,
-                    "candidate_id": previous.id,
-                    "dismissed_at": as_utc(previous.closed_at or at).isoformat(),
-                }
-            )
-            continue
-        candidate = _new_candidate(
-            listing_id=listing_id,
-            ticker=ticker,
-            source=_screen_source(primary),
-            now=at,
-            policy=policy,
-            last_screen_result_id=primary.id,
-        )
-        for row in rows[1:]:
-            _merge_source(candidate, _screen_source(row))
-        session.add(candidate)
-        await session.flush()
-        await decisions.append(
-            listing_id=listing_id,
-            ticker=ticker,
-            kind="nominate",
-            actor="system",
-            reason_text="screen hit: " + ", ".join(
-                f"{row.template_id}@{row.template_version}" for row in rows
-            ),
-            candidate_id=candidate.id,
-            context=await candidate_context(session, candidate, trigger=SCREEN_TRIGGER),
-            at=at,
-        )
-        await enqueue_rule_draft(
-            session,
-            candidate,
-            template_id=primary.template_id,
-            template_version=primary.template_version,
-            as_of=primary.as_of,
-            screen_result_id=primary.id,
-            triggered_by=SCREEN_TRIGGER,
-        )
-        outcome.drafts_enqueued += 1
-        outcome.created.append(
-            {
-                "candidate_id": candidate.id,
-                "ticker": ticker,
-                "templates": [f"{row.template_id}@{row.template_version}" for row in rows],
-            }
-        )
-    await session.flush()
-    log.info(
-        "candidates.screen.applied",
-        run_id=run_id,
-        created=len(outcome.created),
-        merged=len(outcome.merged),
-        skipped_watchlist=len(outcome.skipped_watchlist),
-        skipped_cooldown=len(outcome.skipped_cooldown),
-    )
-    return outcome
+# Moved to investment_agent.candidates.screen_intake (B5 split); the names this
+# module's importers use are re-exported at the top of this module.
 
 
 # --------------------------------------------------------------------------- #
