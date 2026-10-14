@@ -176,7 +176,7 @@ class SnapshotRuntime:
 
 def default_runtime(settings: Settings) -> SnapshotRuntime:
     def proxy_factory() -> AbstractAsyncContextManager[ProxyClient]:
-        from investment_agent.verification.budget import ledger_hook
+        from investment_agent.providers.ifind_budget import ledger_hook
 
         # Watchlist A3 collectors are counted in the iFinD budget ledger
         # (not limited by it: they are not scheduled since D6 rev 2).

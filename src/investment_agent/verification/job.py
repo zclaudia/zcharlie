@@ -53,6 +53,13 @@ from investment_agent.factors.field_sources import FieldSourceRegistry, default_
 from investment_agent.factors.view import factor_fields
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
+from investment_agent.providers.ifind_budget import (
+    BudgetedProxyClient,
+    BudgetExhaustedError,
+    BudgetStatus,
+    as_utc,
+    utc_now,
+)
 from investment_agent.research.ifind_chain import IfindProxyClient
 from investment_agent.research.retry_policy import is_quota_exhausted
 from investment_agent.snapshots.collect import (
@@ -86,13 +93,6 @@ from investment_agent.storage.repositories.pipeline_run import (
     RunLease,
 )
 from investment_agent.storage.repositories.pit import to_utc
-from investment_agent.verification.budget import (
-    BudgetedProxyClient,
-    BudgetExhaustedError,
-    BudgetStatus,
-    as_utc,
-    utc_now,
-)
 from investment_agent.verification.compare import (
     FINANCIAL_FIELD_ENDPOINTS,
     VERIFIABLE_FIELDS,

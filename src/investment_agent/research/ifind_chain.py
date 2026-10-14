@@ -1318,7 +1318,7 @@ async def run_ifind_research_chain(
             report_year = loaded.report_year
             raw_name = "raw_snapshot.json"
         else:
-            from investment_agent.verification.budget import ledger_hook
+            from investment_agent.providers.ifind_budget import ledger_hook
 
             assert industry is not None and report_year is not None
             async with IfindProxyClient(

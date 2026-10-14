@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -9,10 +11,7 @@ import pytest
 from sqlalchemy import select
 
 from investment_agent.providers.errors import QuotaExhaustedError
-from investment_agent.research.ifind_chain import IfindProxyClient
-from investment_agent.storage.database import session_scope
-from investment_agent.storage.models.verification import IfindCallLedger
-from investment_agent.verification.budget import (
+from investment_agent.providers.ifind_budget import (
     BudgetedProxyClient,
     BudgetExhaustedError,
     BudgetStatus,
@@ -20,6 +19,9 @@ from investment_agent.verification.budget import (
     ledger_hook,
     record_call,
 )
+from investment_agent.research.ifind_chain import IfindProxyClient
+from investment_agent.storage.database import session_scope
+from investment_agent.storage.models.verification import IfindCallLedger
 from tests.unit._snapshot_support import FakeProxy
 
 T0 = datetime(2026, 10, 7, 0, 0, tzinfo=UTC)
@@ -153,3 +155,44 @@ async def test_hook_never_breaks_a_call_when_the_ledger_is_unavailable(tmp_path)
         await hook("/stock/info", {"ticker": "600519.SH"}, "ok")
     finally:
         await engine.dispose()
+
+
+def test_verification_budget_shim_reexports_the_moved_surface():
+    """``verification.budget`` stays importable and resolves to the moved objects (B2)."""
+    import investment_agent.providers.ifind_budget as moved
+    import investment_agent.verification.budget as shim
+
+    for name in (
+        "DEFAULT_BUDGET",
+        "DEFAULT_WINDOW",
+        "BudgetExhaustedError",
+        "BudgetStatus",
+        "BudgetedProxyClient",
+        "as_utc",
+        "budget_status",
+        "ledger_hook",
+        "record_call",
+        "ticker_count",
+        "utc_now",
+    ):
+        assert getattr(shim, name) is getattr(moved, name), name
+
+
+def test_moved_module_imports_without_verification_or_snapshots():
+    """The neutral module must not drag ``verification``/``snapshots``/``research.ifind_chain`` in.
+
+    Checked in a fresh interpreter: the whole point of the move (B2) is that
+    importing the ledger does not import the packages that used to depend on it.
+    """
+    code = (
+        "import sys\n"
+        "import investment_agent.providers.ifind_budget\n"
+        "forbidden = ('investment_agent.verification', 'investment_agent.snapshots',\n"
+        "             'investment_agent.research.ifind_chain')\n"
+        "leaked = sorted(m for m in sys.modules if m.startswith(forbidden))\n"
+        "assert not leaked, leaked\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr

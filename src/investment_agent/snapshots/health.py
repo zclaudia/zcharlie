@@ -51,6 +51,7 @@ from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.domain.a_share import format_listing_ticker
 from investment_agent.domain.time import optional_utc as as_utc
 from investment_agent.providers.circuit import CircuitStatus
+from investment_agent.providers.ifind_budget import budget_status
 from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
     UnknownTradingCalendarYearError,
@@ -79,7 +80,6 @@ from investment_agent.storage.models.reference import Listing, UniverseMembershi
 from investment_agent.storage.models.verification import VerificationRequest
 from investment_agent.storage.repositories.provider_call import ProviderCallRepository
 from investment_agent.storage.repositories.stock_directory import StockDirectoryRepository
-from investment_agent.verification.budget import budget_status
 
 TARGET_WEEKS = 8
 """P1 exit: snapshots accumulated for at least 8 consecutive weeks."""

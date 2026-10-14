@@ -23,12 +23,12 @@ from datetime import date, datetime
 import structlog
 from sqlalchemy import func, select
 
+from investment_agent.providers.ifind_budget import utc_now
 from investment_agent.snapshots.collect import SnapshotPreconditionError
 from investment_agent.snapshots.jobs import FinancialSnapshotPayload
 from investment_agent.snapshots.scope import scope_members
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
-from investment_agent.verification.budget import utc_now
 from investment_agent.verification.job import IFIND_VERIFY, dispatch_slot, enqueue_verify_run
 from investment_agent.verification.queue import (
     count_due,

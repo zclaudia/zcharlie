@@ -42,9 +42,9 @@ def status() -> None:
     async def load() -> None:
         from sqlalchemy import func, select
 
+        from investment_agent.providers.ifind_budget import as_utc, budget_status
         from investment_agent.storage.database import session_scope
         from investment_agent.storage.models.verification import IfindCallLedger
-        from investment_agent.verification.budget import as_utc, budget_status
         from investment_agent.verification.queue import count_due, queue_summary
 
         settings = await load_settings(base=bootstrap)
