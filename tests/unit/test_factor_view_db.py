@@ -7,7 +7,8 @@ from datetime import date
 import pytest
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
-from investment_agent.factors.view import OBSERVATION, TARGET_POOL, load_snapshot_view
+from investment_agent.factors.snapshot_model import OBSERVATION, TARGET_POOL
+from investment_agent.factors.view_db import load_snapshot_view
 from tests.support.factor_view import AS_OF, LATER, ON_TIME, TICKER, _seed  # noqa: F401
 
 

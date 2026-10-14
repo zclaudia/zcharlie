@@ -8,12 +8,11 @@ from typing import Any
 
 import pytest
 
-from investment_agent.factors.view import (
+from investment_agent.factors.field_resolution import ProviderFields, resolve_period_fields
+from investment_agent.factors.snapshot_model import (
     TARGET_POOL,
     FinancialPeriod,
-    ProviderFields,
     SnapshotView,
-    resolve_period_fields,
 )
 from investment_agent.research.contracts import CanonicalResearchBundle
 from investment_agent.research.snapshot_source import (

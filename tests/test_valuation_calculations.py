@@ -11,8 +11,8 @@ from sqlalchemy import func, select
 
 from investment_agent.evidence.contracts import EvidenceRecord, Period
 from investment_agent.evidence.store import EvidenceService
+from investment_agent.factors.snapshot_model import Bar, SnapshotView
 from investment_agent.factors.valuation import VALUATION_FACTORS
-from investment_agent.factors.view import Bar, SnapshotView
 from investment_agent.investor.common import ObjectRef, Quantity
 from investment_agent.investor.enums import CalculationStatus as Status
 from investment_agent.investor.foundations import InvestorError

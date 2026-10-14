@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from sqlalchemy import select
 
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.providers.errors import QuotaExhaustedError
 from investment_agent.research.worker import ResearchWorker

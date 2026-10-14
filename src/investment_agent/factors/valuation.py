@@ -38,7 +38,7 @@ from investment_agent.factors.registry import (
     FactorInput,
     Partial,
 )
-from investment_agent.factors.view import SnapshotView
+from investment_agent.factors.snapshot_model import SnapshotView
 
 PERCENTILE_YEARS = 5
 MIN_VALID_SESSIONS = 240

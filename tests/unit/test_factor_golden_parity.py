@@ -19,7 +19,8 @@ import pytest
 import yaml
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
-from investment_agent.factors.view import OBSERVATION, ifind_research_view
+from investment_agent.factors.ifind_view import ifind_research_view
+from investment_agent.factors.snapshot_model import OBSERVATION
 from investment_agent.research.ifind_chain import parse_proxy_rows
 
 FIXTURE_ROOT = Path(__file__).parents[1] / "fixtures" / "research_kernel"

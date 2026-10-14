@@ -15,7 +15,7 @@ Other requested fields (e.g. ``eps_ttm``: no iFinD endpoint in the registry)
 are reported ``unavailable``.
 
 Free-source values are resolved exactly as the factor view resolves them
-(:func:`investment_agent.factors.view.resolve_period_fields` over the
+(:func:`investment_agent.factors.field_resolution.resolve_period_fields` over the
 baostock and AkShare rows of the period - iFinD excluded), so "verified"
 means "the value the view would use agrees with iFinD".
 """
@@ -30,13 +30,13 @@ from typing import Any, Literal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.factors.field_sources import FieldSourceRegistry, relative_difference
-from investment_agent.factors.view import (
+from investment_agent.factors.field_resolution import (
     PROVIDER_FIELD_RENAMES,
     FieldResolution,
     provider_fields_from_rows,
     resolve_period_fields,
 )
+from investment_agent.factors.field_sources import FieldSourceRegistry, relative_difference
 from investment_agent.research.ifind_mapping import IFIND_FIELD_MAPPINGS
 from investment_agent.snapshots.financial import FinancialEndpoint, financial_endpoints
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot

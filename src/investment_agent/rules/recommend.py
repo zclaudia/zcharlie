@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.config import Settings
 from investment_agent.domain.protocols import LLMClient
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.llm.glossary import readability_rules
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.rules.draft_policy import trading_terms

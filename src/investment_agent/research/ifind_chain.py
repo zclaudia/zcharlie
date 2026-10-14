@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from investment_agent.config import Settings
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
+from investment_agent.factors.ifind_view import ifind_research_view
 from investment_agent.factors.metrics import MIN_ONE_YEAR_SESSIONS, ONE_YEAR_WINDOW_DAYS
 from investment_agent.factors.registry import (
     FLAG_NEGATIVE_BOOK_VALUE,
@@ -31,7 +32,6 @@ from investment_agent.factors.registry import (
     FLAG_NON_POSITIVE_REVENUE,
     FLAG_SHORT_HISTORY,
 )
-from investment_agent.factors.view import ifind_research_view
 from investment_agent.llm.glossary import readability_rules
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.providers.errors import QuotaExhaustedError

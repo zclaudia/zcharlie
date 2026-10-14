@@ -16,7 +16,8 @@ from investment_agent.factors.industry_groups import (
     parse_industry_groups,
     usable_sw_code,
 )
-from investment_agent.factors.view import SnapshotView, load_snapshot_view
+from investment_agent.factors.snapshot_model import SnapshotView
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.providers.akshare_shenwan import parse_history
 from investment_agent.providers.shenwan_directory import (
     code_level,

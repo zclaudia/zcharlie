@@ -45,7 +45,12 @@ from investment_agent.factors.registry import (
     Partial,
     Quality,
 )
-from investment_agent.factors.view import Bar, Dividend, FinancialPeriod, SnapshotView
+from investment_agent.factors.snapshot_model import (
+    Bar,
+    Dividend,
+    FinancialPeriod,
+    SnapshotView,
+)
 
 FLAG_DIVIDENDS_NOT_COLLECTED = "dividends_not_collected"
 FLAG_DIVIDENDS_STALE = "dividends_stale"

@@ -9,12 +9,12 @@ import pytest
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.registry import FactorValue
+from investment_agent.factors.snapshot_model import Bar, SnapshotView
 from investment_agent.factors.valuation import (
     MIN_VALID_SESSIONS,
     inclusive_percentile,
     years_before,
 )
-from investment_agent.factors.view import Bar, SnapshotView
 from tests.unit._factor_support import baostock_view, fixture_raw_bars
 
 AS_OF = date(2026, 9, 30)

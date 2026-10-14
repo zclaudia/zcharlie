@@ -458,7 +458,7 @@ class EvidenceService:
             # A selected source reference cannot hide another known conflicting source.
             from investment_agent.domain.a_share import format_listing_ticker
             from investment_agent.evidence.queries import SnapshotQueryService
-            from investment_agent.factors.view import PROVIDER_FIELD_RENAMES
+            from investment_agent.factors.field_resolution import PROVIDER_FIELD_RENAMES
 
             for fact in record.fact_refs:
                 material = (await self.get_evidence(user_id, fact, record.as_of)).data

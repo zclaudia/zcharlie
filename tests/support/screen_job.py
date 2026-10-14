@@ -12,7 +12,7 @@ import pytest
 import yaml
 
 from investment_agent.config import Settings
-from investment_agent.factors.view import SnapshotView
+from investment_agent.factors.snapshot_model import SnapshotView
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.rules import screen_job
 from investment_agent.rules.screen_job import (

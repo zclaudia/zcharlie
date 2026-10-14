@@ -66,12 +66,12 @@ from investment_agent.factors.registry import (
     FLAG_SHORT_HISTORY,
     FactorValue,
 )
-from investment_agent.factors.view import (
+from investment_agent.factors.snapshot_model import (
     TARGET_POOL,
     FinancialPeriod,
     SnapshotView,
-    load_snapshot_view,
 )
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.providers.shenwan_directory import (
     ShenwanDirectory,
     default_shenwan_directory,

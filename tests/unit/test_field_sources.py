@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
+from investment_agent.factors.field_resolution import ProviderFields, resolve_period_fields
 from investment_agent.factors.field_sources import (
     DEFAULT_FIELD_SOURCES_PATH,
     FREE_PROVIDERS,
@@ -19,15 +20,13 @@ from investment_agent.factors.field_sources import (
     parse_field_sources,
     relative_difference,
 )
-from investment_agent.factors.view import (
+from investment_agent.factors.snapshot_model import (
     OBSERVATION,
     TARGET_POOL,
     FinancialPeriod,
-    ProviderFields,
     SnapshotView,
-    load_snapshot_view,
-    resolve_period_fields,
 )
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
 from investment_agent.storage.repositories.listing import ListingRepository
 

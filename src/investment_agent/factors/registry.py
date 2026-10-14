@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from investment_agent.factors.industry_groups import FLAG_INDUSTRY_FALLBACK as INDUSTRY_FALLBACK
-from investment_agent.factors.view import ProviderName, SnapshotView
+from investment_agent.factors.snapshot_model import ProviderName, SnapshotView
 
 Quality = Literal["ok", "missing", "not_applicable", "approx"]
 QUALITIES: frozenset[str] = frozenset({"ok", "missing", "not_applicable", "approx"})

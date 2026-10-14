@@ -49,8 +49,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.config import Settings
+from investment_agent.factors.field_resolution import factor_fields
 from investment_agent.factors.field_sources import FieldSourceRegistry, default_field_sources
-from investment_agent.factors.view import factor_fields
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.providers.ifind_budget import (

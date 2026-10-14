@@ -9,8 +9,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.evidence.contracts import EvidenceRecord, Period
+from investment_agent.factors.field_resolution import PROVIDER_FIELD_RENAMES, factor_fields
 from investment_agent.factors.field_sources import default_field_sources
-from investment_agent.factors.view import PROVIDER_FIELD_RENAMES, factor_fields
 from investment_agent.investor.common import ObjectRef, Quantity
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot

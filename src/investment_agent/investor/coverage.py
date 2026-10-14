@@ -22,7 +22,7 @@ from investment_agent.factors.valuation import (
     PERCENTILE_YEARS,
     VALUATION_FACTORS,
 )
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
 from investment_agent.storage.repositories.pit import end_of_business_day_utc
 from investment_agent.storage.repositories.universe import UniverseRepository

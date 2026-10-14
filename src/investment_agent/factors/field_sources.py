@@ -4,7 +4,7 @@
 ``primary`` and ``fallback`` sources, the definition (口径), a relative
 ``tolerance`` for cross-source comparison, whether it is a ``key`` field, and
 per-provider ``sanity`` rules / ``approx`` markers. The factor view
-(:mod:`investment_agent.factors.view`) resolves financial fields with it:
+(:mod:`investment_agent.factors.field_resolution`) resolves financial fields with it:
 
     iFinD-verified value > primary > fallback(s)
 

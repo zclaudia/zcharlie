@@ -13,8 +13,8 @@ from investment_agent.evidence.contracts import CalculationAssumption, Calculati
 from investment_agent.evidence.snapshots import digest
 from investment_agent.evidence.store import EvidenceService
 from investment_agent.factors.library import STALE_PRICE_DAYS
+from investment_agent.factors.snapshot_model import Bar, FinancialPeriod, SnapshotView
 from investment_agent.factors.valuation import VALUATION_FACTORS, years_before
-from investment_agent.factors.view import Bar, FinancialPeriod, SnapshotView
 from investment_agent.investor.common import ObjectRef, OwnerId, Quantity
 from investment_agent.investor.enums import CalculationStatus as Status
 from investment_agent.investor.foundations import InvestorError
@@ -140,7 +140,7 @@ class ValuationService:
             return False
         from investment_agent.domain.a_share import format_listing_ticker
         from investment_agent.evidence.queries import SnapshotQueryService
-        from investment_agent.factors.view import PROVIDER_FIELD_RENAMES
+        from investment_agent.factors.field_resolution import PROVIDER_FIELD_RENAMES
         from investment_agent.storage.models.reference import Listing
         listing = await self.session.get(Listing, record.subject_ref.id)
         if listing is None or record.period is None:

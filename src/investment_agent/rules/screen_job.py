@@ -6,7 +6,7 @@ One run = one universe on one ``as_of``:
    a changed file becomes a new template version before it is used);
 2. load the latest version of every stored template;
 3. for every universe member on ``as_of``: build the point-in-time view
-   (:func:`investment_agent.factors.view.load_snapshot_view`, baostock
+   (:func:`investment_agent.factors.view_db.load_snapshot_view`, baostock
    target-pool policy) and compute the factors the templates and the
    pre-filter need (:data:`investment_agent.factors.catalog.DEFAULT_REGISTRY`);
 4. :func:`investment_agent.rules.screen.run_screen` (pure);
@@ -41,7 +41,7 @@ from investment_agent.candidates.lifecycle import (
     expire_candidates,
 )
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.providers.baostock_reference import IndexCode
 from investment_agent.rules.schema import RuleTemplate

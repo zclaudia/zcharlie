@@ -44,7 +44,7 @@ from investment_agent.api.app import create_app
 from investment_agent.candidates.lifecycle import CandidatePolicy
 from investment_agent.cli.main import app as cli_app
 from investment_agent.config import Settings
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.providers.akshare_eastmoney import AkshareEastmoneyClient
 from investment_agent.providers.akshare_shenwan import AkshareShenwanClient
 from investment_agent.providers.baostock_market import BaostockMarketClient

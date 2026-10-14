@@ -8,12 +8,12 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-from investment_agent.factors.view import (
+from investment_agent.factors.field_resolution import factor_fields
+from investment_agent.factors.snapshot_model import (
     TARGET_POOL,
     Bar,
     FinancialPeriod,
     SnapshotView,
-    factor_fields,
 )
 
 FIXTURE_DIR = Path(__file__).parents[1] / "fixtures" / "factors"

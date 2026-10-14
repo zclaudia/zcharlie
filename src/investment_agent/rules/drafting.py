@@ -69,7 +69,8 @@ from investment_agent.config import Settings
 from investment_agent.domain.protocols import LLMClient
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.registry import FactorRegistry, FactorValue
-from investment_agent.factors.view import SnapshotView, load_snapshot_view
+from investment_agent.factors.snapshot_model import SnapshotView
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.rules.draft_policy import (

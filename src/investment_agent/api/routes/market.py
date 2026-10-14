@@ -5,23 +5,27 @@ uncorrected (``adjust="none"``) bar in the registry's provider precedence
 (decision D2, ``config/field_sources.yaml`` ``close``): baostock whenever it
 holds the day, else the Tencent close quote stored at 15:10, so the sparkline
 shows today's close the same afternoon.
+
+``load_bars`` / ``BARS_PROVIDER`` / ``BARS_ADJUST`` now live in
+:mod:`investment_agent.api.views` (shared with the MCP ``get_bars`` tool) and
+are re-exported here for existing importers.
 """
 
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.auth import verify_api_key_or_session
 from investment_agent.api.schemas.market import MarketBar, MarketBarsOut
-from investment_agent.clock import shanghai_today
-from investment_agent.factors.field_sources import default_field_sources, market_precedence
+from investment_agent.api.views import (
+    BARS_ADJUST,  # noqa: F401  (re-export; the MCP get_bars tool imports it from api.views too)
+    BARS_PROVIDER,
+    load_bars,
+)
 from investment_agent.storage.database import session_scope
-from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
-from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 
 router = APIRouter(
     prefix="/market",
@@ -31,14 +35,6 @@ router = APIRouter(
 
 # Same shape the /app/stocks/{ticker} page accepts.
 _TICKER = re.compile(r"\d{6}\.(SH|SZ|BJ)")
-BARS_PROVIDERS: tuple[str, ...] = market_precedence(default_field_sources())
-"""Provider precedence of the series (``baostock`` first, then ``tencent``)."""
-BARS_PROVIDER = ",".join(BARS_PROVIDERS)
-BARS_ADJUST = "none"
-# Trading days make up roughly 68% of calendar days; the lookback window is
-# generous so ``days`` trading days always fit, then the tail is sliced.
-_CALENDAR_DAYS_PER_BAR = 2
-_WINDOW_SLACK_DAYS = 30
 
 
 @router.get("/{ticker}/bars", response_model=MarketBarsOut)
@@ -65,23 +61,3 @@ async def market_bars(
         rows = await load_bars(session, listing.id, days, as_of=as_of)
     bars = [MarketBar(trade_date=row.trade_date, close=float(row.close)) for row in rows]
     return MarketBarsOut(ticker=normalized, provider=BARS_PROVIDER, as_of=as_of, bars=bars)
-
-
-async def load_bars(
-    session: AsyncSession, listing_id: int, days: int, *, as_of: datetime
-) -> list[MarketSnapshot]:
-    """The last ``days`` uncorrected bars of ``listing_id`` known at ``as_of``,
-    oldest first, in the registry's provider precedence (shared by the API
-    and the MCP ``get_bars`` tool)."""
-
-    end = shanghai_today()
-    start = end - timedelta(days=days * _CALENDAR_DAYS_PER_BAR + _WINDOW_SLACK_DAYS)
-    rows = await MarketSnapshotRepository(session).series_as_of(
-        listing_id,
-        start,
-        end,
-        as_of,
-        adjust=BARS_ADJUST,
-        provider=BARS_PROVIDERS,
-    )
-    return rows[-days:]

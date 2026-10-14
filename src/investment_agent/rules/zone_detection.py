@@ -66,7 +66,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.config import Settings
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.registry import FactorValue
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.portfolio.valuation import Valuation, ValuationHolding, ValuationService
 from investment_agent.rules.schema import ConditionGroup

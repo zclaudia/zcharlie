@@ -2,5 +2,5 @@
 
 Every screening / candidate / holding rule references factors by name from
 the default registry in :mod:`investment_agent.factors.catalog`. Factors read data
-only through :class:`investment_agent.factors.view.SnapshotView`.
+only through :class:`investment_agent.factors.snapshot_model.SnapshotView`.
 """

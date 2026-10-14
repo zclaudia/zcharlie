@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from sqlalchemy.exc import OperationalError
 
+from investment_agent.factors.snapshot_model import Bar, SnapshotView
 from investment_agent.factors.valuation import VALUATION_FACTORS, years_before
-from investment_agent.factors.view import Bar, SnapshotView
 from investment_agent.investor.coverage import (
     amount_audit,
     audit_database,

@@ -15,14 +15,14 @@ from investment_agent.factors.library import (
     FLAG_NO_PRICE,
 )
 from investment_agent.factors.registry import FactorValue
-from investment_agent.factors.view import (
+from investment_agent.factors.snapshot_model import (
     OBSERVATION,
     Bar,
     Dividend,
     DividendHistory,
     SnapshotView,
-    load_snapshot_view,
 )
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.listing import ListingRepository

@@ -9,33 +9,29 @@ API process has no breaker in memory, so "熔断中" comes from the ledger's
 :mod:`investment_agent.snapshots.health`).
 Auth: ``X-API-Key`` or the web session. No secrets or raw provider bodies
 are returned. ``/healthz`` stays the unauthenticated liveness probe.
+
+The aggregate construction (``compute_data_health`` and its settings /
+universe helpers) now lives in :mod:`investment_agent.api.views`, shared with
+the MCP ``get_data_health`` tool; this module keeps the route and re-exports
+the helpers so existing importers keep working.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-import structlog
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.auth import get_settings, verify_api_key_or_session
-from investment_agent.api.routes.dashboard import (
-    _APP_CONFIG_PATH,
-    _calendar_path,
-    calendar_warnings,
-)
-from investment_agent.clock import today_in
-from investment_agent.config import Settings, SnapshotScheduleConfig
-from investment_agent.scheduler.trading_calendar import TradingCalendar, load_trading_calendar
-from investment_agent.settings.loader import load_runtime
-from investment_agent.snapshots.health import (
-    DataHealth,
-    HealthSettings,
-    HealthWarning,
-    build_data_health,
-)
+
+# Re-exported for existing importers: the aggregate and its universe helper now
+# live in :mod:`investment_agent.api.views`. The dashboard route imports
+# ``compute_data_health`` from here and ``tests/unit/test_settings_consumers.py``
+# reads ``_snapshot_universes`` from here, so both names are kept on this module.
+from investment_agent.api.views import _snapshot_universes as _snapshot_universes
+from investment_agent.api.views import compute_data_health as compute_data_health
+from investment_agent.config import Settings
+from investment_agent.snapshots.health import DataHealth
 from investment_agent.storage.database import session_scope
 
 router = APIRouter(
@@ -43,70 +39,6 @@ router = APIRouter(
     tags=["health"],
     dependencies=[Depends(verify_api_key_or_session)],
 )
-
-log = structlog.get_logger(__name__)
-
-_TIMEZONE = "Asia/Shanghai"
-
-
-async def _snapshot_universes(session: AsyncSession, settings: Settings) -> tuple[str, ...]:
-    """The snapshot target pool from the runtime schedule (settings store)."""
-
-    try:
-        snapshot: SnapshotScheduleConfig = (
-            await load_runtime(session, settings, _APP_CONFIG_PATH)
-        ).schedule.snapshot
-    except Exception:
-        log.warning("data_health.schedule_unavailable")
-        snapshot = SnapshotScheduleConfig()
-    return tuple(dict.fromkeys(snapshot.universes))
-
-
-def _calendar() -> TradingCalendar | None:
-    try:
-        return load_trading_calendar(_calendar_path())
-    except Exception:
-        log.warning("data_health.calendar_unavailable")
-        return None
-
-
-def health_settings(
-    settings: Settings,
-    *,
-    universes: tuple[str, ...],
-    include_calendar_warnings: bool = True,
-) -> HealthSettings:
-    warnings: tuple[HealthWarning, ...] = ()
-    if include_calendar_warnings:
-        warnings = tuple(
-            HealthWarning(
-                code=item.code, level=item.level, message=item.message, section="calendar"
-            )
-            for item in calendar_warnings(data_dir=settings.data_dir)
-        )
-    return HealthSettings(
-        universes=universes,
-        threshold=settings.snapshot_completeness_threshold,
-        budget_cap=settings.ifind_budget_per_5h,
-        budget_window=timedelta(hours=settings.ifind_budget_window_hours),
-        calendar=_calendar(),
-        calendar_warnings=warnings,
-    )
-
-
-async def compute_data_health(
-    session: AsyncSession, settings: Settings, *, include_calendar_warnings: bool = True
-) -> DataHealth:
-    return await build_data_health(
-        session,
-        health_settings(
-            settings,
-            universes=await _snapshot_universes(session, settings),
-            include_calendar_warnings=include_calendar_warnings,
-        ),
-        now=datetime.now(UTC),
-        today=today_in(_TIMEZONE),
-    )
 
 
 @router.get("/data", response_model=DataHealth)

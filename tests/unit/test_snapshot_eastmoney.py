@@ -12,7 +12,7 @@ from sqlalchemy import select
 from typer.testing import CliRunner
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
-from investment_agent.factors.view import load_snapshot_view
+from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.providers.akshare_eastmoney import EastmoneyTransientError
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.snapshots.collect import ArtifactWriter

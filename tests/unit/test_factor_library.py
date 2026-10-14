@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import pytest
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
+from investment_agent.factors.field_resolution import AMBIGUOUS_STORED_FIELDS, factor_fields
 from investment_agent.factors.library import MIN_PLAUSIBLE_DEBT_RATIO
 from investment_agent.factors.metrics import annualized_growth, return_stats, trim_to_window
 from investment_agent.factors.registry import (
@@ -16,13 +17,11 @@ from investment_agent.factors.registry import (
     FactorValue,
     Partial,
 )
-from investment_agent.factors.view import (
-    AMBIGUOUS_STORED_FIELDS,
+from investment_agent.factors.snapshot_model import (
     OBSERVATION,
     TARGET_POOL,
     FinancialPeriod,
     SnapshotView,
-    factor_fields,
 )
 from tests.unit._factor_support import (
     annual,

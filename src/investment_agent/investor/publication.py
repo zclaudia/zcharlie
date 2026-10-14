@@ -672,7 +672,7 @@ class PublicationService:
         source = evidence.source_ref
         field = source.field_path or ""
         if source.kind == "financial_snapshot":
-            from investment_agent.factors.view import PROVIDER_FIELD_RENAMES
+            from investment_agent.factors.field_resolution import PROVIDER_FIELD_RENAMES
             original = await self.session.get(FinancialSnapshot, source.id)
             if original is None or original.version != source.revision:
                 raise InvestorError("invalid_reference", "Financial source unavailable")
