@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>zcharlie 研究台 · UI v2 移动端 mockup</title>
+<!--
+  UI v2 移动端走查 + 设计稿（2026-10-14）
+  - 配套 docs/product/ui-v2-mockup.html（桌面）；共用同一套 token 与组件，本文件取代桌面稿里 ≤900px 的侧栏抽屉方案
+  - 现状截图：docs/product/mobile-audit/*.jpg（375×812，2026-10-14 实测）
+  - 与正式实现的约束一致：不写 style 属性，尺寸只用 class / SVG 属性
+-->
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#fff; --surface-2:#fafbfc; --sunken:#f1f3f6; --hover:#f4f6f9;
+  --ink:#0f1726; --ink-2:#4a5466; --ink-3:#8790a0; --line:#e6e8ee; --line-2:#d5d9e1;
+  --accent:#2f5be7; --accent-hover:#2449cc; --accent-soft:#edf1fe; --accent-ink:#1f43b4;
+  --warn:#c25f09; --warn-soft:#fff3e3;
+  --ai:#7440dc; --ai-soft:#f4effd; --ai-line:#ddd0f8;
+  --up:#d0352a; --down:#0e8f55;
+  --sh-1:0 1px 2px rgba(15,23,38,.05);
+  --sh-pop:0 -8px 40px -8px rgba(15,23,38,.25);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --canvas:#e9ecf1;
+}
+:root[data-theme="dark"]{
+  --bg:#0d1016; --surface:#151921; --surface-2:#181d26; --sunken:#1c222c; --hover:#1d2430;
+  --ink:#e6e9ef; --ink-2:#aab2c0; --ink-3:#737d8d; --line:#262d39; --line-2:#333b49;
+  --accent:#7b9dff; --accent-hover:#97b2ff; --accent-soft:#1c2747; --accent-ink:#a9c0ff;
+  --warn:#f2a54d; --warn-soft:#33240f;
+  --ai:#b294ff; --ai-soft:#261d3d; --ai-line:#3d2f63;
+  --up:#ff6b5e; --down:#3ccf8e;
+  --sh-1:none; --sh-pop:0 -8px 40px -8px rgba(0,0,0,.7);
+  --canvas:#07090d;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--canvas);color:var(--ink);font:14px/1.55 var(--font);-webkit-font-smoothing:antialiased;font-feature-settings:"tnum" 1}
+a{color:var(--accent);text-decoration:none}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+ul{margin:0;padding:0;list-style:none}
+button,input,textarea,select{font:inherit;color:inherit}
+svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+svg.i.lg{width:20px;height:20px}
+svg.i.xl{width:22px;height:22px}
+.mono{font-family:var(--mono);font-size:.9em}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-3)} .ink2{color:var(--ink-2)}
+.up{color:var(--up)} .down{color:var(--down)} .warn-t{color:var(--warn)} .acc-t{color:var(--accent)} .ai-t{color:var(--ai)}
+.row{display:flex;align-items:center;gap:8px}
+.row.g4{gap:4px}.row.g6{gap:6px}.row.g12{gap:12px}
+.sp{flex:1}
+.wrap{flex-wrap:wrap}
+.fs11{font-size:11.5px}.fs12{font-size:12px}.fs13{font-size:13px}.fs15{font-size:15px}
+.fw6{font-weight:600}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.mt16{margin-top:16px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ============ Doc page ============ */
+.doc{max-width:1440px;margin:0 auto;padding:32px 32px 80px}
+.doc-h{display:flex;align-items:flex-end;gap:16px;margin-bottom:24px}
+.doc-h h1{font-size:26px}
+.doc-h p{color:var(--ink-3);margin-top:4px}
+.toc{display:flex;gap:6px;flex-wrap:wrap;margin:-8px 0 28px}
+.toc a{font-size:12.5px;padding:4px 10px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--ink-2)}
+.toc a:hover{color:var(--accent);border-color:var(--accent)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.panel h2{font-size:16px;margin-bottom:12px}
+.audit{width:100%;border-collapse:collapse;font-size:13px}
+.audit th{text-align:left;font-weight:500;font-size:12px;color:var(--ink-3);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.audit td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+.audit tr:last-child td{border-bottom:0}
+.audit td.n{white-space:nowrap;font-weight:600}
+.audit .bad{color:var(--warn);font-weight:600}
+.audit .ok{color:var(--accent);font-weight:600}
+.principles{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.principles div{padding:14px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);font-size:13px;color:var(--ink-2)}
+.principles b{display:block;color:var(--ink);font-size:14px;margin-bottom:4px}
+.sec{margin-top:56px;scroll-margin-top:20px}
+.sec-h{display:flex;align-items:baseline;gap:12px;margin-bottom:16px}
+.sec-h h2{font-size:20px}
+.sec-h .k{font-size:12px;color:var(--ink-3);font-family:var(--mono)}
+.notes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
+.notes>div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.notes h3{font-size:12.5px;color:var(--ink-3);font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.notes h3 i{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.notes h3 i.ok{background:var(--accent)}
+.notes li{font-size:13px;padding:3px 0 3px 14px;position:relative;color:var(--ink-2)}
+.notes li::before{content:"";position:absolute;left:2px;top:11px;width:4px;height:4px;border-radius:50%;background:var(--ink-3)}
+.notes li b{color:var(--ink)}
+.strip{display:flex;gap:28px;align-items:flex-start;overflow-x:auto;padding:4px 4px 16px}
+.cap{font-size:12px;color:var(--ink-3);margin-top:10px;text-align:center;max-width:390px}
+.cap b{color:var(--ink);font-weight:600}
+.shot{flex:none;width:300px}
+.shot .fr{border-radius:30px;padding:8px;background:#c9ced8;box-shadow:var(--sh-1)}
+:root[data-theme="dark"] .shot .fr{background:#2a303b}
+.shot img{display:block;width:100%;height:auto;border-radius:22px}
+.shot .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--warn);margin-bottom:8px}
+.ph-wrap{flex:none}
+.ph-wrap .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px}
+.theme-btn{margin-left:auto;height:34px;padding:0 12px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px}
+
+/* ============ Phone ============ */
+.phone{width:390px;height:844px;border-radius:52px;padding:10px;background:#0b0f16;box-shadow:0 30px 60px -20px rgba(15,23,38,.35),inset 0 0 0 2px #2a303b}
+.scr{position:relative;width:100%;height:100%;border-radius:42px;overflow:hidden;background:var(--bg);display:flex;flex-direction:column}
+.stb{height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:4px 30px 0 34px;font-weight:600;font-size:15px}
+.stb .r{display:flex;gap:5px;align-items:center}
+.stb .r svg{width:17px;height:12px;fill:currentColor;stroke:none}
+.stb .r svg+svg{width:26px}
+.island{position:absolute;top:11px;left:50%;width:120px;height:34px;border-radius:20px;background:#000;transform:translateX(-50%);z-index:20}
+.home{position:absolute;bottom:8px;left:50%;width:134px;height:5px;border-radius:3px;background:var(--ink);opacity:.8;transform:translateX(-50%);z-index:30}
+
+/* app bar */
+.ab{flex:none;display:flex;align-items:center;gap:2px;height:52px;padding:0 8px 0 18px}
+.ab h1{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.ab .st{font-size:12px;color:var(--ink-3);margin-left:8px;font-weight:500}
+.ab.nav{display:grid;grid-template-columns:96px 1fr 96px;padding:0 8px}
+.ab.nav .t{text-align:center;line-height:1.2;min-width:0}
+.ab.nav .t b{display:block;font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ab.nav .t small{display:block;font-size:11.5px;color:var(--ink-3);font-family:var(--mono)}
+.ab.nav .back{display:flex;align-items:center;gap:0;color:var(--accent);font-size:15px;height:44px;padding-left:2px}
+.ab.nav .back svg{width:22px;height:22px}
+.ab.nav .acts{display:flex;justify-content:flex-end}
+.ab.nav .acts:first-child{justify-content:flex-start}
+.ab.bd{border-bottom:1px solid var(--line);background:var(--surface)}
+.ib{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:var(--ink-2);background:none;border:0;cursor:pointer;position:relative;flex:none}
+.ib svg{width:21px;height:21px}
+.ib .dot{position:absolute;top:9px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--warn);box-shadow:0 0 0 2px var(--bg)}
+
+.body{flex:1;overflow:auto;padding:4px 16px 108px;scrollbar-width:none}
+.body::-webkit-scrollbar{display:none}
+.body.bar{padding-bottom:112px}
+.body.flush{padding-left:0;padding-right:0}
+.sticky{position:sticky;top:-4px;z-index:5;background:var(--bg);padding:4px 0 10px;margin:-4px 0 0}
+
+/* tab bar */
+.tb{position:absolute;left:0;right:0;bottom:0;height:86px;padding:7px 10px 0;display:grid;grid-template-columns:repeat(4,1fr);background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(16px) saturate(1.6);-webkit-backdrop-filter:blur(16px) saturate(1.6);border-top:1px solid var(--line);z-index:10}
+.tb a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;font-weight:500;color:var(--ink-3);position:relative;height:48px;justify-content:center}
+.tb a svg{width:24px;height:24px}
+.tb a.on{color:var(--accent)}
+.tb a .cnt{position:absolute;top:2px;left:52%;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--accent);color:#fff;font-size:10.5px;font-weight:600;display:grid;place-items:center;box-shadow:0 0 0 2px var(--surface)}
+.tb a .cnt.warn{background:var(--warn);min-width:9px;width:9px;height:9px;padding:0;top:6px;left:58%}
+
+/* bottom action bar */
+.abar{position:absolute;left:0;right:0;bottom:0;padding:10px 16px 34px;background:color-mix(in srgb,var(--surface) 92%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--line);display:flex;gap:8px;z-index:10}
+.abar .btn{flex:1}
+.abar .btn.grow{flex:1.6}
+
+/* sheets */
+.mscrim{position:absolute;inset:0;background:rgba(8,11,18,.42);z-index:15}
+.msheet{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-radius:22px 22px 0 0;padding:8px 16px 36px;box-shadow:var(--sh-pop);z-index:16}
+.msheet.tall{top:58px;display:flex;flex-direction:column;padding-bottom:0}
+.grab{width:38px;height:5px;border-radius:3px;background:var(--line-2);margin:0 auto 12px}
+.sh-h{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.sh-h h2{font-size:17px}
+.sh-h .sub{font-size:12px;color:var(--ink-3)}
+.sh-b{flex:1;overflow:auto;margin:0 -16px;padding:16px}
+.sh-f{display:flex;gap:8px;padding:12px 0 36px;border-top:1px solid var(--line);margin:0 -16px;padding-left:16px;padding-right:16px;background:var(--surface)}
+.sh-f .btn{flex:1}
+
+/* components */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+:root[data-theme="dark"] .btn.pri{color:#0d1016}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--ink-2)}
+.btn.soft{border-color:transparent;background:var(--sunken)}
+.btn.warn{border-color:transparent;background:var(--warn-soft);color:var(--warn)}
+.btn.lg{height:46px;border-radius:13px;font-size:15px;font-weight:600}
+.btn.sm{height:32px;padding:0 12px;font-size:13px;border-radius:9px}
+.btn.blk{width:100%}
+.b{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:6px;font-size:11.5px;font-weight:500;line-height:1;white-space:nowrap;background:var(--sunken);color:var(--ink-2)}
+.b.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.b.warn{background:var(--warn-soft);color:var(--warn)}
+.b.ai{background:var(--ai-soft);color:var(--ai)}
+.b.line{background:transparent;box-shadow:inset 0 0 0 1px var(--line-2)}
+.b.dot::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.b.dot.hollow::before{background:transparent;box-shadow:inset 0 0 0 1.5px currentColor}
+.seg{display:flex;padding:2px;gap:2px;background:var(--sunken);border-radius:10px;box-shadow:inset 0 0 0 1px var(--line)}
+.seg button{flex:1;height:32px;border:0;border-radius:8px;background:transparent;color:var(--ink-2);font-size:13.5px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer;white-space:nowrap}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line),var(--sh-1)}
+.seg button .c{font-size:11.5px;color:var(--ink-3)}
+.seg.sm button{height:28px;font-size:12.5px;padding:0 8px}
+.seg.fit{display:inline-flex}
+.seg.fit button{flex:none}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:0 16px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:34px;padding:0 13px;border-radius:17px;border:1px solid var(--line-2);background:var(--surface);font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--ink-2)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.chip svg{width:14px;height:14px}
+.chip .c{color:var(--ink-3);font-size:12px}
+.chip.on .c{color:color-mix(in srgb,var(--surface) 70%,transparent)}
+.tabs{display:flex;gap:22px;overflow-x:auto;border-bottom:1px solid var(--line);margin:0 -16px;padding:0 16px;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs span{flex:none;height:42px;display:inline-flex;align-items:center;font-size:14px;font-weight:500;color:var(--ink-3);position:relative}
+.tabs span.on{color:var(--ink)}
+.tabs span.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--accent)}
+.in,.ta,.sel{width:100%;height:44px;padding:0 12px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface);font-size:15px;color:var(--ink)}
+.ta{height:96px;padding:10px 12px;resize:none}
+.sel{appearance:none;display:flex;align-items:center;justify-content:space-between}
+.field{display:flex;flex-direction:column;gap:6px}
+.field+.field{margin-top:14px}
+.field label{font-size:13px;font-weight:500;color:var(--ink-2)}
+.field .hint{font-size:12px;color:var(--ink-3)}
+.callout{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:12px;font-size:13px;background:var(--sunken);color:var(--ink-2);line-height:1.45}
+.callout svg{margin-top:2px}
+.callout.warn{background:var(--warn-soft);color:color-mix(in srgb,var(--warn) 72%,var(--ink))}
+.callout.warn>svg{color:var(--warn)}
+.callout.ai{background:var(--ai-soft);color:color-mix(in srgb,var(--ai) 62%,var(--ink))}
+.callout .end{margin-left:auto;align-self:center;color:var(--ink-3)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh-1)}
+.card+.card{margin-top:10px}
+.card-h{display:flex;align-items:center;gap:8px;padding:13px 14px 0}
+.card-h h3{font-size:15px}
+.card-h .more{margin-left:auto;font-size:13px;color:var(--ink-3);display:flex;align-items:center}
+.card-b{padding:12px 14px 14px}
+.sl{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink-3);font-weight:600;margin:20px 4px 8px}
+.sl .more{margin-left:auto;font-weight:500;color:var(--accent);font-size:13px}
+.lg{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.lr{display:flex;align-items:center;gap:12px;min-height:54px;padding:10px 14px;border-top:1px solid var(--line);color:var(--ink)}
+.lr:first-child{border-top:0}
+.lr .ic{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;background:var(--sunken);color:var(--ink-2)}
+.lr .ic.warn{background:var(--warn-soft);color:var(--warn)}
+.lr .ic.acc{background:var(--accent-soft);color:var(--accent)}
+.lr .ic.ai{background:var(--ai-soft);color:var(--ai)}
+.lr .tx{flex:1;min-width:0}
+.lr .tx b{display:block;font-weight:500;font-size:14.5px;line-height:1.35}
+.lr .tx small{display:block;font-size:12px;color:var(--ink-3);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lr .val{font-size:13px;color:var(--ink-3);white-space:nowrap}
+.lr .chev{color:var(--line-2);width:18px;height:18px}
+.lr.danger{color:var(--warn)}
+.lr .tx small.warn-t,.lr .val.warn-t{color:var(--warn)}
+.lr.center{justify-content:center;font-weight:500}
+svg.bar{display:block;width:100%;height:5px}
+svg.bar .tr{fill:var(--line)}
+svg.bar .fl{fill:var(--accent)}
+svg.bar .fl.weak{fill:color-mix(in srgb,var(--accent) 45%,var(--surface))}
+svg.spark{display:block;width:76px;height:30px;overflow:visible}
+svg.spark.wide{width:100%;height:150px}
+svg.spark path.ln{fill:none;stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round}
+svg.spark path.ar{stroke:none;opacity:.09}
+svg.spark.up path.ln{stroke:var(--up)} svg.spark.up path.ar{fill:var(--up)}
+svg.spark.down path.ln{stroke:var(--down)} svg.spark.down path.ar{fill:var(--down)}
+svg.spark.acc path.ln{stroke:var(--accent)} svg.spark.acc path.ar{fill:var(--accent);opacity:.1}
+.sdot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--accent)}
+.sdot.warn{background:var(--warn)} .sdot.mute{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+
+/* screen-specific */
+.hello{padding:2px 2px 0}
+.hello small{display:block;font-size:12.5px;color:var(--ink-3)}
+.status{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:14px;background:var(--warn-soft);color:var(--warn);font-size:13px;font-weight:500}
+.status span{color:color-mix(in srgb,var(--warn) 70%,var(--ink));font-weight:400}
+.status .end{margin-left:auto}
+.funnel{display:grid;grid-template-columns:1fr 14px 1fr 14px 1fr;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 6px}
+.funnel>a{display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--ink);padding:4px 0;border-radius:10px}
+.funnel>a small{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:4px}
+.funnel>a b{font-size:26px;font-weight:650;letter-spacing:-.02em;line-height:1.15}
+.funnel>a em{font-style:normal;font-size:11px}
+.funnel .ar{color:var(--line-2)}
+.mk{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.mk>div{background:var(--surface);padding:11px 14px}
+.mk small{display:block;font-size:12px;color:var(--ink-3)}
+.mk b{display:block;font-size:21px;font-weight:650;letter-spacing:-.02em;line-height:1.3}
+.mk b small{display:inline;font-size:12px;font-weight:500}
+.mk .warn b{color:var(--warn)}
+.mk em{font-style:normal;font-size:11.5px;color:var(--ink-3)}
+.segbar{display:flex;gap:3px;margin-top:6px}
+.segbar i{flex:1;height:4px;border-radius:2px;background:var(--line)}
+.segbar i.on{background:var(--accent)}
+
+.mc{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:13px 14px 12px;box-shadow:var(--sh-1)}
+.mc+.mc{margin-top:10px}
+.mc-a{display:flex;align-items:flex-start;gap:10px}
+.mc-a .nm{flex:1;min-width:0}
+.mc-a .nm b{font-size:16px;font-weight:600}
+.mc-a .nm .mono{color:var(--ink-3);font-size:12px;margin-left:6px}
+.mc-a .px{text-align:right}
+.mc-a .px b{display:block;font-size:16px;font-weight:600;letter-spacing:-.01em}
+.mc-a .px span{font-size:12.5px;font-weight:500}
+.mc-b{display:flex;align-items:center;gap:6px;margin-top:6px}
+.hitrow{display:flex;align-items:center;gap:8px;margin-top:10px;padding:9px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line);font-size:12.5px;color:var(--ink-2)}
+.hits{display:flex;gap:2px;flex:none}
+.hits i{width:7px;height:4px;border-radius:2px;background:var(--accent)}
+.hitrow b{color:var(--ink);font-weight:600}
+.hitrow .tx{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mc-c{display:flex;align-items:center;gap:8px;margin-top:10px}
+.mc-c .due{font-size:12px;color:var(--ink-3)}
+
+.wl{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.wr{display:grid;grid-template-columns:minmax(0,1fr) 76px 58px;gap:10px;align-items:center;padding:11px 14px;border-top:1px solid var(--line)}
+.wr:first-child{border-top:0}
+.wr .nm b{display:block;font-size:15px;font-weight:600}
+.wr .nm small{display:block;font-size:11.5px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wr .sc{text-align:right}
+.wr .sc b{display:block;font-size:17px;font-weight:650}
+.wr .sc small{font-size:11px;color:var(--ink-3)}
+.wr .sc svg.bar{height:3px;margin-top:3px}
+.wr.sel{background:var(--hover)}
+
+.idhead{padding:4px 2px 12px}
+.idhead .px{display:flex;align-items:baseline;gap:8px}
+.idhead .px b{font-size:30px;font-weight:650;letter-spacing:-.02em}
+.idhead .px span{font-size:14px;font-weight:600}
+.idhead .px small{font-size:12px;color:var(--ink-3)}
+.vrow{display:flex;align-items:center;gap:14px}
+.ring{position:relative;width:76px;height:76px;flex:none}
+.ring svg{width:76px;height:76px;transform:rotate(-90deg)}
+.ring .t{fill:none;stroke:var(--sunken);stroke-width:7}
+.ring .f{fill:none;stroke:var(--accent);stroke-width:7;stroke-linecap:round}
+.ring .v{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.ring .v b{font-size:20px;font-weight:650;line-height:1}
+.ring .v small{display:block;font-size:10px;color:var(--ink-3);margin-top:2px}
+.dl{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;flex:1}
+.dl dt{font-size:11.5px;color:var(--ink-3)}
+.dl dd{margin:0;font-weight:600;font-size:14.5px}
+.metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.metric{background:var(--surface);padding:10px 12px}
+.metric .lb{display:flex;align-items:center;font-size:12px;color:var(--ink-3)}
+.metric .lb .src{margin-left:auto}
+.metric .v{font-size:17px;font-weight:600;margin-top:2px}
+.metric .v small{font-size:11.5px;color:var(--ink-3);font-weight:500;margin-left:2px}
+.src{font-size:10px;padding:0 5px;border-radius:4px;line-height:16px;background:var(--sunken);color:var(--ink-3)}
+.factor{display:grid;grid-template-columns:84px 1fr 34px;gap:10px;align-items:center;font-size:13px;padding:5px 0}
+.factor b{text-align:right}
+.factor .lbl{color:var(--ink-2)}
+.ai-card{border-color:var(--ai-line)}
+.ai-card .card-h{padding-bottom:10px;background:linear-gradient(180deg,var(--ai-soft),transparent);border-radius:16px 16px 0 0}
+.acc-row{display:flex;align-items:center;gap:10px;min-height:48px;border-top:1px solid var(--line);font-size:14px}
+.acc-row i{width:3px;height:14px;border-radius:2px;background:var(--accent)}
+.acc-row i.w{background:var(--warn)}
+.acc-row .c{color:var(--ink-3);font-size:12.5px;margin-left:auto}
+.acc-row svg{color:var(--ink-3)}
+.why li{display:flex;gap:8px;align-items:baseline;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+.why li:first-child{border-top:0;padding-top:0}
+.why li svg{width:14px;height:14px;color:var(--accent);position:relative;top:2px}
+.why li .muted{margin-left:auto;font-size:12px;white-space:nowrap}
+
+.msg{display:flex;gap:10px;margin-top:16px}
+.msg.me{justify-content:flex-end}
+.msg .bub{background:var(--sunken);padding:9px 13px;border-radius:18px 18px 4px 18px;font-size:14.5px;max-width:84%}
+.msg .av{width:26px;height:26px;border-radius:8px;flex:none;display:grid;place-items:center;background:var(--ai-soft);color:var(--ai)}
+.msg .body2{font-size:14.5px;line-height:1.7;min-width:0}
+.msg .who{font-size:12px;color:var(--ink-3);margin-bottom:2px}
+.obj{display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 6px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);font-size:13px;font-weight:500}
+.obj .mono{font-size:10.5px;opacity:.8}
+.task{margin-top:10px;border:1px solid var(--line);border-radius:14px;padding:11px 12px;background:var(--surface)}
+.steps{display:flex;gap:3px;margin-top:8px}
+.steps div{flex:1}
+.steps i{display:block;height:4px;border-radius:2px;background:var(--line)}
+.steps .done i{background:var(--accent)}
+.steps .cur i{background:linear-gradient(90deg,var(--accent) 50%,var(--line) 50%)}
+.steps span{display:block;font-size:10.5px;color:var(--ink-3);margin-top:3px}
+.composer{position:absolute;left:0;right:0;bottom:86px;padding:8px 12px 10px;background:linear-gradient(180deg,transparent,var(--bg) 24%);z-index:9}
+.composer .box{border:1px solid var(--line-2);border-radius:22px;background:var(--surface);padding:8px 8px 8px 12px;box-shadow:0 4px 16px -6px rgba(15,23,38,.15)}
+.composer .box .ph{font-size:15px;color:var(--ink-3);padding:4px 2px 8px}
+.circ{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2)}
+.circ.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+
+.search-in{display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border-radius:12px;background:var(--sunken);flex:1;font-size:15px}
+.search-in svg{color:var(--ink-3)}
+.search-in .cur{width:2px;height:20px;background:var(--accent);margin-left:-6px}
+.kbd{position:absolute;left:0;right:0;bottom:0;height:290px;background:#d1d5dc;z-index:12;display:grid;grid-template-rows:repeat(4,1fr);padding:8px 3px 46px;gap:10px}
+:root[data-theme="dark"] .kbd{background:#2b2f37}
+.kbd div{display:flex;gap:5px;justify-content:center}
+.kbd i{width:32px;border-radius:5px;background:#fff;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+:root[data-theme="dark"] .kbd i{background:#5a5f69}
+.kbd i.w{width:44px;background:#abb1bb}
+.kbd i.sp{width:180px}
+
+.vstep{position:relative;padding-left:34px}
+.vstep+.vstep{margin-top:4px}
+.vstep .n{position:absolute;left:0;top:12px;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;background:var(--sunken);color:var(--ink-3)}
+.vstep.on .n{background:var(--accent);color:#fff}
+.vstep::before{content:"";position:absolute;left:11.5px;top:40px;bottom:-12px;width:1px;background:var(--line-2)}
+.vstep:last-child::before{display:none}
+.empty{text-align:center;padding:26px 12px 18px}
+.empty .ei{width:52px;height:52px;border-radius:15px;margin:0 auto 12px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent)}
+.empty h3{font-size:17px}
+.empty p{font-size:13px;color:var(--ink-3);margin:6px 0 16px}
+.more-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.more-grid a{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 4px 12px;border-radius:14px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink);font-size:13px;font-weight:500;position:relative}
+.more-grid a svg{width:22px;height:22px;color:var(--accent)}
+.more-grid a .b{position:absolute;top:7px;right:7px;height:18px;padding:0 6px}
+
+@media (max-width:900px){
+  .doc{padding:20px 16px 60px}
+  .notes,.principles{grid-template-columns:1fr}
+  .audit{display:block;overflow-x:auto}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" class="sr" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></symbol>
+  <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 16v4M17 18h4"/></symbol>
+  <symbol id="i-funnel" viewBox="0 0 24 24"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-brief" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5z"/><path d="M2 16l10 5 10-5M2 12l10 5 10-5"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v13a2 2 0 0 1 2-2h8z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+  <symbol id="i-chevl" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+  <symbol id="i-chevd" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.7 7.1L3 21l1.9-6.3A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-candle" viewBox="0 0 24 24"><path d="M7 4v3M7 15v5M17 3v5M17 15v6"/><rect x="5" y="7" width="4" height="8" rx="1"/><rect x="15" y="8" width="4" height="7" rx="1"/></symbol>
+  <symbol id="i-sig" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></symbol>
+  <symbol id="i-bat" viewBox="0 0 26 12"><rect x=".5" y=".5" width="22" height="11" rx="3" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="17" height="8" rx="1.6"/><rect x="23.5" y="4" width="1.8" height="4" rx=".9" opacity=".4"/></symbol>
+</svg>
+
+<main class="doc">
+  <div class="doc-h">
+    <div><h1>UI v2 · 移动端</h1><p>2026-10-14 在 375×812 下走查现有 12 个页面 + 候选详情 + 导航，然后给出 v2 移动端设计。左侧灰框为现状截图，蓝标为 v2。</p></div>
+    <button class="theme-btn" type="button" id="theme"><svg class="i"><use href="#i-moon"/></svg>暗色</button>
+  </div>
+  <nav class="toc">
+    <a href="#audit">走查结论</a><a href="#nav">导航</a><a href="#today">今日</a><a href="#cand">候选池</a><a href="#cand-d">候选详情</a><a href="#watch">观察池</a><a href="#port">持仓池</a><a href="#stock">单股研究</a><a href="#ai">AI</a><a href="#runs">运行中心</a><a href="#health">数据健康</a><a href="#rest">模板 · 方法 · 设置</a>
+  </nav>
+
+  <!-- ================= 走查结论 ================= -->
+  <section id="audit" class="panel">
+    <h2>走查结论（现状，375×812）</h2>
+    <table class="audit">
+      <thead><tr><th>页面</th><th>页面长度</th><th>&lt;32px 触控</th><th>主要问题</th></tr></thead>
+      <tbody>
+        <tr><td class="n">导航</td><td>—</td><td>—</td><td>只有左上角 ☰ 抽屉，切换任何页面都要 2 次点击；没有全局搜索入口；顶栏标题和页面 H1 重复</td></tr>
+        <tr><td class="n">今日概览</td><td class="num">3.4 屏</td><td class="bad num">20 / 43</td><td>5 个 KPI 大卡占满首屏，“需要关注”被挤到第 3 屏；链接都是 18px 高的下划线文字</td></tr>
+        <tr><td class="n">候选池</td><td class="bad num">11.1 屏</td><td class="bad num">30 / 50</td><td>22 张卡每张约半屏；卡片上没有任何操作，必须进详情；页面说明 + 未校准提示占首屏 1/3</td></tr>
+        <tr><td class="n">候选详情</td><td class="bad num">10.7 屏</td><td>—</td><td><span class="ok">底部固定操作条是好模式，保留</span>；7 个区间按钮把“7 日”折成两行；条件、参数、决策记录全部平铺</td></tr>
+        <tr><td class="n">观察池</td><td class="num">2.8 屏</td><td class="bad num">37 / 58</td><td>表格降级成“投资分: / 置信度: / 刷新:”标签堆；停用、移除 24px 并排，容易误触；股票名可点区域只有 14px</td></tr>
+        <tr><td class="n">单股研究</td><td class="bad num">9.7 屏</td><td class="bad num">84 / 108</td><td>顶栏写“观察池”而不是股票名；“行业 + 运行研究”表单排在价格前；证据标签是 20px 高的按钮；9 个指标单列</td></tr>
+        <tr><td class="n">AI</td><td class="num">1 屏</td><td>—</td><td><span class="ok">10-13 已按移动稿改过，可用</span>；但它有自己的一套顶栏，和其它页不统一</td></tr>
+        <tr><td class="n">持仓池</td><td class="num">3.1 屏</td><td>—</td><td>没有账户时，页面上仍铺着 32 个输入框；空状态只是一行灰字</td></tr>
+        <tr><td class="n">运行中心</td><td class="num">4.8 屏</td><td>—</td><td>每个任务 6 行“标签：值”，一屏只放得下 3.5 个；只显示代码不显示股票名；“▶ 详情”是原生三角</td></tr>
+        <tr><td class="n">数据健康</td><td class="bad num">9.2 屏</td><td>—</td><td>6 张表全部降级成标签堆（快照积累每周 6 行）；提醒和概览页重复；首屏 3 行说明</td></tr>
+        <tr><td class="n">模板 / 方法</td><td class="num">1.8 屏</td><td>—</td><td>模板徽章换行；研究方法是原生表单和空下拉框</td></tr>
+        <tr><td class="n">设置</td><td class="num">1.1 屏</td><td>—</td><td><span class="ok">分组列表 + 右侧值 + 箭头，体验最好</span>，作为移动端列表的基准样式</td></tr>
+      </tbody>
+    </table>
+    <p class="fs12 muted mt12">所有页面都没有横向滚动。“&lt;32px 触控”= 可点元素中高度小于 32px 的数量 / 可点元素总数。</p>
+  </section>
+
+  <section class="panel mt16">
+    <h2>移动端原则</h2>
+    <div class="principles">
+      <div><b>底部 4 栏</b>今日 · 漏斗 · AI · 更多。漏斗页顶部用分段切换 候选 / 观察 / 持仓，和桌面侧栏的“研究漏斗”一一对应；低频的系统页收进“更多”。</div>
+      <div><b>顶栏就是标题</b>不再重复 H1；页面说明收进 ⓘ。二级页是“返回 + 标题 + 操作”，单股和候选详情的标题直接写股票名。</div>
+      <div><b>列表行代替标签堆</b>表格到手机上一律改成两行列表：主信息 + 一行灰色摘要，右侧放一个关键数字。</div>
+      <div><b>操作靠拇指</b>详情页底部固定操作条；行内操作进长按或 ⋯ 弹出的底部操作表；危险操作单独一行、用橙色。</div>
+      <div><b>表单进底部弹层</b>提名、驳回理由、录入事实、新建账户都从底部弹出，页面上只放结果和空状态。</div>
+      <div><b>触控尺寸</b>主要操作 46px，次要 36px，列表行至少 54px；标签只用来显示状态，不可点。</div>
+    </div>
+  </section>
+
+  <!-- ================= 导航 ================= -->
+  <section class="sec" id="nav">
+    <div class="sec-h"><h2>导航 · 更多 · 搜索</h2><span class="k">现状 02-nav</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>只有 ☰ 抽屉，10 个入口同权重排列</li><li>每次换页：点 ☰ → 选页面，2 次点击 + 一次动画</li><li>没有搜索；拼音搜索只在 AI 的对象选择器里</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li><b>底部 4 栏</b>：今日 / 漏斗 / AI / 更多，高频页一次点击就到</li><li><b>更多</b>是一张底部弹层：运行中心、数据健康、模板、方法、设置；数据状态和退出也放在这里</li><li><b>搜索</b>：每个一级页顶栏右上都有 🔍，进入全屏搜索，支持代码 / 名称 / 拼音，并显示最近访问</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/02-nav.jpg" alt="现状导航抽屉"></div></div>
+
+      <div class="ph-wrap"><div class="tag">● v2 · 更多</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><h1>今日</h1><span class="sp"></span><button class="ib" type="button"><svg class="i"><use href="#i-search"/></svg></button></div>
+          <div class="body"><div class="status"><svg class="i"><use href="#i-alert"/></svg>日线落后 2 日</div><div class="sl">需要你处理</div><div class="lg"><div class="lr"><span class="ic ai"><svg class="i"><use href="#i-file"/></svg></span><div class="tx"><b>22 份草稿待审阅</b></div></div></div></div>
+          <div class="mscrim"></div>
+          <div class="msheet">
+            <div class="grab"></div>
+            <div class="more-grid">
+              <a href="#runs"><svg class="i"><use href="#i-play"/></svg>运行中心<span class="b acc">12</span></a>
+              <a href="#health"><svg class="i"><use href="#i-pulse"/></svg>数据健康<span class="b warn">4</span></a>
+              <a href="#rest"><svg class="i"><use href="#i-layers"/></svg>筛选模板</a>
+              <a href="#rest"><svg class="i"><use href="#i-book"/></svg>研究方法</a>
+              <a href="#rest"><svg class="i"><use href="#i-sliders"/></svg>设置</a>
+              <a href="#nav"><svg class="i"><use href="#i-moon"/></svg>外观</a>
+            </div>
+            <div class="lg mt16">
+              <div class="lr"><span class="ic warn"><svg class="i"><use href="#i-cal"/></svg></span><div class="tx"><b>数据：日线落后 2 个交易日</b><small>CSI300 最新 10-09 · 2 个采集失败</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr danger"><span class="ic"><svg class="i"><use href="#i-logout"/></svg></span><div class="tx"><b>退出登录</b></div></div>
+            </div>
+            <p class="fs11 muted mt12">研究辅助，非投资建议：研究观点基于所列来源与当时材料，包含假设与不确定性；交易决定由你作出。</p>
+          </div>
+          <nav class="tb"><a href="#today"><svg class="i"><use href="#i-home"/></svg>今日</a><a href="#cand"><svg class="i"><use href="#i-funnel"/></svg>漏斗<span class="cnt">22</span></a><a href="#ai"><svg class="i"><use href="#i-ai"/></svg>AI</a><a class="on" href="#nav"><svg class="i"><use href="#i-grid"/></svg>更多<span class="cnt warn"></span></a></nav>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap"><b>更多</b>：底部弹层，不跳页；角标只显示需要处理的数量</div>
+      </div>
+
+      <div class="ph-wrap"><div class="tag">● v2 · 搜索</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><div class="search-in"><svg class="i"><use href="#i-search"/></svg><span>gdnr</span><span class="cur"></span></div><button class="btn ghost" type="button">取消</button></div>
+          <div class="body">
+            <div class="sl">股票</div>
+            <div class="lg">
+              <div class="lr"><span class="ic acc"><svg class="i"><use href="#i-candle"/></svg></span><div class="tx"><b>国电南瑞 <span class="mono muted fs12">600406.SH</span></b><small>观察池 · 投资分 55.3 · 稳健质量成长</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><span class="ic"><svg class="i"><use href="#i-candle"/></svg></span><div class="tx"><b>国电电力 <span class="mono muted fs12">600795.SH</span></b><small>未跟踪 · 电力</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+            <div class="sl">最近访问</div>
+            <div class="chips"><span class="chip">山东黄金</span><span class="chip">贵州茅台</span><span class="chip">数据健康</span><span class="chip">东鹏饮料</span></div>
+          </div>
+          <div class="kbd"><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div><i class="w"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="w"></i></div><div><i class="w"></i><i class="sp"></i><i class="w"></i></div></div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap"><b>搜索</b>：全屏，复用拼音索引；结果直接显示所在漏斗阶段和投资分</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 今日 ================= -->
+  <section class="sec" id="today">
+    <div class="sec-h"><h2>今日</h2><span class="k">现状 01-overview</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>顶栏和 H1 都是“今日概览”，下面还有两行说明</li><li>“本周候选”5 个大方块 + “数据健康”4 个方块，占掉 2 屏</li><li>真正要处理的“需要关注”在第 3 屏</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>首屏顺序：<b>数据状态条 → 需要你处理 → 漏斗 → 最近结论</b></li><li>数据异常压缩成一条橙色状态条，点进去就是数据健康</li><li>KPI 改成漏斗三格（候选 22 → 观察 9 → 持仓 —），每格可点</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/01-overview.jpg" alt="现状今日概览"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><h1>今日</h1><span class="st">10-14 周三 · 收盘后</span><span class="sp"></span><button class="ib" type="button"><svg class="i"><use href="#i-search"/></svg></button></div>
+          <div class="body">
+            <a class="status" href="#health"><svg class="i"><use href="#i-alert"/></svg>日线落后 2 日<span>· 2 个采集失败</span><svg class="i end"><use href="#i-chev"/></svg></a>
+            <div class="sl">需要你处理</div>
+            <div class="lg">
+              <div class="lr"><span class="ic ai"><svg class="i"><use href="#i-file"/></svg></span><div class="tx"><b>22 份研究草稿待审阅</b><small>本周新提名 · 9 只 iFinD 核对未完成</small></div><button class="btn sm pri" type="button">审阅</button></div>
+              <div class="lr"><span class="ic warn"><svg class="i"><use href="#i-alert"/></svg></span><div class="tx"><b>财报事件采集失败 ×2</b><small>akshare 业绩预告 / 预约披露 · #238 #239</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+            <div class="sl">研究漏斗</div>
+            <div class="funnel">
+              <a href="#cand"><small><svg class="i"><use href="#i-funnel"/></svg>候选</small><b class="num">22</b><em class="ai-t">22 草稿待审</em></a>
+              <svg class="i ar"><use href="#i-chev"/></svg>
+              <a href="#watch"><small><svg class="i"><use href="#i-eye"/></svg>观察</small><b class="num">9</b><em class="acc-t">2 只有变化</em></a>
+              <svg class="i ar"><use href="#i-chev"/></svg>
+              <a href="#port"><small><svg class="i"><use href="#i-brief"/></svg>持仓</small><b class="muted">—</b><em class="muted">未建账户</em></a>
+            </div>
+            <div class="sl">最近结论<a class="more" href="#runs">全部</a></div>
+            <div class="wl">
+              <div class="wr"><div class="nm"><b>山东黄金</b><small>周期反转 · 10-09 19:31</small></div><svg class="spark" data-spark="23,0.25" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><b class="num">71.3</b><small>中优先</small></div></div>
+              <div class="wr"><div class="nm"><b>国电南瑞</b><small>稳健质量成长 · 10-07 18:48</small></div><svg class="spark" data-spark="7,-0.08" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><b class="num">55.3</b><small>低优先</small></div></div>
+            </div>
+            <div class="sl">运行中</div>
+            <div class="lg"><div class="lr"><span class="ic"><svg class="i"><use href="#i-clock"/></svg></span><div class="tx"><b>12 个研究任务排队</b><small>最早 10-12 19:30 · worker 空闲</small></div><svg class="i chev"><use href="#i-chev"/></svg></div></div>
+          </div>
+          <nav class="tb"><a class="on" href="#today"><svg class="i"><use href="#i-home"/></svg>今日</a><a href="#cand"><svg class="i"><use href="#i-funnel"/></svg>漏斗<span class="cnt">22</span></a><a href="#ai"><svg class="i"><use href="#i-ai"/></svg>AI</a><a href="#nav"><svg class="i"><use href="#i-grid"/></svg>更多<span class="cnt warn"></span></a></nav>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">首屏就能看到全部待办和漏斗；原来 3.4 屏缩短到约 1.3 屏</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 候选池 ================= -->
+  <section class="sec" id="cand">
+    <div class="sec-h"><h2>漏斗 · 候选池</h2><span class="k">现状 03-candidates</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>每张卡片列出全部入选条件（6–8 行）+ 走势图 + 4 个收益，约半屏</li><li>卡片上没有操作，审阅一只要进详情、再返回</li><li>状态 / 模板两个下拉框 + 说明 + 未校准提示，占首屏 1/3</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>卡片压到约 1/4 屏：名称 + 价格 → 模板/状态 → <b>命中条进度 + 2 条最强理由</b> → 到期 + 操作</li><li>卡片上直接放“忽略”和“审阅”；完整理由在详情页</li><li>筛选改成横向滑动的胶囊；未校准提示缩成一行，可关闭</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/03-candidates.jpg" alt="现状候选池"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><h1>漏斗</h1><span class="sp"></span><button class="ib" type="button"><svg class="i"><use href="#i-search"/></svg></button><button class="ib" type="button" aria-label="手动提名"><svg class="i"><use href="#i-plus"/></svg></button></div>
+          <div class="body">
+            <div class="sticky">
+              <div class="seg"><button class="on" type="button">候选 <span class="c">22</span></button><button type="button">观察 <span class="c">9</span></button><button type="button">持仓</button></div>
+              <div class="chips mt8"><span class="chip on">待处理 <span class="c">22</span></span><span class="chip">模板 · 全部<svg class="i"><use href="#i-chevd"/></svg></span><span class="chip">按到期<svg class="i"><use href="#i-chevd"/></svg></span><span class="chip">已晋级</span><span class="chip">已忽略</span></div>
+            </div>
+            <div class="callout warn"><svg class="i"><use href="#i-alert"/></svg><span>模板未校准，入选理由只是假设</span><svg class="i end"><use href="#i-x"/></svg></div>
+            <div class="mt12"></div>
+            <article class="mc">
+              <div class="mc-a"><div class="nm"><b>贵州茅台</b><span class="mono">600519.SH</span><div class="mc-b"><span class="b acc">稳健质量成长</span><span class="b ai">草稿就绪</span></div></div><svg class="spark" data-spark="11,-0.1" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="px"><b class="num">1,263.00</b><span class="up num">+0.57%</span></div></div>
+              <div class="hitrow"><span class="hits"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>8/8</b><span class="tx">ROE <b>34.5%</b> · 净利率 <b>50.5%</b> · 负债率 16.4%</span></div>
+              <div class="mc-c"><span class="due">到期 10-21 · 剩 7 天</span><span class="sp"></span><button class="btn sm ghost" type="button">忽略</button><button class="btn sm pri" type="button">审阅</button></div>
+            </article>
+            <article class="mc">
+              <div class="mc-a"><div class="nm"><b>东鹏饮料</b><span class="mono">605499.SH</span><div class="mc-b"><span class="b acc">质量成长</span><span class="b ai">草稿就绪</span></div></div><svg class="spark" data-spark="5,-0.35" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="px"><b class="num">114.11</b><span class="up num">+0.95%</span></div></div>
+              <div class="hitrow"><span class="hits"><i></i><i></i><i></i><i></i><i></i><i></i></span><b>6/6</b><span class="tx">ROE <b>51.6%</b> · 净利 3 年复合 <b>45.2%</b></span></div>
+              <div class="mc-c"><span class="due">到期 10-21 · 剩 7 天</span><span class="sp"></span><button class="btn sm ghost" type="button">忽略</button><button class="btn sm pri" type="button">审阅</button></div>
+            </article>
+            <article class="mc">
+              <div class="mc-a"><div class="nm"><b>平安银行</b><span class="mono">000001.SZ</span><div class="mc-b"><span class="b acc">红利蓝筹</span><span class="b warn">核对未完成</span></div></div><svg class="spark" data-spark="3,0.05" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="px"><b class="num">11.59</b><span class="down num">-1.61%</span></div></div>
+              <div class="hitrow"><span class="hits"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><b>7/7</b><span class="tx">股息率 <b>7.4%</b> · 总市值 <b>2202.6 亿</b></span></div>
+              <div class="mc-c"><span class="due">到期 10-21 · 剩 7 天</span><span class="sp"></span><button class="btn sm ghost" type="button">忽略</button><button class="btn sm pri" type="button">审阅</button></div>
+            </article>
+            <article class="mc">
+              <div class="mc-a"><div class="nm"><b>百利天恒</b><span class="mono">688506.SH</span><div class="mc-b"><span class="b acc">高成长风险投资</span></div></div><svg class="spark" data-spark="17,-0.2" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="px"><b class="num">229.33</b><span class="up num">+0.98%</span></div></div>
+              <div class="hitrow"><span class="hits"><i></i><i></i><i></i><i></i></span><b>4/4</b><span class="tx">毛利率 <b>90.8%</b> · 营收 3 年复合 <b>53.1%</b></span></div>
+            </article>
+          </div>
+          <nav class="tb"><a href="#today"><svg class="i"><use href="#i-home"/></svg>今日</a><a class="on" href="#cand"><svg class="i"><use href="#i-funnel"/></svg>漏斗<span class="cnt">22</span></a><a href="#ai"><svg class="i"><use href="#i-ai"/></svg>AI</a><a href="#nav"><svg class="i"><use href="#i-grid"/></svg>更多<span class="cnt warn"></span></a></nav>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">一屏能看 3.5 张卡（原来 1.5 张）；22 只全部看完约 6 屏（原来 11 屏）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 候选详情 ================= -->
+  <section class="sec" id="cand-d">
+    <div class="sec-h"><h2>候选详情 · 审阅</h2><span class="k">现状 04-candidate-detail</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>底部浮动操作条：理由输入 + 批准并晋级 / 驳回草稿 / 忽略候选（<b>这个模式保留</b>）</li><li>7 个区间按钮把“7 日”“近 5 年”折成两行</li><li>触发理由、规则草稿、参数、主营、核对、决策记录一路平铺，共 10.7 屏</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>顶栏直接写股票名；价格、模板、有效期放在一个身份区</li><li>内容按标签页分：<b>概要 / 入选理由 / 规则草稿 / 主营 / 核对 / 记录</b></li><li>底部操作条：主按钮“批准并晋级”占最宽；驳回 / 忽略点了再弹理由（理由必填）</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/04-candidate-detail.jpg" alt="现状候选详情"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2 · 详情</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#cand"><svg class="i"><use href="#i-chevl"/></svg>候选</a><div class="t"><b>贵州茅台</b><small>600519.SH</small></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-msg"/></svg></button><button class="ib" type="button"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+          <div class="body bar">
+            <div class="idhead">
+              <div class="px"><b class="num">1,263.00</b><span class="up num">+0.57%</span><small>10-09 收盘</small></div>
+              <div class="row g4 wrap mt8"><span class="b">待处理</span><span class="b ai">草稿就绪</span><span class="b acc">稳健质量成长 v2</span><span class="b warn">未校准</span></div>
+              <div class="row mt12 fs12 muted"><span>有效期 10-07 → 10-21</span><span class="sp"></span><span>剩 7 天</span></div>
+              <svg class="bar mt8" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl" width="50" height="5" rx="2.5"/></svg>
+            </div>
+            <div class="tabs"><span class="on">概要</span><span>入选理由 8</span><span>规则草稿</span><span>主营</span><span>核对</span><span>记录</span></div>
+            <div class="card mt12">
+              <div class="card-h"><h3>收盘价</h3><span class="sp"></span><div class="seg sm fit"><button type="button">60日</button><button class="on" type="button">240日</button><button type="button">2年</button><button type="button">5年</button></div></div>
+              <div class="card-b"><svg class="spark wide acc" data-spark="88,-0.15" viewBox="0 0 100 150" preserveAspectRatio="none"></svg><div class="row fs11 muted mt8"><span>区间 <span class="down">-12.96%</span></span><span class="sp"></span><span>高 1,555.00 · 低 1,168.63</span></div></div>
+            </div>
+            <div class="card">
+              <div class="card-h"><h3>入选理由</h3><span class="b acc">命中 8/8</span><a class="more" href="#cand-d">全部<svg class="i"><use href="#i-chev"/></svg></a></div>
+              <div class="card-b"><ul class="why">
+                <li><svg class="i"><use href="#i-check"/></svg><span>ROE <b>34.5%</b></span><span class="muted">介于 12%–40%</span></li>
+                <li><svg class="i"><use href="#i-check"/></svg><span>净利率 <b>50.5%</b></span><span class="muted">≥ 8%</span></li>
+                <li><svg class="i"><use href="#i-check"/></svg><span>资产负债率 <b>16.4%</b></span><span class="muted">≤ 55%</span></li>
+              </ul></div>
+            </div>
+          </div>
+          <div class="abar"><button class="btn lg soft" type="button">忽略</button><button class="btn lg soft" type="button">驳回</button><button class="btn lg pri grow" type="button">批准并晋级</button></div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">详情页不显示底部 4 栏，换成固定操作条</div>
+      </div>
+      <div class="ph-wrap"><div class="tag">● v2 · 驳回理由</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#cand"><svg class="i"><use href="#i-chevl"/></svg>候选</a><div class="t"><b>贵州茅台</b><small>600519.SH</small></div><div class="acts"></div></div>
+          <div class="body"><div class="idhead"><div class="px"><b class="num">1,263.00</b><span class="up num">+0.57%</span></div></div></div>
+          <div class="mscrim"></div>
+          <div class="msheet">
+            <div class="grab"></div>
+            <div class="sh-h"><div><h2>驳回规则草稿</h2><div class="sub">候选保留在池中，可重新起草</div></div></div>
+            <div class="field"><label>理由（必填）</label><textarea class="ta" placeholder="例如：参数区间偏宽，复核点没有覆盖分红政策变化"></textarea></div>
+            <div class="chips mt12"><span class="chip">区间过宽</span><span class="chip">复核点不足</span><span class="chip">数据未核对</span><span class="chip">其他</span></div>
+            <div class="row mt16"><button class="btn lg soft blk" type="button">取消</button><button class="btn lg pri blk" type="button">确认驳回</button></div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">常用理由胶囊是<b>示意</b>，点一下填入文本框；具体选项需要另外定</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 观察池 ================= -->
+  <section class="sec" id="watch">
+    <div class="sec-h"><h2>漏斗 · 观察池</h2><span class="k">现状 05-watchlist</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>每只股票 7 组“标签：值”，约 1/4 屏</li><li>“重新起草 / 停用 / 移除”三个按钮常驻每一行，24px 高，挨着排</li><li>9 只里有 7 只“未研究”，但看起来和有分数的一样重</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>两行列表：<b>名称 + 策略·最近变化</b> / 走势 / <b>投资分 + 进度条</b>；未研究的显示“去研究”</li><li>行内不放按钮；点进单股，长按或左滑弹出操作表</li><li>操作表里危险操作（移除）单独一行、用橙色，和停用分开</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/05-watchlist.jpg" alt="现状观察池"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2 · 列表</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><h1>漏斗</h1><span class="sp"></span><button class="ib" type="button"><svg class="i"><use href="#i-search"/></svg></button><button class="ib" type="button"><svg class="i"><use href="#i-refresh"/></svg></button></div>
+          <div class="body">
+            <div class="sticky">
+              <div class="seg"><button type="button">候选 <span class="c">22</span></button><button class="on" type="button">观察 <span class="c">9</span></button><button type="button">持仓</button></div>
+              <div class="chips mt8"><span class="chip on">全部 <span class="c">9</span></span><span class="chip">有变化 <span class="c">2</span></span><span class="chip">待研究 <span class="c">7</span></span><span class="chip">已停用</span></div>
+            </div>
+            <div class="wl">
+              <div class="wr"><div class="nm"><b>山东黄金</b><small>周期反转 · 10-09 更新</small></div><svg class="spark" data-spark="23,0.25" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><b class="num">71.3</b><svg class="bar" viewBox="0 0 100 3" preserveAspectRatio="none"><rect class="tr" width="100" height="3" rx="1.5"/><rect class="fl" width="71.3" height="3" rx="1.5"/></svg></div></div>
+              <div class="wr"><div class="nm"><b>国电南瑞</b><small>稳健质量成长 · 10-07 更新</small></div><svg class="spark" data-spark="7,-0.08" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><b class="num">55.3</b><svg class="bar" viewBox="0 0 100 3" preserveAspectRatio="none"><rect class="tr" width="100" height="3" rx="1.5"/><rect class="fl" width="55.3" height="3" rx="1.5"/></svg></div></div>
+              <div class="wr"><div class="nm"><b>福耀玻璃</b><small>汽车 · 研究排队中</small></div><svg class="spark" data-spark="31,0.1" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div>
+              <div class="wr"><div class="nm"><b>爱尔眼科</b><small>医药生物 · 研究排队中</small></div><svg class="spark" data-spark="41,-0.25" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div>
+              <div class="wr"><div class="nm"><b>恒瑞医药</b><small>医药生物 · 研究排队中</small></div><svg class="spark" data-spark="13,0.15" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div>
+              <div class="wr"><div class="nm"><b>中国移动</b><small>通信 · 研究排队中</small></div><svg class="spark" data-spark="19,0.05" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div>
+              <div class="wr"><div class="nm"><b>阳光电源</b><small>电力设备 · 研究排队中</small></div><svg class="spark" data-spark="29,0.3" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div>
+              <div class="wr"><div class="nm"><b>盐湖股份</b><small>基础化工 · 研究排队中</small></div><svg class="spark" data-spark="37,0.12" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div>
+            </div>
+            <p class="fs12 muted mt12">共 9 只 · 规则全部已生效 v2 · 区间未触发</p>
+          </div>
+          <nav class="tb"><a href="#today"><svg class="i"><use href="#i-home"/></svg>今日</a><a class="on" href="#cand"><svg class="i"><use href="#i-funnel"/></svg>漏斗<span class="cnt">22</span></a><a href="#ai"><svg class="i"><use href="#i-ai"/></svg>AI</a><a href="#nav"><svg class="i"><use href="#i-grid"/></svg>更多<span class="cnt warn"></span></a></nav>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">一屏放下 8 只（原来 2.5 只）；“刷新全部”收进顶栏图标</div>
+      </div>
+      <div class="ph-wrap"><div class="tag">● v2 · 行操作</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><h1>漏斗</h1></div>
+          <div class="body">
+            <div class="seg"><button type="button">候选 <span class="c">22</span></button><button class="on" type="button">观察 <span class="c">9</span></button><button type="button">持仓</button></div>
+            <div class="wl mt12"><div class="wr"><div class="nm"><b>山东黄金</b><small>周期反转</small></div><svg class="spark" data-spark="23,0.25" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><b class="num">71.3</b></div></div><div class="wr"><div class="nm"><b>国电南瑞</b><small>稳健质量成长</small></div><svg class="spark" data-spark="7,-0.08" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><b class="num">55.3</b></div></div><div class="wr sel"><div class="nm"><b>福耀玻璃</b><small>汽车</small></div><svg class="spark" data-spark="31,0.1" viewBox="0 0 100 30" preserveAspectRatio="none"></svg><div class="sc"><small>未研究</small></div></div></div>
+          </div>
+          <div class="mscrim"></div>
+          <div class="msheet">
+            <div class="grab"></div>
+            <div class="sh-h"><div><h2>福耀玻璃 <span class="mono muted fs13">600660.SH</span></h2><div class="sub">规则已生效 v2 · 区间未触发 · 研究排队中</div></div></div>
+            <div class="lg">
+              <div class="lr"><span class="ic acc"><svg class="i"><use href="#i-candle"/></svg></span><div class="tx"><b>打开单股研究</b></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><span class="ic"><svg class="i"><use href="#i-play"/></svg></span><div class="tx"><b>立即运行研究</b><small>当前排队 #273</small></div></div>
+              <div class="lr"><span class="ic ai"><svg class="i"><use href="#i-edit"/></svg></span><div class="tx"><b>重新起草规则</b></div></div>
+              <div class="lr"><span class="ic"><svg class="i"><use href="#i-pause"/></svg></span><div class="tx"><b>停用跟踪</b><small>保留记录，不再刷新</small></div></div>
+            </div>
+            <div class="lg mt12"><div class="lr danger"><span class="ic warn"><svg class="i"><use href="#i-trash"/></svg></span><div class="tx"><b>移出观察池</b></div></div></div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">长按行或左滑弹出；“移出”单独一组，避免误触</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 持仓池 ================= -->
+  <section class="sec" id="port">
+    <div class="sec-h"><h2>漏斗 · 持仓池</h2><span class="k">现状 06-portfolio</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>还没有账户，页面上已经铺着“录入事实”的 32 个输入框</li><li>“+ 新建账户”藏在一个折叠三角里</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>空状态：一句话解释 + 3 步引导 + 一个主按钮</li><li>“录入事实”是全高底部弹层，顶部分段选择事实类型，确认前再提示一次“不可修改”</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/06-portfolio.jpg" alt="现状持仓池"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2 · 空状态</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab"><h1>漏斗</h1><span class="sp"></span><button class="ib" type="button"><svg class="i"><use href="#i-search"/></svg></button></div>
+          <div class="body">
+            <div class="seg"><button type="button">候选 <span class="c">22</span></button><button type="button">观察 <span class="c">9</span></button><button class="on" type="button">持仓</button></div>
+            <div class="card mt12">
+              <div class="empty"><div class="ei"><svg class="i xl"><use href="#i-brief"/></svg></div><h3>还没有账户</h3><p>持仓只从你录入的账本事实派生；行情只用来估值，不会改写事实。</p></div>
+              <div class="card-b">
+                <div class="vstep on"><span class="n">1</span><div class="lr"><div class="tx"><b>新建账户</b><small>名称与币种</small></div></div></div>
+                <div class="vstep"><span class="n">2</span><div class="lr"><div class="tx"><b>录入期初余额</b><small>现金 + 已持有股票</small></div></div></div>
+                <div class="vstep"><span class="n">3</span><div class="lr"><div class="tx"><b>记录交易与资金流</b><small>之后按需对账</small></div></div></div>
+                <button class="btn lg pri blk mt12" type="button">新建账户</button>
+              </div>
+            </div>
+          </div>
+          <nav class="tb"><a href="#today"><svg class="i"><use href="#i-home"/></svg>今日</a><a class="on" href="#cand"><svg class="i"><use href="#i-funnel"/></svg>漏斗<span class="cnt">22</span></a><a href="#ai"><svg class="i"><use href="#i-ai"/></svg>AI</a><a href="#nav"><svg class="i"><use href="#i-grid"/></svg>更多<span class="cnt warn"></span></a></nav>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">有账户后：总资产 / 现金 / 浮盈 2×2 + 持仓列表（同观察池行样式）</div>
+      </div>
+      <div class="ph-wrap"><div class="tag">● v2 · 录入事实</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="mscrim"></div>
+          <div class="msheet tall">
+            <div class="grab"></div>
+            <div class="sh-h"><div><h2>录入事实</h2><div class="sub">华泰 · 主账户</div></div><span class="sp"></span><button class="ib" type="button"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <div class="chips"><span class="chip on">期初余额</span><span class="chip">交易</span><span class="chip">资金流</span><span class="chip">分红</span><span class="chip">对账</span></div>
+            <div class="sh-b mt16">
+              <div class="field"><label>发生时间</label><div class="sel"><span>2026-10-14 15:00</span><span class="muted fs13">北京时间</span></div></div>
+              <div class="field"><label>现金</label><input class="in num" placeholder="0.00" inputmode="decimal"></div>
+              <div class="field"><label>覆盖</label><div class="seg"><button class="on" type="button">部分资产</button><button type="button">全部资产</button></div><div class="hint">“全部资产”时，未列出的股票视为未持有</div></div>
+              <div class="field"><label>持仓</label><div class="lg"><div class="lr"><div class="tx"><b>山东黄金 <span class="mono muted fs12">600547.SH</span></b><small>6,000 股 · 成本 28.10</small></div><svg class="i chev"><use href="#i-chev"/></svg></div><div class="lr center acc-t"><svg class="i"><use href="#i-plus"/></svg>添加持仓</div></div></div>
+              <div class="field"><label>事实来源</label><input class="in" placeholder="对账单 / 成交回报"></div>
+              <div class="callout warn mt16"><svg class="i"><use href="#i-alert"/></svg><span>确认后不可修改，只能撤回纠错</span></div>
+            </div>
+            <div class="sh-f"><button class="btn lg pri" type="button">确认写入</button></div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">全高弹层，表单内部滚动，底部按钮常驻</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 单股 ================= -->
+  <section class="sec" id="stock">
+    <div class="sec-h"><h2>单股研究</h2><span class="k">现状 07-stock / 08-stock-2</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>顶栏显示“观察池”；首屏是“行业（可选）+ 运行研究”表单，价格在下面</li><li>投资分圆环占半屏，6 个结论字段排在圆环下面</li><li>9 个关键指标单列；AI 解释的证据标签都是 20px 的按钮，一共 84 个过小的可点元素</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>顶栏：返回 + <b>股票名 / 代码</b>；首屏：价格 → 投资分小圆环 + 4 个结论 → 标签页</li><li>标签页：概要 / 评分 / 指标 / AI 解释 / 历史；指标 2 列</li><li>AI 解释：先给摘要，证据按“正面 / 负面 / 待核查 / 变化”折叠；依据改成纯文字，不可点</li><li>底部操作条：问 AI / 运行研究（行业参数放在运行前的弹层里）</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/07-stock.jpg" alt="现状单股研究"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2 · 概要</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#watch"><svg class="i"><use href="#i-chevl"/></svg>观察</a><div class="t"><b>国电南瑞</b><small>600406.SH</small></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+          <div class="body bar">
+            <div class="idhead">
+              <div class="px"><b class="num">22.40</b><span class="down num">-4.80%</span><small>近 240 日 · 10-09</small></div>
+              <div class="row g4 wrap mt8"><span class="b acc">稳健质量成长</span><span class="b">电力设备</span><span class="b">低优先级</span></div>
+            </div>
+            <div class="card"><div class="card-b vrow">
+              <div class="ring"><svg viewBox="0 0 76 76"><circle class="t" cx="38" cy="38" r="31"/><circle class="f" cx="38" cy="38" r="31" stroke-dasharray="107.7 195"/></svg><div class="v"><div><b class="num">55.3</b><small>投资分</small></div></div></div>
+              <dl class="dl"><div><dt>估值</dt><dd>合理</dd></div><div><dt>风险</dt><dd>中低</dd></div><div><dt>置信度</dt><dd class="num">100</dd></div><div><dt>数据</dt><dd class="num">100%</dd></div></dl>
+            </div></div>
+            <div class="tabs mt8"><span class="on">概要</span><span>评分</span><span>指标</span><span>AI 解释</span><span>历史 4</span></div>
+            <div class="card mt12">
+              <div class="card-h"><h3>收盘价</h3><span class="sp"></span><div class="seg sm fit"><button type="button">60日</button><button class="on" type="button">240日</button><button type="button">2年</button><button type="button">5年</button></div></div>
+              <div class="card-b"><svg class="spark wide acc" data-spark="220,-0.05" viewBox="0 0 100 150" preserveAspectRatio="none"></svg></div>
+            </div>
+            <div class="card ai-card">
+              <div class="card-h"><svg class="i ai-t"><use href="#i-ai"/></svg><h3>AI 解释</h3><span class="b ai">只复述确定性结果</span></div>
+              <div class="card-b">
+                <p class="fs13 ink2">投资分 55.3 由<b>现金流质量 85</b>和<b>估值 75</b>支撑，被<b>利润成长 23.3</b>、<b>成长持续性 46.2</b>拖累；估值合理、风险中低，综合低优先级。</p>
+                <div class="mt8"></div>
+                <div class="acc-row"><i></i>正面证据<span class="c">5</span><svg class="i"><use href="#i-chevd"/></svg></div>
+                <div class="acc-row"><i class="w"></i>负面证据<span class="c">4</span><svg class="i"><use href="#i-chevd"/></svg></div>
+                <div class="acc-row"><i class="w"></i>待核查问题<span class="c">3</span><svg class="i"><use href="#i-chevd"/></svg></div>
+              </div>
+            </div>
+          </div>
+          <div class="abar"><button class="btn lg soft" type="button"><svg class="i"><use href="#i-msg"/></svg>问 AI</button><button class="btn lg pri grow" type="button"><svg class="i"><use href="#i-play"/></svg>运行研究</button></div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">首屏同时能看到价格、投资分、结论和 AI 摘要</div>
+      </div>
+      <div class="ph-wrap"><div class="tag">● v2 · 评分 / 指标</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav bd"><a class="back" href="#watch"><svg class="i"><use href="#i-chevl"/></svg>观察</a><div class="t"><b>国电南瑞 <span class="num muted fs13">22.40</span></b><small>600406.SH</small></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+          <div class="body bar">
+            <div class="sticky"><div class="tabs"><span>概要</span><span class="on">评分</span><span>指标</span><span>AI 解释</span><span>历史 4</span></div></div>
+            <div class="card mt12">
+              <div class="card-h"><h3>分项评分</h3><span class="sp"></span><span class="muted fs12">评分 v1.3</span></div>
+              <div class="card-b">
+                <div class="factor"><span class="lbl">现金流质量</span><svg class="bar" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl" width="85" height="5" rx="2.5"/></svg><b class="num">85</b></div>
+                <div class="factor"><span class="lbl">估值水平</span><svg class="bar" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl" width="75" height="5" rx="2.5"/></svg><b class="num">75</b></div>
+                <div class="factor"><span class="lbl">盈利质量</span><svg class="bar" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl" width="59" height="5" rx="2.5"/></svg><b class="num">59</b></div>
+                <div class="factor"><span class="lbl">资产负债表</span><svg class="bar" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl" width="55.7" height="5" rx="2.5"/></svg><b class="num">55.7</b></div>
+                <div class="factor"><span class="lbl warn-t">成长持续性</span><svg class="bar" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl weak" width="46.2" height="5" rx="2.5"/></svg><b class="num">46.2</b></div>
+                <div class="factor"><span class="lbl warn-t">利润成长</span><svg class="bar" viewBox="0 0 100 5" preserveAspectRatio="none"><rect class="tr" width="100" height="5" rx="2.5"/><rect class="fl weak" width="23.3" height="5" rx="2.5"/></svg><b class="num">23.3</b></div>
+              </div>
+            </div>
+            <div class="sl">关键指标<span class="more muted fs12">已核对 0 / 9</span></div>
+            <div class="metrics">
+              <div class="metric"><div class="lb">总市值<span class="src">派生</span></div><div class="v num">1808.8<small>亿</small></div></div>
+              <div class="metric"><div class="lb">PE<span class="src">未核对</span></div><div class="v num">21.5<small>倍</small></div></div>
+              <div class="metric"><div class="lb">PB<span class="src">未核对</span></div><div class="v num">3.5<small>倍</small></div></div>
+              <div class="metric"><div class="lb">股息率<span class="src">派生</span></div><div class="v num">2.8%</div></div>
+              <div class="metric"><div class="lb">ROE<span class="src">未核对</span></div><div class="v num">16.3%</div></div>
+              <div class="metric"><div class="lb">资产负债率<span class="src">未核对</span></div><div class="v num">42.7%</div></div>
+              <div class="metric"><div class="lb">营收 3 年复合<span class="src">未核对</span></div><div class="v num">12.3%</div></div>
+              <div class="metric"><div class="lb">净利 3 年复合<span class="src">派生</span></div><div class="v num">8.7%</div></div>
+            </div>
+          </div>
+          <div class="abar"><button class="btn lg soft" type="button"><svg class="i"><use href="#i-msg"/></svg>问 AI</button><button class="btn lg pri grow" type="button"><svg class="i"><use href="#i-play"/></svg>运行研究</button></div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">往下滚时，标签页吸顶，顶栏补上现价</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AI ================= -->
+  <section class="sec" id="ai">
+    <div class="sec-h"><h2>AI</h2><span class="k">现状 09-agent</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>按 10-13 移动稿实现：☰ 会话 / 标题 / 档案 / 新建，底部 ＋ 弹层（<b>结构保留</b>）</li><li>它的顶栏和其它页不统一；从 AI 回其它页只能先开 ☰</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>保持原有结构，只换成 v2 的 token；顶栏用统一的“左图标 + 居中标题 + 右操作”</li><li>底部 4 栏常驻（键盘弹起时隐藏），输入框浮在 4 栏上方</li><li>任务卡和桌面一致：阶段进度条 + “在运行中心查看”</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/09-agent.jpg" alt="现状 AI"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav bd"><div class="acts"><button class="ib" type="button" aria-label="会话"><svg class="i"><use href="#i-menu"/></svg></button></div><div class="t"><b>国电南瑞估值是否合理</b><small>1 个研究任务</small></div><div class="acts"><button class="ib" type="button" aria-label="档案"><svg class="i"><use href="#i-file"/></svg></button><button class="ib" type="button" aria-label="新建"><svg class="i"><use href="#i-edit"/></svg></button></div></div>
+          <div class="body">
+            <div class="msg me"><div class="bub">帮我看看 <span class="obj">国电南瑞 <span class="mono">600406</span></span> 现在估值还合理吗？跟上次比有什么变化？</div></div>
+            <div class="msg"><div class="av"><svg class="i"><use href="#i-ai"/></svg></div><div class="body2">
+              <div class="who">研究助手 · 基于已保存材料</div>
+              <p>按最新研究（#220）：估值<b>合理</b>，PE 21.5 倍、PB 3.5 倍。与上次相比投资分 55.2 → <b>55.3</b>，几乎不变；研究置信度从 92 升到 100。</p>
+              <p class="ink2 mt8">日线已落后 2 日，我排队了一次刷新：</p>
+              <div class="task"><div class="row"><svg class="i acc-t"><use href="#i-play"/></svg><b class="fs13">研究任务 #272</b><span class="b dot hollow">排队中</span></div><div class="steps"><div class="cur"><i></i><span>采集</span></div><div><i></i><span>评分</span></div><div><i></i><span>分类</span></div><div><i></i><span>解释</span></div><div><i></i><span>写入</span></div></div></div>
+            </div></div>
+          </div>
+          <div class="composer"><div class="box"><div class="ph">继续追问…</div><div class="row"><span class="circ"><svg class="i"><use href="#i-plus"/></svg></span><span class="chip">自动<svg class="i"><use href="#i-chevd"/></svg></span><span class="sp"></span><span class="circ pri"><svg class="i"><use href="#i-up"/></svg></span></div></div></div>
+          <nav class="tb"><a href="#today"><svg class="i"><use href="#i-home"/></svg>今日</a><a href="#cand"><svg class="i"><use href="#i-funnel"/></svg>漏斗<span class="cnt">22</span></a><a class="on" href="#ai"><svg class="i"><use href="#i-ai"/></svg>AI</a><a href="#nav"><svg class="i"><use href="#i-grid"/></svg>更多<span class="cnt warn"></span></a></nav>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">会话列表、档案仍按 10-13 方案（左抽屉 / 底部弹层）</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 运行中心 ================= -->
+  <section class="sec" id="runs">
+    <div class="sec-h"><h2>运行中心</h2><span class="k">现状 10-runs</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>每个任务 6 行“状态 / 运行 / 阶段 / 尝试 / 开始 / 详情”</li><li>只有代码，没有股票名；“▶ 详情”是原生展开三角</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>顶部 4 格统计，可以横向滑动；状态筛选用胶囊</li><li>一行一个任务：状态点 + <b>股票名</b> + 运行号 + 阶段进度 + 时间</li><li>点开是底部弹层：阶段时间线、模型、tokens、错误摘要、重试</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/10-runs.jpg" alt="现状运行中心"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#nav"><svg class="i"><use href="#i-chevl"/></svg>更多</a><div class="t"><b>运行中心</b></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-refresh"/></svg></button></div></div>
+          <div class="body">
+            <div class="mk"><div><small>排队</small><b class="num">12</b><em>最早 10-12</em></div><div><small>运行中</small><b class="num">0</b><em>worker 空闲</em></div><div><small>7 日成功</small><b class="num">18</b><em>平均 3m12s</em></div><div class="warn"><small>7 日失败</small><b class="num">2</b><em>均为采集</em></div></div>
+            <div class="chips mt12"><span class="chip on">全部</span><span class="chip">排队 <span class="c">12</span></span><span class="chip">运行中</span><span class="chip">成功</span><span class="chip">失败 <span class="c">2</span></span></div>
+            <div class="lg mt12">
+              <div class="lr"><span class="sdot mute"></span><div class="tx"><b>福耀玻璃 <span class="muted fs12 num">#273</span></b><small>排队 · 0/3 次</small></div><span class="val num">21:09</span></div>
+              <div class="lr"><span class="sdot mute"></span><div class="tx"><b>国电南瑞 <span class="muted fs12 num">#272</span></b><small>排队 · 0/3 次</small></div><span class="val num">21:09</span></div>
+              <div class="lr"><span class="sdot mute"></span><div class="tx"><b>爱尔眼科 <span class="muted fs12 num">#271</span></b><small>排队 · 0/3 次</small></div><span class="val num">21:08</span></div>
+              <div class="lr"><span class="sdot warn"></span><div class="tx"><b>财报事件 · 预约披露 <span class="muted fs12 num">#239</span></b><small class="warn-t">失败 · 采集 0/300 · 3/3 次</small></div><span class="val num">10-09</span></div>
+              <div class="lr"><span class="sdot"></span><div class="tx"><b>国电南瑞 <span class="muted fs12 num">#220</span></b><small>成功 · 3m02s · tokens 18.2k</small></div><span class="val num">10-07</span></div>
+            </div>
+          </div>
+          <div class="mscrim"></div>
+          <div class="msheet">
+            <div class="grab"></div>
+            <div class="sh-h"><div><h2>国电南瑞 · #220</h2><div class="sub">成功 · 10-07 18:45 · 3m02s</div></div><span class="sp"></span><span class="b acc dot">成功</span></div>
+            <div class="steps"><div class="done"><i></i><span>采集 41s</span></div><div class="done"><i></i><span>评分 6s</span></div><div class="done"><i></i><span>分类 4s</span></div><div class="done"><i></i><span>解释 2m05s</span></div><div class="done"><i></i><span>写入 6s</span></div></div>
+            <div class="lg mt16">
+              <div class="lr"><div class="tx"><b>模型</b></div><span class="val">deepseek-v4-flash</span></div>
+              <div class="lr"><div class="tx"><b>tokens / iFinD</b></div><span class="val num">18.2k / 0</span></div>
+              <div class="lr"><div class="tx"><b>查看研究结论</b></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">列表一屏 8–9 个任务（原来 3.5 个）；示意图里点开了 #220</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 数据健康 ================= -->
+  <section class="sec" id="health">
+    <div class="sec-h"><h2>数据健康</h2><span class="k">现状 11-health</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>9.2 屏：快照积累周表、日线覆盖、财报覆盖、采集任务卡片全部展开</li><li>每张表在手机上都变成“标签：值”，一周 6 行</li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>首屏：2×2 指标 → 提醒（带重试按钮）→ 采集任务列表（覆盖率进度条）</li><li>快照积累、交易日历、覆盖明细收成可点的行，点进二级页；首屏只留结论</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="shot"><div class="tag">● 现状</div><div class="fr"><img src="mobile-audit/11-health.jpg" alt="现状数据健康"></div></div>
+      <div class="ph-wrap"><div class="tag">● v2</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#nav"><svg class="i"><use href="#i-chevl"/></svg>更多</a><div class="t"><b>数据健康</b><small>21:19 · CSI300</small></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-refresh"/></svg></button></div></div>
+          <div class="body">
+            <div class="mk">
+              <div class="warn"><small>提醒</small><b class="num">4</b><em>错误 2 · 警告 2</em></div>
+              <div class="warn"><small>日线新鲜度</small><b>落后 2 日</b><em>最新 10-09</em></div>
+              <div><small>快照积累</small><b class="num">2<small class="muted"> / 8 周</small></b><div class="segbar"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+              <div><small>iFinD 预算</small><b class="num">150<small class="muted"> / 150</small></b><em>本月未使用</em></div>
+            </div>
+            <div class="sl">提醒</div>
+            <div class="lg">
+              <div class="lr"><span class="ic warn"><svg class="i"><use href="#i-alert"/></svg></span><div class="tx"><b>业绩预告采集失败</b><small>#238 · collected 0/300</small></div><button class="btn sm" type="button">重试</button></div>
+              <div class="lr"><span class="ic warn"><svg class="i"><use href="#i-alert"/></svg></span><div class="tx"><b>预约披露采集失败</b><small>#239 · collected 0/300</small></div><button class="btn sm" type="button">重试</button></div>
+              <div class="lr"><span class="ic warn"><svg class="i"><use href="#i-cal"/></svg></span><div class="tx"><b>日线落后 2 个交易日</b><small>应有 10-13 · 2 个排队</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+            <div class="sl">采集任务<span class="more">全部 11</span></div>
+            <div class="lg">
+              <div class="lr"><span class="sdot"></span><div class="tx"><b>日线快照</b><small>baostock · #237 · 10-09</small></div><span class="val num">100%</span></div>
+              <div class="lr"><span class="sdot"></span><div class="tx"><b>收盘快照</b><small>tencent · #236 · 10-09</small></div><span class="val num">100%</span></div>
+              <div class="lr"><span class="sdot warn"></span><div class="tx"><b>财报事件 · 业绩预告</b><small class="warn-t">akshare · 失败</small></div><span class="val num warn-t">0%</span></div>
+            </div>
+            <div class="sl">更多</div>
+            <div class="lg">
+              <div class="lr"><span class="ic"><svg class="i"><use href="#i-cal"/></svg></span><div class="tx"><b>交易日历</b><small>覆盖至 2026-12-31 · 已核对</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><span class="ic"><svg class="i"><use href="#i-layers"/></svg></span><div class="tx"><b>快照积累明细</b><small>W42 进行中 · W41 达标</small></div><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+        <div class="cap">二级页面不显示底部 4 栏；首屏回答“数据能不能用、哪里坏了”</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 模板 方法 设置 ================= -->
+  <section class="sec" id="rest">
+    <div class="sec-h"><h2>模板 · 研究方法 · 设置</h2><span class="k">现状 12 / 13 / 14</span></div>
+    <div class="notes">
+      <div><h3><i></i>现状</h3><ul><li>模板：“未校准 / 文件待同步”两个徽章常常换行；顶部 3 行说明 + 3 行警告</li><li>研究方法：两段说明、两个分页按钮、空下拉框，看不出流程</li><li>设置：<b>分组列表已经很好</b></li></ul></div>
+      <div><h3><i class="ok"></i>v2</h3><ul><li>模板：卡片描述限 2 行，徽章固定在标题行，统计放一行</li><li>研究方法：竖向 3 步流程，当前步骤展开，只放一个选择器和一个按钮</li><li>设置：保留结构，只换 token；作为全站列表行的标准样式</li></ul></div>
+    </div>
+    <div class="strip">
+      <div class="ph-wrap"><div class="tag">● v2 · 模板</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#nav"><svg class="i"><use href="#i-chevl"/></svg>更多</a><div class="t"><b>筛选模板</b></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-info"/></svg></button></div></div>
+          <div class="body">
+            <div class="callout warn"><svg class="i"><use href="#i-alert"/></svg><span>5 个模板未校准 · 5 个文件待同步</span><svg class="i end"><use href="#i-chev"/></svg></div>
+            <div class="mt12"></div>
+            <article class="mc"><div class="row"><b class="fs15">周期反转</b><span class="mono muted fs11">v3</span><span class="sp"></span><span class="b warn">未校准</span></div><p class="fs13 ink2 mt8">周期深度下跌、PB 处在自身 5 年区间低位，而低谷仍能盈利的成本领先者…</p><div class="row fs12 muted mt8"><span>条件 4</span><span>参数 15</span><span>候选 <b class="acc-t">7</b></span><span class="sp"></span><span>周期</span></div></article>
+            <article class="mc"><div class="row"><b class="fs15">红利蓝筹</b><span class="mono muted fs11">v3</span><span class="sp"></span><span class="b warn">未校准</span></div><p class="fs13 ink2 mt8">规模大、盈利稳定、持续分红的公用事业与银行，在 PB 处于自身 5 年区间下半部时…</p><div class="row fs12 muted mt8"><span>条件 7</span><span>参数 17</span><span>候选 <b class="acc-t">3</b></span><span class="sp"></span><span>公用事业 · 银行</span></div></article>
+            <article class="mc"><div class="row"><b class="fs15">高成长风险投资</b><span class="mono muted fs11">v2</span><span class="sp"></span><span class="b warn">未校准</span></div><p class="fs13 ink2 mt8">收入高速增长、毛利率高的中小市值科技与医药公司，在估值不处于自身 5 年高位时…</p><div class="row fs12 muted mt8"><span>条件 4</span><span>参数 14</span><span>候选 <b class="acc-t">3</b></span><span class="sp"></span><span>3 个行业</span></div></article>
+            <article class="mc"><div class="row"><b class="fs15">质量成长</b><span class="mono muted fs11">v3</span><span class="sp"></span><span class="b warn">未校准</span></div><p class="fs13 ink2 mt8">高且稳定的 ROE 代表竞争优势，叠加持续的收入与利润增长，长期复利…</p><div class="row fs12 muted mt8"><span>条件 6</span><span>参数 18</span><span>候选 <b class="acc-t">6</b></span><span class="sp"></span><span>3 个行业</span></div></article>
+          </div>
+          <div class="home"></div>
+        </div></div>
+      </div>
+      <div class="ph-wrap"><div class="tag">● v2 · 研究方法</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#nav"><svg class="i"><use href="#i-chevl"/></svg>更多</a><div class="t"><b>研究方法</b></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-info"/></svg></button></div></div>
+          <div class="body">
+            <p class="fs13 muted">从已完成复盘提出改进，由你批准后生效。只加强研究步骤，不改持仓、不发提醒。</p>
+            <div class="card mt12"><div class="card-b">
+              <div class="vstep on"><span class="n">1</span><div class="lr"><div class="tx"><b>冻结真实过程复盘</b><small>选一个已完成任务作为固定样本</small></div></div>
+                <div class="field"><div class="sel"><span class="muted">选择已完成任务</span><svg class="i"><use href="#i-chevd"/></svg></div></div>
+                <button class="btn lg pri blk mt12" type="button">保存任务与实际输出</button>
+              </div>
+              <div class="vstep"><span class="n">2</span><div class="lr"><div class="tx"><b>提出步骤改进</b><small>错误模式与证据说明</small></div></div></div>
+              <div class="vstep"><span class="n">3</span><div class="lr"><div class="tx"><b>影子评估 · 批准</b><small>前瞻样本检验后由你批准</small></div></div></div>
+            </div></div>
+            <div class="sl">方法版本记录</div>
+            <div class="card"><div class="empty"><div class="ei"><svg class="i xl"><use href="#i-book"/></svg></div><h3>还没有改进记录</h3><p>新任务使用当前方法版本；历史任务保留原版本。</p></div></div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+      </div>
+      <div class="ph-wrap"><div class="tag">● v2 · 设置</div>
+        <div class="phone"><div class="scr"><div class="island"></div>
+          <div class="stb"><span>9:41</span><span class="r"><svg><use href="#i-sig"/></svg><svg viewBox="0 0 26 12"><use href="#i-bat"/></svg></span></div>
+          <div class="ab nav"><a class="back" href="#nav"><svg class="i"><use href="#i-chevl"/></svg>更多</a><div class="t"><b>设置</b></div><div class="acts"><button class="ib" type="button"><svg class="i"><use href="#i-search"/></svg></button></div></div>
+          <div class="body">
+            <div class="sl">研究</div>
+            <div class="lg">
+              <div class="lr"><div class="tx"><b>投资 Agent</b><small>模型未填 · 价格为空</small></div><span class="val">已关闭</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><div class="tx"><b>解释模型</b><small>Key 已设置</small></div><span class="val">deepseek-flash</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><div class="tx"><b>通知</b><small>只发新变化的状态和引用</small></div><span class="val">仅站内</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><div class="tx"><b>候选池</b><small>忽略冷却 30 天</small></div><span class="val">14 天过期</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+            <div class="sl">数据</div>
+            <div class="lg"><div class="lr"><div class="tx"><b>数据源</b><small>连接、采集、核验、同行</small></div><span class="val">同行已开</span><svg class="i chev"><use href="#i-chev"/></svg></div></div>
+            <div class="sl">运行</div>
+            <div class="lg">
+              <div class="lr"><div class="tx"><b>定时任务</b><small>2 个停用</small></div><span class="val">16 个</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+              <div class="lr"><div class="tx"><b>手机网关</b><small>凭证只留在服务端</small></div><span class="val">未启用</span><svg class="i chev"><use href="#i-chev"/></svg></div>
+            </div>
+            <div class="sl">系统</div>
+            <div class="lg"><div class="lr"><div class="tx"><b>记录与启动配置</b><small>变更历史与启动配置</small></div><span class="val">只读</span><svg class="i chev"><use href="#i-chev"/></svg></div></div>
+          </div>
+          <div class="home"></div>
+        </div></div>
+      </div>
+      <div class="shot"><div class="tag">● 现状 · 模板</div><div class="fr"><img src="mobile-audit/12-templates.jpg" alt="现状模板"></div></div>
+      <div class="shot"><div class="tag">● 现状 · 研究方法</div><div class="fr"><img src="mobile-audit/13-methods.jpg" alt="现状研究方法"></div></div>
+      <div class="shot"><div class="tag">● 现状 · 设置</div><div class="fr"><img src="mobile-audit/14-settings.jpg" alt="现状设置"></div></div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function(){
+  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  const root=document.documentElement;
+  function setTheme(t){root.dataset.theme=t;try{localStorage.setItem('zc-m-theme',t)}catch(e){}}
+  let saved=null;try{saved=localStorage.getItem('zc-m-theme')}catch(e){}
+  setTheme(saved||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'));
+  $('#theme').addEventListener('click',()=>setTheme(root.dataset.theme==='dark'?'light':'dark'));
+  document.addEventListener('click',e=>{const b=e.target.closest('.seg button');if(b){[...b.parentElement.children].forEach(x=>x.classList.toggle('on',x===b))}});
+
+  function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  function series(seed,drift,n){const r=rng(seed);let v=100,out=[];for(let i=0;i<n;i++){v*=1+(r()-.5)*.045+drift/n;out.push(v)}return out}
+  function path(vals,h,pad){const mn=Math.min(...vals),mx=Math.max(...vals),n=vals.length;return vals.map((v,i)=>(i?'L':'M')+(i/(n-1)*100).toFixed(2)+','+(pad+(1-(v-mn)/(mx-mn||1))*(h-2*pad)).toFixed(2)).join('')}
+  $$('svg.spark').forEach(svg=>{
+    const [seed,drift]=svg.dataset.spark.split(',').map(Number);
+    const h=+svg.getAttribute('viewBox').split(' ')[3];
+    const wide=svg.classList.contains('wide');
+    const vals=series(seed,drift,wide?240:80);
+    const d=path(vals,h,wide?6:3);
+    if(!svg.classList.contains('acc'))svg.classList.add(vals[vals.length-1]>=vals[0]?'up':'down');
+    svg.innerHTML='<path class="ar" d="'+d+'L100,'+h+'L0,'+h+'Z"/><path class="ln" d="'+d+'"/>';
+  });
+})();
+</script>
+</body>
+</html>
