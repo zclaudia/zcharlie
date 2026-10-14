@@ -49,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.domain.a_share import format_listing_ticker
+from investment_agent.domain.time import optional_utc as as_utc
 from investment_agent.providers.circuit import CircuitStatus
 from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
@@ -408,12 +409,6 @@ class HealthSettings:
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-
-
-def as_utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def _str(value: object) -> str | None:

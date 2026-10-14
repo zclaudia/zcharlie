@@ -11,7 +11,7 @@ writes its decision in the same transaction.
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Annotated, Any, NoReturn
 
 import structlog
@@ -65,6 +65,12 @@ from investment_agent.candidates.promote import (
 )
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
+from investment_agent.domain.time import (
+    as_utc as _as_utc,
+)
+from investment_agent.domain.time import (
+    optional_utc as _optional_utc,
+)
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.rules.drafting import load_stock_context
 from investment_agent.rules.screen import evaluate_zone_conditions
@@ -92,14 +98,6 @@ log = structlog.get_logger(__name__)
 candidates_router = APIRouter(prefix="/candidates", tags=["candidates"], dependencies=_auth)
 rules_router = APIRouter(prefix="/rules", tags=["rules"], dependencies=_auth)
 screen_runs_router = APIRouter(prefix="/screen-runs", tags=["screen-runs"], dependencies=_auth)
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
-
-
-def _optional_utc(value: datetime | None) -> datetime | None:
-    return _as_utc(value) if value is not None else None
 
 
 def _raise_http(exc: Exception) -> NoReturn:

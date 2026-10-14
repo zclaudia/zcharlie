@@ -27,6 +27,7 @@ from pydantic_core import to_jsonable_python
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.config import Settings
+from investment_agent.domain.time import as_utc as _utc
 from investment_agent.mcp_server.readonly import SessionFactory
 
 SERVER_NAME = "zcharlie"
@@ -71,10 +72,6 @@ def _json(value: Any) -> dict[str, Any]:
     data = to_jsonable_python(value, serialize_unknown=True)
     assert isinstance(data, dict)
     return data
-
-
-def _utc(value: datetime) -> datetime:
-    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _number(value: Decimal | None) -> float | None:

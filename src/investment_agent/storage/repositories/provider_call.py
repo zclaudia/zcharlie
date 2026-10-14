@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.engine import CursorResult
 
+from investment_agent.domain.time import as_utc
 from investment_agent.storage.models.provider_call import (
     CIRCUIT_ENDPOINT,
     FAILED_OUTCOMES,
@@ -16,12 +17,6 @@ from investment_agent.storage.models.provider_call import (
 )
 from investment_agent.storage.repositories.base import Repository
 from investment_agent.storage.repositories.pit import to_utc
-
-
-def as_utc(value: datetime) -> datetime:
-    """Stored timestamps come back naive from SQLite (they are UTC)."""
-
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 @dataclass(frozen=True)

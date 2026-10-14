@@ -1,6 +1,5 @@
 """/watchlist endpoints."""
 
-from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
@@ -27,6 +26,7 @@ from investment_agent.api.schemas.admin import (
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
+from investment_agent.domain.time import as_utc as _as_utc
 from investment_agent.research.watchlist_refresh import (
     enqueue_watchlist_refresh,
     research_source_mode,
@@ -334,12 +334,6 @@ def _optional_float(value: object) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     return None
-
-
-def _as_utc(value: datetime) -> datetime:
-    """Normalize SQLite's timezone-naive timestamps at the API boundary."""
-
-    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 @router.patch("/{listing_id}", response_model=WatchlistItemOut)

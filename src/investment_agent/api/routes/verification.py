@@ -8,7 +8,6 @@ promote flow, the collectors and the scheduler.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
@@ -20,6 +19,7 @@ from investment_agent.api.schemas.verification import (
     VerificationRequestPageOut,
     VerificationResultSummary,
 )
+from investment_agent.domain.time import optional_utc as _utc
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.verification import VerificationRequest
 
@@ -31,12 +31,6 @@ router = APIRouter(
 
 _STATUS_PATTERN = r"^(pending|deferred|running|done|failed|superseded)$"
 _TICKER_PATTERN = r"^\d{6}\.(SH|SZ|BJ)$"
-
-
-def _utc(value: datetime | None) -> datetime | None:
-    if value is None:
-        return None
-    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _str_list(value: Any) -> list[str]:

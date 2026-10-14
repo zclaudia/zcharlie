@@ -46,6 +46,7 @@ router = APIRouter(
 
 
 def _as_utc(value: datetime) -> datetime:
+    # Deliberately not domain.time.as_utc: keeps a stored aware value's offset.
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 

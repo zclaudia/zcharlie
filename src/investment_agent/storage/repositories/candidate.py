@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from investment_agent.domain.time import as_utc as as_utc
 from investment_agent.storage.models.candidates import (
     CANDIDATE_STATUSES,
     DECISION_ACTORS,
@@ -30,12 +31,6 @@ PREFERENCE_KINDS = ("reject_rule", "dismiss")
 
 class ReasonRequiredError(ValueError):
     """``dismiss`` / ``reject_rule`` decisions need a non-empty reason."""
-
-
-def as_utc(value: datetime) -> datetime:
-    """SQLite returns naive timestamps; every stored timestamp is UTC."""
-
-    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 class CandidateRepository(Repository[CandidateRecord]):

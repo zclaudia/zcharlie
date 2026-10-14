@@ -84,6 +84,7 @@ _CURSOR_MAX_LENGTH = 512
 
 def as_utc(value: datetime) -> datetime:
     """SQLite DateTime drops the offset: stored values are UTC wall time."""
+    # Deliberately not domain.time.as_utc: an aware value keeps its own offset.
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 

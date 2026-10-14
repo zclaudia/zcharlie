@@ -60,6 +60,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
+from investment_agent.domain.time import as_utc as _as_utc
 from investment_agent.evidence.contracts import CalculationRecord, EvidenceRecord
 from investment_agent.industry_peers.artifacts import (
     DEFAULT_ADAPTER_VERSION,
@@ -277,10 +278,6 @@ def _artifacts_root(data_dir: Path | None) -> Path:
     from investment_agent.config import Settings
 
     return Settings().data_dir  # type: ignore[call-arg]
-
-
-def _as_utc(value: datetime) -> datetime:
-    return value.astimezone(UTC) if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
 async def resolve_peer_target(session: AsyncSession, *, ticker: str) -> PeerTargetIdentity:

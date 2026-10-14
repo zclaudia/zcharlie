@@ -30,6 +30,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.domain.time import as_utc as as_utc
 from investment_agent.providers.errors import ProviderError
 from investment_agent.research.ifind_chain import IfindProxyResult, ProxyCallHook
 from investment_agent.research.retry_policy import is_quota_exhausted
@@ -46,12 +47,6 @@ DEFAULT_WINDOW = timedelta(hours=5)
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
-
-
-def as_utc(value: datetime) -> datetime:
-    """Stored timestamps come back naive from SQLite (they are UTC)."""
-
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
 def ticker_count(payload: dict[str, Any]) -> int:
