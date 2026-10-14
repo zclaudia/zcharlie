@@ -43,14 +43,15 @@ export function bootAgentPortfolio() {
   const status = el('p', {role:'status','aria-live':'polite'}), selector = el('select', {'aria-label':'组合账户'});
   const nav = el('div', {class:'toolbar'}), body = el('section'), summary = el('section');
   const retry = button('重取原待确认请求', () => transmit());
-  host.append(el('h2', {}, '真实组合'), el('p', {class:'muted'}, '工程演示默认关闭。真实研究质量验收尚未通过；生产默认可信交易规则不可用；隔离演示不能验证实盘规则。接受或以后买不会记为成交，也不预留现金。'), status, selector, nav, retry, summary, body);
+  host.append(el('h2', {}, '真实组合'), el('p', {class:'notice notice-warn'}, '工程演示默认关闭。真实研究质量验收尚未通过；生产默认可信交易规则不可用；隔离演示不能验证实盘规则。接受或以后买不会记为成交，也不预留现金。'), status, selector, nav, retry, summary, body);
   function error(exc) {
     const values = exc.detail?.field_errors || {};
     const fields = Array.isArray(exc.detail) ? exc.detail.map(x => `${x.loc.join(' · ')}：${x.msg}`).join('；') : Array.isArray(values) ? values.map(x => `${x.field}：${x.message}`).join('；') : Object.entries(values).map(([field,message])=>`${fieldLabel(field)}：${explain(message)}`).join('；');
     status.textContent = `${fields || explain(exc.detail?.message || exc.message)}${exc.status === 409 ? '。版本已变化，请刷新并重新审阅，原事实没有自动重写。' : ''}`;
   }
   function run(fn) {return Promise.resolve().then(fn).catch(error);}
-  function button(text, fn) {const b = el('button', {type:'button'}, text); b.addEventListener('click', () => run(fn)); return b;}
+  // v2 emphasis: the one confirming button of a form is primary; removing a row is a quiet warning action.
+  function button(text, fn) {const b = el('button', {type:'button', class:/^确认/.test(text) ? 'btn-primary' : /^移除/.test(text) ? 'btn-danger-ghost' : undefined}, text); b.addEventListener('click', () => run(fn)); return b;}
   function field(label, value = '', type = 'text', parent = body) {
     const wrap = el('label', {}, label), node = el('input', {type,autocomplete:'off'}); node.value = value; wrap.append(node); parent.append(wrap); return node;
   }

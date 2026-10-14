@@ -26,7 +26,9 @@ export function bootAgentControls() {
   host.append(nav, status, body);
 
   function button(text, fn) {
-    const node = el('button', {type: 'button'}, text);
+    // v2 emphasis: the one confirming button of a form is primary; refusing/revoking is a quiet warning action.
+    const cls = /^(确认|明确保存|保存决定|批准)/.test(text) ? 'btn-primary' : /^(拒绝|撤销|放弃)/.test(text) ? 'btn-danger-ghost' : undefined;
+    const node = el('button', {type: 'button', class: cls}, text);
     node.addEventListener('click', fn);
     return node;
   }

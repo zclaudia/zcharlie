@@ -90,7 +90,7 @@ export function bootAgent() {
   function setDrawer(open) {
     root.dataset.drawer = open ? "open" : "closed";
     const toggle = $("drawer-toggle");
-    toggle.setAttribute("aria-expanded", String(open)); toggle.textContent = open ? "档案 ▸ 收起" : "档案 ◂ 展开";
+    toggle.setAttribute("aria-expanded", String(open)); toggle.querySelector("span").textContent = open ? "收起档案" : "展开档案";
     state.ui.drawer = open ? "open" : "closed"; persist();
   }
   root.querySelectorAll("[data-agent-tab]").forEach(button => {
@@ -106,7 +106,7 @@ export function bootAgent() {
   }));
   root.querySelectorAll("[data-agent-tab-go]").forEach(button => button.addEventListener("click", () => { setPane("chat"); setTab(button.dataset.agentTabGo); }));
   root.querySelectorAll("[data-agent-tab-back]").forEach(button => button.addEventListener("click", () => setTab("chat")));
-  root.querySelector("[data-agent-mainnav]").addEventListener("click", () => { setPane("chat"); document.querySelector(".nav-toggle")?.click(); });
+  root.querySelector("[data-agent-mainnav]")?.addEventListener("click", () => { setPane("chat"); document.querySelector(".nav-toggle")?.click(); });
   root.querySelector("[data-agent-plus-close]").addEventListener("click", () => openPlus(false));
   root.querySelector("[data-agent-plus-portfolio]").addEventListener("click", () => { openPlus(false); setTab("portfolio"); });
   $("scrim").addEventListener("click", () => { openPlus(false); setPane("chat"); });
@@ -261,7 +261,9 @@ export function bootAgent() {
       const status = conversationStatus(c);
       if (status) meta.append(el("span", {}, ""), el("span", {}, status.text));
       if (status) meta.firstChild.className = `ai-dot ${status.cls}`;
-      meta.append(el("span", {}, formatDateTime(c.created_at).slice(5)));
+      // Today's items show the time, older ones the date (Beijing time via format.js).
+      const stamp = formatDateTime(c.created_at);
+      meta.append(el("span", {}, name === "今天" ? stamp.slice(11) : stamp.slice(5, 10)));
       button.append(el("span", {class:"ai-conv-title"}, c.title || "未命名对话"), meta);
       button.addEventListener("click", () => selectConversation(c.id).catch(showError));
       box.append(button);
@@ -311,6 +313,11 @@ export function bootAgent() {
     box.append(hello, cards, el("p", {class:"ai-faint ai-disc"}, "回答只基于已保存的材料与所列来源，包含假设与不确定性；交易决定由你作出。"));
     return box;
   }
+  // Header subtitle (mobile app bar): how many research tasks this conversation started.
+  function updateSubtitle() {
+    const count = tasks.size || messages.filter(m => m.task_ref).length;
+    $("subtitle").textContent = current && count ? `${count} 个研究任务` : "";
+  }
   function renderMessages() {
     const thread = $("messages");
     const nearBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
@@ -321,25 +328,28 @@ export function bootAgent() {
     for (const m of messages) {
       const user = m.role === "user";
       const node = el("article", {class:`ai-msg ai-msg-${user ? "user" : "assistant"} agent-message agent-message-${m.role}`, "data-message-id":m.id});
+      // Avatar + body column: user "我", assistant sparkle; the body carries bubble/answer, object chips and banners.
+      const body = el("div", {class:"ai-body"});
+      node.append(el("div", {class:`ai-av${user ? "" : " ai-av-bot"}`, "aria-hidden":"true"}, user ? "我" : "✦"), body);
       if (user) {
-        node.append(el("div", {class:"ai-bubble"}, m.text));
+        body.append(el("div", {class:"ai-bubble"}, m.text));
         if (m.context_refs.length) {
           const ctx = el("div", {class:"ai-ctx"});
-          m.context_refs.forEach(r => ctx.append(el("span", {class:"ai-chip"}, refLabel(r))));
-          ctx.append(el("span", {}, "发送时对象已固定"));
-          node.append(ctx);
+          m.context_refs.forEach(r => ctx.append(el("span", {class:"ai-chip ai-chip-obj"}, refLabel(r))));
+          ctx.append(el("span", {class:"ai-ctx-note"}, "发送时对象已固定"));
+          body.append(ctx);
         }
       } else {
         const who = el("div", {class:"ai-who"});
-        who.append(el("span", {class:"ai-chip ai-chip-ai"}, "AI"));
-        node.append(who);
-        m.text.split(/\n{2,}/).filter(Boolean).forEach(part => node.append(el("p", {class:"ai-answer"}, part)));
-        if (m.context_refs.length) node.append(el("small", {class:"ai-faint"}, `回答时对象：${m.context_refs.map(refLabel).join("；")}`));
+        who.append(el("b", {}, "研究助手"), el("span", {}, "基于已保存材料 · 不构成建议"));
+        body.append(who);
+        m.text.split(/\n{2,}/).filter(Boolean).forEach(part => body.append(el("p", {class:"ai-answer"}, part)));
+        if (m.context_refs.length) body.append(el("small", {class:"ai-faint"}, `回答时对象：${m.context_refs.map(refLabel).join("；")}`));
       }
       // AG18 consumes saved references through this real lifecycle event; no numeric-node evaluation here.
       [...m.artifact_refs,...m.context_refs].filter(r => r.kind === "recommendation").forEach(r => {
         const view = opinionViews.get(`${r.id}:${r.revision}`);
-        if (view) node.append(el("div", {class:"ai-banner ai-banner-ai"}, `${view.replacement_ref ? "依据的观点已有更新 · " : ""}引用的观点当前${OPINION[view.status] || "状态无法识别"}`));
+        if (view) body.append(el("div", {class:"ai-banner ai-banner-ai"}, `${view.replacement_ref ? "依据的观点已有更新 · " : ""}引用的观点当前${OPINION[view.status] || "状态无法识别"}`));
       });
       thread.append(node);
       const panel = m.task_ref && tasks.get(m.task_ref.id);
@@ -350,6 +360,7 @@ export function bootAgent() {
     if (empty) thread.append(emptyState());
     if (empty) thread.scrollTop = 0;
     else if (nearBottom) thread.scrollTop = thread.scrollHeight;
+    updateSubtitle();
     root.dispatchEvent(new CustomEvent("agent:messages", {detail:{conversationId:current,messages}}));
   }
   async function reloadMessages(id, token) {
@@ -371,6 +382,7 @@ export function bootAgent() {
     $("search-results").replaceChildren(); openPicker(false); openMode(false);
     messages = []; opinionViews.clear(); $("messages").replaceChildren(); $("updates").replaceChildren();
     $("title").textContent = conversations.find(c => c.id === id)?.title || "对话";
+    updateSubtitle();
     restoreDraft(); renderList(); persist(); notice("正在恢复消息与任务…");
     if (window.matchMedia("(max-width: 56rem)").matches) setPane("chat");
     await reloadMessages(id, token);
@@ -433,11 +445,15 @@ export function bootAgent() {
   }
   function watchTask(taskId, id, token) {
     if (tasks.has(taskId) || !isCurrent(id,token)) return;
-    const panel = el("section", {class:"ai-task agent-task", "data-task-id":taskId});
+    const panel = el("section", {class:"ai-task agent-task", "data-task-id":taskId, "data-stage":"queued"});
     const head = el("div", {class:"ai-task-head"});
-    const badge = el("span", {class:"ai-chip ai-chip-ai"}, "任务");
-    const label = el("p", {class:"ai-task-label"}), progress = el("ul", {class:"ai-task-steps"}), cancel = el("button", {type:"button"}, "取消任务");
-    head.append(badge, label, cancel); panel.append(head, progress); tasks.set(taskId, panel); placeTask(taskId);
+    const badge = el("span", {class:"badge dot hollow ai-task-badge"}, "任务");
+    const label = el("p", {class:"ai-task-label"}), progress = el("ul", {class:"ai-task-steps"}), cancel = el("button", {type:"button", class:"btn-sm btn-ghost ai-task-cancel"}, "取消任务");
+    // Lifecycle bar: only the states the task API exposes (排队 / 执行 / 完成), driven by data-stage.
+    const stages = el("ol", {class:"ai-stages", "aria-hidden":"true"});
+    ["排队", "执行", "完成"].forEach(name => stages.append(el("li", {}, name)));
+    const link = el("a", {class:"ai-task-link", href:"/app/runs"}, "在运行中心查看");
+    head.append(label, badge, link, cancel); panel.append(head, stages, progress); tasks.set(taskId, panel); placeTask(taskId); updateSubtitle();
     let cursor = 0, failures = 0, stopped = false, timer, controller, task, finishing;
     const seen = new Set();
     const alive = () => !stopped && isCurrent(id,token);
@@ -450,6 +466,8 @@ export function bootAgent() {
       const detail = `${value.stop_reason ? ` · ${STOP[value.stop_reason] || "停止原因无法识别"}` : ""}${value.waiting ? ` · ${value.waiting.required_input} · 截止 ${formatDateTime(value.waiting.deadline)}` : ""}`;
       label.textContent = `研究任务${detail}`;
       badge.textContent = stopping ? "正在停止" : TASK[value.status] || "任务";
+      badge.className = `badge ai-task-badge ${stopping || value.status === "waiting_user" || value.status === "waiting_data" || value.status === "partial" || value.status === "failed" ? "warn dot" : value.status === "queued" ? "dot hollow" : value.status === "cancelled" ? "outline" : "accent dot"}`;
+      panel.dataset.stage = {queued:"queued", running:"run", waiting_data:"wait", waiting_user:"wait", succeeded:"done", partial:"done", failed:"stop", cancelled:"stop"}[value.status] || "queued";
       panel.classList.toggle("ai-task-done", TERMINAL.has(value.status));
       panel.classList.toggle("ai-task-waiting", value.status === "waiting_user" || value.status === "waiting_data");
       cancel.disabled = TERMINAL.has(value.status) || value.cancel_requested;
@@ -613,7 +631,8 @@ export function bootAgent() {
   async function init() {
     const params = new URLSearchParams(location.search);
     if (narrow()) $("input").placeholder = "问点什么…";
-    setDrawer((state.ui.drawer || "open") === "open");
+    // The research drawer starts open, except on mid-width desktops where it would cover the thread.
+    setDrawer((state.ui.drawer || (window.matchMedia("(max-width: 68rem)").matches ? "closed" : "open")) === "open");
     setPane(params.get("pane") || "chat");
     setTab(params.get("tab") || "chat", {url:false});
     restoreDraft(); renderMessages(); await listConversations();

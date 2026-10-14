@@ -20,7 +20,9 @@ const originalLimitation = v => {
 
 const limitation=v=>v.startsWith('dependency_unavailable:')?'关键依据已更正或当前不可用，需要复核':v.startsWith('monitor_')?'复核条件或监测结果存在限制':label(v);
 const refText = r => `${({recommendation:'观点',thesis:'论证',evidence:'证据',calculation:'计算',listing:'证券',task:'任务',case:'档案'}[r.kind] || r.kind)} ${r.id} · v${r.revision}${r.field_path ? ' · '+r.field_path : ''}`;
-function button(text, action) {const b=el('button',{type:'button'},text); b.addEventListener('click',action); return b;}
+function button(text, action, cls) {const b=el('button',{type:'button',class:cls},text); b.addEventListener('click',action); return b;}
+// Artifact card: a whole-width button row in the research rail (text stays a single node).
+const art=(text,action)=>button(text,action,'art');
 export function bootAgentViews() {
   const root=document.querySelector('#agent-workbench'); if (!root) return;
   const host=root.querySelector('#agent-artifact-extension');
@@ -146,7 +148,7 @@ export function bootAgentViews() {
     }catch(exc){if(alive(token))error(body,exc,()=>casePage(id));}
   }
   async function listPage(kind,after) {
-    selected=kind;const token=++epoch;drawer.hidden=true;loading();const path=kind==='cases'?`/investor/cases?limit=50${after?'&after='+encodeURIComponent(after):''}`:kind==='notifications'?`/investor/notifications?limit=50&after=${after || 0}`:`/investor/discovery/batches?limit=50&after=${after || 0}`;
+    selected=kind;mark(kind);const token=++epoch;drawer.hidden=true;loading();const path=kind==='cases'?`/investor/cases?limit=50${after?'&after='+encodeURIComponent(after):''}`:kind==='notifications'?`/investor/notifications?limit=50&after=${after || 0}`:`/investor/discovery/batches?limit=50&after=${after || 0}`;
     try {const rows=await get(path);if(kind==='cases')await identities(rows.map(r=>r.listing_ref));if(kind==='notifications')await notificationIdentities(rows);if(!alive(token))return;body.replaceChildren(el('h2',{},kind==='cases'?'公司档案':kind==='notifications'?'站内提醒':'有限探索与线索'));
       if(!rows.length)body.append(el('p',{},'本页没有已保存记录。未产生记录不代表研究通过或没有风险。'));
       body.append(el('p',{class:'muted'},`本页 ${rows.length} 条；全体记录数量未知。`));
@@ -162,9 +164,9 @@ export function bootAgentViews() {
     }catch(exc){if(alive(token))error(body,exc,()=>listPage(kind,after));}
   }
   async function batchPage(id) {selected="batch";const token=++epoch;loading();try{const batch=await get(`/investor/discovery/batches/${id}`);await identities((batch.leads || []).map(lead=>lead.listing_ref));if(!alive(token))return;body.replaceChildren(el('h2',{},'有限探索处理过程'),el('p',{},`批次 ${id} · ${label(batch.state)}。选择完成仅代表短名单处理完成。`));body.append(el('p',{},batch.summary || '摘要尚未保存'));for(const lead of batch.leads || []){const section=el('article');section.append(el('h3',{},name(lead.listing_ref)),el('p',{},lead.question || '待核查线索'),el('p',{},`${label(lead.status)} · ${label(lead.processing_reason || '处理原因未知')}`),el('p',{},'选择理由：'+(lead.reason || '未知')),el('p',{},'再评估条件：'+(lead.reevaluate_when || '未知')));refs(section,[lead.listing_ref].filter(Boolean));audit(section,lead);body.append(section);}audit(body,batch);for(const lead of batch.leads || []){const tid=lead.merged_task_id || lead.research_task_id;if(tid)body.append(button(`${lead.merged_task_id?'合并到现有研究':'查看研究任务'} ${tid}`,()=>taskPage(tid)));}}catch(exc){if(alive(token))error(body,exc,()=>batchPage(id));}}
-  function conversationPage() {selected='conversation';++epoch;drawer.hidden=true;body.replaceChildren(el('h2',{},'当前对话研究产物'));if(!recommendations.length)body.append(el('p',{},'当前对话没有正式公司观点；局部回答不表示完整公司判断。'));for(const r of recommendations)body.append(button(refText(r),()=>opinionPage([r])));if(recommendations.length>1)body.append(button('并列查看引用的观点',()=>opinionPage(recommendations)));for(const t of taskRefs.values())body.append(button(`研究过程 ${t.id} · ${label(t.status)}`,()=>taskPage(t.id)));}
+  function conversationPage() {selected='conversation';mark('conversation');++epoch;drawer.hidden=true;body.replaceChildren(el('h2',{},'当前对话研究产物'));if(!recommendations.length)body.append(el('p',{},'当前对话没有正式公司观点；局部回答不表示完整公司判断。'));for(const r of recommendations)body.append(art(refText(r),()=>opinionPage([r])));if(recommendations.length>1)body.append(art('并列查看引用的观点',()=>opinionPage(recommendations)));for(const t of taskRefs.values())body.append(art(`研究过程 ${t.id} · ${label(t.status)}`,()=>taskPage(t.id)));}
   function searchPage() {
-    selected='search';const token=++epoch;let searchGeneration=0;drawer.hidden=true;
+    selected='search';mark('search');const token=++epoch;let searchGeneration=0;drawer.hidden=true;
     const input=el('input',{type:'search',maxlength:'120',placeholder:'例如：净利润、竞争、风险','aria-label':'已保存材料关键词'}),results=el('section',{'aria-live':'polite'});
     const run=async offset=>{const generation=++searchGeneration;if(!searchListings.length){results.replaceChildren(el('p',{},'请先在当前对话选择证券，再搜索已保存材料。'));return;}
       results.replaceChildren(el('p',{},'正在搜索已保存材料…'));
@@ -177,6 +179,9 @@ export function bootAgentViews() {
     const form=el('form');form.append(input,el('button',{type:'submit'},'搜索保存材料'));form.addEventListener('submit',event=>{event.preventDefault();run(0);});body.replaceChildren(el('h2',{},'已保存材料搜索'),el('p',{},'仅搜索当前所选证券的既有研究来源和已保存解析片段；不会下载新材料。'),form,results);
   }
   nav.append(button('对话产物',conversationPage),button('搜索保存材料',searchPage),button('公司档案',()=>listPage('cases')),button('站内提醒',()=>listPage('notifications')),button('线索与探索',()=>listPage('discovery')));
+  // The rail's segmented switch marks the active projection; drill-down pages keep the parent's mark.
+  ['conversation','search','cases','notifications','discovery'].forEach((key,index)=>{nav.children[index].dataset.view=key;});
+  function mark(key){for(const b of nav.children)b.setAttribute('aria-pressed',String(b.dataset.view===key));}
   root.addEventListener('agent:messages',({detail})=>{if(conversation!==detail.conversationId){conversation=detail.conversationId;taskRefs.clear();selected='conversation';++epoch;drawer.hidden=true;}recommendations=[...new Map(detail.messages.flatMap(m=>[...m.context_refs,...m.artifact_refs]).filter(r=>r.kind==='recommendation').map(r=>[`${r.id}:${r.revision}`,r])).values()];if(selected==='conversation')conversationPage();});
   root.addEventListener('agent:task',({detail})=>{taskRefs.set(detail.id,detail);if(selected==='conversation')conversationPage();});
   root.addEventListener('agent:binding',({detail})=>{searchListings=detail.refs.filter(r=>r.kind==='listing').slice(0,10);const signature=JSON.stringify(detail.refs);if(bindingSignature!==null && signature!==bindingSignature){selected='conversation';conversationPage();}bindingSignature=signature;});
