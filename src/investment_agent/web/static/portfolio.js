@@ -17,7 +17,7 @@ import {
 
 const PENDING_KEY = "zcharlie.portfolio.pending.v1";
 let epoch = 0, busy = false, pending = null, storageBlocked = false, currentSnapshot = null;
-let recentActivity = new Set(), lastValuation = null, lastListings = {};
+let recentActivity = new Set(), lastValuation = null, lastListings = {}, hasAccounts = true;
 const CHANGE_KINDS = new Set(["trade", "corporate_action", "opening_balance", "reconciliation"]);
 
 export const PORTFOLIO_REGIONS = new Set([
@@ -87,6 +87,55 @@ function renderDisabled() {
   if (notice) notice.hidden = false;
 }
 
+function closeOverlay() {
+  if (globalThis.zcOverlay) globalThis.zcOverlay.close();
+}
+
+function openFactDrawer(tab = "fact") {
+  showDrawerTab(tab);
+  const drawer = document.querySelector("#portfolio-fact-drawer");
+  if (drawer && globalThis.zcOverlay) globalThis.zcOverlay.open(drawer);
+}
+
+// 页面刚加载时 nav.js 会在 pageshow 里收起所有弹层（bfcache 返回），所以延后一拍再打开。
+function openFactDrawerWhenReady() {
+  if (!globalThis.zcOverlay) return;
+  const open = () => setTimeout(() => openFactDrawer("fact"), 0);
+  if (document.readyState === "complete") open();
+  else globalThis.addEventListener("pageshow", open, { once: true });
+}
+
+// 录入 / 纠错两个面板共用一个抽屉；页签只切换可见面板，两个面板各自的表单与校验不变。
+function showDrawerTab(name) {
+  for (const tab of document.querySelectorAll("[data-pf-tab]")) {
+    const on = tab.getAttribute("data-pf-tab") === name;
+    tab.classList.toggle("on", on);
+    tab.setAttribute("aria-selected", on ? "true" : "false");
+  }
+  for (const pane of document.querySelectorAll("[data-pf-pane]")) {
+    pane.hidden = pane.getAttribute("data-pf-pane") !== name;
+  }
+}
+
+// 没有账户时只显示空状态（说明 + 三步 + 新建账户）；有账户后显示 KPI / 持仓 / 时间线等。
+function setEmptyState(empty) {
+  hasAccounts = !empty;
+  const emptyCard = document.querySelector("#portfolio-empty");
+  const ledger = document.querySelector("#portfolio-ledger");
+  if (emptyCard) emptyCard.hidden = !empty;
+  if (ledger) ledger.hidden = empty;
+  const refresh = document.querySelector("#portfolio-refresh");
+  if (refresh && empty) refresh.disabled = true;
+}
+
+function hideKpis() {
+  const box = document.querySelector("#portfolio-kpis");
+  if (box) {
+    box.replaceChildren();
+    box.hidden = true;
+  }
+}
+
 async function loadListings(ids) {
   const unique = [...new Set(ids.filter((id) => Number.isInteger(id)))];
   if (!unique.length) return {};
@@ -107,6 +156,19 @@ function stockCell(listing, listingId) {
   return cell;
 }
 
+// 列表里（非表格）的股票块：名称 + 代码。
+function stockBlock(listing, listingId) {
+  const block = el("span", { class: "stock-block" });
+  const row = listing || {};
+  if (row.ticker) {
+    block.appendChild(el("a", { href: `/app/stocks/${encodeURIComponent(row.ticker)}`, class: "stock-name" }, row.name || row.ticker));
+    block.appendChild(el("span", { class: "stock-code" }, row.ticker));
+  } else {
+    block.appendChild(el("span", { class: "faint" }, `#${listingId}`));
+  }
+  return block;
+}
+
 function orderByRecentActivity(holdings) {
   // Change-driven order (plan 2.4): holdings whose ledger facts moved within
   // the last day come first; everything else keeps the ledger order.
@@ -114,6 +176,67 @@ function orderByRecentActivity(holdings) {
   const active = holdings.filter((holding) => recentActivity.has(String(holding.listing_ref.id)));
   const rest = holdings.filter((holding) => !recentActivity.has(String(holding.listing_ref.id)));
   return [...active, ...rest];
+}
+
+function signed(value, digits = 2) {
+  const text = fmtDecimal(value, digits);
+  return Number(value) > 0 ? `+${text}` : text;
+}
+
+function direction(value) {
+  const number = Number(value);
+  return number > 0 ? "up" : number < 0 ? "down" : "";
+}
+
+function holdingRow(holding, listings) {
+  const tr = el("tr");
+  const listingId = holding.listing_ref.id;
+  const stock = stockCell(listings[listingId], listingId);
+  stock.classList.add("c-stock");
+  if (holding.holding_days !== null && holding.holding_days !== undefined) {
+    stock.appendChild(el("span", { class: "cell-sub pf-days" }, `持有 ${holding.holding_days} 天`));
+  }
+  const notes = [];
+  if (holding.cost_unknown_reason) notes.push(`成本：${holding.cost_unknown_reason}`);
+  if (holding.price_unknown_reason) notes.push(`价格：${holding.price_unknown_reason}`);
+  if (notes.length) stock.appendChild(el("span", { class: "cell-sub pf-note" }, notes.join("；")));
+  // 手机上数量 / 成本 / 现价 / 权重合并成股票下面的一行小字（桌面隐藏，用独立列）。
+  const listing = listings[listingId] || {};
+  const meta = listing.ticker ? [listing.ticker, `${fmtDecimal(holding.quantity, 4)} 股`] : [`${fmtDecimal(holding.quantity, 4)} 股`];
+  meta.push(holding.average_cost === null ? "成本未知" : `成本 ${fmtDecimal(holding.average_cost, 4)}`);
+  if (holding.price !== null && holding.price !== undefined) meta.push(`现价 ${fmtDecimal(holding.price, 4)}`);
+  else meta.push(holding.price_unknown_reason === "stale_price" ? "价格过期" : "无价格");
+  if (holding.weight !== null && holding.weight !== undefined) meta.push(`权重 ${percent(holding.weight)}`);
+  stock.appendChild(el("span", { class: "pf-meta" }, meta.join(" · ")));
+  tr.appendChild(stock);
+
+  tr.appendChild(el("td", { class: "num c-qty" }, fmtDecimal(holding.quantity, 4)));
+  tr.appendChild(el("td", { class: "num c-cost" }, holding.average_cost === null ? "成本未知" : fmtDecimal(holding.average_cost, 4)));
+  const priceCell = el("td", { class: "num c-price" });
+  if (holding.price !== null && holding.price !== undefined) {
+    priceCell.appendChild(el("span", {}, fmtDecimal(holding.price, 4)));
+    if (holding.price_date) priceCell.appendChild(el("span", { class: "cell-sub" }, holding.price_date));
+  } else {
+    priceCell.appendChild(el("span", { class: "faint" }, holding.price_unknown_reason === "stale_price" ? "价格过期" : "无价格"));
+  }
+  tr.appendChild(priceCell);
+  tr.appendChild(el("td", { class: "num c-mv" }, holding.market_value === null ? "—" : fmtDecimal(holding.market_value)));
+  const pnl = el("td", { class: "num c-pnl" });
+  if (holding.floating_pnl === null || holding.floating_pnl === undefined) {
+    pnl.appendChild(el("span", { class: "faint" }, "—"));
+  } else {
+    pnl.appendChild(el("span", { class: direction(holding.floating_pnl) }, signed(holding.floating_pnl)));
+    if (holding.gain_vs_cost !== null && holding.gain_vs_cost !== undefined) {
+      const gain = percent(holding.gain_vs_cost);
+      pnl.appendChild(el("span", { class: `cell-sub ${direction(holding.gain_vs_cost)}`.trim() }, Number(holding.gain_vs_cost) > 0 ? `+${gain}` : gain));
+    }
+  }
+  tr.appendChild(pnl);
+  tr.appendChild(el("td", { class: "num c-weight" }, holding.weight === null ? "—" : percent(holding.weight)));
+  const ruleCell = el("td", { class: "rule-cell c-rule", "data-rule-listing": String(listingId) });
+  ruleCell.appendChild(el("span", { class: "cell-sub" }, "加载中…"));
+  tr.appendChild(ruleCell);
+  return tr;
 }
 
 function holdingsTable(valuation, listings) {
@@ -125,53 +248,75 @@ function holdingsTable(valuation, listings) {
       { label: "最新收盘" },
       { label: "市值" },
       { label: "浮动盈亏" },
-      { label: "持有天数" },
       { label: "权重" },
       { label: "规则" },
-      { label: "备注" },
     ],
-    orderByRecentActivity(valuation.holdings).map((holding) => {
-      const tr = el("tr");
-      const listingId = holding.listing_ref.id;
-      tr.appendChild(stockCell(listings[holding.listing_ref.id], holding.listing_ref.id));
-      tr.appendChild(el("td", { class: "num" }, fmtDecimal(holding.quantity, 4)));
-      tr.appendChild(el("td", { class: "num" }, holding.average_cost === null ? "成本未知" : fmtDecimal(holding.average_cost, 4)));
-      const priceCell = el("td", { class: "num" });
-      if (holding.price !== null && holding.price !== undefined) {
-        priceCell.appendChild(el("span", {}, fmtDecimal(holding.price, 4)));
-        if (holding.price_date) priceCell.appendChild(el("span", { class: "cell-sub" }, holding.price_date));
-      } else {
-        priceCell.appendChild(el("span", { class: "faint" }, holding.price_unknown_reason === "stale_price" ? "价格过期" : "无价格"));
-      }
-      tr.appendChild(priceCell);
-      tr.appendChild(el("td", { class: "num" }, holding.market_value === null ? "—" : fmtDecimal(holding.market_value)));
-      const pnl = el("td", { class: "num" });
-      if (holding.floating_pnl === null || holding.floating_pnl === undefined) {
-        pnl.appendChild(el("span", { class: "faint" }, "—"));
-      } else {
-        pnl.appendChild(el("span", {}, fmtDecimal(holding.floating_pnl)));
-        if (holding.gain_vs_cost !== null && holding.gain_vs_cost !== undefined) {
-          pnl.appendChild(el("span", { class: "cell-sub" }, percent(holding.gain_vs_cost)));
-        }
-      }
-      tr.appendChild(pnl);
-      tr.appendChild(el("td", { class: "num" }, holding.holding_days === null ? "—" : `${holding.holding_days}`));
-      tr.appendChild(el("td", { class: "num" }, holding.weight === null ? "—" : percent(holding.weight)));
-      const ruleCell = el("td", { class: "rule-cell", "data-rule-listing": String(listingId) });
-      ruleCell.appendChild(el("span", { class: "cell-sub" }, "加载中…"));
-      tr.appendChild(ruleCell);
-      const notes = [];
-      if (holding.cost_unknown_reason) notes.push(`成本：${holding.cost_unknown_reason}`);
-      if (holding.price_unknown_reason) notes.push(`价格：${holding.price_unknown_reason}`);
-      tr.appendChild(el("td", { class: "small faint" }, notes.length ? notes.join("；") : "—"));
-      return tr;
-    })
+    orderByRecentActivity(valuation.holdings).map((holding) => holdingRow(holding, listings))
   );
-  node.classList.add("watch-table");
-  return node;
+  node.classList.remove("stack-table");
+  node.classList.add("watch-table", "pf-table");
+  const wrap = el("div", { class: "table-wrap" });
+  wrap.appendChild(node);
+  return wrap;
+}
+
+function kpiCard(labelText, value, unit, foot, tone = "") {
+  const card = el("div", { class: "kpi" });
+  card.appendChild(el("div", { class: "kpi-label" }, labelText));
+  const number = el("div", { class: `kpi-value num ${tone}`.trim() }, value);
+  if (unit) number.appendChild(el("small", {}, unit));
+  card.appendChild(number);
+  card.appendChild(el("div", { class: "kpi-foot" }, foot));
+  return card;
+}
+
+// KPI 条只用估值里已有的数：总资产 / 现金 / 持仓市值 / 浮动盈亏（未知保持未知，不推断）。
+function renderKpis(valuation) {
+  const box = document.querySelector("#portfolio-kpis");
+  if (!box) return;
+  box.replaceChildren();
+  const holdings = valuation.holdings || [];
+  const total = valuation.total_assets === null || valuation.total_assets === undefined ? null : Number(valuation.total_assets);
+  const cash = valuation.known_cash === null || valuation.known_cash === undefined ? null : Number(valuation.known_cash);
+  box.appendChild(
+    kpiCard(
+      "总资产",
+      total === null ? "—" : fmtDecimal(valuation.total_assets),
+      total === null ? "" : "元",
+      total === null ? "不可用（见备注）" : `估值 ${valuation.valuation_date}`
+    )
+  );
+  let cashFoot = "现金未知";
+  if (cash !== null) cashFoot = total ? `占总资产 ${((cash / total) * 100).toFixed(1)}%` : "已确认现金";
+  box.appendChild(kpiCard("现金", cash === null ? "—" : fmtDecimal(valuation.known_cash), cash === null ? "" : "元", cashFoot));
+  const unpriced = holdings.filter((holding) => holding.market_value === null || holding.market_value === undefined).length;
+  const subtotal = valuation.market_value_subtotal;
+  box.appendChild(
+    kpiCard(
+      "持仓市值",
+      subtotal === null || subtotal === undefined ? "—" : fmtDecimal(subtotal),
+      subtotal === null || subtotal === undefined ? "" : "元",
+      `${holdings.length} 只${unpriced ? `，${unpriced} 只无价格` : ""}`
+    )
+  );
+  const known = holdings.filter((holding) => holding.floating_pnl !== null && holding.floating_pnl !== undefined);
+  let pnlValue = "—";
+  let pnlFoot = holdings.length ? "成本未知，不推断" : "没有持仓";
+  let tone = "zero";
+  if (known.length) {
+    const pnl = known.reduce((sum, holding) => sum + Number(holding.floating_pnl), 0);
+    const cost = known.reduce((sum, holding) => sum + Number(holding.remaining_cost || 0), 0);
+    pnlValue = signed(pnl);
+    tone = direction(pnl);
+    pnlFoot = cost > 0 ? `${pnl >= 0 ? "+" : ""}${((pnl / cost) * 100).toFixed(2)}% · 相对成本` : "相对成本";
+    if (known.length < holdings.length) pnlFoot += `（${holdings.length - known.length} 只成本未知未计入）`;
+  }
+  box.appendChild(kpiCard("浮动盈亏", pnlValue, "", pnlFoot, tone));
+  box.hidden = false;
 }
 
 function renderValuation(region, valuation, listings) {
+  renderKpis(valuation);
   if (!valuation.holdings.length) {
     renderRegion(region, "empty");
   } else {
@@ -257,7 +402,7 @@ function toggleHoldingRule(region, listingId, button) {
   }
   for (const open of region.querySelectorAll("tr.rule-detail-row")) open.remove();
   const detail = el("tr", { class: "rule-detail-row" });
-  const body = el("td", { colspan: "10" });
+  const body = el("td", { colspan: "8" });
   body.appendChild(el("p", { class: "small faint" }, "正在加载规则状态…"));
   detail.appendChild(body);
   row.after(detail);
@@ -428,7 +573,8 @@ function holdingTemplateChooser(rule, feedback) {
   return box;
 }
 
-function realizedTable(snapshot, listings) {  const rows = [];
+function realizedTable(snapshot, listings) {
+  const rows = [];
   for (const record of snapshot.realized || []) {
     const tr = el("tr");
     tr.appendChild(stockCell(listings[record.listing_ref.id], record.listing_ref.id));
@@ -437,7 +583,10 @@ function realizedTable(snapshot, listings) {  const rows = [];
     tr.appendChild(el("td", { class: "num" }, fmtDecimal(record.gross)));
     tr.appendChild(el("td", { class: "num" }, record.fee === null ? "费用未知" : fmtDecimal(record.fee)));
     tr.appendChild(el("td", { class: "num" }, record.cost_carried === null ? "成本未知" : fmtDecimal(record.cost_carried)));
-    tr.appendChild(el("td", { class: "num" }, record.realized === null ? "—" : fmtDecimal(record.realized)));
+    const realizedCell = el("td", { class: "num" });
+    if (record.realized === null) realizedCell.appendChild(el("span", { class: "faint" }, "—"));
+    else realizedCell.appendChild(el("span", { class: direction(record.realized) }, signed(record.realized)));
+    tr.appendChild(realizedCell);
     tr.appendChild(el("td", { class: "small faint" }, record.cycle_opened_on ? `建仓 ${record.cycle_opened_on}` : "建仓日未知"));
     rows.push(tr);
   }
@@ -453,7 +602,7 @@ function realizedTable(snapshot, listings) {  const rows = [];
     tr.appendChild(el("td", { class: "small faint" }, "分红不降低取得成本"));
     rows.push(tr);
   }
-  return table(
+  const node = table(
     [
       { label: "股票" },
       { label: "类型" },
@@ -466,6 +615,10 @@ function realizedTable(snapshot, listings) {  const rows = [];
     ],
     rows
   );
+  node.classList.add("pf-realized");
+  const wrap = el("div", { class: "table-wrap" });
+  wrap.appendChild(node);
+  return wrap;
 }
 
 function archiveList(snapshot, listings) {
@@ -487,14 +640,23 @@ function archiveList(snapshot, listings) {
     const entry = cleared.get(key);
     if (entry) entry.dividends += Number(dividend.amount);
   }
-  const list = el("ul", { class: "portfolio-timeline" });
+  const list = el("ul", { class: "portfolio-timeline pf-archive" });
   for (const entry of cleared.values()) {
-    const item = el("li");
-    item.appendChild(stockCell(listings[entry.listingId], entry.listingId));
-    item.appendChild(el("span", { class: "faint small" }, `清仓数量 ${fmtDecimal(entry.quantity, 4)}`));
-    item.appendChild(el("span", { class: "faint small" }, entry.realized === null ? "已实现盈亏不可用（成本未知）" : `已实现 ${fmtDecimal(entry.realized)}`));
-    if (entry.dividends) item.appendChild(el("span", { class: "faint small" }, `累计分红 ${fmtDecimal(entry.dividends)}`));
-    item.appendChild(el("span", { class: "faint small" }, entry.cycle ? `原建仓 ${entry.cycle}` : "建仓日未知"));
+    const item = el("li", { class: "pf-archive-row" });
+    item.appendChild(stockBlock(listings[entry.listingId], entry.listingId));
+    const facts = el("span", { class: "pf-archive-facts" });
+    facts.appendChild(el("span", {}, `清仓数量 ${fmtDecimal(entry.quantity, 4)}`));
+    if (entry.realized === null) {
+      facts.appendChild(el("span", {}, "已实现盈亏不可用（成本未知）"));
+    } else {
+      const realized = el("span", {});
+      realized.appendChild(document.createTextNode("已实现 "));
+      realized.appendChild(el("b", { class: direction(entry.realized) }, signed(entry.realized)));
+      facts.appendChild(realized);
+    }
+    if (entry.dividends) facts.appendChild(el("span", {}, `累计分红 ${fmtDecimal(entry.dividends)}`));
+    facts.appendChild(el("span", {}, entry.cycle ? `原建仓 ${entry.cycle}` : "建仓日未知"));
+    item.appendChild(facts);
     list.appendChild(item);
   }
   return list;
@@ -565,9 +727,9 @@ async function loadEvents(account, token = epoch, afterRevision = 0, list = null
       renderRegion(region, "empty");
       return;
     }
-    list = list || el("ul", { class: "portfolio-timeline" });
+    list = list || el("ul", { class: "portfolio-timeline pf-events" });
     for (const item of page.items) {
-      const row = el("li");
+      const row = el("li", { class: "pf-event" });
       const check = el("input", { type: "checkbox", "aria-label": `选择事实 r${item.revision} 用于纠错` });
       check.checked = selectedEvents.has(item.id);
       check.addEventListener("change", () => {
@@ -576,11 +738,14 @@ async function loadEvents(account, token = epoch, afterRevision = 0, list = null
         refreshCorrectionSelection();
       });
       row.appendChild(check);
-      row.appendChild(el("span", { class: "faint small" }, formatDateTime(item.recorded_at)));
-      row.appendChild(el("span", { class: "faint small" }, `发生：${formatDateTime(item.request.fact.occurred_at)}`));
-      row.appendChild(el("span", { class: "badge" }, KIND_LABELS[item.request.fact.kind] || item.request.fact.kind));
-      row.appendChild(el("span", {}, factSummary(item.request.fact)));
-      row.appendChild(el("span", { class: "faint small" }, `r${item.revision}`));
+      // 发生时间是主信息；录入时间放在下面一行小字。
+      const when = el("span", { class: "pf-when" });
+      when.appendChild(el("span", { class: "num", title: "发生时间" }, formatDateTime(item.request.fact.occurred_at)));
+      when.appendChild(el("small", {}, `录入 ${formatDateTime(item.recorded_at)}`));
+      row.appendChild(when);
+      row.appendChild(el("span", { class: "badge pf-kind" }, KIND_LABELS[item.request.fact.kind] || item.request.fact.kind));
+      row.appendChild(el("span", { class: "pf-sum" }, factSummary(item.request.fact)));
+      row.appendChild(el("span", { class: "pf-rev faint small" }, `r${item.revision}`));
       list.appendChild(row);
     }
     // The newest page carries the change-driven ordering signal: facts whose
@@ -606,7 +771,7 @@ async function loadEvents(account, token = epoch, afterRevision = 0, list = null
     const block = el("div");
     block.append(list);
     if (page.next_after_revision !== null) {
-      const more = el("button", { type: "button", class: "secondary" }, "加载更多事实");
+      const more = el("button", { type: "button", class: "secondary pf-more" }, "加载更多事实");
       more.addEventListener("click", () => lockWhileBusy(more, loadEvents(account, token, page.next_after_revision, list, count, page.observed_revision)));
       block.append(more);
     }
@@ -794,6 +959,11 @@ function refreshCorrectionSelection() {
   if (label) label.textContent = selectedEvents.size ? `已选择 ${selectedEvents.size} 条事实` : "未选择事实";
   const submit = document.querySelector("#portfolio-correction-submit");
   if (submit) submit.disabled = !selectedEvents.size || busy || !!pending || storageBlocked;
+  const open = document.querySelector("#portfolio-correct-open");
+  if (open) {
+    open.disabled = !selectedEvents.size;
+    open.textContent = selectedEvents.size ? `纠错所选事实（${selectedEvents.size}）` : "纠错所选事实";
+  }
 }
 
 function currentRevision() {
@@ -808,7 +978,8 @@ async function loadAccounts(preselect) {
   if (!select) return;
   const token = ++epoch;
   currentSnapshot = null;
-  for (const id of ["portfolio-valuation-meta", "portfolio-valuation-notes", "portfolio-events-meta"]) document.getElementById(id)?.replaceChildren();
+  for (const id of ["portfolio-valuation-meta", "portfolio-valuation-notes", "portfolio-events-meta", "portfolio-account-meta"]) document.getElementById(id)?.replaceChildren();
+  hideKpis();
   try {
     const accounts = await get("/portfolio/accounts");
     if (token !== epoch) return;
@@ -822,15 +993,20 @@ async function loadAccounts(preselect) {
       select.appendChild(el("option", { value: "" }, "（还没有账户）"));
       const region = document.querySelector("#portfolio-holdings");
       if (region) renderRegion(region, "empty", "先创建一个账户，然后录入期初余额。");
+      setEmptyState(true);
+      locks();
       return;
     }
+    setEmptyState(false);
     if (preselect && accounts.some(item => item.id === preselect)) select.value = preselect;
     const account = select.value;
+    syncFactSub(select);
     try {
       const snapshot = await get(`/portfolio/snapshot?account_id=${encodeURIComponent(account)}`);
       if (token !== epoch) return;
       currentSnapshot = snapshot;
       select.selectedOptions[0].dataset.revision = String(snapshot.revision);
+      renderAccountMeta(snapshot);
     } catch (error) {
       if (token !== epoch) return;
       if (!(error instanceof ApiError && error.status === 404)) throw error;
@@ -845,6 +1021,21 @@ async function loadAccounts(preselect) {
     const region = document.querySelector("#portfolio-holdings");
     if (region) renderRegion(region, "error", error.message);
   }
+}
+
+function renderAccountMeta(snapshot) {
+  const meta = document.getElementById("portfolio-account-meta");
+  if (!meta) return;
+  const parts = [`账本 r${snapshot.revision}`, snapshot.coverage === "complete" ? "覆盖完整" : "覆盖不完整（部分资产）"];
+  if (snapshot.asset_scope) parts.push(snapshot.asset_scope);
+  meta.textContent = parts.join(" · ");
+}
+
+// 抽屉副标题显示当前账户名，避免录入到别的账户。
+function syncFactSub(select) {
+  const sub = document.getElementById("portfolio-fact-sub");
+  if (!sub || !select.selectedOptions || !select.selectedOptions.length) return;
+  sub.textContent = `${select.selectedOptions[0].textContent} · 事实一经确认不可修改`;
 }
 
 async function renderSnapshotDetails(account, token) {
@@ -876,10 +1067,18 @@ function factError(message) {
   renderRegion(document.querySelector("#portfolio-fact-result"), "error", message);
 }
 
+function createError(message) {
+  renderRegion(document.querySelector("#portfolio-create-result"), "error", message);
+}
+
 function locks() {
   const locked = busy || !!pending || storageBlocked;
   document.querySelectorAll("#portfolio-create-form input, #portfolio-create-form button, #portfolio-fact-form input, #portfolio-fact-form select, #portfolio-fact-form button, #portfolio-account, #portfolio-refresh").forEach(node => { node.disabled = locked; });
   document.querySelectorAll("#portfolio-correction-reason, #portfolio-correction-ticker, #portfolio-correction-quantity, #portfolio-correction-price, #portfolio-correction-fee, #portfolio-correction-direction").forEach(node => { node.disabled = locked; });
+  if (!hasAccounts) {
+    const refresh = document.querySelector("#portfolio-refresh");
+    if (refresh) refresh.disabled = true;
+  }
   const retry = document.querySelector("#portfolio-pending-retry");
   retry.hidden = !pending;
   retry.disabled = busy || storageBlocked;
@@ -905,7 +1104,10 @@ async function transmit() {
     const result = await post(fixed.path, fixed.request, { idempotency: false });
     sessionStorage.removeItem(PENDING_KEY);
     pending = null;
-    if (fixed.path === "/portfolio/accounts") document.querySelector("#portfolio-create-form").reset();
+    if (fixed.path === "/portfolio/accounts") {
+      document.querySelector("#portfolio-create-form").reset();
+      document.querySelector("#portfolio-create-result")?.replaceChildren();
+    }
     const form = document.querySelector("#portfolio-fact-form");
     field(form, "user_confirmed").checked = false;
     field(form, "balance_confirmed").checked = false;
@@ -915,12 +1117,16 @@ async function transmit() {
       document.querySelector("#portfolio-correction-reason").value = "";
       refreshCorrectionSelection();
       renderRegion(document.querySelector("#portfolio-correction-result"), "ready", el("p", {}, `纠错已提交并原子写入（冲销 ${ids || "无"}）；历史保留，页面只显示最终状态。`));
+    } else if (fixed.path === "/portfolio/accounts") {
+      // 账户创建成功：关闭抽屉，页面从空状态切到账户视图。
+      document.querySelector("#portfolio-fact-result")?.replaceChildren();
+      closeOverlay();
     } else {
       renderRegion(document.querySelector("#portfolio-fact-result"), "ready", el("p", {}, "服务器已确认保存账本事实；估值显示下方更新时间。"));
     }
     await loadAccounts(fixed.request.account_id || result.id);
   } catch (error) {
-    const reporting = fixed.path === "/portfolio/corrections" ? correctionError : factError;
+    const reporting = fixed.path === "/portfolio/corrections" ? correctionError : fixed.path === "/portfolio/accounts" ? createError : factError;
     if (error instanceof ApiError && [409, 422].includes(error.status)) {
       sessionStorage.removeItem(PENDING_KEY);
       pending = null;
@@ -984,6 +1190,11 @@ async function populateBalance() {
 function updateKind() {
   const form = document.querySelector("#portfolio-fact-form");
   const kind = text(form, "kind"), balance = ["opening_balance", "reconciliation"].includes(kind);
+  for (const chip of form.querySelectorAll("[data-kind-chip]")) {
+    const on = chip.getAttribute("data-kind-chip") === kind;
+    chip.classList.toggle("on", on);
+    chip.setAttribute("aria-pressed", on ? "true" : "false");
+  }
   document.querySelector("#portfolio-balance-editor").hidden = !balance;
   document.querySelectorAll("#portfolio-balance-editor input, #portfolio-balance-editor button").forEach(node => { node.disabled = !balance; });
   for (const name of ["ticker", "quantity", "price", "fee", "cash", "amount", "direction", "asset_scope", "coverage", "unexplained_difference", "action", "ratio", "affects_quantity", "affects_cash"]) {
@@ -1002,6 +1213,30 @@ function updateKind() {
   }
 }
 
+// 事实类型芯片与隐藏的 <select name="kind"> 双向同步：select 仍是唯一的数据来源。
+function wireKindChips() {
+  const group = document.querySelector("#portfolio-fact-form .pf-kinds");
+  if (!group) return;
+  group.addEventListener("click", (event) => {
+    const chip = event.target.closest ? event.target.closest("[data-kind-chip]") : null;
+    if (!chip || chip.disabled) return;
+    const select = field(document.querySelector("#portfolio-fact-form"), "kind");
+    if (!select || select.value === chip.getAttribute("data-kind-chip")) return;
+    select.value = chip.getAttribute("data-kind-chip");
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function wireDrawerTabs() {
+  for (const tab of document.querySelectorAll("[data-pf-tab]")) {
+    tab.addEventListener("click", () => showDrawerTab(tab.getAttribute("data-pf-tab")));
+  }
+  const fact = document.querySelector("#portfolio-fact-open");
+  if (fact) fact.addEventListener("click", () => showDrawerTab("fact"));
+  const correct = document.querySelector("#portfolio-correct-open");
+  if (correct) correct.addEventListener("click", () => showDrawerTab("correction"));
+}
+
 function wireCreateForm() {
   const form = document.querySelector("#portfolio-create-form");
   if (!form) return;
@@ -1012,7 +1247,7 @@ function wireCreateForm() {
     try {
       persist("/portfolio/accounts", { idempotency_key: randomKey(), name });
       await transmit();
-    } catch (error) { factError(`未发送请求：${error.message}`); }
+    } catch (error) { createError(`未发送请求：${error.message}`); }
   });
 }
 
@@ -1124,6 +1359,7 @@ export function bootPortfolio() {
     document.querySelector("#portfolio-balance-rows").replaceChildren();
     addBalanceRow();
     updateKind();
+    syncFactSub(select);
     loadAccounts(select.value);
   });
   const refresh = document.querySelector("#portfolio-refresh");
@@ -1145,7 +1381,13 @@ export function bootPortfolio() {
     if (text(document.querySelector("#portfolio-fact-form"), "kind") === "reconciliation" && currentSnapshot) populateBalance().catch(error => factError(error.message));
   });
   document.querySelector("#portfolio-pending-retry").addEventListener("click", transmit);
+  wireKindChips();
+  wireDrawerTabs();
   locks();
-  if (pending) factError("有上次待确认的请求。请重取原请求后再录入新事实。");
+  if (pending) {
+    factError("有上次待确认的请求。请重取原请求后再录入新事实。");
+    // 录入已锁定：直接打开抽屉，让“重取待确认请求”可见。
+    openFactDrawerWhenReady();
+  }
   loadAccounts(pending?.request?.account_id);
 }

@@ -1,68 +1,159 @@
 /* pages/portfolio.css — 持仓池
-   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
+   Loaded after app.css (and pages/watchlist.css, which holds the rule-review styles shared with this page)
+   through {% block page_css %}. Shared tokens/components live in app.css. */
 
-/* 持仓池 · 事实时间线（portfolio.js） */
-.portfolio-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
-.portfolio-timeline li { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; padding: 4px 0; border-bottom: 1px dashed var(--c-line); }
-.portfolio-timeline li:last-child { border-bottom: none; }
+/* ---- 页头 / 空状态 ----------------------------------------------------------- */
 
-.field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.pf-actions select { width: auto; min-width: 9.5rem; max-width: 16rem; padding-top: 3px; padding-bottom: 3px; font-size: 12.5px; }
+.pf-actions .btn svg { margin-right: -2px; }
+.pf-metaline { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--sp-2); }
+.pf-metaline + .kpis { margin-top: var(--sp-2); }
+.kpis[hidden], #portfolio-ledger[hidden], #portfolio-empty[hidden] { display: none; }
+.kpi-value.up { color: var(--up); }
+.kpi-value.down { color: var(--down); }
+
+.pf-empty { padding: 44px 24px 40px; }
+.pf-empty p { max-width: 30rem; }
+.pf-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 46rem; margin: 4px 0 24px; padding: 0; list-style: none; text-align: left; }
+.pf-steps li { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.pf-steps .n { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--sunken); color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.pf-steps li.on { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: var(--accent-soft); }
+.pf-steps li.on .n { background: var(--accent); color: var(--on-accent); }
+.pf-steps b { display: block; font-size: 13.5px; font-weight: 600; }
+.pf-steps small { display: block; margin-top: 1px; color: var(--ink-3); font-size: 12px; }
+
+/* ---- 持仓表（桌面） ------------------------------------------------------------ */
+
+.pf-card .data-region > .notice { margin: var(--sp-3) var(--sp-4); }
+.pf-card .data-region > p.small { margin: 0; padding: 10px var(--sp-4); border-top: 1px solid var(--line); }
+.pf-notes { padding: 0 var(--sp-4); }
+.pf-notes:not(:empty) { padding-top: 8px; padding-bottom: 6px; border-top: 1px solid var(--line); }
+.pf-notes p { margin: 0 0 4px; }
+.pf-table { margin: 0; }
+.pf-table th:nth-child(n + 2):nth-child(-n + 6) { text-align: right; }
+.pf-table th:nth-child(7) { text-align: right; }
+.pf-table .c-rule { min-width: 12rem; }
+.pf-table .num { white-space: nowrap; }
+.pf-table .up, .pf-table .down { font-weight: 500; }
+.pf-meta { display: none; }
+.pf-note { color: var(--warn); }
+
+/* ---- 事实时间线 / 归档 -------------------------------------------------------- */
+
+.portfolio-timeline { list-style: none; margin: 0; padding: 0; }
+.pf-event {
+  display: grid; grid-template-columns: 20px 9.5rem 5.5rem minmax(0, 1fr) auto; gap: 12px; align-items: center;
+  padding: 10px var(--sp-4); border-bottom: 1px solid var(--line);
+}
+.pf-event:last-child { border-bottom: 0; }
+.pf-event > input { width: auto; margin: 0; }
+.pf-when { display: grid; line-height: 1.35; }
+.pf-when small { color: var(--ink-3); font-size: 11.5px; }
+.pf-kind { margin: 0; justify-self: start; }
+.pf-sum { min-width: 0; overflow-wrap: anywhere; }
+.pf-rev { white-space: nowrap; }
+.pf-more { margin: 10px var(--sp-4) 14px; }
+
+.pf-archive-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 28px; padding: 10px var(--sp-4); border-bottom: 1px solid var(--line); }
+.pf-archive-row:last-child { border-bottom: 0; }
+.pf-archive-row .stock-block { min-width: 9rem; }
+.stock-block .stock-name, .stock-block .stock-code { display: block; }
+.pf-archive-facts { display: flex; flex-wrap: wrap; gap: 2px 18px; color: var(--ink-2); font-size: var(--fs-sm); }
+.pf-archive-facts b { font-weight: 600; }
+
+.pf-realized th:nth-child(n + 3):nth-child(-n + 7) { text-align: right; }
+
+/* ---- 抽屉：录入事实 / 纠错 / 新建账户 ------------------------------------------ */
+
+.pf-drawer .pf-pane { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.pf-drawer .pf-pane[hidden] { display: none; }
+.pf-tabs { flex: none; padding: 0 var(--sp-4); }
+.pf-status > .data-region:not(:empty) { margin: var(--sp-3) var(--sp-4) 0; }
+.pf-status > .data-region .notice { margin: 0; }
+.pf-status > button { margin: var(--sp-2) var(--sp-4) 0; }
+.pf-status > [hidden] { display: none; }
+.pf-status > details { margin: var(--sp-2) var(--sp-4) 0; }
+.pf-status > details[hidden] { display: none; }
+.pf-status pre { max-height: 10rem; overflow: auto; font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+.pf-selected { margin: 0 0 var(--sp-3); color: var(--ink-2); font-weight: 500; }
+
+/* 事实类型：芯片是界面，隐藏的 <select name="kind"> 仍是数据来源（见 portfolio.js wireKindChips） */
+.pf-kinds { flex-wrap: wrap; overflow: visible; margin: 0 0 var(--sp-3); padding: 0; }
+.pf-kind-field { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); margin: 0 0 var(--sp-3); }
+.field-grid .field { margin: 0; }
 .field-wide { grid-column: 1 / -1; }
-.field-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp-2); }
+.field-pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-2); }
 .field-checks { display: none; grid-column: 1 / -1; gap: var(--sp-4); }
 .field-checks:has(> label:not([hidden])) { display: flex; flex-wrap: wrap; }
-.field-checks label, .confirm-line { display: flex; align-items: center; gap: var(--sp-2); color: var(--c-ink-2); font-size: var(--fs-sm); }
+.field-checks label, .confirm-line { display: flex; align-items: center; gap: var(--sp-2); color: var(--ink-2); font-size: var(--fs-sm); }
 .confirm-line { margin: var(--sp-2) 0; align-items: flex-start; }
 .confirm-line input, .field-checks input { width: auto; margin-top: 2px; flex: none; }
-@media (min-width: 48rem) {
-  .field-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .field-wide { grid-column: span 2; }
-}
+.pf-immutable { margin: var(--sp-3) 0 var(--sp-2); }
 .form-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: flex-end; margin-top: var(--sp-3); }
 .form-actions-start { justify-content: flex-start; margin: var(--sp-2) 0; }
-.balance-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); padding: var(--sp-3); margin-bottom: var(--sp-2); border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface-2); }
-.balance-row label { display: grid; gap: 2px; min-width: 0; color: var(--c-ink-2); font-size: var(--fs-sm); }
+.balance-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); padding: var(--sp-3); margin-bottom: var(--sp-2); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.balance-row label { display: grid; gap: 2px; min-width: 0; color: var(--ink-2); font-size: var(--fs-sm); }
 .balance-row input { width: 100%; min-width: 0; box-sizing: border-box; }
 .balance-row button { grid-column: 1 / -1; justify-self: end; }
 
-@media (min-width: 48rem) {
-  .field-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .field-wide { grid-column: span 2; }
+/* ---- 手机（< 56rem）：空状态、两行持仓行、紧凑时间线 ---------------------------- */
+
+@media (max-width: 56rem) {
+  .page-head > .pf-actions { grid-column: 1; grid-row: auto; width: 100%; justify-content: flex-start; margin-top: var(--sp-2); }
+  .pf-actions select { flex: 1 1 8rem; min-height: 36px; font-size: 16px; }
+  .pf-actions .btn { min-height: 36px; }
+  .pf-metaline { padding: 0 2px; }
+
+  .pf-empty { padding: 28px 16px 20px; }
+  .pf-steps { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 18px; }
+  .pf-empty .btn-lg { width: 100%; }
+
+  .pf-card { margin-bottom: 0; }
+  .pf-table thead { display: none; }
+  .pf-table, .pf-table tbody { display: block; }
+  .pf-table tbody tr:not(.rule-detail-row) {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "stock mv" "stock pnl" "rule rule";
+    column-gap: 12px; row-gap: 2px; align-items: start; padding: 10px 14px; border-bottom: 1px solid var(--line);
+  }
+  .pf-table tbody tr:last-child { border-bottom: 0; }
+  .pf-table tbody tr:hover > td { background: transparent; }
+  .card--flush .pf-table td, .card--flush .pf-table td:first-child, .card--flush .pf-table td:last-child { display: block; padding: 0; border: 0; }
+  .pf-table .c-stock .stock-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pf-card .card-head .faint { margin-left: 0; width: 100%; }
+  .pf-tabs { margin: 0; }
+  .pf-table .c-stock { grid-area: stock; min-width: 0; }
+  .pf-table .c-stock .stock-name { font-size: 15px; }
+  .pf-table .c-stock .stock-code, .pf-table .c-stock .pf-days { display: none; }
+  .pf-table .pf-meta { display: block; overflow: hidden; color: var(--ink-3); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .pf-table .pf-note { display: block; font-size: 11.5px; }
+  .pf-table .c-mv { grid-area: mv; font-size: 16px; font-weight: 650; text-align: right; }
+  .pf-table .c-pnl { grid-area: pnl; font-size: 12.5px; text-align: right; white-space: nowrap; }
+  .pf-table .c-pnl .cell-sub { display: inline; margin-left: 6px; font-size: 12px; }
+  .card--flush .pf-table td.c-qty, .card--flush .pf-table td.c-cost, .card--flush .pf-table td.c-price, .card--flush .pf-table td.c-weight { display: none; }
+  .pf-table .c-rule { grid-area: rule; min-width: 0; padding-top: 6px; }
+  .pf-table tr.rule-detail-row { display: block; }
+  .card--flush .pf-table tr.rule-detail-row > td { display: block; padding: var(--sp-3) var(--sp-4); }
+
+  .pf-event { grid-template-columns: 20px auto minmax(0, 1fr) auto; row-gap: 4px; align-items: start; }
+  .pf-event > input { grid-row: 1 / span 2; margin-top: 3px; }
+  .pf-when { grid-column: 2 / 4; grid-template-columns: auto auto; justify-content: start; gap: 0 10px; align-items: baseline; }
+  .pf-rev { grid-column: 4; grid-row: 1; }
+  .pf-kind { grid-column: 2; grid-row: 2; }
+  .pf-sum { grid-column: 3 / 5; grid-row: 2; font-size: 13px; }
+
+  .field-pair { grid-template-columns: minmax(0, 1fr); }
+  .form-actions-start button { flex: 1 1 0; }
+  .field-grid { gap: var(--sp-2) var(--sp-3); }
 }
 
 @media (max-width: 40rem) {
-  /* 持仓池：表单两列（数字字段并排），持仓/已实现各自成紧凑卡 */
-  .field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-3); }
-  .field-pair { grid-template-columns: minmax(0, 1fr); }
-  .form-actions .primary { flex: 1 1 100%; padding-top: 9px; padding-bottom: 9px; }
-  .form-actions-start button { flex: 1 1 0; }
-  .card:has(> #portfolio-holdings) { padding: 0; border: 0; background: none; box-shadow: none; border-radius: 0; }
-  .card:has(> #portfolio-holdings) > .card-head, .card:has(> #portfolio-holdings) > #portfolio-valuation-notes { padding: 0 var(--sp-1); }
-  #portfolio-holdings .watch-table tr:not(.rule-detail-row) {
-    display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px var(--sp-2); align-items: start;
-    margin-bottom: var(--sp-2); padding: var(--sp-3);
-    border: 1px solid var(--c-line); border-radius: var(--r-md); background: var(--c-surface);
-  }
-  #portfolio-holdings .watch-table td { min-width: 0; padding: 0; }
-  #portfolio-holdings .watch-table td:nth-child(1) { grid-column: 1 / 5; grid-row: 1; }
-  #portfolio-holdings .watch-table td:nth-child(5) { grid-column: 5 / 7; grid-row: 1; text-align: right; font-weight: 600; font-size: var(--fs-lg); }
-  #portfolio-holdings .watch-table td:nth-child(n + 2):nth-child(-n + 4),
-  #portfolio-holdings .watch-table td:nth-child(n + 6):nth-child(-n + 8) { grid-column: span 2; }
-  #portfolio-holdings .watch-table td:nth-child(9), #portfolio-holdings .watch-table td:nth-child(10) { grid-column: 1 / -1; min-width: 0; }
-  #portfolio-holdings .watch-table td:nth-child(1)::before { display: none; }
-  #portfolio-holdings .watch-table td:nth-child(5)::before { display: block; font-weight: 400; }
-  #portfolio-holdings .watch-table td:nth-child(n + 2):nth-child(-n + 4)::before,
-  #portfolio-holdings .watch-table td:nth-child(n + 6):nth-child(-n + 8)::before { display: block; margin-bottom: 1px; }
-  #portfolio-holdings .watch-table td:nth-child(9)::before { display: inline; margin-right: var(--sp-1); }
-  #portfolio-holdings .watch-table td:nth-child(10)::before { display: none; }
-  #portfolio-holdings .watch-table td:nth-child(10) { font-size: var(--fs-xs); }
-  #portfolio-holdings .watch-table .rule-cell { min-width: 0; }
-  #portfolio-holdings .watch-table .rule-detail-row td { padding: var(--sp-2) 0; }
-
   /* 已实现盈亏：键值行，标签靠左、数值靠右 */
-  #portfolio-realized .stack-table tr { padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); border: 1px solid var(--c-line); border-radius: var(--r-md); }
+  #portfolio-realized .stack-table tr { padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--line); }
   #portfolio-realized .stack-table td { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 2px 0; }
   #portfolio-realized .stack-table td:first-child { font-weight: 600; justify-content: flex-start; }
   #portfolio-realized .stack-table td:first-child::before { display: none; }
   #portfolio-realized .stack-table td[data-label]::before { flex: none; }
+  .balance-row { grid-template-columns: minmax(0, 1fr); }
 }

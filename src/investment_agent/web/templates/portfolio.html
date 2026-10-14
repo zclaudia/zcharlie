@@ -1,219 +1,280 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/watchlist.css">
 <link rel="stylesheet" href="/app/static/pages/portfolio.css">{% endblock %}
 {% block content %}
+{% include "_funnel_seg.html" %}
 <header class="page-head">
   <h1>持仓池</h1>
   <p class="muted">你确认过的实际账户事实：期初余额、交易、资金流与对账；持仓与成本由账本派生，行情只生成估值，不改写事实。</p>
+  <div class="page-actions pf-actions">
+    <select id="portfolio-account" aria-label="账户"></select>
+    <button id="portfolio-refresh" class="btn btn-sm" type="button">刷新估值</button>
+    <button id="portfolio-fact-open" type="button" class="btn btn-sm btn-primary primary" data-overlay-open="portfolio-fact-drawer" aria-controls="portfolio-fact-drawer" aria-expanded="false">{{ icon("plus", "ico", 14) }}录入事实</button>
+  </div>
 </header>
 <p id="portfolio-disabled" class="notice notice-warn" hidden>
   持仓账本写入当前关闭（portfolio_ledger_enabled=false）：可以查看已有账户与估值，录入会被拒绝。
 </p>
-<section class="card">
-  <div class="card-head">
-    <h2>账户</h2>
-    <select id="portfolio-account" aria-label="账户"></select>
-    <button id="portfolio-refresh" class="secondary card-head-action" type="button">刷新估值</button>
+
+<section id="portfolio-empty" class="card pf-empty-card" hidden>
+  <div class="empty-state pf-empty">
+    <div class="empty-icon">{{ icon("portfolio", "ico", 22) }}</div>
+    <h3>还没有账户</h3>
+    <p>持仓只从你录入的账本事实派生；行情只用来估值，不会改写事实。三步开始：</p>
+    <ol class="pf-steps">
+      <li class="on"><span class="n">1</span><div><b>新建账户</b><small>给账户起个名称</small></div></li>
+      <li><span class="n">2</span><div><b>录入期初余额</b><small>现金 + 已持有股票</small></div></li>
+      <li><span class="n">3</span><div><b>记录交易与资金流</b><small>之后按需对账</small></div></li>
+    </ol>
+    <button type="button" class="btn btn-lg btn-primary primary" data-overlay-open="portfolio-account-drawer" aria-controls="portfolio-account-drawer">新建账户</button>
   </div>
-  <details class="add-panel">
-    <summary>＋ 新建账户</summary>
-    <form id="portfolio-create-form" class="inline-form">
-      <input name="name" placeholder="账户名称，如 我的券商账户" maxlength="128" required aria-label="账户名称">
-      <button type="submit" class="primary">创建</button>
-    </form>
-  </details>
-  <div id="portfolio-account-meta" class="faint small"></div>
 </section>
 
-<section class="card">
-  <div class="card-head">
-    <h2>持仓与估值</h2>
-    <span id="portfolio-valuation-meta" class="faint small"></span>
+<div id="portfolio-ledger" class="stack">
+  <div class="pf-metaline">
+    <span id="portfolio-account-meta" class="faint small"></span>
+    <button type="button" class="link-button" data-overlay-open="portfolio-account-drawer" aria-controls="portfolio-account-drawer">＋ 新建账户</button>
   </div>
-  <div id="portfolio-holdings" class="data-region" data-empty-text="该账户还没有已确认的余额事实。先录入期初余额。">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
-  </div>
-  <div id="portfolio-valuation-notes" class="small"></div>
-</section>
 
-<section class="card">
-  <div class="card-head">
-    <h2>录入事实</h2>
-    <span class="faint small">事实一经确认不可修改；纠错通过原子纠错接口处理，不改写历史。</span>
+  <div id="portfolio-kpis" class="kpis kpis--4" hidden></div>
+
+  <section class="card card--flush pf-card">
+    <div class="card-head card-head--rule">
+      <h2>持仓与估值</h2>
+      <span id="portfolio-valuation-meta" class="faint small"></span>
+    </div>
+    <div id="portfolio-holdings" class="data-region" data-empty-text="该账户还没有已确认的余额事实。先录入期初余额。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+    <div id="portfolio-valuation-notes" class="small pf-notes"></div>
+  </section>
+
+  <section class="card card--flush pf-card">
+    <div class="card-head card-head--rule">
+      <h2>事实时间线</h2>
+      <span id="portfolio-events-meta" class="faint small"></span>
+      <button id="portfolio-correct-open" type="button" class="btn btn-sm" data-overlay-open="portfolio-fact-drawer" aria-controls="portfolio-fact-drawer" disabled>纠错所选事实</button>
+    </div>
+    <div id="portfolio-events" class="data-region" data-empty-text="还没有事实记录。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+
+  <section class="card card--flush pf-card">
+    <div class="card-head card-head--rule">
+      <h2>已实现盈亏与分红</h2>
+      <span class="faint small">按周期引用回放；未知金额保持未知，不推断。</span>
+    </div>
+    <div id="portfolio-realized" class="data-region" data-empty-text="还没有已实现的卖出事实或分红记录。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+
+  <section class="card card--flush pf-card">
+    <div class="card-head card-head--rule">
+      <h2>已平仓（归档）</h2>
+      <span class="faint small">清仓后进入归档区，可回看当初的事实与已实现结果。</span>
+    </div>
+    <div id="portfolio-archive" class="data-region" data-empty-text="还没有已平仓的持仓周期。">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+</div>
+
+<aside class="drawer pf-drawer" id="portfolio-fact-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-fact-title">
+  <div class="drawer-head">
+    <div><h2 id="portfolio-fact-title">录入事实</h2><div class="sub" id="portfolio-fact-sub">事实一经确认不可修改</div></div>
+    <span class="spacer"></span>
+    <button type="button" class="icon-btn" data-overlay-close aria-label="关闭">{{ icon("close", "ico", 18) }}</button>
   </div>
-  <form id="portfolio-fact-form" class="portfolio-fact-form">
-    <div class="field-grid">
-      <div class="field field-wide">
-        <label for="portfolio-fact-kind">类型</label>
-        <select id="portfolio-fact-kind" name="kind" aria-label="事实类型">
-          <option value="opening_balance">期初余额</option>
-          <option value="reconciliation">对账余额</option>
-          <option value="trade">交易</option>
-          <option value="cash_transfer">资金转入 / 转出</option>
-          <option value="dividend">分红到账</option>
-          <option value="corporate_action">公司行动（比例变更 / 待确认）</option>
-        </select>
+  <div class="tabs pf-tabs" role="tablist" aria-label="录入或纠错">
+    <button type="button" class="on" role="tab" aria-selected="true" data-pf-tab="fact">录入事实</button>
+    <button type="button" role="tab" aria-selected="false" data-pf-tab="correction">纠错</button>
+  </div>
+  <div class="pf-status">
+    <div id="portfolio-fact-result" class="data-region" aria-live="polite"></div>
+    <button id="portfolio-pending-retry" class="btn btn-sm secondary" type="button" hidden>重取待确认请求</button>
+    <details id="portfolio-pending-audit" hidden><summary>待确认请求详情</summary><pre></pre></details>
+  </div>
+
+  <form id="portfolio-fact-form" class="portfolio-fact-form pf-pane" data-pf-pane="fact">
+    <div class="drawer-body">
+      <div class="pf-kinds chip-scroll" role="group" aria-label="事实类型">
+        <button type="button" class="filter-chip on" aria-pressed="true" data-kind-chip="opening_balance">期初余额</button>
+        <button type="button" class="filter-chip" aria-pressed="false" data-kind-chip="trade">交易</button>
+        <button type="button" class="filter-chip" aria-pressed="false" data-kind-chip="cash_transfer">资金流</button>
+        <button type="button" class="filter-chip" aria-pressed="false" data-kind-chip="dividend">分红</button>
+        <button type="button" class="filter-chip" aria-pressed="false" data-kind-chip="reconciliation">对账</button>
+        <button type="button" class="filter-chip" aria-pressed="false" data-kind-chip="corporate_action">公司行动</button>
       </div>
-      <div class="field field-wide">
-        <label for="portfolio-fact-date">发生日期与时间</label>
-        <div class="field-pair">
-          <input id="portfolio-fact-date" name="occurred_at" type="datetime-local" step="any" required aria-label="发生日期与时间">
-          <select name="timezone" aria-label="事实时间的时区">
-            <option value="+08:00">北京时间 UTC+08:00</option>
-            <option value="+00:00">UTC+00:00</option>
+      <div class="field-grid">
+        <div class="field field-wide pf-kind-field">
+          <label for="portfolio-fact-kind">类型</label>
+          <select id="portfolio-fact-kind" name="kind" aria-label="事实类型" class="pf-kind-select" tabindex="-1">
+            <option value="opening_balance">期初余额</option>
+            <option value="reconciliation">对账余额</option>
+            <option value="trade">交易</option>
+            <option value="cash_transfer">资金转入 / 转出</option>
+            <option value="dividend">分红到账</option>
+            <option value="corporate_action">公司行动（比例变更 / 待确认）</option>
           </select>
         </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-date">发生日期与时间</label>
+          <div class="field-pair">
+            <input id="portfolio-fact-date" name="occurred_at" type="datetime-local" step="any" required aria-label="发生日期与时间">
+            <select name="timezone" aria-label="事实时间的时区">
+              <option value="+08:00">北京时间 UTC+08:00</option>
+              <option value="+00:00">UTC+00:00</option>
+            </select>
+          </div>
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-action">公司行动</label>
+          <select id="portfolio-fact-action" name="action" aria-label="公司行动类型">
+            <option value="split">比例变更（拆股 / 送股）</option>
+            <option value="pending">待确认（影响数量 / 现金）</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="portfolio-fact-ticker">标的</label>
+          <input id="portfolio-fact-ticker" name="ticker" placeholder="如 600519.SH" maxlength="32" aria-label="标的" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="portfolio-fact-direction">方向</label>
+          <select id="portfolio-fact-direction" name="direction" aria-label="方向">
+            <option value="buy">买入</option>
+            <option value="sell">卖出</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="portfolio-fact-ratio">比例</label>
+          <input id="portfolio-fact-ratio" name="ratio" type="number" step="any" min="0" placeholder="拆分后数量倍数，如 2" aria-label="比例">
+        </div>
+        <div class="field-checks">
+          <label><input type="checkbox" name="affects_quantity" checked>影响数量</label>
+          <label><input type="checkbox" name="affects_cash">影响现金</label>
+        </div>
+        <div class="field">
+          <label for="portfolio-fact-quantity">数量</label>
+          <input id="portfolio-fact-quantity" name="quantity" type="number" step="any" min="0" aria-label="数量">
+        </div>
+        <div class="field">
+          <label for="portfolio-fact-price">价格</label>
+          <input id="portfolio-fact-price" name="price" type="number" step="any" min="0" aria-label="价格">
+        </div>
+        <div class="field">
+          <label for="portfolio-fact-fee">费用</label>
+          <input id="portfolio-fact-fee" name="fee" type="number" step="any" min="0" placeholder="留空即为未知" aria-label="费用">
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-cash">现金</label>
+          <input id="portfolio-fact-cash" name="cash" type="number" step="any" placeholder="现金余额（期初/对账）" aria-label="现金">
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-amount">金额</label>
+          <input id="portfolio-fact-amount" name="amount" type="number" step="any" placeholder="资金流 / 分红金额" aria-label="金额">
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-scope">资产范围</label>
+          <input id="portfolio-fact-scope" name="asset_scope" placeholder="请明确余额覆盖的账户资产范围" maxlength="256" aria-label="资产范围">
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-coverage">覆盖</label>
+          <select id="portfolio-fact-coverage" name="coverage" aria-label="覆盖">
+            <option value="partial">partial（只录入了部分资产）</option>
+            <option value="complete">complete（该范围内无遗漏）</option>
+          </select>
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-difference">差异说明</label>
+          <input id="portfolio-fact-difference" name="unexplained_difference" placeholder="对账差异说明（对账必填，无差异填 none）" maxlength="256" aria-label="差异说明">
+        </div>
+        <div class="field field-wide">
+          <label for="portfolio-fact-source">事实来源</label>
+          <input id="portfolio-fact-source" name="source" maxlength="256" required placeholder="对账单 / 成交回报等" aria-label="事实来源">
+        </div>
       </div>
-      <div class="field field-wide">
-        <label for="portfolio-fact-action">公司行动</label>
-        <select id="portfolio-fact-action" name="action" aria-label="公司行动类型">
-          <option value="split">比例变更（拆股 / 送股）</option>
-          <option value="pending">待确认（影响数量 / 现金）</option>
-        </select>
+      <div id="portfolio-balance-editor">
+        <p class="notice">余额确认会替换该范围的持仓列表。请列出全部已知持仓；对账时先载入当前持仓再核对。完整覆盖时未列出的股票将视为未持有。</p>
+        <div id="portfolio-balance-rows"></div>
+        <div class="form-actions form-actions-start">
+          <button id="portfolio-balance-add" type="button" class="secondary">增加一只持仓</button>
+          <button id="portfolio-balance-load" type="button" class="secondary">载入当前全部持仓</button>
+        </div>
+        <label class="confirm-line"><input type="checkbox" name="balance_confirmed">我已核对余额时点、资产范围和完整持仓列表</label>
       </div>
-      <div class="field">
-        <label for="portfolio-fact-ticker">标的</label>
-        <input id="portfolio-fact-ticker" name="ticker" placeholder="如 600519.SH" maxlength="32" aria-label="标的" autocomplete="off">
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-direction">方向</label>
-        <select id="portfolio-fact-direction" name="direction" aria-label="方向">
-          <option value="buy">买入</option>
-          <option value="sell">卖出</option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-ratio">比例</label>
-        <input id="portfolio-fact-ratio" name="ratio" type="number" step="any" min="0" placeholder="拆分后数量倍数，如 2" aria-label="比例">
-      </div>
-      <div class="field-checks">
-        <label><input type="checkbox" name="affects_quantity" checked>影响数量</label>
-        <label><input type="checkbox" name="affects_cash">影响现金</label>
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-quantity">数量</label>
-        <input id="portfolio-fact-quantity" name="quantity" type="number" step="any" min="0" aria-label="数量">
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-price">价格</label>
-        <input id="portfolio-fact-price" name="price" type="number" step="any" min="0" aria-label="价格">
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-fee">费用</label>
-        <input id="portfolio-fact-fee" name="fee" type="number" step="any" min="0" placeholder="留空即为未知" aria-label="费用">
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-cash">现金</label>
-        <input id="portfolio-fact-cash" name="cash" type="number" step="any" placeholder="现金余额（期初/对账）" aria-label="现金">
-      </div>
-      <div class="field">
-        <label for="portfolio-fact-amount">金额</label>
-        <input id="portfolio-fact-amount" name="amount" type="number" step="any" placeholder="资金流 / 分红金额" aria-label="金额">
-      </div>
-      <div class="field field-wide">
-        <label for="portfolio-fact-scope">资产范围</label>
-        <input id="portfolio-fact-scope" name="asset_scope" placeholder="请明确余额覆盖的账户资产范围" maxlength="256" aria-label="资产范围">
-      </div>
-      <div class="field field-wide">
-        <label for="portfolio-fact-coverage">覆盖</label>
-        <select id="portfolio-fact-coverage" name="coverage" aria-label="覆盖">
-          <option value="partial">partial（只录入了部分资产）</option>
-          <option value="complete">complete（该范围内无遗漏）</option>
-        </select>
-      </div>
-      <div class="field field-wide">
-        <label for="portfolio-fact-difference">差异说明</label>
-        <input id="portfolio-fact-difference" name="unexplained_difference" placeholder="对账差异说明（对账必填，无差异填 none）" maxlength="256" aria-label="差异说明">
-      </div>
-      <div class="field field-wide">
-        <label for="portfolio-fact-source">事实来源</label>
-        <input id="portfolio-fact-source" name="source" maxlength="256" required placeholder="对账单 / 成交回报等" aria-label="事实来源">
-      </div>
+      <div class="callout callout-warn pf-immutable">{{ icon("alert", "ico", 16) }}<span>事实一经确认不可修改；纠错通过原子纠错接口处理，不改写历史。</span></div>
+      <label class="confirm-line"><input type="checkbox" name="user_confirmed" required>我确认这是已经发生的实际事实</label>
+      <p class="small faint" id="portfolio-fact-hint"></p>
     </div>
-    <div id="portfolio-balance-editor">
-      <p class="notice">余额确认会替换该范围的持仓列表。请列出全部已知持仓；对账时先载入当前持仓再核对。完整覆盖时未列出的股票将视为未持有。</p>
-      <div id="portfolio-balance-rows"></div>
-      <div class="form-actions form-actions-start">
-        <button id="portfolio-balance-add" type="button" class="secondary">增加一只持仓</button>
-        <button id="portfolio-balance-load" type="button" class="secondary">载入当前全部持仓</button>
-      </div>
-      <label class="confirm-line"><input type="checkbox" name="balance_confirmed">我已核对余额时点、资产范围和完整持仓列表</label>
+    <div class="drawer-foot">
+      <button type="button" class="btn" data-overlay-close>关闭</button>
+      <button type="submit" class="btn btn-primary primary">提交</button>
     </div>
-    <label class="confirm-line"><input type="checkbox" name="user_confirmed" required>我确认这是已经发生的实际事实</label>
-    <p class="small faint" id="portfolio-fact-hint"></p>
-    <div class="form-actions"><button type="submit" class="primary">提交</button></div>
   </form>
-  <div id="portfolio-fact-result" class="data-region" aria-live="polite"></div>
-  <button id="portfolio-pending-retry" class="secondary" type="button" hidden>重取待确认请求</button>
-  <details id="portfolio-pending-audit" hidden><summary>待确认请求详情</summary><pre></pre></details>
-</section>
 
-<section class="card">
-  <div class="card-head">
-    <h2>纠错</h2>
-    <span class="faint small">冲销与替代在同一事务提交；页面只显示最终状态，历史不被改写。</span>
+  <div class="pf-pane" data-pf-pane="correction" hidden>
+    <div class="drawer-body">
+      <p class="small faint">冲销与替代在同一事务提交；页面只显示最终状态，历史不被改写。先在时间线里勾选要冲销的事实。</p>
+      <p id="portfolio-correction-selected" class="pf-selected small" aria-live="polite">未选择事实</p>
+      <div class="field-grid">
+        <div class="field field-wide">
+          <label for="portfolio-correction-reason">纠错理由</label>
+          <input id="portfolio-correction-reason" name="correction_reason" maxlength="256" placeholder="录错原因（必填）" aria-label="纠错理由">
+        </div>
+        <div class="field">
+          <label for="portfolio-correction-ticker">替代事实标的</label>
+          <input id="portfolio-correction-ticker" name="correction_ticker" maxlength="32" placeholder="可空：只冲销不替代" aria-label="替代事实标的">
+        </div>
+        <div class="field">
+          <label for="portfolio-correction-direction">替代方向</label>
+          <select id="portfolio-correction-direction" name="correction_direction" aria-label="替代方向">
+            <option value="buy">买入</option>
+            <option value="sell">卖出</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="portfolio-correction-quantity">替代数量</label>
+          <input id="portfolio-correction-quantity" name="correction_quantity" type="number" step="any" min="0" aria-label="替代数量">
+        </div>
+        <div class="field">
+          <label for="portfolio-correction-price">替代价格</label>
+          <input id="portfolio-correction-price" name="correction_price" type="number" step="any" min="0" aria-label="替代价格">
+        </div>
+        <div class="field">
+          <label for="portfolio-correction-fee">替代费用</label>
+          <input id="portfolio-correction-fee" name="correction_fee" type="number" step="any" min="0" placeholder="留空即为未知" aria-label="替代费用">
+        </div>
+      </div>
+      <div id="portfolio-correction-result" class="data-region" aria-live="polite"></div>
+    </div>
+    <div class="drawer-foot">
+      <button type="button" class="btn" data-overlay-close>关闭</button>
+      <button id="portfolio-correction-submit" type="button" class="btn btn-primary primary">提交纠错</button>
+    </div>
   </div>
-  <p id="portfolio-correction-selected" class="small faint" aria-live="polite">未选择事实</p>
-  <div class="field-grid">
-    <div class="field field-wide">
-      <label for="portfolio-correction-reason">纠错理由</label>
-      <input id="portfolio-correction-reason" name="correction_reason" maxlength="256" placeholder="录错原因（必填）" aria-label="纠错理由">
-    </div>
-    <div class="field">
-      <label for="portfolio-correction-ticker">替代事实标的</label>
-      <input id="portfolio-correction-ticker" name="correction_ticker" maxlength="32" placeholder="可空：只冲销不替代" aria-label="替代事实标的">
-    </div>
-    <div class="field">
-      <label for="portfolio-correction-direction">替代方向</label>
-      <select id="portfolio-correction-direction" name="correction_direction" aria-label="替代方向">
-        <option value="buy">买入</option>
-        <option value="sell">卖出</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="portfolio-correction-quantity">替代数量</label>
-      <input id="portfolio-correction-quantity" name="correction_quantity" type="number" step="any" min="0" aria-label="替代数量">
-    </div>
-    <div class="field">
-      <label for="portfolio-correction-price">替代价格</label>
-      <input id="portfolio-correction-price" name="correction_price" type="number" step="any" min="0" aria-label="替代价格">
-    </div>
-    <div class="field">
-      <label for="portfolio-correction-fee">替代费用</label>
-      <input id="portfolio-correction-fee" name="correction_fee" type="number" step="any" min="0" placeholder="留空即为未知" aria-label="替代费用">
-    </div>
-  </div>
-  <div class="form-actions"><button id="portfolio-correction-submit" type="button" class="primary">提交纠错</button></div>
-  <div id="portfolio-correction-result" class="data-region" aria-live="polite"></div>
-</section>
+</aside>
 
-<section class="card">
-  <div class="card-head">
-    <h2>事实时间线</h2>
-    <span id="portfolio-events-meta" class="faint small"></span>
-  </div>
-  <div id="portfolio-events" class="data-region" data-empty-text="还没有事实记录。">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
-  </div>
-</section>
-
-<section class="card">
-  <div class="card-head">
-    <h2>已实现盈亏与分红</h2>
-    <span class="faint small">按周期引用回放；未知金额保持未知，不推断。</span>
-  </div>
-  <div id="portfolio-realized" class="data-region" data-empty-text="还没有已实现的卖出事实或分红记录。">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
-  </div>
-</section>
-
-<section class="card">
-  <div class="card-head">
-    <h2>已平仓（归档）</h2>
-    <span class="faint small">清仓后进入归档区，可回看当初的事实与已实现结果。</span>
-  </div>
-  <div id="portfolio-archive" class="data-region" data-empty-text="还没有已平仓的持仓周期。">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
-  </div>
-</section>
+<aside class="drawer pf-drawer" id="portfolio-account-drawer" role="dialog" aria-modal="true" aria-labelledby="portfolio-account-title">
+  <form id="portfolio-create-form" class="pf-pane">
+    <div class="drawer-head">
+      <div><h2 id="portfolio-account-title">新建账户</h2><div class="sub">之后录入期初余额，持仓由账本事实派生</div></div>
+      <span class="spacer"></span>
+      <button type="button" class="icon-btn" data-overlay-close aria-label="关闭">{{ icon("close", "ico", 18) }}</button>
+    </div>
+    <div class="drawer-body">
+      <div class="field">
+        <label for="portfolio-account-name">账户名称</label>
+        <input id="portfolio-account-name" name="name" placeholder="账户名称，如 我的券商账户" maxlength="128" required aria-label="账户名称" data-autofocus>
+      </div>
+      <div id="portfolio-create-result" class="data-region" aria-live="polite"></div>
+    </div>
+    <div class="drawer-foot">
+      <button type="button" class="btn" data-overlay-close>取消</button>
+      <button type="submit" class="btn btn-primary primary">创建</button>
+    </div>
+  </form>
+</aside>
 {% endblock %}

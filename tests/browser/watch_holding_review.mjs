@@ -33,10 +33,13 @@ try {
     page.on('pageerror',e=>errors.push(String(e)));
     await page.goto(base+'/app/portfolio');await page.locator('[name=api_key]').fill('ag24-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/portfolio');
     const select = page.locator('#portfolio-account'), form = page.locator('#portfolio-fact-form');
+    // UI v2: the fact form lives in a drawer (page controls are covered while it is open).
+    const openFacts = () => page.locator('#portfolio-fact-open').click(), closeFacts = () => page.keyboard.press('Escape');
     await select.selectOption(account.id);await page.waitForFunction(()=>document.querySelector('#portfolio-holdings tbody')?.textContent.includes('600002.SH'));
     const fill = async () => {await form.locator('[name=occurred_at]').fill(time.slice(0,19));await form.locator('[name=timezone]').selectOption('+00:00');await form.locator('[name=source]').fill('review statement');await form.locator('[name=user_confirmed]').check();};
     const submit = () => form.getByRole('button',{name:'提交',exact:true}).click();
     const saved = async () => {try {await page.locator('#portfolio-fact-result').getByText(/服务器已确认保存/).waitFor({timeout:10000});}catch(error){console.log(await page.locator('#portfolio-fact-result').innerText());console.log(await form.evaluate(f=>[...f.elements].map(n=>({name:n.name,value:n.value,disabled:n.disabled,valid:n.validity?.valid,checked:n.checked}))));throw error;}};
+    await openFacts();
     await form.locator('[name=kind]').selectOption('reconciliation');await page.getByRole('button',{name:'载入当前全部持仓',exact:true}).click();
     await page.waitForFunction(()=>document.querySelectorAll('[data-balance-row]').length===2);
     assert.deepEqual(await form.locator('[name=balance_quantity]').evaluateAll(nodes=>nodes.map(n=>n.value)),['100','200']);
@@ -55,12 +58,15 @@ try {
     // An old account's late valuation response cannot replace the selected account.
     let release, received, finished;const started = new Promise(r=>received=r), hold = new Promise(r=>release=r), done = new Promise(r=>finished=r);
     await page.route('**/portfolio/valuations/current?**',async route=>{if(new URL(route.request().url()).searchParams.get('account_id')===account.id){received();await hold;await route.continue();finished();}else await route.continue();});
+    await closeFacts();
     await page.getByRole('button',{name:'刷新估值',exact:true}).click();await started;await select.selectOption(second.id);
     await page.waitForFunction(()=>document.querySelector('#portfolio-valuation-meta').textContent.replaceAll(',','').includes('2222'));release();await done;await page.unroute('**/portfolio/valuations/current?**');
     await page.waitForTimeout(200);assert.match(await page.locator('#portfolio-valuation-meta').innerText(),/2,?222/);
     // No storage receipt means no fact POST is admitted to the network.
     await page.evaluate(()=>{const original=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='zcharlie.portfolio.pending.v1')throw Error('fixture storage unavailable');return original.call(this,key,value);};});
+    await openFacts();
     await form.locator('[name=kind]').selectOption('cash_transfer');await form.locator('[name=amount]').fill('1');await fill();await submit();await page.locator('#portfolio-fact-result').getByText(/未发送事实/).waitFor();
+    await closeFacts();
     assert.equal((await api(`/portfolio/snapshot?account_id=${second.id}`)).revision,1);
     assert.equal(await page.locator('#portfolio-holdings img,#portfolio-holdings script').count(),0);
     // Holding rule review (WP8): the row's 规则 cell opens the panel, a draft
