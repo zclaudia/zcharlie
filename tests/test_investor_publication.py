@@ -460,7 +460,33 @@ async def test_critical_opposition_is_dependency_and_review_requirement(publicat
 async def test_market_monitor_excludes_intraday_future_close_and_respects_threshold(publication_db):
     from investment_agent.evidence.snapshots import materialize
     from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
-    candidate, evidence_ref, evidence, old_bar = await market_candidate()
+    candidate, _, _, old_bar = await market_candidate()
+    # Anchor every point-in-time date in this scenario on the run time: a fixed
+    # date drifts out of the 14-day snapshot freshness and validity windows,
+    # eventually predates the publication itself, and in every such case the
+    # intended state (published first, last settled close current, intraday
+    # capture not yet visible) stops holding.
+    now = datetime.now(UTC)
+    day = now.date() + timedelta(days=1)
+    # The value was captured in the morning but represents an unavailable close.
+    morning = datetime.combine(day, datetime.min.time(), tzinfo=UTC) + timedelta(hours=2)
+    # Last settled session close, always older than the cutoff above: the
+    # capture day's own 15:00 Asia/Shanghai close time (07:00 UTC) can still lie
+    # ahead of the run, so take the session before that one.
+    previous = day - timedelta(days=2)
+    settled = datetime.combine(previous, datetime.min.time(), tzinfo=UTC) + timedelta(hours=7)
+    async with session_scope() as session:
+        row = await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=previous, open=Decimal(10), high=Decimal(10), low=Decimal(10), close=Decimal(10), volume=Decimal(100), pe_ttm=Decimal(5), pb_mrq=Decimal(1), provider="baostock", captured_at=settled)
+        evidence_ref = await EvidenceService(session).save_evidence("local_owner", materialize(row, "close"), uuid4())
+    # Rebind the candidate to that settled close and to a cutoff/review/validity
+    # schedule that starts at the run time, so the publication precedes the
+    # observation and the review horizon stays after it.
+    claim = candidate.recommendation.claims[0]
+    claim = claim.model_copy(update={"support_refs": (evidence_ref,), "text": (claim.text[0], claim.text[1].model_copy(update={"ref": evidence_ref.model_copy(update={"field_path": "value"})}))})
+    candidate = candidate.model_copy(update={
+        "thesis": candidate.thesis.model_copy(update={"as_of": now, "claims": (claim,)}),
+        "recommendation": candidate.recommendation.model_copy(update={"as_of": now, "valid_until": now + timedelta(days=14), "next_review_at": now + timedelta(days=7), "claims": (claim,), "provenance": (evidence_ref,), "dependency_refs": (candidate.recommendation.dependency_refs[0].model_copy(update={"ref": evidence_ref}),)}),
+    })
     async with session_scope() as session:
         calculation = CalculationRecord(**metadata(), method="fixture_threshold", method_version="fixture.v1", fact_refs=(evidence_ref,), assumption_refs=(), input_hash="fixture", as_of=candidate.recommendation.as_of, applicable=True, status="ok", results={}, assumptions=(CalculationAssumption(name="review_threshold", value=Quantity(value="20", unit="CNY/share"), provenance="agent_scenario", rationale="A fictional review threshold"),))
         session.add(SavedCalculation(id=str(calculation.id), revision=1, owner_id="local_owner", payload=calculation.model_dump(mode="json")))
@@ -469,11 +495,6 @@ async def test_market_monitor_excludes_intraday_future_close_and_respects_thresh
     candidate = candidate.model_copy(update={"monitors": (monitor,), "recommendation": candidate.recommendation.model_copy(update={"monitor_refs": (ObjectRef(kind="monitor", id=monitor.id, revision=1),)})})
     result = await publish(candidate)
     assert result.published
-    # Keep the observation after the actual publication, regardless of when
-    # the suite is run; a fixed wall date eventually becomes pre-publication.
-    day = datetime.now(UTC).date() + timedelta(days=1)
-    # The value was captured in the morning but represents an unavailable close.
-    morning = datetime.combine(day, datetime.min.time(), tzinfo=UTC) + timedelta(hours=2)
     async with session_scope() as session:
         row = await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=day, open=Decimal(30), high=Decimal(30), low=Decimal(30), close=Decimal(30), volume=Decimal(100), pe_ttm=Decimal(5), pb_mrq=Decimal(1), provider="baostock", captured_at=morning)
         assert materialize(row, "close").available_from > morning
