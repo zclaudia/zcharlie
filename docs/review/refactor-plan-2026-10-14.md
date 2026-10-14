@@ -119,6 +119,7 @@ export DATA_DIR="$PWD/data" DATABASE_URL="sqlite+aiosqlite:///$PWD/data/app.db" 
 |---|---|---|
 | 恢复 ruff 门禁 | `141945b` | 上一提交基线 `ruff check .` 有 13 错（peer 工作包遗留 11 + 2 未归属） |
 | 时间耦合用例解耦 | `cb6f3ea` | 报告 §4.6 预测的类别在 `test_market_monitor_...` 实际发生：基线唯一失败 |
+| 时间耦合用例解耦（第二批 5 例） | `742f689`（合入 main 后） | 合并后在 main 上跑门禁时暴露：`test_investor_publication.py` / `test_investor_monitoring.py` 共 5 例用固定 `AS_OF=2026-10-01` 构造行情场景，最新收盘（2026-09-30，`available_from=2026-09-30T07:00Z`）在 **2026-10-14T07:00Z** 越过发布层 14 天前提新鲜度边界，此后 `publish()` 恒返回 `published=False`。同一份代码 02:5x UTC 通过、12:49 UTC 失败，证明与 ff 合并无关（合并不改内容）。修法：场景锚定到 `anchor = now - 1d`；用 `freeze_time` 在 +400 天/−30 天两个偏移下验证（10 passed），并做反向敏感度对照（改回一个旧固定日期 → 两偏移下 4/4 失败，签名正是 14 天新鲜度退化） |
 | API 关停无界等待 | `063712c` | 目录同步在途时关停 19.03s vs 15s 预算，是 `test_clean_environment_smoke` 在 3 次全量中失败 2 次的原因 |
 | 前端超时文案保真 | `cfeb8db` | 上一包合并 HTTP 客户端时把超时文案并成通用文案 |
 | 守卫不计 `TYPE_CHECKING` | `904bff9` | 注解专用导入不构成运行时依赖；baseline 204→203 |

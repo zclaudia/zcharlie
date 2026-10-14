@@ -62,6 +62,8 @@ root containing raw/official/*.pdf (checkout default: ...)
 
 **守卫本身也被验证**：import-graph ratchet 通过"从 baseline 删掉一条真实运行期边（`providers -> storage`）"复现失败，确认仍会咬；基线重生成只删了一条边（`industry_peers -> cli`，正是 P0-9 修掉的分层倒置），无新增。
 
+**波次 E 之后（合入 main 时暴露）**：在 main 上跑合并后门禁发现 5 例失败——`test_investor_publication.py` / `test_investor_monitoring.py` 用固定 `AS_OF=2026-10-01` 构造行情场景，最新收盘（2026-09-30，`available_from=2026-09-30T07:00Z`）在 **2026-10-14T07:00Z** 越过发布层 14 天前提新鲜度边界，此后 `publish()` 恒返回 `published=False`。因为 ff 合并不改变内容，而同一棵树 2 小时前是 3299 passed，可断定与合并无关、属既有时间耦合缺陷（报告 §4.6 的类别，第一例已在 `cb6f3ea` 修过）。修法：把场景锚定到 `anchor = now - 1d`，并用 `freeze_time` 在 +400 天 / −30 天两个偏移下验证（10 passed）+ 反向敏感度对照（4/4 失败）；修后**全量门禁 `3299 passed / 0 failed`**，提交 `742f689`（仅 4 个测试文件，`src/` 未动）。
+
 **波次 E：两处"重复"其实是误判，改法因此不同**（这是本轮最值得看的一条方法论证据）：
 - 报告称 `is_trading_day` 有"7 处同一兜底"。逐个读下来是**两种产品规则**：2 处（`earnings_events`、`health/accumulation`）确实回退到 `weekday()`，另 5 处（`api/routes/portfolio.py`、`portfolio/valuation_jobs.py`、`scheduler/runner.py` ×3）在未审核年份**拒答**（返回 `None` / 跳过 / 记事件后 fail-closed）。若按报告合并成一个 helper，会把 5 条 fail-closed 路径悄悄变成 fail-open，所以最终落成**两个** helper，各自 docstring 是该规则的唯一表述处。
 - 报告称四处字段核对循环"前 12 项完全同序"。实际 event 分支的 12 个名字**顺序不同**；由于不变量是"首个报错字段名不变"，event 分支保留了自己的顺序，只有另外 3 处归一为共享常量。
