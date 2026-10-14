@@ -146,8 +146,17 @@ export function providerStatus(item, now = Date.now()) {
 
 // ---- DOM 小件 ---------------------------------------------------------------
 
-function meter(value, { max = 1, low, optimum = max, labelText } = {}) {
+// 图标来自 health.html 的 <template id="health-icons">（服务端渲染的内联 SVG），克隆即用；
+// 页面外（node 测试）取不到时返回 null，调用方直接略过。
+function iconNode(name) {
+  const tpl = globalThis.document && document.getElementById("health-icons");
+  const holder = tpl && tpl.content ? tpl.content.querySelector(`[data-icon="${name}"]`) : null;
+  return holder && holder.firstElementChild ? holder.firstElementChild.cloneNode(true) : null;
+}
+
+function meter(value, { max = 1, low, optimum = max, labelText, className } = {}) {
   const node = el("meter", {
+    class: className,
     min: 0,
     max,
     value: typeof value === "number" && Number.isFinite(value) ? Math.min(Math.max(value, 0), max) : 0,
@@ -164,20 +173,50 @@ function bar(value, total, text, threshold) {
   const wrap = el("div", { class: "health-bar" });
   const ratio = total > 0 ? value / total : null;
   wrap.appendChild(meter(ratio, { low: threshold, labelText: text }));
-  wrap.appendChild(el("span", { class: "health-bar-text" }, text));
+  wrap.appendChild(el("span", { class: "health-bar-text num" }, text));
   return wrap;
 }
 
-function kvList(pairs) {
-  const list = el("dl", { class: "kv-list" });
+function putValue(node, value) {
+  if (value instanceof Node) node.appendChild(value);
+  else node.textContent = fmt(value);
+  return node;
+}
+
+// 标签在左、值在右的两列行（手机上也不折成上下堆叠）。
+function rows(pairs) {
+  const list = el("dl", { class: "health-rows" });
   for (const [key, value] of pairs) {
-    list.appendChild(el("dt", {}, key));
-    const dd = el("dd");
-    if (value instanceof Node) dd.appendChild(value);
-    else dd.textContent = fmt(value);
-    list.appendChild(dd);
+    const row = el("div", { class: "health-row" });
+    row.appendChild(el("dt", {}, key));
+    row.appendChild(putValue(el("dd"), value));
+    list.appendChild(row);
   }
   return list;
+}
+
+// 小指标格：标签在上、值在下（每格一项），2~4 列自适应。
+function facts(pairs) {
+  const list = el("dl", { class: "facts health-facts" });
+  for (const [key, value] of pairs) {
+    const fact = el("div", { class: "fact" });
+    fact.appendChild(el("dt", {}, key));
+    fact.appendChild(putValue(el("dd", { class: "num" }), value));
+    list.appendChild(fact);
+  }
+  return list;
+}
+
+function stat(labelText, value, { foot, kind = "" } = {}) {
+  const node = el("div", { class: `health-stat ${kind}`.trim() });
+  node.appendChild(el("div", { class: "health-stat-label" }, labelText));
+  node.appendChild(putValue(el("div", { class: "health-stat-value num" }), value));
+  if (foot) node.appendChild(el("div", { class: "health-stat-foot" }, foot));
+  return node;
+}
+
+function subtitle(text) {
+  return el("h3", { class: "health-sub" }, text);
 }
 
 function statusChip(status) {
@@ -188,64 +227,110 @@ function tickerNode(ticker) {
   return stockLink(ticker) || el("span", {}, "—");
 }
 
-function simpleTable(headers, rows) {
-  const node = el("table", { class: "health-table" });
+function simpleTable(headers, body, { numeric = [] } = {}) {
+  const wrap = el("div", { class: "table-wrap" });
+  const node = el("table", { class: "health-tbl" });
   const head = el("tr");
-  for (const header of headers) head.appendChild(el("th", { scope: "col" }, header));
+  headers.forEach((header, index) => head.appendChild(el("th", { scope: "col", class: numeric.includes(index) ? "num" : undefined }, header)));
   node.appendChild(el("thead")).appendChild(head);
-  const body = el("tbody");
-  for (const cells of rows) {
+  const tbody = el("tbody");
+  for (const cells of body) {
     const tr = el("tr");
     cells.forEach((cell, index) => {
-      const td = el("td", { "data-label": headers[index] });
-      if (cell instanceof Node) td.appendChild(cell);
-      else td.textContent = fmt(cell);
+      const td = el("td", { class: numeric.includes(index) ? "num" : undefined });
+      putValue(td, cell);
       tr.appendChild(td);
     });
-    body.appendChild(tr);
+    tbody.appendChild(tr);
   }
-  node.appendChild(body);
-  return node;
+  node.appendChild(tbody);
+  wrap.appendChild(node);
+  return wrap;
 }
 
 function empty(text) {
-  return el("p", { class: "muted" }, text);
+  return el("p", { class: "muted health-empty" }, text);
 }
 
 // ---- 各分区 -----------------------------------------------------------------
 
+const ALERT_VISIBLE = 5;
+
+// 提醒文案按第一个“：”拆成标题与细节，与概览页的提醒同一规则。
+function splitAlert(message) {
+  const text = String(message ?? "");
+  const match = /[：:]\s*/.exec(text);
+  if (!match || match.index < 4 || match.index + match[0].length >= text.length) return [text, ""];
+  return [text.slice(0, match.index), text.slice(match.index + match[0].length)];
+}
+
+function alertRow(warning) {
+  const isAlert = ["error", "warn"].includes(warning.level);
+  const row = el("li", { class: `health-alert health-alert-${warning.level}` });
+  const icon = el("span", { class: `list-row-icon${isAlert ? " warn" : ""}`, "aria-hidden": "true" });
+  const glyph = iconNode(isAlert ? "alert" : "info");
+  if (glyph) icon.appendChild(glyph);
+  row.appendChild(icon);
+  const main = el("div", { class: "health-alert-main" });
+  const [heading, detail] = splitAlert(warning.message);
+  main.appendChild(el("b", {}, isAlert ? heading : `${label(LEVEL_LABELS, "info")}：${heading}`));
+  if (detail) {
+    const detailNode = el("small", { class: "health-alert-detail", title: "点击展开 / 收起", tabindex: "0" }, detail);
+    const toggle = () => detailNode.classList.toggle("is-open");
+    detailNode.addEventListener("click", toggle);
+    detailNode.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        toggle();
+      }
+    });
+    main.appendChild(detailNode);
+  }
+  row.appendChild(main);
+  const known = warning.section && SECTION_LABELS[warning.section];
+  if (known) {
+    const link = el("a", { class: "btn btn-sm health-alert-link", href: `#health-${warning.section}`, "aria-label": `查看${SECTION_LABELS[warning.section]}` }, "查看");
+    row.appendChild(link);
+  }
+  return row;
+}
+
 function renderWarnings(warnings) {
-  const box = el("div", { class: "health-warnings" });
+  const box = el("div", { class: "health-warnings-body" });
   if (!warnings.length) {
-    box.appendChild(el("p", { class: "notice" }, "当前没有数据健康提醒。"));
+    box.appendChild(el("p", { class: "health-ok" }, "当前没有数据健康提醒。"));
     return box;
   }
-  const alerts = warnings.filter((warning) => ["error", "warn"].includes(warning.level));
-  if (alerts.length) {
-    box.appendChild(
-      alertList(
-        alerts.map((warning) => ({
-          level: warning.level,
-          message: fmt(warning.message),
-          link: warning.section && SECTION_LABELS[warning.section] ? `#health-${warning.section}` : null,
-          linkText: warning.section && SECTION_LABELS[warning.section] ? `查看${SECTION_LABELS[warning.section]} →` : null,
-        })),
-        { title: "数据健康提醒" }
-      )
-    );
-  }
-  for (const warning of warnings.filter((item) => !["error", "warn"].includes(item.level))) {
-    box.appendChild(el("p", { class: "notice" }, `${label(LEVEL_LABELS, "info")}：${fmt(warning.message)}`));
+  const rank = (level) => (level === "error" ? 0 : level === "warn" ? 1 : 2);
+  const sorted = [...warnings].sort((a, b) => rank(a.level) - rank(b.level));
+  const list = el("ul", { class: "health-alerts" });
+  const nodes = sorted.map((warning, index) => {
+    const row = alertRow(warning);
+    if (index >= ALERT_VISIBLE) row.hidden = true;
+    list.appendChild(row);
+    return row;
+  });
+  box.appendChild(list);
+  if (nodes.length > ALERT_VISIBLE) {
+    const more = el("button", { type: "button", class: "btn btn-ghost btn-sm health-alerts-more", "aria-expanded": "false" }, `展开其余 ${nodes.length - ALERT_VISIBLE} 条`);
+    more.addEventListener("click", () => {
+      const open = more.getAttribute("aria-expanded") !== "true";
+      nodes.forEach((row, index) => {
+        if (index >= ALERT_VISIBLE) row.hidden = !open;
+      });
+      more.setAttribute("aria-expanded", open ? "true" : "false");
+      more.textContent = open ? "收起" : `展开其余 ${nodes.length - ALERT_VISIBLE} 条`;
+    });
+    box.appendChild(more);
   }
   return box;
 }
 
 function renderAccumulation(data) {
   const acc = data.accumulation;
-  const box = el("div");
-  const head = el("div", { class: "accumulation-headline" });
-  const count = el("span", { class: "accumulation-count" }, String(acc.streak_weeks));
-  head.appendChild(count);
+  const box = el("div", { class: "stack" });
+  const head = el("div", { class: "health-acc-head" });
+  head.appendChild(el("span", { class: "health-acc-count num" }, String(acc.streak_weeks)));
   head.appendChild(el("span", { class: "muted" }, `/ ${acc.target_weeks} 周连续达标`));
   if (acc.reached) head.appendChild(el("span", { class: "status status-success" }, "已达成"));
   box.appendChild(head);
@@ -258,7 +343,7 @@ function renderAccumulation(data) {
   progress.textContent = accumulationText(acc);
   box.appendChild(progress);
   box.appendChild(
-    kvList([
+    facts([
       ["首个实时快照", acc.first_live_trade_date],
       ["最近实时快照", acc.latest_live_trade_date],
       ["有快照的周数", String(acc.weeks_with_snapshots)],
@@ -276,7 +361,8 @@ function renderAccumulation(data) {
           String(week.collected_days),
           percent(week.min_ratio),
           el("span", { class: `chip week-${week.status}` }, label(WEEK_STATUS_LABELS, week.status)),
-        ])
+        ]),
+        { numeric: [2, 3, 4] }
       )
     );
   } else {
@@ -300,17 +386,19 @@ function renderAccumulation(data) {
 function freshRow(what, ok, text, extra) {
   const row = el("li");
   row.appendChild(el("span", { class: `dot ${ok ? "dot-fresh" : "dot-stale"}`, "aria-hidden": "true" }));
-  row.appendChild(el("span", { class: "fresh-what" }, what));
-  row.appendChild(el("span", {}, text));
-  if (extra) row.appendChild(extra instanceof Node ? extra : el("span", { class: "faint" }, extra));
+  const main = el("span", { class: "health-fresh-main" });
+  main.appendChild(el("span", { class: "fresh-what" }, what));
+  main.appendChild(el("span", {}, text));
+  row.appendChild(main);
+  if (extra) row.appendChild(extra instanceof Node ? extra : el("small", { class: "faint health-fresh-note" }, extra));
   return row;
 }
 
 function renderFreshness(data) {
   const fresh = data.freshness;
   const market = fresh.market;
-  const box = el("div");
-  const list = el("ul", { class: "fresh-list" });
+  const box = el("div", { class: "stack" });
+  const list = el("ul", { class: "fresh-list health-fresh" });
   const lagKnown = market.lag_trading_days !== null && market.lag_trading_days !== undefined;
   list.appendChild(
     freshRow(
@@ -339,28 +427,28 @@ function renderFreshness(data) {
     )
   );
   box.appendChild(list);
-  box.appendChild(el("h3", {}, `日线覆盖（${market.universe_code}，baostock 不复权）`));
-  box.appendChild(
-    bar(market.members_at_latest, market.members, `${market.members_at_latest}/${market.members} 成分`, data.threshold)
-  );
-  box.appendChild(el("h3", {}, "财报覆盖（baostock）"));
+  const coverage = [
+    [
+      `日线覆盖（${market.universe_code}，baostock 不复权）`,
+      bar(market.members_at_latest, market.members, `${market.members_at_latest}/${market.members} 成分`, data.threshold),
+    ],
+  ];
   if (fresh.financial.length) {
-    box.appendChild(
-      kvList(
-        fresh.financial.map((period) => [
-          period.report_period,
-          bar(period.listings, period.members, `${period.listings}/${period.members}（${percent(period.coverage)}）`, data.threshold),
-        ])
-      )
-    );
+    for (const period of fresh.financial) {
+      coverage.push([
+        `财报覆盖 ${period.report_period}`,
+        bar(period.listings, period.members, `${period.listings}/${period.members}（${percent(period.coverage)}）`, data.threshold),
+      ]);
+    }
   } else {
-    box.appendChild(empty("当前成分股尚无财报快照。"));
+    coverage.push(["财报覆盖（baostock）", "当前成分股尚无财报快照。"]);
   }
   const dividend = fresh.dividend;
-  box.appendChild(el("h3", {}, `分红覆盖（${dividend.year} 年）`));
-  box.appendChild(
-    bar(dividend.covered, dividend.members, `${dividend.covered}/${dividend.members}（${percent(dividend.coverage)}）`, data.threshold)
-  );
+  coverage.push([
+    `分红覆盖（${dividend.year} 年）`,
+    bar(dividend.covered, dividend.members, `${dividend.covered}/${dividend.members}（${percent(dividend.coverage)}）`, data.threshold),
+  ]);
+  box.appendChild(rows(coverage));
   return box;
 }
 
@@ -378,41 +466,28 @@ function missingDetails(run) {
   return details;
 }
 
-function renderCollection(item, threshold) {
-  const block = el("article", { class: "collection-item" });
-  const head = el("div", { class: "collection-head" });
-  head.appendChild(el("h3", { class: "collection-title" }, collectionTitle(item)));
+// 采集任务的展开细节：缺失分类、停止原因、错误摘要、近几次完整率、缺失清单。没有可展开内容返回 null。
+function collectionDetail(item) {
   const run = item.last_run;
-  if (run) head.appendChild(statusChip(run.status));
-  if (item.in_flight) head.appendChild(el("span", { class: "status status-running" }, `${item.in_flight} 个排队/运行中`));
-  block.appendChild(head);
-  if (!run) {
-    block.appendChild(empty("尚无已结束的运行。"));
-    return block;
-  }
-  const meta = el("p", { class: "collection-meta muted small" });
-  meta.textContent = `#${run.run_id} · 数据日 ${fmt(run.subject)} · 结束于 ${localTime(run.finished_at)}`;
-  block.appendChild(meta);
-  if (typeof run.ratio === "number") {
-    const ratio = el("p", { class: "collection-ratio" });
-    ratio.appendChild(el("span", { class: `collection-ratio-value${run.ratio < threshold ? " below" : ""}` }, percent(run.ratio)));
-    ratio.appendChild(el("span", { class: "faint" }, ` 完整率 · ${fmt(run.collected)}/${fmt(run.expected)}`));
-    block.appendChild(ratio);
-    block.appendChild(
-      bar(run.collected ?? 0, (run.expected ?? 0) - (run.missing_by_kind.pending || 0), `${fmt(run.collected)}/${fmt(run.expected)}`, threshold)
-    );
-  }
+  if (!run) return null;
+  const box = el("div", { class: "health-coll-detail" });
+  let any = false;
   const missing = missingSummary(run.missing_by_kind);
-  if (missing) block.appendChild(el("p", { class: "small" }, `缺失：${missing}`));
+  if (missing) {
+    box.appendChild(el("p", { class: "small" }, `缺失：${missing}`));
+    any = true;
+  }
   if (run.stop_reason) {
-    block.appendChild(
+    box.appendChild(
       el("p", { class: "notice notice-warn small" }, `${label(STOP_LABELS, run.stop_reason)}：${fmt(run.stop_error)}`)
     );
+    any = true;
   }
   if (run.error_summary && run.status !== "success") {
     const error = el("div", { class: "small error-text" });
     error.appendChild(errorText(run.error_summary));
-    block.appendChild(error);
+    box.appendChild(error);
+    any = true;
   }
   if (item.trend.length > 1) {
     const trend = el("p", { class: "trend small" });
@@ -423,19 +498,146 @@ function renderCollection(item, threshold) {
         el("span", { class: `trend-cell run-${point.status}`, title: `#${point.run_id} ${fmt(point.subject)}：${text}` }, text)
       );
     }
-    block.appendChild(trend);
+    box.appendChild(trend);
+    any = true;
   }
-  if (run.missing.length) block.appendChild(missingDetails(run));
-  return block;
+  if (run.missing.length) {
+    box.appendChild(missingDetails(run));
+    any = true;
+  }
+  return any ? box : null;
+}
+
+function collectionName(item) {
+  const kind = label(KIND_LABELS, item.kind);
+  return item.part ? `${kind} · ${label(PART_LABELS, item.part)}` : kind;
+}
+
+function collectionSource(item) {
+  return [item.provider, item.scope].filter(Boolean).join(" · ") || "—";
+}
+
+function runPercent(item) {
+  const run = item.last_run;
+  if (!run) return null;
+  return typeof run.ratio === "number" ? run.ratio : null;
+}
+
+function runIsBad(item) {
+  const run = item.last_run;
+  return Boolean(run) && ["failed", "partial"].includes(run.status);
+}
+
+function statusCell(item) {
+  const run = item.last_run;
+  if (!run) return el("span", { class: "badge dot hollow" }, "未运行");
+  return statusChip(run.status);
+}
+
+function coverageCell(item, threshold) {
+  const run = item.last_run;
+  if (!run) return el("span", { class: "muted" }, "—");
+  const ratio = runPercent(item);
+  if (ratio === null) {
+    return el("span", { class: "muted num" }, typeof run.collected === "number" ? `${run.collected} 只` : "—");
+  }
+  const cell = el("div", { class: "health-cov" });
+  cell.appendChild(el("b", { class: `num${ratio < threshold ? " below" : ""}` }, percent(ratio)));
+  cell.appendChild(
+    meter(ratio, { low: threshold, labelText: `${fmt(run.collected)}/${fmt(run.expected)}`, className: "health-cov-meter" })
+  );
+  return cell;
+}
+
+function runStamp(item) {
+  const run = item.last_run;
+  return run ? `#${run.run_id} · ${localTime(run.finished_at)}` : "—";
+}
+
+function collectionTableRow(item, threshold, tbody) {
+  const tr = el("tr");
+  tr.appendChild(el("td", { class: "health-coll-name" }, collectionName(item)));
+  tr.appendChild(el("td", { class: "muted" }, collectionSource(item)));
+  tr.appendChild(el("td")).appendChild(statusCell(item));
+  tr.appendChild(el("td")).appendChild(coverageCell(item, threshold));
+  tr.appendChild(el("td", { class: "num" }, runStamp(item)));
+  tr.appendChild(el("td", { class: "num" }, item.in_flight ? String(item.in_flight) : "—"));
+  const action = el("td", { class: "health-coll-action" });
+  tbody.appendChild(tr);
+  const detail = collectionDetail(item);
+  if (detail) {
+    const row = el("tr", { class: "health-detail-row", hidden: "hidden" });
+    const cell = el("td", { colspan: "7" });
+    cell.appendChild(detail);
+    row.appendChild(cell);
+    const toggle = el("button", { type: "button", class: "btn btn-ghost btn-sm", "aria-expanded": "false" }, "详情");
+    toggle.addEventListener("click", () => {
+      const open = row.hidden;
+      row.hidden = !open;
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.textContent = open ? "收起" : "详情";
+    });
+    action.appendChild(toggle);
+    tr.appendChild(action);
+    tbody.appendChild(row);
+  } else {
+    tr.appendChild(action);
+  }
+}
+
+function collectionListRow(item, threshold) {
+  const detail = collectionDetail(item);
+  const wrap = el(detail ? "details" : "div", { class: "health-coll-m" });
+  const head = el(detail ? "summary" : "div", { class: "list-row" });
+  const run = item.last_run;
+  const bad = runIsBad(item);
+  head.appendChild(el("span", { class: `health-dot${bad ? " warn" : run ? "" : " idle"}`, "aria-hidden": "true" }));
+  const main = el("div", { class: "list-row-main" });
+  main.appendChild(el("b", {}, collectionName(item)));
+  const stamp = run ? `${collectionSource(item)} · #${run.run_id} · ${localTime(run.finished_at).slice(5, 10)}` : `${collectionSource(item)} · 未运行`;
+  const sub = el("small", { class: bad ? "warn-text" : undefined }, bad ? `${collectionSource(item)} · ${label(RUN_STATUS_LABELS, run.status)}` : stamp);
+  main.appendChild(sub);
+  head.appendChild(main);
+  const ratio = runPercent(item);
+  const endText = ratio !== null ? percent(ratio) : run && typeof run.collected === "number" ? `${run.collected} 只` : "—";
+  head.appendChild(el("span", { class: `list-row-end num${bad ? " warn-text" : ""}` }, endText));
+  if (detail) {
+    const chev = iconNode("chev");
+    if (chev) {
+      chev.classList.add("list-row-chev", "health-chev");
+      head.appendChild(chev);
+    }
+  }
+  wrap.appendChild(head);
+  if (detail) {
+    const body = el("div", { class: "health-coll-m-body" });
+    body.appendChild(detail);
+    wrap.appendChild(body);
+  }
+  return wrap;
 }
 
 function renderCollections(data) {
-  const box = el("div", { class: "collection-list" });
+  const box = el("div");
   if (!data.collections.length) {
     box.appendChild(empty("尚无采集运行记录（历史回补见下方“历史回补”）。"));
     return box;
   }
-  for (const item of data.collections) box.appendChild(renderCollection(item, data.threshold));
+  const wrap = el("div", { class: "table-wrap health-desktop" });
+  const node = el("table", { class: "health-tbl health-coll-table" });
+  const head = el("tr");
+  ["任务", "来源 · 范围", "状态", "覆盖", "最近运行", "排队", ""].forEach((header, index) =>
+    head.appendChild(el("th", { scope: "col", class: index === 4 || index === 5 ? "num" : undefined }, header))
+  );
+  node.appendChild(el("thead")).appendChild(head);
+  const tbody = el("tbody");
+  for (const item of data.collections) collectionTableRow(item, data.threshold, tbody);
+  node.appendChild(tbody);
+  wrap.appendChild(node);
+  box.appendChild(wrap);
+  const list = el("div", { class: "list-group health-mobile health-coll-list" });
+  for (const item of data.collections) list.appendChild(collectionListRow(item, data.threshold));
+  box.appendChild(list);
   return box;
 }
 
@@ -453,16 +655,16 @@ function tickerList(title, tickers, total) {
 }
 
 function renderUniverses(data) {
-  const box = el("div");
+  const box = el("div", { class: "stack" });
   for (const universe of data.universes) {
-    const headline = el("p", { class: "accumulation-headline" });
-    headline.appendChild(el("span", { class: "accumulation-count" }, String(universe.members)));
+    const headline = el("div", { class: "health-acc-head" });
+    headline.appendChild(el("span", { class: "health-acc-count num" }, String(universe.members)));
     headline.appendChild(el("span", { class: "muted" }, `只 · ${universe.code} 当前成员`));
     box.appendChild(headline);
     const sync = universe.last_sync;
     if (sync) {
       box.appendChild(
-        kvList([
+        rows([
           ["最近同步", `${localTime(sync.at)}（#${sync.run_id}，${label(RUN_STATUS_LABELS, sync.status)}）`],
           ["成分日期", sync.as_of],
           ["生效日期", sync.effective_date],
@@ -475,13 +677,16 @@ function renderUniverses(data) {
       box.appendChild(empty("尚无成分同步记录。"));
     }
     if (universe.changes.length) {
-      box.appendChild(el("h4", {}, "成分变动历史（最近生效日）"));
-      box.appendChild(
+      const history = el("details", { class: "basis" });
+      history.appendChild(el("summary", {}, `成分变动历史（最近 ${universe.changes.length} 个生效日）`));
+      history.appendChild(
         simpleTable(
           ["生效日", "调入", "调出"],
-          universe.changes.map((change) => [change.date, String(change.added), String(change.removed)])
+          universe.changes.map((change) => [change.date, String(change.added), String(change.removed)]),
+          { numeric: [1, 2] }
         )
       );
+      box.appendChild(history);
     }
   }
   return box;
@@ -489,9 +694,9 @@ function renderUniverses(data) {
 
 function renderIndustry(data) {
   const industry = data.industry;
-  const box = el("div");
+  const box = el("div", { class: "stack" });
   box.appendChild(
-    kvList([
+    rows([
       ["当前成员", `${industry.members} 只（${industry.universe_code}）`],
       ["申万 2021 已分类", bar(industry.sw2021, industry.members, `${industry.sw2021}/${industry.members}`, data.threshold)],
       ["仅证监会分类（回退）", String(industry.csrc_fallback)],
@@ -514,30 +719,36 @@ function renderIndustry(data) {
 
 function renderBackfill(data) {
   const backfill = data.backfill;
-  const box = el("div");
+  const box = el("div", { class: "stack" });
   if (!backfill.as_of) {
     box.appendChild(empty(`${backfill.universe_code} 尚无历史回补计划。`));
   } else {
-    box.appendChild(el("p", { class: "faint" }, `${backfill.universe_code} 回补计划 · 截至 ${backfill.as_of}`));
-    const list = el("div", { class: "backfill-list" });
-    for (const part of backfill.parts) {
-      const item = el("div", { class: "backfill-item" });
-      const partHead = el("div", { class: "collection-head" });
-      partHead.appendChild(el("h4", {}, label(PART_LABELS, part.part)));
-      partHead.appendChild(
-        el("span", { class: `status status-${part.done >= part.total ? "success" : part.failed ? "failed" : "running"}` }, part.done >= part.total ? "完成" : `${part.done}/${part.total}`)
-      );
-      item.appendChild(partHead);
-      item.appendChild(bar(part.done, part.total, `${part.done}/${part.total}`, 1));
-      const statuses = Object.entries(part.statuses)
-        .map(([status, count]) => `${label(RUN_STATUS_LABELS, status)} ${count}`)
-        .join("，");
-      item.appendChild(el("p", { class: "small muted" }, `任务 ${part.jobs}${statuses ? `（${statuses}）` : ""}`));
-      if (part.detail) item.appendChild(el("p", { class: "small" }, humanizeDetail(part.detail)));
-      if (part.failed) item.appendChild(tickerList("失败", part.failed_symbols, part.failed));
-      list.appendChild(item);
-    }
-    box.appendChild(list);
+    box.appendChild(el("p", { class: "faint health-note" }, `${backfill.universe_code} 回补计划 · 截至 ${backfill.as_of}`));
+    box.appendChild(
+      simpleTable(
+        ["部分", "状态", "进度", "任务", "说明"],
+        backfill.parts.map((part) => {
+          const statuses = Object.entries(part.statuses)
+            .map(([status, count]) => `${label(RUN_STATUS_LABELS, status)} ${count}`)
+            .join("，");
+          const note = el("div", { class: "health-backfill-note" });
+          if (part.detail) note.appendChild(el("span", { class: "small" }, humanizeDetail(part.detail)));
+          if (part.failed) note.appendChild(tickerList("失败", part.failed_symbols, part.failed));
+          if (!note.children.length) note.textContent = "—";
+          return [
+            label(PART_LABELS, part.part),
+            el(
+              "span",
+              { class: `status status-${part.done >= part.total ? "success" : part.failed ? "failed" : "running"}` },
+              part.done >= part.total ? "完成" : `${part.done}/${part.total}`
+            ),
+            bar(part.done, part.total, `${part.done}/${part.total}`, 1),
+            `${part.jobs}${statuses ? `（${statuses}）` : ""}`,
+            note,
+          ];
+        })
+      )
+    );
   }
   const akshare = Object.entries(backfill.akshare_financials || {});
   if (akshare.length) {
@@ -555,42 +766,46 @@ function renderBackfill(data) {
 function renderVerification(data) {
   const verification = data.verification;
   const budget = verification.budget;
-  const box = el("div");
-  const kpis = el("div", { class: "kpis" });
-  kpis.appendChild(
-    kpi(`iFinD 预算（${budget.window_hours} 小时滚动）`, budget.remaining, {
-      suffix: `/ ${budget.cap} 次`,
+  const box = el("div", { class: "stack" });
+  const stats = el("div", { class: "health-stats" });
+  stats.appendChild(
+    stat(`iFinD 预算（${budget.window_hours} 小时滚动）`, String(budget.remaining), {
+      foot: `/ ${budget.cap} 次 · 已用 ${budget.used}`,
       kind: budget.remaining > 0 ? "" : "attention",
     })
   );
-  kpis.appendChild(kpi("下次可用", budget.remaining > 0 ? "现在" : localTime(budget.next_free_at)));
-  kpis.appendChild(kpi("字段冲突", verification.conflicts_total, { kind: verification.conflicts_total ? "attention" : "zero" }));
-  box.appendChild(kpis);
+  stats.appendChild(stat("下次可用", budget.remaining > 0 ? "现在" : localTime(budget.next_free_at)));
+  stats.appendChild(
+    stat("字段冲突", String(verification.conflicts_total), { kind: verification.conflicts_total ? "attention" : "zero" })
+  );
+  box.appendChild(stats);
   box.appendChild(
     bar(budget.remaining, budget.cap, `剩余 ${budget.remaining} / ${budget.cap} 次（已用 ${budget.used}）`, 0.1)
   );
-  box.appendChild(el("h3", {}, "核对队列"));
   const statuses = Object.entries(verification.by_status);
-  box.appendChild(
-    statuses.length
-      ? el("p", {}, statuses.map(([status, count]) => `${label(VERIFICATION_STATUS_LABELS, status)} ${count}`).join("，"))
-      : empty("核对队列为空。")
-  );
+  const queue = [];
+  if (statuses.length) {
+    const cluster = el("div", { class: "cluster" });
+    for (const [status, count] of statuses) {
+      cluster.appendChild(el("span", { class: "chip" }, `${label(VERIFICATION_STATUS_LABELS, status)} ${count}`));
+    }
+    queue.push(["核对队列", cluster]);
+  } else {
+    queue.push(["核对队列", "核对队列为空。"]);
+  }
   const triggers = Object.entries(verification.open_by_trigger);
   if (triggers.length) {
-    box.appendChild(
-      el(
-        "p",
-        { class: "small" },
-        `未完成按触发原因：${triggers.map(([trigger, count]) => `${label(VERIFICATION_TRIGGER_LABELS, trigger)} ${count}`).join("，")}`
-      )
-    );
+    queue.push([
+      "未完成按触发原因",
+      triggers.map(([trigger, count]) => `${label(VERIFICATION_TRIGGER_LABELS, trigger)} ${count}`).join("，"),
+    ]);
   }
-  box.appendChild(el("h3", {}, `字段冲突（${verification.conflicts_total}）`));
+  box.appendChild(rows(queue));
+  box.appendChild(subtitle(`字段冲突（${verification.conflicts_total}）`));
   if (!verification.conflicts.length) {
     box.appendChild(empty("近期没有数据源字段冲突。"));
   } else {
-    const conflicts = el("details", { class: "conflicts" });
+    const conflicts = el("details", { class: "conflicts basis" });
     const shown = verification.conflicts.length;
     conflicts.appendChild(
       el("summary", {}, `展开冲突清单${verification.conflicts_total > shown ? `（显示最近 ${shown} 条）` : ""}`)
@@ -614,7 +829,7 @@ function renderVerification(data) {
 
 function renderOverdue(data) {
   const overdue = data.overdue;
-  const box = el("div");
+  const box = el("div", { class: "stack" });
   if (!overdue.open) {
     box.appendChild(empty("没有逾期未披露的定期报告。"));
     return box;
@@ -631,7 +846,7 @@ function renderOverdue(data) {
 
 function renderProviders(data) {
   const providers = Array.isArray(data.providers) ? data.providers : [];
-  const box = el("div");
+  const box = el("div", { class: "stack" });
   if (!providers.length) {
     box.appendChild(empty("24 小时内没有上游调用记录。"));
     return box;
@@ -649,7 +864,8 @@ function renderProviders(data) {
           el("span", { class: `status status-provider-${status.kind}` }, status.text),
           item.last_error ? `${item.last_error}（${localTime(item.last_error_at)}）` : "—",
         ];
-      })
+      }),
+      { numeric: [1, 2, 3] }
     )
   );
   const basis = el("details", { class: "basis" });
@@ -679,10 +895,78 @@ const RENDERERS = Object.freeze({
   providers: renderProviders,
 });
 
+// 折叠分区的一行摘要（手机上折叠时显示在标题下面，桌面显示在卡片标题右侧）。
+const SUMMARIES = Object.freeze({
+  accumulation: (data) => {
+    const acc = data.accumulation;
+    const last = acc.weeks.length ? acc.weeks[0] : null;
+    return `${acc.streak_weeks} / ${acc.target_weeks} 周连续达标${last ? ` · ${last.week} ${label(WEEK_STATUS_LABELS, last.status)}` : ""}`;
+  },
+  freshness: (data) => {
+    const lag = data.freshness.market.lag_trading_days;
+    const text = lag === null || lag === undefined ? "日线 —" : lag === 0 ? "日线无落后" : `日线落后 ${lag} 日`;
+    return `${text} · 收盘快照 ${fmt(data.freshness.market.latest_close_quote_date)}`;
+  },
+  universes: (data) => {
+    const universe = data.universes[0];
+    if (!universe) return "尚无成分";
+    return `${universe.members} 只 · ${universe.code}${universe.last_sync ? ` · 同步于 ${localTime(universe.last_sync.at).slice(0, 10)}` : ""}`;
+  },
+  industry: (data) => `申万 2021 已分类 ${data.industry.sw2021}/${data.industry.members}`,
+  backfill: (data) => {
+    const backfill = data.backfill;
+    if (!backfill.as_of) return "尚无回补计划";
+    const done = backfill.parts.filter((part) => part.done >= part.total).length;
+    return `${done}/${backfill.parts.length} 部分完成 · 截至 ${backfill.as_of}`;
+  },
+  verification: (data) => {
+    const v = data.verification;
+    return `预算 ${v.budget.remaining}/${v.budget.cap} · 字段冲突 ${v.conflicts_total}`;
+  },
+  overdue: (data) => (data.overdue.open ? `${data.overdue.open} 份逾期未披露` : "没有逾期未披露"),
+  providers: (data) => {
+    const providers = Array.isArray(data.providers) ? data.providers : [];
+    if (!providers.length) return "24 小时内无调用";
+    const failed = providers.reduce((sum, item) => sum + (item.failed_24h || 0), 0);
+    return `${providers.length} 个数据源 · 24 小时失败 ${failed} 次`;
+  },
+});
+
 // ---- 装配 -------------------------------------------------------------------
 
 function sectionBodies() {
   return [...document.querySelectorAll("[data-health-section]")];
+}
+
+function setSummary(id, text) {
+  const node = document.querySelector(`[data-health-sum="${id}"]`);
+  if (node) node.textContent = text || "";
+}
+
+function applyHeads(data) {
+  for (const [id, summarize] of Object.entries(SUMMARIES)) {
+    try {
+      setSummary(id, summarize(data));
+    } catch {
+      setSummary(id, "");
+    }
+  }
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+  const errors = warnings.filter((warning) => warning.level === "error").length;
+  const warns = warnings.filter((warning) => warning.level === "warn").length;
+  const counts = document.querySelector("#health-warnings [data-health-counts]");
+  if (counts) {
+    clear(counts);
+    if (errors) counts.appendChild(el("span", { class: "badge warn" }, `${errors} 错误`));
+    if (warns) counts.appendChild(el("span", { class: "badge warn" }, `${warns} 警告`));
+    if (!errors && !warns) counts.appendChild(el("span", { class: "badge accent dot" }, "全部正常"));
+  }
+  const collections = document.querySelector("#health-collections [data-health-counts]");
+  if (collections) {
+    const items = Array.isArray(data.collections) ? data.collections : [];
+    const bad = items.filter(runIsBad).length;
+    collections.textContent = `${items.length} 项${bad ? ` · 异常 ${bad}` : ""}`;
+  }
 }
 
 function renderStatus(region, state, message, retry) {
@@ -692,7 +976,7 @@ function renderStatus(region, state, message, retry) {
     region.appendChild(el("p", { class: "notice notice-loading" }, "正在加载…"));
   } else if (state === "error") {
     region.appendChild(el("p", { class: "notice notice-error", role: "alert" }, message || "加载失败。"));
-    const button = el("button", { type: "button" }, "重试");
+    const button = el("button", { type: "button", class: "btn btn-sm" }, "重试");
     button.addEventListener("click", retry);
     region.appendChild(button);
   } else if (state === "ready") {
@@ -700,7 +984,17 @@ function renderStatus(region, state, message, retry) {
   }
 }
 
-// 顶部摘要：各分区一张 KPI 卡，点击跳到对应分区。
+function summaryKpi(labelText, value, { href, suffix, foot, kind = "" } = {}) {
+  const node = el(href ? "a" : "div", { class: `kpi ${kind}`.trim(), href });
+  node.appendChild(el("div", { class: "kpi-label" }, labelText));
+  const valueNode = el("div", { class: "kpi-value" }, value === null || value === undefined ? "—" : String(value));
+  if (suffix) valueNode.appendChild(el("small", {}, suffix));
+  node.appendChild(valueNode);
+  if (foot) node.appendChild(el("div", { class: "kpi-foot" }, foot));
+  return node;
+}
+
+// 顶部摘要：5 张 KPI 卡，点击跳到对应分区；生成时间等写进页头副标题。
 function renderSummary(region, data) {
   clear(region);
   region.dataset.state = "ready";
@@ -712,45 +1006,73 @@ function renderSummary(region, data) {
   const lag = market ? market.lag_trading_days : null;
   const budget = data.verification && data.verification.budget;
   const overdue = data.overdue ? data.overdue.open : 0;
-  const grid = el("div", { class: "kpis" });
+  const grid = el("div", { class: "kpis kpis--5 health-kpis" });
   grid.appendChild(
-    kpi("提醒", warnings.length, {
+    summaryKpi("提醒", warnings.length, {
       href: warnings.length ? "#health-warnings" : undefined,
-      suffix: warnings.length ? `错误 ${errors} · 警告 ${warns}` : "全部正常",
+      foot: warnings.length ? `错误 ${errors} · 警告 ${warns}` : "全部正常",
       kind: errors || warns ? "attention" : "zero",
     })
   );
-  const weeks = kpi("快照积累", acc.streak_weeks, { href: "#health-accumulation", suffix: `/ ${acc.target_weeks} 周` });
+  grid.appendChild(
+    summaryKpi("日线新鲜度", lag === null || lag === undefined ? "—" : lag === 0 ? "无落后" : `落后 ${lag} 日`, {
+      href: "#health-freshness",
+      foot: market && market.latest_trade_date ? `最新 ${market.latest_trade_date}` : undefined,
+      kind: lag ? "attention" : "",
+    })
+  );
+  const weeks = summaryKpi("快照积累", acc.streak_weeks, { href: "#health-accumulation", suffix: `/ ${acc.target_weeks} 周` });
   const cells = el("div", { class: "week-progress", "aria-hidden": "true" });
   for (let index = 0; index < acc.target_weeks; index += 1) {
     cells.appendChild(el("i", { class: index < acc.streak_weeks ? "on" : undefined }));
   }
   weeks.appendChild(cells);
   grid.appendChild(weeks);
-  grid.appendChild(
-    kpi("日线新鲜度", lag === null || lag === undefined ? "—" : lag === 0 ? "无落后" : `落后 ${lag} 日`, {
-      href: "#health-freshness",
-      kind: lag ? "attention" : "",
-    })
-  );
   if (budget) {
     grid.appendChild(
-      kpi("iFinD 预算剩余", budget.remaining, {
+      summaryKpi("iFinD 预算", budget.remaining, {
         href: "#health-verification",
         suffix: `/ ${budget.cap}`,
+        foot: budget.used ? `${budget.window_hours} 小时内已用 ${budget.used}` : "窗口内未使用",
         kind: budget.remaining > 0 ? "" : "attention",
       })
     );
   }
-  grid.appendChild(kpi("逾期财报", overdue, { href: "#health-overdue", kind: overdue ? "attention" : "zero" }));
-  region.appendChild(grid);
-  region.appendChild(
-    el(
-      "p",
-      { class: "faint summary-meta" },
-      `生成于 ${localTime(data.generated_at)}（${data.as_of}） · 完整率阈值 ${percent(data.threshold, 0)} · 目标池 ${data.target_universe}`
-    )
+  grid.appendChild(
+    summaryKpi("逾期财报", overdue, {
+      href: "#health-overdue",
+      foot: overdue ? "逾期未披露" : "无逾期未披露",
+      kind: overdue ? "attention" : "zero",
+    })
   );
+  region.appendChild(grid);
+  const meta = document.getElementById("health-meta");
+  if (meta) {
+    meta.textContent = `生成于 ${localTime(data.generated_at)}（${data.as_of}） · 完整率阈值 ${percent(data.threshold, 0)} · 目标池 ${data.target_universe}`;
+  }
+}
+
+// 手机上折叠成一行列表、桌面展开成卡片；点提醒里的链接（#health-xxx）时自动展开目标分区。
+const DESKTOP_QUERY = "(min-width: 56rem)";
+
+function initFolds() {
+  const query = globalThis.matchMedia ? globalThis.matchMedia(DESKTOP_QUERY) : null;
+  const apply = () => {
+    for (const details of document.querySelectorAll("details.health-details")) details.open = query ? query.matches : true;
+  };
+  apply();
+  if (query && query.addEventListener) query.addEventListener("change", apply);
+  globalThis.addEventListener("hashchange", openHashTarget);
+}
+
+function openHashTarget() {
+  const hash = globalThis.location.hash;
+  if (!hash || hash.length < 2) return;
+  const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+  if (!target) return;
+  const details = target.querySelector("details.health-details");
+  if (details) details.open = true;
+  target.scrollIntoView();
 }
 
 async function loadHealth(region) {
@@ -783,12 +1105,8 @@ async function loadHealth(region) {
     body.closest("section")?.removeAttribute("hidden");
   }
   renderSummary(region, data);
-  if (!Array.isArray(data.warnings) || !data.warnings.length) {
-    document.getElementById("health-warnings")?.setAttribute("hidden", "");
-  }
-  if (globalThis.location.hash) {
-    document.querySelector(globalThis.location.hash)?.scrollIntoView();
-  }
+  applyHeads(data);
+  openHashTarget();
 }
 
 // ---- 今日概览的"数据健康"入口 -------------------------------------------------
@@ -839,14 +1157,6 @@ const PROBE_OUTCOME_LABELS = Object.freeze({
   running: "核对中",
 });
 
-function calendarCoverageLine(status) {
-  const years = status.years.map((item) => item.year).join(" / ") || "—";
-  const coverage = status.coverage;
-  const end = coverage.end ? fmt(coverage.end) : "—";
-  const tail = coverage.expired ? "已过期" : `剩余 ${coverage.days_remaining} 天`;
-  return `已审年份 ${years}（覆盖至 ${end}，${tail}）`;
-}
-
 function calendarYearLine(status) {
   return status.years
     .map((item) =>
@@ -857,6 +1167,10 @@ function calendarYearLine(status) {
       }`
     )
     .join(" · ");
+}
+
+function calendarVerified(status) {
+  return status.years.length > 0 && status.years.every((item) => Boolean(item.verified_on));
 }
 
 function calendarCandidateBlock(candidate) {
@@ -897,8 +1211,8 @@ function calendarActions(status, reload) {
     button.setAttribute("aria-busy", value ? "true" : "false");
   };
 
-  const applyButton = el("button", { type: "button", class: "primary" }, "应用候选");
-  const checkButton = el("button", { type: "button", class: "secondary" }, "检查更新");
+  const applyButton = el("button", { type: "button", class: "btn btn-sm btn-primary primary" }, "应用候选");
+  const checkButton = el("button", { type: "button", class: "btn btn-sm secondary" }, "检查更新");
   const candidate = status.candidate;
   applyButton.disabled = !candidate || !status.writable;
   if (candidate && !status.writable) {
@@ -964,15 +1278,29 @@ function calendarActions(status, reload) {
 
 function renderCalendar(card, status, reload) {
   clear(card);
-  card.appendChild(el("p", {}, calendarCoverageLine(status)));
+  const coverage = status.coverage;
+  const end = coverage.end ? fmt(coverage.end) : "—";
+  const remaining = coverage.expired ? "已过期" : `${coverage.days_remaining} 天`;
+  const verified = calendarVerified(status);
+  const badge = coverage.expired
+    ? el("span", { class: "badge warn dot" }, "已过期")
+    : status.candidate
+      ? el("span", { class: "badge ai dot" }, "有待应用的候选")
+      : verified
+        ? el("span", { class: "badge accent dot" }, "已核对")
+        : el("span", { class: "badge dot hollow" }, "未核对");
+  const lead = el("div", { class: "health-cal-lead" });
+  lead.appendChild(badge);
+  card.appendChild(lead);
+  card.appendChild(facts([["覆盖至", end], ["剩余", remaining]]));
   const years = calendarYearLine(status);
-  if (years) card.appendChild(el("p", { class: "small muted" }, years));
   const source = status.source === "data_dir" ? "数据目录副本" : "仓库基线";
   card.appendChild(
     el(
       "p",
-      { class: "small muted" },
-      `生效文件 ${status.path}（${source}）· 基线 ${status.baseline}`
+      { class: "small muted health-cal-note" },
+      `已审年份 ${status.years.map((item) => item.year).join(" / ") || "—"}。${years ? `${years}。` : ""}` +
+        `生效文件 ${status.path}（${source}）· 基线 ${status.baseline}`
     )
   );
   if (status.candidate) {
@@ -997,6 +1325,7 @@ function renderCalendar(card, status, reload) {
       )
     );
   }
+  setSummary("calendar", `覆盖至 ${end} · ${coverage.expired ? "已过期" : status.candidate ? "有候选" : verified ? "已核对" : `剩余 ${remaining}`}`);
 }
 
 async function loadCalendar() {
@@ -1021,6 +1350,14 @@ async function loadCalendar() {
 
 export function bootHealth() {
   const region = document.getElementById("data-health");
+  if (region) initFolds();
   if (region) loadHealth(region);
   loadCalendar();
+  const refresh = document.getElementById("health-refresh");
+  if (refresh && region) {
+    refresh.addEventListener("click", () => {
+      loadHealth(region);
+      loadCalendar();
+    });
+  }
 }

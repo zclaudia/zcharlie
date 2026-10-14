@@ -18,7 +18,10 @@ import {formatDateTime} from './format.js';
   const refText = ref => `${ref.kind} ${ref.id} · 版本 ${ref.revision}`;
   const listing = review => review.inputs.task.binding.base_refs.filter(r => r.kind === 'listing');
   const option = (select, value, text) => { const node = element('option', text); node.value = value; select.append(node); };
-  const button = (host, text, handler) => { const node = element('button', text); node.type = 'button'; node.onclick = handler; host.append(node); return node; };
+  const button = (host, text, handler, kind) => { const node = element('button', text); node.type = 'button'; node.className = kind ? `btn ${kind}` : 'btn'; node.onclick = handler; host.append(node); return node; };
+  // 步骤条：当前步骤高亮，之前的步骤标为已完成（只改 class，不碰数据）。
+  const setStep = current => { for (const index of [1, 2, 3]) { for (const id of [`method-step-${index}`, `method-panel-${index}`]) { const node = $(id); if (!node) continue; if (index === current) node.classList.add('on'); else node.classList.remove('on'); if (index < current) node.classList.add('done'); else node.classList.remove('done'); } } };
+  const stateKind = {evaluating: 'ai', shadow: 'ai', active: 'accent', rejected: 'warn', retired: ''};
   // 请求统一走共享客户端 api.js（超时中断、CSRF/幂等头、401/403/409/422 分类、
   // 非 JSON 响应兜底都由它负责）；本页只保留 /investor/methods 前缀。
   const BASE = '/investor/methods';
@@ -106,10 +109,11 @@ import {formatDateTime} from './format.js';
     for (const item of data.proposals) {
       const p = item.proposal;
       const card = element('article'); card.className = 'method-card';
-      card.append(element('h3', p.request.summary), element('p', `${states[p.status]} · 提案 ${p.id} · 修订 ${p.revision}`));
+      const top = element('div'); top.className = 'method-card-head'; const badge = element('span', states[p.status]); badge.className = `badge ${stateKind[p.status] || ''}`.trim(); top.append(element('h3', p.request.summary), badge);
+      card.append(top, element('p', `提案 ${p.id} · 修订 ${p.revision}`));
       if (!item.detail_loaded) {
         card.append(element('p', `步骤改进：${p.request.summary}`));
-        button(card, '查看变更与冻结证据', async () => { selected = p.id; try { const detail = await api('/proposals/' + p.id); data.proposals = data.proposals.map(v => v.proposal.id === p.id ? detail : v); render(); } catch (error) { status(`${error.message}。${error.status === 401 ? '请重新登录后重试。' : '详情未加载，可重试。'}`); } });
+        button(card, '查看变更与冻结证据', async () => { selected = p.id; try { const detail = await api('/proposals/' + p.id); data.proposals = data.proposals.map(v => v.proposal.id === p.id ? detail : v); render(); } catch (error) { status(`${error.message}。${error.status === 401 ? '请重新登录后重试。' : '详情未加载，可重试。'}`); } }, 'btn-sm');
         $('method-proposals').append(card); continue;
       }
       evidence(card, item);
@@ -117,7 +121,7 @@ import {formatDateTime} from './format.js';
       history.append(element('p', `已保存 ${item.history_counts.evaluation_ids} 次评估、${item.history_counts.shadow_ids} 次离线重放、${item.history_counts.prospective_ids} 次前瞻步骤影子。当前展示最近证据；所有旧记录保留。`));
       const historyRows = element('div'); history.append(historyRows);
       let historyOffset = 0;
-      button(history, '读取下一页历史引用', async () => { if (historyOffset === null) return; try { const page = await api('/proposals/' + p.id + '/history?offset=' + historyOffset); for (const record of page.items) { const link = element('a', `${record.kind} · ${record.id} · ${formatDateTime(record.created_at)}`); link.href = '/investor/methods/artifacts/' + record.kind + '/' + record.id; link.target = '_blank'; link.rel = 'noopener'; const line = element('p'); line.append(link, element('span', ` · hash ${record.hash}`)); historyRows.append(line); } historyOffset = page.next_offset; if (historyOffset === null) historyRows.append(element('p', '已显示全部历史引用。')); } catch (error) { status(`${error.message}。历史未翻页，可重试。`); } });
+      button(history, '读取下一页历史引用', async () => { if (historyOffset === null) return; try { const page = await api('/proposals/' + p.id + '/history?offset=' + historyOffset); for (const record of page.items) { const link = element('a', `${record.kind} · ${record.id} · ${formatDateTime(record.created_at)}`); link.href = '/investor/methods/artifacts/' + record.kind + '/' + record.id; link.target = '_blank'; link.rel = 'noopener'; const line = element('p'); line.append(link, element('span', ` · hash ${record.hash}`)); historyRows.append(line); } historyOffset = page.next_offset; if (historyOffset === null) historyRows.append(element('p', '已显示全部历史引用。')); } catch (error) { status(`${error.message}。历史未翻页，可重试。`); } }, 'btn-ghost btn-sm');
       card.append(history);
       if (p.status === 'evaluating') {
         const select = element('select'); select.setAttribute('aria-label', '成功反例复盘');
@@ -125,14 +129,14 @@ import {formatDateTime} from './format.js';
         const outside = element('select'); outside.setAttribute('aria-label', '适用范围外成功反例复盘');
         for (const review of data.reviews.filter(r => r.status === 'succeeded' && !listing(r).some(ref => ref.id === p.request.listing_ref.id))) option(outside, review.id, `${review.progress.question} · ${review.id}`);
         card.append(element('p', '原失败样本必须被加强步骤拦截；同范围成功反例不能被误伤；范围外反例保留原方法。'), select, outside);
-        button(card, '评估真实失败与反例', () => { if (!select.value || !outside.value) return status('请先冻结同证券与范围外的成功任务作为反例。'); return mutate('/evaluations', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, cases: [{review_id: p.request.review_id, role: 'failure', expected: 'block'}, {review_id: select.value, role: 'counterexample', expected: 'pass'}, {review_id: outside.value, role: 'counterexample', expected: 'pass'}]}); });
+        button(card, '评估真实失败与反例', () => { if (!select.value || !outside.value) return status('请先冻结同证券与范围外的成功任务作为反例。'); return mutate('/evaluations', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, cases: [{review_id: p.request.review_id, role: 'failure', expected: 'block'}, {review_id: select.value, role: 'counterexample', expected: 'pass'}, {review_id: outside.value, role: 'counterexample', expected: 'pass'}]}); }, 'btn-sm');
       }
       if (p.status === 'shadow') {
         // evaluations/evaluation_ids 可能为空：判空后再启用按钮，避免 render 阶段 TypeError。
         const latestEvaluationId = p.evaluation_ids.at(-1) || null;
         const evaluation = item.evaluations.at(-1) || null;
         const noEvaluation = () => status('尚无已保存评估，请先完成真实失败与反例评估。');
-        const shadow = button(card, '运行冻结样本的离线影子检查', () => latestEvaluationId ? mutate('/offline-shadow', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId}) : noEvaluation());
+        const shadow = button(card, '运行冻结样本的离线影子检查', () => latestEvaluationId ? mutate('/offline-shadow', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId}) : noEvaluation(), 'btn-sm');
         if (!latestEvaluationId) shadow.disabled = true;
         const newTasks = evaluation ? data.completed_tasks.filter(t => Date.parse(t.created_at) > Date.parse(evaluation.created_at) && t.base_refs.some(r => r.kind === 'listing' && r.id === p.request.listing_ref.id)) : [];
         const failure = element('select'), success = element('select');
@@ -140,18 +144,20 @@ import {formatDateTime} from './format.js';
         for (const task of newTasks.filter(t => ['failed', 'partial'].includes(t.status))) option(failure, task.id, `${task.status} · ${task.id}`);
         for (const task of newTasks.filter(t => t.status === 'succeeded')) option(success, task.id, `${task.status} · ${task.id}`);
         card.append(element('p', '前瞻步骤影子：请先在对话中明确发起新的同证券研究，完成后刷新选择。仅检查真实新输出中的步骤，不额外调用模型、不改正式观点或发提醒。离线重放不能替代此项。'), failure, success);
-        const prospective = button(card, '记录新任务的前瞻步骤影子', () => { if (!latestEvaluationId) return noEvaluation(); if (!failure.value || !success.value) return status('需要评估后新建的同证券成功和不完整研究任务。'); return mutate('/prospective-shadow', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId, task_ids: [failure.value, success.value]}); });
+        const prospective = button(card, '记录新任务的前瞻步骤影子', () => { if (!latestEvaluationId) return noEvaluation(); if (!failure.value || !success.value) return status('需要评估后新建的同证券成功和不完整研究任务。'); return mutate('/prospective-shadow', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId, task_ids: [failure.value, success.value]}); }, 'btn-sm');
         if (!latestEvaluationId) prospective.disabled = true;
 
       }
       if (['evaluating', 'shadow'].includes(p.status)) {
         const decision = action => mutate('/decisions', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, expected_head_revision: item.head_revision, listing_ref: p.request.listing_ref, evidence_hash: item.evidence_hash, summary: item.approval_summary, decision: action});
-        if (item.evaluations.at(-1)?.passed && item.prospective?.at(-1)?.passed) button(card, '明确批准并用于该证券的新任务', () => decision('approve'));
-        button(card, '拒绝此提案', () => decision('reject'));
+        if (item.evaluations.at(-1)?.passed && item.prospective?.at(-1)?.passed) button(card, '明确批准并用于该证券的新任务', () => decision('approve'), 'btn-primary');
+        button(card, '拒绝此提案', () => decision('reject'), 'btn-danger-ghost');
       }
       $('method-proposals').append(card);
     }
-    if (!data.proposals.length) $('method-proposals').append(element('p', '尚无方法提案。需要真实已完成任务复盘。'));
+    if (!data.proposals.length) { const note = element('p', '尚无方法提案。需要真实已完成任务复盘。'); note.className = 'muted method-none'; $('method-proposals').append(note); }
+    setStep(data.proposals.length ? 3 : $('method-failure').children.length ? 2 : 1);
+    $('method-heads-empty').hidden = data.heads.length > 0;
     for (const head of data.heads) {
       const card = element('article'); card.className = 'method-card';
       card.append(element('p', `${scopeName(head.binding.listing_ref)} · 范围修订 ${head.revision} · 当前 ${refText(head.binding.method_ref)}`));
@@ -161,7 +167,7 @@ import {formatDateTime} from './format.js';
       for (const version of data.versions.filter(v => v.binding.listing_ref?.id === head.binding.listing_ref.id && v.binding.method_ref.id !== head.binding.method_ref.id)) option(select, JSON.stringify(version.binding.method_ref), refText(version.binding.method_ref));
       const reason = element('input'); reason.placeholder = '说明回退原因'; reason.maxLength = 1000; reason.setAttribute('aria-label', '回退原因');
       card.append(select, reason);
-      button(card, '明确回退并追加版本', () => { if (!reason.value.trim()) return status('请说明回退原因。'); return mutate('/rollback', {mutation_id: crypto.randomUUID(), listing_ref: head.binding.listing_ref, expected_head_revision: head.revision, target_method: JSON.parse(select.value), reason: reason.value.trim()}); });
+      button(card, '明确回退并追加版本', () => { if (!reason.value.trim()) return status('请说明回退原因。'); return mutate('/rollback', {mutation_id: crypto.randomUUID(), listing_ref: head.binding.listing_ref, expected_head_revision: head.revision, target_method: JSON.parse(select.value), reason: reason.value.trim()}); }, 'btn-sm');
       $('method-heads').append(card);
     }
   }

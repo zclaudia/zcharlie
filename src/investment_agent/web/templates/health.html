@@ -1,61 +1,85 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/health.css">{% endblock %}
+{# 可折叠分区：桌面默认展开（卡片），手机默认折叠成一行列表（health.js 按断点设置 open）。 #}
+{% macro fold(sid, title, ico) -%}
+<section id="health-{{ sid }}" class="card card--flush health-section health-fold" hidden>
+  <details class="health-details" open>
+    <summary class="health-sum">
+      <span class="list-row-icon health-sum-icon">{{ icon(ico, "ico", 16) }}</span>
+      <span class="health-sum-main"><h2>{{ title }}</h2><small data-health-sum="{{ sid }}"></small></span>
+      {{ icon("chev", "health-sum-chev", 16) }}
+    </summary>
+    <div class="health-fold-body">{{ caller() }}</div>
+  </details>
+</section>
+{%- endmacro %}
 {% block content %}
 <header class="page-head">
   <h1>数据健康</h1>
-  <p class="muted">采集完整率、数据新鲜度、快照积累（P1 阶段退出指标）、历史回补、iFinD 核对与上游调用。除交易日历卡片（核对 / 应用候选）外均为只读汇总。</p>
+  <p class="muted" id="health-meta">采集完整率、数据新鲜度、快照积累、历史回补、iFinD 核对与上游调用。</p>
+  <div class="page-actions">
+    <button type="button" id="health-refresh" class="btn btn-sm">{{ icon("refresh", "ico", 14) }}重新检查</button>
+  </div>
 </header>
+<template id="health-icons">
+  <span data-icon="alert">{{ icon("alert", "ico", 16) }}</span>
+  <span data-icon="info">{{ icon("info", "ico", 16) }}</span>
+  <span data-icon="cal">{{ icon("cal", "ico", 16) }}</span>
+  <span data-icon="chev">{{ icon("chev", "ico", 16) }}</span>
+</template>
 <div id="data-health" class="data-region"
      data-endpoint="/health/data"
      aria-live="polite">
   <p class="notice notice-loading" data-state="loading">正在加载…</p>
 </div>
-<section id="health-warnings" class="card health-section" hidden>
-  <h2>提醒</h2>
-  <div data-health-section="warnings"></div>
-</section>
-<section id="health-calendar" class="card health-section" hidden>
-  <h2>交易日历</h2>
-  <div id="calendar-card" aria-live="polite"></div>
-</section>
-<div class="grid-2">
-  <section id="health-accumulation" class="card health-section" hidden>
-    <h2>快照积累</h2>
-    <div data-health-section="accumulation"></div>
+<div class="health-page">
+  <div class="health-top">
+    <section id="health-warnings" class="card card--flush health-section health-warnings" hidden>
+      <div class="card-head card-head--rule">
+        <h2>提醒</h2>
+        <span class="cluster" data-health-counts></span>
+      </div>
+      <div data-health-section="warnings"></div>
+    </section>
+    {% call fold("calendar", "交易日历", "cal") %}
+      <div id="calendar-card" aria-live="polite"></div>
+    {% endcall %}
+  </div>
+  <section id="health-collections" class="card card--flush health-section" hidden>
+    <div class="card-head card-head--rule">
+      <h2>采集任务</h2>
+      <span class="faint" data-health-counts></span>
+    </div>
+    <div data-health-section="collections"></div>
   </section>
-  <section id="health-freshness" class="card health-section" hidden>
-    <h2>数据新鲜度</h2>
-    <div data-health-section="freshness"></div>
-  </section>
+  <div class="health-pair">
+    {% call fold("accumulation", "快照积累", "templates") %}
+      <div data-health-section="accumulation"></div>
+    {% endcall %}
+    {% call fold("freshness", "数据新鲜度", "health") %}
+      <div data-health-section="freshness"></div>
+    {% endcall %}
+  </div>
+  <div class="health-pair">
+    {% call fold("universes", "目标池成分", "candidates") %}
+      <div data-health-section="universes"></div>
+    {% endcall %}
+    {% call fold("industry", "行业分类", "portfolio") %}
+      <div data-health-section="industry"></div>
+    {% endcall %}
+  </div>
+  {% call fold("backfill", "历史回补", "refresh") %}
+    <div data-health-section="backfill"></div>
+  {% endcall %}
+  {% call fold("verification", "iFinD 核对", "check") %}
+    <div data-health-section="verification"></div>
+  {% endcall %}
+  {% call fold("overdue", "逾期财报", "file") %}
+    <div data-health-section="overdue"></div>
+  {% endcall %}
+  {% call fold("providers", "上游调用", "arrow") %}
+    <div data-health-section="providers"></div>
+  {% endcall %}
 </div>
-<section id="health-collections" class="card health-section" hidden>
-  <h2>采集任务</h2>
-  <div data-health-section="collections"></div>
-</section>
-<div class="grid-2">
-  <section id="health-universes" class="card health-section" hidden>
-    <h2>目标池成分</h2>
-    <div data-health-section="universes"></div>
-  </section>
-  <section id="health-industry" class="card health-section" hidden>
-    <h2>行业分类</h2>
-    <div data-health-section="industry"></div>
-  </section>
-</div>
-<section id="health-backfill" class="card health-section" hidden>
-  <h2>历史回补</h2>
-  <div data-health-section="backfill"></div>
-</section>
-<section id="health-verification" class="card health-section" hidden>
-  <h2>iFinD 核对</h2>
-  <div data-health-section="verification"></div>
-</section>
-<section id="health-overdue" class="card health-section" hidden>
-  <h2>逾期财报</h2>
-  <div data-health-section="overdue"></div>
-</section>
-<section id="health-providers" class="card health-section" hidden>
-  <h2>上游调用</h2>
-  <div data-health-section="providers"></div>
-</section>
 {% endblock %}

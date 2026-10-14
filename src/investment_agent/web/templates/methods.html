@@ -1,31 +1,81 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/methods.css">{% endblock %}
 {% block title %}研究方法{% endblock %}
 {% block content %}
 <div id="method-workbench" class="method-workbench">
-  <h1>研究方法</h1>
-  <p>从已完成复盘提出改进，检查失败样本与反例，再由你明确批准。只支持加强研究步骤；不会修改持仓或发送提醒。</p>
-  <p class="muted">离线重放经过原生模型边界；前瞻步骤影子检查评估后新任务的真实输出。只有前瞻步骤影子可供批准，两者都是工程检查，不能证明研究质量。新任务固定方法版本；已有任务与历史观点保留原版本。</p>
-  <p id="method-status" role="status" aria-live="polite"></p>
-  <button id="method-refresh" type="button">刷新记录</button>
-  <p id="method-page-note"></p><button id="method-prev" type="button">较新记录</button><button id="method-next" type="button">较早记录</button>
-  <section class="method-panel"><h2>冻结真实过程复盘</h2>
-    <label for="method-task">已完成任务</label><select id="method-task"></select>
-    <button id="method-review" type="button">保存任务与实际输出</button>
-  </section>
-  <section class="method-panel"><h2>提出步骤改进</h2>
-    <form id="method-create">
-      <label for="method-failure">失败或不完整复盘</label><select id="method-failure" required></select>
-      <label for="method-summary">改进摘要</label><textarea id="method-summary" maxlength="1000" required></textarea>
-      <label for="method-pattern">实际错误模式与证据说明</label><textarea id="method-pattern" maxlength="1000" required></textarea>
-      <label><input id="method-two" type="checkbox">要求两个不同的反向解释</label>
-      <label><input id="method-verified" type="checkbox">要求已验证、无未解冲突的反证来源</label>
-      <label><input id="method-stop" type="checkbox">未回答时要求明确停止或继续判断</label>
-      <button type="submit">保存提案（不会启用）</button>
-    </form>
-  </section>
-  <section class="method-panel"><h2>提案、评估与影子记录</h2><div id="method-proposals"></div></section>
-  <section class="method-panel"><h2>当前适用方法与版本回退</h2><p>只适用一个明确证券。多证券、比较与组合任务使用固定基线。回退会追加新版本并保留所有记录；执行中的任务继续使用原版本。</p><div id="method-heads"></div></section>
+  <header class="page-head">
+    <h1>研究方法</h1>
+    <p class="muted">从已完成复盘提出改进，检查失败样本与反例，再由你明确批准。只支持加强研究步骤；不会修改持仓或发送提醒。</p>
+    <div class="page-actions">
+      <button id="method-refresh" type="button" class="btn btn-sm">{{ icon("refresh", "ico", 14) }}刷新记录</button>
+    </div>
+  </header>
+  <div class="method-feedback"><p id="method-status" role="status" aria-live="polite"></p></div>
+
+  <ol class="stepper" aria-label="研究方法流程">
+    <li id="method-step-1" class="on"><a href="#method-panel-1"><span class="n">1</span><span class="t"><b>冻结真实过程复盘</b><small>保存已完成任务与实际输出</small></span></a></li>
+    <li id="method-step-2"><a href="#method-panel-2"><span class="n">2</span><span class="t"><b>提出步骤改进</b><small>说明错误模式与证据</small></span></a></li>
+    <li id="method-step-3"><a href="#method-panel-3"><span class="n">3</span><span class="t"><b>影子评估 · 批准</b><small>前瞻样本检验后由你批准</small></span></a></li>
+  </ol>
+
+  <div class="method-grid">
+    <section id="method-panel-1" class="card method-panel method-step on">
+      <div class="method-step-head"><span class="n">1</span><div><h2>冻结真实过程复盘</h2><small>选一个已完成任务作为固定样本</small></div></div>
+      <div class="method-step-body">
+        <div class="field">
+          <label for="method-task">已完成任务</label><select id="method-task"></select>
+          <div class="hint">只能选择已结束的任务；冻结后作为复盘的固定样本。</div>
+        </div>
+        <div class="btn-row"><button id="method-review" type="button" class="btn btn-primary">保存任务与实际输出</button></div>
+      </div>
+    </section>
+
+    <section id="method-panel-2" class="card method-panel method-step">
+      <div class="method-step-head"><span class="n">2</span><div><h2>提出步骤改进</h2><small>错误模式与证据说明</small></div></div>
+      <div class="method-step-body">
+        <form id="method-create" class="form-grid">
+          <div class="field full"><label for="method-failure">失败或不完整复盘</label><select id="method-failure" required></select></div>
+          <div class="field"><label for="method-summary">改进摘要</label><textarea id="method-summary" maxlength="1000" required></textarea></div>
+          <div class="field"><label for="method-pattern">实际错误模式与证据说明</label><textarea id="method-pattern" maxlength="1000" required></textarea></div>
+          <div class="full method-checks">
+            <label class="check-row"><input id="method-two" type="checkbox"><span>要求两个不同的反向解释</span></label>
+            <label class="check-row"><input id="method-verified" type="checkbox"><span>要求已验证、无未解冲突的反证来源</span></label>
+            <label class="check-row"><input id="method-stop" type="checkbox"><span>未回答时要求明确停止或继续判断</span></label>
+          </div>
+          <div class="full btn-row"><button type="submit" class="btn btn-primary">保存提案（不会启用）</button></div>
+        </form>
+      </div>
+    </section>
+
+    <section id="method-panel-3" class="card method-panel method-step">
+      <div class="method-step-head"><span class="n">3</span><div><h2>提案、评估与影子记录</h2><small>前瞻样本检验后由你批准</small></div></div>
+      <div id="method-proposals" class="method-step-body"></div>
+      <div class="method-pager">
+        <p id="method-page-note" class="muted"></p>
+        <button id="method-prev" type="button" class="btn btn-ghost btn-sm">较新记录</button>
+        <button id="method-next" type="button" class="btn btn-ghost btn-sm">较早记录</button>
+      </div>
+    </section>
+
+    <section id="method-records" class="card card--flush method-records">
+      <div class="card-head card-head--rule"><h2>方法版本记录</h2></div>
+      <div class="method-records-body">
+        <p class="hint">当前适用方法与版本回退。只适用一个明确证券；多证券、比较与组合任务使用固定基线。回退会追加新版本并保留所有记录；执行中的任务继续使用原版本。</p>
+        <div id="method-heads"></div>
+        <div id="method-heads-empty" class="empty-state method-empty">
+          <div class="empty-icon">{{ icon("methods", "ico", 20) }}</div>
+          <h3>还没有改进记录</h3>
+          <p>新任务固定使用当前方法版本；已有任务与历史观点保留原版本。</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="callout method-callout">
+    {{ icon("info", "ico", 16) }}
+    <span>离线重放经过原生模型边界；前瞻步骤影子检查评估后新任务的真实输出。只有前瞻步骤影子可供批准，两者都是工程检查，不能证明研究质量。新任务固定方法版本；已有任务与历史观点保留原版本。</span>
+  </div>
 </div>
 <script type="module" src="/app/static/methods.js"></script>
 {% endblock %}

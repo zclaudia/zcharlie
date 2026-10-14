@@ -1,64 +1,200 @@
-/* pages/health.css — 数据健康
-   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
+/* pages/health.css — 数据健康（UI v2）
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css.
+   桌面：KPI 条 → 提醒 + 交易日历（8/4）→ 采集任务表 → 两两并排的分区卡片。
+   手机（< 56rem）：2×2 KPI → 提醒 → 采集任务列表 → “更多”：其余分区折叠成一行列表（<details>）。 */
 
 .health-section[hidden] { display: none; }
-.health-section h3 { font-size: var(--fs-md); }
-.accumulation-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); margin: var(--sp-1) 0; }
-.accumulation-count { font-size: 1.6rem; font-weight: 700; }
-progress, meter { accent-color: var(--c-accent); }
-progress.accumulation-progress { width: 100%; height: 0.8rem; }
-.health-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-width: 0; }
-.health-bar meter { flex: 1 1 8rem; max-width: 20rem; height: 0.8rem; }
-.health-bar-text { font-size: var(--fs-sm); overflow-wrap: anywhere; }
-meter::-webkit-meter-bar, progress::-webkit-progress-bar { background: var(--c-track); border: none; border-radius: var(--r-pill); }
-meter::-webkit-meter-optimum-value, meter::-webkit-meter-suboptimum-value,
-meter::-webkit-meter-even-less-good-value, progress::-webkit-progress-value { background: var(--c-accent); border-radius: var(--r-pill); }
-meter::-webkit-meter-suboptimum-value { background: var(--c-aging); }
-meter::-webkit-meter-even-less-good-value { background: var(--c-warn); }
-meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--c-accent); }
+.health-page { display: flex; flex-direction: column; gap: var(--sp-4); min-width: 0; }
+.health-page .card { margin-bottom: 0; }
+.health-top, .health-pair { display: grid; gap: var(--sp-4); grid-template-columns: minmax(0, 1fr); min-width: 0; }
+progress, meter { accent-color: var(--accent); }
 
-.collection-list, .backfill-list { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
-.collection-item, .backfill-item { border: 1px solid var(--c-line); border-radius: var(--r-md); padding: var(--sp-3); min-width: 0; background: var(--c-surface-2); }
-.collection-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
-.collection-title { margin: 0; font-size: var(--fs-md); overflow-wrap: anywhere; }
-.collection-meta { margin: 2px 0; overflow-wrap: anywhere; }
-.trend { margin: var(--sp-1) 0; }
-.trend .chip { margin-right: var(--sp-1); }
-.health-section details summary { color: var(--c-accent); margin: var(--sp-1) 0; }
+/* ---- KPI ---------------------------------------------------------------------------- */
+
+.health-kpis .kpi-value { font-variant-numeric: tabular-nums; }
+.health-kpis .week-progress { margin: 8px 0 0; }
+@media (max-width: 55.99rem) {
+  .health-kpis .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
+
+/* ---- 提醒 -------------------------------------------------------------------------------- */
+
+.health-alerts { list-style: none; margin: 0; padding: 0; }
+.health-alert { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.health-alert:first-child { border-top: 0; }
+.health-alert[hidden] { display: none; }
+.health-alert-main { flex: 1; min-width: 0; }
+.health-alert-main b { display: block; font-size: 13.5px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.health-alert-detail {
+  display: block; margin-top: 2px; color: var(--ink-3); font-size: 12px; line-height: 1.45;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+}
+.health-alert-detail.is-open { white-space: normal; overflow-wrap: anywhere; }
+.health-alert-link { flex: none; }
+.health-alerts-more { margin: 2px 12px 12px; }
+.health-ok { margin: 0; padding: 14px 16px; color: var(--ink-2); }
+.health-warnings .card-head .cluster { margin-left: auto; }
+.health-warnings .card-head .badge { margin: 0; }
+
+/* ---- 折叠分区：手机 = 列表行，桌面 = 卡片 -------------------------------------------------------- */
+
+.health-details { min-width: 0; }
+.health-sum {
+  display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 10px 14px;
+  list-style: none; cursor: pointer; border-radius: var(--r-md);
+}
+.health-sum::-webkit-details-marker { display: none; }
+.health-sum::marker { content: ""; }
+.health-sum:hover { background: var(--hover); }
+.health-sum-main { flex: 1; min-width: 0; display: block; }
+.health-sum-main h2 { margin: 0; font-size: 14.5px; font-weight: 500; line-height: 1.35; }
+.health-sum-main small { display: block; overflow: hidden; color: var(--ink-3); font-size: 12px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.health-sum-chev { flex: none; color: var(--line-2); transition: transform 0.15s ease; }
+.health-details[open] > .health-sum { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom: 1px solid var(--line); }
+.health-details[open] > .health-sum .health-sum-chev { transform: rotate(90deg); }
+.health-fold-body { padding: 14px 14px 16px; min-width: 0; }
+.health-fold-body > .stack > * + * { margin-top: var(--sp-3); }
+.health-fold-body .health-tbl th:first-child, .health-fold-body .health-tbl td:first-child { padding-left: 10px; }
+.health-fold-body .health-tbl th:last-child, .health-fold-body .health-tbl td:last-child { padding-right: 10px; }
+
+/* ---- 表格 / 通用小件 ------------------------------------------------------------------------------ */
+
+.health-tbl td { overflow-wrap: anywhere; }
+.health-tbl .num { font-variant-numeric: tabular-nums; }
+.health-empty { margin: 0; padding: 4px 0; }
+.health-note { margin: 0; }
+.health-sub { margin: 0; font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
+.health-rows { display: grid; margin: 0; }
+.health-row {
+  display: grid; grid-template-columns: minmax(7rem, 36%) minmax(0, 1fr); gap: 4px 12px;
+  padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px;
+}
+.health-row:first-child { border-top: 0; padding-top: 0; }
+.health-row dt { color: var(--ink-3); }
+.health-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.health-facts { margin: 0; }
+.health-stats { display: grid; gap: var(--sp-3) var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+.health-stat-label { font-size: 12.5px; color: var(--ink-3); }
+.health-stat-value { margin-top: 2px; font-size: 22px; font-weight: 600; line-height: 30px; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.health-stat-foot { font-size: 12px; color: var(--ink-3); }
+.health-stat.attention .health-stat-value { color: var(--warn); }
+.health-stat.zero .health-stat-value { color: var(--ink-3); }
+.health-acc-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-2); }
+.health-acc-count { font-size: 28px; font-weight: 600; line-height: 34px; letter-spacing: -0.02em; }
+progress.accumulation-progress { width: 100%; height: 8px; }
+.health-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); min-width: 0; }
+.health-bar meter { flex: 1 1 8rem; max-width: 20rem; height: 8px; }
+.health-bar-text { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+meter::-webkit-meter-bar, progress::-webkit-progress-bar { background: var(--line); border: none; border-radius: var(--r-pill); }
+meter::-webkit-meter-optimum-value, meter::-webkit-meter-suboptimum-value,
+meter::-webkit-meter-even-less-good-value, progress::-webkit-progress-value { background: var(--accent); border-radius: var(--r-pill); }
+meter::-webkit-meter-suboptimum-value { background: var(--amber); }
+meter::-webkit-meter-even-less-good-value { background: var(--warn); }
+meter::-moz-meter-bar, progress::-moz-progress-bar { background: var(--accent); }
+.basis { margin-top: var(--sp-2); }
+.basis summary, .conflicts summary, .missing-details summary { color: var(--accent); font-size: var(--fs-sm); cursor: pointer; }
+.health-fold-body details summary, .health-coll-detail details summary { margin: var(--sp-1) 0; }
 .ticker-list { overflow-wrap: anywhere; }
 .ticker-list a { margin-right: 6px; }
-.health-table td { overflow-wrap: anywhere; }
-.health-warnings .notice { margin: 6px 0; }
-.calendar-candidate { margin: var(--sp-2) 0; }
-.calendar-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-2); }
-.calendar-messages .notice { margin: var(--sp-2) 0 0; }
+.health-backfill-note { display: grid; gap: 2px; }
 
-.run-success, .week-qualified { color: var(--c-accent); border-color: color-mix(in srgb, var(--c-accent) 40%, var(--c-line)); background: var(--c-accent-soft); }
-.run-partial, .week-below_threshold { color: var(--c-ai); border-color: color-mix(in srgb, var(--c-ai) 35%, var(--c-line)); background: var(--c-ai-soft); }
-.run-failed, .week-missing { color: var(--c-warn); border-color: color-mix(in srgb, var(--c-warn) 40%, var(--c-line)); background: var(--c-warn-soft); }
-.run-queued, .run-running, .week-in_progress { color: var(--c-ink-2); }
-.week-no_trading { color: var(--c-ink-3); }
+/* 新鲜度行：圆点 + 名称 + 结论，备注另起一行 */
+.health-fresh { gap: var(--sp-3); }
+.health-fresh li { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 2px 10px; }
+.health-fresh .dot { margin-top: 5px; }
+.health-fresh-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 0 10px; }
+.health-fresh-note { flex: 0 0 100%; padding-left: 20px; }
 
-/* ---- 数据健康 ---------------------------------------------------------------------- */
+/* ---- 采集任务 ------------------------------------------------------------------------------------ */
 
-.summary-meta { margin: calc(-1 * var(--sp-1)) 0 var(--sp-4); }
-.collection-ratio { margin: var(--sp-2) 0 0; }
-.collection-ratio-value { font-size: var(--fs-xl); font-weight: 700; font-variant-numeric: tabular-nums; }
-.collection-ratio-value.below { color: var(--c-warn); }
+.health-desktop { display: none; }
+.health-mobile { display: block; }
+#health-collections .health-mobile { border: 0; border-radius: 0 0 var(--r-md) var(--r-md); }
+.health-coll-name { font-weight: 600; white-space: nowrap; }
+.health-coll-action { text-align: right; white-space: nowrap; }
+.health-coll-table td { white-space: nowrap; }
+.health-coll-table td.muted { color: var(--ink-3); }
+.health-cov { display: flex; align-items: center; gap: 8px; min-width: 7.5rem; }
+.health-cov b { min-width: 3.4em; text-align: right; font-weight: 600; }
+.health-cov b.below { color: var(--warn); }
+.health-cov-meter { flex: 1; width: auto; min-width: 3rem; height: 5px; }
+.health-detail-row > td { padding: 12px 16px 14px; background: var(--surface-2); white-space: normal; }
+.health-detail-row[hidden] { display: none; }
+tbody tr.health-detail-row:hover > td { background: var(--surface-2); }
+.health-coll-detail { display: grid; gap: var(--sp-2); }
+.health-coll-detail p { margin: 0; }
+.health-coll-detail .notice { margin: 0; }
 .trend { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
 .trend-cell {
-  font-size: 10.5px;
-  padding: 0 5px;
-  line-height: 16px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--c-line);
-  font-variant-numeric: tabular-nums;
+  font-size: 10.5px; padding: 0 5px; line-height: 16px; border-radius: var(--r-sm);
+  border: 1px solid var(--line); font-variant-numeric: tabular-nums;
 }
-.backfill-item h4, .collection-head h4 { margin: 0; font-size: var(--fs-md); color: var(--c-ink); }
-.collection-head .status { margin-left: auto; }
-.basis { margin-top: var(--sp-3); }
-.basis summary, .conflicts summary { color: var(--c-accent); font-size: var(--fs-sm); }
-.accumulation-headline .muted { font-size: var(--fs-sm); }
-.health-section .kpis { margin-bottom: var(--sp-2); }
+.health-coll-m + .health-coll-m { border-top: 1px solid var(--line); }
+.health-coll-m > summary { list-style: none; }
+.health-coll-m > summary::-webkit-details-marker { display: none; }
+.health-coll-m > .list-row { border-top: 0; }
+.health-coll-m .health-chev { transition: transform 0.15s ease; }
+.health-coll-m[open] .health-chev { transform: rotate(90deg); }
+.health-coll-m-body { padding: 2px 14px 14px 34px; }
+.health-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.health-dot.warn { background: var(--warn); }
+.health-dot.idle { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.list-row-end.warn-text { color: var(--warn); }
 
-.health-warnings .alerts { margin: 6px 0; }
+/* 状态 / 周状态 / 趋势单元 */
+.run-success, .week-qualified { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-soft); }
+.run-partial, .week-below_threshold { color: var(--ai); border-color: color-mix(in srgb, var(--ai) 35%, var(--line)); background: var(--ai-soft); }
+.run-failed, .week-missing { color: var(--warn); border-color: var(--warn-line); background: var(--warn-soft); }
+.run-queued, .run-running, .week-in_progress { color: var(--ink-2); }
+.week-no_trading { color: var(--ink-3); }
+.status-provider-ok { background: var(--accent-soft); color: var(--accent-ink); }
+.status-provider-failed, .status-provider-open { background: var(--warn-soft); color: var(--warn); }
+.status-provider-unknown { background: transparent; box-shadow: inset 0 0 0 1px var(--line-2); }
+
+/* ---- 交易日历 ------------------------------------------------------------------------------------ */
+
+.health-cal-lead { margin-bottom: var(--sp-2); }
+.health-cal-lead .badge { margin: 0; }
+.health-cal-note { margin: var(--sp-2) 0; overflow-wrap: anywhere; }
+.calendar-candidate { margin: var(--sp-2) 0; }
+.calendar-candidate p { margin: 0 0 var(--sp-1); }
+.calendar-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.calendar-messages .notice { margin: var(--sp-2) 0 0; }
+#calendar-card > p { margin: var(--sp-2) 0 0; }
+
+/* ---- 桌面 ≥ 56rem ----------------------------------------------------------------------------------- */
+
+@media (min-width: 56rem) {
+  .health-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  .health-top > #health-calendar { grid-column: 2; }
+  .health-top > #health-warnings { grid-column: 1; }
+  .health-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .health-desktop { display: block; }
+  .health-mobile { display: none; }
+  /* 折叠分区在桌面就是一张带标题的卡片 */
+  .health-sum { min-height: 0; padding: 14px 16px; }
+  .health-sum-icon { display: none; }
+  .health-sum-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+  .health-sum-main h2 { font-size: 14px; font-weight: 600; }
+  .health-sum-main small { display: inline; white-space: normal; }
+  .health-fold-body { padding: 14px 16px 16px; }
+  .health-details[open] > .health-sum { border-bottom: 0; padding-bottom: 0; }
+  .health-details[open] > .health-sum:hover { background: transparent; }
+  .health-details[open] > .health-fold-body { padding-top: 12px; }
+}
+
+/* ---- 手机 < 56rem：列表顺序 提醒 → 采集任务 → 更多 ---------------------------------------------------- */
+
+@media (max-width: 55.99rem) {
+  .health-page { gap: var(--sp-3); }
+  .health-top, .health-pair { display: contents; }
+  .health-page > #health-warnings, .health-top > #health-warnings { order: 1; }
+  .health-page > #health-collections { order: 2; }
+  .health-fold { order: 3; }
+  #health-collections .card-head { padding-top: 12px; }
+  .health-alert { padding: 10px 14px; }
+  .health-alert-link { min-height: 32px; }
+  .health-row { grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr); }
+  .health-fold-body { padding: 12px 14px 14px; }
+  .health-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

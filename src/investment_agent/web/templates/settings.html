@@ -8,43 +8,45 @@
 </header>
 <div id="settings-encryption" class="notice notice-warn" hidden></div>
 <div class="settings-shell">
-  <nav id="settings-nav" class="settings-nav" aria-label="设置目录"></nav>
-  <div class="settings-main">
+  <aside class="settings-side">
     <div id="settings-search-wrap" class="settings-search">
       <input id="settings-search" type="search" placeholder="搜索配置" aria-label="搜索配置" autocomplete="off">
     </div>
+    <nav id="settings-nav" class="settings-nav" aria-label="设置目录"></nav>
+  </aside>
+  <div class="settings-main">
     <div id="settings-form" class="data-region"
          data-endpoint="/settings"
          aria-live="polite">
       <p class="notice notice-loading" data-state="loading">正在加载…</p>
     </div>
-    <section id="settings-history-card" class="card" hidden>
-      <div class="card-head">
+    <section id="settings-history-card" class="card card--flush" hidden>
+      <div class="card-head card-head--rule">
         <h2>最近变更</h2>
         <span class="faint">最新在前，密钥只记录“已设置 / 末 4 位”</span>
       </div>
-      <div id="settings-history" class="data-region"
+      <div id="settings-history" class="data-region settings-table-region"
            data-endpoint="/settings/history?limit=30"
            data-empty-text="还没有变更记录。"
            aria-live="polite">
         <p class="notice notice-loading" data-state="loading">正在加载…</p>
       </div>
     </section>
-    <section id="settings-bootstrap-card" class="card" hidden>
-      <div class="card-head">
+    <section id="settings-bootstrap-card" class="card card--flush" hidden>
+      <div class="card-head card-head--rule">
         <h2>启动配置（只读）</h2>
         <span class="faint">来自环境变量 / .env，修改后需重启服务</span>
       </div>
-      <div id="settings-bootstrap" class="data-region" aria-live="polite">
+      <div id="settings-bootstrap" class="data-region settings-table-region" aria-live="polite">
         <p class="notice notice-loading" data-state="loading">正在加载…</p>
       </div>
     </section>
-    <section id="settings-savebar" class="card settings-savebar" aria-live="polite" hidden>
+    <section id="settings-savebar" class="action-bar settings-savebar" aria-live="polite" hidden>
       <div class="settings-savebar-row">
         <span id="settings-dirty-count" class="settings-dirty-count">没有未保存的修改</span>
         <input id="settings-note" maxlength="500" placeholder="变更说明（可选）" aria-label="变更说明">
-        <button type="button" id="settings-save" class="primary" disabled>保存</button>
-        <button type="button" id="settings-discard" disabled>放弃</button>
+        <button type="button" id="settings-discard" class="btn" disabled>放弃</button>
+        <button type="button" id="settings-save" class="btn btn-primary primary" disabled>保存</button>
       </div>
       <div id="settings-save-result" class="issues"></div>
     </section>
