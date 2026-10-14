@@ -8,17 +8,15 @@ rewrite either its body or an earlier snapshot.
 import hashlib
 import json
 from collections.abc import Sequence
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from decimal import Decimal, localcontext
-from typing import Any, Literal
+from decimal import localcontext
+from typing import Any
 from uuid import UUID, uuid4, uuid5
 
 import structlog
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.foundations import InvestorError, storage_conflicts
 from investment_agent.portfolio.contracts import (
@@ -31,23 +29,26 @@ from investment_agent.portfolio.contracts import (
     CorporateAction,
     CorrectionResult,
     CreateAccount,
-    DividendRecord,
     EventFact,
     EventPage,
     EventRecord,
-    HoldingComparison,
     ImportBatch,
     ImportPreview,
     ImportResult,
     ImportRowEffect,
-    RealizedPnL,
-    ReconciliationComparison,
     Reversal,
     Snapshot,
-    SnapshotHolding,
     Trade,
 )
-from investment_agent.storage.models.pit_snapshot import MarketSnapshot
+from investment_agent.portfolio.prices import SessionPriceLookup
+from investment_agent.portfolio.projection import (
+    COST_METHOD_VERSION as COST_METHOD_VERSION,
+)
+from investment_agent.portfolio.projection import (
+    Projection,
+    ProjectionEngine,
+)
+from investment_agent.portfolio.projection_state import fact_refs
 from investment_agent.storage.models.portfolio import (
     PortfolioAccount,
     PortfolioEvent,
@@ -58,41 +59,9 @@ from investment_agent.storage.models.reference import Listing, Market
 
 log = structlog.get_logger(__name__)
 
-COST_METHOD_VERSION = "weighted_average_remaining_v1"
-"""Plan 2.7口径: remaining weighted acquisition cost, fees included."""
-
 
 def digest(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
-
-
-@dataclass
-class _CostState:
-    """Remaining-cost projection state of one listing (plan 2.7)."""
-
-    quantity: Decimal
-    remaining: Decimal | None
-    opened_on: Any = None
-    reason: str | None = None
-
-
-def fact_refs(fact: EventFact) -> tuple[ObjectRef, ...]:
-    """The listings one fact names (empty for pure cash facts)."""
-
-    if isinstance(fact, Balance):
-        return tuple(holding.listing_ref for holding in fact.holdings)
-    if isinstance(fact, Trade):
-        return (fact.holding.listing_ref,)
-    if isinstance(fact, (CashFact, CorporateAction)) and fact.listing_ref is not None:
-        return (fact.listing_ref,)
-    return ()
-
-
-@dataclass
-class Projection:
-    snapshot: Snapshot
-    confirmable_deficits: list[tuple[UUID, ObjectRef]] = field(default_factory=list)
-    """Sells (event id, listing id) whose confirmable basis was known and insufficient."""
 
 
 class PortfolioService:
@@ -683,350 +652,15 @@ class PortfolioService:
         new_event_ids: frozenset[UUID] = frozenset(),
         trace: dict[UUID, dict[str, Any]] | None = None,
     ) -> Projection:
+        """The only projection entry point: owner of precision, records and trace.
+
+        ``new_event_ids`` is kept for callers that already pass it (and for the
+        signature the projection has always had); the replay names new rows
+        through ``trace`` alone.
+        """
+
         with localcontext() as context:
             # Bounded arithmetic precision, no binary floats or silent rounding.
             context.prec = max(128, 80 * len(records))
-            return await self._project_decimal(account_id, records, recorded, new_event_ids, trace)
-
-    async def _project_decimal(
-        self,
-        account_id: UUID,
-        records: list[EventRecord],
-        recorded: datetime,
-        new_event_ids: frozenset[UUID],
-        trace: dict[UUID, dict[str, Any]] | None = None,
-    ) -> Projection:
-        reversed_ids = {r.request.fact.original_event_id for r in records if isinstance(r.request.fact, Reversal)}
-        active = sorted((r for r in records if r.id not in reversed_ids and not isinstance(r.request.fact, Reversal)), key=lambda r: (r.request.fact.occurred_at, r.revision))
-        opening = next((r for r in active if isinstance(r.request.fact, Balance) and r.request.fact.kind == "opening_balance"), None)
-        balances = [r for r in active if isinstance(r.request.fact, Balance)]
-        # Earlier backfills are included in the confirmed baseline. Same-time
-        # later-recorded events are applied, never silently discarded.
-        baseline = opening or (balances[0] if balances else None)
-        baseline_key = (baseline.request.fact.occurred_at, baseline.revision) if baseline else None
-        excluded: list[UUID] = []
-        quantities: dict[ObjectRef, Decimal] = {}
-        restricted: set[ObjectRef] = set()
-        cash: Decimal | None = None
-        cash_unknown: set[str] = {"missing_confirmed_balance"}
-        history: set[str] = set()
-        conflicts: list[str] = []
-        comparisons: list[ReconciliationComparison] = []
-        has_balance = False
-        coverage: Literal["complete", "partial"] = "partial"
-        scope = "no active confirmed balance"
-        # Plan 2.7: remaining weighted acquisition cost per listing, fees
-        # included on buys; unknown costs stay unknown instead of guessing.
-        costs: dict[ObjectRef, _CostState] = {}
-        cost_history: set[str] = set()
-        realized_records: list[RealizedPnL] = []
-        dividends: list[DividendRecord] = []
-        deficits: list[tuple[UUID, ObjectRef]] = []
-        for record in active:
-            traced = trace is not None and record.id in trace
-            before_quantities: dict[ObjectRef, Decimal] = {}
-            before_cash: Decimal | None = None
-            if traced:
-                before_quantities, before_cash = dict(quantities), cash
-            fact = record.request.fact
-            if isinstance(fact, Balance):
-                if fact.kind == "reconciliation":
-                    before_cash = cash if not cash_unknown else None
-                    confirmed_holdings = {h.listing_ref: h.quantity for h in fact.holdings}
-                    holding_comparisons: list[HoldingComparison] = []
-                    for ref in sorted(quantities.keys() | confirmed_holdings.keys() | restricted, key=lambda r: int(r.id)):
-                        before_qty = quantities.get(ref, Decimal(0)) if ref not in restricted and (ref in quantities or coverage == "complete") else None
-                        after_qty = confirmed_holdings.get(ref, Decimal(0)) if ref in confirmed_holdings or fact.coverage == "complete" else None
-                        delta = after_qty - before_qty if before_qty is not None and after_qty is not None else None
-                        holding_comparisons.append(HoldingComparison(listing_ref=ref, before=before_qty, confirmed=after_qty, delta=delta, unknown_reason="before_or_confirmed_quantity_unknown" if delta is None else None))
-                    cash_delta = fact.cash - before_cash if fact.cash is not None and before_cash is not None else None
-                    comparison = ReconciliationComparison(event_id=record.id, occurred_at=fact.occurred_at, before_cash=before_cash, confirmed_cash=fact.cash, cash_delta=cash_delta, cash_unknown_reason="before_or_confirmed_cash_unknown" if cash_delta is None else None, holdings=tuple(holding_comparisons), user_difference_explanation=fact.unexplained_difference or "none")
-                    comparisons.append(comparison)
-                    if cash_delta is None or cash_delta != 0 or any(h.delta is None or h.delta != 0 for h in holding_comparisons):
-                        conflicts.append(f"reconciliation_difference:{record.id}")
-                if has_balance:
-                    history.update(cash_unknown)
-                    history.update(f"unknown_quantity:{ref.id}" for ref in restricted)
-                    if coverage == "partial":
-                        history.add("unlisted_assets_unknown")
-                prior_quantities = dict(quantities)
-                prior_costs = dict(costs)
-                prior_restricted = set(restricted)
-                quantities = {h.listing_ref: h.quantity for h in fact.holdings}
-                restricted = set()
-                cash = fact.cash
-                cash_unknown = set() if cash is not None else {f"unknown_cash:{record.id}"}
-                coverage = fact.coverage
-                scope = fact.asset_scope
-                has_balance = True
-                history.update(cash_unknown)
-                if coverage == "partial":
-                    history.add("unlisted_assets_unknown")
-                # Plan 2.7: balance holdings carry optional confirmed average
-                # cost and cycle start; without a confirmation the cost stays
-                # unknown unless this is the same unchanged position as before.
-                costs = {}
-                for holding in fact.holdings:
-                    ref = holding.listing_ref
-                    if holding.quantity == 0:
-                        closed = prior_costs.get(ref)
-                        if closed is not None and closed.reason:
-                            cost_history.add(closed.reason)
-                        continue
-                    prior = prior_costs.get(ref)
-                    prior_quantity = prior_quantities.get(ref)
-                    if prior_quantity is None and prior is not None:
-                        prior_quantity = prior.quantity
-                    same_quantity = ref not in prior_restricted and prior_quantity is not None and prior_quantity == holding.quantity
-                    if holding.average_cost is not None:
-                        remaining = holding.quantity * holding.average_cost
-                        reason = None
-                    elif prior is not None and same_quantity and prior.remaining is not None:
-                        remaining = prior.remaining
-                        reason = None
-                    else:
-                        remaining = None
-                        reason = "balance_cost_not_confirmed"
-                    if prior is not None and prior.reason and prior.reason != reason and not same_quantity:
-                        cost_history.add(prior.reason)
-                    opened_on = holding.opened_on if holding.opened_on is not None else (prior.opened_on if prior is not None and same_quantity else None)
-                    costs[ref] = _CostState(quantity=holding.quantity, remaining=remaining, opened_on=opened_on, reason=reason)
-                continue
-            if baseline_key is not None and (fact.occurred_at, record.revision) < baseline_key:
-                excluded.append(record.id)
-                if trace is not None and record.id in trace:
-                    trace[record.id] = {"inclusion": "audit_prior_history"}
-                continue
-            if isinstance(fact, Trade):
-                ref = fact.holding.listing_ref
-                basis_unknown = ref in restricted
-                if ref not in quantities and coverage == "partial":
-                    restricted.add(ref)
-                    basis_unknown = True
-                direction = Decimal(1) if fact.direction == "buy" else Decimal(-1)
-                quantities[ref] = quantities.get(ref, Decimal(0)) + direction * fact.holding.quantity
-                if quantities[ref] < 0:
-                    conflicts.append(f"negative_quantity:{record.id}:{ref.id}")
-                    # Plan 2.8: a sell beyond a *confirmed* basis is rejected at
-                    # commit; an unknown basis is recorded, never pretended.
-                    if not basis_unknown:
-                        deficits.append((record.id, ref))
-                    restricted.add(ref)
-                state = costs.get(ref)
-                if fact.direction == "buy":
-                    if state is None or state.quantity == 0:
-                        # A buy from flat opens a new cycle (plan 2.7).
-                        opened_on = fact.occurred_at.astimezone(SHANGHAI_TZ).date()
-                        remaining = Decimal(0)
-                        reason = None
-                    else:
-                        opened_on = state.opened_on
-                        remaining = state.remaining
-                        reason = state.reason
-                    if remaining is None:
-                        remaining, reason = None, reason or "prior_cost_unknown"
-                    elif fact.fee is None:
-                        remaining, reason = None, "buy_fee_unknown"
-                    else:
-                        remaining = remaining + fact.holding.quantity * fact.actual_price + fact.fee
-                        reason = None
-                    if basis_unknown:
-                        remaining, reason, opened_on = None, "quantity_basis_unknown", None
-                    costs[ref] = _CostState(
-                        quantity=(state.quantity if state is not None else Decimal(0)) + fact.holding.quantity,
-                        remaining=remaining,
-                        opened_on=opened_on,
-                        reason=reason,
-                    )
-                else:
-                    carried: Decimal | None = None
-                    opened_on = state.opened_on if state is not None else None
-                    cycle_opened_on = opened_on
-                    cycle_reason = state.reason if state is not None else None
-                    if state is not None and state.remaining is not None and state.quantity > 0:
-                        # Carry the pre-sale average out of the sold portion; the
-                        # remaining average stays unchanged (plan 2.7).
-                        carried = state.remaining * fact.holding.quantity / state.quantity
-                        remaining = state.remaining - carried if fact.holding.quantity < state.quantity else Decimal(0)
-                        reason = None
-                    else:
-                        remaining, reason = None, cycle_reason or "sell_cost_basis_unknown"
-                    new_quantity = quantities[ref]
-                    if new_quantity == 0:
-                        # Cycle closed: remaining cost resets, cycle reference ends.
-                        remaining, reason, opened_on = Decimal(0), None, None
-                        if cycle_reason:
-                            cost_history.add(cycle_reason)
-                    costs[ref] = _CostState(quantity=new_quantity, remaining=remaining, opened_on=opened_on, reason=reason)
-                    gross = fact.holding.quantity * fact.actual_price
-                    realized_records.append(
-                        RealizedPnL(
-                            event_id=record.id,
-                            listing_ref=ref,
-                            quantity=fact.holding.quantity,
-                            gross=gross,
-                            fee=fact.fee,
-                            cost_carried=carried,
-                            realized=(gross - fact.fee - carried) if (fact.fee is not None and carried is not None) else None,
-                            cycle_opened_on=cycle_opened_on,
-                        )
-                    )
-                if cash is not None:
-                    cash -= direction * fact.holding.quantity * fact.actual_price
-                    if fact.fee is not None:
-                        cash -= fact.fee
-                if fact.fee is None:
-                    issue = f"unknown_fee:{record.id}"
-                    cash_unknown.add(issue)
-                    history.add(issue)
-            elif isinstance(fact, CashFact):
-                if cash is not None:
-                    cash += fact.amount
-                if fact.kind == "dividend":
-                    # Dividends never reduce the acquisition cost (plan 2.7).
-                    dividends.append(DividendRecord(event_id=record.id, listing_ref=fact.listing_ref, amount=fact.amount))
-            elif isinstance(fact, CorporateAction):
-                ref = fact.listing_ref
-                if fact.action == "split":
-                    if ref not in quantities and coverage == "partial":
-                        restricted.add(ref)
-                    quantities[ref] = quantities.get(ref, Decimal(0)) * (fact.ratio or Decimal(1))
-                    state = costs.get(ref)
-                    if state is not None:
-                        # Quantity scales, total cost is unchanged, the cycle continues.
-                        costs[ref] = _CostState(quantity=quantities[ref], remaining=state.remaining, opened_on=state.opened_on, reason=state.reason)
-                else:
-                    issue = f"pending_corporate_action:{record.id}"
-                    history.add(issue)
-                    if "quantity" in fact.affects:
-                        restricted.add(ref)
-                        quantities.setdefault(ref, Decimal(0))
-                        # An unconfirmed action keeps the cost unknown until the
-                        # user confirms the actual fact (plan 2.7).
-                        state = costs.get(ref)
-                        if state is not None and state.reason:
-                            cost_history.add(state.reason)
-                        costs[ref] = _CostState(
-                            quantity=state.quantity if state is not None else quantities.get(ref, Decimal(0)),
-                            remaining=None,
-                            opened_on=state.opened_on if state is not None else None,
-                            reason="pending_corporate_action",
-                        )
-                    if "cash" in fact.affects:
-                        cash_unknown.add(issue)
-            if cash is not None and cash < 0:
-                issue = f"negative_cash:{record.id}"
-                conflicts.append(issue)
-                cash_unknown.add(issue)
-            history.update(cash_unknown)
-            history.update(f"unknown_quantity:{ref.id}" for ref in restricted)
-            if trace is not None and record.id in trace:
-                refs = fact_refs(fact)
-                trace[record.id] = {
-                    "inclusion": "applied",
-                    "quantity_delta": {
-                        str(ref.id): quantities.get(ref, Decimal(0))
-                        - before_quantities.get(ref, Decimal(0))
-                        for ref in refs
-                    },
-                    "cash_delta": (
-                        cash - before_cash
-                        if cash is not None and before_cash is not None
-                        else None
-                    ),
-                    "cost_remaining": {
-                        str(ref.id): costs[ref].remaining
-                        for ref in refs
-                        if ref in costs and costs[ref].remaining is not None
-                    },
-                }
-        holdings: list[SnapshotHolding] = []
-        unknowns = set(cash_unknown)
-        cost_unknowns: set[str] = set()
-        if opening is None:
-            unknowns.add("no_active_opening")
-        if coverage == "partial":
-            unknowns.add("unlisted_assets_unknown")
-        price_complete = True
-        known_cash = cash if not cash_unknown else None
-        subtotal = known_cash
-        fact_as_of = max(r.request.fact.occurred_at for r in records)
-        for ref, quantity in sorted(quantities.items(), key=lambda pair: int(pair[0].id)):
-            confirmed = quantity if ref not in restricted else None
-            if confirmed is None:
-                unknowns.add(f"unknown_quantity:{ref.id}")
-            price = await self.session.scalar(select(MarketSnapshot).where(MarketSnapshot.listing_id == ref.id, MarketSnapshot.adjust == "none", MarketSnapshot.trade_date <= recorded.astimezone(SHANGHAI_TZ).date(), MarketSnapshot.captured_at <= recorded, MarketSnapshot.close > 0).order_by(MarketSnapshot.trade_date.desc(), MarketSnapshot.version.desc(), MarketSnapshot.id.desc()).limit(1))
-            if price is None and confirmed != 0:
-                price_complete = False
-                unknowns.add(f"missing_price:{ref.id}")
-            value = Decimal(0) if confirmed == 0 else confirmed * price.close if confirmed is not None and price is not None else None
-            if value is not None:
-                subtotal = (subtotal or Decimal(0)) + value
-            state = costs.get(ref)
-            cost_reason = state.reason if state is not None else None
-            if quantity == 0:
-                # A flat position carries no remaining cost (plan 2.7).
-                remaining_cost: Decimal | None = Decimal(0)
-                cost_reason = None
-            else:
-                remaining_cost = state.remaining if state is not None else None
-                if state is None and cost_reason is None:
-                    cost_reason = "cost_never_confirmed"
-            average_cost = remaining_cost / quantity if remaining_cost is not None and quantity > 0 else None
-            opened_on_value = state.opened_on if state is not None and quantity > 0 else None
-            if quantity != 0 and cost_reason is not None:
-                cost_unknowns.add(f"{cost_reason}:{ref.id}")
-            holdings.append(
-                SnapshotHolding(
-                    listing_ref=ref,
-                    confirmed_quantity=confirmed,
-                    quantity_subtotal=quantity,
-                    price=price.close if price else None,
-                    price_ref=ObjectRef(kind="market_snapshot", id=price.id, revision=price.version) if price else None,
-                    price_date=price.trade_date if price else None,
-                    market_value=value,
-                    remaining_cost=remaining_cost,
-                    average_cost=average_cost,
-                    opened_on=opened_on_value,
-                    cost_unknown_reason=cost_reason if quantity != 0 else None,
-                )
-            )
-        total = subtotal if coverage == "complete" and not unknowns and not any(q < 0 for q in quantities.values()) else None
-        if total is not None and total > 0:
-            with localcontext() as ratio_context:
-                ratio_context.prec = 40
-                holdings = [h.model_copy(update={"weight": h.market_value / total if h.market_value is not None else None}) for h in holdings]
-        snapshot_id = uuid4()
-        # An empty records list has no facts to name: fall back to sentinels
-        # (the projection instant itself, revision 0) instead of crashing, so a
-        # first import's before-projection can replay an empty account.
-        fact_as_of = max((r.request.fact.occurred_at for r in records), default=recorded)
-        head_revision = records[-1].revision if records else 0
-        snapshot = Snapshot(
-            id=snapshot_id,
-            account_id=account_id,
-            revision=head_revision,
-            recorded_at=recorded,
-            fact_as_of=fact_as_of,
-            valuation_at=recorded,
-            coverage=coverage,
-            asset_scope=scope,
-            known_cash=known_cash,
-            cash_subtotal=cash,
-            holdings=tuple(holdings),
-            known_subtotal=subtotal,
-            total_assets=total,
-            unknowns=tuple(sorted(unknowns)),
-            historical_unknowns=tuple(sorted(history)),
-            reconciliations=tuple(comparisons),
-            conflicts=tuple(conflicts),
-            source_event_ids=tuple(r.id for r in records),
-            excluded_prior_event_ids=tuple(excluded),
-            reference=ObjectRef(kind="portfolio_snapshot", id=snapshot_id, revision=head_revision),
-            price_coverage="complete" if price_complete else "partial",
-            cost_method_version=COST_METHOD_VERSION,
-            realized=tuple(realized_records),
-            dividends=tuple(dividends),
-            cost_unknowns=tuple(sorted(cost_unknowns | {f"historical:{reason}" for reason in cost_history})),
-        )
-        return Projection(snapshot=snapshot, confirmable_deficits=deficits)
+            engine = ProjectionEngine(SessionPriceLookup(self.session))
+            return await engine.project(account_id, records, recorded, trace=trace)

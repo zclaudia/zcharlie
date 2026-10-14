@@ -24,8 +24,8 @@ from investment_agent.clock import SHANGHAI_TZ, shanghai_today
 from investment_agent.investor.common import Contract, DecimalValue, ObjectRef
 from investment_agent.investor.foundations import InvestorError, storage_conflicts
 from investment_agent.portfolio.contracts import Snapshot
+from investment_agent.portfolio.prices import latest_price_as_of
 from investment_agent.portfolio.service import PortfolioService, digest
-from investment_agent.storage.models.pit_snapshot import MarketSnapshot
 from investment_agent.storage.models.portfolio import PortfolioAccount, PortfolioValuation
 
 VALUATION_ALGORITHM = "daily_valuation_v1"
@@ -204,21 +204,11 @@ class ValuationService:
         for item in snapshot.holdings:
             ref = item.listing_ref
             quantity = item.confirmed_quantity
-            price = await self.session.scalar(
-                select(MarketSnapshot)
-                .where(
-                    MarketSnapshot.listing_id == ref.id,
-                    MarketSnapshot.adjust == "none",
-                    MarketSnapshot.trade_date <= valuation_date,
-                    MarketSnapshot.captured_at <= knowledge_cutoff,
-                    MarketSnapshot.close > 0,
-                )
-                .order_by(
-                    MarketSnapshot.trade_date.desc(),
-                    MarketSnapshot.version.desc(),
-                    MarketSnapshot.id.desc(),
-                )
-                .limit(1)
+            price = await latest_price_as_of(
+                self.session,
+                ref.id,
+                trade_date=valuation_date,
+                knowledge_cutoff=knowledge_cutoff,
             )
             if price is not None:
                 prices.append(
