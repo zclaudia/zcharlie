@@ -116,23 +116,33 @@ def unchanged_review(ref, checked):
 
 
 async def market_candidate():
-    """Real AG05/AG10 source adapters, with a finite candidate company view."""
+    """Real AG05/AG10 source adapters, with a finite candidate company view.
+
+    Anchored on the run time: the market premise must stay inside the 14-day
+    snapshot freshness and validity windows on any date. A fixed cutoff drifts
+    out of them, and then publish(candidate) returns published=False and every
+    scenario built here loses its published-first precondition.
+    """
     from investment_agent.investor.contracts import Dependency
-    from tests.support.valuation import AS_OF, seed_bars
+    from tests.support.valuation import seed_bars
+    now = datetime.now(UTC)
+    # The newest premise close settles one session behind the cutoff, which is
+    # recent enough to publish and old enough for a same-value capture after it.
+    anchor = now - timedelta(days=1)
     candidate, _, _ = await fixture()
     async with session_scope() as session:
-        listing, bars = await seed_bars(session)
-        output = await ValuationService(session).percentile("local_owner", PercentileRequest(ticker="600519.SH", as_of=AS_OF, metric="pe"), uuid4())
+        listing, bars = await seed_bars(session, anchor=anchor)
+        output = await ValuationService(session).percentile("local_owner", PercentileRequest(ticker="600519.SH", as_of=anchor, metric="pe"), uuid4())
         calculation = CalculationRecord.model_validate(output["calculation"])
-        evidence_refs = [ref for ref in calculation.fact_refs if (await EvidenceService(session).get_evidence("local_owner", ref, AS_OF)).data.source_ref.field_path == "close"]
+        evidence_refs = [ref for ref in calculation.fact_refs if (await EvidenceService(session).get_evidence("local_owner", ref, anchor)).data.source_ref.field_path == "close"]
         evidence_ref = evidence_refs[0]
-        evidence = (await EvidenceService(session).get_evidence("local_owner", evidence_ref, AS_OF)).data
+        evidence = (await EvidenceService(session).get_evidence("local_owner", evidence_ref, anchor)).data
         foundation = InvestorService(session)
         subject = ObjectRef(kind="listing", id=listing.id, revision=1)
         mandate = await foundation.get_mandate("local_owner")
         mandate = await foundation.revise_mandate("local_owner", mandate.model_copy(update={"revision": 2, "scope_refs": (*mandate.scope_refs, subject)}), Mutation(expected_revision=1, idempotency_key=uuid4()))
         case = await foundation.create_case("local_owner", CreateCase(listing_ref=subject, question="Review company", idempotency_key=uuid4()))
         claim = candidate.recommendation.claims[0].model_copy(update={"materiality": "context", "verification": "pending", "support_refs": (evidence_ref,), "text": (TextNode(type="text", text="Saved daily price "), NumericNode(type="numeric_claim", ref=evidence_ref.model_copy(update={"field_path": "value"}), role="historical_fact", display_format="decimal"))})
-        thesis = candidate.thesis.model_copy(update={"case_ref": ObjectRef(kind="case", id=case.id, revision=1), "as_of": AS_OF, "claims": (claim,)})
-        rec = candidate.recommendation.model_copy(update={"case_ids": (case.id,), "as_of": AS_OF, "valid_until": AS_OF + timedelta(days=14), "next_review_at": AS_OF + timedelta(days=7), "claims": (claim,), "dependency_refs": (Dependency(ref=evidence_ref, materiality="critical", fields=("value",)),), "provenance": (evidence_ref,), "mandate_revision_id": ObjectRef(kind="mandate", id=mandate.id, revision=2)})
+        thesis = candidate.thesis.model_copy(update={"case_ref": ObjectRef(kind="case", id=case.id, revision=1), "as_of": anchor, "claims": (claim,)})
+        rec = candidate.recommendation.model_copy(update={"case_ids": (case.id,), "as_of": anchor, "valid_until": anchor + timedelta(days=14), "next_review_at": anchor + timedelta(days=7), "claims": (claim,), "dependency_refs": (Dependency(ref=evidence_ref, materiality="critical", fields=("value",)),), "provenance": (evidence_ref,), "mandate_revision_id": ObjectRef(kind="mandate", id=mandate.id, revision=2)})
         return candidate.model_copy(update={"thesis": thesis, "recommendation": rec}), evidence_ref, evidence, bars[-1]

@@ -60,23 +60,30 @@ async def seed(session, *, amounts=("7.6", "8.2", "9.1"), market="212.4", unit="
     return request, qualification, subject
 
 
-async def seed_bars(session, *, negative=False, count=260, old=False):
+async def seed_bars(session, *, negative=False, count=260, old=False, anchor: datetime | None = None):
+    """Seed the market series around ``anchor`` (default: the fixed valuation ``AS_OF``).
+
+    Publication/monitoring scenarios pass a run-time anchor so their market
+    premise stays inside the 14-day snapshot freshness window on any date;
+    the valuation fixtures keep the fixed AS_OF and are unaffected.
+    """
     listing = await ListingRepository(session).ensure_a_share_listing("600519.SH", company_name="Fictional fixture")
     repository = MarketSnapshotRepository(session)
-    end = date(2026, 9, 30) - (timedelta(days=30) if old else timedelta())
+    anchor = AS_OF if anchor is None else anchor
+    end = anchor.date() - timedelta(days=1) - (timedelta(days=30) if old else timedelta())
     rows = []
     # Exact left boundary is stored and audited but must not enter the distribution.
-    dates = [years_before(AS_OF.date(), 5), *(end - timedelta(days=count - 1 - i) for i in range(count))]
+    dates = [years_before(anchor.date(), 5), *(end - timedelta(days=count - 1 - i) for i in range(count))]
     for index, day in enumerate(dates):
         pe = D(-1) if index == len(dates) - 1 and negative else D(index % 17 + 1)
         row = await repository.insert(listing_id=listing.id, trade_date=day,
             open=D(10), high=D(10), low=D(10), close=D(10), volume=D(100),
             pe_ttm=pe, pb_mrq=D("1.2"), provider="baostock",
-            captured_at=AS_OF - timedelta(days=1), is_backfill=False)
+            captured_at=anchor - timedelta(days=1), is_backfill=False)
         rows.append(row)
     # A later recapture and future-known backfill must never enter a strict historical view.
     await repository.insert(listing_id=listing.id, trade_date=end,
         open=D(10), high=D(10), low=D(10), close=D(10), volume=D(100),
         pe_ttm=D(9999), pb_mrq=D(9999), provider="baostock",
-        captured_at=AS_OF + timedelta(seconds=1), is_backfill=True)
+        captured_at=anchor + timedelta(seconds=1), is_backfill=True)
     return listing, rows

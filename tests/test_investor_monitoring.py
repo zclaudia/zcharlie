@@ -369,7 +369,11 @@ async def test_native_capture_receipt_old_snapshot_unknown_cannot_extend(publica
     if fresh:
         async with session_scope() as session:
             value = Decimal("10")
-            await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=date(2026, 10, 9), open=value, high=value, low=value, close=value, volume=Decimal(100), provider="baostock", captured_at=datetime(2026, 10, 9, 9, tzinfo=UTC))
+            # A same-value capture acquired after the published cutoff: its
+            # trade date settles one session behind the run-time anchor, so it
+            # is the latest visible snapshot on any date.
+            anchor = candidate.recommendation.as_of
+            await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=anchor.date(), open=value, high=value, low=value, close=value, volume=Decimal(100), provider="baostock", captured_at=anchor + timedelta(hours=12))
     async with session_scope() as session:
         receipt = await MonitoringService(session, selected).manual(candidate.thesis.case_ref.id, uuid4(), expected_revision=2)
     def respond(messages, info):

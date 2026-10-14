@@ -511,8 +511,11 @@ async def test_no_new_price_automatic_invalidation_without_triggered_condition(p
     candidate, _, evidence, old_bar = await market_candidate()
     result = await publish(candidate)
     assert result.published
+    # A new settled close after the premise close, still relative to the
+    # run-time anchor so it stays visible and current on any date.
+    latest = candidate.recommendation.as_of.date()
     async with session_scope() as session:
-        await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=date(2026, 10, 10), open=Decimal(11), high=Decimal(11), low=Decimal(11), close=Decimal(11), volume=Decimal(100), pe_ttm=Decimal(5), pb_mrq=Decimal(1), provider="baostock", captured_at=datetime(2026, 10, 10, 9, tzinfo=UTC))
+        await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=latest, open=Decimal(11), high=Decimal(11), low=Decimal(11), close=Decimal(11), volume=Decimal(100), pe_ttm=Decimal(5), pb_mrq=Decimal(1), provider="baostock", captured_at=datetime.combine(latest, datetime.min.time(), tzinfo=UTC) + timedelta(hours=9))
     async with session_scope() as session:
         assert (await PublicationService(session).get_recommendation(result.recommendation_ref, at=datetime.now(UTC))).status == "published"
 
@@ -588,10 +591,12 @@ async def test_extension_retains_old_historical_price_requires_explicit_current_
     preparation = await prepared(candidate)
     result = await publish(candidate, preparation)
     # Just before validity expiry, the historical source price is older than
-    # the freshness policy; a current same-value capture is available.
+    # the freshness policy; a current same-value capture is available. The
+    # review instant derives from the run-time anchor, and the capture settles
+    # one session before it, so it stays visible and fresh on any date.
     at = candidate.recommendation.valid_until - timedelta(hours=1)
     async with session_scope() as session:
-        row = await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=date(2026, 10, 14), open=Decimal(10), high=Decimal(10), low=Decimal(10), close=Decimal(10), volume=Decimal(100), pe_ttm=Decimal(5), pb_mrq=Decimal(1), provider="baostock", captured_at=at - timedelta(days=1))
+        row = await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=at.date() - timedelta(days=1), open=Decimal(10), high=Decimal(10), low=Decimal(10), close=Decimal(10), volume=Decimal(100), pe_ttm=Decimal(5), pb_mrq=Decimal(1), provider="baostock", captured_at=at - timedelta(days=1))
         record = materialize(row, "close")
         session.add(SavedEvidence(id=str(record.id), revision=1, owner_id="local_owner", payload=record.model_dump(mode="json")))
         latest_ref = ObjectRef(kind="evidence", id=record.id, revision=1)
