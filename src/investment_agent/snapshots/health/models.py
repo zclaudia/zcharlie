@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.providers.circuit import CircuitStatus
 from investment_agent.scheduler.trading_calendar import TradingCalendar
 from investment_agent.snapshots.jobs import (
@@ -42,7 +43,8 @@ COLLECTION_KINDS: tuple[str, ...] = (
     DIVIDEND_SNAPSHOT,
     EARNINGS_EVENT,
 )
-TERMINAL_STATUSES = frozenset({"success", "partial", "failed"})
+TERMINAL_STATUSES = TERMINAL_RUN_STATUSES
+"""Re-export of the single home (see :mod:`investment_agent.domain.pipeline_status`)."""
 COUNTED_STATUSES = ("success", "partial")
 MISSING_KINDS: tuple[str, ...] = ("failed", "stopped", "quota", "no_data", "pending")
 

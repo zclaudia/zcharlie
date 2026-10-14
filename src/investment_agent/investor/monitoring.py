@@ -21,7 +21,7 @@ from investment_agent.agent.execution import (
     live_policy,
 )
 from investment_agent.agent.research import registrations
-from investment_agent.agent.tasks import TaskService
+from investment_agent.agent.tasks import TERMINAL, TaskService
 from investment_agent.config import Settings
 from investment_agent.investor.common import ObjectRef, utc_timestamp
 from investment_agent.investor.contracts import Case, MonitorSpec, ReviewEvent
@@ -39,7 +39,6 @@ from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, Mark
 from investment_agent.storage.models.publication import PublicationOutbox
 
 ACTIVE = ("pending", "running", "blocked")
-TERMINAL = {"succeeded", "partial", "failed", "cancelled"}
 
 
 class MonitoringService:

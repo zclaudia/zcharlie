@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.domain.protocols import Notifier, RenderedContent
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.snapshots.collect import PROVIDER_STOP_REASON, QUOTA_STOP_REASON
@@ -58,7 +59,7 @@ def _completeness(run: PipelineRun) -> dict[str, Any] | None:
 def notification_level(run: PipelineRun, *, threshold: float) -> Level | None:
     """Decide whether (and how loudly) a terminal snapshot run is reported."""
 
-    if run.kind not in SNAPSHOT_KINDS or run.status not in {"success", "partial", "failed"}:
+    if run.kind not in SNAPSHOT_KINDS or run.status not in TERMINAL_RUN_STATUSES:
         return None
     if run.status == "failed":
         return "action_required"

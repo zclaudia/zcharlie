@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.domain.protocols import RenderedContent
 from investment_agent.notifiers.file_notifier import FileNotifier
 from investment_agent.storage.database import session_scope
@@ -20,7 +21,7 @@ _MAX_LISTED = 30
 
 
 def verification_notification_level(run: PipelineRun) -> str | None:
-    if run.kind != IFIND_VERIFY or run.status not in {"success", "partial", "failed"}:
+    if run.kind != IFIND_VERIFY or run.status not in TERMINAL_RUN_STATUSES:
         return None
     metadata = run.metadata_json or {}
     if run.status == "failed" or metadata.get("stop_reason") == "quota":

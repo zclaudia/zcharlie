@@ -80,6 +80,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.config import Settings
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.evidence.contracts import Period
 from investment_agent.industry_peers import batch as peer_batch
 from investment_agent.industry_peers.artifacts import (
@@ -142,7 +143,8 @@ RESPONSES_INDEX_FILENAME = "index.json"
 INDEX_FILENAME = "index.json"
 
 ACTIVE_STATUSES: tuple[str, ...] = ("queued", "running")
-TERMINAL_STATUSES: tuple[str, ...] = ("success", "partial", "failed")
+TERMINAL_STATUSES: frozenset[str] = TERMINAL_RUN_STATUSES
+"""Run-terminal statuses; same domain leaf as the pipeline-run repository."""
 
 CollectMode = Literal["full", "refresh"]
 

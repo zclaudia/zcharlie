@@ -7,6 +7,7 @@ from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 from sqlalchemy import select
 
+from investment_agent.agent.tasks import COMPLETED_TASK_STATUSES
 from investment_agent.api.auth import verify_api_key_or_session
 from investment_agent.api.deps import session_service
 from investment_agent.investor.foundations import InvestorError
@@ -39,7 +40,7 @@ async def list_methods(svc: Service, offset: Annotated[int, Query(ge=0)] = 0, li
     reviews = (await svc.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == svc.owner, MethodArtifact.kind == "process_review").order_by(MethodArtifact.payload["created_at"].as_string().desc(), MethodArtifact.id.desc()).offset(offset).limit(limit + 1))).all()
     versions = (await svc.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == svc.owner, MethodArtifact.kind == "version").order_by(MethodArtifact.payload["created_at"].as_string().desc(), MethodArtifact.id.desc()).offset(offset).limit(limit + 1))).all()
     heads = (await svc.session.scalars(select(MethodHead).where(MethodHead.owner_id == svc.owner).order_by(MethodHead.revision.desc(), MethodHead.listing_id.desc()).offset(offset).limit(limit + 1))).all()
-    tasks = (await svc.session.scalars(select(AgentTask).where(AgentTask.owner_id == svc.owner, AgentTask.status.in_(("succeeded", "partial", "failed"))).order_by(AgentTask.payload["created_at"].as_string().desc(), AgentTask.id.desc()).offset(offset).limit(limit + 1))).all()
+    tasks = (await svc.session.scalars(select(AgentTask).where(AgentTask.owner_id == svc.owner, AgentTask.status.in_(COMPLETED_TASK_STATUSES)).order_by(AgentTask.payload["created_at"].as_string().desc(), AgentTask.id.desc()).offset(offset).limit(limit + 1))).all()
     more = any(len(rows) > limit for rows in (proposals, reviews, versions, heads, tasks))
     proposals, reviews, versions, heads, tasks = proposals[:limit], reviews[:limit], versions[:limit], heads[:limit], tasks[:limit]
     listing_ids = {p.payload["request"]["listing_ref"]["id"] for p in proposals} | {h.listing_id for h in heads}

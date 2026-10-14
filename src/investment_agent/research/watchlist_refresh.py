@@ -13,6 +13,7 @@ from hashlib import sha256
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.models.user_domain import WatchlistItem
@@ -32,7 +33,6 @@ def research_source_mode(provider: str | None) -> str | None:
     """Watchlist ``provider`` -> research source mode; ``None`` when unsupported."""
 
     return _SUPPORTED_PROVIDERS.get((provider or "auto").strip().lower())
-_TERMINAL_STATUSES = {"success", "partial", "failed"}
 
 
 @dataclass(frozen=True)
@@ -113,7 +113,7 @@ async def enqueue_watchlist_refresh(
                     listing_id=item.listing_id,
                     request_json=payload,
                 )
-                if run.status in _TERMINAL_STATUSES:
+                if run.status in TERMINAL_RUN_STATUSES:
                     await watchlist_repository.mark_refresh_finished(
                         item.listing_id,
                         run_id=run.id,
@@ -224,7 +224,7 @@ async def enqueue_single_stock_research(
         listing_id=listing_id,
         request_json=payload,
     )
-    if run.status not in _TERMINAL_STATUSES:
+    if run.status not in TERMINAL_RUN_STATUSES:
         await WatchlistRepository(session).mark_refresh_queued(
             listing_id, run_id=run.id, status=run.status
         )

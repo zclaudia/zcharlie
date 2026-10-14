@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 import structlog
 from sqlalchemy import select
 
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.base import Repository
@@ -106,7 +107,7 @@ class WatchlistRepository(Repository[WatchlistItem]):
         refreshed_at: datetime,
         error: str | None,
     ) -> bool:
-        if status not in {"success", "partial", "failed"}:
+        if status not in TERMINAL_RUN_STATUSES:
             raise ValueError(f"Unsupported terminal refresh status: {status}")
         item = await self.get_by_listing(listing_id)
         if item is None:

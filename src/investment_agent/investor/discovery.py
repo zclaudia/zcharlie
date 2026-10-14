@@ -27,7 +27,7 @@ from investment_agent.agent.execution import (
 from investment_agent.agent.executor import RunSpecification, TaskDisposition
 from investment_agent.agent.research import registrations
 from investment_agent.agent.runtime import RunOutcome
-from investment_agent.agent.tasks import TaskClaim, TaskService
+from investment_agent.agent.tasks import TERMINAL, TaskClaim, TaskService
 from investment_agent.config import Settings
 from investment_agent.investor.common import Contract, ObjectRef, Text, utc_timestamp
 from investment_agent.investor.contracts import Case, Mandate
@@ -39,8 +39,6 @@ from investment_agent.storage.models.discovery import DiscoveryBatch, DiscoveryC
 from investment_agent.storage.models.investor import InvestorCase
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot
 from investment_agent.storage.models.rules import ScreenResultRecord
-
-TERMINAL = {"succeeded", "partial", "failed", "cancelled"}
 
 
 def digest(value: Any) -> str:

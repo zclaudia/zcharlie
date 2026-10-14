@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.candidates.lifecycle import CandidatePolicy
 from investment_agent.config import Settings
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.industry_peers.contracts import PeerContextBinding
 from investment_agent.jobs.base import (
     BaseJobHandler,
@@ -580,7 +581,7 @@ async def _as_coroutine[T](work: Callable[[], Awaitable[T]]) -> T:
 async def _sync_watchlist_refresh(*, run_id: int, listing_id: int) -> None:
     async with session_scope() as session:
         run = await PipelineRunRepository(session).get(run_id)
-        if run is None or run.status not in {"success", "partial", "failed"}:
+        if run is None or run.status not in TERMINAL_RUN_STATUSES:
             return
         await WatchlistRepository(session).mark_refresh_finished(
             listing_id,

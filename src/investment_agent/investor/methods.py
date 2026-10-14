@@ -13,7 +13,7 @@ from pydantic import Field, StrictBool, model_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.agent.tasks import fingerprint
+from investment_agent.agent.tasks import COMPLETED_TASK_STATUSES, fingerprint
 from investment_agent.investor.common import Contract, ObjectRef, Text
 from investment_agent.investor.foundations import InvestorError, storage_conflicts
 from investment_agent.investor.publication import FIXED_METHOD
@@ -207,7 +207,7 @@ class MethodService:
     async def process_review(self, task_id: UUID) -> dict[str, Any]:
         await self.reserve()
         task = await self.session.get(AgentTask, str(task_id))
-        if not task or task.owner_id != self.owner or task.status not in {"succeeded", "partial", "failed"}:
+        if not task or task.owner_id != self.owner or task.status not in COMPLETED_TASK_STATUSES:
             raise InvestorError("invalid_reference", "过程复盘需要真实已完成任务")
         rows = (await self.session.scalars(select(ToolAction).where(ToolAction.task_id == str(task_id), ToolAction.state == "committed"))).all()
         actions = [{"operation_id": r.operation_id, "parameters": r.parameters, "result": r.result} for r in rows]

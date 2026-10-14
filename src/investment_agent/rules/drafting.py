@@ -66,6 +66,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.config import Settings
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.domain.protocols import LLMClient
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.registry import FactorRegistry, FactorValue
@@ -1003,7 +1004,7 @@ class RuleDraftHandler(BaseJobHandler):
         try:
             async with session_scope() as session:
                 run = await PipelineRunRepository(session).get(job.run_id)
-                if run is None or run.status not in {"success", "partial", "failed"}:
+                if run is None or run.status not in TERMINAL_RUN_STATUSES:
                     return  # retry scheduled or lease lost: not terminal for us
                 status, error = run.status, run.error_summary
                 metadata = dict(run.metadata_json or {})

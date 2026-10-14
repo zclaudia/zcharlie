@@ -10,7 +10,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
@@ -34,6 +34,7 @@ from investment_agent.agent.job import SessionFactory
 from investment_agent.agent.model import AgentModelConfig
 from investment_agent.agent.runtime import AgentRunError, PrivateHistory, RunOutcome, run_agent
 from investment_agent.agent.tasks import (
+    CompletedTaskStatus,
     ReconciliationRequiredError,
     TaskBoundaryError,
     TaskClaim,
@@ -77,7 +78,7 @@ class UnpublishedDraft(BaseModel):
 class TaskDisposition:
     """Certified business stop, distinct from successful native model output."""
 
-    terminal: Literal["succeeded", "partial", "failed"]
+    terminal: CompletedTaskStatus
     reason: StopReason
 
 

@@ -12,10 +12,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.orm.util import identity_key
 
+from investment_agent.domain.pipeline_status import TERMINAL_RUN_STATUSES
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.repositories.base import Repository
 
-TERMINAL_STATUSES = frozenset({"success", "partial", "failed"})
+TERMINAL_STATUSES = TERMINAL_RUN_STATUSES
+"""Public name kept for existing callers; the single home is the domain leaf."""
 
 
 class IdempotencyPayloadMismatchError(ValueError):

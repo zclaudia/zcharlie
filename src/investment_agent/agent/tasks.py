@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
@@ -35,6 +35,21 @@ from investment_agent.storage.repositories.pipeline_run import (
 )
 
 TERMINAL = {"succeeded", "partial", "failed", "cancelled"}
+"""Task statuses that can no longer change: every final outcome, cancellation
+included (the task was stopped, so it produced nothing usable)."""
+
+type CompletedTaskStatus = Literal["succeeded", "partial", "failed"]
+"""A task outcome that produced a result; ``cancelled`` is deliberately absent.
+
+The runtime form is :data:`COMPLETED_TASK_STATUSES`. The ``Literal`` annotation
+sites (:class:`~investment_agent.agent.executor.TaskDisposition` and
+:meth:`TaskService.checkpoint` below) need literal text to satisfy the type
+system, so this alias is their single home instead of a repeated literal.
+"""
+
+COMPLETED_TASK_STATUSES: frozenset[str] = frozenset(get_args(CompletedTaskStatus.__value__))
+"""Runtime form of :data:`CompletedTaskStatus` for membership / SQL ``in_()``."""
+
 EVENT: TypeAdapter[TaskEvent] = TypeAdapter(TaskEvent)
 
 
@@ -497,7 +512,7 @@ class TaskService:
         checkpoint: dict[str, Any],
         waiting: WaitRequirement | None = None,
         wait_status: Literal["waiting_data", "waiting_user"] = "waiting_data",
-        terminal: Literal["succeeded", "partial", "failed"] | None = None,
+        terminal: CompletedTaskStatus | None = None,
         stop_reason: StopReason | None = None,
         artifact_refs: tuple[ObjectRef, ...] | None = None,
     ) -> Task:
