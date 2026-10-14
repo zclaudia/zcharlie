@@ -4,35 +4,11 @@ import pytest
 import pytest_asyncio
 
 from investment_agent.storage.database import init_engine, session_scope
-from investment_agent.storage.models import (  # noqa: F401
-    agent,
-    analysis,
-    app_settings,
-    candidates,
-    disclosure,
-    discovery,
-    earnings_events,
-    evidence,
-    investor,
-    market_data,
-    monitoring,
-    ops,
-    peer,
-    pit_snapshot,
-    portfolio,
-    portfolio_plan,
-    provider_call,
-    publication,
-    reference,
-    relationship,
-    research_material,
-    rules,
-    stock_directory,
-    user_domain,
-    verification,
-    zones,
-)
-from investment_agent.storage.models.base import Base
+
+# Importing Base from the models package also imports every model module, so
+# ``Base.metadata`` carries all tables (single registration list; see the
+# package docstring).
+from investment_agent.storage.models import Base
 
 
 @pytest.fixture(autouse=True, scope="session")

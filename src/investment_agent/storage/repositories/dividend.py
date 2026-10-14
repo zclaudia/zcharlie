@@ -14,11 +14,12 @@ never changes, so results for a past ``as_of`` are reproducible.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
 
+from investment_agent.domain.time import as_utc
 from investment_agent.storage.models.pit_snapshot import (
     DividendCoverage,
     DividendCoverageCheck,
@@ -38,12 +39,6 @@ EVENT_PAYLOAD_COLUMNS: tuple[str, ...] = (
     "stock_per_share",
     "reserve_per_share",
 )
-
-
-def _stored_utc(value: datetime) -> datetime:
-    """Stored timestamps are UTC; SQLite returns them naive."""
-
-    return value.astimezone(UTC) if value.tzinfo else value.replace(tzinfo=UTC)
 
 
 def _same(stored: object, new: object) -> bool:
@@ -224,9 +219,9 @@ class DividendRepository(Repository[DividendEventSnapshot]):
             )
             .group_by(DividendCoverageCheck.year)
         )
-        known = {year: _stored_utc(at) for year, at in (await self.session.execute(stmt)).all()}
+        known = {year: as_utc(at) for year, at in (await self.session.execute(stmt)).all()}
         return {
-            year: known.get(year) or _stored_utc(row.first_checked_at)
+            year: known.get(year) or as_utc(row.first_checked_at)
             for year, row in sorted(coverage.items())
         }
 

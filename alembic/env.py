@@ -9,36 +9,9 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# 触发所有 model 模块导入（让 Base.metadata 收集到所有表）
-from investment_agent.storage.models import (  # noqa: F401
-    agent,
-    analysis,
-    app_settings,
-    candidates,
-    disclosure,
-    discovery,
-    earnings_events,
-    evidence,
-    investor,
-    market_data,
-    monitoring,
-    ops,
-    peer,
-    pit_snapshot,
-    portfolio,
-    portfolio_plan,
-    provider_call,
-    publication,
-    reference,
-    relationship,
-    research_material,
-    rules,
-    stock_directory,
-    user_domain,
-    verification,
-    zones,
-)
-from investment_agent.storage.models.base import Base
+# 从 models 包导入 Base 即触发所有 model 模块导入（唯一注册清单，见该包 docstring），
+# 让 Base.metadata 收集到所有表。
+from investment_agent.storage.models import Base
 
 config = context.config
 if config.config_file_name is not None:
