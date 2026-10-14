@@ -22,10 +22,10 @@ import {formatDateTime} from './format.js';
   // 请求统一走共享客户端 api.js（超时中断、CSRF/幂等头、401/403/409/422 分类、
   // 非 JSON 响应兜底都由它负责）；本页只保留 /investor/methods 前缀。
   const BASE = '/investor/methods';
-  // api.js 的文案与本页旧实现不同（401、对象 detail、断网/超时）；在调用点翻译回
-  // 用户一直看到的措辞，status 分类（409/422 分支、401 提示）保持不变。
+  // api.js 的文案与本页旧实现不同（401、对象 detail、超时/断网）；在调用点翻译回
+  // 用户一直看到的措辞：中断（超时）由 ApiError.aborted 区分，status 分类保持不变。
   function legacyMessage(error) {
-    if (error.status === 0) return '网络请求失败或超时';
+    if (error.status === 0) return error.aborted ? '请求超时' : '网络请求失败或超时';
     if (error.status === 401) return '登录已过期';
     const detail = error.detail;
     if (detail && typeof detail === 'object' && detail.message) return String(detail.message);

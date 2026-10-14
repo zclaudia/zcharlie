@@ -810,6 +810,119 @@ console.log(JSON.stringify({{
     assert out["pendingAfterSuccess"] is False
 
 
+# ---- B7：methods 页区分超时中断与真实网络失败 --------------------------------
+
+
+def test_methods_distinguishes_timeout_abort_from_plain_network_failure():
+    """B7：api.js 在 catch 里用 controller.signal.aborted 给 ApiError 附加
+    aborted 标记（status/message/retryable/detail 均不变）；methods 页据此把
+    超时中断翻译回旧文案『请求超时』，真实断网仍是『网络请求失败或超时』。
+    同时断言 api.js 的 error.message 两种情况都保持通用文案——其它页面直接
+    渲染 message，不能回退。"""
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+        return
+    api_uri = (WEB_STATIC / "api.js").resolve().as_uri()
+    methods_uri = (WEB_STATIC / "methods.js").resolve().as_uri()
+    script = FAKE_DOM + f"""
+const API_URI = {json.dumps(api_uri)};
+const METHODS_URI = {json.dumps(methods_uri)};
+// 只截获 api.js 的 15s 超时定时器（>=1s）：测试里手动触发以模拟真实超时中断；
+// 测试自身的短延时定时器照常走真实实现。
+const realSetTimeout = globalThis.setTimeout;
+const realClearTimeout = globalThis.clearTimeout;
+const longTimers = [];
+globalThis.setTimeout = (fn, ms, ...rest) => {{
+  if (typeof ms === 'number' && ms >= 1000) {{ const handle = {{fn, cleared: false}}; longTimers.push(handle); return handle; }}
+  return realSetTimeout(fn, ms, ...rest);
+}};
+globalThis.clearTimeout = (handle) => {{
+  if (handle && typeof handle === 'object' && 'cleared' in handle) {{ handle.cleared = true; return; }}
+  realClearTimeout(handle);
+}};
+const fireTimeout = () => {{
+  const handle = longTimers.filter((t) => !t.cleared).at(-1);
+  if (!handle) throw new Error('no pending long timer');
+  handle.fn();  // 15s 到期 → controller.abort()
+}};
+const sleep = (ms) => new Promise((resolve) => realSetTimeout(resolve, ms));
+// 'timeout'：fetch 挂起，等 controller 中断后按 abort 语义拒绝（AbortError）；
+// 'network'：直接抛 TypeError（真实断网）；其余返回 JSON。
+let mode = 'ok';
+globalThis.fetch = (path, init = {{}}) => {{
+  if (mode === 'timeout') {{
+    return new Promise((_resolve, reject) => {{
+      init.signal.addEventListener('abort', () => reject(Object.assign(new Error('This operation was aborted'), {{name: 'AbortError'}})));
+    }});
+  }}
+  if (mode === 'network') return Promise.reject(new TypeError('network down'));
+  const boot = {{proposals: [], heads: [], reviews: [], completed_tasks: [{{id: 'task-1', status: 'succeeded'}}],
+    versions: [], baseline_method: {{}}, scope_names: {{}}, page: {{truncated: false, next_offset: null}}}};
+  return Promise.resolve({{status: 200, ok: true, headers: {{get: () => 'application/json'}},
+    json: async () => boot, text: async () => JSON.stringify(boot)}});
+}};
+const snapshot = (error) => ({{name: error.name, status: error.status, retryable: error.retryable,
+  aborted: error.aborted, message: error.message, isApiError: error instanceof api.ApiError}});
+
+// 1) api.js 直接驱动：真实网络失败 vs 15s 定时器中断，message 必须都不变。
+const api = await import(API_URI);
+mode = 'network';
+const apiNetwork = snapshot(await api.get('/probe').then(() => null, (error) => error));
+mode = 'timeout';
+const pendingTimeout = api.get('/probe').then(() => null, (error) => error);
+fireTimeout();
+const apiTimeout = snapshot(await pendingTimeout);
+
+// 2) 真实 methods.js：点击评审按钮走 POST，同一页面下对比两种失败文案。
+const hosts = new Map();
+const host = (id) => {{ if (!hosts.has(id)) hosts.set(id, new FakeNode('#' + id)); return hosts.get(id); }};
+globalThis.document = {{
+  createElement: (tag) => new FakeNode(tag),
+  getElementById: (id) => host('#' + id),
+  querySelector: () => null,
+  querySelectorAll: () => [],
+}};
+const store = new Map();
+globalThis.sessionStorage = {{
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+}};
+mode = 'ok';
+await import(METHODS_URI);
+await sleep(20);
+host('#method-task').value = 'task-1';
+mode = 'timeout';
+host('#method-review').onclick();
+await sleep(20);
+fireTimeout();
+await sleep(20);
+const methodsTimeout = host('#method-status').textContent;
+mode = 'network';
+host('#method-review').onclick();
+await sleep(30);
+const methodsNetwork = host('#method-status').textContent;
+console.log(JSON.stringify({{apiTimeout, apiNetwork, methodsTimeout, methodsNetwork}}));
+"""
+    out = _run_node(script)
+    # api.js 自身：两种情况的 message/status/retryable 完全保持不变（其它页面直接渲染）。
+    for case in ("apiTimeout", "apiNetwork"):
+        probe = out[case]
+        assert probe["isApiError"] is True
+        assert probe["name"] == "ApiError"
+        assert probe["status"] == 0
+        assert probe["retryable"] is True
+        assert probe["message"] == "网络请求失败或超时，请重试。"
+    # 只有 abort（controller 被中断）才带上 aborted 标记。
+    assert out["apiNetwork"]["aborted"] is False
+    assert out["apiTimeout"]["aborted"] is True
+    # methods 页文案：超时中断→旧文案『请求超时』；真实断网→『网络请求失败或超时』。
+    assert out["methodsTimeout"] == "请求超时。原操作内容已保留，可重试。"
+    assert out["methodsNetwork"] == "网络请求失败或超时。原操作内容已保留，可重试。"
+
+
 def test_methods_guards_empty_evaluations_and_async_handlers():
     source = (WEB_STATIC / "methods.js").read_text(encoding="utf-8")
     # async onclick 包 catch 并更新 status()（详情/历史/加载三条路径，失败不静默）。

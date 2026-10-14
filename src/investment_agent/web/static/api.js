@@ -8,13 +8,16 @@ const TIMEOUT_MS = 15000;
 export const FETCH_MARKER_HEADERS = Object.freeze({ "X-Requested-With": "fetch" });
 
 export class ApiError extends Error {
-  constructor(status, message, { retryable = false, detail = null } = {}) {
+  constructor(status, message, { retryable = false, detail = null, aborted = false } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.retryable = retryable;
     // 原始 detail（如 422 规则校验的 issues 列表），供页面逐条展示。
     this.detail = detail;
+    // 请求是否被 AbortController 中断（15s 超时或调用方 signal）。仅作附加
+    // 分类信息，status/message/retryable/detail 对页面可见的语义不变。
+    this.aborted = aborted;
   }
 }
 
@@ -62,7 +65,12 @@ async function request(path, { method = "GET", body, idempotency = false, signal
       signal: controller.signal,
     });
   } catch (error) {
-    throw new ApiError(0, "网络请求失败或超时，请重试。", { retryable: true });
+    // aborted 标记超时/中断（controller.abort()），供调用方区分真实网络失败；
+    // message 与 status 对所有页面保持不变。
+    throw new ApiError(0, "网络请求失败或超时，请重试。", {
+      retryable: true,
+      aborted: controller.signal.aborted,
+    });
   } finally {
     clearTimeout(timer);
   }
