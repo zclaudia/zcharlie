@@ -25,6 +25,19 @@ inside seven handlers.  Therefore the AST walk visits the whole tree (``ast.Node
 over every node, not just ``tree.body``); ``scope`` is reported as ``module`` or
 ``function`` in failure messages so the reader knows which one it is.
 
+Annotation-only imports do NOT count.  Imports under ``if TYPE_CHECKING:`` never execute, so
+they add no runtime dependency and cannot create an import-time cycle.  Counting them pushed
+callers toward weaker annotations or gratuitous runtime imports: ``cli/runtime.py`` needs
+``JobHandler`` / ``ResearchWorker`` / ``PipelineRun`` in signatures only, and importing those
+for real would couple the CLI to the job and research packages at runtime for no benefit.
+The walk therefore skips the body of a ``if TYPE_CHECKING:`` block (whatever the branch is
+called: ``TYPE_CHECKING``, ``typing.TYPE_CHECKING``) and keeps counting everything else --
+module-level *and* function-level imports, whose runtime effect is real.
+
+There is a deliberate asymmetry here: a function-level import *is* a runtime dependency (it
+executes when the call does), which is why lazy imports are counted even though they hide
+cycles from coarse tools.  A ``TYPE_CHECKING`` import is not.
+
 ``domain`` is a sanctioned shared leaf.  A parallel work package adds
 ``investment_agent/domain/time.py`` (already imported by storage, api, mcp_server,
 snapshots, verification, industry_peers, ...), so edges whose *destination* package is
@@ -144,9 +157,13 @@ class _ImportCollector(ast.NodeVisitor):
         # refined to ``X.y`` when ``y`` really is a module (not just an attribute).
         self.known = known
         self.function_depth = 0
+        self.type_checking_depth = 0
         self.sites: list[ImportSite] = []
 
     def _note(self, node: ast.Import | ast.ImportFrom, dotted: str) -> None:
+        if self.type_checking_depth:
+            # ``if TYPE_CHECKING:`` never runs, so this is not a runtime dependency.
+            return
         self.sites.append(
             ImportSite(
                 source_module=self.module,
@@ -168,6 +185,31 @@ class _ImportCollector(ast.NodeVisitor):
 
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self._visit_function(node)
+
+    @staticmethod
+    def _is_type_checking(test: ast.expr) -> bool:
+        """True for ``TYPE_CHECKING`` / ``typing.TYPE_CHECKING`` (also inside a ``BoolOp``)."""
+
+        if isinstance(test, ast.Name):
+            return test.id == "TYPE_CHECKING"
+        if isinstance(test, ast.Attribute):
+            return test.attr == "TYPE_CHECKING"
+        if isinstance(test, ast.BoolOp):
+            return any(_ImportCollector._is_type_checking(operand) for operand in test.values)
+        return False
+
+    def visit_If(self, node: ast.If) -> None:
+        if self._is_type_checking(node.test):
+            self.type_checking_depth += 1
+            try:
+                for statement in node.body:
+                    self.visit(statement)
+            finally:
+                self.type_checking_depth -= 1
+            for statement in node.orelse:
+                self.visit(statement)
+            return
+        self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:

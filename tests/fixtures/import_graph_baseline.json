@@ -70,7 +70,6 @@
     "gateway -> config",
     "gateway -> settings",
     "gateway -> storage",
-    "industry_peers -> cli",
     "industry_peers -> config",
     "industry_peers -> evidence",
     "industry_peers -> investor",
