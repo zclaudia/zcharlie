@@ -1193,7 +1193,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
-    { name = "zclaudia-gateway", specifier = "==0.3.0" },
+    { name = "zclaudia-gateway", specifier = "==0.4.0" },
 ]
 provides-extras = ["dev", "original-parsing"]
 
@@ -3424,12 +3424,12 @@ wheels = [
 
 [[package]]
 name = "zclaudia-gateway"
-version = "0.3.0"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/49/0e/249423f2bac1b0b8960c7c9c33e97a1dfcfa13547c6ba0f069483cc32025/zclaudia_gateway-0.3.0.tar.gz", hash = "sha256:f32a29baef8735b43996d993dbda4cdb5e8af0c8764d53eeda3ce47e5978b54c", size = 43523, upload-time = "2026-10-12T08:56:50.309Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/79/f9212ce4cf444e1b6ef3527379611ae24432ce1da0db349534b385a0a8e2/zclaudia_gateway-0.4.0.tar.gz", hash = "sha256:50d4fc7f0293552fbbf7560821e40c2ed7b67ca401221d12dd11b67d07826c84", size = 48145, upload-time = "2026-10-13T16:20:05.03Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/c7/f36f5bdfec06691688c2fd127e3550f5d9f2281c9d608b6363ef305893a6/zclaudia_gateway-0.3.0-py3-none-any.whl", hash = "sha256:008b32002a526f37a6d075c0580610300e1cf877fc056f292614c58f844e4260", size = 26088, upload-time = "2026-10-12T08:56:49.053Z" },
+    { url = "https://files.pythonhosted.org/packages/37/a5/914b94aa6ea29a817f529ab8c44987760de9480654772c3de4f82a364c24/zclaudia_gateway-0.4.0-py3-none-any.whl", hash = "sha256:230ba80439c9adf9e4b02368bff533a73f82a09ea126c0fca6af9a856826515a", size = 28226, upload-time = "2026-10-13T16:20:03.719Z" },
 ]

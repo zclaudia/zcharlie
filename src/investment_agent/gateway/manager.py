@@ -24,7 +24,15 @@ log = structlog.get_logger(__name__)
 DEVICE_ID = "zcharlie"
 DEFAULT_POLL_SECONDS = 10.0
 
-GatewayState = Literal["disabled", "incomplete", "connecting", "connected", "error"]
+GatewayState = Literal[
+    "disabled", "incomplete", "connecting", "connected", "replaced", "error"
+]
+
+# SDK >= 0.4.0: a newer connection with the same backend credential takes over
+# (newest wins) and the displaced backend stops for good instead of fighting
+# back. The manager stands down with it — auto-rebuilding here would make the
+# two instances swap forever — and recovery is an explicit settings change.
+REPLACED_ERROR_CODE = "REPLACED"
 
 
 @dataclass(frozen=True)
@@ -120,6 +128,14 @@ class GatewayManager:
                 epoch=backend.epoch,
             )
         last_error = backend.last_error
+        if backend.state == "closed" and last_error is not None and last_error.code == REPLACED_ERROR_CODE:
+            return GatewayStatus(
+                "replaced",
+                detail="已被同一注册凭证的新连接取代，本实例停止重连；停用并重新启用手机网关即可接管",
+                url=self._config.url,
+                namespace=self._config.namespace,
+                backend_id=backend.backend_id,
+            )
         detail = (
             f"{last_error.code}: {last_error.message}"
             if last_error is not None

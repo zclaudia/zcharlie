@@ -146,6 +146,40 @@ async def test_unreachable_gateway_reports_connecting_with_last_error(
     assert status.detail.startswith("AUTH_FAILED:")
 
 
+async def test_a_replaced_backend_reports_replaced_and_stays_down(
+    manager: GatewayManager, gateway: FakeGateway
+) -> None:
+    # SDK >= 0.4.0: a newer connection with the same credential takes over and
+    # the displaced backend stops for good; the manager stands down with it
+    # instead of fighting the new connection back.
+    await save(connection_settings(gateway))
+    await manager.reconcile()
+    assert manager._backend is not None
+    await asyncio.wait_for(manager._backend.wait_connected(), 5)
+    await gateway.replace_control()
+    await asyncio.sleep(0.05)
+    status = manager.status()
+    assert status.state == "replaced"
+    assert status.detail is not None
+    assert "停止重连" in status.detail
+
+    # The poll loop re-runs reconcile on unchanged settings without reconnecting.
+    await manager.reconcile()
+    assert len(gateway.hellos) == 1
+    assert manager.status().state == "replaced"
+
+    # A settings change takes the identity back: disable, then enable again.
+    await save({"gateway_enabled": False})
+    await manager.reconcile()
+    assert manager.status().state == "disabled"
+    await manager.reconcile()  # a further poll keeps the link off
+    await save({"gateway_enabled": True})
+    await manager.reconcile()
+    assert manager._backend is not None
+    await asyncio.wait_for(manager._backend.wait_connected(), 5)
+    assert len(gateway.hellos) == 2
+
+
 async def test_a_failing_settings_read_is_reported_and_retried(
     manager: GatewayManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -195,6 +195,7 @@ console.log(JSON.stringify({
   off: show({state: "disabled"}),
   incomplete: show({state: "incomplete", detail: "未填写：注册凭证"}),
   connecting: show({state: "connecting", detail: "AUTH_FAILED"}),
+  replaced: show({state: "replaced", detail: "已被同一注册凭证的新连接取代，本实例停止重连"}),
   up: show({state: "connected", backend_id: "abc", namespace: "ns"}),
 }));
 """
@@ -202,4 +203,8 @@ console.log(JSON.stringify({
     assert out["off"] == {"text": "未启用", "ok": False, "neutral": True}
     assert out["incomplete"]["text"] == "已启用但配置不完整：未填写：注册凭证"
     assert out["connecting"] == {"text": "连接中：AUTH_FAILED", "ok": False}
+    assert out["replaced"] == {
+        "text": "服务身份被接管：已被同一注册凭证的新连接取代，本实例停止重连",
+        "ok": False,
+    }
     assert out["up"] == {"text": "已连接，服务 ID abc（命名空间 ns）", "ok": True}

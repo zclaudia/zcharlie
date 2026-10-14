@@ -204,8 +204,10 @@ class Settings(BaseSettings):
     gateway_url: str = ""
     gateway_credential: str = Field(default="", repr=False)
     gateway_namespace: str = Field(default="", max_length=64)
-    # Stable per installation: with the namespace it fixes the backend's identity
-    # on the gateway (a changed id is a different backend to the phone).
+    # Sent as descriptive identity: a credential-bound gateway (SDK >= 0.4.0,
+    # ADR-0009) takes the backend identity from the credential, so this field
+    # is display only there; a legacy (unbound) credential still derives the
+    # identity from it and it must stay stable per installation.
     gateway_instance_id: str = Field(default="zcharlie", min_length=1, max_length=64)
 
     @field_validator("gateway_url")

@@ -23,7 +23,7 @@ router = APIRouter(
 
 
 class GatewayStatusOut(BaseModel):
-    state: Literal["disabled", "incomplete", "connecting", "connected", "error"]
+    state: Literal["disabled", "incomplete", "connecting", "connected", "replaced", "error"]
     detail: str | None = None
     url: str | None = None
     namespace: str | None = None

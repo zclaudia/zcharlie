@@ -459,7 +459,7 @@ SPECS: tuple[SettingSpec, ...] = (
     ),
     _env(
         "gateway_instance_id", "gateway", "实例标识",
-        "与命名空间一起决定本服务在网关上的固定身份；更换后手机需要重新发现。", "live",
+        "新版网关的服务身份由注册凭证决定，此字段仅作展示；旧式未绑定凭证才用它与命名空间一起固定身份，须保持稳定。", "live",
     ),
     _yaml(
         "schedule.watchlist.cron", "观察池刷新 cron", _CRON_HELP,

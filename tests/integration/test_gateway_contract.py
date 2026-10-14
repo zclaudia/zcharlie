@@ -180,6 +180,48 @@ async def test_proxy_streams_and_propagates_client_abort(
     assert body == "data: one\n\ndata: two\n\n"
 
 
+async def test_a_replaced_backend_stands_down(gateway_url: str) -> None:
+    """ADR-0009/0010 (SDK >= 0.4.0): two connections sharing one backend
+    credential land on the same backend id, the newest wins, and the displaced
+    one stops for good instead of reconnecting."""
+
+    credential = await _issue(gateway_url, "backend")
+    app = _app()
+
+    def make_backend() -> GatewayBackend:
+        backend = GatewayBackend(url=gateway_url, credential=credential, namespace="contract")
+        backend.serve_http_stream(asgi_http_handler(app, extra_headers={"X-API-Key": "k"}))
+        return backend
+
+    first = make_backend()
+    await first.start()
+    try:
+        await asyncio.wait_for(first.wait_connected(), 10)
+        second = make_backend()
+        await second.start()
+        try:
+            await asyncio.wait_for(second.wait_connected(), 10)
+            await asyncio.wait_for(first.wait_closed(), 10)
+            assert first.backend_id == second.backend_id  # identity comes from the credential
+            assert first.state == "closed"
+            assert first.last_error is not None
+            assert first.last_error.code == "REPLACED"
+            await asyncio.sleep(1)  # long enough that a fighting backend would have re-helloed
+            assert first.state == "closed"
+
+            # The taking-over backend still serves the phone.
+            device = {"Authorization": f"Bearer {await _issue(gateway_url, 'device')}"}
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{gateway_url}/api/proxy/{second.backend_id}/ping", headers=device
+                )
+            assert response.status_code == 200
+        finally:
+            await second.close()
+    finally:
+        await first.close()
+
+
 async def test_topic_retain_reaches_a_late_device_subscriber(
     gateway_url: str, proxied: tuple[str, dict[str, str], FastAPI, GatewayBackend]
 ) -> None:

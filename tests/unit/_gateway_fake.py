@@ -99,6 +99,12 @@ class FakeGateway:
         assert self.control is not None
         await self.control.close()
 
+    async def replace_control(self) -> None:
+        """Close the control socket with the "backend replaced" code (SDK 0.4.0)."""
+
+        assert self.control is not None
+        await self.control.close(4001, "replaced by a newer connection")
+
     async def next_message(self, message_type: str) -> dict[str, Any]:
         while True:
             message = await asyncio.wait_for(self.messages.get(), 5)

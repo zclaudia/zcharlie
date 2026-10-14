@@ -199,14 +199,7 @@ function updateSavebar() {
 }
 
 function refreshDirtyLabels() {
-  for (const node of document.querySelectorAll("[data-dirty-for]")) {
-    const section = state.sections.find((item) => item.id === node.getAttribute("data-dirty-for"));
-    const count = section ? sectionDirtyCount(section) : 0;
-    const badge = node.querySelector("[data-dirty-count]");
-    if (!badge) continue;
-    badge.hidden = count === 0;
-    badge.textContent = count ? String(count) : "";
-  }
+  renderNav();
 }
 
 function showIssues(key, messages) {
@@ -332,7 +325,7 @@ function secretControl(item, encryptionReady) {
   wrap.appendChild(status);
   let clearButton = null;
   if (item.configured || item.env_fallback) {
-    clearButton = el("button", { type: "button", class: "danger small-button" }, "清除");
+    clearButton = el("button", { type: "button", class: "btn btn-sm btn-danger-ghost danger small-button" }, "清除");
     clearButton.addEventListener("click", () => {
       if (state.cleared.has(item.key)) {
         state.cleared.delete(item.key);
@@ -379,20 +372,23 @@ function metaLine(item) {
 }
 
 function settingRow(item, encryptionReady) {
-  const root = el("div", { class: "setting", "data-key": item.key });
-  const head = el("div", { class: "setting-head" });
-  head.appendChild(el("label", { for: inputId(item.key), class: "setting-label" }, item.label));
-  root.appendChild(head);
-  root.appendChild(el("p", { class: "setting-help faint" }, item.help));
-
   const control = controlFor(item, encryptionReady);
-  root.appendChild(control.root);
+  const isSwitch = control.control && control.control.type === "checkbox";
+  const root = el("div", { class: `setting set-row${isSwitch ? " is-switch" : ""}`, "data-key": item.key });
+  const left = el("div", { class: "set-k" });
+  left.appendChild(el("label", { for: inputId(item.key), class: "setting-label" }, item.label));
+  left.appendChild(el("p", { class: "setting-help faint" }, item.help));
   const meta = el("p", { class: "setting-meta faint" }, metaLine(item));
-  root.appendChild(meta);
+  left.appendChild(meta);
   const warning = el("p", { class: "setting-warning faint", hidden: "hidden" });
-  root.appendChild(warning);
+  left.appendChild(warning);
+  root.appendChild(left);
+
+  const right = el("div", { class: "set-c" });
+  right.appendChild(control.root);
   const issues = el("ul", { class: "issue-list setting-issues issues" });
-  root.appendChild(issues);
+  right.appendChild(issues);
+  root.appendChild(right);
 
   const isCron = item.input && item.input.type === "cron";
   const refreshCronHints = () => {
@@ -454,8 +450,8 @@ function connectionTest(group) {
             api_key: state.cleared.has("ifind_proxy_api_key") ? null : state.edits.get("ifind_proxy_api_key") || null,
           }),
         };
-  const row = el("div", { class: "settings-test" });
-  const button = el("button", { type: "button", class: "secondary" }, "测试连接");
+  const row = el("div", { class: "settings-test settings-foot" });
+  const button = el("button", { type: "button", class: "btn btn-sm secondary" }, "测试连接");
   const result = el("span", { class: "settings-test-result", "aria-live": "polite" });
   button.addEventListener("click", () => {
     result.className = "settings-test-result";
@@ -486,6 +482,8 @@ export function gatewayStatusText(status) {
       return { text: `已连接，服务 ID ${status.backend_id}（命名空间 ${status.namespace}）`, ok: true };
     case "connecting":
       return { text: `连接中${detail}`, ok: false };
+    case "replaced":
+      return { text: `服务身份被接管${detail}`, ok: false };
     case "incomplete":
       return { text: `已启用但配置不完整${detail}`, ok: false };
     case "error":
@@ -961,13 +959,13 @@ function shownValue(item) {
 }
 
 function jumpRow({ title, detail, value, dirty, href, onClick }) {
-  const node = href ? el("a", { class: "settings-jump", href }) : el("button", { type: "button", class: "settings-jump" });
-  const text = el("span", { class: "settings-jump-text" });
-  text.appendChild(el("span", { class: "settings-jump-title" }, title));
-  if (detail) text.appendChild(el("span", { class: "settings-jump-detail" }, detail));
+  const node = href ? el("a", { class: "list-row settings-jump", href }) : el("button", { type: "button", class: "list-row settings-jump" });
+  const text = el("span", { class: "list-row-main settings-jump-text" });
+  text.appendChild(el("b", { class: "settings-jump-title" }, title));
+  if (detail) text.appendChild(el("small", { class: "settings-jump-detail" }, detail));
   node.appendChild(text);
-  if (value) node.appendChild(el("span", { class: dirty ? "settings-jump-value is-dirty" : "settings-jump-value" }, value));
-  node.appendChild(el("span", { class: "settings-jump-chevron", "aria-hidden": "true" }));
+  if (value) node.appendChild(el("span", { class: dirty ? "list-row-end settings-jump-value is-dirty" : "list-row-end settings-jump-value" }, value));
+  node.appendChild(el("span", { class: "list-row-chev settings-jump-chevron", "aria-hidden": "true" }));
   if (onClick) node.addEventListener("click", onClick);
   return node;
 }
@@ -988,7 +986,7 @@ function renderDirectory() {
     const sections = state.sections.filter((section) => section.navGroup === name);
     if (!sections.length) continue;
     root.appendChild(el("h2", { class: "settings-kicker" }, name));
-    const list = el("div", { class: "settings-jump-list" });
+    const list = el("div", { class: "list-group settings-jump-list" });
     for (const section of sections) {
       const home = sectionHome(section, readNow, (key) => state.items.get(key));
       const dirty = sectionDirtyCount(section);
@@ -1006,14 +1004,17 @@ function renderDirectory() {
 }
 
 function renderTopicList(section) {
-  const root = el("div", { class: "settings-browse" });
+  const root = el("div", { class: "settings-topic settings-topic-list" });
   if (section.id === "agent") root.id = "agent-settings";
+  root.appendChild(cardHead(section.title, section.blurb));
+  const body = el("div", { class: "settings-card-body" });
+  root.appendChild(body);
   if (section.id === "schedule") {
-    for (const notice of groupNotices({ key: "schedule", items: [] })) root.appendChild(notice);
+    for (const notice of groupNotices({ key: "schedule", items: [] })) body.appendChild(notice);
   }
   for (const group of groupedTopics(section)) {
-    if (group.label) root.appendChild(el("h2", { class: "settings-kicker" }, group.label));
-    const list = el("div", { class: "settings-jump-list" });
+    if (group.label) body.appendChild(el("h2", { class: "settings-kicker" }, group.label));
+    const list = el("div", { class: "list-group settings-jump-list" });
     for (const topic of group.topics) {
       const dirty = topicDirtyKeys(topic).length;
       list.appendChild(jumpRow({
@@ -1023,15 +1024,15 @@ function renderTopicList(section) {
         onClick: () => openPlace(section.id, topic.id),
       }));
     }
-    root.appendChild(list);
+    body.appendChild(list);
   }
   if (section.links && section.links.length) {
-    root.appendChild(el("h2", { class: "settings-kicker" }, "相关"));
-    const list = el("div", { class: "settings-jump-list" });
+    body.appendChild(el("h2", { class: "settings-kicker" }, "相关"));
+    const list = el("div", { class: "list-group settings-jump-list" });
     for (const link of section.links) {
       list.appendChild(jumpRow({ title: link.title, detail: link.detail, href: link.href }));
     }
-    root.appendChild(list);
+    body.appendChild(list);
   }
   return root;
 }
@@ -1044,42 +1045,57 @@ function topicNoticeKey(topic) {
   return null;
 }
 
+// 右侧详情卡的头部（桌面显示；手机上标题已在页头，隐藏）：标题 + 生效方式徽章 + 说明。
+function cardHead(title, hint, applyKey) {
+  const head = el("div", { class: "card-head card-head--rule settings-card-head" });
+  head.appendChild(el("h2", {}, title));
+  if (applyKey) head.appendChild(el("span", { class: `badge ${applyKey === "live" ? "accent" : "ai"} dot` }, label(APPLY_LABELS, applyKey)));
+  if (hint) head.appendChild(el("span", { class: "faint settings-card-hint" }, hint));
+  return head;
+}
+
 function renderTopic(topic, section) {
   const root = el("div", { class: "settings-topic" });
   if (section.id === "agent") root.id = "agent-settings";
-  if (topic.kind === "history" || topic.kind === "bootstrap") {
-    if (topic.note) root.appendChild(el("p", { class: "faint" }, topic.note));
-    return root;
-  }
   const keys = topicKeys(topic);
   const applies = new Set(keys.map((key) => state.items.get(key)?.apply).filter(Boolean));
-  if (applies.size === 1) {
-    const apply = [...applies][0];
-    root.appendChild(el("p", { class: "settings-apply" }, `生效：${label(APPLY_LABELS, apply)}。${label(APPLY_TITLES, apply)}`));
+  const apply = applies.size === 1 ? [...applies][0] : null;
+  root.appendChild(cardHead(topic.title, apply ? label(APPLY_TITLES, apply) : "", apply));
+  const body = el("div", { class: "settings-card-body" });
+  root.appendChild(body);
+  if (topic.kind === "history" || topic.kind === "bootstrap") {
+    if (topic.note) body.appendChild(el("p", { class: "faint" }, topic.note));
+    return root;
   }
-  if (topic.note) root.appendChild(el("p", { class: "faint" }, topic.note));
+  if (apply) {
+    body.appendChild(el("p", { class: "settings-apply" }, `生效：${label(APPLY_LABELS, apply)}。${label(APPLY_TITLES, apply)}`));
+  }
+  if (topic.note) body.appendChild(el("p", { class: "faint settings-note" }, topic.note));
   const noticeKey = topicNoticeKey(topic);
   if (noticeKey) {
     const items = keys.map((key) => state.items.get(key)).filter(Boolean);
-    for (const notice of groupNotices({ key: noticeKey, items })) root.appendChild(notice);
+    for (const notice of groupNotices({ key: noticeKey, items })) body.appendChild(notice);
   }
-  if (topic.id === "llm" || topic.id === "ifind") root.appendChild(connectionTest(topic.id));
   const encryptionReady = Boolean(state.data && state.data.encryption_key_configured);
   const fieldBlocks = topic.blocks && topic.blocks.length ? topic.blocks : [{ keys }];
   for (const block of fieldBlocks) {
-    if (block.title) root.appendChild(el("h2", { class: "settings-kicker" }, block.title));
+    if (block.title) body.appendChild(el("h2", { class: "settings-kicker" }, block.title));
     const list = el("div", { class: "setting-list settings-fields" });
     for (const key of block.keys || []) {
       const item = state.items.get(key);
       if (item) list.appendChild(settingRow(item, encryptionReady));
     }
-    root.appendChild(list);
+    body.appendChild(list);
   }
+  if (topic.id === "llm" || topic.id === "ifind") root.appendChild(connectionTest(topic.id));
   return root;
 }
 
 function renderHits() {
-  const root = el("div", { class: "settings-browse" });
+  const root = el("div", { class: "settings-topic settings-hits" });
+  root.appendChild(cardHead("搜索结果", "点一条进入那个主题"));
+  const body = el("div", { class: "settings-card-body" });
+  root.appendChild(body);
   const needle = state.query.trim().toLowerCase();
   const hits = [];
   const seen = new Set();
@@ -1100,10 +1116,10 @@ function renderHits() {
     if (hits.length >= 24) break;
   }
   if (!hits.length) {
-    root.appendChild(el("p", { class: "notice" }, "没有这项配置。"));
+    body.appendChild(el("p", { class: "notice" }, "没有这项配置。"));
     return root;
   }
-  const list = el("div", { class: "settings-jump-list" });
+  const list = el("div", { class: "list-group settings-jump-list" });
   for (const hit of hits) {
     list.appendChild(jumpRow({
       title: hit.item.label,
@@ -1112,44 +1128,66 @@ function renderHits() {
       onClick: () => openPlace(hit.section.id, hit.topic.id),
     }));
   }
-  root.appendChild(list);
+  body.appendChild(list);
   return root;
 }
 
+// 桌面左侧：按 研究 / 数据 / 运行 / 系统 分组的目录，每项带一行说明和当前值摘要。
 function renderNav() {
   const nav = document.getElementById("settings-nav");
   if (!nav) return;
   clear(nav);
-  nav.appendChild(el("div", { class: "settings-kicker" }, "目录"));
-  for (const section of state.sections) {
-    const button = el("button", { type: "button", class: "settings-nav-item", "data-dirty-for": section.id });
-    if (section.id === state.place.sectionId && !state.query.trim()) button.classList.add("is-current");
-    const labelNode = el("span", {}, section.title);
-    labelNode.style.flex = "1";
-    button.appendChild(labelNode);
-    button.appendChild(el("span", { class: "settings-nav-dirty", "data-dirty-count": section.id, hidden: "hidden" }));
-    button.addEventListener("click", () => openPlace(section.id, section.topics.length === 1 ? section.topics[0].id : null));
-    nav.appendChild(button);
+  const searching = state.query.trim().length > 0;
+  for (const name of NAV_GROUPS) {
+    const sections = state.sections.filter((section) => section.navGroup === name);
+    if (!sections.length) continue;
+    nav.appendChild(el("div", { class: "settings-group-label" }, name));
+    for (const section of sections) {
+      const home = sectionHome(section, readNow, (key) => state.items.get(key));
+      const dirty = sectionDirtyCount(section);
+      const button = el("button", { type: "button", class: "settings-nav-item", "data-dirty-for": section.id });
+      if (section.id === state.place.sectionId && !searching) {
+        button.classList.add("is-current");
+        button.setAttribute("aria-current", "true");
+      }
+      const text = el("span", { class: "settings-nav-text" });
+      text.appendChild(el("b", {}, section.title));
+      text.appendChild(el("small", {}, home.detail));
+      button.appendChild(text);
+      button.appendChild(el("span", { class: dirty ? "settings-nav-value settings-nav-dirty" : "settings-nav-value" }, dirty ? `未保存 ${dirty} 项` : home.value));
+      button.addEventListener("click", () => openPlace(section.id, section.topics.length === 1 ? section.topics[0].id : null));
+      nav.appendChild(button);
+    }
   }
+}
+
+const DESKTOP_QUERY = "(min-width: 56rem)";
+
+function isDesktop() {
+  return Boolean(globalThis.matchMedia && globalThis.matchMedia(DESKTOP_QUERY).matches);
 }
 
 function syncSearchVisibility(searching) {
   const wrap = document.getElementById("settings-search-wrap");
   if (!wrap) return;
-  const desktop = globalThis.matchMedia("(min-width: 48rem)").matches;
-  wrap.hidden = !(desktop || searching || !state.place.sectionId);
+  wrap.hidden = !(isDesktop() || searching || !state.place.sectionId);
 }
 
 function updateChrome(searching) {
   const { section, topic } = placeTopic();
+  const desktop = isDesktop();
   const title = document.getElementById("settings-title");
   const lead = document.getElementById("settings-lead");
   const back = document.getElementById("settings-back");
-  if (title) title.textContent = searching ? "搜索" : topic ? topic.title : section ? section.title : "设置";
+  if (title) {
+    title.textContent = searching ? "搜索" : desktop ? "设置" : topic ? topic.title : section ? section.title : "设置";
+    // 手机顶栏已写“设置”；进入子页后用页头标题显示当前主题。
+    title.classList.toggle("keep", !desktop && (searching || Boolean(section)));
+  }
   if (lead) {
     const text = searching
       ? "点一条进入那个主题。"
-      : !section
+      : desktop || !section
         ? "改完不用重启。生效方式写在每个主题里，只写一次。"
         : !topic
           ? section.blurb || ""
@@ -1158,8 +1196,9 @@ function updateChrome(searching) {
     lead.hidden = !text;
   }
   if (back) {
-    back.hidden = !section || searching;
-    back.textContent = topic && section && section.topics.length > 1 ? section.title : "设置";
+    const multi = Boolean(topic && section && section.topics.length > 1);
+    back.hidden = searching || !section || (desktop && !multi);
+    back.textContent = multi ? section.title : "设置";
   }
   syncSearchVisibility(searching);
 }
@@ -1173,6 +1212,10 @@ function paint() {
   state.nodes = new Map();
   const hash = globalThis.location ? globalThis.location.hash : "";
   state.place = resolveSettingsPlace(hash, state.sections);
+  // 桌面是两栏：没有指定目录时默认落在第一项，右侧不留空。
+  if (!state.place.sectionId && isDesktop() && state.sections.length) {
+    state.place = resolveSettingsPlace(`#${state.sections[0].id}`, state.sections);
+  }
   const searching = state.query.trim().length > 0;
   updateChrome(searching);
   renderNav();
@@ -1405,7 +1448,10 @@ export function bootSettings() {
     setSaveResult([], "");
     paint();
   });
-  globalThis.addEventListener("resize", () => syncSearchVisibility(state.query.trim().length > 0));
+  if (globalThis.matchMedia) {
+    const query = globalThis.matchMedia(DESKTOP_QUERY);
+    if (query.addEventListener) query.addEventListener("change", () => paint());
+  }
   globalThis.addEventListener("beforeunload", (event) => {
     if (dirtyCount()) event.preventDefault();
   });
