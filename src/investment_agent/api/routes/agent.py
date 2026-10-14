@@ -98,6 +98,12 @@ def expired_detail(exc: EventCursorExpiredError) -> dict[str, object]:
 
 
 async def service(base: BaseSettings) -> AsyncIterator[ConversationService]:
+    """Deliberately not ``deps.session_service``: this dependency takes an
+    injected settings sub-dependency and maps its own, disjoint exception
+    taxonomy.  ``ConversationService`` never raises ``InvestorError``, so adding
+    the canonical InvestorError status table here would turn today's 500 into a
+    4xx - an API contract change.  Keep the two maps separate."""
+
     try:
         async with session_scope() as session:
             yield ConversationService(session, base)

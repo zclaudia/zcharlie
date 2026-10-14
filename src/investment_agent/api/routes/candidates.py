@@ -101,6 +101,10 @@ screen_runs_router = APIRouter(prefix="/screen-runs", tags=["screen-runs"], depe
 
 
 def _raise_http(exc: Exception) -> NoReturn:
+    """Candidate-domain errors -> HTTP.  Must be called from an ``except`` block:
+    the final bare ``raise`` re-raises the active exception untouched, while
+    ``raise exc`` would splice this helper's frame into its traceback."""
+
     if isinstance(exc, RuleValidationError):
         raise HTTPException(
             status_code=422,
@@ -116,7 +120,7 @@ def _raise_http(exc: Exception) -> NoReturn:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if isinstance(exc, CandidateError):
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    raise exc
+    raise
 
 
 # --------------------------------------------------------------------------- #

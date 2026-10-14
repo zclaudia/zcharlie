@@ -1,6 +1,5 @@
 """Authenticated AG04 foundation endpoints; application service owns semantics."""
 
-from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -9,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import AwareDatetime
 
 from investment_agent.api.auth import get_bootstrap_settings, verify_api_key_or_session
+from investment_agent.api.deps import session_service
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import EvidenceRecord, ToolResult
 from investment_agent.investor.common import Contract, Mutation, ObjectRef
@@ -34,21 +34,7 @@ router = APIRouter(
 )
 
 
-async def service() -> AsyncIterator[InvestorService]:
-    try:
-        async with session_scope() as session:
-            yield InvestorService(session)
-    except InvestorError as exc:
-        code = (
-            404
-            if exc.detail.code == "not_found"
-            else 422
-            if exc.detail.code == "invalid_reference"
-            else 409
-        )
-        raise HTTPException(status_code=code, detail=exc.detail.model_dump(mode="json")) from exc
-
-
+service = session_service(InvestorService)
 Service = Annotated[InvestorService, Depends(service, scope="function")]
 
 

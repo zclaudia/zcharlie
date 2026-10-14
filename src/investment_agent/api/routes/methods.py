@@ -1,5 +1,4 @@
 """Authenticated user method proposals; no model approval or paid shadow route."""
-from collections.abc import AsyncIterator
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -9,6 +8,7 @@ from pydantic_ai.models.function import FunctionModel
 from sqlalchemy import select
 
 from investment_agent.api.auth import verify_api_key_or_session
+from investment_agent.api.deps import session_service
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.investor.methods import (
     CreateProposal,
@@ -29,15 +29,7 @@ from investment_agent.storage.models.reference import Company, Listing
 router = APIRouter(prefix="/investor/methods", tags=["methods"], dependencies=[Depends(verify_api_key_or_session)])
 
 
-async def service() -> AsyncIterator[MethodService]:
-    try:
-        async with session_scope() as session:
-            yield MethodService(session)
-    except InvestorError as exc:
-        code = 404 if exc.detail.code == "not_found" else 422 if exc.detail.code == "invalid_reference" else 409
-        raise HTTPException(code, detail=exc.detail.model_dump(mode="json")) from exc
-
-
+service = session_service(MethodService)
 Service = Annotated[MethodService, Depends(service, scope="function")]
 
 
@@ -117,6 +109,9 @@ async def offline_shadow(body: ShadowRequest) -> dict[str, Any]:
     try:
         return await run_offline_shadow(session_scope, body, FunctionModel(_frozen_progress_replay))
     except InvestorError as exc:
+        # Deliberately NOT the canonical deps table: this endpoint has always
+        # answered 422/409 only (a not_found replay id is a conflict-like 409
+        # here, not the canonical 404). Frozen wire contract; see deps.py.
         raise HTTPException(422 if exc.detail.code == "invalid_reference" else 409, detail=exc.detail.model_dump(mode="json")) from exc
 
 

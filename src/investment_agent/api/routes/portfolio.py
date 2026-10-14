@@ -1,5 +1,5 @@
 """Authenticated user fact endpoints; intentionally absent from model tools."""
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 
 from investment_agent.api.auth import get_settings, verify_api_key_or_session
+from investment_agent.api.deps import session_service
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import CalculationRecord
 from investment_agent.investor.common import ObjectRef
@@ -48,34 +49,17 @@ from investment_agent.settings.loader import (
     configured_calendar_path,
     resolved_calendar_path,
 )
-from investment_agent.storage.database import session_scope
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"], dependencies=[Depends(verify_api_key_or_session)])
 
 logger = structlog.get_logger(__name__)
 
 
-async def service() -> AsyncIterator[PortfolioService]:
-    try:
-        async with session_scope() as session:
-            yield PortfolioService(session, "local_owner")
-    except InvestorError as exc:
-        code = 403 if exc.detail.code == "writes_disabled" else 404 if exc.detail.code == "not_found" else 422 if exc.detail.code == "invalid_reference" else 409
-        raise HTTPException(code, detail=exc.detail.model_dump(mode="json")) from exc
-
-
+service = session_service(lambda session: PortfolioService(session, "local_owner"))
 Service = Annotated[PortfolioService, Depends(service, scope="function")]
 
 
-async def valuation_service() -> AsyncIterator[ValuationService]:
-    try:
-        async with session_scope() as session:
-            yield ValuationService(session, "local_owner")
-    except InvestorError as exc:
-        code = 403 if exc.detail.code == "writes_disabled" else 404 if exc.detail.code == "not_found" else 422 if exc.detail.code == "invalid_reference" else 409
-        raise HTTPException(code, detail=exc.detail.model_dump(mode="json")) from exc
-
-
+valuation_service = session_service(lambda session: ValuationService(session, "local_owner"))
 ValuationSvc = Annotated[ValuationService, Depends(valuation_service, scope="function")]
 
 
