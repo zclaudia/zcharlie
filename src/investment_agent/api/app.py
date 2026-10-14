@@ -20,6 +20,21 @@ from investment_agent.storage.repositories.stock_directory import StockDirectory
 
 log = structlog.get_logger(__name__)
 
+# The startup directory sync runs on a provider thread, and cancelling a task cannot
+# interrupt work already handed to that thread. Waiting for it unconditionally let an
+# in-flight sync hold up every shutdown: a reproduction that terminated the API while the
+# baostock fetch was running took 19s, against 0.26s once the sync had finished, which is
+# what made the clean-environment lifecycle smoke test flaky on its 15s budget. Give a
+# cooperative task a moment to unwind, then stop waiting.
+DIRECTORY_SHUTDOWN_GRACE_SECONDS = 2.0
+
+
+def _consume_result(task: asyncio.Task[None]) -> None:
+    """Retrieve a task's exception so a late failure does not warn as never-retrieved."""
+
+    with suppress(BaseException):
+        task.exception()
+
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -61,8 +76,17 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await gateway.stop()
             if directory_task is not None:
                 directory_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await directory_task
+                finished, still_running = await asyncio.wait(
+                    {directory_task}, timeout=DIRECTORY_SHUTDOWN_GRACE_SECONDS
+                )
+                for task in finished:
+                    _consume_result(task)
+                if still_running:
+                    # The sync is inside a provider call that cancellation cannot reach.
+                    # The process is going away; leaving it behind beats blocking the exit.
+                    log.warning("directory_initialization_abandoned_on_shutdown")
+                    for task in still_running:
+                        task.add_done_callback(_consume_result)
 
 
 # CSP for the /app UI: templates and app.js use no inline scripts or styles.
