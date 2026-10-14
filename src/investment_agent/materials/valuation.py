@@ -37,7 +37,7 @@ from typing import Final
 from investment_agent.investor.common import Quantity
 from investment_agent.investor.enums import CalculationStatus
 from investment_agent.materials.contracts import FactPeriod, FactRecord, PerShareBasis
-from investment_agent.materials.metrics import CompanyProfile, MetricResult
+from investment_agent.materials.metric_core import CompanyProfile, MetricResult, build_result
 
 #: The capability bits the read model must consult; all false by decision.
 CAPABILITY: Final[dict[str, bool]] = {
@@ -634,14 +634,14 @@ def _result(
     notes: tuple[str, ...] = (),
     inputs: tuple[str, ...] = (),
 ) -> MetricResult:
-    if not basis:
-        raise ValueError(f"metric {key} requires a non-empty basis")
-    return MetricResult(
-        key=key,
-        label=LABELS[key],
+    """Build one result through the shared builder, labelled from :data:`LABELS`."""
+
+    return build_result(
+        key,
+        LABELS[key],
         status=status,
-        value=value,
         basis=basis,
+        value=value,
         periods=periods,
         notes=notes,
         inputs=inputs,

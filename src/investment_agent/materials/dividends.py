@@ -72,7 +72,7 @@ from typing import Any, Final
 from investment_agent.investor.common import Quantity
 from investment_agent.investor.enums import CalculationStatus
 from investment_agent.materials.contracts import DatePrecision, FactPeriod, PeriodBasis
-from investment_agent.materials.metrics import MetricResult
+from investment_agent.materials.metric_core import MetricResult, build_result
 
 #: The two capabilities this module would back. Both stay off in the first delivery: the
 #: online dividend event source is not enabled and complete historical coverage is not
@@ -886,12 +886,14 @@ def _yield_result(
     notes: tuple[str, ...] = (),
     inputs: tuple[str, ...] = (),
 ) -> MetricResult:
-    return MetricResult(
-        key=DIVIDEND_YIELD_KEY,
-        label=DIVIDEND_YIELD_LABEL,
+    """Build a result for this module's one key through the shared builder."""
+
+    return build_result(
+        DIVIDEND_YIELD_KEY,
+        DIVIDEND_YIELD_LABEL,
         status=status,
-        value=value,
         basis=basis,
+        value=value,
         periods=periods,
         notes=notes,
         inputs=inputs,

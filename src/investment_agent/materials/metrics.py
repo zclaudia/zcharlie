@@ -52,7 +52,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation, localcontext
+from decimal import Decimal, localcontext
 from typing import Final
 
 from investment_agent.domain.security import ControlledIdentity, SecurityType
@@ -64,6 +64,26 @@ from investment_agent.materials.contracts import (
     FactPeriod,
     FactRecord,
     Verification,
+)
+from investment_agent.materials.metric_core import (
+    CompanyProfile as CompanyProfile,
+)
+from investment_agent.materials.metric_core import (
+    MetricResult as MetricResult,
+)
+from investment_agent.materials.metric_core import (
+    MetricSet as MetricSet,
+)
+from investment_agent.materials.metric_core import (
+    _amount,
+    _amount_quantity,
+    _ordered_years,
+    _period_label,
+    _ratio_quantity,
+    _signed,
+    _span_days,
+    _unique_periods,
+    build_result,
 )
 
 #: The six first-delivery metric keys, in display order.
@@ -129,58 +149,6 @@ _FISCAL_LENGTH_TOLERANCE_DAYS: Final[int] = 7
 #: One day of difference is a calendar-year artefact (leap years change the exclusive
 #: day span of 1 January to 31 December), so the 52/53-week note needs a wider spread.
 _LEAP_ROUNDING_TOLERANCE_DAYS: Final[int] = 1
-
-
-@dataclass(frozen=True)
-class CompanyProfile:
-    """A security's applicability profile, mapped from task 01's controlled identity.
-
-    ``is_bank`` and ``is_ads`` drive the applicability rules; neither is inferred from the
-    numbers. ``report_currency`` is the reporting currency of the statements (not the
-    quote currency of the listing), and every amount metric must be stated in it.
-    """
-
-    company_key: str
-    is_bank: bool
-    is_ads: bool
-    ads_ratio: str | None
-    report_currency: str
-    quote_currency: str
-    fiscal_year_end_note: str
-
-
-@dataclass(frozen=True)
-class MetricResult:
-    """One metric for one window: status, value (when computable), full basis text.
-
-    ``basis`` is never empty and always names numerator/denominator, the period, the
-    definition used and whether the amounts are in the original reporting currency.
-    ``notes`` carries comparability, non-applicability and loss-year explanations.
-    ``inputs`` lists ``"metric@period_end"`` for input-hash and traceability use.
-    """
-
-    key: str
-    label: str
-    status: CalculationStatus
-    value: Quantity | None
-    basis: str
-    periods: tuple[FactPeriod, ...]
-    notes: tuple[str, ...]
-    inputs: tuple[str, ...]
-
-    @property
-    def period_end(self) -> date | None:
-        """The end of the last period this result describes (``None`` without periods)."""
-
-        return self.periods[-1].end if self.periods else None
-
-
-@dataclass(frozen=True)
-class MetricSet:
-    """All metric results for one company plus the human-readable gap list."""
-
-    metrics: tuple[MetricResult, ...]
-    gaps: tuple[str, ...]
 
 
 def profile_from_identity(identity: ControlledIdentity, *, is_bank: bool) -> CompanyProfile:
@@ -1479,54 +1447,18 @@ def _result(
     notes: tuple[str, ...] = (),
     inputs: tuple[str, ...] = (),
 ) -> MetricResult:
-    if not basis:
-        raise ValueError(f"metric {key} requires a non-empty basis")
-    return MetricResult(
-        key=key,
-        label=METRIC_LABELS[key],
+    """Build one rule result; the display label comes from :data:`METRIC_LABELS`."""
+
+    return build_result(
+        key,
+        METRIC_LABELS[key],
         status=status,
-        value=value,
         basis=basis,
+        value=value,
         periods=periods,
         notes=notes,
         inputs=inputs,
     )
-
-
-def _ratio_quantity(value: Decimal) -> Quantity:
-    return Quantity(value=value, unit="ratio")
-
-
-def _amount_quantity(value: Decimal, currency: str) -> Quantity:
-    return Quantity(value=value, unit=currency, currency=currency)
-
-
-def _amount(fact: FactRecord) -> Decimal | None:
-    raw = fact.value.raw_value
-    if raw is None:
-        return None
-    try:
-        parsed = Decimal(raw)
-    except InvalidOperation:
-        return None
-    if not parsed.is_finite():
-        return None
-    return parsed * fact.value.scale
-
-
-def _ordered_years(fiscal_years: Sequence[FactPeriod]) -> tuple[FactPeriod, ...]:
-    unique: dict[date, FactPeriod] = {}
-    for period in fiscal_years:
-        unique.setdefault(period.end, period)
-    return tuple(unique[end] for end in sorted(unique))
-
-
-def _span_days(period: FactPeriod) -> int | None:
-    if period.days is not None:
-        return period.days
-    if period.start is None:
-        return None
-    return (period.end - period.start).days
 
 
 def _instant_before(period: FactPeriod) -> date | None:
@@ -1547,14 +1479,6 @@ def _previous_year(period: FactPeriod) -> FactPeriod | None:
     )
 
 
-def _period_label(period: FactPeriod | None) -> str:
-    if period is None:
-        return "the previous period"
-    if period.label:
-        return period.label
-    return period.end.isoformat()
-
-
 def _year_labels(periods: Sequence[FactPeriod]) -> str:
     return ", ".join(_period_label(period) for period in periods)
 
@@ -1565,18 +1489,3 @@ def _inputs(series: _Series, ends: Sequence[date]) -> tuple[str, ...]:
 
 def _input_ref(fact: FactRecord) -> str:
     return f"{fact.metric}@{fact.period.end.isoformat()}"
-
-
-def _unique_periods(*periods: FactPeriod) -> tuple[FactPeriod, ...]:
-    """The involved periods, deduplicated and ordered so the last one ends the latest."""
-
-    unique: dict[tuple[date | None, date, object, str | None], FactPeriod] = {}
-    for period in periods:
-        unique.setdefault((period.start, period.end, period.basis, period.label), period)
-    return tuple(
-        sorted(unique.values(), key=lambda period: (period.end, period.start or period.end))
-    )
-
-
-def _signed(value: Decimal) -> str:
-    return f"+{value}" if value >= 0 else str(value)
