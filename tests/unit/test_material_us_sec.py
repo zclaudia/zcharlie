@@ -52,24 +52,26 @@ from investment_agent.materials.us_sec import (
     DEFAULT_PERIOD_WINDOW,
     MIN_INTERVAL_SECONDS,
     MISSING_TAG_REASON,
-    PERIOD_NOT_FILED,
-    PERIOD_STATES,
     SHARD_URL,
     SOURCE_FACTS,
     SOURCE_FILINGS,
     SUBMISSIONS_URL,
     USER_AGENT,
-    FactRow,
-    FilingRef,
-    PeriodSelection,
     SecFactsAdapter,
-    UnreliableNotice,
-    _choose_taxonomy,
     _discover_periods,
     _period_references,
     _read_facts_document,
     _read_submissions_document,
     _target_periods,
+)
+from investment_agent.materials.us_sec_concepts import _choose_taxonomy
+from investment_agent.materials.us_sec_periods import (
+    PERIOD_NOT_FILED,
+    PERIOD_STATES,
+    FactRow,
+    FilingRef,
+    PeriodSelection,
+    UnreliableNotice,
     select_period_state,
 )
 from tests.unit._hk_us_support import pilot_identities

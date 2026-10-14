@@ -16,10 +16,11 @@ Decisions kept from the plan:
 
 * **No EdgarTools** (``pyproject.toml`` untouched, offline environment): version
   selection and eligibility belong to this application, so the bounded parsing
-  and the version state machine live here. :func:`select_period_state` pins the
-  behaviour for the LNC case; if a third-party parser is ever introduced, this
-  module's tests (``tests/unit/test_material_us_sec.py``) must be re-run against
-  the new library version — the plan requires exactly that.
+  lives here and the version state machine in ``us_sec_periods``.
+  ``us_sec_periods.select_period_state`` pins the behaviour for the LNC case; if
+  a third-party parser is ever introduced, this module's tests
+  (``tests/unit/test_material_us_sec.py``) must be re-run against the new
+  library version — the plan requires exactly that.
 * **Fact selection key** = ``CIK + taxonomy + concept + unit + start/end +
   accession + form``. ``duration`` (a ``start`` is present) and ``instant`` (no
   ``start``) rows never mix. ``frame`` is not read at all: it stays in the
@@ -55,6 +56,12 @@ Data discipline:
   (``drafts == ()``); incompleteness (a document or shard listed but not
   supplied) is reported in ``problems`` while drafts are still produced.
 
+Module layout: this module holds the adapter, the document parsing, the period
+discovery and the draft assembly. The concept table and the static selectors
+built on it live in ``us_sec_concepts.py``; the version state machine, its
+payload dataclasses and the shared reference/time helpers live in
+``us_sec_periods.py``. Both are imported here, one way only.
+
 Fixture provenance (``tests/fixtures/materials/us/**``): trimmed from the saved
 research responses under
 ``research/market-data-validation/evidence/{remaining-final-03/raw/us,validated-run-01/raw/sec}``
@@ -71,9 +78,9 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Literal
+from typing import Any
 
 from investment_agent.domain.security import ControlledIdentity, source_symbol
 from investment_agent.materials.contracts import (
@@ -82,7 +89,6 @@ from investment_agent.materials.contracts import (
     DatasetDraft,
     DatasetKind,
     DatePrecision,
-    EquityScope,
     FactPeriod,
     FactProvenance,
     FactRecord,
@@ -90,13 +96,35 @@ from investment_agent.materials.contracts import (
     FactValue,
     ParseResult,
     PeriodBasis,
-    PerShareBasis,
     RawPayload,
     ReportingScope,
     SubjectKind,
     UpstreamRequest,
     Verification,
     fact_to_payload,
+)
+from investment_agent.materials.us_sec_concepts import (
+    _TAXONOMY_WHITELIST,
+    CONCEPT_MAP,
+    ConceptBinding,
+    _bindings_for,
+    _choose_taxonomy,
+    _expected_unit,
+    _ExpectedUnit,
+    _metric_concepts,
+    _metrics_for,
+    _unit_matches,
+    _unit_skipped_counts,
+)
+from investment_agent.materials.us_sec_periods import (
+    UNRELIABLE_ITEM_CODE,
+    FactRow,
+    FilingRef,
+    PeriodSelection,
+    UnreliableNotice,
+    _reference_known_at,
+    _reference_order,
+    select_period_state,
 )
 
 SOURCE_FACTS = "sec.companyfacts.v1"
@@ -111,684 +139,19 @@ MIN_INTERVAL_SECONDS = 0.5
 
 FACTS_DOCUMENT = "companyfacts.json"
 SUBMISSIONS_DOCUMENT = "submissions.json"
-_ANNUAL_FORMS: tuple[str, ...] = ("10-K", "10-K/A", "20-F", "20-F/A")
-"""Forms that describe an issuer's fiscal year (amendments included)."""
 _ANNUAL_REPORT_FORMS: tuple[str, ...] = ("10-K", "20-F")
 """Non-amendment annual reports; only these define a fiscal-year period."""
-_TAXONOMY_WHITELIST: tuple[str, ...] = ("us-gaap", "ifrs-full")
 _ANNUAL_SPAN_RANGE = (330, 400)
-UNRELIABLE_ITEM_CODE = "4.02"
-"""SEC EDGAR 8-K item code for "non-reliance on previously issued statements"."""
 DEFAULT_PERIOD_WINDOW = 4
 """Most recent fiscal years produced when no ``periods`` are requested."""
 MISSING_TAG_REASON = "standard tag absent in CompanyFacts for this issuer"
 _SIGN_CONVENTION = "as_reported"
 
-PERIOD_STATES: tuple[str, ...] = (
-    "current",
-    "superseded",
-    "nonreliance_notice_known",
-    "conflict",
-)
-"""The four fixed version states of a period."""
-PERIOD_NOT_FILED = "not_yet_filed"
-"""Absence of any known version at a cutoff — not one of the four states."""
-
-_UnitKind = Literal["currency", "per_share", "shares"]
-
-
-@dataclass(frozen=True)
-class ConceptBinding:
-    """One taxonomy concept bound to a metric, with the caveats of that binding."""
-
-    taxonomy: str
-    concept: str
-    metric: str
-    unit_kind: _UnitKind
-    basis: PeriodBasis
-    equity_scope: EquityScope
-    per_share_basis: PerShareBasis
-    priority: int
-    note: str
-
-
-def _b(
-    taxonomy: str,
-    concept: str,
-    metric: str,
-    unit_kind: _UnitKind,
-    basis: PeriodBasis,
-    equity_scope: EquityScope,
-    per_share_basis: PerShareBasis = PerShareBasis.NA,
-    priority: int = 0,
-    note: str = "",
-) -> ConceptBinding:
-    return ConceptBinding(
-        taxonomy=taxonomy,
-        concept=concept,
-        metric=metric,
-        unit_kind=unit_kind,
-        basis=basis,
-        equity_scope=equity_scope,
-        per_share_basis=per_share_basis,
-        priority=priority,
-        note=note,
-    )
-
-
-#: Concept table. Every entry states the source concept's own definition; the
-#: metric is this application's name for it. Both travel on the fact
-#: (``source_field`` / ``source_label``), so a definition difference stays
-#: visible instead of being silently normalised away.
-CONCEPT_MAP: tuple[ConceptBinding, ...] = (
-    # --- us-gaap (10-K filers: AAPL, COST, JPM, XOM) -------------------------
-    _b(
-        "us-gaap",
-        "Revenues",
-        "revenue_operating",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note=(
-            "standard Revenues; for XOM this includes equity-method income and other "
-            "revenue (349,585M FY2024) and is explicitly not the pure sales line "
-            "(339,247M). The plan binds XOM's revenue_operating to this concept."
-        ),
-    ),
-    _b(
-        "us-gaap",
-        "RevenueFromContractWithCustomerExcludingAssessedTax",
-        "revenue_operating",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        priority=1,
-        note="contract revenue excluding assessed taxes; the current tag for AAPL/COST.",
-    ),
-    _b(
-        "us-gaap",
-        "NetIncomeLoss",
-        "net_profit",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.ALL_PARENT,
-        note=(
-            "standard GAAP net income as filed (JPM 58,471M FY2024). us-gaap defines it "
-            "as the portion attributable to the parent."
-        ),
-    ),
-    _b(
-        "us-gaap",
-        "ProfitLoss",
-        "profit_parent",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note=(
-            "bound to profit_parent exactly as the plan's table says. us-gaap:ProfitLoss "
-            "is the consolidated result *including* noncontrolling interests (XOM FY2024 "
-            "35,063M vs NetIncomeLoss 33,680M), so the fact keeps equity_scope=total and "
-            "never stands in for a parent-only number."
-        ),
-    ),
-    _b(
-        "us-gaap",
-        "StockholdersEquity",
-        "equity_parent",
-        "currency",
-        PeriodBasis.INSTANT,
-        EquityScope.ALL_PARENT,
-        note=(
-            "total stockholders' equity (all parent equity holders, preferred included); "
-            "never filled from or into equity_ordinary."
-        ),
-    ),
-    _b(
-        "us-gaap",
-        "Assets",
-        "total_assets",
-        "currency",
-        PeriodBasis.INSTANT,
-        EquityScope.TOTAL,
-        note="consolidated total assets, instant fact (no start).",
-    ),
-    _b(
-        "us-gaap",
-        "Liabilities",
-        "total_liabilities",
-        "currency",
-        PeriodBasis.INSTANT,
-        EquityScope.TOTAL,
-        note="consolidated total liabilities, instant fact (no start).",
-    ),
-    _b(
-        "us-gaap",
-        "NetCashProvidedByUsedInOperatingActivities",
-        "operating_cash_flow",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note="cash provided by (used in) operating activities, as reported (JPM is negative).",
-    ),
-    _b(
-        "us-gaap",
-        "PaymentsToAcquirePropertyPlantAndEquipment",
-        "capex_ppe",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note=(
-            "one cash expenditure component (PP&E purchases), not a universal capex "
-            "definition. JPM does not tag it, so the metric is reported as missing."
-        ),
-    ),
-    _b(
-        "us-gaap",
-        "EarningsPerShareBasic",
-        "eps_basic",
-        "per_share",
-        PeriodBasis.ANNUAL,
-        EquityScope.ORDINARY,
-        PerShareBasis.BASIC,
-        note="basic earnings per share of the issuer's common stock.",
-    ),
-    _b(
-        "us-gaap",
-        "EarningsPerShareDiluted",
-        "eps_diluted",
-        "per_share",
-        PeriodBasis.ANNUAL,
-        EquityScope.ORDINARY,
-        PerShareBasis.DILUTED,
-        note="diluted earnings per share of the issuer's common stock.",
-    ),
-    _b(
-        "us-gaap",
-        "WeightedAverageNumberOfSharesOutstandingBasic",
-        "shares_weighted_basic",
-        "shares",
-        PeriodBasis.ANNUAL,
-        EquityScope.ORDINARY,
-        note="weighted average basic shares outstanding over the fiscal year.",
-    ),
-    _b(
-        "us-gaap",
-        "CommonStockSharesOutstanding",
-        "shares_outstanding_end",
-        "shares",
-        PeriodBasis.INSTANT,
-        EquityScope.ORDINARY,
-        note="common shares outstanding at the balance-sheet date (instant fact).",
-    ),
-    # ``dei:EntityCommonStockSharesOutstanding`` is the plan's other candidate for
-    # shares_outstanding_end. Rule 7 keeps ``dei`` outside the whitelist, so its
-    # rows are counted in ``unmapped.taxonomies`` and never produce a fact; a test
-    # asserts exactly that, and the us-gaap tag above carries the metric.
-    # --- ifrs-full (20-F filer: TSM) -----------------------------------------
-    _b(
-        "ifrs-full",
-        "Revenue",
-        "revenue_operating",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note="IFRS revenue from contracts with customers, 20-F series only.",
-    ),
-    _b(
-        "ifrs-full",
-        "ProfitLoss",
-        "net_profit",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note="IFRS consolidated profit for the period, including non-controlling interests.",
-    ),
-    _b(
-        "ifrs-full",
-        "ProfitLossAttributableToOwnersOfParent",
-        "profit_parent",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.ALL_PARENT,
-        note=(
-            "the IFRS concept the plan's bare ``ProfitLoss`` entry means for a 20-F filer: "
-            "TSM FY2024 1,158,380.2M TWD as filed in the 20-F, never the local-report "
-            "figure and never stitched together with it."
-        ),
-    ),
-    _b(
-        "ifrs-full",
-        "EquityAttributableToOwnersOfParent",
-        "equity_parent",
-        "currency",
-        PeriodBasis.INSTANT,
-        EquityScope.ALL_PARENT,
-        note="equity attributable to owners of the parent; excludes non-controlling interests.",
-    ),
-    _b(
-        "ifrs-full",
-        "Assets",
-        "total_assets",
-        "currency",
-        PeriodBasis.INSTANT,
-        EquityScope.TOTAL,
-        note="consolidated total assets, instant fact.",
-    ),
-    _b(
-        "ifrs-full",
-        "Liabilities",
-        "total_liabilities",
-        "currency",
-        PeriodBasis.INSTANT,
-        EquityScope.TOTAL,
-        note="consolidated total liabilities, instant fact.",
-    ),
-    _b(
-        "ifrs-full",
-        "CashFlowsFromUsedInOperatingActivities",
-        "operating_cash_flow",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note="IFRS cash flows from (used in) operating activities.",
-    ),
-    _b(
-        "ifrs-full",
-        "PurchaseOfPropertyPlantAndEquipmentClassifiedAsInvestingActivities",
-        "capex_ppe",
-        "currency",
-        PeriodBasis.ANNUAL,
-        EquityScope.TOTAL,
-        note="cash purchases of PP&E classified as investing activities.",
-    ),
-    _b(
-        "ifrs-full",
-        "BasicEarningsLossPerShare",
-        "eps_basic",
-        "per_share",
-        PeriodBasis.ANNUAL,
-        EquityScope.ORDINARY,
-        PerShareBasis.BASIC,
-        note="basic earnings (loss) per share, TWD — no USD convenience value is read.",
-    ),
-    _b(
-        "ifrs-full",
-        "DilutedEarningsLossPerShare",
-        "eps_diluted",
-        "per_share",
-        PeriodBasis.ANNUAL,
-        EquityScope.ORDINARY,
-        PerShareBasis.DILUTED,
-        note="diluted earnings (loss) per share, TWD — no USD convenience value is read.",
-    ),
-    _b(
-        "ifrs-full",
-        "WeightedAverageShares",
-        "shares_weighted_basic",
-        "shares",
-        PeriodBasis.ANNUAL,
-        EquityScope.ORDINARY,
-        note="weighted average number of shares over the fiscal year.",
-    ),
-    # TSM's share count is tagged as NumberOfSharesIssuedAndFullyPaid (issued and
-    # fully paid). That is a different definition from "outstanding", so this
-    # adapter does not bind it to shares_outstanding_end; the metric is simply
-    # not part of the IFRS metric set.
-)
-
-#: Deterministic metric order inside one draft's ``facts`` list.
-METRIC_ORDER: tuple[str, ...] = (
-    "revenue_operating",
-    "net_profit",
-    "profit_parent",
-    "total_assets",
-    "total_liabilities",
-    "equity_parent",
-    "operating_cash_flow",
-    "capex_ppe",
-    "eps_basic",
-    "eps_diluted",
-    "shares_weighted_basic",
-    "shares_outstanding_end",
-)
 
 _STANDARD_BY_TAXONOMY: dict[str, AccountingStandard] = {
     "us-gaap": AccountingStandard.US_GAAP,
     "ifrs-full": AccountingStandard.IFRS,
 }
-
-_MIN_MOMENT = datetime.min.replace(tzinfo=UTC)
-
-
-# --- public data structures ------------------------------------------------
-
-
-@dataclass(frozen=True)
-class FactRow:
-    """One CompanyFacts observation, already keyed for selection."""
-
-    taxonomy: str
-    concept: str
-    unit: str
-    start: date | None
-    end: date
-    value: str
-    accession: str
-    form: str
-    filed: date | None
-    fy: int | None
-    fp: str | None
-
-    @property
-    def is_duration(self) -> bool:
-        return self.start is not None
-
-    @property
-    def span_days(self) -> int | None:
-        return None if self.start is None else (self.end - self.start).days
-
-
-@dataclass(frozen=True)
-class FilingRef:
-    """One filing as the version machine sees it for one described period.
-
-    ``observations`` are the ``(metric, value)`` pairs this filing reports for
-    ``period_end``. They are what lets a later report that re-cites an earlier
-    period be compared with the period's own annual report.
-    """
-
-    accession: str
-    form: str
-    filing_date: date | None
-    accepted_at: datetime | None
-    report_period: date | None
-    primary_document: str | None
-    items: tuple[str, ...] = ()
-    period_end: date | None = None
-    observations: tuple[tuple[str, str], ...] = ()
-
-    @property
-    def is_amendment(self) -> bool:
-        return self.form.endswith("/A")
-
-    @property
-    def is_annual(self) -> bool:
-        return self.form in _ANNUAL_FORMS
-
-    @property
-    def is_own_annual(self) -> bool:
-        """The annual report *for* ``period_end`` — not a later re-citation."""
-
-        return (
-            self.is_annual and self.period_end is not None and self.report_period == self.period_end
-        )
-
-    def observation(self, metric: str) -> str | None:
-        for name, value in self.observations:
-            if name == metric:
-                return value
-        return None
-
-    def payload(self) -> dict[str, Any]:
-        return {
-            "accession": self.accession,
-            "form": self.form,
-            "filing_date": _iso_date(self.filing_date),
-            "accepted_at": _iso_datetime(self.accepted_at),
-            "report_period": _iso_date(self.report_period),
-            "primary_document": self.primary_document,
-            "is_amendment": self.is_amendment,
-        }
-
-
-@dataclass(frozen=True)
-class UnreliableNotice:
-    """An 8-K Item 4.02 notice: earlier statements must not be relied on."""
-
-    accession: str
-    form: str
-    accepted_at: datetime | None
-    items: tuple[str, ...]
-    known_at: datetime | None
-
-    def payload(self) -> dict[str, Any]:
-        return {
-            "accession": self.accession,
-            "form": self.form,
-            "accepted_at": _iso_datetime(self.accepted_at),
-            "items": list(self.items),
-            "known_at": _iso_datetime(self.known_at),
-        }
-
-
-@dataclass(frozen=True)
-class PeriodCandidate:
-    """One version describing the period: its state and its observations.
-
-    ``report_period`` is the period the *filing itself* reports: a candidate
-    whose ``report_period`` differs from the period key is a later report that
-    re-cites this period, not an annual report for it.
-    """
-
-    accession: str
-    form: str
-    state: str
-    usable: bool
-    accepted_at: datetime | None
-    report_period: date | None = None
-    observations: tuple[tuple[str, str], ...] = ()
-
-    def value_for(self, metric: str) -> str | None:
-        for name, value in self.observations:
-            if name == metric:
-                return value
-        return None
-
-    def payload(self) -> dict[str, Any]:
-        return {
-            "accession": self.accession,
-            "form": self.form,
-            "state": self.state,
-            "usable": self.usable,
-            "accepted_at": _iso_datetime(self.accepted_at),
-            "report_period": _iso_date(self.report_period),
-        }
-
-
-@dataclass(frozen=True)
-class PeriodSelection:
-    """The version state of one period, from :func:`select_period_state`."""
-
-    status: str
-    selected_accession: str | None
-    usable: bool
-    candidates: tuple[PeriodCandidate, ...]
-    known_at: datetime | None
-    note: str | None = None
-
-    def value_for(self, metric: str) -> str | None:
-        """The selected version's value for ``metric`` (None if it reports none)."""
-
-        for candidate in self.candidates:
-            if candidate.accession == self.selected_accession:
-                return candidate.value_for(metric)
-        return None
-
-    def payload(self) -> dict[str, Any]:
-        return {
-            "status": self.status,
-            "selected_accession": self.selected_accession,
-            "usable": self.usable,
-            "known_at": _iso_datetime(self.known_at),
-            "candidates": [candidate.payload() for candidate in self.candidates],
-            "note": self.note,
-        }
-
-
-# --- the version state machine ---------------------------------------------
-
-
-def select_period_state(
-    filings: Sequence[FilingRef],
-    notices: Sequence[UnreliableNotice],
-    *,
-    as_of: datetime | None = None,
-) -> PeriodSelection:
-    """Pure period version state from filings and Item 4.02 notices.
-
-    Every filing in ``filings`` describes the same period (its ``period_end``);
-    the period's own annual reports are those whose ``report_period`` equals
-    that date, anything else carrying observations is a re-citation.
-
-    Rules (plan rule 12):
-
-    * the latest accepted own annual report is ``current`` and the versions it
-      replaces are ``superseded`` — an earlier ``10-K/A`` replaces a ``10-K`` by
-      acceptance time. The ``/A`` suffix alone is never trusted and
-      ``is_restated`` is not consulted at all (the LNC revision files with
-      ``is_restated`` still false);
-    * a version with no observation at all in the saved CompanyFacts leaves the
-      period ``superseded`` with ``usable=False`` while the previous value stays
-      traceable;
-    * an Item 4.02 notice accepted *after* the selected version marks the period
-      ``nonreliance_notice_known`` with ``usable=False`` and the old value kept;
-      a version accepted after the notice clears it again;
-    * a re-citation whose value differs from the selected version's value for
-      that metric makes the period ``conflict`` and keeps every candidate — no
-      auto-overwrite and no growth-rate sewing;
-    * ``as_of`` keeps only what was already public then (a filing without an
-      acceptance time falls back to its filing date, and one without any date is
-      treated as known); ``as_of=None`` means "everything known now".
-    """
-
-    known = tuple(ref for ref in filings if _known_at(ref.accepted_at, ref.filing_date, as_of))
-    notices_known = tuple(
-        notice for notice in notices if _known_at(notice.accepted_at, None, as_of)
-    )
-    own = tuple(ref for ref in known if ref.is_own_annual)
-    if not known:
-        return PeriodSelection(PERIOD_NOT_FILED, None, False, (), None, None)
-    if not own:
-        return PeriodSelection(
-            PERIOD_NOT_FILED,
-            None,
-            False,
-            tuple(
-                PeriodCandidate(
-                    ref.accession,
-                    ref.form,
-                    "conflict",
-                    False,
-                    ref.accepted_at,
-                    ref.report_period,
-                    ref.observations,
-                )
-                for ref in sorted(known, key=_reference_order)
-            ),
-            None,
-            "no annual report for this period is part of the material; the listed "
-            "filings only re-cite it",
-        )
-
-    ordered = sorted(own, key=_reference_order)
-    authoritative = ordered[-1]
-    selected = next((ref for ref in reversed(ordered) if ref.observations), authoritative)
-    conflicting = [
-        ref
-        for ref in known
-        if not ref.is_own_annual
-        and any(
-            value is not None and value != selected.observation(metric)
-            for metric, value in ref.observations
-        )
-    ]
-    notice = _applicable_notice(notices_known, selected)
-
-    candidates: list[PeriodCandidate] = [
-        PeriodCandidate(
-            ref.accession,
-            ref.form,
-            "current" if ref.accession == selected.accession else "superseded",
-            ref.accession == selected.accession and bool(ref.observations),
-            ref.accepted_at,
-            ref.report_period,
-            ref.observations,
-        )
-        for ref in ordered
-    ]
-    conflicting_accessions = {ref.accession for ref in conflicting}
-    candidates.extend(
-        PeriodCandidate(
-            ref.accession,
-            ref.form,
-            "conflict" if ref.accession in conflicting_accessions else "current",
-            ref.accession not in conflicting_accessions,
-            ref.accepted_at,
-            ref.report_period,
-            ref.observations,
-        )
-        for ref in sorted((ref for ref in known if not ref.is_own_annual), key=_reference_order)
-    )
-
-    note: str | None = None
-    if conflicting:
-        status, usable = "conflict", False
-        note = (
-            "re-cited values differ from the selected version: "
-            + "; ".join(
-                f"{ref.accession}="
-                + ",".join(
-                    f"{metric}:{value}"
-                    for metric, value in ref.observations
-                    if value != selected.observation(metric)
-                )
-                for ref in sorted(conflicting, key=_reference_order)
-            )
-            + " (all candidates kept; no overwrite, no growth rate)"
-        )
-    elif notice is not None:
-        status, usable = "nonreliance_notice_known", False
-        note = (
-            f"8-K {notice.accession} reports item {UNRELIABLE_ITEM_CODE} after "
-            f"{selected.accession}; the previous value is kept for traceability"
-        )
-    elif selected is authoritative and selected.observations:
-        status, usable = "current", True
-    elif selected is authoritative:
-        status, usable = "current", False
-        note = "the current annual report carries no observation for this period"
-    else:
-        status, usable = "superseded", False
-        note = (
-            f"{authoritative.accession} carries no observation for this period in the saved "
-            f"CompanyFacts; the value shown is the superseded {selected.accession}"
-        )
-
-    return PeriodSelection(
-        status=status,
-        selected_accession=selected.accession,
-        usable=usable,
-        candidates=tuple(candidates),
-        known_at=notice.known_at if notice is not None else _reference_known_at(selected),
-        note=note,
-    )
-
-
-def _applicable_notice(
-    notices: Sequence[UnreliableNotice], selected: FilingRef
-) -> UnreliableNotice | None:
-    """The newest Item 4.02 notice that invalidates ``selected`` (or None)."""
-
-    selected_at = _moment(selected.accepted_at, selected.filing_date)
-    applicable = [
-        notice
-        for notice in notices
-        if UNRELIABLE_ITEM_CODE in notice.items
-        and (selected_at is None or notice.accepted_at is None or notice.accepted_at > selected_at)
-    ]
-    if not applicable:
-        return None
-    return max(applicable, key=lambda notice: _moment(notice.accepted_at, None) or _MIN_MOMENT)
 
 
 # --- the adapter ------------------------------------------------------------
@@ -1428,31 +791,6 @@ def _fiscal_label(rows: Sequence[FactRow], period: _AnnualPeriod) -> str | None:
     return f"FY{min(years)}"
 
 
-@dataclass(frozen=True)
-class _ExpectedUnit:
-    unit: str
-    currency: str | None
-    raw_unit: str
-
-
-def _expected_unit(binding: ConceptBinding, report_currency: str) -> _ExpectedUnit:
-    if binding.unit_kind == "currency":
-        return _ExpectedUnit(report_currency, report_currency, report_currency)
-    if binding.unit_kind == "per_share":
-        return _ExpectedUnit(
-            f"{report_currency}/share", report_currency, f"{report_currency}/shares"
-        )
-    return _ExpectedUnit("shares", None, "shares")
-
-
-def _unit_matches(unit: str, binding: ConceptBinding, report_currency: str) -> bool:
-    if binding.unit_kind == "currency":
-        return unit == report_currency
-    if binding.unit_kind == "per_share":
-        return unit in (f"{report_currency}/share", f"{report_currency}/shares")
-    return unit == "shares"
-
-
 def _row_in_period(row: FactRow, period: _AnnualPeriod) -> bool:
     if row.is_duration:
         return row.start == period.start and row.end == period.end
@@ -1636,65 +974,6 @@ def _period_references(
     return tuple(references.values())
 
 
-def _metric_concepts(taxonomy: str, metric: str) -> frozenset[str]:
-    return frozenset(
-        binding.concept
-        for binding in CONCEPT_MAP
-        if binding.taxonomy == taxonomy and binding.metric == metric
-    )
-
-
-def _choose_taxonomy(rows: Sequence[FactRow], report_currency: str) -> str:
-    """Whitelisted taxonomy satisfying the most mapped metrics (ties: us-gaap)."""
-
-    best = _TAXONOMY_WHITELIST[0]
-    best_score = -1
-    for taxonomy in _TAXONOMY_WHITELIST:
-        bindings = _bindings_of(taxonomy)
-        present = {(row.concept, row.unit) for row in rows if row.taxonomy == taxonomy}
-        score = sum(
-            1
-            for metric in _metrics_for(taxonomy)
-            if any(
-                binding.metric == metric
-                and (binding.concept, _expected_unit(binding, report_currency).raw_unit) in present
-                for binding in bindings
-            )
-        )
-        if score > best_score:
-            best, best_score = taxonomy, score
-    return best
-
-
-def _bindings_of(taxonomy: str) -> tuple[ConceptBinding, ...]:
-    return tuple(binding for binding in CONCEPT_MAP if binding.taxonomy == taxonomy)
-
-
-def _metrics_for(taxonomy: str) -> tuple[str, ...]:
-    bound = {binding.metric for binding in _bindings_of(taxonomy)}
-    return tuple(metric for metric in METRIC_ORDER if metric in bound)
-
-
-def _bindings_for(taxonomy: str, concept: str) -> tuple[ConceptBinding, ...]:
-    return tuple(binding for binding in _bindings_of(taxonomy) if binding.concept == concept)
-
-
-def _unit_skipped_counts(
-    rows: Sequence[FactRow], taxonomy: str, report_currency: str
-) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for row in rows:
-        if row.taxonomy != taxonomy:
-            continue
-        bindings = _bindings_for(taxonomy, row.concept)
-        if not bindings:
-            continue
-        if any(_unit_matches(row.unit, binding, report_currency) for binding in bindings):
-            continue
-        counts[row.unit] = counts.get(row.unit, 0) + 1
-    return counts
-
-
 # --- filing index -----------------------------------------------------------
 
 
@@ -1811,31 +1090,6 @@ def _cik_matches(value: object, cik10: str) -> bool:
     return _cik_text(value) == cik10
 
 
-def _known_at(
-    accepted_at: datetime | None, filing_date: date | None, as_of: datetime | None
-) -> bool:
-    if as_of is None:
-        return True
-    moment = _moment(accepted_at, filing_date)
-    return moment is None or moment <= as_of
-
-
-def _moment(accepted_at: datetime | None, filing_date: date | None) -> datetime | None:
-    if accepted_at is not None:
-        return accepted_at
-    if filing_date is not None:
-        return datetime.combine(filing_date, time.min, tzinfo=UTC)
-    return None
-
-
-def _reference_order(ref: FilingRef) -> tuple[datetime, str]:
-    return (_moment(ref.accepted_at, ref.filing_date) or _MIN_MOMENT, ref.accession)
-
-
-def _reference_known_at(ref: FilingRef) -> datetime | None:
-    return _moment(ref.accepted_at, ref.filing_date)
-
-
 def _parse_date(value: object) -> date | None:
     if not isinstance(value, str) or not value:
         return None
@@ -1887,9 +1141,3 @@ def _text_or_none(value: object) -> str | None:
     return None
 
 
-def _iso_date(value: date | None) -> str | None:
-    return None if value is None else value.isoformat()
-
-
-def _iso_datetime(value: datetime | None) -> str | None:
-    return None if value is None else value.isoformat()
