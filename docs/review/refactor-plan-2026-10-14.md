@@ -1,7 +1,7 @@
 # 架构评审修复计划（2026-10-14）
 
-> **执行状态：已执行四波次，共 25 个工作包提交（`1c04589..180a54f`）。**
-> 门禁：基线 `3260 passed / 1 failed`（时间耦合用例）＋ `ruff` 13 错 → 终态 **`3291 passed / 0 failed`、`ruff` 0 错、`mypy` 0 错（360 文件）**。
+> **执行状态：已执行五波次，共 28 个工作包提交（`1c04589..fb6c3fa`）。**
+> 门禁：基线 `3260 passed / 1 failed`（时间耦合用例）＋ `ruff` 13 错 → 终态 **`3299 passed / 0 failed`、`ruff` 0 错、`mypy` 0 错（368 文件）**。
 > 逐项完成情况见文末「七、执行结果」；验证证据与需用户决策的事项见 `refactor-execution-2026-10-14.md`。
 
 - 依据：`docs/review/architecture-review-2026-10-14.md`（P0×10 / P1×26 / P2×6）
@@ -49,6 +49,8 @@ export DATA_DIR="$PWD/data" DATABASE_URL="sqlite+aiosqlite:///$PWD/data/app.db" 
 
 ## 四、波次 C：其余 P1（按剩余预算推进）
 
+> **本节列出的 7 项已全部执行完毕**（`providers/transport.py` → `180a54f`；`settings` 三小步 → `ae6edfc`；`evidence/store` 适配器 → `e97f06f`；`mcp_server` 拆分 + `api/views.py` → `7a1d069`；`is_trading_day` 与终态集合收敛 → `0ed6f4d` / `fb6c3fa`；`snapshots/health.py` 拆包 → `e47c5e4`）。本计划为自己划定的波次 A/B/C 范围至此**全部完成**；「七、执行结果」里列出的剩余 P1/P2 项属计划之外的后续批次。
+
 `providers/transport.py`（P1-4）、`settings` 三小步（P1-19）、`evidence/store` 适配器（P1-13）、`mcp_server` 拆分 + `api/views.py`（P1-7）、`is_trading_day`/终态集合收敛、`snapshots/health.py` 拆包（P1-3）。
 
 ## 五、明确不做（本轮）
@@ -75,6 +77,7 @@ export DATA_DIR="$PWD/data" DATABASE_URL="sqlite+aiosqlite:///$PWD/data/app.db" 
 | B | 10（8 计划 + 2 基线修复） | `bd8b9b1..063712c` | 3281 passed / 0 failed |
 | C | 4 | `e47c5e4..ae6edfc` | 3281 passed / 0 failed |
 | D | 3（4 个包；其中 2 包必须同提交） | `c58cca3..180a54f` | 3291 passed / 0 failed |
+| E | 3（P1-13 与 P0-6 剩余两项） | `e97f06f..fb6c3fa` | 3299 passed / 0 failed |
 | — | 基线 | `3260 passed / 1 failed`、`ruff` 13 错 | |
 
 ### P0（10/10 完成）
@@ -86,13 +89,13 @@ export DATA_DIR="$PWD/data" DATABASE_URL="sqlite+aiosqlite:///$PWD/data/app.db" 
 | P0-3 抽 `tests/support/peer_world.py` | 完成（消除 6 个测试模块互引） | `6a7c44a` |
 | P0-4 import-graph 守卫 | 完成（不变量 4 条 + ratchet；后修正为不计 `TYPE_CHECKING`） | `2a68a3e`、`904bff9` |
 | P0-5 删死代码 | 完成（296 行） | `038d2d3` |
-| P0-6 重复实现收敛 | **部分**：UTC 归一化收敛完成（`29d98a0`、`6f4210f`）；前端 `PROVIDER_LABELS`/`methods.js` 完成（`88474fe`）。**未做**：`_optional_*`（bool 语义分歧）、`is_trading_day` 7 处兜底、终态集合 5 处、`_decimal_text` 合并 | — |
+| P0-6 重复实现收敛 | **完成**：UTC 归一化（`29d98a0`、`6f4210f`）、前端 `PROVIDER_LABELS`/`methods.js`（`88474fe`）、`is_trading_day` 两派规则各自收敛（`0ed6f4d`）、终态集合三个概念各自归一（`fb6c3fa`）。**未做**：`_optional_*`（bool 语义分歧，需产品判断）、`_decimal_text` 合并（需先固定输出契约） | — |
 | P0-7 模型注册单点化 | 完成（106 表集合零差异） | `6f4210f` |
 | P0-8 api DI 与错误映射收敛 | 完成 | `8a87b47` |
 | P0-9 哈希 schema 迁出 CLI | 完成 | `4c33c70` |
 | P0-10 iFinD 预算提至中立层 | 完成（落在 `providers/ifind_budget.py`，边集 204→204） | `6a9ce8d` |
 
-### P1（8/26 完成，其中 2 项部分）
+### P1（10/26 完成，其中 2 项部分）
 
 | 条目 | 状态 | 提交 |
 |---|---|---|
@@ -102,6 +105,7 @@ export DATA_DIR="$PWD/data" DATABASE_URL="sqlite+aiosqlite:///$PWD/data/app.db" 
 | P1-4 `providers/transport.py` | 完成（五客户端全部采纳） | `180a54f` |
 | P1-6 `factors/view.py` 拆分 | 完成（删除 god module，33 处导入改指向） | `7a1d069` |
 | P1-7 `mcp_server` 拆分 + 共享视图层 | 完成（405→94；消除 7 条 mcp→api.routes） | `7a1d069` |
+| P1-13 `evidence/store.py` 来源分支拆分 | 完成（`save_evidence` 304→67 行；`evidence/adapters/` 5 个适配器 + 共享字段常量） | `e97f06f` |
 | P1-19 `settings` 三小步 | 完成（合并三个相同调度模型 + 日历定位外移；crontab 倒置留给 P1-14） | `ae6edfc` |
 | P1-21 `candidates/lifecycle.py` 抽 screen intake | 完成（1001→787） | `4ce4d23` |
 | P1-23 CLI runtime/parsing 抽取 | 完成（`verify.py`/`peer_annual.py` 归其他包，仍有余量） | `1e45108` |
@@ -122,6 +126,6 @@ export DATA_DIR="$PWD/data" DATABASE_URL="sqlite+aiosqlite:///$PWD/data/app.db" 
 ### 未做（明确列出，不视为完成）
 
 - **P2 全部 6 项**：仓储网关边界、API 读路径下沉、测试 fixture 事务化（执行报告给出为什么最后做）、`config.py` 收窄 / api↔web 环、`rule_templates` 与 kernel 的一致性测试、`local_owner` 多租户化。
-- **P1 剩余 15 项**：`snapshots/backfill.py`(P1-5)、`agent/research.py`(P1-8)、`investor/publication.py`(P1-9)、`research/ifind_chain.py`(P1-10)、`industry_peers`(P1-11)、`rules/zone_detection.py`(P1-12)、`evidence/store.py`(P1-13)、`scheduler/runner.py`(P1-14)、前端按需加载与页面拆分(P1-15)、`PortfolioService` 类拆分(P1-16)、`plans.check`(P1-17)、`reverse_dcf`(P1-18)、`storage/repositories/pipeline_run.py`(P1-20)、`verification/job.py`(P1-22)、测试结构重整(P1-26)。
-- **P0-6 剩余子项**与 **P1-24/P1-25 剩余子项**（见上表）。
+- **P1 剩余 14 项**：`snapshots/backfill.py`(P1-5)、`agent/research.py`(P1-8)、`investor/publication.py`(P1-9)、`research/ifind_chain.py`(P1-10)、`industry_peers`(P1-11)、`rules/zone_detection.py`(P1-12)、`scheduler/runner.py`(P1-14)、前端按需加载与页面拆分(P1-15)、`PortfolioService` 类拆分(P1-16)、`plans.check`(P1-17)、`reverse_dcf`(P1-18)、`storage/repositories/pipeline_run.py`(P1-20)、`verification/job.py`(P1-22)、测试结构重整(P1-26)。
+- **P0-6 剩余**：`_optional_*` 的 bool 语义分歧（`research.py` 返回 `1.0` vs `watchlist.py` 返回 `None`，属产品判断）、`_decimal_text`(us_sec) 与 `_decimal_string`(hk_native) 合并（须先固定已落库 `raw_value` 的输出契约）；**P1-24/P1-25 剩余子项**见上表。
 - 评审报告与各波次子报告提出的"发现但不改"清单（如 `akshare` 熔断键冲突、`eastmoney_annual` 缓存命中记为 `terminal`、`api/views.py` 的 `compute_data_health` 借用边、`providers/ledger.py:3` docstring 指向旧路径）均未动手，**已在执行报告中逐条列出**。

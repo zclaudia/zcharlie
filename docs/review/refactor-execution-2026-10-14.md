@@ -1,21 +1,25 @@
 # 架构评审修复执行报告（2026-10-14）
 
 - 计划：`docs/review/refactor-plan-2026-10-14.md`（依据 `architecture-review-2026-10-14.md`）
-- 分支：`refactor/arch-review-p0`，25 个工作包提交（`1c04589..180a54f`），**未合入 `main`**
-- 执行方式：4 个波次，每波 4–8 个**文件所有权互斥**的工作包由 sub-agent 并行执行，波次末由主进程串行跑三项门禁
+- 分支：`refactor/arch-review-p0`，28 个工作包提交（`1c04589..fb6c3fa`），**未合入 `main`**
+- 执行方式：5 个波次，每波 3–8 个**文件所有权互斥**的工作包由 sub-agent 并行执行，波次末由主进程串行跑三项门禁
 
 ## 一、结果
 
-| 指标 | 基线（`63a2b4d`） | 终态（`180a54f`） |
+| 指标 | 基线（`63a2b4d`） | 终态（`fb6c3fa`） |
 |---|---|---|
-| 全量 `pytest -q -m "not network"` | **3260 passed / 1 failed** / 3 skipped | **3291 passed / 0 failed** / 3 skipped |
+| 全量 `pytest -q -m "not network"` | **3260 passed / 1 failed** / 3 skipped | **3299 passed / 0 failed** / 3 skipped |
 | `ruff check .` | **13 errors**（peer 工作包遗留 11 + 2 无归属） | **0** |
-| `mypy src/investment_agent` | 0 errors | **0**（360 文件） |
-| 文件改动 | — | 181 文件，+20,602 / −8,016（其中 src+tests 178 文件 / +20,002 / −8,016） |
+| `mypy src/investment_agent` | 0 errors | **0**（368 文件） |
+| 文件改动 | — | 208 文件，+21,227 / −8,326（src+tests 207 文件） |
 
-四波次门禁：A 3278 passed / B 3281 / C 3281 / D 3291，全部 0 failed。基线那 1 个失败是**时间耦合用例**（报告 §4.6 预判的类别），在本轮一并修掉。
+五波次门禁：A 3278 passed / B 3281 / C 3281 / D 3291 / E 3299，全部 0 failed。基线那 1 个失败是**时间耦合用例**（报告 §4.6 预判的类别），在本轮一并修掉。
 
-各波次改动量：A 45 文件（+9,505/−1,438）、B 69 文件（+2,652/−821）、C 17 文件（+3,267/−2,743）、D 68 文件（+4,590/−3,026）。插入数普遍高于删除数，是因为新增模块都带 docstring 与 import 头，以及多处"显式再导出"（本项目 strict mypy 禁止隐式再导出）；真正的净行数下降集中在被拆解的文件本身。
+交付内容：**P0 10/10 完成**；**P1 10/26 完成 + 2 项部分完成**；另修复 4 个计划外但在报告风险清单里的既有缺陷（lint 门禁、时间耦合、API 关停挂起、前端文案）。逐条状态见计划文档「七、执行结果」。
+
+**本计划为自己划定的范围（波次 A / B / C 的全部条目）已 100% 执行完毕**：波次 C 一节列出的 `providers/transport.py`、`settings` 三小步、`evidence/store` 适配器、`mcp_server` 拆分 + `api/views.py`、`is_trading_day` / 终态集合收敛、`snapshots/health.py` 拆包七项全部落地（分散在 C/D/E 三波）。计划之外的剩余 P1（14 项）与 P2（6 项）是后续批次，见文末「七、后续」。
+
+各波次改动量：A 45 文件（+9,505/−1,438）、B 69 文件（+2,652/−821）、C 17 文件（+3,267/−2,743）、D 68 文件（+4,590/−3,026）、E 34 文件（+633/−320）。插入数普遍高于删除数，是因为新增模块都带 docstring 与 import 头，以及多处"显式再导出"（本项目 strict mypy 禁止隐式再导出）；真正的净行数下降集中在被拆解的文件本身。
 
 交付内容：**P0 10/10 完成**；**P1 8/26 完成 + 2 项部分完成**；另修复 4 个计划外但在报告风险清单里的既有缺陷（lint 门禁、时间耦合、API 关停挂起、前端文案）。逐条状态见计划文档「七、执行结果」。
 
@@ -27,6 +31,7 @@
 | B（P0 结构收口 + 低风险 P1） | 8 计划包 + 2 计划外修复 | `bd8b9b1..063712c` |
 | C（大文件拆分） | 4 包 | `e47c5e4..ae6edfc` |
 | D（剩余高价值结构项） | 4 包（其中 factors 与 mcp 必须同提交，见下） | `c58cca3..180a54f` |
+| E（P1-13 与 P0-6 剩余两项） | 3 包 | `e97f06f..fb6c3fa` |
 
 `refactor(factors,mcp)` 一条提交包含两个工作包：D2 删除了 `factors/view.py`，而当时的 `mcp_server/server.py` 正 import 它，D4 之后才改为 import `view_db`——拆成两条提交会产生无法导入的中间状态，故合并，并在提交信息里说明原因。
 
@@ -57,6 +62,11 @@ root containing raw/official/*.pdf (checkout default: ...)
 
 **守卫本身也被验证**：import-graph ratchet 通过"从 baseline 删掉一条真实运行期边（`providers -> storage`）"复现失败，确认仍会咬；基线重生成只删了一条边（`industry_peers -> cli`，正是 P0-9 修掉的分层倒置），无新增。
 
+**波次 E：两处"重复"其实是误判，改法因此不同**（这是本轮最值得看的一条方法论证据）：
+- 报告称 `is_trading_day` 有"7 处同一兜底"。逐个读下来是**两种产品规则**：2 处（`earnings_events`、`health/accumulation`）确实回退到 `weekday()`，另 5 处（`api/routes/portfolio.py`、`portfolio/valuation_jobs.py`、`scheduler/runner.py` ×3）在未审核年份**拒答**（返回 `None` / 跳过 / 记事件后 fail-closed）。若按报告合并成一个 helper，会把 5 条 fail-closed 路径悄悄变成 fail-open，所以最终落成**两个** helper，各自 docstring 是该规则的唯一表述处。
+- 报告称四处字段核对循环"前 12 项完全同序"。实际 event 分支的 12 个名字**顺序不同**；由于不变量是"首个报错字段名不变"，event 分支保留了自己的顺序，只有另外 3 处归一为共享常量。
+- 终态集合同理：报告的"5 处"实为**三个不同概念**（run 终态 8 处 / task 终态含 cancelled 3 处 / task 已完成排除 cancelled 4 处），各自归一，未互相折叠。
+
 ## 四、需要你决策的事项
 
 1. **peer 原件 PDF（37MB）是否入仓**。现状（方案 A，已落地）：19 个小 metadata（35KB）入仓，20 个需要原件的用例在无原件时**显式 skip**——CI 不再红，但 CI 不覆盖 `verified` 原件的 20 个用例。备选：**B** 把 19 个 PDF 放进 `tests/fixtures/peer_run02/raw/official/`（仓库 +35.4MB，需考虑第三方年报再分发）；**C** CI 侧用 artifact/缓存/LFS 提供原件并设 `ZCHARLIE_PEER_ORIGINALS`。metadata 与解析逻辑已就位，B 只需补 PDF 并改默认回落顺序。
@@ -72,8 +82,10 @@ root containing raw/official/*.pdf (checkout default: ...)
 | `eastmoney_annual` 缓存命中把台账事件标成 `terminal`（看起来像 bug） | `providers/eastmoney_annual.py` reuse 路径 | 改标签会改台账口径 |
 | 两组"同一语义两种数字"：`max_attempts=2`（=2 次）vs `max_retries=2`（=3 次）；节流打点位置不同（akshare 每次尝试后 / annual 仅在开始） | 五个客户端 | 已参数化保留，未统一数值 |
 | 脏数值解析有**第三份**副本（前两份经穷举判定外延等价，报告里的"可能翻转 verdict"风险**不成立**） | `factors/metrics.py` `parse_number` | 修改即涉及比较口径 |
-| `is_trading_day` 兜底逻辑 7 处、「未复核年份按工作日」这一业务决策散落 | `snapshots/health`、`scheduler/runner.py`、`portfolio/valuation_jobs.py`、`api/routes/portfolio.py` 等 | 跨多包，未纳入本轮文件所有权 |
-| 终态集合 5 处（权威在 `storage/repositories/pipeline_run.py:18`） | `research/{worker,watchlist_refresh}.py`、`storage/repositories/watchlist.py`、`investor/{monitoring,discovery}.py` | 同上 |
+| `research_kernel/scoring.py:356` 的 `_weekday_is_trading_day` 是**第三个**"交易日"概念：它是 `count_trading_days_after` 未传谓词时的内部默认值，完全不查日历也不捕获该异常 | `research_kernel/scoring.py` | 语义与另两派都不同，改它会影响离线 kernel 的 golden 口径 |
+| `evidence/queries.py` 的 `RefreshService`（写/入队关注点，却住在"读永不入队"的模块里）；`capture_snapshot` 另写了一遍 replay→execute→save→receipt 骨架（载荷类型与内层回执均不同） | `evidence/queries.py` | 抽公共骨架会触碰 `InvestorService` 并威胁"回执恰好一次"，非行为保持的机械改动 |
+| `agent/conversations.py:186-189` 是**第三处**事件映射表，但它是 7 键的"对象→模型"表（含 listing/candidate/watchlist_item 等），与 evidence 的两处键集不同 | `agent/conversations.py` | 键集不同，属另一概念 |
+| `industry_peers/jobs.py` 的 `TERMINAL_STATUSES` 经核为**死代码**（无任何引用）；本轮只把它重指向 domain 常量并放宽注解类型 | `industry_peers/jobs.py` | 删除属清理而非拆分，留作后续 |
 | `rules.py` 仍**传递**加载 sqlalchemy（经 `models.py`→`snapshots.jobs` 的 kind 常量与 `rules.py`→`snapshots.collect` 的 `QUOTA_STOP_REASON`），故"规则层零 DB 依赖"只做到断言层面 | `snapshots/health/{models,rules}.py` | 需把那两组常量迁到无 DB 模块，超出该包文件集 |
 | `compute_data_health` 仍函数级借用 `api/routes/dashboard.py` 的 `calendar_warnings`/`_calendar_path` | `api/views.py` | 建议把这两个 helper 下沉到 `settings/calendar_paths.py` 旁 |
 | `settings/registry.py:102` import `scheduler/runner._parse_cron`（**私有**函数、跨层倒置） | settings ↔ scheduler | 属 P1-14（scheduler 拆分） |
@@ -102,9 +114,12 @@ root containing raw/official/*.pdf (checkout default: ...)
 | 新增：CLI 样板 | `cli/runtime.py` + `cli/parsing.py` |
 | 新增：candidates screen intake | `candidates/screen_intake.py`（lifecycle 再导出） |
 | 新增：测试基座／守卫 | `tests/support/peer_world.py`、`tests/support/purity.py`、`tests/unit/test_import_graph.py` + `tests/fixtures/import_graph_baseline.json` |
+| 新增：证据来源适配器 | `evidence/adapters/{snapshot,peer,event,material,user_report,_fields}.py`（`store.save_evidence` 304→67 行） |
+| 新增：run 终态常量 | `domain/pipeline_status.py`（`pipeline_run.TERMINAL_STATUSES` 与 `snapshots/health/models.TERMINAL_STATUSES` 均为再导出） |
+| 新增：交易日 helper | `scheduler/trading_calendar.py` 的 `is_trading_day_or_weekday`（未审核年份按工作日）与 `is_trading_day_or_none`（未审核年份拒答，返回 `None`） |
 
 ## 七、后续
 
-- **未完成项的清单与状态**在计划文档「七、执行结果」逐条列出（P0-6 剩余子项、P1 剩余 15 项、P2 全部 6 项），路线图与排序原则仍然有效。
-- 下一批建议顺序：P1-11（`industry_peers`，含 `jobs._finalize` 与 `batch` 编排去重）→ P1-3 已完成的 `health` 包基础上做 `snapshots/backfill.py`(P1-5) → P1-13（`evidence/store.py` 适配器）→ P1-14（scheduler，顺带清掉 `_parse_cron` 倒置）→ P1-16/P1-17/P1-18（portfolio 与 valuation 剩余巨型函数/类）。
+- **未完成项的清单与状态**在计划文档「七、执行结果」逐条列出（P0-6 剩余 2 子项、P1 剩余 14 项、P2 全部 6 项），路线图与排序原则仍然有效。
+- 下一批建议顺序：P1-11（`industry_peers`，含 `jobs._finalize` 与 `batch` 编排去重）→ P1-5（`snapshots/backfill.py`）→ P1-14（scheduler，顺带清掉 `_parse_cron` 倒置）→ P1-16/P1-17/P1-18（portfolio 与 valuation 剩余巨型函数/类）→ P1-15（前端：**先补 candidates/health 页的浏览器 E2E 再拆**，否则拆分只会让现有护栏静默失效）。
 - **P2 一律排在最后**：仓储网关边界影响 172 个直连 ORM 的测试文件，测试 fixture 事务化影响 129 个文件，二者都会同时动摇"生产语义"与"测试基础设施"，不应与结构拆分叠加在同一批提交里。
