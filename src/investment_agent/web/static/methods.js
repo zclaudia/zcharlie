@@ -1,4 +1,5 @@
 /* Exact saved body + UUID survives lost acknowledgements and reloads. */
+import {ApiError, get, post} from './api.js';
 import {formatDateTime} from './format.js';
 (() => {
   'use strict';
@@ -18,27 +19,26 @@ import {formatDateTime} from './format.js';
   const listing = review => review.inputs.task.binding.base_refs.filter(r => r.kind === 'listing');
   const option = (select, value, text) => { const node = element('option', text); node.value = value; select.append(node); };
   const button = (host, text, handler) => { const node = element('button', text); node.type = 'button'; node.onclick = handler; host.append(node); return node; };
-  const TIMEOUT_MS = 15000;
+  // 请求统一走共享客户端 api.js（超时中断、CSRF/幂等头、401/403/409/422 分类、
+  // 非 JSON 响应兜底都由它负责）；本页只保留 /investor/methods 前缀。
+  const BASE = '/investor/methods';
+  // api.js 的文案与本页旧实现不同（401、对象 detail、断网/超时）；在调用点翻译回
+  // 用户一直看到的措辞，status 分类（409/422 分支、401 提示）保持不变。
+  function legacyMessage(error) {
+    if (error.status === 0) return '网络请求失败或超时';
+    if (error.status === 401) return '登录已过期';
+    const detail = error.detail;
+    if (detail && typeof detail === 'object' && detail.message) return String(detail.message);
+    if (typeof detail === 'string') return detail;
+    return `请求失败 ${error.status}`;
+  }
   async function api(path, body) {
-    // 与 api.js 同口径：超时中断；响应先按文本读取再安全解析 JSON，
-    // 网关返回 HTML/空体时给出可读错误而不是 SyntaxError。
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    let response;
     try {
-      response = await fetch('/investor/methods' + path, body === undefined ? {signal: controller.signal} : {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body), signal: controller.signal});
+      return body === undefined ? await get(BASE + path) : await post(BASE + path, body);
     } catch (error) {
-      throw Object.assign(new Error(controller.signal.aborted ? '请求超时' : '网络请求失败或超时'), {status: 0});
-    } finally { clearTimeout(timer); }
-    if (response.status === 401) { status('登录已过期，待处理内容已保留。请重新登录后重试。'); throw Object.assign(new Error('登录已过期'), {status: 401}); }
-    const text = await response.text();
-    let payload = null;
-    if (text) { try { payload = JSON.parse(text); } catch { payload = null; } }
-    if (!response.ok) {
-      const detail = payload && typeof payload === 'object' ? payload.detail : null;
-      throw Object.assign(new Error(detail?.message || (typeof detail === 'string' ? detail : `请求失败 ${response.status}`)), {status: response.status});
+      if (!(error instanceof ApiError)) throw error;
+      throw Object.assign(new Error(legacyMessage(error)), {status: error.status});
     }
-    return payload;
   }
   async function mutate(path, body) {
     if (busy) return;

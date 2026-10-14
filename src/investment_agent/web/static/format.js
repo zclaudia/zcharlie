@@ -431,10 +431,13 @@ export const QUALITY_FLAG_LABELS = Object.freeze({
   ...FLAG_LABELS,
 });
 
+// 数据源标识 -> 显示名：全站唯一的基础表（含全部 provider 键）。
+// health.js 只在本页需要更具体的渠道说明时覆盖个别条目（如 akshare），不另建新表。
 export const PROVIDER_LABELS = Object.freeze({
   baostock: "baostock",
   akshare: "AkShare",
   eastmoney: "东方财富",
+  tencent: "腾讯行情",
   ifind: "iFinD",
 });
 

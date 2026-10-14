@@ -10,6 +10,7 @@ import { clear, el, errorText, fmt, stockLink } from "./dom.js";
 import { alertList, kpi } from "./ui.js";
 import {
   INDUSTRY_SYSTEM_LABELS,
+  PROVIDER_LABELS,
   VERIFICATION_STATUS_LABELS,
   VERIFICATION_TRIGGER_LABELS,
   fieldLabel,
@@ -84,11 +85,11 @@ const SECTION_LABELS = Object.freeze({
   calendar: "交易日历",
 });
 
-export const PROVIDER_LABELS = Object.freeze({
-  baostock: "baostock",
+// 数据源显示名：基础表统一来自 format.js；本页的“上游调用”按渠道统计，
+// 需要把 akshare 说清是东财渠道（与 baostock 并列显示时避免混淆），故只在本页覆盖该条。
+export const HEALTH_PROVIDER_LABELS = Object.freeze({
+  ...PROVIDER_LABELS,
   akshare: "AkShare（东财）",
-  tencent: "腾讯行情",
-  ifind: "iFinD",
 });
 
 export const STOP_LABELS = Object.freeze({
@@ -641,7 +642,7 @@ function renderProviders(data) {
       providers.map((item) => {
         const status = providerStatus(item);
         return [
-          label(PROVIDER_LABELS, item.provider),
+          label(HEALTH_PROVIDER_LABELS, item.provider),
           String(item.calls_24h),
           String(item.failed_24h),
           String(item.skipped_24h ?? 0),

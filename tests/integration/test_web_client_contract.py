@@ -692,16 +692,128 @@ def test_agent_views_delegates_dates_to_format_js():
     assert "Intl.DateTimeFormat" not in source
 
 
-# ---- P3：methods 页健壮性与死代码 -------------------------------------------
+# ---- A6：methods 页回归共享客户端；P3 健壮性断言保留 ------------------------
 
 
-def test_methods_api_is_timeout_safe_and_guards_empty_evaluations():
+def test_methods_delegates_to_the_shared_api_client():
+    """A6：methods.js 不再自带 HTTP 客户端，请求与错误分类统一由 api.js 承载。
+
+    现在由 api.js 保证：15s 超时中断、X-Requested-With / Idempotency-Key、
+    先按文本读取再安全解析 JSON（容忍网关 HTML/空体）、401/403/409/422 分类。
+    本页只保证改用共享客户端，并把 ApiError 翻译回原有用户文案；
+    请求形状与文案的回归由下面的行为测试驱动真实模块验证。
+    """
+
     source = (WEB_STATIC / "methods.js").read_text(encoding="utf-8")
-    # api()：超时中断 + 先按文本读取再安全解析 JSON（容忍网关 HTML/空体）。
-    assert "AbortController" in source and "setTimeout" in source
-    assert "response.text()" in source and "JSON.parse(text)" in source
-    # async onclick 包 catch 并更新 status()。
-    assert "catch (error) { status(" in source
+    assert re.search(
+        r"import\s*\{[^}]*\bApiError\b[^}]*\bget\b[^}]*\bpost\b[^}]*\}\s*from\s*['\"]\./api\.js['\"]",
+        source,
+    ), "methods.js 必须从 ./api.js 引入共享客户端"
+    # 本地不再有第二套客户端：无 fetch、超时控制器、响应手工解析或 401 分支。
+    for marker in ("AbortController", "TIMEOUT_MS", "response.text()", "JSON.parse(text)", "fetch("):
+        assert marker not in source, marker
+    # 旧实现的用户文案在调用点翻译保留（断网/超时、401、对象 detail 的 message、降级）。
+    for copy in ("'网络请求失败或超时'", "'登录已过期'", "detail.message", "`请求失败 ${error.status}`"):
+        assert copy in source, copy
+
+
+def test_methods_requests_go_through_the_shared_client_with_legacy_copy():
+    """用假 DOM + 假 fetch 驱动真实 methods.js：URL/方法/请求头/凭据与
+    409/422 分类、401 提示、断网文案逐项复现旧实现。"""
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+        return
+    uri = (WEB_STATIC / "methods.js").resolve().as_uri()
+    script = FAKE_DOM + f"""
+const URI = {json.dumps(uri)};
+const hosts = new Map();
+const host = (id) => {{ if (!hosts.has(id)) hosts.set(id, new FakeNode('#' + id)); return hosts.get(id); }};
+globalThis.document = {{
+  createElement: (tag) => new FakeNode(tag),
+  getElementById: (id) => host('#' + id),
+  querySelector: () => null,
+  querySelectorAll: () => [],
+}};
+const store = new Map();
+globalThis.sessionStorage = {{
+  getItem: (k) => (store.has(k) ? store.get(k) : null),
+  setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
+}};
+const calls = [];
+let scenario = 'ok';
+const respond = (status, body) => ({{
+  status, ok: status >= 200 && status < 300,
+  headers: {{ get: () => 'application/json' }},
+  json: async () => body, text: async () => JSON.stringify(body),
+}});
+const boot = {{proposals: [], heads: [], reviews: [], completed_tasks: [{{id: 'task-1', status: 'succeeded'}}],
+  versions: [], baseline_method: {{}}, scope_names: {{}}, page: {{truncated: false, next_offset: null}}}};
+globalThis.fetch = async (path, init = {{}}) => {{
+  const method = init.method || 'GET';
+  calls.push({{method, path, headers: init.headers || {{}}, body: init.body, credentials: init.credentials}});
+  if (method === 'POST' && scenario === 'network') throw new TypeError('network down');
+  if (method === 'POST' && scenario === 'unauthorized') return respond(401, {{detail: 'Authentication required'}});
+  if (method === 'POST' && scenario === 'unprocessable') return respond(422, {{detail: {{message: '规则校验失败', issues: []}}}});
+  if (method === 'POST') return respond(200, {{id: 'ok-1', status: 'created'}});
+  return respond(200, boot);
+}};
+await import(URI);
+await new Promise((r) => setTimeout(r, 20));
+host('#method-task').value = 'task-1';
+const click = async () => {{ host('#method-review').onclick(); await new Promise((r) => setTimeout(r, 30)); }};
+const first = {{...calls[0]}};
+scenario = 'unprocessable'; await click();
+const after422 = {{status: host('#method-status').textContent, pending: store.has('investor.method.pending.v1'),
+  gets: calls.filter((c) => c.method === 'GET').length}};
+scenario = 'unauthorized'; await click();
+const after401 = {{status: host('#method-status').textContent, pending: store.has('investor.method.pending.v1')}};
+scenario = 'network'; await click();
+const afterOffline = {{status: host('#method-status').textContent}};
+scenario = 'ok'; await click();
+const lastPost = calls.filter((c) => c.method === 'POST').at(-1);
+console.log(JSON.stringify({{
+  first, after422, after401, afterOffline, lastPost,
+  postCount: calls.filter((c) => c.method === 'POST').length,
+  finalStatus: host('#method-status').textContent,
+  pendingAfterSuccess: store.has('investor.method.pending.v1'),
+}}));
+"""
+    out = _run_node(script)
+    # GET 经共享客户端：同一 URL、同一方法、同源凭据、fetch 标记头。
+    assert out["first"]["method"] == "GET"
+    assert out["first"]["path"] == "/investor/methods?offset=0"
+    assert out["first"]["credentials"] == "same-origin"
+    assert out["first"]["headers"]["X-Requested-With"] == "fetch"
+    # POST：路径 / 方法 / body 与旧实现逐项一致，并带上共享客户端的幂等键。
+    last = out["lastPost"]
+    assert last["method"] == "POST"
+    assert last["path"] == "/investor/methods/reviews/task-1"
+    assert last["body"] == "{}"
+    assert last["headers"]["Content-Type"] == "application/json"
+    assert last["headers"]["X-Requested-With"] == "fetch"
+    assert last["headers"]["Idempotency-Key"]
+    # 422：对象 detail 的 message 仍直接展示；待确认内容清除并重载列表（旧行为）。
+    assert out["after422"]["status"] == "规则校验失败。原操作内容已保留，可重试。"
+    assert out["after422"]["pending"] is False
+    assert out["after422"]["gets"] == 2  # 首次加载 + 422 后的重载
+    # 401：文案与旧实现一致，待确认内容保留可重试。
+    assert out["after401"]["status"] == "登录已过期。原操作内容已保留，可重试。"
+    assert out["after401"]["pending"] is True
+    # 断网：可读文案 + 保留待确认内容，不再是未处理拒绝。
+    assert out["afterOffline"]["status"] == "网络请求失败或超时。原操作内容已保留，可重试。"
+    # 成功：4 个 POST（422/401/断网/成功各一），保存后清除待确认内容并重载。
+    assert out["postCount"] == 4
+    assert out["finalStatus"] == "已保存。提案创建不会自动启用方法。"
+    assert out["pendingAfterSuccess"] is False
+
+
+def test_methods_guards_empty_evaluations_and_async_handlers():
+    source = (WEB_STATIC / "methods.js").read_text(encoding="utf-8")
+    # async onclick 包 catch 并更新 status()（详情/历史/加载三条路径，失败不静默）。
+    assert source.count("catch (error) { status(") >= 3
     # evaluations / evaluation_ids 判空后再启用按钮，空时禁用并提示。
     assert "const latestEvaluationId = p.evaluation_ids.at(-1) || null;" in source
     assert "if (!latestEvaluationId) shadow.disabled = true;" in source
