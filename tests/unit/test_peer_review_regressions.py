@@ -36,6 +36,7 @@ from investment_agent.storage.models.peer import PeerAnnualSnapshot, PeerCohortS
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from tests.support.peer_world import (
     AUDIT_PATH,
+    ORIGINALS_ROOT,
     SAMPLE_PATH,
     DirectCtx,
     FakeAnnualSource,
@@ -54,6 +55,9 @@ from tests.support.peer_world import (
 )
 from tests.support.peer_world import (
     peer_db as peer_db,  # noqa: F401  (pytest fixture)
+)
+from tests.support.peer_world import (
+    requires_originals as requires_originals,
 )
 from tests.support.peer_world import (
     synthetic as synthetic,
@@ -111,7 +115,7 @@ async def test_real_handler_keeps_the_queued_generation(peer_db):
 
 
 @pytest.mark.parametrize("part", ["header", "excerpt", "value"])
-async def test_original_tampering_is_refused_before_writes(db_session, part):
+async def test_original_tampering_is_refused_before_writes(db_session, part, requires_originals):
     sample = load_sample_json(SAMPLE_PATH)
     await seed_listings(db_session, tuple((c["code"], c["name"]) for c in sample["companies"]))
     await db_session.commit()
@@ -129,7 +133,11 @@ async def test_original_tampering_is_refused_before_writes(db_session, part):
         record["matched_row"]["parsed_first_value"] = changed
     with pytest.raises(PeerAnnualImportError, match="original verification failed"):
         await import_peer_annual_snapshots(
-            db_session, sample=sample, audit=audit, acquired_at=datetime.now(UTC)
+            db_session,
+            sample=sample,
+            audit=audit,
+            acquired_at=datetime.now(UTC),
+            originals_root=ORIGINALS_ROOT,
         )
     assert not (await db_session.scalars(select(PeerAnnualSnapshot))).all()
 
@@ -148,7 +156,9 @@ async def test_missing_originals_stay_candidate(db_session, tmp_path):
     assert all(f["verification"] == "candidate" for r in rows for f in r.fields.values())
 
 
-async def test_real_golden_outputs_and_loss_exclusions_are_citable(db_session, golden, tmp_path):
+async def test_real_golden_outputs_and_loss_exclusions_are_citable(
+    db_session, golden, requires_originals, tmp_path
+):
     await submit_offline_batch(db_session, data_dir=tmp_path)
     await db_session.commit()
     for ticker in ("600519.SH", "000799.SZ"):
@@ -235,7 +245,7 @@ async def test_research_post_freezes_binding_and_replays_it(db_session, golden, 
 
 @pytest.mark.parametrize("change", ["original_bytes", "field_revision"])
 async def test_raw_annual_quote_keeps_original_and_revision_checks(
-    db_session, golden, tmp_path, change
+    db_session, golden, requires_originals, tmp_path, change
 ):
     from sqlalchemy import update
 

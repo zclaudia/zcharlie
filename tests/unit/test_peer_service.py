@@ -132,6 +132,9 @@ from tests.support.peer_world import (
     golden as golden,
 )
 from tests.support.peer_world import (
+    requires_originals as requires_originals,
+)
+from tests.support.peer_world import (
     synthetic as synthetic,
 )
 
@@ -206,7 +209,9 @@ async def test_no_submission_is_missing_with_job_hint_slot(db_session, synthetic
 # --- status table: the run-02 offline batch -------------------------------------
 
 
-async def test_run02_offline_batch_reads_verified_with_originals(db_session, golden, tmp_path) -> None:
+async def test_run02_offline_batch_reads_verified_with_originals(
+    db_session, golden, requires_originals, tmp_path
+) -> None:
     submission = await submit_offline_batch(
         db_session, data_dir=tmp_path, submitted_at=SUBMITTED_AT
     )
@@ -385,7 +390,9 @@ async def test_conflicted_input_is_excluded_and_marks_conflict(db_session, synth
 # --- cutoff ---------------------------------------------------------------------
 
 
-async def test_batch_submitted_after_cutoff_is_invisible(db_session, golden, tmp_path) -> None:
+async def test_batch_submitted_after_cutoff_is_invisible(
+    db_session, golden, requires_originals, tmp_path
+) -> None:
     submission = await submit_offline_batch(
         db_session,
         data_dir=tmp_path,
@@ -811,7 +818,7 @@ async def test_previous_year_is_an_explicit_old_reference(db_session, synthetic,
 
 
 async def test_known_recheck_marks_current_read_stale_history_stays_readable(
-    db_session, golden, tmp_path
+    db_session, golden, requires_originals, tmp_path
 ) -> None:
     submission = await submit_offline_batch(
         db_session, data_dir=tmp_path, tickers=[MAOTAI], submitted_at=SUBMITTED_AT
@@ -988,7 +995,9 @@ async def test_unreadable_artifact_is_an_explicit_gap(db_session, golden, tmp_pa
 # --- company detail ------------------------------------------------------------------
 
 
-async def test_companies_endpoint_lists_fixed_versions(db_session, golden, tmp_path) -> None:
+async def test_companies_endpoint_lists_fixed_versions(
+    db_session, golden, requires_originals, tmp_path
+) -> None:
     submission = await submit_offline_batch(
         db_session, data_dir=tmp_path, tickers=[MAOTAI], submitted_at=SUBMITTED_AT
     )

@@ -41,7 +41,10 @@ from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
-from tests.support.peer_world import AUDIT_PATH, SAMPLE_PATH
+from tests.support.peer_world import AUDIT_PATH, ORIGINALS_ROOT, SAMPLE_PATH
+from tests.support.peer_world import (
+    requires_originals as requires_originals,
+)
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
 LATER_ACQUIRED_AT = datetime(2026, 10, 12, 5, 30, tzinfo=UTC)
@@ -137,11 +140,17 @@ async def seeded(session):
 # --- golden import -----------------------------------------------------------
 
 
-async def test_golden_import_matches_sample_exactly(seeded, session) -> None:
+async def test_golden_import_matches_sample_exactly(
+    seeded, session, requires_originals
+) -> None:
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     report = await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
 
@@ -228,11 +237,17 @@ async def test_every_stored_field_round_trips_through_the_wp1_contract() -> None
 # --- verification proofs: all 114 checks traceable ---------------------------
 
 
-async def test_all_114_checks_reproduce_and_trace_to_audit_records(seeded, session) -> None:
+async def test_all_114_checks_reproduce_and_trace_to_audit_records(
+    seeded, session, requires_originals
+) -> None:
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     report = await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
     assert report.verification_checks == 19 * 6 == 114
@@ -283,7 +298,11 @@ async def test_revenue_total_check_is_candidate_without_fabricated_proof(seeded,
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
     rows = list((await session.execute(select(PeerAnnualSnapshot))).scalars())
@@ -304,7 +323,11 @@ async def test_moutai_golden_roe_fraction(seeded, session) -> None:
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
     rows = list((await session.execute(select(PeerAnnualSnapshot))).scalars())
@@ -319,7 +342,11 @@ async def test_roe_conversion_is_exactly_one_division_for_all_companies(seeded, 
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
     tokens = {e["code"]: e for e in raw_tokens(SAMPLE_PATH)["companies"]}
@@ -452,7 +479,11 @@ async def test_tampered_audit_value_rejected_even_with_matched_status(seeded, se
     audit[0]["api_value"] = audit[0]["api_value"] + Decimal("1.00")
     with pytest.raises(PeerAnnualImportError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     assert any("does not match the audited original value" in p for p in excinfo.value.problems)
     assert await snapshot_count(session) == 0  # nothing was written
@@ -464,7 +495,11 @@ async def test_tampered_sample_value_rejected(seeded, session) -> None:
     sample["companies"][0]["营业收入"] = sample["companies"][0]["营业收入"] + Decimal("0.01")
     with pytest.raises(PeerAnnualImportError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     assert any("does not match the audited original value" in p for p in excinfo.value.problems)
     assert await snapshot_count(session) == 0
@@ -476,7 +511,11 @@ async def test_missing_audit_record_rejects_whole_batch(seeded, session) -> None
     del audit[3]
     with pytest.raises(PeerAnnualImportError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     assert "113/114" in str(excinfo.value)
     assert await snapshot_count(session) == 0
@@ -490,7 +529,11 @@ async def test_extra_audit_record_for_unknown_company_rejected(seeded, session) 
     audit.append(extra)
     with pytest.raises(PeerAnnualImportError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     assert any("999999.SZ" in p and "not in the sample" in p for p in excinfo.value.problems)
     assert await snapshot_count(session) == 0
@@ -503,7 +546,11 @@ async def test_unit_mismatch_rejected(seeded, session) -> None:
     next(r for r in audit if r["field"] == "加权平均ROE")["matched_row"]["unit"] = "CNY"
     with pytest.raises(PeerAnnualImportError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     assert any(
         "unit 'CNY' does not match the expected 'percent'" in p for p in excinfo.value.problems
@@ -513,7 +560,11 @@ async def test_unit_mismatch_rejected(seeded, session) -> None:
     next(r for r in audit2 if r["field"] == "营业收入")["matched_row"]["unit"] = "percent"
     with pytest.raises(PeerAnnualImportError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit2, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit2,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     assert any(
         "unit 'percent' does not match the expected 'CNY'" in p for p in excinfo.value.problems
@@ -592,7 +643,11 @@ async def test_unresolvable_code_rejects_whole_batch(session) -> None:
     # No listing seeded: 000568.SZ cannot be resolved.
     with pytest.raises(ValueError) as excinfo:
         await import_peer_annual_snapshots(
-            session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=audit,
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     message = str(excinfo.value)
     assert "000568.SZ" in message and "whole batch rejected" in message
@@ -608,12 +663,20 @@ async def test_reimport_is_idempotent_and_import_time_stays_out_of_the_hash(
     sample = load_sample_json(SAMPLE_PATH)
     audit = load_audit_json(AUDIT_PATH)
     first = await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
     # A later re-run (different import time) must not add rows or double-divide.
     second = await import_peer_annual_snapshots(
-        session, sample=sample, audit=audit, acquired_at=LATER_ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=audit,
+        acquired_at=LATER_ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await session.commit()
     assert (first.inserted, first.skipped_existing) == (19, 0)

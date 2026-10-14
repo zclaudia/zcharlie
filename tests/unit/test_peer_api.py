@@ -72,8 +72,12 @@ from investment_agent.storage.repositories.research_snapshot import (
 )
 from tests.support.peer_world import (
     AUDIT_PATH,
+    ORIGINALS_ROOT,
     RUN02_SAMPLE,
     SAMPLE_PATH,
+)
+from tests.support.peer_world import (
+    requires_originals as requires_originals,
 )
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
@@ -111,7 +115,11 @@ async def _seed_fixed_evidence(session: Any) -> None:
         await listing_repo.ensure_a_share_listing(entry["code"], company_name=entry["name"])
     await import_sample_roster(session, sample_path=RUN02_SAMPLE, acquired_at=ACQUIRED_AT)
     await import_peer_annual_snapshots(
-        session, sample=sample, audit=load_audit_json(AUDIT_PATH), acquired_at=ACQUIRED_AT
+        session,
+        sample=sample,
+        audit=load_audit_json(AUDIT_PATH),
+        acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
 
 
@@ -252,7 +260,9 @@ def _get(client: TestClient, path: str) -> Any:
 # --- golden chain over HTTP ------------------------------------------------------
 
 
-def test_golden_chain_reads_partial_with_maotai_values(api_client, tmp_path) -> None:
+def test_golden_chain_reads_partial_with_maotai_values(
+    api_client, requires_originals, tmp_path
+) -> None:
     batch_run_id = seed_golden_chain(tmp_path)
 
     assert _pipeline_run_count() == 0  # nothing queued by the seeding either
@@ -326,7 +336,7 @@ def test_golden_chain_reads_partial_with_maotai_values(api_client, tmp_path) -> 
 
 
 def test_golden_companies_endpoint_returns_fixed_version_detail(
-    api_client, tmp_path
+    api_client, requires_originals, tmp_path
 ) -> None:
     batch_run_id = seed_golden_chain(tmp_path)
 
@@ -520,7 +530,9 @@ def test_feature_disabled_returns_the_not_covered_state(api_client, tmp_path, mo
     assert companies.json()["status"] == "not_supported"
 
 
-def test_feature_enabled_reads_normally(api_client, tmp_path) -> None:
+def test_feature_enabled_reads_normally(
+    api_client, requires_originals, tmp_path
+) -> None:
     seed_golden_chain(tmp_path)
 
     response = _get(api_client, f"/stocks/{MAOTAI}/industry-peer-context")

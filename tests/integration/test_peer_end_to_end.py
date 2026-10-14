@@ -79,10 +79,14 @@ from tests.support.conversations import (
 )
 from tests.support.peer_world import (
     AUDIT_PATH,
+    ORIGINALS_ROOT,
     PEERS_JS,
     RUN02_SAMPLE,
     SAMPLE_PATH,
     labels_object,
+)
+from tests.support.peer_world import (
+    requires_originals as requires_originals,
 )
 from tests.support.research import progress, response, run
 
@@ -193,7 +197,11 @@ async def import_fixed_evidence() -> tuple[Any, Any]:
             session, sample_path=RUN02_SAMPLE, acquired_at=ACQUIRED_AT
         )
         report = await import_peer_annual_snapshots(
-            session, sample=sample, audit=load_audit_json(AUDIT_PATH), acquired_at=ACQUIRED_AT
+            session,
+            sample=sample,
+            audit=load_audit_json(AUDIT_PATH),
+            acquired_at=ACQUIRED_AT,
+            originals_root=ORIGINALS_ROOT,
         )
     return roster, report
 
@@ -317,7 +325,9 @@ async def no_collect_run_was_enqueued() -> None:
 # --- the golden full chain --------------------------------------------------------
 
 
-async def test_golden_chain_migration_to_agent_tool_reads_one_batch(peer_world) -> None:
+async def test_golden_chain_migration_to_agent_tool_reads_one_batch(
+    peer_world, requires_originals
+) -> None:
     world = peer_world
 
     # WP1: the migrations built the peer tables (048 is head).
@@ -482,7 +492,9 @@ async def test_forged_calculation_reference_is_refused_in_the_full_task_flow(pee
 # --- forged peer evidence refused end to end ---------------------------------------
 
 
-async def test_forged_verified_peer_evidence_is_refused_at_the_research_save(peer_world) -> None:
+async def test_forged_verified_peer_evidence_is_refused_at_the_research_save(
+    peer_world, requires_originals
+) -> None:
     world = peer_world
     await build_chain(world.data_dir)
 
@@ -649,7 +661,9 @@ def _run_tool(script: Path, args: list[str]) -> None:
     assert result.returncode == 0, (result.stderr or result.stdout)[-2000:]
 
 
-async def test_backup_restore_preserves_the_peer_chain(peer_world, tmp_path) -> None:
+async def test_backup_restore_preserves_the_peer_chain(
+    peer_world, requires_originals, tmp_path
+) -> None:
     world = peer_world
     batch_run_id = await build_chain(world.data_dir)
     cutoff = read_cutoff()
@@ -805,7 +819,9 @@ async def test_flag_off_answers_not_covered_at_api_agent_and_page(peer_world, mo
     await no_collect_run_was_enqueued()
 
 
-async def test_flag_on_exposes_only_the_imported_results(peer_world) -> None:
+async def test_flag_on_exposes_only_the_imported_results(
+    peer_world, requires_originals
+) -> None:
     world = peer_world
     # Flag on, roster imported but nothing submitted yet: the covered target
     # reads as missing - nothing is fabricated, nothing is fetched.

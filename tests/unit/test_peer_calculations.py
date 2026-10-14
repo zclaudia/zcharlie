@@ -86,7 +86,10 @@ from investment_agent.storage.models.evidence import SavedCalculation
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
-from tests.support.peer_world import AUDIT_PATH, RUN02_SAMPLE, SAMPLE_PATH
+from tests.support.peer_world import AUDIT_PATH, ORIGINALS_ROOT, RUN02_SAMPLE, SAMPLE_PATH
+from tests.support.peer_world import (
+    requires_originals as requires_originals,
+)
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
 AS_OF = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
@@ -124,6 +127,7 @@ async def golden(db_session):
         sample=sample,
         audit=load_audit_json(AUDIT_PATH),
         acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await db_session.commit()
     assert (report.inserted, report.skipped_existing) == (19, 0)
@@ -347,7 +351,9 @@ async def test_every_golden_peer_row_reproduces(golden, db_session) -> None:
             )
 
 
-async def test_run02_original_backed_fields_are_materialized(golden, db_session) -> None:
+async def test_run02_original_backed_fields_are_materialized(
+    golden, db_session, requires_originals
+) -> None:
     """Official metadata supplies real dates; only core original-backed fields materialize."""
 
     rows = list((await db_session.execute(select(PeerAnnualSnapshot))).scalars())

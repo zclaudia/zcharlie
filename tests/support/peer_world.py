@@ -8,7 +8,14 @@ module). This module is their single shared home:
   tracked under ``tests/fixtures/peer_run02`` (byte-identical copies of the
   untracked ``research/industry-data-validation/evidence/run-02`` originals),
   so a clean checkout can run the cluster. Never add a skip on a missing
-  file: absence must fail loudly.
+  *tracked* file: absence must fail loudly.
+* **run-02 filing originals** - the 37 MB of third-party filing PDFs are not
+  tracked, so the verified proof path cannot run everywhere. ``ORIGINALS_ROOT``
+  resolves the evidence root (``ZCHARLIE_PEER_ORIGINALS`` override, else the
+  ``research/`` checkout path) and tests that assert the verified path request
+  the ``requires_originals`` guard, which skips with exact instructions. The
+  metadata half (``derived/filings/<TICKER>.json``) is tracked byte-identical
+  under ``RUN02_FIXTURES/derived/filings``.
 * **synthetic worlds** - the dated synthetic cohort (service/resolver/wp13
   tests) and the offline collection doubles (jobs/review tests).
 * **web page helpers** - the shipped ``industry_peers.js`` path and its
@@ -23,6 +30,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -121,6 +129,44 @@ RUN02_SAMPLE = RUN02_FIXTURES / "sample.json"
 DERIVED = RUN02_FIXTURES / "derived"
 SAMPLE_PATH = DERIVED / "baijiu-peer-sample.json"
 AUDIT_PATH = DERIVED / "baijiu-official-audit.json"
+
+# --- run-02 filing originals (untracked PDFs; opt-in verified path) -------------
+
+ORIGINALS_ROOT = Path(
+    os.environ.get("ZCHARLIE_PEER_ORIGINALS")
+    or REPO_ROOT / "research" / "industry-data-validation" / "evidence" / "run-02"
+)
+"""The evidence root the annual importer reads (``--originals-root``).
+
+It holds ``derived/filings/<TICKER>.json`` metadata plus the untracked
+``raw/official/<TICKER>_2025.pdf`` filing bytes. ``ZCHARLIE_PEER_ORIGINALS``
+overrides the location; unset, the local ``research/`` checkout path is used.
+Absent originals are a supported importer state (audited fields stay
+``candidate`` instead of ``verified``), so tests that assert the verified
+proof path must request ``requires_originals``. The metadata half of this root
+is also tracked byte-identically under ``RUN02_FIXTURES/derived/filings``.
+"""
+
+ORIGINALS_RAWS = ORIGINALS_ROOT / "raw" / "official"
+ORIGINALS_AVAILABLE = ORIGINALS_RAWS.is_dir() and any(ORIGINALS_RAWS.iterdir())
+"""True only when the originals root exists and ``raw/official`` is non-empty."""
+
+ORIGINALS_HINT = (
+    f"run-02 filing originals unavailable: {ORIGINALS_RAWS} is missing or empty, "
+    "so the importer keeps every audited field 'candidate' instead of 'verified' "
+    "and this test's verified path cannot run. Enable it by pointing "
+    "ZCHARLIE_PEER_ORIGINALS at an evidence root containing raw/official/*.pdf "
+    f"(checkout default: {REPO_ROOT / 'research' / 'industry-data-validation' / 'evidence' / 'run-02'})."
+)
+
+
+@pytest.fixture
+def requires_originals() -> None:
+    """Skip (loudly, with the enable instructions) when the PDFs are absent."""
+
+    if not ORIGINALS_AVAILABLE:
+        pytest.skip(ORIGINALS_HINT)
+
 
 # --- synthetic world (dated fields, from the service/resolver fixtures) --------
 
@@ -392,6 +438,7 @@ async def golden(db_session):
         sample=sample,
         audit=load_audit_json(AUDIT_PATH),
         acquired_at=ACQUIRED_AT,
+        originals_root=ORIGINALS_ROOT,
     )
     await db_session.commit()
     return roster.snapshot
