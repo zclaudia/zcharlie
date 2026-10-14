@@ -17,6 +17,7 @@ from investment_agent.cli.commands import settings as settings_cmd
 from investment_agent.cli.commands import snapshot as snapshot_cmd
 from investment_agent.cli.commands import verify as verify_cmd
 from investment_agent.cli.commands import worker as worker_cmd
+from investment_agent.cli.runtime import bootstrap_settings
 
 app = typer.Typer(help="Investment Agent CLI")
 app.add_typer(admin_cmd.app, name="admin", help="Admin and ops commands")
@@ -43,10 +44,9 @@ app.add_typer(
 @app.callback()
 def _bootstrap() -> None:
     try:
-        from investment_agent.config import Settings
         from investment_agent.logging import configure_logging
 
-        settings = Settings()  # type: ignore[call-arg]
+        settings = bootstrap_settings()
         configure_logging(settings.log_level)
     except Exception:
         # Allow --help invocations without full env configuration

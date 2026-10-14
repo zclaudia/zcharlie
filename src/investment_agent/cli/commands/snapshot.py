@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import os
 import re
-import socket
 from collections.abc import Awaitable, Callable
 from datetime import date
 from pathlib import Path
@@ -15,9 +13,11 @@ from pydantic import ValidationError
 from rich import print as rprint
 from rich.table import Table
 
+from investment_agent.cli.parsing import UNIVERSE_HELP, date_option, universe_code
+from investment_agent.cli.runtime import bootstrap_settings, inline_worker, run_inline
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
-from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
+from investment_agent.providers.baostock_reference import IndexCode
 from investment_agent.settings.loader import load_runtime, load_settings
 from investment_agent.snapshots.jobs import (
     AKSHARE_FINANCIAL_PARTS,
@@ -54,7 +54,6 @@ if TYPE_CHECKING:
 
 app = typer.Typer(help="Point-in-time snapshot collection (universe, industry, market, financial, dividends)")
 
-_UNIVERSE_HELP = f"Universe code: {', '.join(INDEX_CODES)}"
 _PROVIDER_HELP = (
     "Data source: baostock (target pool breadth, default), ifind (watchlist only; "
     "spends the iFinD gateway quota) or akshare (Eastmoney financials only); "
@@ -72,15 +71,6 @@ _CONFIG_HELP = (
     "App config; its snapshot.universes is the target pool only until the settings "
     "import ran (afterwards: the schedule.snapshot.universes setting)"
 )
-
-
-def _date(value: str | None, name: str) -> date:
-    if value is None:
-        return shanghai_today()
-    try:
-        return date.fromisoformat(value)
-    except ValueError as exc:
-        raise typer.BadParameter("expected YYYY-MM-DD", param_hint=name) from exc
 
 
 def _period(value: str | None, name: str, *, default: date) -> date:
@@ -105,13 +95,6 @@ def _earnings_part(value: str) -> EarningsEventPart:
     raise typer.BadParameter(" | ".join(EARNINGS_EVENT_PARTS), param_hint="--part")
 
 
-def _universe(value: str) -> IndexCode:
-    code = value.strip().upper()
-    if code not in INDEX_CODES:
-        raise typer.BadParameter(_UNIVERSE_HELP, param_hint="--universe")
-    return code
-
-
 def _provider(value: str) -> SnapshotProvider:
     provider = value.strip().lower()
     if provider not in SNAPSHOT_PROVIDERS:
@@ -133,7 +116,7 @@ def _routing(
             "iFinD only collects the watchlist scope; use --provider baostock for target pools",
             param_hint="--scope",
         )
-    code = _universe(universe) if scope == "universe" else None
+    code = universe_code(universe) if scope == "universe" else None
     return chosen, scope, code
 
 
@@ -167,7 +150,7 @@ async def target_pool_universes(settings: Settings, config_path: Path) -> tuple[
 
     async with session_scope() as session:
         runtime = await load_runtime(session, settings, config_path)
-    return tuple(sorted({_universe(code) for code in runtime.schedule.snapshot.universes}))
+    return tuple(sorted({universe_code(code) for code in runtime.schedule.snapshot.universes}))
 
 
 async def _loaded[T](bootstrap: Settings, main: Callable[[Settings], Awaitable[T]]) -> T:
@@ -182,7 +165,6 @@ PayloadFactory = Callable[[Settings], Awaitable[SnapshotPayload]]
 async def _submit(
     settings: Settings, payload: SnapshotPayload | PayloadFactory, *, now: bool
 ) -> None:
-    from investment_agent.research.worker import ResearchWorker
     from investment_agent.snapshots.handlers import snapshot_job_handlers
 
     if callable(payload):
@@ -199,19 +181,10 @@ async def _submit(
     if status != "queued":
         rprint(f"Run #{run_id} is {status}; nothing to run inline")
         return
-    worker = ResearchWorker(
-        settings=settings,
-        worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-        handlers=snapshot_job_handlers(settings),
+    finished = await run_inline(
+        settings, run_id=run_id, handlers=snapshot_job_handlers(settings)
     )
-    await worker.run_once(run_id=run_id)
-    async with session_scope() as session:
-        from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
-
-        finished = await PipelineRunRepository(session).get(run_id)
-        assert finished is not None
-        rprint(f"Run #{run_id} finished: status={finished.status}")
-        _print_completeness(finished.metadata_json, finished.error_summary)
+    _print_completeness(finished.metadata_json, finished.error_summary)
 
 
 def _print_completeness(metadata: dict[str, object], error: str | None) -> None:
@@ -227,7 +200,7 @@ def _print_completeness(metadata: dict[str, object], error: str | None) -> None:
 
 
 def _run(payload: SnapshotPayload | PayloadFactory, now: bool) -> None:
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
     run_with_engine(
         bootstrap.database_url,
         lambda: _loaded(bootstrap, lambda settings: _submit(settings, payload, now=now)),
@@ -239,14 +212,14 @@ _NOW_HELP = "Also execute the job in this process (debugging) instead of leaving
 
 @app.command("sync-universe")
 def sync_universe(
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     as_of: str | None = typer.Option(None, help="Constituents as of (YYYY-MM-DD, default today)"),
     now: bool = typer.Option(False, "--now", help=_NOW_HELP),
 ) -> None:
     """Enqueue a baostock constituent sync for one universe."""
 
     _run(
-        UniverseSyncPayload(universe_code=_universe(universe), as_of=_date(as_of, "--as-of")),
+        UniverseSyncPayload(universe_code=universe_code(universe), as_of=date_option(as_of, "--as-of")),
         now,
     )
 
@@ -282,9 +255,9 @@ def sync_industry(
     systems = _systems(system)
     if all_market and universe:
         raise typer.BadParameter("--all-market excludes --universe", param_hint="--all-market")
-    day = _date(as_of, "--as-of")
+    day = date_option(as_of, "--as-of")
     if all_market or universe:
-        codes = tuple(sorted({_universe(code) for code in universe or []}))
+        codes = tuple(sorted({universe_code(code) for code in universe or []}))
         _run(IndustrySyncPayload(as_of=day, universe_codes=codes, systems=systems), now)
         return
 
@@ -297,7 +270,7 @@ def sync_industry(
 
 @app.command("collect-market")
 def collect_market(
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     provider: str = typer.Option("baostock", help=_PROVIDER_HELP),
     scope: str | None = typer.Option(None, help=_SCOPE_HELP),
     trade_date: str | None = typer.Option(
@@ -313,7 +286,7 @@ def collect_market(
             provider=chosen,
             scope=chosen_scope,
             universe_code=code,
-            trade_date=_date(trade_date, "--date"),
+            trade_date=date_option(trade_date, "--date"),
         )
     except ValidationError as exc:
         raise typer.BadParameter(str(exc), param_hint="--provider") from exc
@@ -322,7 +295,7 @@ def collect_market(
 
 @app.command("collect-close-quote")
 def collect_close_quote(
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     scope: str | None = typer.Option(
         None,
         help="universe (members of --universe plus watchlist / candidates / holdings, "
@@ -344,7 +317,7 @@ def collect_close_quote(
             provider="tencent",
             scope=chosen_scope,
             universe_code=code,
-            trade_date=_date(trade_date, "--date"),
+            trade_date=date_option(trade_date, "--date"),
             slot="retry" if retry else "close",
         )
     except ValidationError as exc:
@@ -363,7 +336,7 @@ def collect_earnings_events(
         help="Report period (YYYY-MM-DD or YYYYMMDD, e.g. 20250930); default: the latest "
         "quarter end before --as-of",
     ),
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     scope: str | None = typer.Option(
         None,
         help="universe (members of --universe plus watchlist / candidates / holdings, "
@@ -377,7 +350,7 @@ def collect_earnings_events(
     from investment_agent.scheduler.snapshot_jobs import earnings_report_period
 
     _, chosen_scope, code = _routing("akshare", scope, universe)
-    membership = _date(as_of, "--as-of")
+    membership = date_option(as_of, "--as-of")
     try:
         payload = EarningsEventPayload(
             provider="akshare",
@@ -395,7 +368,7 @@ def collect_earnings_events(
 @app.command("collect-financial")
 def collect_financial(
     period: str = typer.Option(..., help="Report period, a quarter end such as 2026-06-30"),
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     provider: str = typer.Option("baostock", help=_PROVIDER_HELP),
     scope: str | None = typer.Option(None, help=_SCOPE_HELP),
     as_of: str | None = typer.Option(None, help="Membership date (YYYY-MM-DD, default today)"),
@@ -412,8 +385,8 @@ def collect_financial(
             provider=chosen,
             scope=chosen_scope,
             universe_code=code,
-            report_period=_date(period, "--period"),
-            as_of=_date(as_of, "--as-of"),
+            report_period=date_option(period, "--period"),
+            as_of=date_option(as_of, "--as-of"),
             part=chosen_part,
         )
     except ValidationError as exc:
@@ -423,7 +396,7 @@ def collect_financial(
 
 @app.command("collect-dividends")
 def collect_dividends(
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     scope: str | None = typer.Option(None, help=_SCOPE_HELP),
     as_of: str | None = typer.Option(None, help="Membership date (YYYY-MM-DD, default today)"),
     year: list[int] | None = typer.Option(  # noqa: B008
@@ -441,7 +414,7 @@ def collect_dividends(
             provider="baostock",
             scope=chosen_scope,
             universe_code=code,
-            as_of=_date(as_of, "--as-of"),
+            as_of=date_option(as_of, "--as-of"),
             years=tuple(year or ()),
         )
     except ValidationError as exc:
@@ -492,7 +465,7 @@ async def _status(settings: Settings, limit: int) -> Table:
 def status(limit: int = typer.Option(3, min=1, max=50, help="Runs per kind")) -> None:
     """Latest runs per snapshot kind with their completeness."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
     rprint(run_with_engine(settings.database_url, lambda: _status(settings, limit)))
 
 
@@ -622,15 +595,9 @@ async def _backfill(
     if not now:
         rprint("Jobs run on the worker; re-run this command to resume, --status for progress.")
         return
-    from investment_agent.research.worker import ResearchWorker
     from investment_agent.snapshots.handlers import snapshot_job_handlers
 
-    worker = ResearchWorker(
-        settings=settings,
-        worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-        handlers=snapshot_job_handlers(settings),
-        kinds=[SNAPSHOT_BACKFILL],
-    )
+    worker = inline_worker(settings, snapshot_job_handlers(settings), kinds=[SNAPSHOT_BACKFILL])
     executed = 0
     while (run_id := await worker.run_once()) is not None:
         executed += 1
@@ -725,14 +692,9 @@ async def _akshare_backfill(
     if not now:
         rprint("Jobs run on the worker; re-run this command to resume, --status for progress.")
         return
-    from investment_agent.research.worker import ResearchWorker
     from investment_agent.snapshots.handlers import snapshot_job_handlers
 
-    worker = ResearchWorker(
-        settings=settings,
-        worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-        handlers=snapshot_job_handlers(settings),
-    )
+    worker = inline_worker(settings, snapshot_job_handlers(settings))
     for action in actions:
         if action.status == "queued":
             await worker.run_once(run_id=action.run_id)
@@ -741,7 +703,7 @@ async def _akshare_backfill(
 
 @app.command("backfill")
 def backfill(
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     prices: str = typer.Option("5y", help="Price / membership history depth (D5: 5y)"),
     annual: int = typer.Option(6, min=0, max=20, help="Annual reports to backfill (D5: 6)"),
     quarters: int = typer.Option(4, min=0, max=12, help="Latest periodic reports (D5: 4)"),
@@ -766,7 +728,7 @@ def backfill(
     financials; akshare: Eastmoney period summaries (+ cash-flow statements).
     Re-running the command resumes unfinished parts."""
 
-    day = _date(as_of, "--as-of")
+    day = date_option(as_of, "--as-of")
     if day > shanghai_today():
         raise typer.BadParameter("--as-of cannot be in the future", param_hint="--as-of")
     chosen = provider.strip().lower()
@@ -776,9 +738,9 @@ def backfill(
         raise typer.BadParameter(
             "--with-cash-flow only applies to --provider akshare", param_hint="--with-cash-flow"
         )
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
     if chosen == "akshare":
-        code = _universe(universe)
+        code = universe_code(universe)
         run_with_engine(
             bootstrap.database_url,
             lambda: _loaded(
@@ -798,7 +760,7 @@ def backfill(
         )
         return
     payload = SnapshotBackfillPayload(
-        universe_code=_universe(universe),
+        universe_code=universe_code(universe),
         as_of=day,
         part="membership",
         price_years=_years(prices),

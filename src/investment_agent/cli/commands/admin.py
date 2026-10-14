@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 from sqlalchemy import func, select
 
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.ops import LLMCall
 from investment_agent.storage.repositories.provider_call import ProviderCallRepository
@@ -50,7 +50,7 @@ def cost_summary(
             )
             return list((await session.execute(stmt)).all())  # type: ignore[arg-type]
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
     rows = run_with_engine(settings.database_url, _run)
     table = Table(title=f"LLM Cost Summary — {month}")
     table.add_column("Provider")
@@ -90,7 +90,7 @@ def prune_provider_calls(
         async with session_scope() as session:
             return await ProviderCallRepository(session).prune(before=before)
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
     removed = run_with_engine(settings.database_url, _run)
     _console.print(
         f"Removed {removed} provider_call rows older than {days} days "

@@ -3,45 +3,24 @@
 from __future__ import annotations
 
 import json
-import os
-import socket
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 import typer
 from rich import print as rprint
 from rich.markup import escape
 from rich.table import Table
 
-from investment_agent.clock import shanghai_today
-from investment_agent.config import Settings
-from investment_agent.providers.baostock_reference import INDEX_CODES, IndexCode
+from investment_agent.cli.parsing import UNIVERSE_HELP, date_option, universe_code
+from investment_agent.cli.runtime import bootstrap_settings, run_inline
 from investment_agent.settings.loader import load_settings
 from investment_agent.storage.database import run_with_engine
 
 app = typer.Typer(help="Weekly template screen over a target pool (screen_run)")
 
-_UNIVERSE_HELP = f"Universe code: {', '.join(INDEX_CODES)}"
-
-
-def _universe(value: str) -> IndexCode:
-    code = value.strip().upper()
-    if code not in INDEX_CODES:
-        raise typer.BadParameter(_UNIVERSE_HELP, param_hint="--universe")
-    return code
-
-
-def _date(value: str | None) -> date:
-    if value is None:
-        return shanghai_today()
-    try:
-        return date.fromisoformat(value)
-    except ValueError as exc:
-        raise typer.BadParameter("expected YYYY-MM-DD", param_hint="--as-of") from exc
-
 
 @app.command("run")
 def run(
-    universe: str = typer.Option("CSI300", help=_UNIVERSE_HELP),
+    universe: str = typer.Option("CSI300", help=UNIVERSE_HELP),
     as_of: str | None = typer.Option(None, help="Screen as of (YYYY-MM-DD, default today)"),
     now: bool = typer.Option(
         False, "--now", help="Also execute the job in this process instead of the worker"
@@ -63,22 +42,20 @@ def run(
     )
 
     payload = ScreenRunPayload(
-        universe_code=_universe(universe),
-        as_of=_date(as_of),
+        universe_code=universe_code(universe),
+        as_of=date_option(as_of),
         hit_cap=hit_cap,
         sync_templates=sync,
     )
     key = screen_idempotency_key(payload)
     if rerun:
         key = f"{key}:{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%f')}"
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
 
     async def submit() -> None:
         from investment_agent.candidates.lifecycle import CandidatePolicy
-        from investment_agent.research.worker import ResearchWorker
         from investment_agent.rules.screen_job import ScreenRunHandler
         from investment_agent.storage.database import session_scope
-        from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
         async with session_scope() as session:
             queued, created = await enqueue_screen_run(
@@ -93,21 +70,14 @@ def run(
             rprint(f"Run #{run_id} is {status}; nothing to run inline")
             return
         settings = await load_settings(base=bootstrap)
-        worker = ResearchWorker(
-            settings=settings,
-            worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-            handlers=[
-                ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings))
-            ],
+        finished = await run_inline(
+            settings,
+            run_id=run_id,
+            handlers=[ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings))],
         )
-        await worker.run_once(run_id=run_id)
-        async with session_scope() as session:
-            finished = await PipelineRunRepository(session).get(run_id)
-            assert finished is not None
-            rprint(f"Run #{run_id} finished: status={finished.status}")
-            if finished.error_summary:
-                rprint(f"Error: {escape(finished.error_summary)}")
-            _print_summary(finished.metadata_json)
+        if finished.error_summary:
+            rprint(f"Error: {escape(finished.error_summary)}")
+        _print_summary(finished.metadata_json)
 
     run_with_engine(bootstrap.database_url, submit)
 
@@ -146,7 +116,7 @@ def show(
 ) -> None:
     """Hits of one screen run (rank, strength, reasons)."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def load() -> None:
         from investment_agent.rules.screen_job import SCREEN_RUN, screen_results

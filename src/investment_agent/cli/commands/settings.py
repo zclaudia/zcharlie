@@ -16,7 +16,7 @@ from rich import print as rprint
 from rich.markup import escape
 from rich.table import Table
 
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.settings.crypto import EncryptionKeyError
 from investment_agent.settings.registry import SPECS_BY_KEY, defaults
 from investment_agent.settings.store import SettingsValidationError
@@ -62,7 +62,7 @@ def _display(item: dict[str, Any]) -> str:
 def list_settings() -> None:
     """Every runtime setting with its current value (secrets masked)."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> list[dict[str, Any]]:
         from investment_agent.settings.loader import store_for
@@ -94,7 +94,7 @@ def get_setting(key: str = typer.Argument(..., help="Setting key, e.g. candidate
     """Print one setting (a secret prints whether it is set and its hint only)."""
 
     _spec_or_exit(key)
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> dict[str, Any]:
         from investment_agent.settings.loader import store_for
@@ -135,7 +135,7 @@ def set_setting(
         except json.JSONDecodeError as exc:
             rprint(f"[red]Invalid JSON for {escape(key)}: {escape(str(exc))}[/red]")
             raise typer.Exit(code=2) from exc
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> list[str]:
         from investment_agent.settings.loader import store_for
@@ -168,7 +168,7 @@ def import_settings(
 ) -> None:
     """Import runtime values explicitly set in env / .env and the app.yaml schedules."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> list[str] | None:
         from investment_agent.settings.loader import ensure_imported
@@ -190,7 +190,7 @@ def import_settings(
 def history(limit: int = typer.Option(20, min=1, max=500, help="Most recent N changes")) -> None:
     """Recent setting changes (secrets shown masked)."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> list[tuple[str, str, str, str, str, str]]:
         from investment_agent.settings.loader import store_for

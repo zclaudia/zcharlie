@@ -7,6 +7,8 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from investment_agent.cli.runtime import bootstrap_settings
+
 app = typer.Typer(help="Evidence-first research workflows")
 _DEFAULT_OUTPUT_ROOT = Path("data/research-runs")
 
@@ -51,7 +53,6 @@ def run_ifind_research(
     watchlist research uses ``ia research snapshot`` (free sources) instead.
     """
 
-    from investment_agent.config import Settings
     from investment_agent.research.ifind_chain import (
         ResearchChainResult,
         ResearchPartialError,
@@ -67,7 +68,7 @@ def run_ifind_research(
             "must contain 1 to 128 characters",
             param_hint="--idempotency-key",
         )
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
 
     async def main() -> ResearchChainResult:
         settings = await load_settings(base=bootstrap)
@@ -134,7 +135,6 @@ def run_snapshot_research(
     verification request (trigger ``missing``) and ends the run partial.
     """
 
-    from investment_agent.config import Settings
     from investment_agent.research.ifind_chain import (
         ResearchChainResult,
         ResearchPartialError,
@@ -143,7 +143,7 @@ def run_snapshot_research(
     from investment_agent.settings.loader import load_settings
     from investment_agent.storage.database import run_with_engine
 
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
 
     async def main() -> ResearchChainResult:
         return await run_ifind_research_chain(

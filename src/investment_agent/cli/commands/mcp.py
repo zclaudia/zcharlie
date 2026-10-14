@@ -11,7 +11,7 @@ import typer
 from rich import print as rprint
 from rich.table import Table
 
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.mcp_server.server import build_server
 
 app = typer.Typer(help="Read-only MCP server for Claude Desktop and other MCP clients")
@@ -21,7 +21,7 @@ async def _serve() -> None:
     from investment_agent.mcp_server.readonly import readonly_engine, readonly_sessions
     from investment_agent.settings.loader import load_settings
 
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
     engine = readonly_engine(bootstrap)
     try:
         sessions = readonly_sessions(engine)

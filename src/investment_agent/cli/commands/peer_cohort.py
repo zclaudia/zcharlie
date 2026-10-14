@@ -41,8 +41,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import socket
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -55,7 +53,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.cli.commands import peer_annual as peer_annual_cmd
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings, inline_worker
 from investment_agent.domain.a_share import parse_a_share_ticker
 from investment_agent.industry_peers.batch import DEFAULT_COHORT_KEY, submit_offline_batch
 from investment_agent.industry_peers.jobs import (
@@ -450,7 +448,7 @@ def import_roster(
     calls; the roster is not registered as a screening pool or watchlist.
     """
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
@@ -543,7 +541,7 @@ def submit_offline_batch_command(
         if parse_a_share_ticker(item.upper()) is None:
             typer.echo(f"--ticker must be a canonical A-share code, got {item!r}", err=True)
             raise typer.Exit(1)
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
@@ -648,7 +646,7 @@ def collect_command(
     if period is None:
         typer.echo("--report-period is required (annual period as YYYY-12-31)", err=True)
         raise typer.Exit(1)
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
@@ -697,15 +695,10 @@ def collect_command(
 
     if not (run_now and summary["created"] and summary["status"] == "queued"):
         return
-    from investment_agent.research.worker import ResearchWorker
     from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
     async def run_inline() -> dict[str, Any]:
-        worker = ResearchWorker(
-            settings=settings,
-            worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-            handlers=[PeerCollectHandler(settings=settings)],
-        )
+        worker = inline_worker(settings, [PeerCollectHandler(settings=settings)])
         await worker.run_once(run_id=summary["run_id"])
         async with session_scope() as session:
             finished = await PipelineRunRepository(session).get(summary["run_id"])
@@ -739,7 +732,7 @@ def admit_command(
     if parse_a_share_ticker(ticker.upper()) is None:
         typer.echo(f"ticker must be a canonical A-share code, got {ticker!r}", err=True)
         raise typer.Exit(1)
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
     cooldown = (
         settings.peer_collect_admission_cooldown_seconds if cooldown_seconds < 0 else cooldown_seconds
     )

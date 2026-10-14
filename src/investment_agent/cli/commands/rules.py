@@ -10,7 +10,7 @@ from rich import print as rprint
 from rich.markup import escape
 from rich.table import Table
 
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings, run_inline
 from investment_agent.rules.schema import RuleTemplate, to_yaml
 from investment_agent.rules.templates import (
     DEFAULT_TEMPLATES_DIR,
@@ -30,8 +30,7 @@ def _run[T](main: Callable[[], Awaitable[T]]) -> T:
 
     from investment_agent.storage.database import run_with_engine
 
-    settings = Settings()  # type: ignore[call-arg]
-    return run_with_engine(settings.database_url, main)
+    return run_with_engine(bootstrap_settings().database_url, main)
 
 
 def _report(exc: RuleValidationError) -> None:
@@ -208,13 +207,9 @@ def draft(
         day = date.fromisoformat(as_of) if as_of else shanghai_today()
     except ValueError as exc:
         raise typer.BadParameter("expected YYYY-MM-DD", param_hint="--as-of") from exc
-    bootstrap = Settings()  # type: ignore[call-arg]
+    bootstrap = bootstrap_settings()
 
     async def submit() -> int:
-        import os
-        import socket
-
-        from investment_agent.research.worker import ResearchWorker
         from investment_agent.rules.drafting import (
             RuleDraftHandler,
             enqueue_rule_draft,
@@ -225,7 +220,6 @@ def draft(
         from investment_agent.storage.database import session_scope
         from investment_agent.storage.repositories.pipeline_run import (
             IdempotencyPayloadMismatchError,
-            PipelineRunRepository,
         )
 
         async with session_scope() as session:
@@ -283,18 +277,12 @@ def draft(
         from investment_agent.settings.loader import load_settings
 
         settings = await load_settings(base=bootstrap)
-        worker = ResearchWorker(
-            settings=settings,
-            worker_id=f"cli:{socket.gethostname()}:{os.getpid()}",
-            handlers=[RuleDraftHandler(settings=settings)],
+        finished = await run_inline(
+            settings, run_id=run_id, handlers=[RuleDraftHandler(settings=settings)]
         )
-        await worker.run_once(run_id=run_id)
+        if finished.error_summary:
+            rprint(f"Error: {escape(finished.error_summary)}")
         async with session_scope() as session:
-            finished = await PipelineRunRepository(session).get(run_id)
-            assert finished is not None
-            rprint(f"Run #{run_id} finished: status={finished.status}")
-            if finished.error_summary:
-                rprint(f"Error: {escape(finished.error_summary)}")
             rule_id = (finished.metadata_json or {}).get("rule_instance_id")
             if not isinstance(rule_id, int):
                 return 0 if finished.status == "success" else 2

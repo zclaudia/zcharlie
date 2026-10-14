@@ -5,7 +5,7 @@ import socket
 
 import typer
 
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.logging import configure_logging
 from investment_agent.research.worker import run_worker
 from investment_agent.storage.database import run_with_engine
@@ -43,7 +43,7 @@ def start(
 ) -> None:
     """Claim queued jobs (research and snapshot collection) and execute them."""
 
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
     configure_logging(settings.log_level)
     identity = worker_id or f"{socket.gethostname()}:{os.getpid()}"
     if len(identity) > 128:

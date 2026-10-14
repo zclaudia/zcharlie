@@ -7,7 +7,7 @@ from typing import Any
 import typer
 from sqlalchemy.exc import OperationalError
 
-from investment_agent.config import Settings
+from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.domain.security import DEFAULT_PILOT_LIST_PATH, load_pilot_identities
 from investment_agent.materials.bootstrap import import_pilot_materials, initialize_pilot
 from investment_agent.storage.database import run_with_engine, session_scope
@@ -28,7 +28,7 @@ def _run(pilot_list: Path, source_dir: Path | None, company_keys: list[str]) -> 
         identity for identity in identities
         if not company_keys or identity.company_key in company_keys
     )
-    settings = Settings()  # type: ignore[call-arg]
+    settings = bootstrap_settings()
 
     async def main() -> dict[str, Any]:
         async with session_scope() as session:
