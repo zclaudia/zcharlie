@@ -15,6 +15,11 @@ from investment_agent.agent.tasks import ActionResult, TaskClaim, TaskService, f
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import EvidenceRecord, ToolResult
 from investment_agent.evidence.store import EvidenceService
+from investment_agent.industry_peers.contracts import PeerContextBinding
+from investment_agent.industry_peers.resolver import (
+    PeerContextResolver,
+    peer_method_payload,
+)
 from investment_agent.investor.common import Contract, ObjectRef, Record, utc_timestamp
 from investment_agent.investor.contracts import (
     DIMENSIONS,
@@ -37,11 +42,6 @@ from investment_agent.investor.publication_numbers import (
     NumericResolver,
     ResolvedNode,
     resolve_assumption,
-)
-from investment_agent.industry_peers.contracts import PeerContextBinding
-from investment_agent.industry_peers.resolver import (
-    PeerContextResolver,
-    peer_method_payload,
 )
 from investment_agent.storage.models.evidence import SavedEvidence
 from investment_agent.storage.models.investor import InvestorCase

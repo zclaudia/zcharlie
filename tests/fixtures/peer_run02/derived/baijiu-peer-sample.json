@@ -1,0 +1,1030 @@
+{
+  "period": "2025-12-31",
+  "cohort": "Current observed 19-member baijiu index cohort, measured with latest-returned FY2025 financials; not the FY2025/2023 historical universe.",
+  "unit": "amounts CNY; ROE percent; derived ratios fraction",
+  "companies": [
+    {
+      "营业收入": 25731010647.32,
+      "营业总收入": 25731010647.32,
+      "归母净利润": 10830713936.14,
+      "归母净资产": 49780293635.74,
+      "合同负债": 3367443727.83,
+      "经营现金流": 7123218677.88,
+      "加权平均ROE": 22.66,
+      "code": "000568.SZ",
+      "name": "泸州老窖",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.13087102461638966,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 0.6576869004093253,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 18831982591.24,
+      "营业总收入": 18831982591.24,
+      "归母净利润": 3549108530.34,
+      "归母净资产": 25050216942.36,
+      "合同负债": 1519882489.7,
+      "经营现金流": 1947212977,
+      "加权平均ROE": 14.28,
+      "code": "000596.SZ",
+      "name": "古井贡酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.08070751352579296,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 0.548648473371272,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 1107847647.74,
+      "营业总收入": 1107847647.74,
+      "归母净利润": -33951823.75,
+      "归母净资产": 3738092983.9,
+      "合同负债": 175340831.01,
+      "经营现金流": -171519369.34,
+      "加权平均ROE": -0.88,
+      "code": "000799.SZ",
+      "name": "酒鬼酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.1582716101511736,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": null,
+      "CFO/归母净利润_reason": "non_positive_denominator"
+    },
+    {
+      "营业收入": 40528509770.23,
+      "营业总收入": 40528509770.23,
+      "归母净利润": 8954257202.51,
+      "归母净资产": 119932271234.99,
+      "合同负债": 13459591156.56,
+      "经营现金流": 29706259919.13,
+      "加权平均ROE": 6.89,
+      "code": "000858.SZ",
+      "name": "五粮液",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.3321018027276855,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 3.317557140396071,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 7223834604.34,
+      "营业总收入": 7223834604.34,
+      "归母净利润": -152358569.63,
+      "归母净资产": 6750273539.53,
+      "合同负债": 1410949280.25,
+      "经营现金流": -272576717.13,
+      "加权平均ROE": -2.21,
+      "code": "000860.SZ",
+      "name": "顺鑫农业",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.1953186025884808,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": null,
+      "CFO/归母净利润_reason": "non_positive_denominator"
+    },
+    {
+      "营业收入": 169754468.07,
+      "营业总收入": 169754468.07,
+      "归母净利润": 14121184.54,
+      "归母净资产": 169520753.52,
+      "合同负债": 10825704.57,
+      "经营现金流": 25524870.13,
+      "加权平均ROE": 8.78,
+      "code": "000995.SZ",
+      "name": "皇台酒业",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.06377272240949741,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 1.80755871136006,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 19211057613.05,
+      "营业总收入": 19211057613.05,
+      "归母净利润": 2206058926.68,
+      "归母净资产": 46797173513.37,
+      "合同负债": 7529047335.12,
+      "经营现金流": -763040326.79,
+      "加权平均ROE": 4.62,
+      "code": "002304.SZ",
+      "name": "洋河股份",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.3919121730188111,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": -0.3458839279231469,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 1101267955.96,
+      "营业总收入": 1101267955.96,
+      "归母净利润": 4298089.35,
+      "归母净资产": 2832894964.78,
+      "合同负债": 48431519.02,
+      "经营现金流": 15564713.17,
+      "加权平均ROE": 0.15,
+      "code": "002646.SZ",
+      "name": "天佑德酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.04397796082042645,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 3.6213098199087,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 1722298983.55,
+      "营业总收入": 1722298983.55,
+      "归母净利润": 216373720.31,
+      "归母净资产": 3876266814.29,
+      "合同负债": 41162873.82,
+      "经营现金流": -86084740.3,
+      "加权平均ROE": 5.58,
+      "code": "600197.SH",
+      "name": "伊力特",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.023899958261111638,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": -0.39785210596123155,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 722028589.37,
+      "营业总收入": 722028589.37,
+      "归母净利润": -198577959.58,
+      "归母净资产": 1960746001.31,
+      "合同负债": 158982884.3,
+      "经营现金流": -218939694.24,
+      "加权平均ROE": -9.58,
+      "code": "600199.SH",
+      "name": "金种子酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.22018918175902036,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": null,
+      "CFO/归母净利润_reason": "non_positive_denominator"
+    },
+    {
+      "营业收入": 168838102514.79,
+      "营业总收入": 172054171890.91,
+      "归母净利润": 82320067101.68,
+      "归母净资产": 244637811032.18,
+      "合同负债": 8006739780.94,
+      "经营现金流": 61522204989.35,
+      "加权平均ROE": 32.53,
+      "code": "600519.SH",
+      "name": "贵州茅台",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.047422588039560676,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 0.747353678822432,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 4121473456.04,
+      "营业总收入": 4121473456.04,
+      "归母净利润": 429781332.91,
+      "归母净资产": 5307434732.13,
+      "合同负债": 1025697048.47,
+      "经营现金流": -293434849.81,
+      "加权平均ROE": 8.1,
+      "code": "600559.SH",
+      "name": "老白干酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.24886659089526486,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": -0.6827538269826341,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 4419218512.51,
+      "营业总收入": 4419218512.51,
+      "归母净利润": 223006640.32,
+      "归母净资产": 6887388531.76,
+      "合同负债": 146683981.7,
+      "经营现金流": -522995154.18,
+      "加权平均ROE": 3.28,
+      "code": "600702.SH",
+      "name": "舍得酒业",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.03319228983241368,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": -2.3451999161528825,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 3037761624.63,
+      "营业总收入": 3037761624.63,
+      "归母净利润": 405888019.7,
+      "归母净资产": 5113546281.2,
+      "合同负债": 806024807.87,
+      "经营现金流": -624309026.73,
+      "加权平均ROE": 7.89,
+      "code": "600779.SH",
+      "name": "水井坊",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.2653351077104919,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": -1.5381311998108231,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 38718257657.74,
+      "营业总收入": 38718257657.74,
+      "归母净利润": 12246329337.25,
+      "归母净资产": 39633139714.36,
+      "合同负债": 7006704329.89,
+      "经营现金流": 9013519822.15,
+      "加权平均ROE": 33.48,
+      "code": "600809.SH",
+      "name": "山西汾酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.1809664162015648,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 0.7360180813309769,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 6018726913.75,
+      "营业总收入": 6018726913.75,
+      "归母净利润": 1985645392.08,
+      "归母净资产": 10635273211.1,
+      "合同负债": 484134691.88,
+      "经营现金流": 1234403273.26,
+      "加权平均ROE": 19.4,
+      "code": "603198.SH",
+      "name": "迎驾贡酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.08043805589085239,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 0.6216635045630882,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 10180698281.27,
+      "营业总收入": 10182116333.95,
+      "归母净利润": 2603690665.79,
+      "归母净资产": 16562615013.46,
+      "合同负债": 1708006613.73,
+      "经营现金流": 1508158610.16,
+      "加权平均ROE": 16.39,
+      "code": "603369.SH",
+      "name": "今世缘",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.16776910252534596,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 0.5792387820779783,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 3990595921.88,
+      "营业总收入": 3990595921.88,
+      "归母净利润": 673327111.62,
+      "归母净资产": 10401814927.06,
+      "合同负债": 334464339.4,
+      "经营现金流": -216175036.25,
+      "加权平均ROE": 6.43,
+      "code": "603589.SH",
+      "name": "口子窖",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.08381313115822342,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": -0.3210550006368983,
+      "CFO/归母净利润_reason": null
+    },
+    {
+      "营业收入": 2918472595.78,
+      "营业总收入": 2918472595.78,
+      "归母净利润": 354386738.61,
+      "归母净资产": 3430053202.42,
+      "合同负债": 819688326.23,
+      "经营现金流": 480139995.41,
+      "加权平均ROE": 10.57,
+      "code": "603919.SH",
+      "name": "金徽酒",
+      "period": "2025-12-31",
+      "合同负债/营业收入": 0.28086209458167877,
+      "合同负债/营业收入_reason": null,
+      "CFO/归母净利润": 1.3548475241856905,
+      "CFO/归母净利润_reason": null
+    }
+  ],
+  "totals": {
+    "营业收入": 358592900349.26,
+    "营业总收入": 361810387778.06,
+    "归母净利润": 126632165576.87,
+    "归母净资产": 603496827029.46,
+    "合同负债": 48059801722.29,
+    "经营现金流": 109407132932.87,
+    "合同负债/营业收入": 0.13402329403477042,
+    "CFO/归母净利润": 0.8639758503257703
+  },
+  "peers": [
+    {
+      "code": "000568.SZ",
+      "name": "泸州老窖",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 22.66,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 9.205555555555556,
+          "ascending_midrank_percentile": 88.88888888888889,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.13087102461638966,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16104538344985536,
+          "ascending_midrank_percentile": 44.44444444444444,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 0.6576869004093253,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.5135546492365768,
+          "ascending_midrank_percentile": 60.0,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "000596.SZ",
+      "name": "古井贡酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 14.28,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 9.671111111111111,
+          "ascending_midrank_percentile": 72.22222222222223,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.08070751352579296,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16383224517711073,
+          "ascending_midrank_percentile": 33.333333333333336,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 0.548648473371272,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.5208238777057804,
+          "ascending_midrank_percentile": 40.0,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "000799.SZ",
+      "name": "酒鬼酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": -0.88,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.513333333333334,
+          "ascending_midrank_percentile": 11.11111111111111,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.1582716101511736,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1493200635708678,
+          "peer_mean": 0.1595231286979229,
+          "ascending_midrank_percentile": 50.0,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": null,
+          "valid_peer_count": 16,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6004511433205333,
+          "peer_mean": 0.5225629149348736,
+          "ascending_midrank_percentile": null,
+          "excluded_peer_codes": [
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "000858.SZ",
+      "name": "五粮液",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 6.89,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.081666666666667,
+          "ascending_midrank_percentile": 44.44444444444444,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.3321018027276855,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.14986589577700557,
+          "ascending_midrank_percentile": 94.44444444444444,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 3.317557140396071,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.3362299665707938,
+          "ascending_midrank_percentile": 93.33333333333333,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "000860.SZ",
+      "name": "顺鑫农业",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": -2.21,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.587222222222222,
+          "ascending_midrank_percentile": 5.555555555555555,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.1953186025884808,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.15746496245140584,
+          "ascending_midrank_percentile": 66.66666666666667,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": null,
+          "valid_peer_count": 16,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6004511433205333,
+          "peer_mean": 0.5225629149348736,
+          "ascending_midrank_percentile": null,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "000995.SZ",
+      "name": "皇台酒业",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 8.78,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 9.976666666666667,
+          "ascending_midrank_percentile": 61.111111111111114,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.06377272240949741,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.1647730669057938,
+          "ascending_midrank_percentile": 22.22222222222222,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 1.80755871136006,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.4368965285065279,
+          "ascending_midrank_percentile": 86.66666666666667,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "002304.SZ",
+      "name": "洋河股份",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 4.62,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.207777777777778,
+          "ascending_midrank_percentile": 27.77777777777778,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.3919121730188111,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.1465430974274986,
+          "ascending_midrank_percentile": 100.0,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": -0.3458839279231469,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.5804593711254084,
+          "ascending_midrank_percentile": 26.666666666666668,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "002646.SZ",
+      "name": "天佑德酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 0.15,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.456111111111111,
+          "ascending_midrank_percentile": 16.666666666666668,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.04397796082042645,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16587277588296442,
+          "ascending_midrank_percentile": 11.11111111111111,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 3.6213098199087,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.3159797879366185,
+          "ascending_midrank_percentile": 100.0,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600197.SH",
+      "name": "伊力特",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 5.58,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.154444444444444,
+          "ascending_midrank_percentile": 33.333333333333336,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.023899958261111638,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16698822046959302,
+          "ascending_midrank_percentile": 0.0,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": -0.39785210596123155,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.5839239163279473,
+          "ascending_midrank_percentile": 20.0,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600199.SH",
+      "name": "金种子酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": -9.58,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.996666666666666,
+          "ascending_midrank_percentile": 0.0,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.22018918175902036,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.1560832636085981,
+          "ascending_midrank_percentile": 72.22222222222223,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": null,
+          "valid_peer_count": 16,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6004511433205333,
+          "peer_mean": 0.5225629149348736,
+          "ascending_midrank_percentile": null,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600519.SH",
+      "name": "贵州茅台",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 32.53,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 8.657222222222222,
+          "ascending_midrank_percentile": 94.44444444444444,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.047422588039560676,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16568140770412362,
+          "ascending_midrank_percentile": 16.666666666666668,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 0.747353678822432,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.5075768640090363,
+          "ascending_midrank_percentile": 73.33333333333333,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600559.SH",
+      "name": "老白干酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 8.1,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 10.014444444444445,
+          "ascending_midrank_percentile": 55.55555555555556,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.24886659089526486,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.15449007421214006,
+          "ascending_midrank_percentile": 77.77777777777777,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": -0.6827538269826341,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.6029173643960408,
+          "ascending_midrank_percentile": 13.333333333333334,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600702.SH",
+      "name": "舍得酒业",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 3.28,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.282222222222222,
+          "ascending_midrank_percentile": 22.22222222222222,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.03319228983241368,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16647197982674292,
+          "ascending_midrank_percentile": 5.555555555555555,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": -2.3451999161528825,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.7137471036740574,
+          "ascending_midrank_percentile": 0.0,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600779.SH",
+      "name": "水井坊",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 7.89,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.494999999999999,
+          "peer_mean": 10.026111111111112,
+          "ascending_midrank_percentile": 50.0,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.2653351077104919,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.15357515661129412,
+          "ascending_midrank_percentile": 83.33333333333333,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": -1.5381311998108231,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.6599425225845867,
+          "ascending_midrank_percentile": 6.666666666666667,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "600809.SH",
+      "name": "山西汾酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 33.48,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 8.604444444444445,
+          "ascending_midrank_percentile": 100.0,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.1809664162015648,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.15826230613956785,
+          "ascending_midrank_percentile": 61.111111111111114,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 0.7360180813309769,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.5083325705084667,
+          "ascending_midrank_percentile": 66.66666666666667,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "603198.SH",
+      "name": "迎驾贡酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 19.4,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 9.386666666666667,
+          "ascending_midrank_percentile": 83.33333333333333,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.08043805589085239,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16384721504571853,
+          "ascending_midrank_percentile": 27.77777777777778,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 0.6216635045630882,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.5159562089596593,
+          "ascending_midrank_percentile": 53.333333333333336,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "603369.SH",
+      "name": "今世缘",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 16.39,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 9.553888888888888,
+          "ascending_midrank_percentile": 77.77777777777777,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.16776910252534596,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.1589954902326911,
+          "ascending_midrank_percentile": 55.55555555555556,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 0.5792387820779783,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.518784523792,
+          "ascending_midrank_percentile": 46.666666666666664,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "603589.SH",
+      "name": "口子窖",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 6.43,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.994999999999999,
+          "peer_mean": 10.107222222222221,
+          "ascending_midrank_percentile": 38.888888888888886,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.08381313115822342,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.1630203563382598,
+          "peer_mean": 0.16365971086419792,
+          "ascending_midrank_percentile": 38.888888888888886,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": -0.3210550006368983,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.6216635045630882,
+          "peer_mean": 0.5788041093063251,
+          "ascending_midrank_percentile": 33.333333333333336,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    },
+    {
+      "code": "603919.SH",
+      "name": "金徽酒",
+      "metrics": {
+        "加权平均ROE": {
+          "target_value": 10.57,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 7.39,
+          "peer_mean": 9.877222222222223,
+          "ascending_midrank_percentile": 66.66666666666667,
+          "excluded_peer_codes": []
+        },
+        "合同负债/营业收入": {
+          "target_value": 0.28086209458167877,
+          "valid_peer_count": 18,
+          "candidate_peer_count": 18,
+          "peer_median": 0.14457131738378165,
+          "peer_mean": 0.1527125462295615,
+          "ascending_midrank_percentile": 88.88888888888889,
+          "excluded_peer_codes": []
+        },
+        "CFO/归母净利润": {
+          "target_value": 1.3548475241856905,
+          "valid_peer_count": 15,
+          "candidate_peer_count": 18,
+          "peer_median": 0.5792387820779783,
+          "peer_mean": 0.4670772743181525,
+          "ascending_midrank_percentile": 80.0,
+          "excluded_peer_codes": [
+            "000799.SZ",
+            "000860.SZ",
+            "600199.SH"
+          ]
+        }
+      }
+    }
+  ],
+  "rules": {
+    "exclude_target_from_peers": true,
+    "loss_companies": "Keep amounts, contracts/revenue and valid ROE; CFO/parent NP is undefined when parent NP <= 0; list exclusions, never set missing to zero.",
+    "aggregation": "Ratio of sums is a different statistic from equal-weight mean/median of ratios. Sum includes loss-making companies; individual CFO/NP distribution omits non-positive denominators.",
+    "roe": "Issuer weighted-average ROE, never NP divided by year-end equity; do not aggregate into an official sector ROE.",
+    "interpretation": "Descriptive relative position, not good/bad rank, sales forecast, dealer inventory inference, or expected return."
+  }
+}

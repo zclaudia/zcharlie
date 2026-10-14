@@ -1,0 +1,217 @@
+{
+  "captured_at": "2026-10-11T15:06:06.796243+00:00",
+  "periods": [
+    "2023-12-31",
+    "2024-06-30",
+    "2024-12-31",
+    "2025-06-30",
+    "2025-12-31",
+    "2026-06-30"
+  ],
+  "membership_semantics": "Current observed constituents/classification; older financial periods belong to the current cohort, never a historical investable universe.",
+  "selection": "All current baijiu index constituents; banks include large/state-owned, joint-stock, city, rural; PV includes silicon/wafer/cell/module/inverter/production equipment. Bank/PV sample is purposive, not random or whole-sector coverage.",
+  "baijiu": [
+    "000568.SZ",
+    "000596.SZ",
+    "000799.SZ",
+    "000858.SZ",
+    "000860.SZ",
+    "000995.SZ",
+    "002304.SZ",
+    "002646.SZ",
+    "600197.SH",
+    "600199.SH",
+    "600519.SH",
+    "600559.SH",
+    "600702.SH",
+    "600779.SH",
+    "600809.SH",
+    "603198.SH",
+    "603369.SH",
+    "603589.SH",
+    "603919.SH"
+  ],
+  "bank": [
+    "601398.SH",
+    "601939.SH",
+    "601288.SH",
+    "600036.SH",
+    "601166.SH",
+    "000001.SZ",
+    "600919.SH",
+    "601009.SH",
+    "002142.SZ",
+    "601128.SH"
+  ],
+  "pv": [
+    "601012.SH",
+    "600438.SH",
+    "603806.SH",
+    "002129.SZ",
+    "688223.SH",
+    "688599.SH",
+    "300274.SZ",
+    "300751.SZ",
+    "300724.SZ",
+    "603185.SH"
+  ],
+  "baijiu_classification_codes": [
+    "000568.SZ",
+    "000596.SZ",
+    "000799.SZ",
+    "000858.SZ",
+    "000860.SZ",
+    "000995.SZ",
+    "002304.SZ",
+    "002646.SZ",
+    "600197.SH",
+    "600199.SH",
+    "600519.SH",
+    "600559.SH",
+    "600696.SH",
+    "600702.SH",
+    "600779.SH",
+    "600809.SH",
+    "603198.SH",
+    "603369.SH",
+    "603589.SH",
+    "603919.SH"
+  ],
+  "index_only": [],
+  "classification_only": [
+    "600696.SH"
+  ],
+  "bank_classifications": {
+    "601398.SH": {
+      "symbol": "601398",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480201",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601939.SH": {
+      "symbol": "601939",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480201",
+      "update_time": "2022-12-09T00:00:00.000"
+    },
+    "601288.SH": {
+      "symbol": "601288",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480201",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "600036.SH": {
+      "symbol": "600036",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480301",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601166.SH": {
+      "symbol": "601166",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480301",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "000001.SZ": {
+      "symbol": "000001",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480301",
+      "update_time": "2025-12-15T00:00:00.000"
+    },
+    "600919.SH": {
+      "symbol": "600919",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480401",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601009.SH": {
+      "symbol": "601009",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480401",
+      "update_time": "2025-12-15T00:00:00.000"
+    },
+    "002142.SZ": {
+      "symbol": "002142",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480401",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601128.SH": {
+      "symbol": "601128",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480501",
+      "update_time": "2021-07-31T00:00:00.000"
+    }
+  },
+  "pv_classifications": {
+    "601012.SH": {
+      "symbol": "601012",
+      "start_date": "2022-07-29T00:00:00.000",
+      "industry_code": "630502",
+      "update_time": "2026-06-17T00:00:00.000"
+    },
+    "600438.SH": {
+      "symbol": "600438",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630501",
+      "update_time": "2025-12-10T00:00:00.000"
+    },
+    "603806.SH": {
+      "symbol": "603806",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630504",
+      "update_time": "2025-10-15T00:00:00.000"
+    },
+    "002129.SZ": {
+      "symbol": "002129",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630501",
+      "update_time": "2025-12-10T00:00:00.000"
+    },
+    "688223.SH": {
+      "symbol": "688223",
+      "start_date": "2022-01-07T00:00:00.000",
+      "industry_code": "630502",
+      "update_time": "2025-10-15T00:00:00.000"
+    },
+    "688599.SH": {
+      "symbol": "688599",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630502",
+      "update_time": "2025-10-15T00:00:00.000"
+    },
+    "300274.SZ": {
+      "symbol": "300274",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630503",
+      "update_time": "2026-06-17T00:00:00.000"
+    },
+    "300751.SZ": {
+      "symbol": "300751",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630505",
+      "update_time": "2025-12-09T00:00:00.000"
+    },
+    "300724.SZ": {
+      "symbol": "300724",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630505",
+      "update_time": "2025-10-15T00:00:00.000"
+    },
+    "603185.SH": {
+      "symbol": "603185",
+      "start_date": "2023-07-04T00:00:00.000",
+      "industry_code": "630501",
+      "update_time": "2025-10-15T00:00:00.000"
+    }
+  },
+  "rejected_pv_candidate": {
+    "600089.SH": {
+      "symbol": "600089",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "630801",
+      "update_time": "2025-12-08T00:00:00.000"
+    },
+    "reason": "630801 is grid/transformer equipment, outside Shenwan PV equipment 6305; replaced with 603806.SH (PV materials)."
+  }
+}

@@ -463,7 +463,7 @@ async def test_forged_verified_upload_is_rejected(db_session, maotai) -> None:
     assert result.record is not None
     genuine = result.record
     store = EvidenceService(db_session)
-    ref = await store.save_evidence(
+    await store.save_evidence(
         "local_owner", genuine, peer_field_operation_id(row, "revenue_total_check")
     )
 
