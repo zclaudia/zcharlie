@@ -79,7 +79,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.cli.commands.peer_annual import SEMANTIC_HASH_SCHEMA
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import Period
 from investment_agent.industry_peers import batch as peer_batch
@@ -102,6 +101,7 @@ from investment_agent.industry_peers.calculations import (
     save_peer_calculations,
 )
 from investment_agent.industry_peers.contracts import PeerAnnualField, PeerFieldVerification
+from investment_agent.industry_peers.hashing import SEMANTIC_HASH_SCHEMA, canonical_json
 from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.providers.eastmoney_annual import (
@@ -724,7 +724,7 @@ def snapshot_hashes(
         },
         "verification": dict(proofs),
     }
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    canonical = canonical_json(payload)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return digest, digest
 

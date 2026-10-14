@@ -62,6 +62,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import Period
 from investment_agent.industry_peers.contracts import PeerAnnualField, PeerFieldVerification
+from investment_agent.industry_peers.hashing import SEMANTIC_HASH_SCHEMA, canonical_json
 from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
@@ -78,7 +79,6 @@ DEFAULT_AUDIT_PATH = _DERIVED / "baijiu-official-audit.json"
 
 PROVIDER = "eastmoney"
 ADAPTER_VERSION = "offline-run02-v1"
-SEMANTIC_HASH_SCHEMA = "peer_annual_semantic_hash/1"
 _AUDIT_JSON_NAME = "baijiu-official-audit.json"
 
 
@@ -695,7 +695,7 @@ def _hashes(
         },
         "verification": {metric: {k: v for k, v in proof.items() if k != "checked_at"} for metric, proof in proofs.items()},
     }
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    canonical = canonical_json(payload)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return digest, digest
 
