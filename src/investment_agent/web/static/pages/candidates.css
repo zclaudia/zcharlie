@@ -1,53 +1,118 @@
 /* pages/candidates.css — 候选池 + 候选详情
    Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
 
-.candidate-list { display: grid; gap: var(--sp-3); }
-.candidate-item {
-  border: 1px solid var(--c-line);
-  border-radius: var(--r-lg);
-  padding: var(--sp-3) var(--sp-4);
-  background: var(--c-surface);
-  min-width: 0;
+/* ---- 候选池：提示条 / 工具栏 ------------------------------------------------- */
+
+#candidates-calibration[hidden] { display: none; }
+.cand-callout-text { flex: 1; min-width: 0; }
+.cand-callout-text .badge { margin: 0 4px; }
+.cand-callout-short { display: none; }
+.cand-callout-x { margin: -4px -6px -4px auto; flex: none; }
+
+.cand-toolbar { margin: var(--sp-3) 0; gap: var(--sp-2); }
+.cand-status-chips { display: none; }
+.cand-status-select {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none;
 }
-.candidate-item:hover { border-color: var(--c-line-strong); }
-.candidate-item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem); gap: var(--sp-2) var(--sp-5); align-items: start; }
-.candidate-main { min-width: 0; }
-.candidate-aside { min-width: 0; display: flex; flex-direction: column; gap: var(--sp-1); }
-.candidate-aside .spark { display: block; width: 100%; }
-.candidate-aside .spark-pending { height: 72px; line-height: 72px; }
-.candidate-aside-cap { margin: 0; }
-.candidate-aside .candidate-states { margin: var(--sp-1) 0 0; }
-.candidate-why { margin: var(--sp-2) 0 0; padding: var(--sp-2) var(--sp-3); background: var(--c-accent-soft); border-left: 3px solid var(--c-accent); border-radius: var(--r-md); }
-.candidate-why-head { display: flex; gap: var(--sp-2); align-items: baseline; margin: 0; }
-.candidate-why .reason-list { margin: var(--sp-1) 0 0; }
-.candidate-why .reason-list { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); column-gap: var(--sp-5); }
-.candidate-why-more { display: inline-block; margin-top: var(--sp-1); }
-.candidate-why .reason-list li.reason-warn::before { content: "!"; background: var(--c-warn-soft); color: var(--c-warn); }
-@media (max-width: 48rem) { .candidate-item { grid-template-columns: minmax(0, 1fr); } }
-.candidate-head { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-2); align-items: center; }
-.candidate-title { font-size: var(--fs-lg); margin: 0; overflow-wrap: anywhere; }
-.candidate-title a { text-decoration: none; color: var(--c-ink); }
-.candidate-title a:hover { color: var(--c-accent); }
-.candidate-meta { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin: var(--sp-1) 0; font-size: var(--fs-sm); color: var(--c-ink-2); }
-.candidate-templates, .candidate-states { margin: var(--sp-2) 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
-.candidate-templates .chip, .candidate-states .chip { margin: 0; }
-.reason-list { list-style: none; margin: var(--sp-2) 0; padding: 0; display: grid; gap: 2px; }
-.reason-list li { overflow-wrap: anywhere; padding-left: 22px; position: relative; }
-.reason-list li::before {
-  content: "✓";
-  position: absolute;
-  left: 0;
-  top: 3px;
-  width: 15px;
-  height: 15px;
-  border-radius: 50%;
-  background: var(--c-accent-soft);
-  color: var(--c-accent);
-  font-size: 10px;
-  font-weight: 700;
-  display: grid;
-  place-items: center;
+.cand-selects { display: contents; }
+.cand-select { width: auto; min-width: 9.5rem; }
+.cand-callout-text b { font-weight: 600; }
+.cand-total { margin-left: auto; font-size: var(--fs-sm); }
+
+/* ---- 候选池：卡片（桌面：左 入选理由，右 价格 / 日线 / 区间涨跌 / 操作） ---------- */
+
+.cand-list { display: grid; gap: var(--sp-3); }
+.cand {
+  display: grid; grid-template-columns: minmax(0, 1fr) 16.5rem; min-width: 0;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--sh-1);
 }
+.cand:hover { border-color: var(--line-2); box-shadow: var(--sh-2); }
+.cand-main { min-width: 0; padding: 14px 16px; }
+.cand-side { min-width: 0; padding: 14px 16px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+
+.cand-nm { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.cand-title { font-size: 16px; font-weight: 650; color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.cand-title:hover { color: var(--accent); }
+.cand-nm .code { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); }
+.cand-badges { margin-top: 6px; grid-area: bdg; }
+.cand-badges .badge { white-space: nowrap; }
+.cand-meta { display: flex; flex-wrap: wrap; gap: 2px 8px; margin: 8px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.cand-meta i { font-style: normal; color: var(--line-2); }
+.cand-hitrow, .cand-due { display: none; }
+
+.cand-why { margin-top: 12px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); }
+.cand-why-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 12.5px; }
+.cand-why-count { color: var(--ink-3); font-weight: 600; }
+.cand-hits { display: inline-flex; gap: 2px; flex: none; }
+.cand-hits i { width: 10px; height: 4px; border-radius: 2px; background: var(--line-2); }
+.cand-hits i.on { background: var(--accent); }
+.cand-why .reason-list { margin: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; font-size: 12.5px; color: var(--ink-2); }
+.cand-why .reason-list.reason-list-one { grid-template-columns: minmax(0, 1fr); }
+.cand-why .reason-list b { color: var(--ink); font-weight: 600; }
+.cand-why-more { display: inline-block; margin-top: 6px; }
+.cand-why-none { margin: 0; font-size: 12.5px; }
+
+.cand-px { display: flex; align-items: baseline; gap: 8px; min-height: 28px; }
+.cand-px .price-last { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cand-px .price-chg { font-size: 12.5px; font-weight: 500; }
+.cand-px small { margin-left: auto; font-size: 11.5px; }
+.cand-side .spark { display: block; width: 100%; height: 56px; }
+.cand-side .spark-pending { height: 56px; line-height: 56px; }
+.cand-rets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; min-height: 36px; }
+.cand-ret { font-size: 11.5px; color: var(--ink-3); min-width: 0; }
+.cand-ret .price-chg { display: block; font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.cand-acts { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; }
+.cand-acts .btn { flex: 1; }
+
+.price-chg { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 56rem) {
+  .cand-callout-long { display: none; }
+  .cand-callout-short { display: inline; }
+  .page-head > .page-actions, .page-head > p { display: none; }
+  .cand-toolbar { gap: 6px var(--sp-2); margin: var(--sp-2) 0; }
+  .cand-status-seg { display: none; }
+  .cand-status-chips { display: flex; flex: 0 0 100%; }
+  .cand-selects { display: flex; flex: 1 1 100%; gap: var(--sp-2); min-width: 0; }
+  .cand-select { flex: 1 1 0; min-width: 0; }
+  .cand-total { flex-basis: 100%; margin-left: 0; }
+
+  .cand-list { gap: 10px; }
+  .cand {
+    grid-template-columns: minmax(0, 1fr) 4.5rem auto;
+    grid-template-areas: "id spark px" "bdg bdg bdg" "hit hit hit" "due due acts";
+    gap: 8px 10px; padding: 13px 14px 12px; border-radius: var(--r-lg);
+  }
+  .cand-main, .cand-side { display: contents; }
+  .cand-id { grid-area: id; min-width: 0; }
+  .cand-side > .spark { grid-area: spark; height: 36px; min-width: 0; align-self: center; }
+  .cand-side > .spark-pending { height: 36px; line-height: 36px; min-width: 0; }
+  .cand-px { grid-area: px; flex-direction: column; align-items: flex-end; gap: 0; min-height: 0; text-align: right; }
+  .cand-px .price-last { font-size: 16px; letter-spacing: -0.01em; }
+  .cand-px small { display: none; }
+  .cand-hitrow {
+    grid-area: hit; display: flex; align-items: center; gap: 8px; min-width: 0;
+    padding: 8px 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; color: var(--ink-2);
+  }
+  .cand-hits i { width: 7px; }
+  .cand-hit-n { color: var(--ink); font-weight: 600; flex: none; }
+  .cand-hit-tag { flex: none; color: var(--ai); font-weight: 600; }
+  .cand-hit-tx { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cand-due { grid-area: due; display: block; margin: 0; align-self: center; font-size: 12px; color: var(--ink-3); }
+  .cand-acts { grid-area: acts; margin: 0; padding: 0; }
+  .cand-acts .btn { flex: none; min-width: 3.6rem; }
+  .cand-meta, .cand-why, .cand-rets, .cand .cand-ver, .cand .cand-uncal { display: none; }
+  .cand-badges { margin-top: 6px; gap: 4px; }
+  .cand-nm { gap: 6px; }
+  .cand-title { font-size: 16px; }
+}
+
+.drawer-form { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0; }
+.cand-sheet-btns .btn { flex: 1; }
+.cand-sheet-sub { white-space: pre-line; }
+.sheet-head .sub { margin-top: 2px; }
+.sheet .issues { margin-top: var(--sp-2); }
 
 /* ---- 候选详情：头部 ----------------------------------------------------------- */
 
@@ -175,13 +240,6 @@ input[aria-invalid="true"] + .range-hint { color: var(--c-warn); }
 .verification-item p { margin: 2px 0; overflow-wrap: anywhere; }
 .verification-item .chip { margin-left: var(--sp-2); }
 
-.candidate-price:empty { display: none; }
-.price-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
-.price-last { font-size: var(--fs-xl, 1.4rem); font-weight: 700; font-variant-numeric: tabular-nums; }
-.price-chg { font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
-.price-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px var(--sp-3); margin-top: var(--sp-1); font-size: var(--fs-sm); }
-.price-cell { display: flex; justify-content: space-between; gap: var(--sp-2); }
-
 @media (min-width: 48rem) {
   .zone-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .check-item { grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr); }
@@ -190,36 +248,79 @@ input[aria-invalid="true"] + .range-hint { color: var(--c-warn); }
   .param-scale { grid-column: auto; }
 }
 
+
 @media (max-width: 40rem) {
   .param.changed { margin: 0 calc(-1 * var(--sp-3)); padding-left: var(--sp-3); padding-right: var(--sp-3); }
-  /* 外层容器卡只是列表的壳：压平，让每个条目自己成卡，少一层边框和内边距 */
-  .card:has(> #candidates-list), .card:has(> .candidate-list) {
-    padding: 0; border: 0; background: none; box-shadow: none; border-radius: 0;
-  }
-  .card:has(> #candidates-list) > .add-panel { padding: 0 var(--sp-1); }
-  .candidate-list { gap: var(--sp-2); }
-  .candidate-item { padding: var(--sp-3); gap: var(--sp-2); border-radius: var(--r-md); }
-  .candidate-title { font-size: var(--fs-lg); }
-  .candidate-meta { gap: 2px var(--sp-3); margin: 2px 0; }
-  .candidate-templates, .candidate-states { margin: 6px 0; }
-  .candidate-why { margin-top: 6px; padding: 6px var(--sp-2); }
-  .candidate-why .reason-list { grid-template-columns: minmax(0, 1fr); font-size: var(--fs-sm); }
-  .reason-list li { padding-left: 20px; line-height: 1.45; }
-
-  /* 走势图在左、最新价在右并排；区间涨跌和状态芯片在下 */
-  .candidate-aside { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 2px var(--sp-3); }
-  .candidate-aside .spark { height: 52px; min-width: 0; }
-  .candidate-aside .spark-pending { height: 52px; line-height: 52px; }
-  .candidate-aside .candidate-price { display: contents; }
-  .candidate-aside .price-top { grid-column: 2; grid-row: 1; flex-direction: column; align-items: flex-start; gap: 0; }
-  .candidate-aside .price-last { font-size: var(--fs-xl); line-height: 1.2; }
-  .candidate-aside .price-grid { grid-column: 1 / -1; }
-  .candidate-aside .candidate-aside-cap, .candidate-aside .candidate-states { grid-column: 1 / -1; }
-  .candidate-aside .candidate-aside-cap { display: none; }
 }
 
-#candidates-template-filter { width: 16rem; }
-@media (max-width: 40rem) {
-  #candidates-template-filter { flex: 1 1 0; width: auto; min-width: 0; }
-  .toolbar #candidates-total { flex-basis: 100%; }
+/* ---- 理由清单（列表卡、概要、详情共用） ---------------------------------------- */
+
+.reason-list { list-style: none; margin: var(--sp-2) 0; padding: 0; display: grid; gap: 4px; }
+.reason-list li { overflow-wrap: anywhere; padding-left: 22px; position: relative; }
+.reason-list li::before {
+  content: "✓"; position: absolute; left: 0; top: 2px; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 700; display: grid; place-items: center;
+}
+.reason-list li.reason-warn::before { content: "!"; background: var(--warn-soft); color: var(--warn); }
+
+/* ---- 候选详情：页头 / 身份区 / 分区标签 ---------------------------------------- */
+
+.cand-back { margin: 0 0 var(--sp-1); }
+.cand-idcard { padding: 16px 18px; }
+.cand-idcard .notice { margin: var(--sp-3) 0 0; }
+.cand-idhead { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--sp-3) var(--sp-5); }
+.cand-id-left { min-width: 0; display: grid; gap: 8px; }
+.cand-id-price { display: flex; align-items: baseline; gap: 10px; min-height: 36px; }
+.cand-id-price .price-last { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cand-id-price .price-chg { font-size: 14px; font-weight: 600; }
+.cand-id-price small { font-size: 12px; }
+.cand-idhead .timeline-mini { flex: 0 1 300px; }
+.cand-idhead .timeline-mini svg { height: 5px; }
+.cand-id-closed { margin: 0; }
+
+.cand-tabs { margin: 0 0 var(--sp-3); }
+.cand-panel { min-width: 0; }
+.cand-panel[hidden] { display: none; }
+.cand-panel > .card { margin-bottom: var(--sp-3); }
+.cand-chart-card .pc-head { flex-wrap: wrap; }
+.cand-chart-card .pc-tabs { flex-wrap: nowrap; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.cand-chart-card .pc-tabs::-webkit-scrollbar { display: none; }
+.cand-chart-card .pc-tab { flex: none; }
+@media (max-width: 40rem) { .cand-chart-card .pc-tab { padding: 2px 6px; } .cand-chart-card .pc-tabs { gap: 3px; } }
+
+.cand-summary { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
+.cand-summary:empty { display: none; }
+.cand-sum-card { margin: 0; }
+.cand-sum-card .card-head { margin-bottom: var(--sp-2); }
+.cand-sum-card .reason-list { margin: 0; font-size: 13px; }
+.cand-sum-card .reason-list b { font-weight: 600; }
+.cand-sum-side { display: grid; gap: var(--sp-3); min-width: 0; }
+.cand-sum-side .kv-list { margin: 0; }
+.cand-sum-card .zone-detection { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); }
+
+/* 处理：待处理时为底部固定操作条，已关闭时是普通卡片 */
+.cand-actions-card.action-bar > h2 { display: none; }
+.cand-action-row { display: flex; align-items: center; gap: var(--sp-3); }
+.cand-action-info { flex: 1; min-width: 0; margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.cand-action-btns { display: flex; gap: var(--sp-2); flex: none; }
+.cand-action-btns .btn { white-space: nowrap; }
+.cand-action-btns .btn-primary { min-width: 12rem; }
+.cand-actions-card .issues { margin-top: var(--sp-2); }
+
+@media (max-width: 56rem) {
+  .cand-back, .cand-d-head h1 { display: none; }
+  .cand-d-head { margin: 0; }
+  .cand-d-head .page-actions { display: none; }
+  .cand-idcard { padding: 14px; }
+  .cand-id-price .price-last { font-size: 30px; }
+  .cand-idhead { flex-direction: column; gap: var(--sp-3); }
+  .cand-idhead .timeline-mini { flex: none; width: 100%; }
+  .cand-summary { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .cand-sum-side { gap: var(--sp-2); }
+  .cand-panel > .card { margin-bottom: var(--sp-2); }
+  .cand-action-row { gap: var(--sp-2); }
+  .cand-action-info { display: none; }
+  .cand-action-btns { flex: 1; }
+  .cand-action-btns .btn { flex: 1; padding-left: 8px; padding-right: 8px; }
+  .cand-action-btns .btn-primary { flex: 1.8; min-width: 0; }
 }

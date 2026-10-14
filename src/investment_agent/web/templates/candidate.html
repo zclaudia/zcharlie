@@ -1,75 +1,120 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/candidates.css">{% endblock %}
+{% block mobile_back %}<a href="/app/candidates">候选池</a>{% endblock %}
+{% block appbar_actions %}<a class="icon-btn" href="/app/agent?candidate={{ candidate_id }}" aria-label="在对话工作台讨论此候选">{{ icon("agent", "ico", 21) }}</a>{% endblock %}
 {% block content %}
 <div id="candidate-detail" class="data-region"
      data-endpoint="/candidates/{{ candidate_id }}"
      data-candidate-id="{{ candidate_id }}">
-  <header class="page-head">
-    <p class="small"><a href="/app/candidates">← 返回候选池</a></p>
-    <h1 id="candidate-title">候选 #{{ candidate_id }}</h1>
-    <a href="/app/agent?candidate={{ candidate_id }}">在对话工作台讨论此候选</a>
+  <header class="page-head cand-d-head">
+    <p class="small cand-back"><a href="/app/candidates">← 返回候选池</a></p>
+    <h1 id="candidate-title" class="keep">候选 #{{ candidate_id }}</h1>
+    <div class="page-actions">
+      <a class="btn btn-sm" href="/app/agent?candidate={{ candidate_id }}">{{ icon("agent", "ico", 16) }}在对话工作台讨论此候选</a>
+    </div>
   </header>
-  <section class="card">
+
+  <section class="card cand-idcard">
     <div id="candidate-header" aria-live="polite">
       <p class="notice notice-loading" data-state="loading">正在加载…</p>
     </div>
     <div id="candidate-flash" aria-live="polite"></div>
   </section>
-  <section class="card spark-card">
-    <div class="card-head">
-      <h2 id="candidate-price-title">近 240 个交易日收盘价</h2>
-      <span class="faint">不复权，仅展示已入库日线</span>
-    </div>
-    <div id="candidate-price-chart" class="spark-host"></div>
-  </section>
-  <p class="notice notice-warn calibration-banner">
-    基于 <span class="badge badge-uncalibrated">未校准</span> 模板：默认参数与起草的参数都是尚未回测的假设。
-    本页只用于研究优先级审阅，不是操作建议。
-  </p>
 
-  <section class="card" aria-labelledby="candidate-reasons-title">
-    <h2 id="candidate-reasons-title">触发理由</h2>
-    <div id="candidate-reasons" data-empty-text="没有筛选理由。">
-      <p class="notice notice-loading" data-state="loading">正在加载…</p>
-    </div>
-    <aside id="candidate-inspector" class="card evidence-inspector" tabindex="-1" hidden
-           aria-label="理由来源"></aside>
-  </section>
+  <div class="tabs cand-tabs" id="candidate-tabs" role="tablist" aria-label="候选详情分区">
+    <button type="button" role="tab" id="cand-tab-summary" data-tab="summary" aria-controls="cand-panel-summary" aria-selected="true" class="on">概要</button>
+    <button type="button" role="tab" id="cand-tab-reasons" data-tab="reasons" aria-controls="cand-panel-reasons" aria-selected="false">入选理由<span class="c" id="cand-tab-reasons-count" hidden></span></button>
+    <button type="button" role="tab" id="cand-tab-rule" data-tab="rule" aria-controls="cand-panel-rule" aria-selected="false">规则草稿</button>
+    <button type="button" role="tab" id="cand-tab-segments" data-tab="segments" aria-controls="cand-panel-segments" aria-selected="false">主营</button>
+    <button type="button" role="tab" id="cand-tab-verification" data-tab="verification" aria-controls="cand-panel-verification" aria-selected="false">核对</button>
+    <button type="button" role="tab" id="cand-tab-decisions" data-tab="decisions" aria-controls="cand-panel-decisions" aria-selected="false">记录</button>
+  </div>
 
-  <section class="card ai" aria-labelledby="candidate-rule-title">
-    <h2 id="candidate-rule-title">规则草稿审阅</h2>
-    <div id="candidate-rule">
-      <p class="notice notice-loading" data-state="loading">正在加载…</p>
-    </div>
-  </section>
+  <div class="cand-panel" role="tabpanel" id="cand-panel-summary" data-panel="summary" aria-labelledby="cand-tab-summary">
+    <section class="card spark-card cand-chart-card">
+      <div class="card-head">
+        <h2 id="candidate-price-title">近 240 个交易日收盘价</h2>
+        <span class="faint">不复权，仅展示已入库日线</span>
+      </div>
+      <div id="candidate-price-chart" class="spark-host"></div>
+    </section>
+    <p class="notice notice-warn calibration-banner"><span>基于 <b>未校准</b> 模板：默认参数与起草的参数都是尚未回测的假设。本页只用于研究优先级审阅，不是操作建议。</span></p>
+    <div id="candidate-summary" class="cand-summary"></div>
+  </div>
 
-  <section class="card" aria-labelledby="candidate-actions-title">
+  <div class="cand-panel" role="tabpanel" id="cand-panel-reasons" data-panel="reasons" aria-labelledby="cand-tab-reasons" hidden>
+    <section class="card" aria-labelledby="candidate-reasons-title">
+      <h2 id="candidate-reasons-title">触发理由</h2>
+      <div id="candidate-reasons" data-empty-text="没有筛选理由。">
+        <p class="notice notice-loading" data-state="loading">正在加载…</p>
+      </div>
+      <aside id="candidate-inspector" class="card evidence-inspector" tabindex="-1" hidden
+             aria-label="理由来源"></aside>
+    </section>
+  </div>
+
+  <div class="cand-panel" role="tabpanel" id="cand-panel-rule" data-panel="rule" aria-labelledby="cand-tab-rule" hidden>
+    <section class="card card--ai" aria-labelledby="candidate-rule-title">
+      <h2 id="candidate-rule-title">规则草稿审阅</h2>
+      <div id="candidate-rule">
+        <p class="notice notice-loading" data-state="loading">正在加载…</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="cand-panel" role="tabpanel" id="cand-panel-segments" data-panel="segments" aria-labelledby="cand-tab-segments" hidden>
+    <section class="card" aria-labelledby="candidate-segments-title">
+      <h2 id="candidate-segments-title">主营构成</h2>
+      <p class="small faint">最新报告期按收入前 5（东方财富）。仅作业务背景，不参与筛选与规则。</p>
+      <div id="candidate-segments">
+        <p class="notice notice-loading" data-state="loading">正在加载…</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="cand-panel" role="tabpanel" id="cand-panel-verification" data-panel="verification" aria-labelledby="cand-tab-verification" hidden>
+    <section class="card" aria-labelledby="candidate-verification-title">
+      <h2 id="candidate-verification-title">iFinD 核对</h2>
+      <div id="candidate-verification">
+        <p class="notice notice-loading" data-state="loading">正在加载…</p>
+      </div>
+    </section>
+  </div>
+
+  <div class="cand-panel" role="tabpanel" id="cand-panel-decisions" data-panel="decisions" aria-labelledby="cand-tab-decisions" hidden>
+    <section class="card" aria-labelledby="candidate-decisions-title">
+      <h2 id="candidate-decisions-title">决策记录</h2>
+      <div id="candidate-decisions">
+        <p class="notice notice-loading" data-state="loading">正在加载…</p>
+      </div>
+    </section>
+  </div>
+
+  <section class="card cand-actions-card" id="candidate-actions-card" aria-labelledby="candidate-actions-title">
     <h2 id="candidate-actions-title">处理</h2>
     <div id="candidate-actions">
       <p class="notice notice-loading" data-state="loading">正在加载…</p>
     </div>
   </section>
+</div>
 
-  <section class="card" aria-labelledby="candidate-segments-title">
-    <h2 id="candidate-segments-title">主营构成</h2>
-    <p class="small faint">最新报告期按收入前 5（东方财富）。仅作业务背景，不参与筛选与规则。</p>
-    <div id="candidate-segments">
-      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+<div class="sheet" id="candidate-reason-sheet" role="dialog" aria-modal="true" aria-labelledby="candidate-reason-title">
+  <div class="sheet-grab"></div>
+  <div class="sheet-head">
+    <div>
+      <h2 id="candidate-reason-title">处理候选</h2>
+      <div class="faint small cand-sheet-sub" id="candidate-reason-sub"></div>
     </div>
-  </section>
-
-  <section class="card" aria-labelledby="candidate-verification-title">
-    <h2 id="candidate-verification-title">iFinD 核对</h2>
-    <div id="candidate-verification">
-      <p class="notice notice-loading" data-state="loading">正在加载…</p>
-    </div>
-  </section>
-
-  <section class="card" aria-labelledby="candidate-decisions-title">
-    <h2 id="candidate-decisions-title">决策记录</h2>
-    <div id="candidate-decisions">
-      <p class="notice notice-loading" data-state="loading">正在加载…</p>
-    </div>
-  </section>
+  </div>
+  <div class="field">
+    <label for="candidate-reason" id="candidate-reason-label">理由</label>
+    <textarea id="candidate-reason" rows="4" maxlength="2000" placeholder="写下理由" aria-label="处理理由" data-autofocus></textarea>
+  </div>
+  <div id="candidate-sheet-issues" class="issues" role="alert"></div>
+  <div class="btn-row cand-sheet-btns">
+    <button type="button" class="btn btn-lg" data-overlay-close>取消</button>
+    <button type="button" class="btn btn-lg btn-primary" id="candidate-reason-confirm">确认</button>
+  </div>
 </div>
 {% endblock %}

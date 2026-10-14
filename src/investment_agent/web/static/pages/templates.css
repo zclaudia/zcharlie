@@ -1,39 +1,96 @@
 /* pages/templates.css — 规则模板 + 模板详情
    Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
 
-/* ---- 规则模板页（只读） ---- */
-.tpl-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
-.tpl-card { border: 1px solid var(--c-line); border-radius: var(--r-lg); padding: var(--sp-3) var(--sp-4); background: var(--c-surface); display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
-.tpl-card:hover { border-color: var(--c-line-strong); }
-.tpl-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-2); }
-.tpl-card-head h2 { margin: 0; font-size: var(--fs-lg); }
-.tpl-card-head h2 a { color: var(--c-ink); text-decoration: none; }
-.tpl-card-head h2 a:hover { color: var(--c-accent); }
-.tpl-thesis { margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.tpl-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin: 0; }
-.tpl-chips .chip, .tpl-chips .badge { margin: 0; }
-.tpl-stats { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-3); margin: auto 0 0; }
-.tpl-lead { font-size: var(--fs-md, 1.05rem); line-height: 1.7; margin: 0 0 var(--sp-3); }
-.tpl-notes-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); margin-bottom: var(--sp-3); }
-.tpl-notes h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); color: var(--c-ink-2); }
-.tpl-notes ul { margin: 0; padding-left: 1.2em; }
-.tpl-notes li { margin: 2px 0; }
-.tpl-falsify { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--c-warn); background: var(--c-warn-soft); border-radius: var(--r-md); margin-bottom: var(--sp-2); }
-.tpl-conds { list-style: none; margin: var(--sp-2) 0 0; padding: 0; }
-.tpl-cond { padding: var(--sp-2) 0; border-top: 1px solid var(--c-line); }
-.tpl-cond:first-child { border-top: 0; }
-.tpl-cond-group > .tpl-conds { margin-left: var(--sp-4); }
-.tpl-cond-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
-.tpl-cond-text { font-variant-numeric: tabular-nums; }
-.tpl-param-ref { font-size: var(--fs-xs); color: var(--c-ink-3); background: var(--c-surface-2); padding: 0 6px; border-radius: var(--r-sm); }
-.tpl-cond-why { margin: 2px 0 0; color: var(--c-ink-2); font-size: var(--fs-sm); }
-.tpl-cond-note { margin: 2px 0 0; color: var(--c-warn); font-size: var(--fs-xs); }
-.tpl-zone + .tpl-zone { margin-top: var(--sp-3); }
-.tpl-zone h3 { margin: 0; font-size: var(--fs-md, 1rem); }
-.tpl-params td code { display: block; }
-.tpl-params .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
-tr.is-current td { background: var(--c-surface-2); }
+/* ---- 列表页 ----------------------------------------------------------------- */
 
-@media (max-width: 40rem) {
-  .tpl-card { padding: var(--sp-3); }
+.page-head code, .tpl-notice-long code { font-family: var(--font-mono); font-size: 0.92em; color: var(--ink-2); }
+.tpl-notice-counts { margin-right: var(--sp-2); }
+.tpl-notice-counts:empty { display: none; }
+#templates-notice[data-counts="0"] { display: none; }
+
+.tpl-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.tpl-card {
+  position: relative; margin: 0; display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0;
+  padding: 14px 16px; transition: border-color 0.12s, box-shadow 0.12s;
 }
+.tpl-card:hover { border-color: var(--line-2); box-shadow: var(--sh-2); }
+.tpl-card-head { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.tpl-card-head h2 { margin: 0; font-size: 15px; min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpl-card-head h2 a { color: var(--ink); text-decoration: none; }
+.tpl-card-head h2 a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.tpl-card-head h2 a:hover { color: var(--accent); }
+.tpl-card-head .code { font-size: var(--fs-xs); white-space: nowrap; }
+.tpl-ver { display: none; }
+.tpl-badges { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.tpl-badges .badge { margin: 0; white-space: nowrap; }
+.tpl-thesis {
+  margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.6;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.tpl-chips { margin: 0; }
+.tpl-stats { display: flex; align-items: baseline; gap: var(--sp-1) var(--sp-3); margin-top: auto; padding-top: var(--sp-1); font-size: var(--fs-sm); color: var(--ink-3); min-width: 0; }
+.tpl-stat b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tpl-stat-groups { display: none; }
+.tpl-stat { flex: none; white-space: nowrap; }
+
+@media (max-width: 56rem) {
+  .tpl-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .tpl-card { padding: 12px 14px; }
+  .tpl-slug, .tpl-stat-ver, .tpl-card .tpl-chips { display: none; }
+  .tpl-ver { display: inline; }
+  .tpl-stat-groups { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tpl-notice-long { display: none; }
+  .page-head > p { display: none; }
+  .tpl-opt { display: none; }
+  #templates-notice .tpl-notice-counts { margin: 0; }
+}
+
+/* ---- 详情页 ------------------------------------------------------------------- */
+
+.tpl-back { margin-bottom: var(--sp-1); }
+.tpl-d-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.tpl-d-grid > .card { margin: 0; }
+.tpl-wide { grid-column: 1 / -1; }
+.tpl-card-title { margin-bottom: var(--sp-2); }
+.tpl-card-title .faint { margin-left: auto; text-align: right; }
+.tpl-card-note { margin: calc(-1 * var(--sp-1)) 0 var(--sp-2); }
+
+.tpl-idcard .meta-row { margin: var(--sp-2) 0 0; }
+.tpl-idcard .notice { margin: var(--sp-3) 0 0; }
+.tpl-lead { font-size: 15px; line-height: 1.75; margin: 0 0 var(--sp-3); color: var(--ink); }
+.tpl-notes-grid { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); margin-bottom: var(--sp-3); }
+.tpl-notes { padding: var(--sp-3); border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); }
+.tpl-notes h3 { margin: 0 0 var(--sp-1); font-size: var(--fs-sm); color: var(--ink-2); }
+.tpl-notes ul { margin: 0; padding-left: 1.2em; font-size: 13px; }
+.tpl-notes li { margin: 3px 0; }
+.tpl-falsify { padding: var(--sp-2) var(--sp-3); border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: var(--r-sm); margin-bottom: var(--sp-2); font-size: 13px; }
+
+.tpl-conds { list-style: none; margin: var(--sp-1) 0 0; padding: 0; }
+.tpl-cond { padding: 10px 0; border-top: 1px solid var(--line); }
+.tpl-cond:first-child { border-top: 0; }
+.tpl-cond-group { padding: 8px 0 8px var(--sp-3); border-left: 2px solid var(--line-2); border-top: 0; margin: 6px 0; }
+.tpl-cond-group > .tpl-conds { margin-left: 0; }
+.tpl-cond-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-1) var(--sp-2); }
+.tpl-cond-label { font-weight: 600; }
+.tpl-cond-text { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.tpl-param-ref { font-size: var(--fs-xs); color: var(--ink-3); background: var(--sunken); padding: 0 6px; border-radius: var(--r-xs); font-family: var(--font-mono); }
+.tpl-cond-why { margin: 2px 0 0; color: var(--ink-2); font-size: var(--fs-sm); }
+.tpl-cond-note { margin: 2px 0 0; color: var(--warn); font-size: var(--fs-xs); }
+.tpl-zone + .tpl-zone { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
+.tpl-zone h3 { margin: 0; font-size: 14px; }
+
+.tpl-params td code, .tpl-params td .code { display: block; font-family: var(--font-mono); color: var(--ink-3); }
+.tpl-params .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+tr.is-current td { background: var(--accent-soft); }
+
+@media (max-width: 56rem) {
+  .tpl-d-grid { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
+  .tpl-d-grid > .card { padding: var(--sp-3); }
+  .tpl-back { display: none; }
+  .tpl-d-head h1 { display: none; }
+  .tpl-d-head { margin: 0; }
+  .tpl-card-title .faint { flex-basis: 100%; margin-left: 0; text-align: left; }
+  .tpl-lead { font-size: 14px; line-height: 1.7; }
+  .tpl-notes-grid { grid-template-columns: minmax(0, 1fr); }
+}
+

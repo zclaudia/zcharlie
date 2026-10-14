@@ -27,8 +27,16 @@ function section(id) {
   return document.querySelector(`#${id}`);
 }
 
-function chip(text, extraClass = "") {
-  return el("span", { class: `chip ${extraClass}`.trim() }, text);
+function badge(text, extraClass = "", title) {
+  return el("span", { class: `badge ${extraClass}`.trim(), title }, text);
+}
+
+// 卡片标题：左侧标题，右侧可选说明（说明在窄屏换到下一行）。
+function cardHead(title, note) {
+  const head = el("div", { class: "card-head tpl-card-title" });
+  head.appendChild(el("h2", {}, title));
+  if (note) head.appendChild(el("span", { class: "faint small" }, note));
+  return head;
 }
 
 function calibrationBadge(status) {
@@ -44,9 +52,14 @@ function calibrationBadge(status) {
 }
 
 function groupChips(groups) {
-  const box = el("p", { class: "tpl-chips" });
-  for (const group of groups || []) box.appendChild(chip(label(INDUSTRY_GROUP_LABELS, group)));
+  const box = el("div", { class: "cluster tpl-chips" });
+  for (const group of groups || []) box.appendChild(badge(label(INDUSTRY_GROUP_LABELS, group)));
   return box;
+}
+
+// 详情页：移动端顶栏与桌面面包屑末项改写成模板名（外壳按路由给的是模板编号）。
+function setShellTitle(text) {
+  for (const node of document.querySelectorAll("[data-appbar-title], .crumbs > b")) node.textContent = text;
 }
 
 function errorText(error) {
@@ -62,31 +75,59 @@ function showError(region, text) {
 
 // ---- 列表 ---------------------------------------------------------------
 
+function stat(value, text) {
+  const node = el("span", { class: "tpl-stat" });
+  node.appendChild(el("b", {}, String(value)));
+  node.appendChild(document.createTextNode(` ${text}`));
+  return node;
+}
+
 function templateCard(item) {
-  const card = el("article", { class: "tpl-card" });
+  const card = el("article", { class: "card tpl-card" });
   const head = el("header", { class: "tpl-card-head" });
   const title = el("h2");
   title.appendChild(el("a", { href: `/app/templates/${encodeURIComponent(item.id)}` }, item.name));
   head.appendChild(title);
-  head.appendChild(el("span", { class: "code faint" }, `${item.id} · v${item.version}`));
-  head.appendChild(calibrationBadge(item.calibration_status));
-  if (item.file_status !== "synced") head.appendChild(chip("文件待同步", "chip-warn"));
+  head.appendChild(el("span", { class: "code faint tpl-slug" }, `${item.id} · v${item.version}`));
+  head.appendChild(el("span", { class: "code faint tpl-ver" }, `v${item.version}`));
+  head.appendChild(el("span", { class: "spacer" }));
+  const badges = el("span", { class: "tpl-badges" });
+  badges.appendChild(calibrationBadge(item.calibration_status));
+  if (item.file_status !== "synced") {
+    badges.appendChild(badge("待同步", "outline", "模板文件有未同步的修改或问题，详情见模板页"));
+  }
+  head.appendChild(badges);
   card.appendChild(head);
   card.appendChild(
     el("p", { class: item.thesis ? "tpl-thesis" : "tpl-thesis muted" }, item.thesis || item.description || "（该版本没有策略说明）")
   );
   card.appendChild(groupChips(item.applicable_groups));
-  const stats = el("p", { class: "tpl-stats faint small" });
-  for (const text of [
-    `筛选条件 ${item.screen_condition_count} 条`,
-    `参数 ${item.param_count} 个`,
-    `待处理候选 ${item.open_candidates}`,
-    `${item.version_count} 个版本 · 入库 ${formatDate(item.synced_at)}`,
-  ]) {
-    stats.appendChild(el("span", {}, text));
-  }
+  const stats = el("div", { class: "tpl-stats" });
+  stats.appendChild(stat(item.screen_condition_count, "条件"));
+  stats.appendChild(stat(item.param_count, "参数"));
+  const open = stat(item.open_candidates, "候选");
+  open.insertBefore(el("span", { class: "tpl-opt" }, "待处理"), open.lastChild);
+  stats.appendChild(open);
+  stats.appendChild(el("span", { class: "spacer" }));
+  const groups = (item.applicable_groups || []).map((group) => label(INDUSTRY_GROUP_LABELS, group)).join(" · ");
+  if (groups) stats.appendChild(el("span", { class: "tpl-stat-groups" }, groups));
+  stats.appendChild(el("span", { class: "tpl-stat-ver" }, `${item.version_count} 个版本 · 入库 ${formatDate(item.synced_at)}`));
   card.appendChild(stats);
   return card;
+}
+
+// 顶部提示条：未校准 / 文件待同步的模板数。
+function fillNotice(items) {
+  const notice = section("templates-notice");
+  if (!notice) return;
+  const uncalibrated = items.filter((item) => (item.calibration_status || "uncalibrated") === "uncalibrated").length;
+  const unsynced = items.filter((item) => item.file_status !== "synced").length;
+  const counts = section("templates-notice-counts");
+  const parts = [];
+  if (uncalibrated) parts.push(`${uncalibrated} 个模板未校准`);
+  if (unsynced) parts.push(`${unsynced} 个文件待同步`);
+  if (counts) counts.textContent = parts.join(" · ");
+  notice.dataset.counts = String(parts.length);
 }
 
 async function loadTemplateList(region) {
@@ -97,6 +138,7 @@ async function loadTemplateList(region) {
       renderRegion(region, "empty", "规则库中还没有模板：运行 ia rules sync 或等待周筛选同步。");
       return;
     }
+    fillNotice(items);
     const grid = el("div", { class: "tpl-grid" });
     for (const item of items) grid.appendChild(templateCard(item));
     renderRegion(region, "ready", grid);
@@ -177,10 +219,10 @@ function modeHint(group) {
   return group && group.any ? "满足任一条即触发" : "全部满足才触发";
 }
 
-function zonesCard(title, zones, ctx, note) {
-  const card = el("section", { class: "card" });
-  card.appendChild(el("h2", {}, title));
-  if (note) card.appendChild(el("p", { class: "small faint" }, note));
+function zonesCard(title, zones, ctx, note, extraClass = "") {
+  const card = el("section", { class: `card ${extraClass}`.trim() });
+  card.appendChild(cardHead(title));
+  if (note) card.appendChild(el("p", { class: "small faint tpl-card-note" }, note));
   const names = Object.keys(zones || {});
   if (!names.length) {
     card.appendChild(el("p", { class: "muted" }, "未定义。"));
@@ -209,8 +251,8 @@ function listBlock(title, items, cls) {
 }
 
 function thesisCard(def) {
-  const card = el("section", { class: "card" });
-  card.appendChild(el("h2", {}, "策略说明"));
+  const card = el("section", { class: "card tpl-wide" });
+  card.appendChild(cardHead("策略说明"));
   if (!def.thesis && !def.falsification) {
     card.appendChild(el("p", { class: "muted" }, "该版本没有策略说明（模板格式 v3 之前入库）。"));
     if (def.description) card.appendChild(el("p", {}, def.description));
@@ -244,11 +286,8 @@ function thesisCard(def) {
 }
 
 function paramsCard(def, ctx) {
-  const card = el("section", { class: "card" });
-  card.appendChild(el("h2", {}, "参数"));
-  card.appendChild(
-    el("p", { class: "small faint" }, "默认值用于筛选；单股规则草稿只能在允许范围内调整。")
-  );
+  const card = el("section", { class: "card tpl-wide" });
+  card.appendChild(cardHead("参数", "默认值用于筛选；单股规则草稿只能在允许范围内调整。"));
   const names = Object.keys(def.params || {});
   if (!names.length) {
     card.appendChild(el("p", { class: "muted" }, "没有参数。"));
@@ -286,9 +325,8 @@ function paramsCard(def, ctx) {
 }
 
 function versionsCard(detail) {
-  const card = el("section", { class: "card" });
-  card.appendChild(el("h2", {}, "版本"));
-  card.appendChild(el("p", { class: "small faint" }, "内容（含说明文字）变化即生成新版本，旧版本不改；已批准的单股规则仍指向当时的版本。"));
+  const card = el("section", { class: "card tpl-wide" });
+  card.appendChild(cardHead("版本", "内容（含说明文字）变化即生成新版本，旧版本不改；已批准的单股规则仍指向当时的版本。"));
   const tableNode = el("table", { class: "stack-table" });
   const headRow = el("tr");
   for (const text of ["版本", "入库时间", "校准", "内容哈希"]) headRow.appendChild(el("th", { scope: "col" }, text));
@@ -326,10 +364,11 @@ function headerBlock(detail) {
     title.replaceChildren(document.createTextNode(`${detail.name} `));
     title.appendChild(el("span", { class: "code" }, `${detail.id} · v${detail.version}`));
   }
-  const box = el("section", { class: "card" });
-  const line = el("p", { class: "tpl-chips" });
+  const box = el("section", { class: "card tpl-wide tpl-idcard" });
+  const line = el("div", { class: "cluster tpl-chips" });
   line.appendChild(calibrationBadge(detail.calibration_status));
-  for (const group of detail.applicable_groups || []) line.appendChild(chip(label(INDUSTRY_GROUP_LABELS, group)));
+  if (detail.file_status !== "synced") line.appendChild(badge("待同步", "outline"));
+  for (const group of detail.applicable_groups || []) line.appendChild(badge(label(INDUSTRY_GROUP_LABELS, group)));
   box.appendChild(line);
   const meta = el("p", { class: "meta-row small" });
   meta.appendChild(el("span", {}, `入库 ${formatDateTime(detail.synced_at)}`));
@@ -360,16 +399,17 @@ async function loadTemplateDetail(root) {
     const def = detail.definition || {};
     const ctx = { params: def.params || {}, units: detail.factor_units || {} };
     document.title = `${detail.name} · 模板 · zcharlie`;
-    const container = el("div");
+    setShellTitle(detail.name);
+    const container = el("div", { class: "tpl-d-grid" });
     container.appendChild(headerBlock(detail));
     container.appendChild(thesisCard(def));
     const screen = el("section", { class: "card" });
-    screen.appendChild(el("h2", {}, "筛选条件（进入候选）"));
-    screen.appendChild(el("p", { class: "small faint" }, `${modeHint(def.screen)}；数值为默认参数。`));
+    screen.appendChild(cardHead("筛选条件（进入候选）"));
+    screen.appendChild(el("p", { class: "small faint tpl-card-note" }, `${modeHint(def.screen)}；数值为默认参数。`));
     screen.appendChild(conditionList(def.screen, ctx));
     container.appendChild(screen);
     container.appendChild(zonesCard("候选区间", def.candidate_zones, ctx));
-    container.appendChild(zonesCard("持仓区间", def.holding_zones, ctx, "P1 只定义、不执行；仓位类因子在 P2 才有数据。"));
+    container.appendChild(zonesCard("持仓区间", def.holding_zones, ctx, "P1 只定义、不执行；仓位类因子在 P2 才有数据。", "tpl-wide"));
     container.appendChild(paramsCard(def, ctx));
     container.appendChild(versionsCard(detail));
     renderRegion(root, "ready", container);

@@ -181,9 +181,34 @@ export function candidatesBucket(counts) {
 // ---- 候选列表 ---------------------------------------------------------
 
 const listState = { items: [], verifications: new Map() };
+const MAX_DOTS = 12;
+const NEGATIVE_ZONE = /(^|_)(drop|exit|trim|remove)(_|$)/;
+const DISMISS_NOTE = "30 天内筛选不再自动提名该标的。";
 
-function sortCandidates(items) {
+function candidateHref(candidate) {
+  return `/app/candidates/${encodeURIComponent(candidate.id)}`;
+}
+
+function metCount(candidate) {
+  const reasons = candidate.latest_screen && Array.isArray(candidate.latest_screen.reasons) ? candidate.latest_screen.reasons : [];
+  return { met: reasons.filter((reason) => reason.outcome === "met").length, total: reasons.length };
+}
+
+function hitRatio(candidate) {
+  const { met, total } = metCount(candidate);
+  return total ? met / total : 0;
+}
+
+function sortCandidates(items, mode = "opened") {
   return [...items].sort((a, b) => {
+    if (mode === "hits") {
+      const diff = hitRatio(b) - hitRatio(a);
+      if (diff) return diff;
+    } else if (mode === "expiry") {
+      const expA = Date.parse(a.expires_at) || Infinity;
+      const expB = Date.parse(b.expires_at) || Infinity;
+      if (expA !== expB) return expA < expB ? -1 : 1;
+    }
     const dayA = formatDate(a.opened_at);
     const dayB = formatDate(b.opened_at);
     if (dayA !== dayB) return dayA < dayB ? 1 : -1;
@@ -200,133 +225,230 @@ function topReasons(screen) {
   return (met.length ? met : screen.reasons).slice(0, TOP_REASONS);
 }
 
-function candidateItem(candidate) {
-  const item = el("article", { class: "candidate-item", "data-candidate-id": candidate.id });
-  const main = el("div", { class: "candidate-main" });
-  const head = el("header", { class: "candidate-head" });
-  const title = el("h2", { class: "candidate-title" });
-  title.appendChild(
-    el(
-      "a",
-      { href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
-      `${candidate.ticker} ${candidate.name || ""}`.trim()
-    )
-  );
-  head.appendChild(title);
-  if (candidate.status !== "open") {
-    head.appendChild(chip(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
-  }
-  const refs = Array.isArray(candidate.template_refs) ? candidate.template_refs : [];
-  if (refs.length) {
-    for (const ref of refs) head.appendChild(templateChip(ref));
-  } else {
-    head.appendChild(chip("手动提名", "chip-template"));
-  }
-  head.appendChild(calibrationBadge(candidate.calibration_status));
-  main.appendChild(head);
+// 一条理由拆成「名称 实际值 条件」；缺失 / 不适用时退回 formatReason 的整句。
+function reasonParts(reason) {
+  if (!reason || !reason.factor || reason.outcome === "not_applicable") return null;
+  if (reason.actual === null || reason.actual === undefined) return null;
+  return {
+    name: factorLabel(reason.factor),
+    actual: formatFactorValue(reason.actual, reason.unit),
+    cond: formatThreshold(reason.op, reason.threshold, reason.unit),
+  };
+}
 
+function reasonLine(reason, prefix = "") {
+  const parts = reasonParts(reason);
+  const line = el("span", { class: "cand-reason-text" });
+  if (!parts) {
+    line.textContent = `${prefix}${formatReason(reason)}`;
+    return line;
+  }
+  line.appendChild(document.createTextNode(`${prefix}${parts.name} `));
+  line.appendChild(el("b", {}, parts.actual));
+  line.appendChild(el("span", { class: "muted" }, ` ${parts.cond}`));
+  return line;
+}
+
+function inlineReason(reason, prefix = "") {
+  const parts = reasonParts(reason);
+  return parts ? `${prefix}${parts.name} ${parts.actual}` : `${prefix}${formatReason(reason)}`;
+}
+
+// 入选理由的统一数据：筛选命中 / 手动提名的草稿检查 / AI 起草分析 / 无理由。
+function whyModel(candidate) {
   const screen = candidate.latest_screen;
-  const meta = el("p", { class: "candidate-meta muted" });
-  meta.appendChild(el("span", {}, `行业组：${industryText(screen && screen.context)}`));
-  meta.appendChild(
-    el("span", {}, `开启 ${formatDate(candidate.opened_at)} · 到期 ${formatDate(candidate.expires_at)}`)
-  );
-  main.appendChild(meta);
-
-  // 入选理由放在最显眼的位置：带标题与命中计数的色块。
-  const reasons = topReasons(screen);
-  const block = el("div", { class: "candidate-why" });
   const allReasons = screen && Array.isArray(screen.reasons) ? screen.reasons : [];
-  const met = allReasons.filter((reason) => reason.outcome === "met").length;
-  const whyHead = el("p", { class: "candidate-why-head" });
-  whyHead.appendChild(el("strong", {}, "入选理由"));
-  if (allReasons.length) whyHead.appendChild(el("span", { class: "faint" }, `命中 ${met}/${allReasons.length} 项`));
-  block.appendChild(whyHead);
-  if (reasons.length) {
-    const list = el("ul", { class: "reason-list" });
-    for (const reason of reasons) list.appendChild(el("li", {}, formatReason(reason)));
-    block.appendChild(list);
-    if (allReasons.length > reasons.length) {
-      block.appendChild(
-        el(
-          "a",
-          { class: "candidate-why-more small", href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
-          `另有 ${allReasons.length - reasons.length} 项，查看详情 →`
-        )
-      );
-    }
-  } else if (Array.isArray(candidate.draft_checks) && candidate.draft_checks.length) {
+  const shown = topReasons(screen);
+  if (shown.length) {
+    const { met, total } = metCount(candidate);
+    return {
+      kind: "screen",
+      verb: "命中",
+      met,
+      total,
+      items: shown.map((reason) => ({ reason, ok: reason.outcome === "met", prefix: "" })),
+      more: allReasons.length - shown.length,
+    };
+  }
+  if (Array.isArray(candidate.draft_checks) && candidate.draft_checks.length) {
     // 手动提名：草稿规则的候选区间 × 本股因子，产出与筛选命中同构的检查项。
     // 移出类区间（drop / exit / trim / remove）"满足"意味着离场信号，✓/! 按是否有利翻转，计数只统计有利项。
-    const NEGATIVE_ZONE = /(^|_)(drop|exit|trim|remove)(_|$)/;
-    const zoneOf = (reason) => String(reason.rule_path || "").split(".")[0];
     const items = candidate.draft_checks.map((reason) => {
-      const zone = zoneOf(reason);
+      const zone = String(reason.rule_path || "").split(".")[0];
       const negative = NEGATIVE_ZONE.test(zone);
-      const desirable = negative ? reason.outcome !== "met" : reason.outcome === "met";
-      return { reason, desirable, zone };
-    });
-    const good = items.filter((item) => item.desirable).length;
-    whyHead.appendChild(el("span", { class: "faint" }, `满足 ${good}/${items.length} 项`));
-    const list = el("ul", { class: "reason-list" });
-    for (const { reason, desirable, zone } of items.slice(0, TOP_REASONS)) {
+      const ok = negative ? reason.outcome !== "met" : reason.outcome === "met";
       const zoneLabel = label(ZONE_LABELS, zone);
-      const prefix = zoneLabel !== zone ? `${zoneLabel}·` : "";
-      list.appendChild(
-        el("li", { class: desirable ? "reason-ok" : "reason-warn" }, `${prefix}${formatReason(reason)}`)
-      );
-    }
-    block.appendChild(list);
-    block.appendChild(
-      el(
-        "a",
-        { class: "candidate-why-more small", href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
-        items.length > TOP_REASONS ? `另有 ${items.length - TOP_REASONS} 项，查看详情 →` : "查看完整分析 →"
-      )
-    );
-  } else if (candidate.draft_overall_rationale) {
-    // 手动提名的候选：起草完成后用 LLM 的整体分析替代占位文案，
-    // 按句拆成列表，复用筛选命中的 reason-list 样式（✓ 项）。
+      return { reason, ok, prefix: zoneLabel !== zone ? `${zoneLabel}·` : "" };
+    });
+    return {
+      kind: "draft",
+      verb: "满足",
+      met: items.filter((item) => item.ok).length,
+      total: items.length,
+      items: items.slice(0, TOP_REASONS),
+      more: Math.max(0, items.length - TOP_REASONS),
+    };
+  }
+  if (candidate.draft_overall_rationale) {
+    // 手动提名的候选：起草完成后用 LLM 的整体分析替代占位文案，按句拆成列表。
     const sentences = candidate.draft_overall_rationale
       .split(/(?<=[。！？；;])/)
       .map((sentence) => sentence.trim())
       .filter(Boolean);
-    whyHead.appendChild(el("span", { class: "faint" }, "AI 起草分析"));
+    return { kind: "text", sentences: sentences.slice(0, 4) };
+  }
+  return { kind: "none" };
+}
+
+function hitDots(met, total) {
+  const dots = el("span", { class: "cand-hits", "aria-hidden": "true" });
+  for (let index = 0; index < Math.min(total, MAX_DOTS); index += 1) {
+    dots.appendChild(el("i", { class: index < met ? "on" : "" }));
+  }
+  return dots;
+}
+
+function truncate(text, limit) {
+  return text.length > limit ? `${text.slice(0, limit)}…` : text;
+}
+
+function daysLeftText(candidate) {
+  const end = Date.parse(candidate.expires_at);
+  if (candidate.status !== "open" || !Number.isFinite(end)) return "";
+  const days = Math.ceil((end - Date.now()) / 86400000);
+  return days > 0 ? `剩 ${days} 天` : "已到期";
+}
+
+function shortDate(value) {
+  const day = formatDate(value);
+  return day.length >= 10 ? day.slice(5) : day;
+}
+
+function badge(text, kind = "", title) {
+  return el("span", { class: `badge ${kind}`.trim(), title }, text);
+}
+
+function templateBadge(ref) {
+  const [id, version] = String(ref).split("@");
+  const node = badge(label(TEMPLATE_LABELS, id), "accent", ref);
+  if (version) node.appendChild(el("span", { class: "cand-ver" }, ` v${version}`));
+  return node;
+}
+
+function draftBadge(candidate) {
+  const kind = { ready: "ai", failed: "warn", pending: "outline", none: "outline" }[candidate.draft_state] || "outline";
+  return badge(label(DRAFT_STATE_LABELS, candidate.draft_state), kind);
+}
+
+function candidateBadges(candidate) {
+  const box = el("div", { class: "cluster cand-badges" });
+  const refs = Array.isArray(candidate.template_refs) ? candidate.template_refs : [];
+  if (refs.length) for (const ref of refs) box.appendChild(templateBadge(ref));
+  else box.appendChild(badge("手动提名", "accent"));
+  if (candidate.status === "open") box.appendChild(draftBadge(candidate));
+  else box.appendChild(badge(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
+  const request = listState.verifications.get(candidate.listing_id);
+  if (request && UNFINISHED_VERIFICATION.has(request.status)) box.appendChild(badge("核对未完成", "warn", verificationText(request)));
+  if ((candidate.calibration_status || "uncalibrated") === "uncalibrated") {
+    box.appendChild(el("span", { class: "badge badge-uncalibrated cand-uncal", title: "模板默认参数尚未经回测校准，只是假设" }, "未校准"));
+  }
+  return box;
+}
+
+// 入选理由块（桌面）：标题 + 命中进度点 + 两列理由 + 更多。
+function whyBlock(candidate, model) {
+  const block = el("div", { class: "cand-why" });
+  const head = el("div", { class: "cand-why-head" });
+  head.appendChild(el("strong", {}, "入选理由"));
+  if (model.kind === "screen" || model.kind === "draft") {
+    head.appendChild(hitDots(model.met, model.total));
+    head.appendChild(el("span", { class: "cand-why-count" }, `${model.verb} ${model.met}/${model.total} 项`));
+  } else if (model.kind === "text") {
+    head.appendChild(el("span", { class: "faint" }, "AI 起草分析"));
+  }
+  block.appendChild(head);
+  if (model.kind === "screen" || model.kind === "draft") {
     const list = el("ul", { class: "reason-list" });
-    for (const sentence of sentences.slice(0, 4)) {
-      list.appendChild(
-        el("li", {}, sentence.length > 72 ? `${sentence.slice(0, 72)}…` : sentence)
-      );
+    for (const { reason, ok, prefix } of model.items) {
+      list.appendChild(el("li", { class: ok ? "reason-ok" : "reason-warn" }, undefined)).appendChild(reasonLine(reason, prefix));
     }
     block.appendChild(list);
-    block.appendChild(
-      el(
-        "a",
-        { class: "candidate-why-more small", href: `/app/candidates/${encodeURIComponent(candidate.id)}` },
-        "查看完整分析 →"
-      )
-    );
+    const text =
+      model.more > 0 ? `另有 ${model.more} 项 · 查看详情` : model.kind === "draft" ? "查看完整分析" : "";
+    if (text) block.appendChild(el("a", { class: "cand-why-more small", href: candidateHref(candidate) }, text));
+  } else if (model.kind === "text") {
+    const list = el("ul", { class: "reason-list reason-list-one" });
+    for (const sentence of model.sentences) list.appendChild(el("li", { class: "reason-ok" }, truncate(sentence, 72)));
+    block.appendChild(list);
+    block.appendChild(el("a", { class: "cand-why-more small", href: candidateHref(candidate) }, "查看完整分析"));
   } else {
-    block.appendChild(el("p", { class: "muted" }, "无筛选理由（手动提名）。"));
+    block.appendChild(el("p", { class: "muted cand-why-none" }, "无筛选理由（手动提名）。"));
   }
-  main.appendChild(block);
+  return block;
+}
+
+// 手机卡片的命中条：进度点 + 计数 + 最靠前的两条理由（单行）。
+function hitRow(model) {
+  const row = el("div", { class: "cand-hitrow" });
+  if (model.kind === "screen" || model.kind === "draft") {
+    row.appendChild(hitDots(model.met, model.total));
+    row.appendChild(el("b", { class: "cand-hit-n" }, `${model.met}/${model.total}`));
+    const picks = (model.items.filter((item) => item.ok).length ? model.items.filter((item) => item.ok) : model.items).slice(0, 2);
+    row.appendChild(el("span", { class: "cand-hit-tx" }, picks.map((item) => inlineReason(item.reason, item.prefix)).join(" · ")));
+  } else if (model.kind === "text") {
+    row.appendChild(el("span", { class: "cand-hit-tag" }, "AI 起草分析"));
+    row.appendChild(el("span", { class: "cand-hit-tx" }, truncate(model.sentences[0] || "", 40)));
+  } else {
+    row.appendChild(el("span", { class: "cand-hit-tx" }, "无筛选理由（手动提名）"));
+  }
+  return row;
+}
+
+function candidateItem(candidate) {
+  const href = candidateHref(candidate);
+  const model = whyModel(candidate);
+  const item = el("article", { class: "cand", "data-candidate-id": candidate.id });
+  const main = el("div", { class: "cand-main" });
+
+  const identity = el("div", { class: "cand-id" });
+  const name = el("div", { class: "cand-nm" });
+  name.appendChild(el("a", { class: "cand-title", href }, candidate.name || candidate.ticker));
+  name.appendChild(el("span", { class: "code" }, candidate.ticker));
+  identity.appendChild(name);
+  main.appendChild(identity);
+  main.appendChild(candidateBadges(candidate));
+
+  const screen = candidate.latest_screen;
+  const left = daysLeftText(candidate);
+  const meta = el("p", { class: "cand-meta" });
+  for (const text of [
+    industryText(screen && screen.context),
+    `开启 ${shortDate(candidate.opened_at)}`,
+    `到期 ${shortDate(candidate.expires_at)}${left ? ` · ${left}` : ""}`,
+  ]) {
+    if (meta.children.length) meta.appendChild(el("i", {}, "/"));
+    meta.appendChild(el("span", {}, text));
+  }
+  main.appendChild(meta);
+  main.appendChild(whyBlock(candidate, model));
+  main.appendChild(hitRow(model));
+  main.appendChild(el("p", { class: "cand-due" }, `到期 ${shortDate(candidate.expires_at)}${left ? ` · ${left}` : ""}`));
   item.appendChild(main);
 
-  // 右侧栏：放大的日线 + 草稿 / 核对状态，避免右半边留白。
-  const aside = el("aside", { class: "candidate-aside" });
-  aside.appendChild(
-    el("span", { class: "spark spark-pending spark-slot spark-slot-wide", "data-spark": candidate.ticker, "aria-hidden": "true" })
-  );
-  aside.appendChild(el("div", { class: "candidate-price", "data-price-for": candidate.ticker }));
-  aside.appendChild(el("p", { class: "faint small candidate-aside-cap" }, `近 ${SPARK_DAYS} 个交易日收盘`));
-  const states = el("p", { class: "candidate-states" });
-  if (candidate.status === "open") states.appendChild(draftChip(candidate));
-  const request = listState.verifications.get(candidate.listing_id);
-  states.appendChild(
-    chip(verificationText(request), request && UNFINISHED_VERIFICATION.has(request.status) ? "chip-pending" : "")
-  );
-  aside.appendChild(states);
-  item.appendChild(aside);
+  // 右侧栏：价格 + 日线 + 区间涨跌 + 操作。
+  const side = el("aside", { class: "cand-side" });
+  side.appendChild(el("div", { class: "cand-px", "data-price-for": candidate.ticker }));
+  side.appendChild(el("span", { class: "spark spark-pending cand-spark", "data-spark": candidate.ticker, "aria-hidden": "true" }));
+  side.appendChild(el("div", { class: "cand-rets", "data-rets-for": candidate.ticker }));
+  const acts = el("div", { class: "cand-acts" });
+  if (candidate.status === "open") {
+    const dismiss = el("button", { type: "button", class: "btn btn-sm btn-ghost", "data-action": "dismiss-candidate" }, "忽略");
+    dismiss.addEventListener("click", () => openDismissSheet(candidate));
+    acts.appendChild(dismiss);
+  }
+  acts.appendChild(el("a", { class: `btn btn-sm${candidate.status === "open" ? " btn-primary" : ""}`, href }, candidate.status === "open" ? "审阅" : "查看"));
+  side.appendChild(acts);
+  item.appendChild(side);
   return item;
 }
 
@@ -334,7 +456,7 @@ function pctChange(from, to) {
   return from ? ((to - from) / from) * 100 : null;
 }
 
-function pctNode(text, value) {
+function pctNode(value) {
   const cls = value > 0 ? "pc-up" : value < 0 ? "pc-down" : "pc-flat";
   return el("span", { class: `price-chg ${cls}` }, value === null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`);
 }
@@ -350,38 +472,40 @@ function fillPriceSummary(root, ticker, bars) {
     ["5日", pctChange(back(5), last.close)],
     ["20日", pctChange(back(20), last.close)],
     [`${closes.length}日`, pctChange(closes[0].close, last.close)],
+    ["距高点", pctChange(high, last.close)],
   ];
-  for (const host of root.querySelectorAll(`[data-price-for="${CSS.escape(ticker)}"]`)) {
-    const top = el("div", { class: "price-top" });
-    top.appendChild(el("span", { class: "price-last" }, last.close.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })));
-    top.appendChild(pctNode("", pctChange(back(1), last.close)));
-    top.appendChild(el("span", { class: "faint small" }, last.trade_date));
-    const grid = el("div", { class: "price-grid" });
-    for (const [text, value] of periods) {
-      const cell = el("span", { class: "price-cell" });
-      cell.appendChild(el("span", { class: "faint" }, text));
-      cell.appendChild(pctNode("", value));
-      grid.appendChild(cell);
-    }
-    const fromHigh = el("span", { class: "price-cell" });
-    fromHigh.appendChild(el("span", { class: "faint" }, "距高点"));
-    fromHigh.appendChild(pctNode("", pctChange(high, last.close)));
-    grid.appendChild(fromHigh);
-    host.replaceChildren(top, grid);
+  const selector = (attr) => `[${attr}="${CSS.escape(ticker)}"]`;
+  for (const host of root.querySelectorAll(selector("data-price-for"))) {
+    host.replaceChildren(
+      el("b", { class: "price-last" }, last.close.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+      pctNode(pctChange(back(1), last.close)),
+      el("small", { class: "faint" }, `${String(last.trade_date).slice(5)} 收盘`)
+    );
+  }
+  for (const host of root.querySelectorAll(selector("data-rets-for"))) {
+    host.replaceChildren(
+      ...periods.map(([text, value]) => {
+        const cell = el("div", { class: "cand-ret" });
+        cell.appendChild(el("span", { class: "faint" }, text));
+        cell.appendChild(pctNode(value));
+        return cell;
+      })
+    );
   }
 }
 
 function renderCandidateList(region) {
   const templateFilter = document.querySelector("#candidates-template-filter");
   const template = templateFilter ? templateFilter.value : "";
-  const items = sortCandidates(listState.items).filter(
+  const sortSelect = document.querySelector("#candidates-sort");
+  const items = sortCandidates(listState.items, sortSelect ? sortSelect.value : "opened").filter(
     (candidate) => !template || (candidate.template_refs || []).includes(template)
   );
   if (!items.length) {
     renderRegion(region, "empty", template ? "该模板下没有候选。" : undefined);
     return;
   }
-  const container = el("div", { class: "candidate-list" });
+  const container = el("div", { class: "cand-list" });
   for (const candidate of items) container.appendChild(candidateItem(candidate));
   renderRegion(region, "ready", container);
   fillSparklines(
@@ -391,7 +515,7 @@ function renderCandidateList(region) {
       fillPriceSummary(container, ticker, data && data.bars);
       return data;
     },
-    { width: "100%", height: 72 }
+    { width: "100%", height: 56 }
   );
 }
 
@@ -409,9 +533,24 @@ function refreshTemplateOptions() {
   select.value = refs.has(current) ? current : "";
 }
 
+// 状态分段控件（桌面）与胶囊（手机）与隐藏的 #candidates-status-filter 保持一致。
+function syncStatusControls(status, total) {
+  for (const button of document.querySelectorAll("[data-status]")) {
+    const on = button.dataset.status === status;
+    button.classList.toggle("on", on);
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+    const count = button.querySelector("[data-status-count]");
+    if (count) {
+      count.hidden = !(on && typeof total === "number");
+      if (!count.hidden) count.textContent = String(total);
+    }
+  }
+}
+
 async function loadCandidateList(region) {
   const statusFilter = document.querySelector("#candidates-status-filter");
   const status = (statusFilter && statusFilter.value) || "open";
+  syncStatusControls(status, null);
   renderRegion(region, "loading");
   try {
     const params = new URLSearchParams({ status, limit: String(LIST_LIMIT) });
@@ -426,6 +565,7 @@ async function loadCandidateList(region) {
     listState.verifications = newestVerificationByListing(verifications && verifications.items);
     refreshTemplateOptions();
     renderCandidateList(region);
+    syncStatusControls(status, page ? page.total : null);
     const total = document.querySelector("#candidates-total");
     if (total && page) {
       total.textContent = `共 ${page.total} 个${label(CANDIDATE_STATUS_LABELS, status)}候选${
@@ -436,6 +576,54 @@ async function loadCandidateList(region) {
     if (redirectOn401(error)) return;
     renderError(region, error.message, () => loadCandidateList(region));
   }
+}
+
+// ---- 列表：忽略（底部弹层，理由必填；与详情页同一个接口）---------------------------
+
+const dismissState = { candidate: null, list: null };
+
+function openDismissSheet(candidate) {
+  const sheet = section("candidate-dismiss-sheet");
+  if (!sheet) return;
+  dismissState.candidate = candidate;
+  const sub = section("candidate-dismiss-sub");
+  if (sub) sub.textContent = `${candidate.ticker} ${candidate.name || ""}：${DISMISS_NOTE}`.replace("  ", " ");
+  const reason = section("candidate-dismiss-reason");
+  if (reason) reason.value = "";
+  const issues = section("candidate-dismiss-issues");
+  if (issues) clear(issues);
+  if (globalThis.zcOverlay) globalThis.zcOverlay.open(sheet);
+}
+
+function wireDismissSheet(list) {
+  const confirmButton = section("candidate-dismiss-confirm");
+  if (!confirmButton) return;
+  dismissState.list = list;
+  confirmButton.addEventListener("click", () => {
+    const candidate = dismissState.candidate;
+    if (!candidate) return;
+    const reasonInput = section("candidate-dismiss-reason");
+    const issues = section("candidate-dismiss-issues");
+    const reason = reasonInput ? reasonInput.value.trim() : "";
+    clear(issues);
+    if (!reason) {
+      issues.appendChild(el("p", { class: "notice notice-error" }, "忽略候选需要填写理由。"));
+      if (reasonInput) reasonInput.focus();
+      return;
+    }
+    const promise = post(`/candidates/${candidate.id}/dismiss`, { reason }, { idempotency: false })
+      .then(() => {
+        if (reasonInput) reasonInput.value = "";
+        dismissState.candidate = null;
+        if (globalThis.zcOverlay) globalThis.zcOverlay.close();
+        if (dismissState.list) loadCandidateList(dismissState.list);
+      })
+      .catch((error) => {
+        if (redirectOn401(error)) return;
+        showIssues(issues, error, "忽略失败");
+      });
+    lockWhileBusy(confirmButton, promise);
+  });
 }
 
 // ---- 手动提名 ---------------------------------------------------------
@@ -619,7 +807,32 @@ function kvRows(pairs) {
   return list;
 }
 
+// 外壳按路由只给了「候选 #编号」：拿到数据后把移动端顶栏与桌面面包屑末项改成股票名。
+function setShellTitle(text) {
+  for (const node of document.querySelectorAll("[data-appbar-title], .crumbs > b")) node.textContent = text;
+  document.title = `${text} · 候选 · zcharlie`;
+}
+
+// 身份区的最新收盘与日涨跌：只取最近几根日线，失败时留空（价格图里仍有完整行情）。
+async function fillHeaderPrice(ticker, host) {
+  try {
+    const data = await get(`/market/${encodeURIComponent(ticker)}/bars?days=5`);
+    const closes = (data && Array.isArray(data.bars) ? data.bars : []).filter((bar) => bar && Number.isFinite(bar.close));
+    if (!closes.length || !host.isConnected) return;
+    const last = closes[closes.length - 1];
+    const prev = closes.length > 1 ? closes[closes.length - 2].close : null;
+    host.replaceChildren(
+      el("b", { class: "price-last" }, last.close.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+      pctNode(prev ? pctChange(prev, last.close) : null),
+      el("small", { class: "faint" }, `${String(last.trade_date).slice(5)} 收盘`)
+    );
+  } catch {
+    // 行情缺失不影响审阅。
+  }
+}
+
 function renderHeader(candidate) {
+  setShellTitle(candidate.name || `候选 #${candidate.id}`);
   const title = section("candidate-title");
   if (title) {
     clear(title);
@@ -628,37 +841,155 @@ function renderHeader(candidate) {
   }
   const node = section("candidate-header");
   if (!node) return;
-  const box = el("div", { class: "entity-head" });
-  const left = el("div");
-  const line = el("p", { class: "candidate-states" });
-  line.appendChild(chip(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
-  if (candidate.status === "open") line.appendChild(draftChip(candidate));
-  for (const ref of candidate.template_refs || []) line.appendChild(templateChip(ref));
-  line.appendChild(calibrationBadge(candidate.calibration_status));
+  const box = el("div", { class: "cand-idhead" });
+  const left = el("div", { class: "cand-id-left" });
+  const price = el("div", { class: "cand-id-price" });
+  left.appendChild(price);
+  const line = el("div", { class: "cluster cand-id-badges" });
+  line.appendChild(badge(label(CANDIDATE_STATUS_LABELS, candidate.status), `state-${candidate.status}`));
+  if (candidate.status === "open") line.appendChild(draftBadge(candidate));
+  for (const ref of candidate.template_refs || []) line.appendChild(templateBadge(ref));
+  if ((candidate.calibration_status || "uncalibrated") === "uncalibrated") {
+    line.appendChild(el("span", { class: "badge badge-uncalibrated", title: "模板默认参数尚未经回测校准，只是假设" }, "未校准"));
+  }
   left.appendChild(line);
-  const meta = el("p", { class: "meta-row" });
+  box.appendChild(left);
+  if (candidate.status === "open") {
+    box.appendChild(timeline(candidate.opened_at, candidate.expires_at));
+  } else {
+    box.appendChild(el("p", { class: "faint small cand-id-closed" }, `开启 ${formatDate(candidate.opened_at)} · 到期 ${formatDate(candidate.expires_at)}`));
+  }
+  sectionReady(node, box);
+  fillHeaderPrice(candidate.ticker, price);
+}
+
+// ---- 候选详情：分区（概要 / 入选理由 / 规则草稿 / 主营 / 核对 / 记录）------------------
+
+const TAB_NAMES = ["summary", "reasons", "rule", "segments", "verification", "decisions"];
+
+function selectTab(name, { focus = false } = {}) {
+  if (!TAB_NAMES.includes(name)) return;
+  for (const tab of document.querySelectorAll("#candidate-tabs [data-tab]")) {
+    const on = tab.dataset.tab === name;
+    tab.classList.toggle("on", on);
+    tab.setAttribute("aria-selected", on ? "true" : "false");
+    tab.tabIndex = on ? 0 : -1;
+    if (on) {
+      if (focus) tab.focus();
+      tab.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+  }
+  for (const panel of document.querySelectorAll("[data-panel]")) panel.hidden = panel.dataset.panel !== name;
+}
+
+function wireTabs() {
+  const tabs = [...document.querySelectorAll("#candidate-tabs [data-tab]")];
+  if (!tabs.length) return;
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => selectTab(tab.dataset.tab));
+    tab.addEventListener("keydown", (event) => {
+      const index = tabs.indexOf(tab);
+      const step = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+      if (!step) return;
+      event.preventDefault();
+      selectTab(tabs[(index + step + tabs.length) % tabs.length].dataset.tab, { focus: true });
+    });
+  }
+  const hash = globalThis.location.hash.replace(/^#/, "");
+  selectTab(TAB_NAMES.includes(hash) ? hash : "summary");
+}
+
+function summaryCard(titleText, aside) {
+  const card = el("section", { class: "card cand-sum-card" });
+  const head = el("div", { class: "card-head" });
+  head.appendChild(el("h2", {}, titleText));
+  if (aside) head.appendChild(aside);
+  card.appendChild(head);
+  return card;
+}
+
+function tabLink(text, tab) {
+  const button = el("button", { type: "button", class: "link-button card-more" }, text);
+  button.addEventListener("click", () => selectTab(tab));
+  return button;
+}
+
+function renderSummary(candidate) {
+  const node = section("candidate-summary");
+  if (!node) return;
+  clear(node);
+  node.dataset.state = "ready";
+
+  const model = whyModel(candidate);
+  const reasons = summaryCard("入选理由", tabLink("全部 →", "reasons"));
+  if (model.kind === "screen" || model.kind === "draft") {
+    reasons.querySelector(".card-head").insertBefore(
+      badge(`${model.verb} ${model.met}/${model.total}`, "accent"),
+      reasons.querySelector(".card-more")
+    );
+    const list = el("ul", { class: "reason-list" });
+    for (const { reason, ok, prefix } of model.items.slice(0, 3)) {
+      list.appendChild(el("li", { class: ok ? "reason-ok" : "reason-warn" })).appendChild(reasonLine(reason, prefix));
+    }
+    reasons.appendChild(list);
+  } else if (model.kind === "text") {
+    reasons.appendChild(el("p", { class: "small" }, truncate(model.sentences[0] || "", 120)));
+  } else {
+    reasons.appendChild(el("p", { class: "muted small" }, "手动提名：没有筛选理由。"));
+  }
+  node.appendChild(reasons);
+
+  const side = el("div", { class: "cand-sum-side" });
+  const rule = candidate.draft_rule_detail;
+  const draft = summaryCard("规则草稿", tabLink("去审阅 →", "rule"));
+  const draftLine = el("div", { class: "cluster" });
+  if (rule) {
+    if (String(rule.drafted_by || "").startsWith("llm:")) draftLine.appendChild(aiStamp(`AI 草稿 · ${rule.drafted_by.slice(4)}`));
+    draftLine.appendChild(badge(`规则 #${rule.rule_instance_id} v${rule.version}`));
+    draftLine.appendChild(badge(label(RULE_STATUS_LABELS, rule.status), rule.status === "draft" ? "ai" : "accent"));
+  } else {
+    draftLine.appendChild(draftBadge(candidate));
+  }
+  draft.appendChild(draftLine);
+  const detection = zoneDetectionLine(candidate.zone_events);
+  if (detection) draft.appendChild(detection);
+  side.appendChild(draft);
+
+  const info = summaryCard("基本信息");
   const screen = candidate.latest_screen;
-  if (screen && screen.context) meta.appendChild(el("span", {}, `行业组 ${industryText(screen.context)}`));
   const sources = (candidate.sources || []).map((source) =>
     source.kind === "screen"
       ? `筛选 #${fmt(source.screen_run_id)}（${label(TEMPLATE_LABELS, source.template_id)}，数据日 ${fmt(source.as_of)}）`
       : `手动提名${source.template_id ? `（${label(TEMPLATE_LABELS, source.template_id)}）` : ""}`
   );
-  if (sources.length) meta.appendChild(el("span", {}, `来源：${sources.join("；")}`));
-  if (candidate.closed_at) meta.appendChild(el("span", {}, `关闭 ${formatDate(candidate.closed_at)}`));
   const research = el("span");
-  research.appendChild(el("span", {}, "单股研究："));
-  research.appendChild(stockLink(candidate.ticker));
-  meta.appendChild(research);
-  left.appendChild(meta);
-  if (candidate.note) left.appendChild(el("p", {}, `备注：${candidate.note}`));
-  box.appendChild(left);
-  if (candidate.status === "open") {
-    box.appendChild(timeline(candidate.opened_at, candidate.expires_at));
-  } else {
-    box.appendChild(el("p", { class: "faint" }, `开启 ${formatDate(candidate.opened_at)} · 到期 ${formatDate(candidate.expires_at)}`));
+  const link = stockLink(candidate.ticker);
+  if (link) research.appendChild(link);
+  info.appendChild(
+    kvRows([
+      ["行业组", screen && screen.context ? industryText(screen.context) : null],
+      ["来源", sources.length ? sources.join("；") : null],
+      ["开启 / 到期", `${formatDate(candidate.opened_at)} → ${formatDate(candidate.expires_at)}`],
+      ["关闭", candidate.closed_at ? formatDate(candidate.closed_at) : null],
+      ["备注", candidate.note || null],
+    ].filter(([, value]) => value !== null))
+  );
+  const dl = info.querySelector("dl");
+  if (dl) {
+    dl.appendChild(el("dt", {}, "单股研究"));
+    const dd = el("dd");
+    dd.appendChild(research);
+    dl.appendChild(dd);
   }
-  sectionReady(node, box);
+  side.appendChild(info);
+  node.appendChild(side);
+
+  const count = document.querySelector("#cand-tab-reasons-count");
+  if (count) {
+    const total = (candidate.screen_results || []).reduce((sum, result) => sum + (result.reasons || []).length, 0) || (model.total || 0);
+    count.hidden = !total;
+    count.textContent = String(total);
+  }
 }
 
 function isNumber(value) {
@@ -1171,12 +1502,12 @@ function redraftButton(candidate, templateRef) {
 }
 
 async function runAction(button, work) {
-  if (detailState.busy) return;
+  if (detailState.busy) return false;
   const original = button.textContent;
   setBusy(true);
   button.textContent = "处理中…";
   try {
-    await work();
+    return await work();
   } finally {
     button.textContent = original;
     setBusy(false);
@@ -1215,9 +1546,7 @@ async function saveParams(candidate, rule, button) {
   }
   await runAction(button, async () => {
     try {
-      const reasonInput = section("candidate-reason");
-      const reason = reasonInput ? reasonInput.value.trim() : "";
-      const result = await patch(`/rules/${rule.rule_instance_id}`, reason ? { params: changes, reason } : { params: changes });
+      const result = await patch(`/rules/${rule.rule_instance_id}`, { params: changes });
       flash(`参数已保存：规则草稿 #${result.rule.rule_instance_id} v${result.rule.version}。`);
       await loadCandidateDetail();
     } catch (error) {
@@ -1257,57 +1586,144 @@ function promoteSummary(result) {
   return box;
 }
 
-function reasonValue() {
+// 处理理由弹层（底部弹层 / 桌面居中）：驳回、忽略必填，批准并晋级可选；失败时留在弹层里显示。
+const reasonSheet = { pending: null };
+
+function openReasonSheet({ title, sub, field, required, confirmText, placeholder, run }) {
+  const sheet = section("candidate-reason-sheet");
   const input = section("candidate-reason");
-  return input ? input.value.trim() : "";
+  if (!sheet || !input) return;
+  section("candidate-reason-title").textContent = title;
+  section("candidate-reason-sub").textContent = sub;
+  section("candidate-reason-label").textContent = `${field}${required ? "（必填）" : "（可选）"}`;
+  section("candidate-reason-confirm").textContent = confirmText;
+  input.value = "";
+  input.setAttribute("placeholder", placeholder);
+  clear(section("candidate-sheet-issues"));
+  reasonSheet.pending = { title, required, run };
+  if (globalThis.zcOverlay) globalThis.zcOverlay.open(sheet);
 }
 
-function requireReason(target, actionName) {
-  const reason = reasonValue();
-  if (!reason) {
-    clear(target);
-    target.appendChild(el("p", { class: "notice notice-error" }, `${actionName}需要填写理由。`));
+function wireReasonSheet() {
+  const confirmButton = section("candidate-reason-confirm");
+  if (!confirmButton) return;
+  confirmButton.addEventListener("click", async () => {
+    const pending = reasonSheet.pending;
+    if (!pending) return;
     const input = section("candidate-reason");
-    if (input) input.focus();
-    return null;
-  }
-  return reason;
+    const issues = section("candidate-sheet-issues");
+    const reason = input.value.trim();
+    clear(issues);
+    if (pending.required && !reason) {
+      issues.appendChild(el("p", { class: "notice notice-error" }, `${pending.title}需要填写理由。`));
+      input.focus();
+      return;
+    }
+    const done = await pending.run(reason, issues, confirmButton);
+    if (done) {
+      reasonSheet.pending = null;
+      input.value = "";
+      if (globalThis.zcOverlay) globalThis.zcOverlay.close();
+    }
+  });
 }
 
 function renderActions(candidate) {
   const node = section("candidate-actions");
   if (!node) return;
-  // 待处理时整张卡浮在视口底部（同设置页保存条）；已关闭则回到文档流。
-  const card = node.closest("section");
-  if (card) card.classList.toggle("floating-bar", candidate.status === "open");
-  if (candidate.status !== "open") {
+  // 待处理时整张卡变成固定在视口底部的操作条；已关闭则回到文档流。
+  const open = candidate.status === "open";
+  const card = section("candidate-actions-card");
+  if (card) {
+    card.classList.toggle("action-bar", open);
+    card.classList.toggle("card", !open);
+  }
+  if (!open) {
     renderRegion(node, "empty", `候选${label(CANDIDATE_STATUS_LABELS, candidate.status)}，无需处理。`);
     return;
   }
   const rule = candidate.draft_rule_detail;
   const draftReady = Boolean(rule && rule.status === "draft");
   const box = el("div");
-  const row = el("div", { class: "floating-bar-row" });
+  const row = el("div", { class: "cand-action-row" });
   row.appendChild(
-    el("input", {
-      id: "candidate-reason",
-      maxlength: "2000",
-      placeholder: "理由（忽略候选、驳回草稿必填；晋级可选）",
-      "aria-label": "处理理由",
-    })
+    el(
+      "p",
+      { class: "cand-action-info" },
+      draftReady
+        ? `规则草稿 #${rule.rule_instance_id} v${rule.version} 待审阅`
+        : "没有可审阅的规则草稿：晋级需要先批准一份草稿。"
+    )
   );
   const feedback = el("div", { id: "candidate-action-issues", class: "issues", role: "alert" });
+  const buttons = el("div", { class: "cand-action-btns" });
 
-  const buttons = el("div", { class: "toolbar" });
+  const dismiss = el("button", { type: "button", class: "btn btn-danger-ghost btn-lg", "data-action": "dismiss" }, "忽略候选");
+  dismiss.addEventListener("click", () => {
+    clear(feedback);
+    openReasonSheet({
+      title: "忽略候选",
+      sub: `忽略候选 ${candidate.ticker}？${DISMISS_NOTE}`,
+      field: "理由",
+      required: true,
+      confirmText: "确认忽略",
+      placeholder: "例如：行业景气度已转弱，本轮不再研究",
+      run: (reason, issues, confirmButton) =>
+        runAction(confirmButton, async () => {
+          try {
+            await post(`/candidates/${candidate.id}/dismiss`, { reason }, { idempotency: false });
+            flash(`已忽略候选 ${candidate.ticker}。`);
+            await loadCandidateDetail();
+            return true;
+          } catch (error) {
+            if (redirectOn401(error)) return false;
+            showIssues(issues, error, "忽略失败");
+            return false;
+          }
+        }),
+    });
+  });
+
+  const reject = el(
+    "button",
+    { type: "button", class: "btn btn-danger-ghost btn-lg", "data-action": "reject", "data-unavailable": draftReady ? "false" : "true" },
+    "驳回草稿"
+  );
+  reject.disabled = !draftReady;
+  reject.addEventListener("click", () => {
+    clear(feedback);
+    openReasonSheet({
+      title: "驳回草稿",
+      sub: `驳回规则草稿 #${rule.rule_instance_id}？候选保留在池中，理由将作为后续起草的偏好输入。`,
+      field: "理由",
+      required: true,
+      confirmText: "确认驳回",
+      placeholder: "例如：参数区间偏宽，复核点没有覆盖分红政策变化",
+      run: (reason, issues, confirmButton) =>
+        runAction(confirmButton, async () => {
+          try {
+            await post(`/rules/${rule.rule_instance_id}/reject`, { reason }, { idempotency: false });
+            flash(`已驳回规则草稿 #${rule.rule_instance_id}。`);
+            await loadCandidateDetail();
+            return true;
+          } catch (error) {
+            if (redirectOn401(error)) return false;
+            showIssues(issues, error, "驳回失败");
+            return false;
+          }
+        }),
+    });
+  });
+
   const promote = el(
     "button",
-    { type: "button", class: "primary", "data-action": "promote", "data-unavailable": draftReady ? "false" : "true" },
+    { type: "button", class: "btn btn-primary btn-lg", "data-action": "promote", "data-unavailable": draftReady ? "false" : "true" },
     "批准并晋级"
   );
   promote.disabled = !draftReady;
   promote.addEventListener("click", () => {
+    clear(feedback);
     if (invalidParams().length) {
-      clear(feedback);
       feedback.appendChild(el("p", { class: "notice notice-error" }, "有参数超出允许范围，请先修正。"));
       return;
     }
@@ -1316,70 +1732,37 @@ function renderActions(candidate) {
     const message =
       `批准规则草稿 #${rule.rule_instance_id} 并将 ${candidate.ticker} 晋级到观察池？` +
       (changed.length ? `\n将同时采用修改后的参数：${changed.map((name) => `${name}=${changes[name]}`).join("，")}` : "");
-    if (!globalThis.confirm(message)) return;
-    runAction(promote, async () => {
-      try {
-        const body = { rule_instance_id: rule.rule_instance_id };
-        if (changed.length) body.params_override = changes;
-        const reason = reasonValue();
-        if (reason) body.reason = reason;
-        const result = await post(`/candidates/${candidate.id}/promote`, body, { idempotency: false });
-        flash(promoteSummary(result));
-        await loadCandidateDetail();
-      } catch (error) {
-        if (redirectOn401(error)) return;
-        showIssues(feedback, error, "晋级失败");
-      }
+    openReasonSheet({
+      title: "批准并晋级",
+      sub: message,
+      field: "理由",
+      required: false,
+      confirmText: "确认晋级",
+      placeholder: "可选：为什么批准这份草稿",
+      run: (reason, issues, confirmButton) =>
+        runAction(confirmButton, async () => {
+          try {
+            const body = { rule_instance_id: rule.rule_instance_id };
+            if (changed.length) body.params_override = changes;
+            if (reason) body.reason = reason;
+            const result = await post(`/candidates/${candidate.id}/promote`, body, { idempotency: false });
+            flash(promoteSummary(result));
+            await loadCandidateDetail();
+            return true;
+          } catch (error) {
+            if (redirectOn401(error)) return false;
+            showIssues(issues, error, "晋级失败");
+            return false;
+          }
+        }),
     });
   });
 
-  const reject = el(
-    "button",
-    { type: "button", class: "danger", "data-action": "reject", "data-unavailable": draftReady ? "false" : "true" },
-    "驳回草稿"
-  );
-  reject.disabled = !draftReady;
-  reject.addEventListener("click", () => {
-    const reason = requireReason(feedback, "驳回草稿");
-    if (!reason) return;
-    if (!globalThis.confirm(`驳回规则草稿 #${rule.rule_instance_id}？理由将作为后续起草的偏好输入。`)) return;
-    runAction(reject, async () => {
-      try {
-        await post(`/rules/${rule.rule_instance_id}/reject`, { reason }, { idempotency: false });
-        flash(`已驳回规则草稿 #${rule.rule_instance_id}。`);
-        await loadCandidateDetail();
-      } catch (error) {
-        if (redirectOn401(error)) return;
-        showIssues(feedback, error, "驳回失败");
-      }
-    });
-  });
-
-  const dismiss = el("button", { type: "button", class: "danger", "data-action": "dismiss" }, "忽略候选");
-  dismiss.addEventListener("click", () => {
-    const reason = requireReason(feedback, "忽略候选");
-    if (!reason) return;
-    if (!globalThis.confirm(`忽略候选 ${candidate.ticker}？30 天内筛选不再自动提名该标的。`)) return;
-    runAction(dismiss, async () => {
-      try {
-        await post(`/candidates/${candidate.id}/dismiss`, { reason }, { idempotency: false });
-        flash(`已忽略候选 ${candidate.ticker}。`);
-        await loadCandidateDetail();
-      } catch (error) {
-        if (redirectOn401(error)) return;
-        showIssues(feedback, error, "忽略失败");
-      }
-    });
-  });
-
-  buttons.appendChild(promote);
-  buttons.appendChild(reject);
   buttons.appendChild(dismiss);
+  buttons.appendChild(reject);
+  buttons.appendChild(promote);
   row.appendChild(buttons);
   box.appendChild(row);
-  if (!draftReady) {
-    box.appendChild(el("p", { class: "muted small" }, "没有可审阅的规则草稿：晋级需要先批准一份草稿。"));
-  }
   box.appendChild(feedback);
   sectionReady(node, box);
 }
@@ -1542,6 +1925,7 @@ async function loadCandidateDetail() {
       });
     }
     renderReasons(candidate);
+    renderSummary(candidate);
     renderRule(candidate);
     renderActions(candidate);
     renderSegments(candidate);
@@ -1557,7 +1941,7 @@ async function loadCandidateDetail() {
         error instanceof ApiError && error.status === 404 ? null : () => loadCandidateDetail()
       );
     }
-    for (const id of ["candidate-reasons", "candidate-rule", "candidate-actions", "candidate-segments", "candidate-verification", "candidate-decisions"]) {
+    for (const id of ["candidate-summary", "candidate-reasons", "candidate-rule", "candidate-actions", "candidate-segments", "candidate-verification", "candidate-decisions"]) {
       const node = section(id);
       if (node) renderRegion(node, "empty", "—");
     }
@@ -1566,16 +1950,55 @@ async function loadCandidateDetail() {
 
 // ---- 启动 -------------------------------------------------------------
 
+function wireCalibrationBanner() {
+  const banner = section("candidates-calibration");
+  if (!banner) return;
+  const KEY = "zc-cand-calibration-dismissed";
+  try {
+    if (globalThis.sessionStorage.getItem(KEY) === "1") banner.hidden = true;
+  } catch {
+    // 存储不可用时照常显示。
+  }
+  const close = banner.querySelector("[data-dismiss-callout]");
+  if (close) {
+    close.addEventListener("click", () => {
+      banner.hidden = true;
+      try {
+        globalThis.sessionStorage.setItem(KEY, "1");
+      } catch {
+        // 只影响下次是否再显示。
+      }
+    });
+  }
+}
+
 export function bootCandidates() {
   const list = section("candidates-list");
   if (list) {
     loadCandidateList(list);
     const statusFilter = section("candidates-status-filter");
-    if (statusFilter) statusFilter.addEventListener("change", () => loadCandidateList(list));
+    if (statusFilter) {
+      statusFilter.addEventListener("change", () => loadCandidateList(list));
+      for (const button of document.querySelectorAll("[data-status]")) {
+        button.addEventListener("click", () => {
+          if (statusFilter.value === button.dataset.status) return;
+          statusFilter.value = button.dataset.status;
+          statusFilter.dispatchEvent(new Event("change"));
+        });
+      }
+    }
     const templateFilter = section("candidates-template-filter");
     if (templateFilter) templateFilter.addEventListener("change", () => renderCandidateList(list));
+    const sortSelect = section("candidates-sort");
+    if (sortSelect) sortSelect.addEventListener("change", () => renderCandidateList(list));
+    wireDismissSheet(list);
+    wireCalibrationBanner();
   }
   const nominateForm = section("candidate-nominate-form");
   if (nominateForm) wireNominateForm(nominateForm, list);
-  if (section("candidate-detail")) loadCandidateDetail();
+  if (section("candidate-detail")) {
+    wireTabs();
+    wireReasonSheet();
+    loadCandidateDetail();
+  }
 }

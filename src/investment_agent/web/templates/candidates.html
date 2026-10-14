@@ -1,47 +1,119 @@
 {% extends "base.html" %}
+{% from "_icons.html" import icon %}
 {% block page_css %}<link rel="stylesheet" href="/app/static/pages/candidates.css">{% endblock %}
+{% block appbar_actions %}<button type="button" class="icon-btn" data-overlay-open="candidate-nominate-drawer" aria-controls="candidate-nominate-drawer" aria-label="手动提名">{{ icon("plus", "ico", 21) }}</button>{% endblock %}
 {% block content %}
+{% include "_funnel_seg.html" %}
 <header class="page-head">
   <h1>候选池</h1>
-  <p class="muted">筛选命中与手动提名的标的：先看触发理由，再审阅起草的区间规则。候选只表示研究优先级，不是操作建议。</p>
+  <p>模板命中或手动提名的标的：先看入选理由，再审阅规则草稿。候选只表示研究优先级，不是操作建议。</p>
+  <div class="page-actions">
+    <button type="button" class="btn btn-sm" data-overlay-open="candidate-nominate-drawer" aria-controls="candidate-nominate-drawer">{{ icon("plus", "ico", 16) }}手动提名</button>
+  </div>
 </header>
-<p class="notice notice-warn calibration-banner">
-  标注 <span class="badge badge-uncalibrated">未校准</span> 的模板，默认参数尚未经回测校准，只是假设；
-  命中理由与规则草稿都基于未校准模板。
-</p>
-<section class="card">
-  <details class="add-panel">
-    <summary>＋ 手动提名</summary>
-    <form id="candidate-nominate-form" class="inline-form" data-endpoint="/candidates" method="post">
-      <input name="ticker" placeholder="输入代码或名称后从下拉选择；也可直接输入 6 位代码，如 600900" maxlength="32" required aria-label="代码" autocomplete="off"
-             pattern="\d{6}(\.(SH|SZ|BJ|sh|sz|bj))?" title="提交需要 6 位数字代码（可带 .SH/.SZ/.BJ 后缀）；按名称搜索请从下拉中选择">
-      <select name="template_id" required aria-label="起草模板">
-        <option value="">选择起草模板…</option>
-      </select>
-      <input name="note" placeholder="提名理由（可选）" maxlength="2000" aria-label="提名理由">
-      <button type="submit" class="primary">提名</button>
-    </form>
-    <div id="candidate-nominate-result" class="data-region" aria-live="polite"></div>
-  </details>
-  <div class="toolbar">
-    <label for="candidates-status-filter">状态</label>
-    <select id="candidates-status-filter">
-      <option value="open" selected>待处理</option>
-      <option value="promoted">已晋级</option>
-      <option value="dismissed">已忽略</option>
-      <option value="expired">已过期</option>
-    </select>
-    <label for="candidates-template-filter">模板</label>
-    <select id="candidates-template-filter">
+
+<div class="callout callout-warn calibration-banner" id="candidates-calibration" role="note">
+  {{ icon("alert", "ico", 16) }}
+  <span class="cand-callout-text">
+    <span class="cand-callout-long"><b>模板未校准：</b>默认参数尚未经回测校准，入选理由只是假设，规则草稿基于未校准模板。</span>
+    <span class="cand-callout-short">模板<b>未校准</b>，入选理由只是假设</span>
+  </span>
+  <button type="button" class="icon-btn btn-sm cand-callout-x" data-dismiss-callout aria-label="关闭提示">{{ icon("close", "ico", 14) }}</button>
+</div>
+
+<div class="toolbar cand-toolbar">
+  <div class="seg cand-status-seg" id="candidates-status-seg" role="group" aria-label="状态">
+    <button type="button" class="on" data-status="open">待处理<span class="c" data-status-count hidden></span></button>
+    <button type="button" data-status="promoted">已晋级</button>
+    <button type="button" data-status="dismissed">已忽略</button>
+    <button type="button" data-status="expired">已过期</button>
+  </div>
+  <div class="chip-scroll cand-status-chips" id="candidates-status-chips" role="group" aria-label="状态">
+    <button type="button" class="filter-chip on" data-status="open">待处理<span class="c" data-status-count hidden></span></button>
+    <button type="button" class="filter-chip" data-status="promoted">已晋级</button>
+    <button type="button" class="filter-chip" data-status="dismissed">已忽略</button>
+    <button type="button" class="filter-chip" data-status="expired">已过期</button>
+  </div>
+  <label class="visually-hidden" for="candidates-status-filter">状态</label>
+  <select id="candidates-status-filter" class="cand-status-select" tabindex="-1" aria-hidden="true">
+    <option value="open" selected>待处理</option>
+    <option value="promoted">已晋级</option>
+    <option value="dismissed">已忽略</option>
+    <option value="expired">已过期</option>
+  </select>
+  <div class="cand-selects">
+    <label class="visually-hidden" for="candidates-template-filter">模板</label>
+    <select id="candidates-template-filter" class="cand-select">
       <option value="">全部模板</option>
     </select>
-    <span id="candidates-total" class="faint" aria-live="polite"></span>
+    <label class="visually-hidden" for="candidates-sort">排序</label>
+    <select id="candidates-sort" class="cand-select">
+      <option value="opened" selected>按开启时间</option>
+      <option value="hits">按命中率</option>
+      <option value="expiry">按到期日</option>
+    </select>
   </div>
-  <div id="candidates-list" class="data-region"
-       data-endpoint="/candidates"
-       data-empty-text="没有该状态的候选。每周筛选完成后会自动生成候选。"
-       aria-live="polite">
-    <p class="notice notice-loading" data-state="loading">正在加载…</p>
+  <span id="candidates-total" class="faint cand-total" aria-live="polite"></span>
+</div>
+
+<div id="candidates-list" class="data-region"
+     data-endpoint="/candidates"
+     data-empty-text="没有该状态的候选。每周筛选完成后会自动生成候选。"
+     aria-live="polite">
+  <p class="notice notice-loading" data-state="loading">正在加载…</p>
+</div>
+
+<aside class="drawer" id="candidate-nominate-drawer" role="dialog" aria-modal="true" aria-labelledby="candidate-nominate-title">
+  <div class="drawer-head">
+    <div>
+      <h2 id="candidate-nominate-title">手动提名</h2>
+      <div class="sub">把一只股票放进候选池，并按所选模板起草规则草稿</div>
+    </div>
+    <span class="spacer"></span>
+    <button type="button" class="icon-btn" data-overlay-close aria-label="关闭">{{ icon("close", "ico", 18) }}</button>
   </div>
-</section>
+  <form id="candidate-nominate-form" class="drawer-form" data-endpoint="/candidates" method="post">
+    <div class="drawer-body">
+      <div class="field">
+        <label for="candidate-nominate-ticker">股票</label>
+        <input id="candidate-nominate-ticker" name="ticker" placeholder="输入代码或名称后从下拉选择；也可直接输入 6 位代码，如 600900" maxlength="32" required aria-label="代码" autocomplete="off"
+               pattern="\d{6}(\.(SH|SZ|BJ|sh|sz|bj))?" title="提交需要 6 位数字代码（可带 .SH/.SZ/.BJ 后缀）；按名称搜索请从下拉中选择">
+      </div>
+      <div class="field">
+        <label for="candidate-nominate-template">起草模板</label>
+        <select id="candidate-nominate-template" name="template_id" required aria-label="起草模板">
+          <option value="">选择起草模板…</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="candidate-nominate-note">提名理由（可选）</label>
+        <input id="candidate-nominate-note" name="note" placeholder="例如：财报超预期，想看看区间规则怎么起草" maxlength="2000" aria-label="提名理由">
+      </div>
+      <div id="candidate-nominate-result" class="data-region" aria-live="polite"></div>
+    </div>
+    <div class="drawer-foot">
+      <button type="button" data-overlay-close>取消</button>
+      <button type="submit" class="primary btn-primary">提名</button>
+    </div>
+  </form>
+</aside>
+
+<div class="sheet" id="candidate-dismiss-sheet" role="dialog" aria-modal="true" aria-labelledby="candidate-dismiss-title">
+  <div class="sheet-grab"></div>
+  <div class="sheet-head">
+    <div>
+      <h2 id="candidate-dismiss-title">忽略候选</h2>
+      <div class="sub faint small" id="candidate-dismiss-sub">30 天内筛选不再自动提名该标的。</div>
+    </div>
+  </div>
+  <div class="field">
+    <label for="candidate-dismiss-reason">理由（必填）</label>
+    <textarea id="candidate-dismiss-reason" rows="3" maxlength="2000" placeholder="例如：行业景气度已转弱，本轮不再研究" data-autofocus></textarea>
+  </div>
+  <div id="candidate-dismiss-issues" class="issues" role="alert"></div>
+  <div class="btn-row cand-sheet-btns">
+    <button type="button" class="btn btn-lg" data-overlay-close>取消</button>
+    <button type="button" class="btn btn-lg btn-primary" id="candidate-dismiss-confirm">确认忽略</button>
+  </div>
+</div>
 {% endblock %}

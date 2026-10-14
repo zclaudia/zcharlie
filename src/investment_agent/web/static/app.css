@@ -412,8 +412,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
 @media (min-width: 56.01rem) {
   .only-mobile { display: none !important; }
-  .only-desktop { display: initial !important; }
-  .appbar, .tabbar, .more-sheet { display: none; }
+  .only-desktop { display: revert !important; }
+  .appbar, .has-back .appbar, .tabbar, .more-sheet { display: none; }
 
   .app-shell {
     --sb-w: 228px;
