@@ -34,7 +34,9 @@ from investment_agent.investor.enums import NumericRole
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.peer import PeerAnnualSnapshot, PeerCohortSnapshot
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
-from tests.unit.test_peer_jobs import (
+from tests.support.peer_world import (
+    AUDIT_PATH,
+    SAMPLE_PATH,
     DirectCtx,
     FakeAnnualSource,
     claim_job,
@@ -43,12 +45,19 @@ from tests.unit.test_peer_jobs import (
     make_settings,
     read_mapping,
     seed_collection_run,
+    seed_listings,
     seed_roster,
+    store_standard,
 )
-from tests.unit.test_peer_jobs import peer_db as peer_db
-from tests.unit.test_peer_service import AUDIT_PATH, SAMPLE_PATH, store_standard
-from tests.unit.test_peer_service import golden as golden
-from tests.unit.test_peer_service import synthetic as synthetic
+from tests.support.peer_world import (
+    golden as golden,
+)
+from tests.support.peer_world import (
+    peer_db as peer_db,  # noqa: F401  (pytest fixture)
+)
+from tests.support.peer_world import (
+    synthetic as synthetic,
+)
 
 
 async def test_rolled_back_mapping_is_never_published(db_session, synthetic, tmp_path):
@@ -103,8 +112,6 @@ async def test_real_handler_keeps_the_queued_generation(peer_db):
 
 @pytest.mark.parametrize("part", ["header", "excerpt", "value"])
 async def test_original_tampering_is_refused_before_writes(db_session, part):
-    from tests.unit.test_peer_service import seed_listings
-
     sample = load_sample_json(SAMPLE_PATH)
     await seed_listings(db_session, tuple((c["code"], c["name"]) for c in sample["companies"]))
     await db_session.commit()
@@ -128,8 +135,6 @@ async def test_original_tampering_is_refused_before_writes(db_session, part):
 
 
 async def test_missing_originals_stay_candidate(db_session, tmp_path):
-    from tests.unit.test_peer_service import seed_listings
-
     sample = load_sample_json(SAMPLE_PATH)
     await seed_listings(db_session, tuple((c["code"], c["name"]) for c in sample["companies"]))
     await import_peer_annual_snapshots(

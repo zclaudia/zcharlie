@@ -39,20 +39,10 @@ from sqlalchemy import select
 from investment_agent.agent.execution import (
     ExecutionDeniedError,
     ExecutionGrant,
-    ResearchValidationError,
 )
 from investment_agent.agent.research import validate_progress
 from investment_agent.evidence.contracts import CalculationRecord
 from investment_agent.evidence.store import EvidenceService
-from investment_agent.industry_peers.artifacts import (
-    DEFAULT_ADAPTER_VERSION,
-    DEFAULT_PROVIDER,
-    BatchManifest,
-    MetricMappingEntry,
-    PeerBatchMapping,
-    TargetMapping,
-    write_batch_mapping,
-)
 from investment_agent.industry_peers.calculations import (
     METHOD,
     METRIC_KEYS,
@@ -63,52 +53,54 @@ from investment_agent.industry_peers.calculations import (
     verify_built_metric_record,
 )
 from investment_agent.industry_peers.contracts import (
-    BINDING_METRIC_KEYS,
     PeerContextBinding,
-    PeerMetricBinding,
 )
 from investment_agent.industry_peers.resolver import (
     PeerContextResolver,
     peer_method_entry,
 )
 from investment_agent.investor.common import ObjectRef
-from investment_agent.investor.contracts import Mandate, ResearchAuthorization
 from investment_agent.investor.contracts import (
-    DIMENSIONS,
-    DimensionAssessment,
-    NumericNode,
     TextNode,
 )
-from investment_agent.investor.enums import NumericRole
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.investor.methods import MethodConfig, enforce_steps
 from investment_agent.investor.publication_numbers import NumericResolver
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.agent import AgentTask, ExecutionGrantRow
-from investment_agent.storage.models.evidence import SavedCalculation, SavedEvidence
+from investment_agent.storage.models.evidence import SavedEvidence
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
 from tests.support.conversations import (
     base,
-    conversation_db as conversation_db,  # noqa: F401  (pytest fixture)
     message,
     new_conversation,
     submit,
 )
-from tests.support.research import full_progress, progress
-from tests.unit.test_peer_service import (
+from tests.support.conversations import (
+    conversation_db as conversation_db,  # noqa: F401  (pytest fixture)
+)
+from tests.support.peer_world import (
+    FEATURE,
+    GAP_PEER,
+    PEER,
     PERIOD_END,
     SYNTHETIC_ROSTER,
     SYNTHETIC_VALUES,
-    seed_cohort,
-    seed_listings,
+    TARGET,
+    clone_calculation,
+    full_progress_for,
+    listing_ref,
+    make_binding,
+    metric_refs,
+    output_node,
+    peer_candidate,
+    prepared_with_peer,
+    record_of,
+    seed_world,
     store_snapshot,
-    store_standard,
+    write_craft_mapping,
 )
-
-TARGET = "600001.SH"
-PEER = "600002.SH"
-GAP_PEER = "600003.SH"
-FEATURE = dict(industry_peer_context_enabled=True)
+from tests.support.research import progress
 
 
 @pytest.fixture
@@ -118,59 +110,6 @@ def peer_env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("API_KEY", "fixture-key")
     return tmp_path
-
-
-async def seed_world(session, tmp_path, *, values=None):
-    """Roster, snapshots and one submitted batch over the synthetic roster."""
-
-    from investment_agent.industry_peers.batch import submit_offline_batch
-
-    identities = await seed_listings(session, SYNTHETIC_ROSTER)
-    await seed_cohort(session, identities)
-    synthetic = {
-        "ids": {code: company for code, (company, _listing) in identities.items()},
-        "listings": {code: listing for code, (_company, listing) in identities.items()},
-    }
-    if values is None:
-        await store_standard(session, synthetic, captured_at=datetime.now(UTC) - timedelta(hours=3))
-    else:
-        for (code, _name), entry in zip(SYNTHETIC_ROSTER, values, strict=True):
-            await store_snapshot(
-                session,
-                synthetic["ids"][code],
-                synthetic["listings"][code],
-                entry,
-                semantic_hash=f"fixture-{code}",
-                captured_at=datetime.now(UTC) - timedelta(hours=3),
-            )
-        await session.commit()
-    submission = await submit_offline_batch(
-        session,
-        data_dir=tmp_path,
-        tickers=[TARGET],
-        provider=DEFAULT_PROVIDER,
-        adapter_version=DEFAULT_ADAPTER_VERSION,
-        submitted_at=datetime.now(UTC) - timedelta(hours=1),
-    )
-    await session.commit()
-    return synthetic, submission
-
-
-def listing_ref(synthetic: dict, code: str) -> ObjectRef:
-    return ObjectRef(kind="listing", id=synthetic["listings"][code], revision=1)
-
-
-async def metric_refs(submission, synthetic) -> dict[str, ObjectRef]:
-    """The submitted metric references of the batch's one target."""
-
-    target_entry = submission.mapping.target_for(synthetic["ids"][TARGET])
-    return {entry.metric_key: entry.ref for entry in target_entry.metric_calculation_refs if entry.ref}
-
-
-async def record_of(session, ref: ObjectRef) -> CalculationRecord:
-    row = await session.get(SavedCalculation, (str(ref.id), ref.revision))
-    assert row is not None
-    return CalculationRecord.model_validate(row.payload)
 
 
 async def start_task(target: ObjectRef, *, kind: str, feature: dict | None = None):
@@ -199,127 +138,6 @@ async def bound_refs(receipt) -> tuple[PeerContextBinding | None, dict[str, Obje
             if entry.ref is not None
         }
         return grant.peer_context, refs
-
-
-def make_binding(
-    *,
-    record: CalculationRecord,
-    batch_run_id: str,
-    refs_by_metric: dict[str, ObjectRef],
-    cutoff: datetime,
-) -> PeerContextBinding:
-    """A binding over one record's own cohort identity (the craft seam)."""
-
-    entries = tuple(
-        PeerMetricBinding(
-            metric_key=key,
-            state="saved" if key in refs_by_metric else "gap",
-            ref=refs_by_metric.get(key),
-            gap_reason=None if key in refs_by_metric else "fixture gap",
-        )
-        for key in sorted(BINDING_METRIC_KEYS)
-    )
-    return PeerContextBinding(
-        target=TARGET,
-        cohort_ref=ObjectRef.model_validate(record.details["cohort"]["ref"]),
-        batch_run_id=batch_run_id,
-        report_period=PERIOD_END,
-        cutoff=cutoff,
-        metric_calculation_refs=entries,
-    )
-
-
-async def write_craft_mapping(
-    tmp_path,
-    session=None,
-    *,
-    batch_run_id: str,
-    record: CalculationRecord,
-    target_company_id: int,
-    target_listing_id: int,
-    refs_by_metric: dict[str, ObjectRef],
-    submitted_at: datetime,
-) -> PeerBatchMapping:
-    """A hand-submitted mapping artifact for negative/reuse scenarios."""
-
-    entries = tuple(
-        MetricMappingEntry(
-            metric_key=key,
-            state="reused" if key in refs_by_metric else "gap",
-            ref=refs_by_metric.get(key),
-            gap_reason=None if key in refs_by_metric else "fixture gap",
-        )
-        for key in sorted(BINDING_METRIC_KEYS)
-    )
-    mapping = PeerBatchMapping.create(
-        batch_run_id=batch_run_id,
-        cohort_ref=ObjectRef.model_validate(record.details["cohort"]["ref"]),
-        cohort_content_hash=record.details["cohort"]["content_hash"],
-        report_period=PERIOD_END,
-        provider=DEFAULT_PROVIDER,
-        adapter_version=DEFAULT_ADAPTER_VERSION,
-        generation=9,
-        status="success",
-        submitted_at=submitted_at,
-        targets=(
-            TargetMapping(
-                company_id=target_company_id,
-                listing_id=target_listing_id,
-                ticker=TARGET,
-                name="目标公司",
-                report_period=PERIOD_END,
-                metric_calculation_refs=entries,
-            ),
-        ),
-        manifest=BatchManifest(),
-    )
-    from investment_agent.industry_peers.artifacts import register_batch_commit
-    if session is None:
-        async with session_scope() as owned:
-            await register_batch_commit(owned, mapping)
-    else:
-        await register_batch_commit(session, mapping)
-    write_batch_mapping(tmp_path, mapping)
-    return mapping
-
-
-async def clone_calculation(session, ref: ObjectRef, mutate, *, revision: int = 2) -> ObjectRef:
-    """Same record identity, next revision, mutated payload (craft seam).
-
-    Keeping the id/input-hash derivation intact lets a mutation exercise its
-    specific checklist item instead of failing the earlier identity guard.
-    """
-
-    row = await session.get(SavedCalculation, (str(ref.id), ref.revision))
-    assert row is not None
-    data = CalculationRecord.model_validate(row.payload).model_dump(mode="json")
-    clone = CalculationRecord.model_validate(mutate(data))
-    session.add(
-        SavedCalculation(
-            id=str(ref.id), revision=revision, owner_id="local_owner", payload=clone.model_dump(mode="json")
-        )
-    )
-    await session.flush()
-    return ref.model_copy(update={"revision": revision})
-
-
-def output_node(ref: ObjectRef, key: str = "peer_median") -> NumericNode:
-    return NumericNode(
-        type="numeric_claim",
-        ref=ref.model_copy(update={"field_path": f"results.{key}"}),
-        role=NumericRole.OUTPUT,
-        display_format="decimal" if key in {"valid_peer_count", "candidate_peer_count"} else "percent",
-    )
-
-
-def full_progress_for(**updates):
-    dimensions = tuple(
-        DimensionAssessment(
-            dimension=name, status="missing", applicable=True, reason="Report detail remains unavailable", refs=()
-        )
-        for name in DIMENSIONS
-    )
-    return full_progress(dimensions, **updates)
 
 
 async def evidence_ref_for(session, listing_id: int) -> ObjectRef:
@@ -986,162 +804,6 @@ async def test_counter_evidence_cannot_be_peer_statistics(conversation_db, peer_
 
 
 
-# --- publication: the method entry serves the critical-source loop ----------------
-
-
-async def peer_candidate(session, synthetic, refs, task_id):
-    """A bounded company view whose critical inference cites the peer median."""
-
-    from investment_agent.investor.common import Quantity
-    from investment_agent.investor.contracts import (
-        Claim,
-        CompanyRecommendation,
-        Dependency,
-        ThesisRevision,
-    )
-    from investment_agent.investor.foundations import CreateCase, InvestorService
-    from investment_agent.investor.publication import FIXED_METHOD, PublicationCandidate
-    from tests.support.publication import metadata
-
-    target = listing_ref(synthetic, TARGET)
-    service = InvestorService(session)
-    unknown = Quantity(value=None, unit="USD", unknown_reason="Not specified")
-    mandate = await service.create_mandate(
-        "local_owner",
-        Mandate(
-            **metadata(),
-            goals=(),
-            scope_refs=(target,),
-            hard_constraints=(),
-            unknowns=(),
-            authorization=ResearchAuthorization(
-                daily_budget=unknown,
-                per_task_budget=unknown,
-                max_leads_per_batch=0,
-                max_new_tasks_per_batch=0,
-                source_refs=(),
-            ),
-        ),
-        uuid4(),
-    )
-    case = await service.create_case(
-        "local_owner", CreateCase(listing_ref=target, question="Peer reference view", idempotency_key=uuid4())
-    )
-    as_of = datetime.now(UTC) - timedelta(hours=1)
-    roe_ref = refs[ROE]
-    claim = Claim(
-        id=uuid4(),
-        kind="inference",
-        text=(
-            TextNode(type="text", text="The roster statistics describe the margin position"),
-            output_node(roe_ref),
-        ),
-        materiality="critical",
-        support_refs=(roe_ref,),
-        opposition_refs=(),
-        assumption_refs=(),
-        verification="verified",
-        impact_if_wrong="The margin comparison must be reconsidered",
-    )
-    dimensions = tuple(
-        DimensionAssessment(
-            dimension=name, status="missing", applicable=True, reason="Report detail remains unavailable", refs=()
-        )
-        for name in DIMENSIONS
-    )
-    meta = {**metadata(), "origin_ref": ObjectRef(kind="task", id=task_id, revision=1)}
-    thesis = ThesisRevision(
-        **meta,
-        case_ref=ObjectRef(kind="case", id=case.id, revision=case.revision),
-        previous_ref=None,
-        change_reason="Initial review",
-        question_scope="Peer-referenced margin position",
-        assessed_dimensions=dimensions,
-        claims=(claim,),
-        assumptions=(),
-        counter_case=(TextNode(type="text", text="Roster statistics may not generalize"),),
-        evidence_set_hash="peer-material",
-        method_ref=FIXED_METHOD,
-        as_of=as_of,
-    )
-    recommendation = CompanyRecommendation(
-        **meta,
-        scope="company_view",
-        case_ids=(case.id,),
-        thesis_revision_refs=(ObjectRef(kind="thesis", id=thesis.id, revision=thesis.revision),),
-        as_of=as_of,
-        question_scope=thesis.question_scope,
-        assessed_dimensions=dimensions,
-        sufficiency="bounded",
-        claims=(claim,),
-        counter_case=thesis.counter_case,
-        assumptions=(),
-        gaps=("Company report detail remains unavailable",),
-        conditions=(),
-        valid_until=as_of + timedelta(days=14),
-        next_review_at=as_of + timedelta(days=7),
-        monitor_refs=(),
-        dependency_refs=(Dependency(ref=roe_ref, materiality="critical", fields=("value",)),),
-        mandate_revision_id=ObjectRef(kind="mandate", id=mandate.id, revision=mandate.revision),
-        method_revision_id=FIXED_METHOD,
-        provenance=(roe_ref,),
-        business_view="undetermined",
-        price_view="undetermined",
-        conditional_actions=(),
-    )
-    return PublicationCandidate(thesis=thesis, recommendation=recommendation)
-
-
-async def prepared_with_peer(candidate, review, binding):
-    """Admit the publishing task with the trusted peer binding in its grant."""
-
-    from investment_agent.agent.contracts import ContextBinding
-    from investment_agent.agent.execution import admit
-    from investment_agent.agent.tasks import TaskService
-    from investment_agent.investor.foundations import InvestorService
-    from investment_agent.storage.repositories.pipeline_run import (
-        PipelineRunRepository,
-        RunLease,
-    )
-
-    async with session_scope() as session:
-        mandate = await InvestorService(session).get_mandate("local_owner")
-        case = await InvestorService(session).get_case("local_owner", candidate.thesis.case_ref.id)
-        grant = ExecutionGrant(
-            mode="interactive",
-            source="authenticated_message",
-            prompt="Publish the peer-referenced view",
-            tool_names=("publish_recommendation", "extend_recommendation"),
-            scope_refs=(candidate.thesis.case_ref, case.listing_ref),
-            mandate_id=mandate.id,
-            peer_context=binding,
-        )
-        task = await admit(
-            session,
-            base=base(),
-            input_key=str(uuid4()),
-            binding=ContextBinding(
-                context_refs=(candidate.thesis.case_ref,),
-                base_refs=(candidate.thesis.case_ref,),
-                as_of=datetime.now(UTC),
-            ),
-            grant=grant,
-        )
-        row = await session.get(AgentTask, str(task.id))
-        assert row is not None
-        run = await PipelineRunRepository(session).claim_next(worker_id="fixture", run_id=row.run_id)
-        claim = await TaskService(session).claim(task.id, RunLease(run.id, "fixture", run.attempt_count))
-        action = await TaskService(session).prepare_action(
-            claim,
-            intent_key=f"publish:{candidate.thesis.case_ref.id}",
-            parameters={
-                "candidate": candidate.model_dump(mode="json"),
-                "semantic": review.model_dump(mode="json"),
-            },
-        )
-    return claim, UUID(action.operation_id), review
-
-
 @pytest.mark.asyncio
 async def test_publication_routes_peer_sources_and_rechecks_the_dependency(conversation_db, peer_env):
     from investment_agent.investor.publication import PublicationService
@@ -1204,7 +866,6 @@ async def test_peer_publication_without_a_binding_fails_closed(conversation_db, 
 
     async with session_scope() as session:
         synthetic, submission = await seed_world(session, peer_env)
-        refs = await metric_refs(submission, synthetic)
     conversation = await new_conversation()
     receipt = await submit(
         conversation,

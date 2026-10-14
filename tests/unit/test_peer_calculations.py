@@ -29,7 +29,6 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -87,12 +86,7 @@ from investment_agent.storage.models.evidence import SavedCalculation
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN02_SAMPLE = REPO_ROOT / "research/industry-data-validation/evidence/run-02/sample.json"
-DERIVED = REPO_ROOT / "research/industry-data-validation/evidence/run-02/derived"
-SAMPLE_PATH = DERIVED / "baijiu-peer-sample.json"
-AUDIT_PATH = DERIVED / "baijiu-official-audit.json"
+from tests.support.peer_world import AUDIT_PATH, RUN02_SAMPLE, SAMPLE_PATH
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
 AS_OF = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)

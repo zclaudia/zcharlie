@@ -63,8 +63,8 @@ from investment_agent.industry_peers.contracts import PeerContextBinding
 from investment_agent.industry_peers.resolver import (
     DIGEST_SCHEMA,
     MANIFEST_HASH_SCHEMA,
-    PeerContextResolver,
     RENEWAL_BLOCK_REASON,
+    PeerContextResolver,
     registered_display,
 )
 from investment_agent.investor.common import ObjectRef, Quantity
@@ -86,29 +86,37 @@ from investment_agent.storage.models.peer import PeerCohortSnapshot
 from tests.support.conversations import (
     base,
     claim,
-    conversation_db as conversation_db,  # noqa: F401  (pytest fixture)
     message,
     new_conversation,
     submit,
 )
-from tests.support.publication import metadata, semantic, unchanged_review
-from tests.unit.test_peer_resolver import (
+from tests.support.conversations import (
+    conversation_db as conversation_db,  # noqa: F401  (pytest fixture)
+)
+from tests.support.peer_world import (
     FEATURE,
     GAP_PEER,
+    SYNTHETIC_ROSTER,
+    SYNTHETIC_VALUES,
     TARGET,
     clone_calculation,
     full_progress_for,
+    identifier_references,
+    imported_module_paths,
     listing_ref,
     make_binding,
     metric_refs,
+    module_ast,
     output_node,
     peer_candidate,
     prepared_with_peer,
     record_of,
     seed_world,
+    store_snapshot,
+    string_constants,
     write_craft_mapping,
 )
-from tests.unit.test_peer_service import SYNTHETIC_ROSTER, SYNTHETIC_VALUES, store_snapshot
+from tests.support.publication import metadata, semantic, unchanged_review
 
 ROE = "roe"
 CFO = "cfo_parent_profit"
@@ -477,7 +485,8 @@ def _document_evidence(subject: ObjectRef, *, text: str | None = None, index: in
     """One verified document evidence row for the target listing; returns the
     unsaved ``(record, ref)`` pair."""
 
-    from datetime import date, timedelta as _timedelta
+    from datetime import date
+    from datetime import timedelta as _timedelta
 
     now = datetime.now(UTC) - _timedelta(days=1)
     record = EvidenceRecord(
@@ -1199,9 +1208,6 @@ async def test_continuation_recovery_carries_no_peer_calculation_details(convers
         )
         await tasks.settle_action(trusted, UUID(action.operation_id), lambda s, op: read_peer_context(s, op, PeerContextParameters(ticker=TARGET)))
     async with session_scope() as session:
-        from investment_agent.investor.foundations import InvestorService
-
-        mandate = await InvestorService(session).get_mandate("local_owner")
         # The continuation inherits only with the parent's exact scope set.
         child_scope = (case_ref, listing_ref(synthetic, TARGET))
         child = await admit(
@@ -1242,13 +1248,24 @@ async def test_continuation_recovery_carries_no_peer_calculation_details(convers
 
 
 def test_report_views_do_not_consume_peer_results():
-    """The old strength summaries never read anything this feature produces."""
+    """The old strength summaries never read anything this feature produces.
+
+    Structural (AST) guard: no import from ``investment_agent.industry_peers``
+    and no name, attribute or string constant equal to ``peer_context``, so a
+    comment or an unrelated textual hit can neither pass nor fail the check.
+    """
 
     from investment_agent.research_kernel import report_views
 
-    source = Path(report_views.__file__).read_text(encoding="utf-8")
-    assert "industry_peers" not in source
-    assert "peer_context" not in source
+    imports = imported_module_paths(report_views)
+    assert not any(
+        path == "investment_agent.industry_peers"
+        or path.startswith("investment_agent.industry_peers.")
+        for path in imports
+    )
+    tree = module_ast(report_views)
+    assert "peer_context" not in identifier_references(tree)
+    assert "peer_context" not in string_constants(tree)
     # Feeding the peer digest (or a whole peer result) into the old views
     # produces no stronger/weaker summary and no metric leakage.
     digest = {

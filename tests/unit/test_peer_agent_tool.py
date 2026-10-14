@@ -37,6 +37,8 @@ from investment_agent.agent.execution import (
 from investment_agent.agent.peer_tools import (
     PeerContextParameters,
     read_peer_context,
+)
+from investment_agent.agent.peer_tools import (
     registrations as peer_registrations,
 )
 from investment_agent.agent.research import ResearchOutput, check_progress_round
@@ -74,19 +76,21 @@ from investment_agent.storage.repositories.pipeline_run import (
 from tests.support.conversations import (
     base,
     claim,
-    conversation_db as conversation_db,
     message,
     new_conversation,
     submit,
 )
-from tests.support.research import progress, response, run
-from tests.unit.test_peer_service import (
+from tests.support.conversations import (
+    conversation_db as conversation_db,
+)
+from tests.support.peer_world import (
     PERIOD_END,
     SYNTHETIC_ROSTER,
     seed_cohort,
     seed_listings,
     store_standard,
 )
+from tests.support.research import progress, response, run
 
 TARGET = "600001.SH"
 PEER = "600002.SH"

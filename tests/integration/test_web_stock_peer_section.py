@@ -21,23 +21,19 @@ Page and client contract, following the existing web test conventions:
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import subprocess
-from pathlib import Path
 
 from investment_agent.industry_peers.calculations import (
-    NON_POSITIVE_DENOMINATOR,
-    MISSING_FIELD,
     FIELD_CONFLICT,
+    MISSING_FIELD,
+    NON_POSITIVE_DENOMINATOR,
 )
 from investment_agent.industry_peers.contracts import (
     PeerContextStatus,
     PeerMetricStatus,
 )
-
-WEB_STATIC = Path("src/investment_agent/web/static")
-PEERS_JS = WEB_STATIC / "industry_peers.js"
+from tests.support.peer_world import PEERS_JS, labels_object
 
 
 def _login(client):
@@ -91,17 +87,11 @@ def test_peer_module_reads_only_the_two_readonly_endpoints():
 # ---- label maps cover the enums (no raw internal text on the page) ---------------
 
 
-def _labels_object(source: str, name: str) -> dict[str, str]:
-    match = re.search(rf"const {name} = Object\.freeze\(\{{(.*?)\}}\);", source, re.DOTALL)
-    assert match, name
-    return {key: value for key, value in re.findall(r"(\w+):\s*\"([^\"]+)\"", match.group(1))}
-
-
 def test_context_and_metric_status_labels_cover_the_enums():
     source = PEERS_JS.read_text(encoding="utf-8")
-    context = _labels_object(source, "CONTEXT_STATUS_LABELS")
+    context = labels_object(source, "CONTEXT_STATUS_LABELS")
     assert set(context) == {status.value for status in PeerContextStatus}
-    metric = _labels_object(source, "METRIC_STATUS_LABELS")
+    metric = labels_object(source, "METRIC_STATUS_LABELS")
     assert set(metric) == {status.value for status in PeerMetricStatus}
 
 
@@ -109,7 +99,7 @@ def test_exclusion_labels_cover_the_audit_reasons():
     from investment_agent.industry_peers import calculations
 
     source = PEERS_JS.read_text(encoding="utf-8")
-    labels = _labels_object(source, "EXCLUSION_LABELS")
+    labels = labels_object(source, "EXCLUSION_LABELS")
     for constant in (
         "NOT_IN_COHORT",
         "DUPLICATE_COMPANY",

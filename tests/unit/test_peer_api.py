@@ -70,12 +70,11 @@ from investment_agent.storage.repositories.pipeline_run import PipelineRunReposi
 from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
 )
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN02_SAMPLE = REPO_ROOT / "research/industry-data-validation/evidence/run-02/sample.json"
-DERIVED = REPO_ROOT / "research/industry-data-validation/evidence/run-02/derived"
-SAMPLE_PATH = DERIVED / "baijiu-peer-sample.json"
-AUDIT_PATH = DERIVED / "baijiu-official-audit.json"
+from tests.support.peer_world import (
+    AUDIT_PATH,
+    RUN02_SAMPLE,
+    SAMPLE_PATH,
+)
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
 LATER_ACQUIRED_AT = datetime(2026, 10, 12, 5, 0, tzinfo=UTC)

@@ -70,7 +70,6 @@ from investment_agent.industry_peers.service import get_industry_peer_context
 from investment_agent.investor.common import ObjectRef, Quantity
 from investment_agent.investor.enums import TaskStatus
 from investment_agent.storage.database import init_engine, session_scope
-from tests.integration.test_web_stock_peer_section import PEERS_JS, _labels_object
 from tests.support.conversations import (
     base,
     claim,
@@ -78,18 +77,16 @@ from tests.support.conversations import (
     new_conversation,
     submit,
 )
+from tests.support.peer_world import (
+    AUDIT_PATH,
+    PEERS_JS,
+    RUN02_SAMPLE,
+    SAMPLE_PATH,
+    labels_object,
+)
 from tests.support.research import progress, response, run
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN02_SAMPLE = REPO_ROOT / "research/industry-data-validation/evidence/run-02/sample.json"
-SAMPLE_PATH = (
-    REPO_ROOT
-    / "research/industry-data-validation/evidence/run-02/derived/baijiu-peer-sample.json"
-)
-AUDIT_PATH = (
-    REPO_ROOT
-    / "research/industry-data-validation/evidence/run-02/derived/baijiu-official-audit.json"
-)
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
 SUBMITTED_AT = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
@@ -747,7 +744,7 @@ async def test_flag_off_answers_not_covered_at_api_agent_and_page(peer_world, mo
     # Page: the shipped renderer maps exactly this state onto 尚未覆盖 (the
     # boot behaviour is driven in the WP10 suite over the same body); here the
     # label map itself is pinned so the three entries cannot drift apart.
-    labels = _labels_object(PEERS_JS.read_text(encoding="utf-8"), "CONTEXT_STATUS_LABELS")
+    labels = labels_object(PEERS_JS.read_text(encoding="utf-8"), "CONTEXT_STATUS_LABELS")
     assert labels[PeerContextStatus.NOT_SUPPORTED.value] == "尚未覆盖"
 
     # Agent admission: no tool, no binding while the flag is off.

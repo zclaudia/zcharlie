@@ -33,28 +33,19 @@ promoted to verified).
 
 from __future__ import annotations
 
-import hashlib
 import json
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from pytest_asyncio import fixture as async_fixture
 from typer.testing import CliRunner
 
-from investment_agent.cli.commands.peer_annual import (
-    import_peer_annual_snapshots,
-    load_audit_json,
-    load_sample_json,
-)
 from investment_agent.cli.commands.peer_cohort import (
     app as peers_app,
 )
-from investment_agent.cli.commands.peer_cohort import import_sample_roster
-from investment_agent.evidence.contracts import Period
 from investment_agent.industry_peers.artifacts import (
     MAPPING_FILENAME,
     MappingArtifactError,
@@ -79,7 +70,6 @@ from investment_agent.industry_peers.calculations import (
 from investment_agent.industry_peers.contracts import (
     PeerAnnualField,
     PeerContextStatus,
-    PeerFieldVerification,
     PeerMetricStatus,
 )
 from investment_agent.industry_peers.service import (
@@ -119,292 +109,35 @@ from investment_agent.storage.models import (  # noqa: F401
 )
 from investment_agent.storage.models.evidence import SavedCalculation
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
-from investment_agent.storage.repositories.listing import ListingRepository
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN02_SAMPLE = REPO_ROOT / "research/industry-data-validation/evidence/run-02/sample.json"
-DERIVED = REPO_ROOT / "research/industry-data-validation/evidence/run-02/derived"
-SAMPLE_PATH = DERIVED / "baijiu-peer-sample.json"
-AUDIT_PATH = DERIVED / "baijiu-official-audit.json"
-
-ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
-LATER_ACQUIRED_AT = datetime(2026, 10, 12, 5, 0, tzinfo=UTC)
-SUBMITTED_AT = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
-NOTICE_DATE = date(2026, 4, 25)
-PERIOD_END = date(2025, 12, 31)
-PREVIOUS_PERIOD = date(2024, 12, 31)
-OWNER = "local_owner"
-MAOTAI = "600519.SH"
-PROVIDER = "eastmoney"
-ADAPTER = "offline-run02-v1"
-"""The synthetic fixture freezes in the service's default scope, so reads
-with the default selection work; the rival provider below creates conflicts."""
-
-
-# --- dated synthetic fixture (values as WP5's saved chain) --------------------
+from tests.support.peer_world import (
+    ACQUIRED_AT,
+    ADAPTER,
+    LATER_ACQUIRED_AT,
+    MAOTAI,
+    OWNER,
+    PERIOD_END,
+    PREVIOUS_PERIOD,
+    PROVIDER,
+    SUBMITTED_AT,
+    SYNTHETIC_ROSTER,
+    SYNTHETIC_VALUES,
+    identifier_references,
+    imported_module_paths,
+    module_ast,
+    seed_listings,
+    store_snapshot,
+    store_standard,
+)
+from tests.support.peer_world import (
+    golden as golden,
+)
+from tests.support.peer_world import (
+    synthetic as synthetic,
+)
 
 
 def dec(value: str) -> Decimal:
     return Decimal(value)
-
-
-FIELD_KINDS: dict[str, tuple[str, str, str | None]] = {
-    "operating_revenue": ("flow", "CNY", "CNY"),
-    "net_profit_parent": ("flow", "CNY", "CNY"),
-    "operating_cash_flow": ("flow", "CNY", "CNY"),
-    "equity_parent": ("stock", "CNY", "CNY"),
-    "contract_liabilities": ("stock", "CNY", "CNY"),
-    "roe_weighted_annual": ("ratio", "fraction", None),
-}
-SYNTHETIC_ROSTER: tuple[tuple[str, str], ...] = (
-    ("600001.SH", "目标公司"),
-    ("600002.SH", "同行二"),
-    ("600003.SH", "同行三"),
-    ("600004.SH", "同行四"),
-    ("600005.SH", "同行五"),
-    ("600006.SH", "同行六"),
-    ("600007.SH", "同行七"),
-)
-# target 0.30 ROE / 0.15 contract-revenue / 0.75 cfo; peers 0.05..0.35, 0.10, 0.5..1.0
-SYNTHETIC_VALUES: tuple[dict[str, str], ...] = (
-    {
-        "roe_weighted_annual": "0.30",
-        "equity_parent": "500",
-        "contract_liabilities": "15",
-        "operating_revenue": "100",
-        "operating_cash_flow": "75",
-        "net_profit_parent": "100",
-    },
-) + tuple(
-    {
-        "roe_weighted_annual": roe,
-        "equity_parent": "100",
-        "contract_liabilities": "10",
-        "operating_revenue": "100",
-        "operating_cash_flow": cfo,
-        "net_profit_parent": "100",
-    }
-    for roe, cfo in zip(
-        ("0.05", "0.10", "0.15", "0.20", "0.25", "0.35"),
-        ("50", "60", "70", "80", "90", "100"),
-        strict=True,
-    )
-)
-
-
-def synthetic_field(metric: str, value: str, *, period_end: date = PERIOD_END) -> PeerAnnualField:
-    kind, unit, currency = FIELD_KINDS[metric]
-    if kind == "flow":
-        period = Period(start=date(period_end.year, 1, 1), end=period_end, basis="period_to_date/annual")
-        raw_unit = "CNY"
-    elif kind == "stock":
-        period = Period(start=period_end, end=period_end, basis="point_in_time")
-        raw_unit = "CNY"
-    else:
-        period = Period(start=date(period_end.year, 1, 1), end=period_end, basis="annual_ratio")
-        raw_unit = "percent"
-    saved = Decimal(value)
-    raw_value = str(saved * 100) if metric == "roe_weighted_annual" else value
-    return PeerAnnualField(
-        metric=metric,
-        value=saved,
-        raw_value=raw_value,
-        unit=unit,
-        currency=currency,
-        period=period,
-        source_field="SYNTHETIC",
-        raw_unit=raw_unit,
-        disclosed_on=NOTICE_DATE,
-        acquired_at=ACQUIRED_AT,
-        verification=PeerFieldVerification.VERIFIED,
-    )
-
-
-def synthetic_proof(metric: str, value: str) -> dict[str, Any]:
-    excerpt = f"synthetic {metric} {value}"
-    return {
-        "metric": metric,
-        "status": "verified",
-        "original_ref": None,
-        "pdf_hash": None,
-        "report_identity": None,
-        "pdf_page": 3,
-        "header": metric,
-        "raw_value": value,
-        "raw_unit": FIELD_KINDS[metric][1],
-        "parsed_value": value,
-        "period": PERIOD_END.isoformat(),
-        "accounting_scope": None,
-        "locator_excerpt": excerpt,
-        "locator_excerpt_sha256": hashlib.sha256(excerpt.encode("utf-8")).hexdigest(),
-        "checked_at": None,
-        "checked_by": None,
-        "check_rule_version": None,
-        "audit_record": {
-            "source": "synthetic-fixture",
-            "index": 0,
-            "code": "synthetic",
-            "field": metric,
-            "api_key": "SYNTHETIC",
-        },
-    }
-
-
-async def store_snapshot(
-    session: Any,
-    company_id: int,
-    listing_id: int,
-    values: dict[str, str],
-    *,
-    semantic_hash: str,
-    provider: str = PROVIDER,
-    adapter_version: str = ADAPTER,
-    report_period: date = PERIOD_END,
-    captured_at: datetime = ACQUIRED_AT,
-) -> PeerAnnualSnapshot:
-    """Append one snapshot version exactly as the WP3 importer would store it."""
-
-    from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
-
-    from tests.support.peer_originals import synthetic_original_proofs
-    fields = {metric: synthetic_field(metric, value, period_end=report_period) for metric, value in values.items()}
-    from investment_agent.storage.models.reference import Listing
-    from investment_agent.domain.a_share import format_listing_ticker
-    listing = await session.get(Listing, listing_id)
-    ticker = format_listing_ticker(ticker=listing.ticker, market_code=listing.market_code)
-    proofs = await synthetic_original_proofs(session, ticker, listing_id, fields, captured_at)
-    return await PeerAnnualSnapshotRepository(session).add(
-        PeerAnnualSnapshot(
-            id=str(uuid4()),
-            company_id=company_id,
-            listing_id=listing_id,
-            report_period=report_period,
-            provider=provider,
-            adapter_version=adapter_version,
-            captured_at=captured_at,
-            content_hash=semantic_hash,
-            semantic_hash=semantic_hash,
-            fields={
-                metric: synthetic_field(metric, value, period_end=report_period).model_dump(
-                    mode="json"
-                )
-                for metric, value in values.items()
-            },
-            verification=proofs,
-        )
-    )
-
-
-async def seed_listings(
-    session: Any, roster: tuple[tuple[str, str], ...]
-) -> dict[str, tuple[int, int]]:
-    """Create the directory listings; returns ``code -> (company_id, listing_id)``."""
-
-    listing_repo = ListingRepository(session)
-    ids: dict[str, tuple[int, int]] = {}
-    for code, name in roster:
-        listing = await listing_repo.ensure_a_share_listing(code, company_name=name)
-        ids[code] = (listing.company_id, listing.id)
-    return ids
-
-
-async def seed_cohort(session: Any, identities: dict[str, tuple[int, int]]) -> None:
-    """One roster version over the synthetic members (the default cohort key)."""
-
-    from investment_agent.storage.models.peer import PeerCohortSnapshot
-    from investment_agent.storage.repositories.peer import PeerCohortSnapshotRepository
-
-    entries = [
-        {
-            "ticker": code,
-            "company_id": company_id,
-            "listing_id": listing_id,
-            "name": name,
-        }
-        for code, name in SYNTHETIC_ROSTER
-        for company_id, listing_id in [identities[code]]
-    ]
-    await PeerCohortSnapshotRepository(session).add(
-        PeerCohortSnapshot(
-            id=str(uuid4()),
-            cohort_key="baijiu_current",
-            revision=1,
-            observed_on=PERIOD_END,
-            acquired_at=ACQUIRED_AT,
-            verification="candidate",
-            inclusion_rule_version="test/1",
-            content_hash="c" * 64,
-            payload={"schema": "test-roster/1", "entries": entries},
-        )
-    )
-
-
-@async_fixture
-async def synthetic(db_session):
-    """Directory listings plus one roster over the synthetic members.
-
-    Snapshots are *not* stored here: each test stores exactly the versions of
-    its scenario (a second disagreeing version is an honest re-check trigger,
-    so scenario data and base data must not both exist unless a test wants
-    that).
-    """
-
-    identities = await seed_listings(db_session, SYNTHETIC_ROSTER)
-    await seed_cohort(db_session, identities)
-    await db_session.commit()
-    return {
-        "ids": {code: company_id for code, (company_id, _listing) in identities.items()},
-        "listings": {code: listing_id for code, (_company, listing_id) in identities.items()},
-    }
-
-
-async def store_standard(
-    session: Any,
-    synthetic: dict[str, Any],
-    *,
-    target_overrides: dict[str, str] | None = None,
-    without_roe: set[str] = frozenset(),
-    captured_at: datetime = ACQUIRED_AT,
-) -> None:
-    """The seven standard 2025 versions, with per-test scenario tweaks."""
-
-    for index, ((code, _name), values) in enumerate(
-        zip(SYNTHETIC_ROSTER, SYNTHETIC_VALUES, strict=True)
-    ):
-        if code in without_roe:
-            values = {key: item for key, item in values.items() if key != "roe_weighted_annual"}
-        if code == "600001.SH" and target_overrides:
-            values = {**values, **target_overrides}
-        await store_snapshot(
-            session,
-            synthetic["ids"][code],
-            synthetic["listings"][code],
-            values,
-            semantic_hash=f"{index + 1:02d}" * 32,
-            captured_at=captured_at,
-        )
-    await session.commit()
-
-
-@async_fixture
-async def golden(db_session):
-    """run-02 fully imported: roster (WP2) and annual facts with proofs (WP3)."""
-
-    sample = load_sample_json(SAMPLE_PATH)
-    listing_repo = ListingRepository(db_session)
-    for entry in sample["companies"]:
-        await listing_repo.ensure_a_share_listing(entry["code"], company_name=entry["name"])
-    roster = await import_sample_roster(
-        db_session, sample_path=RUN02_SAMPLE, acquired_at=ACQUIRED_AT
-    )
-    await import_peer_annual_snapshots(
-        db_session,
-        sample=sample,
-        audit=load_audit_json(AUDIT_PATH),
-        acquired_at=ACQUIRED_AT,
-    )
-    await db_session.commit()
-    return roster.snapshot
 
 
 def metric_of(result: Any, key: str) -> Any:
@@ -1337,11 +1070,21 @@ def test_cli_rejects_malformed_tickers() -> None:
 
 
 def test_engine_is_unused_here() -> None:
-    """The service module never opens engines; reads arrive via the session."""
+    """The service module never opens engines; reads arrive via the session.
+
+    Structural (AST) guard: neither the imports (storage.database, httpx,
+    requests) nor any identifier anywhere in the module - nested scopes and
+    from-import bindings included - may name the engine entry points. A
+    comment or an unrelated string cannot influence this check.
+    """
 
     import investment_agent.industry_peers.service as service_module
 
-    source = Path(service_module.__file__).read_text(encoding="utf-8")
-    assert "init_engine" not in source
-    assert "session_scope" not in source
-    assert "httpx" not in source and "requests" not in source
+    imports = imported_module_paths(service_module)
+    for banned in ("investment_agent.storage.database", "httpx", "requests"):
+        assert not any(
+            path == banned or path.startswith(f"{banned}.") for path in imports
+        ), banned
+    references = identifier_references(module_ast(service_module))
+    assert "init_engine" not in references
+    assert "session_scope" not in references

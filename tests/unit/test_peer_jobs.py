@@ -10,12 +10,10 @@ collector's retry/throttle knobs are pinned through the settings.
 from __future__ import annotations
 
 import json
-import re
 import uuid as uuid_module
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
 import pytest
 from sqlalchemy import func, select, update
@@ -23,12 +21,9 @@ from sqlalchemy.exc import IntegrityError
 from typer.testing import CliRunner
 
 from investment_agent.cli.commands import peer_cohort as peer_cohort_cmd
-from investment_agent.config import Settings
 from investment_agent.industry_peers.artifacts import (
     PeerBatchMapping,
-    mapping_artifact_path,
     mappings_in_scope,
-    read_batch_mapping,
     scan_batch_mappings,
     select_current_mapping,
     write_batch_mapping,
@@ -36,7 +31,6 @@ from investment_agent.industry_peers.artifacts import (
 from investment_agent.industry_peers.jobs import (
     PEER_COLLECT_KIND,
     CollectArtifactStore,
-    PeerCollectHandler,
     PeerCollectPayload,
     SavedResponseCache,
     admit_peer_collect,
@@ -44,11 +38,9 @@ from investment_agent.industry_peers.jobs import (
     peer_collect_idempotency_key,
     request_identity,
 )
-from investment_agent.jobs.base import ClaimedJob
 from investment_agent.providers.eastmoney_annual import (
-    EastmoneyAnnualTransientError,
     PROVIDER,
-    RawAnnualResponse,
+    EastmoneyAnnualTransientError,
 )
 from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models.analysis import PipelineRun
@@ -58,266 +50,39 @@ from investment_agent.storage.models.peer import PeerAnnualSnapshot, PeerCohortS
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.peer import (
     PeerAnnualSnapshotRepository,
-    PeerCohortSnapshotRepository,
 )
 from investment_agent.storage.repositories.pipeline_run import (
     LeaseLostError,
     PipelineRunRepository,
-    RunLease,
+)
+from tests.support.peer_world import (
+    COLLECT_ADAPTER as ADAPTER,
+)
+from tests.support.peer_world import (
+    COLLECT_PERIOD as PERIOD,
+)
+from tests.support.peer_world import (
+    COLLECT_ROSTER as ROSTER,
+)
+from tests.support.peer_world import (
+    DirectCtx,
+    FakeAnnualSource,
+    claim_job,
+    ctype_page,
+    happy_companies,
+    make_handler,
+    make_settings,
+    read_mapping,
+    seed_collection_run,
+    seed_roster,
+)
+from tests.support.peer_world import (
+    peer_db as peer_db,  # noqa: F401  (pytest fixture)
 )
 
-PERIOD = date(2025, 12, 31)
-NOTICE_DATE = "2026-04-25 00:00:00"
-UPDATE_DATE = "2026-04-30 00:00:00"
-ADAPTER = "1.0"
-
-ROSTER: tuple[tuple[str, str], ...] = (
-    ("600001", "目标公司"),
-    ("600002", "同行二"),
-    ("600003", "同行三"),
-    ("600004", "同行四"),
-    ("600005", "同行五"),
-    ("600006", "同行六"),
-    ("600007", "同行七"),
-)
-
-
 # --------------------------------------------------------------------------- #
-# Fake transport and answer builders
+# Local helpers (the fake transport and the shared builders live in peer_world)
 # --------------------------------------------------------------------------- #
-
-
-class NoSleep:
-    async def __call__(self, seconds: float) -> None:
-        self.slept.append(seconds)
-
-    def __init__(self) -> None:
-        self.slept: list[float] = []
-
-
-class DirectCtx:
-    """A JobContext stand-in: no heartbeats, work runs inline."""
-
-    worker_id = "test-worker"
-
-    async def run_with_heartbeat(self, lease: RunLease, work: Any) -> Any:
-        return await work()
-
-
-_OPERATION_BY_PATH = {
-    "/PC_HSF10/NewFinanceAnalysis/Index": "f10_ctype",
-    "/PC_HSF10/NewFinanceAnalysis/lrbAjaxNew": "f10_income",
-    "/PC_HSF10/NewFinanceAnalysis/zcfzbAjaxNew": "f10_balance",
-    "/PC_HSF10/NewFinanceAnalysis/xjllbAjaxNew": "f10_cashflow",
-    "/securities/api/data/v1/get": "main_fina",
-}
-
-
-def _code_of(params: dict[str, str]) -> str:
-    match = re.search(r"\d{6}", json.dumps(params))
-    assert match is not None, f"no company code in {params}"
-    return match.group(0)
-
-
-class FakeAnnualSource:
-    """Answers every operation from a per-company body table; counts fetches.
-
-    ``failures`` maps ``(code, operation)`` to a list of exceptions raised on
-    consecutive fetches of that request (transient simulation); each raised
-    entry is consumed, so a later attempt of the same request succeeds.
-    """
-
-    def __init__(
-        self,
-        companies: dict[str, dict[str, bytes]],
-        *,
-        failures: dict[tuple[str, str], list[BaseException]] | None = None,
-    ) -> None:
-        self.companies = companies
-        self.failures = failures or {}
-        self.fetches: list[tuple[str, str]] = []
-
-    async def fetch(self, url: str, params: dict[str, str]) -> RawAnnualResponse:
-        operation = _OPERATION_BY_PATH[urlsplit(url).path]
-        code = _code_of(params)
-        self.fetches.append((code, operation))
-        pending = self.failures.get((code, operation))
-        if pending:
-            raise pending.pop(0)
-        return RawAnnualResponse(status=200, body=self.companies[code][operation])
-
-    def fetch_counts(self, code: str) -> int:
-        return sum(1 for fetched, _ in self.fetches if fetched == code)
-
-
-def _row(code: str, values: dict[str, Any], *, notice: str = NOTICE_DATE, update: str = UPDATE_DATE):
-    row: dict[str, Any] = {
-        "SECUCODE": f"{code}.SH",
-        "REPORT_DATE": "2025-12-31 00:00:00",
-        "NOTICE_DATE": notice,
-        "UPDATE_DATE": update,
-        "CURRENCY": "CNY",
-    }
-    row.update(values)
-    return row
-
-
-def _statement_body(row: dict[str, Any]) -> bytes:
-    return json.dumps({"version": "4.0", "data": [row], "success": True}).encode("utf-8")
-
-
-def _main_body(row: dict[str, Any]) -> bytes:
-    return json.dumps(
-        {
-            "version": "4.0",
-            "success": True,
-            "result": {"pages": 1, "pageNo": 1, "pageSize": 100, "total": 1, "data": [row]},
-        }
-    ).encode("utf-8")
-
-
-def _ctype_page(ctype: str | None = "4") -> bytes:
-    if ctype is None:
-        return b"<!DOCTYPE html><html><body><p>no metadata</p></body></html>"
-    return (
-        "<!DOCTYPE html><html><head></head><body>"
-        f'<input type="hidden" id="hidctype" value="{ctype}" />'
-        "</body></html>"
-    ).encode()
-
-
-def company_bodies(code: str, *, ctype: str | None = "4") -> dict[str, bytes]:
-    """The five happy answers of one company (ctype page, three tables, main)."""
-
-    income = _row(
-        code,
-        {
-            "OPERATE_INCOME": 25731010647.32,
-            "TOTAL_OPERATE_INCOME": 25898434324.18,
-            "PARENT_NETPROFIT": 86228146421.62,
-        },
-    )
-    balance = _row(
-        code,
-        {"TOTAL_PARENT_EQUITY": 200456087654.32, "CONTRACT_LIAB": 32338664843.91},
-    )
-    cash = _row(code, {"NETCASH_OPERATE": 92435296907.06})
-    main = _row(code, {"ROEJQ": 8.62})
-    return {
-        "f10_ctype": _ctype_page(ctype),
-        "f10_income": _statement_body(income),
-        "f10_balance": _statement_body(balance),
-        "f10_cashflow": _statement_body(cash),
-        "main_fina": _main_body(main),
-    }
-
-
-def happy_companies(codes: list[str]) -> dict[str, dict[str, bytes]]:
-    return {code: company_bodies(code) for code in codes}
-
-
-# --------------------------------------------------------------------------- #
-# Fixtures and helpers
-# --------------------------------------------------------------------------- #
-
-
-def make_settings(tmp_path: Path, *, retries: int = 2) -> Settings:
-    return Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        api_key="test",
-        llm_tier3_api_key="test",
-        data_dir=tmp_path,
-        peer_collect_min_interval_seconds=0,
-        peer_collect_retries=retries,
-    )
-
-
-async def seed_roster(
-    session: Any,
-    tickers: tuple[tuple[str, str], ...] = ROSTER,
-    *,
-    cohort_key: str = "baijiu_current",
-    revision: int | None = None,
-) -> PeerCohortSnapshot:
-    """Directory listings plus one roster version over the given members."""
-
-    repo = ListingRepository(session)
-    entries = []
-    for code, name in tickers:
-        listing = await repo.ensure_a_share_listing(f"{code}.SH", company_name=name)
-        entries.append(
-            {
-                "ticker": f"{code}.SH",
-                "company_id": listing.company_id,
-                "listing_id": listing.id,
-                "name": name,
-            }
-        )
-    cohort_repo = PeerCohortSnapshotRepository(session)
-    return await cohort_repo.add(
-        PeerCohortSnapshot(
-            id=str(uuid_module.uuid4()),
-            cohort_key=cohort_key,
-            revision=(
-                revision
-                if revision is not None
-                else await cohort_repo.next_revision(cohort_key)
-            ),
-            observed_on=PERIOD,
-            acquired_at=datetime.now(UTC),
-            verification="candidate",
-            inclusion_rule_version="test/1",
-            content_hash="c" * 64,
-            payload={"schema": "test-roster/1", "entries": entries},
-        )
-    )
-
-
-async def seed_collection_run(
-    cohort: PeerCohortSnapshot,
-    tmp_path: Path,
-    *,
-    mode: str = "full",
-    provider: str = PROVIDER,
-    adapter_version: str = ADAPTER,
-    report_period: date = PERIOD,
-) -> Any:
-    async with session_scope() as session:
-        return await enqueue_peer_collect(
-            session,
-            report_period=report_period,
-            mode=mode,  # type: ignore[arg-type]
-            triggered_by="test",
-            data_dir=tmp_path,
-            cohort_row=cohort,
-            provider=provider,
-            adapter_version=adapter_version,
-        )
-
-
-async def claim_job(run_id: int, worker_id: str = "test-worker") -> ClaimedJob:
-    async with session_scope() as session:
-        claimed = await PipelineRunRepository(session).claim_next(
-            worker_id=worker_id, kinds=[PEER_COLLECT_KIND], run_id=run_id
-        )
-        assert claimed is not None
-        return ClaimedJob(
-            run_id=claimed.id,
-            kind=claimed.kind,
-            lease=RunLease(
-                run_id=claimed.id, worker_id=worker_id, attempt=claimed.attempt_count
-            ),
-            request_json=dict(claimed.request_json),
-        )
-
-
-def make_handler(settings: Settings, source: FakeAnnualSource) -> PeerCollectHandler:
-    return PeerCollectHandler(
-        settings=settings,
-        source=source,
-        retry_backoff_seconds=0.0,
-        sleep=NoSleep(),
-    )
 
 
 async def run_row(run_id: int) -> PipelineRun:
@@ -326,10 +91,6 @@ async def run_row(run_id: int) -> PipelineRun:
         assert row is not None
         session.expunge(row)
         return row
-
-
-async def read_mapping(tmp_path: Path, run_id: int) -> PeerBatchMapping:
-    return read_batch_mapping(mapping_artifact_path(tmp_path, str(run_id)))
 
 
 def collect_index(tmp_path: Path, run_id: int) -> dict[str, Any]:
@@ -349,13 +110,6 @@ async def run_count() -> int:
 
 async def roster_entry(cohort: PeerCohortSnapshot, ticker: str) -> dict[str, Any]:
     return next(e for e in cohort.payload["entries"] if e["ticker"] == ticker)
-
-
-@pytest.fixture
-async def peer_db(db_session, tmp_path):
-    """The shared in-memory engine plus the test's data directory."""
-    del db_session  # initializes the engine and the schema
-    return tmp_path
 
 
 @pytest.fixture
@@ -704,7 +458,7 @@ async def test_company_failure_marks_mapping_partial_with_reasons(
     companies = happy_companies([code for code, _ in ROSTER])
     companies["600002"] = {
         **companies["600002"],
-        "f10_ctype": _ctype_page(None),  # company type cannot be confirmed
+        "f10_ctype": ctype_page(None),  # company type cannot be confirmed
     }
     source = FakeAnnualSource(companies)
 
@@ -897,7 +651,7 @@ async def test_admission_first_gap_pending_cooldown_then_reenqueue(
     # Run the task; one company fails, so the submitted mapping keeps gaps.
     job = await claim_job(first.run_id)
     companies = happy_companies([code for code, _ in ROSTER])
-    companies["600002"] = {**companies["600002"], "f10_ctype": _ctype_page(None)}
+    companies["600002"] = {**companies["600002"], "f10_ctype": ctype_page(None)}
     assert await make_handler(make_settings(peer_db), FakeAnnualSource(companies)).execute(
         job, DirectCtx()
     ) == "partial"

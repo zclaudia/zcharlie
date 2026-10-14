@@ -35,9 +35,7 @@ from investment_agent.storage.models.reference import Universe, UniverseMembersh
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.peer import PeerCohortSnapshotRepository
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN02_SAMPLE = REPO_ROOT / "research/industry-data-validation/evidence/run-02/sample.json"
+from tests.support.peer_world import REPO_ROOT, RUN02_SAMPLE
 
 # The golden roster: the run-02 baijiu sample's 19 companies with the names the
 # local directory carries. Identity resolution is by code only - the names are
@@ -274,9 +272,14 @@ def test_golden_import_matches_run02_sample(peer_db) -> None:
 
     # Source locator + hash + observation metadata from the file itself.
     assert payload["source"]["sha256"] == hashlib.sha256(RUN02_SAMPLE.read_bytes()).hexdigest()
+    # The importer records the repo-relative path of the exact file it was
+    # handed (``_invoke`` passes ``str(RUN02_SAMPLE)``); pin the tracked
+    # fixture's own location first, then the recorded value.
     assert (
-        payload["source"]["path"] == "research/industry-data-validation/evidence/run-02/sample.json"
+        RUN02_SAMPLE.resolve().relative_to(REPO_ROOT).as_posix()
+        == "tests/fixtures/peer_run02/sample.json"
     )
+    assert payload["source"]["path"] == "tests/fixtures/peer_run02/sample.json"
     assert payload["source"]["captured_at"] == sample["captured_at"]
     assert payload["source"]["membership_semantics"] == sample["membership_semantics"]
     assert payload["source"]["selection"] == sample["selection"]

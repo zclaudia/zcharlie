@@ -41,11 +41,7 @@ from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.peer import PeerAnnualSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.peer import PeerAnnualSnapshotRepository
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
-DERIVED = REPO_ROOT / "research" / "industry-data-validation" / "evidence" / "run-02" / "derived"
-SAMPLE_PATH = DERIVED / "baijiu-peer-sample.json"
-AUDIT_PATH = DERIVED / "baijiu-official-audit.json"
+from tests.support.peer_world import AUDIT_PATH, SAMPLE_PATH
 
 ACQUIRED_AT = datetime(2026, 10, 12, 4, 0, tzinfo=UTC)
 LATER_ACQUIRED_AT = datetime(2026, 10, 12, 5, 30, tzinfo=UTC)
