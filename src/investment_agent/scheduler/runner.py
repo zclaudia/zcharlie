@@ -42,6 +42,7 @@ from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
     UnknownTradingCalendarYearError,
     calendar_coverage,
+    is_trading_day_or_none,
     load_trading_calendar,
 )
 from investment_agent.settings.loader import (
@@ -193,10 +194,8 @@ def watchlist_catch_up_date(
     today = fired_today(now=now, trigger=trigger)
     if today is None:
         return None
-    try:
-        return today if calendar.is_trading_day(today) else None
-    except UnknownTradingCalendarYearError:
-        return None
+    # An unreviewed year answers ``None`` and fails closed: no catch-up.
+    return today if is_trading_day_or_none(calendar, today) else None
 
 
 def fired_today(*, now: datetime, trigger: CronTrigger) -> date | None:

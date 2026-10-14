@@ -62,7 +62,7 @@ from investment_agent.providers.circuit import CircuitBreaker
 from investment_agent.providers.errors import ProviderUnavailableError
 from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
-    UnknownTradingCalendarYearError,
+    is_trading_day_or_weekday,
 )
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
@@ -128,14 +128,10 @@ async def earnings_scope(
 
 
 def is_trading_day(calendar: TradingCalendar | None, day: date) -> bool:
-    """Calendar answer; weekdays when there is no calendar for the year."""
+    """Kept for this module's callers; the rule has one home in
+    :func:`~investment_agent.scheduler.trading_calendar.is_trading_day_or_weekday`."""
 
-    if calendar is not None:
-        try:
-            return calendar.is_trading_day(day)
-        except UnknownTradingCalendarYearError:
-            pass
-    return day.weekday() < 5
+    return is_trading_day_or_weekday(calendar, day)
 
 
 def upcoming_trading_days(

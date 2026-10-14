@@ -103,6 +103,47 @@ def load_trading_calendar(path: Path) -> TradingCalendar:
         return TradingCalendar.model_validate(yaml.safe_load(handle))
 
 
+# --------------------------------------------------------------------------- #
+# Day decisions for callers that cannot fail closed themselves
+#
+# ``TradingCalendar.is_trading_day`` raises for an unreviewed year. Callers
+# resolve that in exactly two ways, and these helpers are the one place where
+# each resolution is defined.
+# --------------------------------------------------------------------------- #
+
+
+def is_trading_day_or_weekday(calendar: TradingCalendar | None, day: date) -> bool:
+    """Trading-day answer that never fails closed.
+
+    A reviewed year answers from the calendar (its closed_dates / open_dates
+    win over the weekday rule); an unreviewed year - or no calendar at all -
+    assumes a weekday is a trading day. This is the product rule for planning
+    helpers (earnings windows, accumulation weeks), where a guess is preferable
+    to stopping.
+    """
+
+    if calendar is not None:
+        try:
+            return calendar.is_trading_day(day)
+        except UnknownTradingCalendarYearError:
+            pass
+    return day.weekday() < 5
+
+
+def is_trading_day_or_none(calendar: TradingCalendar, day: date) -> bool | None:
+    """Reviewed years answer from the calendar; an unreviewed year answers ``None``.
+
+    ``None`` is not "weekday": the year has no reviewed coverage, so the caller
+    must not treat the day as confirmed trading or confirmed closed data - it
+    reports a limitation (portfolio staleness) or skips the job instead.
+    """
+
+    try:
+        return calendar.is_trading_day(day)
+    except UnknownTradingCalendarYearError:
+        return None
+
+
 @dataclass(frozen=True)
 class CalendarCoverage:
     """How long the reviewed trading calendar keeps scheduled refreshes alive."""

@@ -8,6 +8,8 @@ import pytest
 from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
     UnknownTradingCalendarYearError,
+    is_trading_day_or_none,
+    is_trading_day_or_weekday,
     load_trading_calendar,
 )
 
@@ -95,3 +97,52 @@ def test_calendar_coverage_after_expiry_and_contiguous_years():
     contiguous = calendar_coverage(_calendar([2026, 2027, 2029]), date(2026, 12, 1))
     assert contiguous.coverage_end == date(2027, 12, 31)
     assert contiguous.expiring_soon is False
+
+
+def _answered_calendar() -> TradingCalendar:
+    """One reviewed year: 2026-10-08 (Thu) closed, 2026-10-10 (Sat) open."""
+
+    return TradingCalendar.model_validate(
+        {
+            "calendar_id": "TEST",
+            "timezone": "Asia/Shanghai",
+            "source": {"title": "t", "url": "https://example.test", "published_on": "2025-12-01"},
+            "years": [
+                {
+                    "year": 2026,
+                    "closed_dates": ["2026-10-08"],
+                    "open_dates": ["2026-10-10"],
+                }
+            ],
+        }
+    )
+
+
+def test_is_trading_day_or_weekday_reviewed_year_answers_from_the_calendar():
+    calendar = _answered_calendar()
+
+    # The reviewed year wins over the weekday rule in both directions.
+    assert is_trading_day_or_weekday(calendar, date(2026, 10, 8)) is False  # weekday holiday
+    assert is_trading_day_or_weekday(calendar, date(2026, 10, 10)) is True  # Saturday open
+
+
+def test_is_trading_day_or_weekday_unreviewed_year_assumes_weekdays():
+    calendar = _answered_calendar()
+
+    assert is_trading_day_or_weekday(calendar, date(2027, 1, 4)) is True  # Monday
+    assert is_trading_day_or_weekday(calendar, date(2027, 1, 9)) is False  # Saturday
+
+
+def test_is_trading_day_or_weekday_without_a_calendar_is_the_weekday_rule():
+    assert is_trading_day_or_weekday(None, date(2027, 1, 4)) is True
+    assert is_trading_day_or_weekday(None, date(2027, 1, 9)) is False
+
+
+def test_is_trading_day_or_none_answers_from_the_calendar_or_refuses():
+    calendar = _answered_calendar()
+
+    assert is_trading_day_or_none(calendar, date(2026, 10, 8)) is False
+    assert is_trading_day_or_none(calendar, date(2026, 10, 10)) is True
+    # Unreviewed year: None, never the weekday assumption.
+    assert is_trading_day_or_none(calendar, date(2027, 1, 4)) is None
+    assert is_trading_day_or_none(calendar, date(2027, 1, 9)) is None

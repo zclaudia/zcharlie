@@ -14,7 +14,7 @@ from datetime import date, timedelta
 
 from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
-    UnknownTradingCalendarYearError,
+    is_trading_day_or_weekday,
 )
 from investment_agent.snapshots.health.models import (
     _WEEKS_SHOWN,
@@ -30,14 +30,10 @@ from investment_agent.snapshots.health.models import (
 
 
 def is_trading_day(calendar: TradingCalendar | None, day: date) -> bool:
-    """Calendar answer; weekdays when the year is not reviewed (or no calendar)."""
+    """Kept for this module's callers; the rule has one home in
+    :func:`~investment_agent.scheduler.trading_calendar.is_trading_day_or_weekday`."""
 
-    if calendar is not None:
-        try:
-            return calendar.is_trading_day(day)
-        except UnknownTradingCalendarYearError:
-            pass
-    return day.weekday() < 5
+    return is_trading_day_or_weekday(calendar, day)
 
 
 def previous_trading_day(calendar: TradingCalendar | None, day: date, *, inclusive: bool) -> date:

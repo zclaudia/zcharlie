@@ -39,7 +39,7 @@ from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, J
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.portfolio.valuation import ValuationService, day_knowledge_cutoff
 from investment_agent.scheduler.trading_calendar import (
-    UnknownTradingCalendarYearError,
+    is_trading_day_or_none,
     load_trading_calendar,
 )
 from investment_agent.storage.database import session_scope
@@ -111,16 +111,14 @@ def calendar_predicate(calendar_path: str) -> Any:
 
     ``None`` means the year is not in the trading calendar: staleness cannot be
     settled then, and the valuation reports a limitation instead of treating
-    weekdays as reviewed data (plan 2.10 / WP10).
+    weekdays as reviewed data (plan 2.10 / WP10). See
+    :func:`~investment_agent.scheduler.trading_calendar.is_trading_day_or_none`.
     """
 
     calendar = load_trading_calendar(Path(calendar_path))
 
     def predicate(value: date) -> bool | None:
-        try:
-            return calendar.is_trading_day(value)
-        except UnknownTradingCalendarYearError:
-            return None
+        return is_trading_day_or_none(calendar, value)
 
     return predicate
 

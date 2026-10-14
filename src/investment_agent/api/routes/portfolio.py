@@ -41,7 +41,7 @@ from investment_agent.portfolio.purposes import (
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.portfolio.valuation import Valuation, ValuationService
 from investment_agent.scheduler.trading_calendar import (
-    UnknownTradingCalendarYearError,
+    is_trading_day_or_none,
     load_trading_calendar,
 )
 from investment_agent.settings.loader import (
@@ -67,7 +67,8 @@ def trading_calendar_predicate(settings: Settings) -> Callable[[date], bool | No
     """Reviewed years use the calendar; an unreviewed year is ``None``.
 
     ``None`` is not "weekday": staleness cannot be settled then, and the
-    valuation reports a limitation instead (plan 2.10 / WP10).
+    valuation reports a limitation instead (plan 2.10 / WP10). See
+    :func:`~investment_agent.scheduler.trading_calendar.is_trading_day_or_none`.
 
     Same source as the scheduler and the dashboard: the DATA_DIR copy applied
     from the health page wins over the repository baseline, so an applied
@@ -83,10 +84,7 @@ def trading_calendar_predicate(settings: Settings) -> Callable[[date], bool | No
         raise InvestorError("invalid_reference", "交易日历不可用，无法确认价格时效") from exc
 
     def predicate(value: date) -> bool | None:
-        try:
-            return calendar.is_trading_day(value)
-        except UnknownTradingCalendarYearError:
-            return None
+        return is_trading_day_or_none(calendar, value)
 
     return predicate
 
