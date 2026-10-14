@@ -118,8 +118,13 @@ def _check_universes(value: list[str]) -> list[str]:
     return value
 
 
-class WatchlistSchedule(BaseModel):
-    """Daily watchlist refresh (app.yaml ``scheduler.watchlist_refresh_*``)."""
+class CronSchedule(BaseModel):
+    """A daily ``(timezone, cron)`` scheduler section.
+
+    Serves the three app.yaml blocks that are field-for-field identical:
+    ``scheduler.watchlist_refresh_*``, ``scheduler.portfolio_valuation_*`` and
+    ``scheduler.zone_detection_*``.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -130,28 +135,10 @@ class WatchlistSchedule(BaseModel):
     _cron = field_validator("cron")(_check_cron)
 
 
-class PortfolioValuationSchedule(BaseModel):
-    """Daily portfolio valuation (app.yaml ``scheduler.portfolio_valuation_*``)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    timezone: str = "Asia/Shanghai"
-    cron: str | None = None
-
-    _timezone = field_validator("timezone")(_check_timezone)
-    _cron = field_validator("cron")(_check_cron)
-
-
-class ZoneDetectionSchedule(BaseModel):
-    """Daily zone detection (app.yaml ``scheduler.zone_detection_*``)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    timezone: str = "Asia/Shanghai"
-    cron: str | None = None
-
-    _timezone = field_validator("timezone")(_check_timezone)
-    _cron = field_validator("cron")(_check_cron)
+# Compatibility aliases: the per-section names stay importable/annotatable.
+WatchlistSchedule = CronSchedule
+PortfolioValuationSchedule = CronSchedule
+ZoneDetectionSchedule = CronSchedule
 
 
 class SnapshotSchedule(SnapshotScheduleConfig):
