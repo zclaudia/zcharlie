@@ -1,5 +1,7 @@
 # HK2-04 三项 P0 收口及 HK2-07 开工评估
 
+> 后续更新：本报告保留 HK2-04 收口时的条件判断；HK2-07 离线 A–C 已按 [26](26-hk2-07-offline-execution.md) 完成，实测结果见 [27](27-hk2-07-offline-acceptance.md)。
+
 日期：2026-10-15；分支 `codex/hkus-archive`，起点 `19cc4ea`。
 执行拆分见 [22](22-hk2-04-closeout-plan.md)。三个 GPT-6 Luna 子代理并行完成专项实现，
 主代理复核官方原件、集成生成器与验收器、检查负例和全量回归后统一提交。

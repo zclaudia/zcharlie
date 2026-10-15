@@ -26,8 +26,11 @@ from investment_agent.api.schemas.research_materials import (
     FactOut,
     FinancialContextResponse,
     FiscalYearOut,
+    FreshnessOut,
+    MetricCoverageOut,
     MetricOut,
     RefreshBody,
+    RefreshLifecycleOut,
     RefreshResponse,
     StatusOut,
 )
@@ -159,6 +162,7 @@ def _context_response(view: FinancialContextView) -> FinancialContextResponse:
                 verification=fact.verification,
                 conflict=fact.conflict,
                 source=fact.source,
+                evidence_kind=fact.evidence_kind,
                 source_date=fact.source_date,
                 locator=fact.locator,
             )
@@ -184,4 +188,31 @@ def _context_response(view: FinancialContextView) -> FinancialContextResponse:
             StatusOut(code=status.code, affected=status.affected, next_step=status.next_step)
             for status in view.statuses
         ),
+        freshness=FreshnessOut(
+            last_requested_at=view.freshness.last_requested_at,
+            last_attempt_at=view.freshness.last_attempt_at,
+            last_success_at=view.freshness.last_success_at,
+            last_imported_at=view.freshness.last_imported_at,
+            last_verified_on=view.freshness.last_verified_on,
+            latest_period_end=view.freshness.latest_period_end,
+            latestness=view.freshness.latestness,
+            latestness_checked_on=view.freshness.latestness_checked_on,
+            sources=view.freshness.sources or {},
+        ),
+        refresh=RefreshLifecycleOut(
+            run_id=view.refresh.run_id,
+            status=view.refresh.status,
+            reason=view.refresh.reason,
+            started_at=view.refresh.started_at,
+            completed_at=view.refresh.completed_at,
+        ),
+        metric_coverage={
+            key: MetricCoverageOut(
+                applicable=item.applicable,
+                evidence_status=item.evidence_status,
+                usable_facts=item.usable_facts,
+                verified_facts=item.verified_facts,
+            )
+            for key, item in (view.metric_coverage or {}).items()
+        },
     )

@@ -36,17 +36,20 @@ Data discipline carried here:
 * every capability the first delivery does not ship is ``False`` and its gap is
   named in ``statuses``; a ``False`` bit is never a silent omission.
 
-The two decisions the plan left to the control agent are recorded in
-:data:`BANK_COMPANY_KEYS` (the controlled bank set) and in
-:data:`MATERIAL_STALE_AFTER_DAYS` (the period-lag indicator).
+The controlled bank applicability set is recorded in :data:`BANK_COMPANY_KEYS`.
+Latestness comes only from a validated review receipt and its checked period;
+this module does not infer a filing deadline from the current date.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
-from datetime import date, timedelta
+import hashlib
+import json
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
+from pathlib import PurePosixPath
 from typing import Final
 
 from sqlalchemy import select
@@ -60,6 +63,7 @@ from investment_agent.domain.security import (
     find_identity,
 )
 from investment_agent.materials.contracts import (
+    SCHEMA_VERSION,
     AccountingStandard,
     DatasetKind,
     EquityScope,
@@ -70,13 +74,18 @@ from investment_agent.materials.contracts import (
     ReportingScope,
     SubjectKind,
     Verification,
+    fact_from_payload,
+    fact_to_payload,
 )
+from investment_agent.materials.equity_reconciliation import evaluate_equity_reconciliation
 from investment_agent.materials.evidence import dataset_facts
+from investment_agent.materials.jobs import MATERIAL_COLLECTION
 from investment_agent.materials.metrics import (
     MetricResult,
     compute_metrics,
     profile_from_identity,
 )
+from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.material_acquisition import ResearchMaterialAcquisition
 from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.research_material import ResearchDataset
@@ -137,17 +146,8 @@ Used only when a metric produced no value: its unit still has to be the unit of
 its own definition, so a missing amount never looks like a ratio.
 """
 
-MATERIAL_STALE_AFTER_DAYS: Final[int] = 366
-"""Period lag after which the material is reported as behind the calendar.
-
-The newest annual period of the material is compared with the *real* current
-date: an annual period that ended more than this many days ago means the
-following annual report should already have been collected, so the page shows
-the periods it really covers and asks for a refresh. This is a lag indicator
-over real dates — it asserts no filing deadline and invents no date. (The plan
-leaves this rule to the control agent; the threshold is the one-year-plus-1-day
-boundary so a 12-31 fiscal year turns stale when its successor should be out.)
-"""
+REVIEWED_ANNUAL_SOURCE: Final[str] = "issuer.reviewed_annual.v1"
+"""Source id reserved for validated, offline reviewed annual material."""
 
 STATUS_CODES: Final[tuple[str, ...]] = (
     "listing_not_covered",
@@ -158,6 +158,10 @@ STATUS_CODES: Final[tuple[str, ...]] = (
     "raw_archive_missing",
     "material_stale",
     "online_refresh_disabled",
+    "partial_coverage",
+    "awaiting_original_review",
+    "latestness_unknown",
+    "failed_refresh",
 )
 """The fixed business-status vocabulary of the read model."""
 
@@ -204,6 +208,22 @@ STATUS_COPY: Final[dict[str, _StatusCopy]] = {
     "online_refresh_disabled": _StatusCopy(
         affected=("刷新入口",),
         next_step="确认来源使用许可后开启在线刷新；当前登记的任务不会联网采集。",
+    ),
+    "partial_coverage": _StatusCopy(
+        affected=("财务展示", "指标计算"),
+        next_step="补齐最近六类字段及连续四个财年的可用证据；不适用项目单独标注。",
+    ),
+    "awaiting_original_review": _StatusCopy(
+        affected=("原件复核",),
+        next_step="逐项对照发行人原件并保存复核回执；导入时间不代表原件核对时间。",
+    ),
+    "latestness_unknown": _StatusCopy(
+        affected=("最新性判断",),
+        next_step="取得并核对发行人当前年报索引后再判断资料是否最新。",
+    ),
+    "failed_refresh": _StatusCopy(
+        affected=("资料刷新",),
+        next_step="查看刷新运行原因并修复来源问题；失败运行不会更新最近成功采集时间。",
     ),
 }
 """Business copy per status code: affected functions + next step.
@@ -309,6 +329,7 @@ class FactView:
     source: str
     source_date: date | None
     locator: str | None
+    evidence_kind: str = "reported"
 
 
 @dataclass(frozen=True)
@@ -336,6 +357,44 @@ class StatusView:
 
 
 @dataclass(frozen=True)
+class FreshnessView:
+    last_requested_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_imported_at: datetime | None = None
+    last_verified_on: date | None = None
+    latest_period_end: date | None = None
+    latestness: str = "unknown"
+    latestness_checked_on: date | None = None
+    sources: dict[str, dict[str, str | bool]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class RefreshLifecycleView:
+    run_id: int | None = None
+    status: str | None = None
+    reason: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class MetricCoverageView:
+    applicable: bool
+    evidence_status: str
+    usable_facts: int
+    verified_facts: int
+
+
+@dataclass(frozen=True)
+class ReviewReceiptView:
+    checked_on: date
+    latest_period_end: date
+    manifest_sha256: str
+    company_key: str
+
+
+@dataclass(frozen=True)
 class FinancialContextView:
     """The whole read model of one listing; immutable and freely serialisable."""
 
@@ -353,6 +412,9 @@ class FinancialContextView:
     capabilities: dict[str, bool]
     coverage: dict[str, int]
     statuses: tuple[StatusView, ...]
+    freshness: FreshnessView = field(default_factory=FreshnessView)
+    refresh: RefreshLifecycleView = field(default_factory=RefreshLifecycleView)
+    metric_coverage: dict[str, MetricCoverageView] = field(default_factory=dict)
 
 
 class ListingNotFoundError(LookupError):
@@ -400,7 +462,10 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
         subject_kind=COMPANY_SUBJECT,
         subject_id=company.id,
     )
-    material = _current_versions(datasets)
+    material = _current_versions(datasets, expected_company_key=identity.company_key)
+    review_acquisitions = _valid_review_receipts(
+        company_id=company.id, datasets=material, company_key=identity.company_key
+    )
     missing_archive_sources = await _missing_archive_sources(
         session, subject_id=company.id, datasets=material
     )
@@ -430,14 +495,49 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
             for item in metric_set.metrics
         )
     )
-    capabilities = _capabilities(covered=True, has_material=bool(material))
+    capabilities = _capabilities(
+        covered=True,
+        has_material=any(
+            fact.value.raw_value is not None and fact.conflict != "unresolved"
+            for fact in material_facts
+        ),
+    )
     coverage = _coverage(facts=facts, fiscal_years=fiscal_views)
+    freshest_review = max(
+        review_acquisitions.values(),
+        key=lambda item: item.checked_on,
+        default=None,
+    )
+    latest_review_period = (
+        None if freshest_review is None else freshest_review.latest_period_end
+    )
+    # Latestness is about every selected financial fact, including an instant
+    # opening balance that may not belong to the annual fiscal-year display.
+    max_period = max((fact.period.end for fact in material_facts), default=None)
+    latestness = (
+        "unknown" if freshest_review is None
+        else "stale" if max_period is not None and latest_review_period is not None and latest_review_period < max_period
+        else "checked_through"
+    )
+    freshness, refresh = await _freshness(
+        session,
+        listing_id=listing.id,
+        datasets=datasets,
+        review_acquisitions=review_acquisitions,
+        max_period=max_period,
+        latest_period_end=latest_review_period,
+        latestness=latestness,
+        latestness_checked_on=None if freshest_review is None else freshest_review.checked_on,
+    )
+    metric_coverage = _metric_coverage(facts, metrics)
     statuses = _statuses(
         facts=facts,
         metrics=metrics,
         capabilities=capabilities,
-        newest_period_end=fiscal_views[-1].end if fiscal_views else None,
-        today=date.today(),
+        latestness=latestness,
+        refresh_status=refresh.status,
+        fiscal_period_ends=tuple(year.end for year in fiscal_views),
+        has_valid_original_review=bool(review_acquisitions),
     )
     if missing_archive_sources:
         statuses = (
@@ -466,6 +566,9 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
         capabilities=capabilities,
         coverage=coverage,
         statuses=statuses,
+        freshness=freshness,
+        refresh=refresh,
+        metric_coverage=metric_coverage,
     )
 
 
@@ -497,13 +600,18 @@ def _uncovered_view(listing: Listing, company: Company | None) -> FinancialConte
         capabilities=_capabilities(covered=False, has_material=False),
         coverage={"periods_covered": 0, "facts_total": 0, "facts_candidate": 0, "facts_verified": 0},
         statuses=(_status("listing_not_covered"),),
+        freshness=FreshnessView(sources=_source_states()),
+        refresh=RefreshLifecycleView(),
+        metric_coverage={},
     )
 
 
 # --- material, facts and metrics ------------------------------------------------
 
 
-def _current_versions(datasets: Sequence[ResearchDataset]) -> tuple[ResearchDataset, ...]:
+def _current_versions(
+    datasets: Sequence[ResearchDataset], *, expected_company_key: str | None = None
+) -> tuple[ResearchDataset, ...]:
     """Current source/year versions, preserving legacy per-table HK rows.
 
     Older imports saved the three statements as separate revisions of one key.
@@ -521,20 +629,430 @@ def _current_versions(datasets: Sequence[ResearchDataset]) -> tuple[ResearchData
         if content in seen_content:
             continue
         seen_content.add(content)
-        current = newest.get(key)
-        if current is None or dataset.revision >= current.revision:
+        existing = newest.get(key)
+        if existing is None or dataset.revision >= existing.revision:
             newest[key] = dataset
-    return tuple(
-        sorted(
-            (
-                row for (source, end, report), row in newest.items()
-                if report is None
-                or (source, end, None) not in newest
-                or row.revision > newest[(source, end, None)].revision
-            ),
-            key=lambda row: (row.period_end or date.min, row.source),
+    selected_rows = [
+        row for (source, end, report), row in newest.items()
+        if report is None
+        or (source, end, None) not in newest
+        or row.revision > newest[(source, end, None)].revision
+    ]
+    reviewed_windows: list[tuple[date, date, ResearchDataset, ReviewReceiptView]] = []
+    for row in selected_rows:
+        envelope = (
+            _valid_review_envelope(row, expected_company_key=expected_company_key)
+            if row.source == REVIEWED_ANNUAL_SOURCE
+            else None
         )
+        if envelope is not None:
+            period_ends = [fact.period.end for fact in dataset_facts(row)]
+            if period_ends:
+                reviewed_windows.append((min(period_ends), max(period_ends), row, envelope))
+    latest_reviewed = max(
+        reviewed_windows,
+        key=lambda item: (
+            item[3].latest_period_end,
+            item[3].checked_on,
+            item[2].revision,
+            item[2].id or 0,
+        ),
+        default=None,
     )
+    if latest_reviewed is not None:
+        reviewed_windows = [latest_reviewed]
+    # The reviewed package contains an authoritative multi-year fact selection.
+    # Suppress legacy provider versions inside that exact covered window to
+    # avoid duplicate scope-conflict inputs, while retaining older history and
+    # newer provider periods beyond the verified horizon.
+    selected_rows = [
+        row for row in selected_rows
+        if (latest_reviewed is not None and row.id == latest_reviewed[2].id)
+        or row.period_end is None
+        or not any(start <= row.period_end <= end for start, end, _, _ in reviewed_windows)
+    ]
+    return tuple(sorted(selected_rows, key=lambda row: (row.period_end or date.min, row.source)))
+
+
+def _valid_review_envelope(
+    dataset: ResearchDataset, *, expected_company_key: str | None
+) -> ReviewReceiptView | None:
+    """Validate the review envelope against this immutable dataset's facts.
+
+    A `review` flag by itself is not evidence. The reserved source, schema,
+    company, canonical fact hashes, period horizon and actual import timestamp
+    must agree before its checked date can be surfaced.
+    """
+
+    if dataset.source != REVIEWED_ANNUAL_SOURCE or dataset.kind != ANNUAL_FACTS:
+        return None
+    if dataset.subject_kind != COMPANY_SUBJECT or dataset.schema_version != SCHEMA_VERSION:
+        return None
+    review = dataset.payload.get("review")
+    if not isinstance(review, dict):
+        return None
+    if review.get("schema_version") != 1 or review.get("status") != "complete":
+        return None
+    company_key = review.get("company_key")
+    if not isinstance(company_key, str) or not company_key:
+        return None
+    if expected_company_key is not None and company_key != expected_company_key:
+        return None
+    manifest = review.get("manifest_sha256")
+    if not isinstance(manifest, str) or len(manifest) != 64 or any(
+        character not in "0123456789abcdef" for character in manifest
+    ):
+        return None
+    checked_on = _iso_date(review.get("checked_on"))
+    latest_end = _iso_date(review.get("latest_period_end"))
+    if checked_on is None or latest_end is None or checked_on > dataset.captured_at.date():
+        return None
+    if review.get("latest_published_on") is not None and _iso_date(
+        review.get("latest_published_on")
+    ) is None:
+        return None
+    latest_published = _iso_date(review.get("latest_published_on"))
+    if latest_published is not None and (latest_published > checked_on or latest_end > latest_published):
+        return None
+    if not isinstance(review.get("issues"), list) or review["issues"]:
+        return None
+    for key in (
+        "documents", "fact_evidence", "superseded_facts", "equity_reconciliations",
+        "equity_scope_reviews", "conflict_resolutions",
+    ):
+        if not isinstance(review.get(key), list):
+            return None
+    documents = review["documents"]
+    evidence = review["fact_evidence"]
+    document_raw_refs = {
+        document.get("id"): document.get("raw_ref")
+        for document in documents
+        if isinstance(document, dict)
+        and isinstance(document.get("id"), str)
+        and isinstance(document.get("raw_ref"), str)
+    }
+    document_ids = set(document_raw_refs)
+    if not documents or len(document_ids) != len(documents):
+        return None
+    for document in documents:
+        raw_ref = document.get("raw_ref")
+        digest = document.get("sha256")
+        if (
+            not isinstance(raw_ref, str)
+            or not raw_ref
+            or "\\" in raw_ref
+            or PurePosixPath(raw_ref).is_absolute()
+            or ".." in PurePosixPath(raw_ref).parts
+            or not isinstance(digest, str)
+            or len(digest) != 64
+            or any(character not in "0123456789abcdef" for character in digest)
+        ):
+            return None
+    calculation_refs: set[str] = set()
+    for reconciliation in review["equity_reconciliations"]:
+        if not isinstance(reconciliation, Mapping):
+            return None
+        try:
+            evaluation = evaluate_equity_reconciliation(reconciliation)
+        except (TypeError, ValueError):
+            return None
+        calculation_refs.add(evaluation["calculation_ref"])
+    for item in evidence:
+        if not isinstance(item, dict) or not isinstance(item.get("references"), list):
+            return None
+        references = item["references"]
+        if not references:
+            return None
+        for reference in references:
+            if not isinstance(reference, dict):
+                return None
+            if reference.get("kind") == "derived_calculation":
+                digest = reference.get("calculation_ref")
+                if (
+                    not isinstance(digest, str)
+                    or digest not in calculation_refs
+                ):
+                    return None
+            else:
+                document_id = reference.get("document_id")
+                if (
+                    document_id not in document_ids
+                    or reference.get("raw_ref") != document_raw_refs[document_id]
+                    or not isinstance(reference.get("locator"), (str, Mapping))
+                    or not isinstance(reference.get("excerpt"), str)
+                ):
+                    return None
+        equivalents = item.get("equivalent_facts", [])
+        if not isinstance(equivalents, list):
+            return None
+        for equivalent in equivalents:
+            if (
+                not isinstance(equivalent, dict)
+                or not isinstance(equivalent.get("fact"), dict)
+                or not isinstance(equivalent.get("fact_sha256"), str)
+                or not isinstance(equivalent.get("references"), list)
+                or not equivalent["references"]
+            ):
+                return None
+            alternate_hash = hashlib.sha256(
+                json.dumps(
+                    equivalent["fact"], ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                ).encode("utf-8")
+            ).hexdigest()
+            if alternate_hash != equivalent["fact_sha256"]:
+                return None
+            for reference in equivalent["references"]:
+                if (
+                    not isinstance(reference, dict)
+                    or reference.get("document_id") not in document_ids
+                    or reference.get("raw_ref") != document_raw_refs[reference.get("document_id")]
+                    or not isinstance(reference.get("locator"), (str, Mapping))
+                    or not isinstance(reference.get("excerpt"), str)
+                ):
+                    return None
+    try:
+        facts = dataset_facts(dataset)
+    except (TypeError, ValueError):
+        return None
+    if any(fact.verification != Verification.VERIFIED for fact in facts):
+        return None
+    fact_by_hash = {
+        hashlib.sha256(
+            json.dumps(
+                fact_to_payload(fact), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+        ).hexdigest(): fact
+        for fact in facts
+    }
+    supplied_hashes = set()
+    for entry in evidence:
+        if not isinstance(entry, dict) or not isinstance(entry.get("fact_sha256"), str):
+            return None
+        if entry.get("fact_sha256") in supplied_hashes:
+            return None
+        supplied_hashes.add(entry["fact_sha256"])
+    if not fact_by_hash or set(fact_by_hash) != supplied_hashes:
+        return None
+    for item in evidence:
+        fact = fact_by_hash[item["fact_sha256"]]
+        for reference in item["references"]:
+            if reference.get("kind") == "derived_calculation" and (
+                fact.provenance.source != "material.equity_reconciliation"
+                or reference.get("calculation_input_hash") != fact.provenance.original_hash
+            ):
+                return None
+            if reference.get("kind") != "derived_calculation":
+                locator = reference.get("locator")
+                if fact.original_locator is not None:
+                    canonical_locator = (
+                        locator
+                        if isinstance(locator, str)
+                        else json.dumps(
+                            locator, sort_keys=True, separators=(",", ":")
+                        )
+                    )
+                    if canonical_locator != fact.original_locator:
+                        return None
+        for equivalent in item.get("equivalent_facts", []):
+            alternate = equivalent["fact"]
+            # An equivalent rendering is proof for the selected fact only when
+            # its canonical semantics and value agree; it must never become a
+            # second selected application fact.
+            try:
+                alternate_fact = fact_from_payload(alternate)
+            except (AttributeError, TypeError, ValueError):
+                return None
+            if (
+                alternate_fact.metric != fact.metric
+                or (
+                    alternate_fact.period.start,
+                    alternate_fact.period.end,
+                    alternate_fact.period.basis,
+                    alternate_fact.period.days,
+                ) != (
+                    fact.period.start,
+                    fact.period.end,
+                    fact.period.basis,
+                    fact.period.days,
+                )
+                or alternate_fact.value != fact.value
+                or alternate_fact.semantics.metric != fact.semantics.metric
+                or alternate_fact.semantics.accounting_standard != fact.semantics.accounting_standard
+                or alternate_fact.semantics.reporting_scope != fact.semantics.reporting_scope
+                or alternate_fact.semantics.equity_scope != fact.semantics.equity_scope
+                or alternate_fact.semantics.per_share_basis != fact.semantics.per_share_basis
+                or alternate_fact.provenance.source != fact.provenance.source
+                or alternate_fact.verification != fact.verification
+                or alternate_fact.conflict != fact.conflict
+                or alternate_fact.applicability != fact.applicability
+                or alternate_fact.conflict_note != fact.conflict_note
+            ):
+                return None
+            if alternate_fact.original_locator is not None:
+                for reference in equivalent["references"]:
+                    locator = reference["locator"]
+                    canonical_locator = (
+                        locator if isinstance(locator, str)
+                        else json.dumps(locator, sort_keys=True, separators=(",", ":"))
+                    )
+                    if canonical_locator != alternate_fact.original_locator:
+                        return None
+    annual_ends = [fact.period.end for fact in facts if fact.period.basis.value == "annual"]
+    if not annual_ends or max(annual_ends) != latest_end:
+        return None
+    if dataset.period_end is not None and dataset.period_end != latest_end:
+        return None
+    latest_start = review.get("latest_period_start")
+    if latest_start is not None:
+        start_date = _iso_date(latest_start)
+        latest_fact_starts = [
+            fact.period.start for fact in facts
+            if fact.period.end == latest_end and fact.period.start is not None
+        ]
+        if start_date is None or (latest_fact_starts and start_date not in latest_fact_starts):
+            return None
+    return ReviewReceiptView(
+        checked_on=checked_on,
+        latest_period_end=latest_end,
+        manifest_sha256=manifest,
+        company_key=company_key,
+    )
+
+
+def _iso_date(value: object) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.isoformat() == value else None
+
+
+def _valid_review_receipts(
+    *,
+    company_id: int,
+    datasets: Sequence[ResearchDataset],
+    company_key: str,
+) -> dict[int, ReviewReceiptView]:
+    """Validated review envelopes attached to immutable imported datasets."""
+
+    candidate_reviews = {
+        row.id: envelope
+        for row in datasets
+        if (envelope := _valid_review_envelope(row, expected_company_key=company_key)) is not None
+        and row.subject_id == company_id
+    }
+    if not candidate_reviews:
+        return {}
+    return candidate_reviews
+
+
+async def _freshness(
+    session: AsyncSession,
+    *,
+    listing_id: int,
+    datasets: Sequence[ResearchDataset],
+    review_acquisitions: dict[int, ReviewReceiptView],
+    max_period: date | None,
+    latest_period_end: date | None,
+    latestness: str,
+    latestness_checked_on: date | None,
+) -> tuple[FreshnessView, RefreshLifecycleView]:
+    """Read request, worker attempt, provider success, import and review times."""
+
+    runs = (
+        await session.execute(
+            select(PipelineRun)
+            .where(PipelineRun.kind == MATERIAL_COLLECTION, PipelineRun.listing_id == listing_id)
+            .order_by(PipelineRun.created_at.desc(), PipelineRun.id.desc())
+        )
+    ).scalars().all()
+    latest = runs[0] if runs else None
+    last_success: datetime | None = None
+    for run in runs:
+        if run.status not in {"success", "partial"} or run.finished_at is None:
+            continue
+        metadata = run.metadata_json if isinstance(run.metadata_json, dict) else {}
+        source_status = metadata.get("source_status")
+        saved = metadata.get("saved")
+        if not isinstance(source_status, dict) or not isinstance(saved, list):
+            continue
+        saved_ids = {
+            row.get("dataset_id") for row in saved
+            if isinstance(row, dict) and isinstance(row.get("dataset_id"), int)
+        }
+        if not saved_ids:
+            continue
+        actual = [
+            row for row in datasets
+            if row.id in saved_ids
+            and row.source in {SOURCE_EASTMONEY_HK, SOURCE_SEC_COMPANYFACTS}
+            and source_status.get(row.source) == "saved"
+            and dataset_facts(row)
+        ]
+        if actual:
+            last_success = run.finished_at
+            break
+    last_review = max(
+        (item.checked_on for item in review_acquisitions.values()),
+        default=None,
+    )
+    imported_at = max(
+        (row.captured_at for row in datasets if row.source == REVIEWED_ANNUAL_SOURCE),
+        default=None,
+    )
+    refresh = RefreshLifecycleView(
+        run_id=None if latest is None else latest.id,
+        status=None if latest is None else latest.status,
+        reason=None if latest is None else _refresh_reason(latest.status, latest.request_json),
+            started_at=None if latest is None else _as_utc(latest.claimed_at),
+            completed_at=None if latest is None else _as_utc(latest.finished_at),
+    )
+    source_states = _source_states()
+    for source in source_states:
+        source_states[source]["enabled"] = online_refresh_enabled()
+        source_states[source]["state"] = "enabled" if online_refresh_enabled() else "disabled"
+    return (
+        FreshnessView(
+            last_requested_at=None if latest is None else _as_utc(latest.created_at),
+            last_attempt_at=_as_utc(
+                max((row.claimed_at for row in runs if row.claimed_at), default=None)
+            ),
+            last_success_at=_as_utc(last_success),
+            last_imported_at=_as_utc(imported_at),
+            last_verified_on=last_review,
+            latest_period_end=max_period,
+            latestness=latestness,
+            latestness_checked_on=latestness_checked_on,
+            sources=source_states,
+        ),
+        refresh,
+    )
+
+
+def _refresh_reason(status: str, request: object) -> str | None:
+    if status == "failed":
+        return "刷新运行失败"
+    if status == "partial":
+        return "部分来源未完成"
+    reason = request.get("reason") if isinstance(request, dict) else None
+    return reason if isinstance(reason, str) else None
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    """Normalize stored instants to explicit UTC; DB-naive values are UTC by convention."""
+
+    if value is None:
+        return None
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _source_states() -> dict[str, dict[str, str | bool]]:
+    return {
+        "hk_annual_reports": {"enabled": False, "licensing": "unknown", "state": "disabled"},
+        "us_issuer_facts": {"enabled": False, "licensing": "unknown", "state": "disabled"},
+    }
 
 
 async def _missing_archive_sources(
@@ -561,7 +1079,10 @@ async def _missing_archive_sources(
         if isinstance(link, dict) and isinstance(link.get("id"), int)
     }
     return tuple(
-        sorted({dataset.source for dataset in datasets if dataset.id not in linked_ids})
+        sorted({
+            dataset.source for dataset in datasets
+            if dataset.id not in linked_ids and dataset.source != REVIEWED_ANNUAL_SOURCE
+        })
     )
 
 
@@ -635,9 +1156,18 @@ def _fact_view(dataset: ResearchDataset, fact: FactRecord) -> FactView:
         definition=_definition(fact),
         verification=fact.verification.value,
         conflict=fact.conflict,
-        source=SOURCE_DOCUMENT_LABELS.get(dataset.source, OTHER_DOCUMENT_LABEL),
+        source=(
+            "复核计算"
+            if fact.provenance.source == "material.equity_reconciliation"
+            else SOURCE_DOCUMENT_LABELS.get(dataset.source, OTHER_DOCUMENT_LABEL)
+        ),
         source_date=_source_date(fact),
         locator=fact.original_locator,
+        evidence_kind=(
+            "derived_calculation"
+            if fact.provenance.source == "material.equity_reconciliation"
+            else "reported"
+        ),
     )
 
 
@@ -717,7 +1247,7 @@ def _capabilities(*, covered: bool, has_material: bool) -> dict[str, bool]:
     """The capability bits; not-delivered capabilities stay ``False``.
 
     ``financials`` is true exactly when the security is covered *and* at least
-    one material dataset exists. The conditional capabilities (price, annual PE,
+    one usable financial fact exists. The conditional capabilities (price, annual PE,
     dividends, PB) are not shipped by the first delivery and are therefore
     false; ``online_refresh`` mirrors the handler's licence flag, which decides
     whether a collection run may call upstream at all.
@@ -747,8 +1277,10 @@ def _statuses(
     facts: Sequence[FactView],
     metrics: Sequence[MetricView],
     capabilities: dict[str, bool],
-    newest_period_end: date | None,
-    today: date,
+    latestness: str,
+    refresh_status: str | None,
+    fiscal_period_ends: tuple[date, ...],
+    has_valid_original_review: bool,
 ) -> tuple[StatusView, ...]:
     """Every applicable business status, in the fixed report order.
 
@@ -773,6 +1305,8 @@ def _statuses(
     candidates = [fact for fact in facts if fact.verification == Verification.CANDIDATE]
     if candidates:
         statuses.append(_status("partial_verification"))
+    if facts and not has_valid_original_review:
+        statuses.append(_status("awaiting_original_review"))
     not_applicable = [metric.label for metric in metrics if metric.status == "not_applicable"]
     if not_applicable:
         statuses.append(_status("metric_not_applicable", affected=tuple(not_applicable)))
@@ -784,13 +1318,94 @@ def _statuses(
                 affected=tuple(FACT_LABELS.get(metric, metric) for metric in conflicts),
             )
         )
-    if newest_period_end is not None and newest_period_end < today - timedelta(
-        days=MATERIAL_STALE_AFTER_DAYS
-    ):
+    if facts and (not _has_four_continuous_years(fiscal_period_ends) or _latest_category_count(facts) < 6):
+        statuses.append(_status("partial_coverage"))
+    if latestness == "stale":
         statuses.append(_status("material_stale"))
+    elif latestness == "unknown":
+        statuses.append(_status("latestness_unknown"))
+    if refresh_status == "failed":
+        statuses.append(_status("failed_refresh"))
     if not capabilities["online_refresh"]:
         statuses.append(_status("online_refresh_disabled"))
     return tuple(statuses)
+
+
+def _metric_coverage(
+    facts: Sequence[FactView], metrics: Sequence[MetricView]
+) -> dict[str, MetricCoverageView]:
+    """Per-core-metric applicability and usable fact evidence, separate from N/A."""
+
+    inputs: dict[str, frozenset[str]] = {
+        "revenue_yoy": frozenset({"revenue_operating", "revenue_net_credit", "revenue_gross"}),
+        "revenue_cagr_3y": frozenset({"revenue_operating", "revenue_net_credit", "revenue_gross"}),
+        "roe_avg_equity": frozenset({"profit_parent", "profit_ordinary_shareholders", "net_profit", "equity_parent", "equity_ordinary"}),
+        "debt_ratio": frozenset({"total_assets", "total_liabilities"}),
+        "cfo_to_profit": frozenset({"operating_cash_flow", "profit_parent", "profit_ordinary_shareholders", "net_profit"}),
+        "fcf_simple": frozenset({"operating_cash_flow", "capex_ppe"}),
+    }
+    output: dict[str, MetricCoverageView] = {}
+    for metric in metrics:
+        related = [fact for fact in facts if fact.metric in inputs.get(metric.key, frozenset())]
+        usable = [fact for fact in related if fact.amount is not None and fact.conflict != "unresolved"]
+        verified = [fact for fact in usable if fact.verification == Verification.VERIFIED]
+        candidate = [fact for fact in usable if fact.verification == Verification.CANDIDATE]
+        applicable = metric.status != "not_applicable"
+        if not applicable:
+            state = "not_applicable"
+        elif not usable:
+            state = "missing"
+        elif verified and candidate:
+            state = "mixed"
+        elif verified:
+            state = "verified"
+        else:
+            state = "candidate"
+        output[metric.key] = MetricCoverageView(
+            applicable=applicable,
+            evidence_status=state,
+            usable_facts=len(usable),
+            verified_facts=len(verified),
+        )
+    return output
+
+
+def _latest_category_count(facts: Sequence[FactView]) -> int:
+    """How many required latest-period categories have direct usable evidence.
+
+    Coverage is distinct from calculability: a validated explicit N/A/missing
+    fact records coverage, while ``metric_coverage`` separately says whether
+    a value can be calculated. Liabilities are not one of the acceptance
+    package's six required categories; operating cash flow and capex are.
+    """
+
+    if not facts:
+        return 0
+    latest = max(fact.period_end for fact in facts)
+    latest_facts = [
+        fact for fact in facts
+        if fact.period_end == latest
+        and fact.conflict != "unresolved"
+        and (fact.amount is not None or fact.missing_reason is not None)
+    ]
+    metrics = {fact.metric for fact in latest_facts}
+    categories = (
+        bool(metrics & {"revenue_operating", "revenue_gross", "revenue_net_credit"}),
+        bool(metrics & {"net_profit", "profit_parent", "profit_ordinary_shareholders"}),
+        "total_assets" in metrics,
+        bool(metrics & {"total_equity", "equity_parent", "equity_ordinary"}),
+        "operating_cash_flow" in metrics,
+        "capex_ppe" in metrics,
+    )
+    return sum(categories)
+
+
+def _has_four_continuous_years(period_ends: tuple[date, ...]) -> bool:
+    ordered = sorted(set(period_ends))
+    return len(ordered) >= 4 and all(
+        300 <= (right - left).days <= 400
+        for left, right in zip(ordered[-4:-1], ordered[-3:], strict=True)
+    )
 
 
 def _status(code: str, *, affected: tuple[str, ...] | None = None) -> StatusView:

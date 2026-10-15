@@ -346,7 +346,9 @@ async def test_covered_listing_without_material_asks_for_collection(api_client) 
     }
 
 
-async def test_material_uses_real_fiscal_years_and_keeps_price_missing(api_client, tmp_path) -> None:
+async def test_material_uses_real_fiscal_years_and_keeps_price_missing(
+    api_client, tmp_path
+) -> None:
     seeded = await seed_listings()
     await store_apple_material(tmp_path, seeded["NASDAQ/AAPL"])
     response = api_client.get(url_context(seeded["NASDAQ/AAPL"]), headers=H)
@@ -413,7 +415,9 @@ async def test_bank_material_reports_not_applicable_metrics_and_missing_amounts(
     assert missing["locator"] is None
 
 
-async def test_material_stale_status_tracks_the_real_period_lag(api_client, tmp_path) -> None:
+async def test_calendar_age_cannot_establish_latestness_without_original_review(
+    api_client, tmp_path
+) -> None:
     seeded = await seed_listings()
     await store_hsbc_material(tmp_path, seeded["HKEX/00005"])
     url = url_context(seeded["HKEX/00005"])
@@ -424,7 +428,10 @@ async def test_material_stale_status_tracks_the_real_period_lag(api_client, tmp_
     with freeze_time(TODAY):
         stale = api_client.get(url, headers=H)
     assert stale.status_code == 200
-    assert "material_stale" in codes(stale.json())
+    assert "material_stale" not in codes(stale.json())
+    assert "latestness_unknown" in codes(stale.json())
+    assert stale.json()["freshness"]["last_verified_on"] is None
+    assert stale.json()["freshness"]["latestness"] == "unknown"
 
 
 async def test_capability_bits_follow_the_online_refresh_flag(api_client, monkeypatch) -> None:
@@ -441,9 +448,7 @@ async def test_capability_bits_follow_the_online_refresh_flag(api_client, monkey
     assert body["capabilities"]["pb"] is False  # still not delivered
 
 
-async def test_unresolved_source_conflict_is_visible_and_not_resolved(
-    api_client, tmp_path
-) -> None:
+async def test_unresolved_source_conflict_is_visible_and_not_resolved(api_client, tmp_path) -> None:
     """A conflicting source value is shown as such and never averaged or picked."""
 
     seeded = await seed_listings()
@@ -665,7 +670,9 @@ def test_financial_context_requires_authentication(api_client) -> None:
 
 def test_refresh_requires_authentication(api_client) -> None:
     assert api_client.post(url_refresh(1), json={}).status_code == 401
-    assert api_client.post(url_refresh(1), headers={"X-API-Key": "nope"}, json={}).status_code == 401
+    assert (
+        api_client.post(url_refresh(1), headers={"X-API-Key": "nope"}, json={}).status_code == 401
+    )
 
 
 # --- the import-graph walker ---------------------------------------------------

@@ -199,6 +199,8 @@ ia materials verify-annual \
 [`18-hk2-01-02-acceptance.md`](plans/hk-us-expansion/18-hk2-01-02-acceptance.md) 为准。
 HK2-03 指标发布准备及 HK2-04 年度补验的本轮结果见
 [`21-hk2-03-04-acceptance.md`](plans/hk-us-expansion/21-hk2-03-04-acceptance.md)。
-最新 HK2-04 三项 P0 收口及 HK2-07 开工评估见
+HK2-04 三项 P0 收口及 HK2-07 开工评估见
 [`25-hk2-04-closeout-acceptance.md`](plans/hk-us-expansion/25-hk2-04-closeout-acceptance.md)。
+最新 HK2-07 离线实际导入、状态时间契约及八家桌面/移动浏览器验收见
+[`27-hk2-07-offline-acceptance.md`](plans/hk-us-expansion/27-hk2-07-offline-acceptance.md)。在线刷新继续关闭，生产环境尚未迁移或导入。
 来源启用和后续产品能力仍须分别验收。

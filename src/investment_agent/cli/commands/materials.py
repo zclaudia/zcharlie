@@ -1,6 +1,7 @@
 """Offline administration of the checked HK/US financial material."""
 
 import json
+from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,8 @@ def _run(pilot_list: Path, source_dir: Path | None, company_keys: list[str]) -> 
     if unknown:
         raise typer.BadParameter(f"unknown company keys: {unknown}", param_hint="--company-key")
     selected = tuple(
-        identity for identity in identities
+        identity
+        for identity in identities
         if not company_keys or identity.company_key in company_keys
     )
     settings = bootstrap_settings()
@@ -67,7 +69,9 @@ def _run(pilot_list: Path, source_dir: Path | None, company_keys: list[str]) -> 
     try:
         output = run_with_engine(settings.database_url, main)
     except OperationalError as exc:
-        typer.echo("Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True)
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
         raise typer.Exit(1) from exc
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -142,7 +146,9 @@ def replay_materials(
     try:
         output = run_with_engine(settings.database_url, main)
     except OperationalError as exc:
-        typer.echo("Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True)
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
         raise typer.Exit(1) from exc
     except (ReplayError, ValueError) as exc:
         typer.echo(str(exc), err=True)
@@ -182,7 +188,9 @@ def prepare_publication(
     try:
         output = run_with_engine(settings.database_url, main)
     except OperationalError as exc:
-        typer.echo("Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True)
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
         raise typer.Exit(1) from exc
     except ValueError as exc:
         typer.echo(str(exc), err=True)
@@ -211,4 +219,67 @@ def verify_annual(
     )
     typer.echo(json.dumps(output, ensure_ascii=False, indent=2))
     if not output["complete"]:
+        raise typer.Exit(2)
+
+
+@app.command("import-reviewed")
+def import_reviewed_materials(
+    manifest: Path = typer.Option(..., exists=True, dir_okay=False),  # noqa: B008
+    source_root: Path = typer.Option(..., exists=True, file_okay=False),  # noqa: B008
+    company_key: list[str] = typer.Option(  # noqa: B008
+        [],
+        help="Import selected controlled companies; the complete source package is still verified",
+    ),
+) -> None:
+    """Verify saved originals and import reviewed annual facts without upstream requests."""
+    from investment_agent.materials.reviewed_import import import_reviewed_annual
+
+    identities = load_pilot_identities(DEFAULT_PILOT_LIST_PATH)
+    unknown = sorted(set(company_key) - {item.company_key for item in identities})
+    if unknown:
+        raise typer.BadParameter(f"unknown company keys: {unknown}", param_hint="--company-key")
+    selected = tuple(
+        item for item in identities if not company_key or item.company_key in company_key
+    )
+    settings = bootstrap_settings()
+
+    async def main() -> dict[str, Any]:
+        async with session_scope() as session:
+            setup = await initialize_pilot(session, identities)
+            report = await import_reviewed_annual(
+                session,
+                manifest_path=manifest,
+                source_root=source_root,
+                data_dir=settings.data_dir,
+                identities=selected,
+                company_ids=setup.company_ids,
+            )
+            return {
+                "listings": {
+                    f"{market}/{ticker}": item.id
+                    for (market, ticker), item in setup.listings.items()
+                },
+                "company_ids": setup.company_ids,
+                "bindings_created": setup.bindings_created,
+                "scope": "all_controlled" if len(selected) == len(identities) else "subset",
+                "datasets_created": sum(item.created for item in report.saved),
+                "datasets_reused": sum(not item.created for item in report.saved),
+                **asdict(report),
+            }
+
+    try:
+        output = run_with_engine(settings.database_url, main)
+    except OperationalError as exc:
+        typer.echo(
+            "Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True
+        )
+        raise typer.Exit(1) from exc
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps(output, ensure_ascii=False, indent=2, default=str))
+    if output.get("problems") or any(
+        company.get("status") != "complete" or not company.get("imported")
+        for company in output.get("companies", [])
+    ):
         raise typer.Exit(2)

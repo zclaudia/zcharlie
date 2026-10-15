@@ -18,6 +18,7 @@ answered with an explicit error instead of an invented view.
 from __future__ import annotations
 
 import re
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final
 
@@ -54,6 +55,22 @@ from investment_agent.web.session import (
 
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
+
+
+def _financial_timestamp(value: date | datetime | None) -> str:
+    """Format financial event times to whole-second UTC; preserve review dates."""
+
+    if value is None:
+        return "未知"
+    if isinstance(value, datetime):
+        stamp = value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        return stamp.strftime("%Y-%m-%d %H:%M:%S UTC")
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)
+
+
+templates.env.filters["financial_timestamp"] = _financial_timestamp
 
 router = APIRouter(prefix="/app", tags=["web"], include_in_schema=False)
 
@@ -101,6 +118,10 @@ STATUS_LABELS: Final[dict[str, str]] = {
     "material_stale": "资料待更新",
     "online_refresh_disabled": "在线刷新未开启",
     "raw_archive_missing": "原件归档不完整",
+    "partial_coverage": "资料覆盖不完整",
+    "awaiting_original_review": "原件待核对",
+    "latestness_unknown": "最新状态未核实",
+    "failed_refresh": "最近刷新失败",
 }
 """Business wording of every read-model status code (no supplier/run identifier)."""
 
@@ -135,6 +156,40 @@ FINANCIAL_LABELS: Final[dict[str, dict[str, str]]] = {
     "period_basis": PERIOD_BASIS_LABELS,
     "unit": UNIT_LABELS,
     "unknown": UNKNOWN_LABELS,
+    "latestness": {
+        "unknown": "未知",
+        "checked_through": "已核对至记录日期",
+        "stale": "有更新待核",
+    },
+    "metric_evidence": {
+        "verified": "已核对证据可用",
+        "candidate": "候选证据可用",
+        "mixed": "候选与已核对并存",
+        "missing": "证据不足",
+        "not_applicable": "不适用",
+        "unknown": "尚未评估",
+    },
+    "sources": {
+        "hk_annual_reports": "港股报告来源",
+        "us_issuer_facts": "美国发行人申报来源",
+    },
+    "licensing": {
+        "unknown": "未确认",
+        "approved": "已确认",
+        "denied": "未获许可",
+    },
+    "refresh_status": {
+        "queued": "排队中",
+        "running": "执行中",
+        "success": "已完成",
+        "partial": "部分完成",
+        "failed": "失败",
+    },
+    "refresh_reason": {
+        "user_refresh": "用户点击刷新",
+        "刷新运行失败": "刷新运行失败",
+        "部分来源未完成": "部分来源未完成",
+    },
 }
 
 INVALID_A_SHARE_COPY = "不是有效的 A 股代码：{ticker}"

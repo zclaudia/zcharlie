@@ -9,9 +9,9 @@ currency travel separately and a missing amount travels as null with its reason.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class FiscalYearOut(BaseModel):
@@ -47,6 +47,8 @@ class FactOut(BaseModel):
     """``none`` / ``unresolved`` / ``resolved``, passed through as stored."""
     source: str
     """Kind of original document (never a supplier endpoint name)."""
+    evidence_kind: str = "reported"
+    """Whether the value is directly reported or a separately evidenced calculation."""
     source_date: date | None = None
     locator: str | None = None
     """Page number, snippet or table locator in the original document."""
@@ -78,6 +80,39 @@ class StatusOut(BaseModel):
     next_step: str
 
 
+class FreshnessOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    last_requested_at: datetime | None = None
+    last_attempt_at: datetime | None = None
+    last_success_at: datetime | None = None
+    last_imported_at: datetime | None = None
+    last_verified_on: date | None = None
+    latest_period_end: date | None = None
+    latestness: str
+    latestness_checked_on: date | None = None
+    sources: dict[str, dict[str, str | bool]] = Field(default_factory=dict)
+
+
+class RefreshLifecycleOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: int | None = None
+    status: str | None = None
+    reason: str | None = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+
+
+class MetricCoverageOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    applicable: bool
+    evidence_status: str
+    usable_facts: int
+    verified_facts: int
+
+
 class FinancialContextResponse(BaseModel):
     """The read-only financial context of one listing."""
 
@@ -103,6 +138,9 @@ class FinancialContextResponse(BaseModel):
     ``facts_verified`` — material coverage and verification coverage are
     counted separately."""
     statuses: tuple[StatusOut, ...] = ()
+    freshness: FreshnessOut = Field(default_factory=lambda: FreshnessOut(latestness="unknown"))
+    refresh: RefreshLifecycleOut = Field(default_factory=RefreshLifecycleOut)
+    metric_coverage: dict[str, MetricCoverageOut] = Field(default_factory=dict)
 
 
 class RefreshBody(BaseModel):

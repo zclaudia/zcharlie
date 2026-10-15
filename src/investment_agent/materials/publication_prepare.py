@@ -168,7 +168,7 @@ async def _prepare(
         subject_kind=COMPANY_SUBJECT,
         subject_id=company.id,
     )
-    current = _current_versions(history)
+    current = _current_versions(history, expected_company_key=identity.company_key)
     if dataset_ids is not None:
         requested = tuple(dict.fromkeys(dataset_ids))
         current_by_id = {row.id: row for row in current}

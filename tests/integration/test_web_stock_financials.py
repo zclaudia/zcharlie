@@ -50,7 +50,18 @@ STATIC = Path("src/investment_agent/web/static")
 
 FORBIDDEN_UPSTREAM = ("eastmoney", "sec.gov", "cik", "accession")
 TRADING_WORDS = (
-    "买入", "卖出", "建仓", "加仓", "减仓", "清仓", "止损", "抄底", "满仓", "割肉", "目标价", "评分",
+    "买入",
+    "卖出",
+    "建仓",
+    "加仓",
+    "减仓",
+    "清仓",
+    "止损",
+    "抄底",
+    "满仓",
+    "割肉",
+    "目标价",
+    "评分",
 )
 
 
@@ -99,14 +110,14 @@ def _amounts(html: str) -> list[str]:
 # --- the covered HK listing with material --------------------------------------
 
 
-async def test_plan_sample_page_00002_hk_renders_report_currency_and_year(api_client, tmp_path) -> None:
+async def test_plan_sample_page_00002_hk_renders_report_currency_and_year(
+    api_client, tmp_path
+) -> None:
     """The plan's named sample page: /app/stocks/00002.HK with CLP's material."""
 
     seeded = await seed_listings()
     years = tuple(year["label"] for year in PILOTS[CLP]["fiscal_years"])
-    await store_material(
-        tmp_path, listing_id=seeded["HKEX/00002"], company_key=CLP, labels=years
-    )
+    await store_material(tmp_path, listing_id=seeded["HKEX/00002"], company_key=CLP, labels=years)
     _login(api_client)
     html = _page(api_client, "00002.HK")
 
@@ -156,7 +167,7 @@ async def test_hk_page_renders_material_currency_years_and_states(api_client, tm
         ("material_missing", "资料待采集"),
         ("partial_verification", "部分数据待核"),
         ("metric_not_applicable", "指标不适用"),
-        ("material_stale", "资料待更新"),
+        ("latestness_unknown", "最新状态未核实"),
         ("online_refresh_disabled", "在线刷新未开启"),
     ):
         assert f'data-status-code="{code}"' in html, code
@@ -255,8 +266,7 @@ async def test_source_date_and_locator_are_shown_per_fact(api_client, tmp_path) 
 
     blocks = _fact_blocks(html, "revenue_net_credit", "2024-12-31")
     assert any(
-        "来源日期 2025-03-18" in block and "原件定位：p.128 合并收益表" in block
-        for block in blocks
+        "来源日期 2025-03-18" in block and "原件定位：p.128 合并收益表" in block for block in blocks
     ), blocks
 
 
@@ -406,7 +416,9 @@ def test_refresh_client_posts_and_never_claims_an_update() -> None:
         pytest.skip("node is not available")
         return
     uri = (STATIC / "financials.js").resolve().as_uri()
-    script = f"const MODULE_URI = {json.dumps(uri)};\n" + """
+    script = (
+        f"const MODULE_URI = {json.dumps(uri)};\n"
+        + """
     class Node {
       constructor(tag) { this.tag = tag; this.attrs = {}; this.children = []; this.listeners = {}; this.textContent = undefined; this.dataset = {}; this.disabled = false; }
       setAttribute(k, v) { this.attrs[k] = String(v); }
@@ -441,6 +453,7 @@ def test_refresh_client_posts_and_never_claims_an_update() -> None:
     }
     console.log(JSON.stringify({ calls, snapshots }));
     """
+    )
     result = subprocess.run(
         [node, "--input-type=module", "-e", script], capture_output=True, text=True, check=False
     )
@@ -459,7 +472,14 @@ def test_refresh_client_posts_and_never_claims_an_update() -> None:
     # A queued batch is never presented as fetched data.
     for snapshot in out["snapshots"]:
         assert "已更新" not in snapshot["text"]
-        for forbidden in ("42", "43", "eastmoney", "sec.companyfacts", "material_collection", "CIK"):
+        for forbidden in (
+            "42",
+            "43",
+            "eastmoney",
+            "sec.companyfacts",
+            "material_collection",
+            "CIK",
+        ):
             assert forbidden not in snapshot["text"], (forbidden, snapshot["text"])
     assert failed["state"] == "error" and "请求失败" in failed["text"]
     assert all(snapshot["enabled"] for snapshot in out["snapshots"])
