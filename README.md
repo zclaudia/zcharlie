@@ -44,7 +44,9 @@ open http://127.0.0.1:8000/app
 # 用 .env 里的 API_KEY 登录；密钥只用于服务端验证，不写入 Cookie。
 ```
 
-Docker 部署：配好 `.env` 后运行 `tools/deploy.sh`，一条命令完成预检、备份、构建、迁移，并启动 api / worker / scheduler 三个服务、验证健康；`tools/deploy.sh status` 查看状态，`tools/deploy.sh rollback` 回退（详见[运维手册 2.1](docs/product/operations.md#21-docker-一键部署--回滚)）。
+生产环境在局域网主机 ai-server（`http://192.168.2.150:8001`）：在开发机的 main 分支运行 `tools/deploy-remote.sh` 推送并部署，`tools/deploy-remote.sh status` / `rollback` 同理（详见[运维手册 2.2](docs/product/operations.md#22-生产环境ai-server)）。
+
+Docker 部署：配好 `.env` 后在部署主机上运行 `tools/deploy.sh`，一条命令完成预检、备份、构建、迁移，并启动 api / worker / scheduler 三个服务、验证健康；`tools/deploy.sh status` 查看状态，`tools/deploy.sh rollback` 回退（详见[运维手册 2.1](docs/product/operations.md#21-docker-一键部署--回滚)）。
 
 Web 内即可完成日常闭环：手动添加观察标的（代码 + 行业 + 报告年度 + 推荐/自选起草模板）→
 在观察池审阅、批准或驳回该股的规则草稿 → 刷新全部 →

@@ -63,6 +63,38 @@ tools/deploy.sh rollback    # 回到上一次部署的镜像（不跑迁移）
 - **回退**：把 `:prev` 标回 `:dev`，只重建 api / worker / scheduler（跳过 `migrate`：旧代码不认识新迁移）。如果上次部署改了数据库迁移版本，脚本拒绝回退，提示先用部署前备份按 [备份与恢复](backup-and-recovery.md) 恢复数据库；确认兼容可加 `--force`。被替换的镜像保存为 `investment-agent:rolled-back`。
 - **回退到加存活检查之前的版本（一次性注意事项）**：worker / scheduler 的存活文件健康检查从 `27b354c`（2026-10-15）开始才有。第一次用 `tools/deploy.sh` 部署时，`:prev` 是这之前的旧镜像，它的 worker / scheduler 不会写存活文件，回退后会一直被判为不健康，脚本等待超时报错——但进程本身是正常在跑的。遇到这种情况用 `docker compose logs worker scheduler` 确认它们在工作即可，或者别回退到那个版本。之后再正常部署一次，`:prev` 就是带存活检查的版本，这个问题不再出现。
 
+### 2.2 生产环境：ai-server
+
+自 2026-10-15 起生产环境在局域网主机 **ai-server**（`192.168.2.150`，Ubuntu 24.04，x86_64），从 Mac 的 colima 迁出。Mac 只做开发，不再运行生产服务。
+
+| 项 | 值 |
+|---|---|
+| Web / API | `http://192.168.2.150:8001`（ai-server 的 8000 被其他服务占用） |
+| 代码目录 | `~/services/zcharlie`、`~/services/ifind-proxy`（普通 git 仓库，`receive.denyCurrentBranch updateInstead`；ai-server 不能访问 GitHub，代码由 Mac push 过去） |
+| 数据库 | 具名卷 `zcharlie-db`（`/app/db/app.db`），制品与通知在 `~/services/zcharlie/data` |
+| ifind-proxy | `ifind-proxy_default` 网络内 `http://ifind-proxy:7100`；局域网 `192.168.2.150:7100`；redis 只发布到 `127.0.0.1:6379` |
+| LLM | 同机 new-api `http://192.168.2.150:3022`（在 `/app/settings` 配置） |
+| 每日备份 | cron `15 19 * * *`（UTC，即北京时间 03:15）→ `~/.local/bin/zcharlie-backup.sh` → `~/backups/YYYY-MM-DD`，日志 `~/logs/zcharlie-backup.log`（见[备份与恢复](backup-and-recovery.md#21-生产环境每日备份ai-server)） |
+
+**部署**（在 Mac 的 checkout 里，main 分支）：
+
+```bash
+tools/deploy-remote.sh             # git push ai-server main，然后在 ai-server 上执行 tools/deploy.sh
+tools/deploy-remote.sh status
+tools/deploy-remote.sh rollback
+```
+
+- 首次在一台开发机上使用：`git remote add ai-server ai-server:services/zcharlie`（`~/.ssh/config` 里要有 `ai-server`）。
+- 只部署已提交的 `main`；推送后脚本核对 ai-server 的 HEAD 与本地一致。ai-server 工作区里已跟踪文件有改动时 push 会被拒绝，不要在 ai-server 上直接改代码。
+- Mac checkout 里有未提交的 `.deploy/remote`（内容 `ai-server`），本机 `tools/deploy.sh deploy|rollback` 会直接拒绝，防止在 Mac 上再起一套服务连着过期数据库重复跑任务；`status` 不受影响。
+- 每台主机的差异文件不在 git 里，换主机时手工拷：`.env`（`SETTINGS_ENCRYPTION_KEY` 必须原样保留，否则库里加密的 key 解不开）、`docker-compose.override.yml`（8001 端口、`zcharlie-db` 卷、`ifind-proxy_default` 网络）。
+- Linux 上 `tools/deploy.sh` 用宿主机 uid/gid 构建镜像（`APP_UID=$(id -u)`），`./data`、`~/backups` 与数据库卷都归部署用户所有；Mac/colima 保持镜像默认 10001。
+- ifind-proxy 的代码改动：在其 Mac checkout 里 `git push ai-server HEAD:main`，再 `ssh ai-server 'cd ~/services/ifind-proxy && docker compose up -d --build'`；它必须先于 zcharlie 启动（外部网络 `ifind-proxy_default` 由它创建）。
+
+**常用操作**（ssh 到 ai-server 后在 `~/services/zcharlie` 下）：`docker compose logs -f worker`、`docker compose exec -T api sqlite3 /app/db/app.db`。ai-server 重启后 docker 随系统启动，服务按 `restart: unless-stopped` 自动拉起。
+
+**迁移记录（2026-10-15）**：停 Mac 服务 → 数据库卷整体 tar 迁移（sha256 一致、112 张表行数一致、`integrity_check` ok）→ rsync `./data` → 在 ai-server 用 `tools/deploy.sh` 启动。Mac 上的容器与 `zcharlie-db` 卷只停未删，保留作回退参考；它停在迁移时刻，不能再启动 worker / scheduler。
+
 ## 3. 调度（Asia/Shanghai，标准 crontab 星期：0 = 周日）
 
 | 任务 | 时间 | 门控 | 说明 |

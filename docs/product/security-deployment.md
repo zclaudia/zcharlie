@@ -22,6 +22,7 @@
 
 ## Docker
 
-- 镜像以非 root 用户（uid/gid 10001，可用 `--build-arg APP_UID/APP_GID` 修改）运行，仅 `/app/data` 可写；Linux 上宿主机 `./data` 需对该 uid 可写。
+- 镜像以非 root 用户（uid/gid 10001，可用 `--build-arg APP_UID/APP_GID` 修改）运行，仅 `/app/data` 可写；Linux 上 `tools/deploy.sh` 自动用宿主机 uid/gid 构建，`./data` 与备份目录归部署用户所有。
 - 代码（`src/`、`alembic/`）打包在镜像内，不再挂载；`config/` 以只读方式挂载。改代码后用 `tools/deploy.sh` 重新部署（从 HEAD 构建、先备份再迁移，见[运维手册 2.1](operations.md#21-docker-一键部署--回滚)）。
 - 端口只发布到 `127.0.0.1:8000`；远程访问请在前面加 TLS 反向代理，并设置 `WEB_COOKIE_SECURE=true`、`WEB_PUBLIC_ORIGIN`。
+- 当前生产环境（ai-server，见[运维手册 2.2](operations.md#22-生产环境ai-server)）经本机 override 以明文 HTTP 发布到局域网 `0.0.0.0:8001`，只适合可信内网；不要映射到公网。ifind-proxy 的 redis 没有密码，只发布到 `127.0.0.1`。

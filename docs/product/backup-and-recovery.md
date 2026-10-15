@@ -37,6 +37,20 @@ docker compose stop          # Compose 部署
 说明：SQLite 的在线备份 API 本身可产出一致快照，但制品目录按文件复制，
 因此先停止写入才能保证"数据库引用的制品 == 备份里的制品"。
 
+### 2.1 生产环境每日备份（ai-server）
+
+生产环境（[运维手册 2.2](operations.md#22-生产环境ai-server)）由 ai-server 的 cron 每天北京时间 03:15
+（`15 19 * * *`，主机时区 UTC）执行 `~/.local/bin/zcharlie-backup.sh`：
+
+- 在线备份，服务不停：先用一次性容器以 SQLite 备份 API 快照数据库，再复制制品，备份引用的制品必然齐全；
+- 写入 `~/backups/YYYY-MM-DD`（按北京时间命名），`verify_backup.py` 校验后把 `app.db` 压缩为 `app.db.zst`（恢复：`zstd -d app.db.zst`）；
+- 保留最近 7 份每日备份 + 最近 4 份周日备份；当天重复执行不会覆盖已有备份，而是先写 `.partial` 再替换；
+- 日志 `~/logs/zcharlie-backup.log`，失败行以 `FAILED:` 开头（没有桌面通知，巡检时 `grep FAILED`）。
+
+`tools/deploy.sh` 每次部署前另存一份到 `~/backups/deploy-<时间>-<提交号>`（保留 5 份）。
+Mac 时期的备份（2026-10-09 起）已拷到 ai-server 的 `~/backups`；Mac 上的 launchd 任务
+`local.zhvala.zcharlie-backup` 已停用。
+
 ### 数据库在 Docker 卷中（macOS + colima 推荐）
 
 Docker 部署在 macOS（colima / Docker Desktop）上时，`./data` 经 virtiofs 挂载，

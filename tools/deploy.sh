@@ -23,6 +23,11 @@
 # changed the schema it refuses unless --force: restore the backup first
 # (docs/product/backup-and-recovery.md).
 #
+# Production runs on ai-server (since 2026-10-15): deploy from a dev machine
+# with tools/deploy-remote.sh. A checkout that is not the production host keeps
+# an untracked .deploy/remote (one line: the production host); deploy and
+# rollback then refuse to start a second stack against a stale database.
+#
 # Machine-specific settings (ports, external networks, the DB volume) stay in
 # docker-compose.override.yml. Env knobs: BACKUP_ROOT (default ~/backups),
 # DEPLOY_WAIT_SECONDS (default 300).
@@ -35,6 +40,7 @@ IMAGE="investment-agent:dev"
 PREV_IMAGE="investment-agent:prev"
 STATE_DIR="$REPO/.deploy"
 STATE_FILE="$STATE_DIR/last.env"
+REMOTE_MARKER="$STATE_DIR/remote"
 BACKUP_ROOT="${BACKUP_ROOT:-$HOME/backups}"
 WAIT_SECONDS="${DEPLOY_WAIT_SECONDS:-300}"
 KEEP_BACKUPS=5
@@ -44,6 +50,12 @@ LONG_RUNNING=(api worker scheduler)
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!!\033[0m %s\n' "$*" >&2; }
 die() { printf '\033[31mxx\033[0m %s\n' "$*" >&2; exit 1; }
+
+refuse_if_remote() {
+    [ -f "$REMOTE_MARKER" ] || return 0
+    die "生产环境在 $(head -n1 "$REMOTE_MARKER")，本机不部署（${REMOTE_MARKER}）。
+   用 tools/deploy-remote.sh ${1:-deploy}；确需在本机运行先删除该文件。"
+}
 
 image_exists() { docker image inspect "$1" >/dev/null 2>&1; }
 
@@ -309,9 +321,12 @@ rollback() {
 cmd="${1:-deploy}"
 [ $# -gt 0 ] && shift
 case "$cmd" in
+    deploy|rollback) refuse_if_remote "$cmd" ;;
+esac
+case "$cmd" in
     deploy) deploy "$@" ;;
     status) docker info >/dev/null 2>&1 || die "docker 未运行"; print_status ;;
     rollback) rollback "$@" ;;
-    -h|--help|help) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' ;;
+    -h|--help|help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "未知命令: $cmd（deploy | status | rollback）" ;;
 esac
