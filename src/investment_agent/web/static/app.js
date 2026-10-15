@@ -22,6 +22,7 @@ import { el, errorText, fmt, fmtNumber, kvTable, statusBadge, table } from "./do
 import {
   FRESHNESS_LABELS,
   QUALITY_FLAG_LABELS,
+  RUN_KIND_LABELS,
   RUN_STAGE_LABELS,
   METRIC_UNITS,
   PROVIDER_LABELS,
@@ -572,7 +573,7 @@ const RUNS_STATS_WINDOW = 100;
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 
 function runsQuery(offset, status) {
-  const params = new URLSearchParams({ limit: String(RUNS_PAGE_SIZE), offset: String(offset) });
+  const params = new URLSearchParams({ limit: String(RUNS_PAGE_SIZE), offset: String(offset), kind: "all" });
   if (status) params.set("status", status);
   return `/research/runs?${params.toString()}`;
 }
@@ -589,7 +590,7 @@ function runsLoadMore(region) {
 
 const RUN_HEADERS = [
   { label: "运行" },
-  { label: "股票" },
+  { label: "任务" },
   { label: "状态" },
   { label: "阶段" },
   { label: "重试", cls: "num" },
@@ -613,6 +614,9 @@ function runSteps(run) {
   });
 }
 
+// 阶段时间线是个股研究流水线专用；其余任务只有「排队 / 已领取」之类的泛化阶段。
+const RESEARCH_RUN_KIND = "ifind_research";
+
 function stepsNode(run) {
   const box = el("ol", { class: "run-steps", "aria-label": "阶段进度" });
   for (const step of runSteps(run)) {
@@ -634,20 +638,29 @@ function duration(startIso, endIso) {
   return `${fmtNumber(seconds / 3600, 1)} 小时`;
 }
 
+// 耗时从被 worker 领取算起；started_at 是入队时间，积压的任务会把排队等待也算进去。
+function runDuration(run) {
+  return duration(run.claimed_at || run.started_at, run.finished_at);
+}
+
 function runTitle(run) {
-  return run.company_name || run.ticker || "（未关联股票）";
+  return run.company_name || run.ticker || label(RUN_KIND_LABELS, run.kind);
 }
 
 // 渲染详情主体：阶段时间线 + 事实 + 错误 + 制品 + 研究结论入口。detail 可为空（尚未加载）。
 function renderRunDetail(container, run, detail) {
   container.replaceChildren();
-  container.appendChild(stepsNode(run));
+  if (run.kind === RESEARCH_RUN_KIND) container.appendChild(stepsNode(run));
   const source = detail || run;
   const list = el("dl", { class: "kv-list run-facts" });
   for (const [key, value] of [
+    ["类型", label(RUN_KIND_LABELS, run.kind)],
     ["股票", source.ticker],
+    ["股票池", source.universe_code],
+    ["参数", source.subtitle],
     ["执行进程", source.worker_id],
-    ["开始时间", formatDateTime(source.started_at)],
+    ["入队时间", formatDateTime(source.started_at)],
+    ["领取时间", formatDateTime(source.claimed_at)],
     ["结束时间", formatDateTime(source.finished_at)],
     ["工作流标签", source.workflow_label],
     ["尝试", `${run.attempt_count}/${run.max_attempts}`],
@@ -703,7 +716,11 @@ function runRows(run) {
 
   const what = el("td", { class: "stock-cell" });
   if (run.ticker) what.appendChild(stockIdent(run.company_name, run.ticker));
-  else what.appendChild(el("span", { class: "faint" }, "（未关联股票）"));
+  else {
+    what.appendChild(el("b", {}, label(RUN_KIND_LABELS, run.kind)));
+    const hint = [run.universe_code, run.subtitle].filter(Boolean).join(" · ");
+    if (hint) what.appendChild(el("small", { class: "muted" }, hint));
+  }
   if (run.needs_agent_review) what.appendChild(el("span", { class: "badge warn" }, "需复核"));
   if (run.meaningful_change_count) what.appendChild(el("span", { class: "badge accent" }, `重要变化 ${run.meaningful_change_count}`));
   if (run.error_summary) what.appendChild(el("small", { class: "run-err" }, summarizeError(run.error_summary).summary));
@@ -715,7 +732,7 @@ function runRows(run) {
   tr.appendChild(el("td", { class: run.stage === "queued" ? "muted" : "" }, run.status === "queued" ? "—" : label(RUN_STAGE_LABELS, run.stage)));
   tr.appendChild(el("td", { class: "num" }, `${run.attempt_count}/${run.max_attempts}`));
   tr.appendChild(el("td", {}, shortStamp(run.started_at)));
-  tr.appendChild(el("td", { class: "num muted" }, duration(run.started_at, run.finished_at) || "—"));
+  tr.appendChild(el("td", { class: "num muted" }, runDuration(run) || "—"));
 
   const toggleCell = el("td", { class: "run-toggle-cell" });
   const toggle = el("button", { type: "button", class: "btn btn-ghost btn-sm icon-btn run-toggle", "aria-expanded": "false", "aria-label": "展开详情" });
@@ -747,6 +764,7 @@ function runRows(run) {
   main.appendChild(title);
   const failed = run.status === "failed";
   const bits = [label(STATUS_LABELS, run.status)];
+  if (!run.ticker) bits.unshift(label(RUN_KIND_LABELS, run.kind));
   if (run.status !== "queued") bits.push(label(RUN_STAGE_LABELS, run.stage));
   bits.push(`${run.attempt_count}/${run.max_attempts} 次`);
   main.appendChild(el("small", { class: failed ? "warn-text" : "" }, bits.join(" · ")));
@@ -766,7 +784,7 @@ function openRunSheet(run) {
   const body = sheet.querySelector("#run-sheet-body");
   if (title) title.textContent = `${runTitle(run)} · #${run.run_id}`;
   if (sub) {
-    const took = duration(run.started_at, run.finished_at);
+    const took = runDuration(run);
     sub.textContent = [formatDateTime(run.started_at), took].filter((part) => part && part !== "—").join(" · ");
   }
   if (status) status.replaceChildren(statusBadge(run.status));
@@ -853,7 +871,7 @@ function kpiCell(text, value, foot, { kind = "", tone = "" } = {}) {
 
 function averageDuration(runs) {
   const spans = runs
-    .map((run) => Date.parse(run.finished_at) - Date.parse(run.started_at))
+    .map((run) => Date.parse(run.finished_at) - Date.parse(run.claimed_at || run.started_at))
     .filter((span) => Number.isFinite(span) && span >= 0);
   if (!spans.length) return "";
   const seconds = Math.round(spans.reduce((sum, span) => sum + span, 0) / spans.length / 1000);
@@ -894,7 +912,12 @@ function renderRunsStats(runs) {
 
 async function loadRunsStats() {
   try {
-    renderRunsStats(await get(`/research/runs?limit=${RUNS_STATS_WINDOW}`));
+    // 排队 / 运行中的任务单独取，避免被最近 100 条已完成任务挤出统计窗口。
+    const query = (extra) => get(`/research/runs?kind=all&limit=${RUNS_STATS_WINDOW}${extra}`);
+    const [recent, queued, running] = await Promise.all([query(""), query("&status=queued"), query("&status=running")]);
+    const byId = new Map();
+    for (const run of [...recent, ...queued, ...running]) byId.set(run.run_id, run);
+    renderRunsStats([...byId.values()]);
   } catch {
     renderRunsStats([]);
   }

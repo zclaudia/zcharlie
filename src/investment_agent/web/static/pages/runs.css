@@ -79,3 +79,5 @@
   .run-row .run-id { font-size: 12px; font-weight: 400; }
   .run-sheet .kv-list { grid-template-columns: minmax(5.5rem, 36%) minmax(0, 1fr); }
 }
+
+.runs-table .stock-cell b, .runs-table .stock-cell small.muted { display: block; }

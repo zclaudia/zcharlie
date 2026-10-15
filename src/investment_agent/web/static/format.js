@@ -407,6 +407,32 @@ export const STATUS_LABELS = Object.freeze({
   warning: "警告",
 });
 
+export const RUN_KIND_LABELS = Object.freeze({
+  ifind_research: "个股研究",
+  ifind_verify: "数据核对",
+  universe_sync: "股票池同步",
+  industry_sync: "行业分类同步",
+  market_snapshot: "行情快照",
+  financial_snapshot: "财务快照",
+  snapshot_backfill: "快照回补",
+  dividend_snapshot: "分红快照",
+  close_quote: "收盘行情",
+  earnings_event: "业绩事件",
+  calendar_probe: "日历探测",
+  material_collection: "材料收集",
+  screen_run: "筛选",
+  rule_draft: "规则草拟",
+  portfolio_valuation: "组合估值",
+  zone_detection: "区间检测",
+  industry_peer_collect: "行业对标采集",
+  agent_turn: "AI 对话",
+  agent_research: "AI 研究",
+  agent_review: "AI 复核",
+  agent_discovery: "AI 发现",
+  discovery: "发现",
+  attribution: "归因",
+});
+
 export const RUN_STAGE_LABELS = Object.freeze({
   queued: "排队",
   claimed: "已领取",
