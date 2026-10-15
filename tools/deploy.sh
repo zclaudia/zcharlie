@@ -16,6 +16,8 @@
 #   4. `docker compose up -d`: the one-shot `migrate` service runs first, then
 #      api, then worker + scheduler once the api is healthy
 #   5. waits for all three to be healthy and checks /healthz reports the new rev
+#   6. `docker image prune -f`: drops dangling images (each deploy leaves the
+#      replaced :prev and the builder stage behind); tagged images stay
 # rollback re-tags :prev as :dev and restarts api/worker/scheduler WITHOUT the
 # migrate step (old code cannot migrate a newer schema). When the failed deploy
 # changed the schema it refuses unless --force: restore the backup first
@@ -261,6 +263,8 @@ REV_BEFORE='${rev_before}'
 REV_AFTER='${rev_after}'
 BACKUP_DIR='${BACKUP_DIR}'
 EOF
+    say "清理悬空镜像"
+    docker image prune -f >/dev/null || warn "清理悬空镜像失败（不影响本次部署）"
     say "部署完成"
     print_status
 }
