@@ -1,5 +1,7 @@
 # 备份与恢复手册（MVP）
 
+港美 HK2-08 M1 的实测矩阵与生产/演练状态区分见 [验收报告](plans/hk-us-expansion/29-hk2-08-m1-acceptance.md)。
+
 适用范围：单机部署的 `zcharlie`（SQLite + `data/` 制品目录）。目标是：
 数据库与制品可以通过 `run_id` 对齐恢复，且恢复后迁移版本、观察池、研究运行、
 快照、diff 与制品全部可读。
@@ -15,12 +17,13 @@ MVP 保留策略：**不自动删除任何原始证据**。备份按日期目录
 | 研究制品（审计真相） | `data/research-runs/<run_id>/` | 原始响应、canonical、scores、报告 |
 | 变化通知 | `data/notifications/` | meaningful-change Markdown |
 | 港美资料与原件归档 | `data/research-material/` | 单文件原件、多响应正文与版本化清单；采集记录和资料版本关联随数据库备份 |
+| 港美复核原件 | `data/reviewed-annual/sources/` | HK2-07 复核导入保存的内容寻址原件，复核索引位于资料 payload，必须随数据库恢复 |
 | 运行时交易日历 | `data/calendars/a_share.yaml`（存在时） | 数据健康页「应用候选」写入的副本，优先于仓库基线 `config/calendars/a_share.yaml`；不备份则恢复后回落到基线（缺年份时 fail-closed） |
 
 数据库与制品必须通过 `run_id` 关联恢复，缺一不可。
 
-港美资料还须恢复数据库引用的 `research-material/` 相对目录。备份工具同时复制该目录，
-并校验其中的正文和嵌套清单；只恢复数据库不能恢复离线重放能力。
+港美资料还须恢复数据库引用的 `research-material/`、`reviewed-annual/` 相对目录。
+备份工具同时复制这些目录及 `calendars/`，逐文件校验正文和嵌套清单；只恢复数据库不能恢复离线重放与原件核对能力。
 
 ## 2. 备份步骤
 
@@ -63,30 +66,53 @@ docker compose start
 ## 3. 恢复步骤
 
 ```bash
-# 1. 停止所有服务，进入全新的或已清空的 data 目录
-mkdir -p restored/data
-# 2. 从备份复制（cp 或 rsync -a）
-cp  ~/backups/2026-10-06/app.db restored/data/app.db
-cp -a ~/backups/2026-10-06/research-runs restored/data/
-cp -a ~/backups/2026-10-06/notifications restored/data/
-# 备份包含港美资料时，同时恢复该目录
-cp -a ~/backups/2026-10-06/research-material restored/data/
-
-# 3. 先校验备份（在任何恢复前）
+# 1. 停止目标环境所有服务；先校验备份，不覆盖现有 data
 .venv/bin/python tools/verify_backup.py --backup-dir ~/backups/2026-10-06
 
-# 4. 以指向恢复目录的配置启动，并确认迁移版本
+# 2. 恢复到不存在的新目录（工具复制前、复制后均校验）
+.venv/bin/python tools/restore_research.py \
+  --backup-dir ~/backups/2026-10-06 --output restored/data
+
+# 3. 以显式指向恢复目录的配置确认迁移版本
 DATABASE_URL=sqlite+aiosqlite:///restored/data/app.db .venv/bin/ia migrate current
 # 迁移版本须与备份记录一致；旧版本恢复后按升级说明执行 ia migrate up。
 
-# 5. 启动 API/worker/scheduler，抽查一条 run 的结果、diff 与制品下载。
+# 4. 港美 M1 环境在启动前做业务完整性检查（报告写到 data 之外）
+.venv/bin/python tools/hk208_release_check.py \
+  --database restored/data/app.db --data-dir restored/data \
+  --report restored/m1-check.json --require-m1
+
+# 5. 检查通过后启动 API，抽查财务页、精确引用及既有 run/diff/制品。
+#    M1 不启动在线采集；worker/scheduler 是否启动按对应环境运行手册执行。
 ```
+
+`restore_research.py` 拒绝已存在的输出目录，先校验清单，再复制到暂存目录，验证后才完成恢复；
+它不迁移数据库、不加载部署配置。校验失败保留备份且不创建成功恢复目录。
+`verify_backup.py` 证明备份文件与清单一致；`hk208_release_check.py` 进一步证明数据库引用的
+复核原件、资料版本与计算事实配套，不以“清单校验通过”代替业务恢复验收。
 
 ## 4. 恢复演练（自动化）
 
 `tests/integration/test_backup_restore.py` 在临时目录完成一次完整演练：
 建库 → 写入观察池与研究运行（含制品）→ 备份 → 校验 → 篡改检测 →
 恢复到新目录 → 校验迁移版本与数据可读。该测试离线运行，属于默认套件。
+
+港美 HK2-08 M1 使用独立的新目录运行，不读取生产 DATABASE_URL/DATA_DIR：
+
+```bash
+PYTHONPATH=src .venv/bin/python tools/hk208_m1_drill.py \
+  --work-dir ./data/hk208-m1-acceptance/run-01 \
+  --manifest config/research_material/annual_validation_2026-10-15.json \
+  --source-root data/hk2-latest-evidence/2026-10-15/raw
+```
+
+工作目录必须不存在；演练按 048 旧库备份 → 升级 head → 受控八家导入与计算准备 → 配套备份 →
+搬迁恢复 → 新进程只读核验执行。真实报告和浏览器结果记录在对应 HK2-08 验收文档；
+本地演练通过不表示已迁移生产库或已开启在线刷新。
+
+若需要恢复到迁移前版本，使用 `restore_research.py` 将 `backup-before-049` 恢复到另一个新目录，
+确认 `ia migrate current` 为 048，并对照备份核验旧行及原件后再决定后续操作；不通过降级迁移覆盖现有数据。
+本次另行恢复的 `rollback-048` 验证结果见上述验收报告。
 
 ## 5. 已知限制
 

@@ -1,5 +1,7 @@
 # MVP 发布清单（签字式验收）
 
+> 港美 HK2-08 M1 的后续本地发布与备份恢复验收见 [29](plans/hk-us-expansion/29-hk2-08-m1-acceptance.md)；下列 MVP 记录保留原日期，生产环境操作状态以新报告为准。
+
 状态日期：2026-10-06。对照 [`engineering-baseline.md`](engineering-baseline.md)
 的 MVP Definition of Done 与 [`mvp-completion-plan.md`](mvp-completion-plan.md)
 第 8 节逐项验收。每项标注通过证据（测试 / 提交 / 人工操作）。
