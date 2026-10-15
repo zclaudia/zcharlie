@@ -162,11 +162,17 @@ preflight() {
 # Builds from `git archive HEAD`, never the working tree, so uncommitted or
 # untracked files (including another session's work in progress) never ship.
 build_image() {
-    local dir status=0 log="$STATE_DIR/build.log"
+    local dir status=0 log="$STATE_DIR/build.log" uid_args=()
+    # On a Linux host the bind mounts (./data, $BACKUP_ROOT) keep host
+    # ownership, so the container runs as the deploying user. colima's
+    # virtiofs maps ownership itself: keep the image default (10001) there.
+    if [ "$(uname -s)" = "Linux" ]; then
+        uid_args=(--build-arg APP_UID="$(id -u)" --build-arg APP_GID="$(id -g)")
+    fi
     dir="$(mktemp -d)"
     mkdir -p "$STATE_DIR"
     git archive --format=tar HEAD | tar -x -C "$dir" \
-        && docker build -t "$IMAGE" --build-arg GIT_SHA="$GIT_SHA" "$dir" >"$log" 2>&1 \
+        && docker build -t "$IMAGE" --build-arg GIT_SHA="$GIT_SHA" "${uid_args[@]}" "$dir" >"$log" 2>&1 \
         || status=$?
     rm -rf -- "$dir"
     if [ "$status" -ne 0 ]; then
