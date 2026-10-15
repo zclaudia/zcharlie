@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import shutil
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -601,7 +601,10 @@ class TwoStageAdapter:
         self.second_stage = True
         if len(raw) < 3:
             return ParseResult(drafts=(), problems=())
-        return ParseResult(drafts=(_draft(source=self.source, subject_id=subject_id),), problems=())
+        draft = replace(
+            _draft(source=self.source, subject_id=subject_id), adapter_version=self.adapter_version
+        )
+        return ParseResult(drafts=(draft,), problems=())
 
 
 async def test_an_adapter_may_ask_for_further_documents_after_a_parse(

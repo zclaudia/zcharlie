@@ -14,9 +14,13 @@ MVP 保留策略：**不自动删除任何原始证据**。备份按日期目录
 | 数据库（状态真相） | `data/app.db` | 迁移版本、观察池、run、快照、diff、通知状态 |
 | 研究制品（审计真相） | `data/research-runs/<run_id>/` | 原始响应、canonical、scores、报告 |
 | 变化通知 | `data/notifications/` | meaningful-change Markdown |
+| 港美资料与原件归档 | `data/research-material/` | 单文件原件、多响应正文与版本化清单；采集记录和资料版本关联随数据库备份 |
 | 运行时交易日历 | `data/calendars/a_share.yaml`（存在时） | 数据健康页「应用候选」写入的副本，优先于仓库基线 `config/calendars/a_share.yaml`；不备份则恢复后回落到基线（缺年份时 fail-closed） |
 
 数据库与制品必须通过 `run_id` 关联恢复，缺一不可。
+
+港美资料还须恢复数据库引用的 `research-material/` 相对目录。备份工具同时复制该目录，
+并校验其中的正文和嵌套清单；只恢复数据库不能恢复离线重放能力。
 
 ## 2. 备份步骤
 
@@ -65,13 +69,15 @@ mkdir -p restored/data
 cp  ~/backups/2026-10-06/app.db restored/data/app.db
 cp -a ~/backups/2026-10-06/research-runs restored/data/
 cp -a ~/backups/2026-10-06/notifications restored/data/
+# 备份包含港美资料时，同时恢复该目录
+cp -a ~/backups/2026-10-06/research-material restored/data/
 
 # 3. 先校验备份（在任何恢复前）
 .venv/bin/python tools/verify_backup.py --backup-dir ~/backups/2026-10-06
 
 # 4. 以指向恢复目录的配置启动，并确认迁移版本
 DATABASE_URL=sqlite+aiosqlite:///restored/data/app.db .venv/bin/ia migrate current
-# 预期输出：012 (head)。若备份来自旧版本，先执行 ia migrate up。
+# 迁移版本须与备份记录一致；旧版本恢复后按升级说明执行 ia migrate up。
 
 # 5. 启动 API/worker/scheduler，抽查一条 run 的结果、diff 与制品下载。
 ```

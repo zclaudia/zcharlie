@@ -44,6 +44,14 @@ from investment_agent.domain.security import (
     ControlledIdentity,
     source_symbol,
 )
+from investment_agent.materials.archive import (
+    ArchiveCapture,
+    DatasetLink,
+    ResponseEvidence,
+    archive_capture,
+    identity_snapshot,
+    record_acquisition,
+)
 from investment_agent.materials.contracts import (
     DatasetDraft,
     MaterialAdapter,
@@ -77,6 +85,7 @@ class ImportReport:
     problems: tuple[str, ...]
     skipped: tuple[str, ...]
     informational: tuple[str, ...] = ()
+    acquisition_ids: tuple[int, ...] = ()
 
 
 async def import_offline_evidence(
@@ -109,10 +118,24 @@ async def import_offline_evidence(
         captured_at=captured_at,
     )
     store = MaterialStore(session, data_dir=Path(data_dir))
-    saved = [await store.save(draft) for draft in batch.drafts]
+    saved: list[SavedDataset] = []
+    acquisition_ids: list[int] = []
+    for source_capture in batch.sources:
+        archived = archive_capture(Path(data_dir), source_capture.capture)
+        links: list[DatasetLink] = []
+        for draft in source_capture.drafts:
+            outcome = await store.save(draft)
+            saved.append(outcome)
+            links.append(DatasetLink(
+                id=outcome.id,
+                revision=outcome.revision,
+                content_hash=outcome.content_hash,
+            ))
+        acquisition = await record_acquisition(session, archived, datasets=links)
+        acquisition_ids.append(acquisition.id)
     return ImportReport(
         saved=tuple(saved), problems=batch.problems, skipped=batch.skipped,
-        informational=batch.informational,
+        informational=batch.informational, acquisition_ids=tuple(acquisition_ids),
     )
 
 
@@ -120,10 +143,18 @@ async def import_offline_evidence(
 class _Batch:
     """Everything one pass over the evidence directory produced."""
 
-    drafts: tuple[DatasetDraft, ...]
+    sources: tuple[_SourceCapture, ...]
     problems: tuple[str, ...]
     skipped: tuple[str, ...]
     informational: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class _SourceCapture:
+    """One source attempt, including its archive manifest and resulting drafts."""
+
+    capture: ArchiveCapture
+    drafts: tuple[DatasetDraft, ...]
 
 
 def _read_evidence_batch(
@@ -136,10 +167,11 @@ def _read_evidence_batch(
 ) -> _Batch:
     """Read, locate and parse the evidence (all blocking IO happens here)."""
 
-    if not root.is_dir():
-        return _Batch((), (f"evidence directory not found: {root}",), ())
-    drafts: list[DatasetDraft] = []
+    root_exists = root.is_dir()
+    sources: list[_SourceCapture] = []
     problems: list[str] = []
+    if not root_exists:
+        problems.append(f"evidence directory not found: {root}")
     skipped: list[str] = []
     informational: list[str] = []
     for identity in identities:
@@ -150,13 +182,15 @@ def _read_evidence_batch(
             continue
         for source, adapter in adapters.items():
             label = f"{identity.company_key}/{source}"
-            source_problem_count = len(problems)
             symbol = source_symbol(identity, source)
             if symbol is None:
                 skipped.append(f"{label}: the pilot list binds no symbol for this source")
                 continue
             raws: list[_LocatedRaw] = []
+            observed: list[_LocatedRaw] = []
             seen: set[str] = set()
+            expected: list[str] = []
+            local_problems: list[str] = []
             result = None
             # SEC discovers submissions shards after parsing the index. Read
             # newly requested files too, with the same bounded rounds as the worker.
@@ -169,16 +203,24 @@ def _read_evidence_batch(
                     break
                 for request in requests:
                     seen.add(request.name)
-                    raw, reason = _locate(
-                        root, request, symbol_dirs=_symbol_dirs(identity, symbol),
-                        source=source,
-                    )
+                    expected.append(request.name)
+                    if root_exists:
+                        raw, reason = _locate(
+                            root, request, symbol_dirs=_symbol_dirs(identity, symbol),
+                            source=source,
+                        )
+                    else:
+                        raw, reason = None, f"evidence directory not found: {root}"
                     if reason is not None:
-                        problems.append(f"{label}: {reason}")
+                        local_problems.append(reason)
+                        if root_exists:
+                            problems.append(f"{label}: {reason}")
                     if raw is not None:
-                        raws.append(raw)
+                        observed.append(raw)
+                        if raw.usable_for_parse:
+                            raws.append(raw)
                 if not raws:
-                    break
+                    continue
                 result = adapter.parse(
                     identity,
                     raw=tuple(raw.as_payload(imported_at=captured_at) for raw in raws),
@@ -190,26 +232,56 @@ def _read_evidence_batch(
                 if request.name not in seen
             ]
             if pending:
-                problems.append(f"{label}: evidence discovery exceeded 3 rounds: {pending}")
+                expected.extend(pending)
+                message = f"evidence discovery exceeded 3 rounds: {pending}"
+                local_problems.append(message)
+                problems.append(f"{label}: {message}")
             if result is None:
                 if not seen:
-                    problems.append(f"{label}: the adapter requested no evidence file")
+                    message = "the adapter requested no evidence file"
+                    local_problems.append(message)
+                    problems.append(f"{label}: {message}")
+                prepared: tuple[DatasetDraft, ...] = ()
+            else:
+                for problem in result.problems:
+                    if problem.startswith(("unmapped_items:", "unmapped")):
+                        informational.append(f"{label}: {problem}")
+                    else:
+                        local_problems.append(problem)
+                        problems.append(f"{label}: {problem}")
+                if not result.drafts and not result.problems:
+                    message = "the adapter produced no dataset"
+                    local_problems.append(message)
+                    problems.append(f"{label}: {message}")
+                prepared = tuple(
+                    _prepare_draft(draft, company_id=company_id, raws=raws, captured_at=captured_at)
+                    for draft in coalesce_annual_tables(result.drafts)
+                )
+            if local_problems:
                 skipped.append(label)
-                continue
-            for problem in result.problems:
-                if problem.startswith(("unmapped_items:", "unmapped")):
-                    informational.append(f"{label}: {problem}")
-                else:
-                    problems.append(f"{label}: {problem}")
-            if not result.drafts and not result.problems:
-                problems.append(f"{label}: the adapter produced no dataset")
-            drafts.extend(
-                _prepare_draft(draft, company_id=company_id, raws=raws, captured_at=captured_at)
-                for draft in coalesce_annual_tables(result.drafts)
-            )
-            if len(problems) > source_problem_count:
-                skipped.append(label)
-    return _Batch(tuple(drafts), tuple(problems), tuple(skipped), tuple(informational))
+            sources.append(_SourceCapture(
+                capture=ArchiveCapture(
+                    identity=identity_snapshot(identity),
+                    source=source,
+                    subject_id=company_id,
+                    adapter_version=adapter.adapter_version,
+                    periods=(),
+                    expected_requests=tuple(expected),
+                    responses=tuple(ResponseEvidence(
+                        name=raw.request_name,
+                        content=raw.content,
+                        source_url=raw.source_url,
+                        media_type=raw.media_type,
+                        http_status=raw.http_status,
+                        fetched_at=raw.fetched_at,
+                        parse_eligible=raw.usable_for_parse,
+                    ) for raw in observed),
+                    problems=tuple(dict.fromkeys(local_problems)),
+                    captured_at=captured_at,
+                ),
+                drafts=prepared,
+            ))
+    return _Batch(tuple(sources), tuple(problems), tuple(skipped), tuple(informational))
 
 
 @dataclass(frozen=True)
@@ -228,6 +300,8 @@ class _LocatedRaw:
     """The sidecar's ``url`` when it has one, else the URL the request asked for."""
     http_status: int
     """Reported HTTP status; ``0`` when the sidecar did not report one."""
+    usable_for_parse: bool = True
+    """False when a sidecar-declared failed/corrupt response must only be archived."""
 
     def as_payload(self, *, imported_at: datetime) -> RawPayload:
         """The adapter-facing payload of this file.
@@ -281,7 +355,8 @@ def _locate(
         return None, f"unreadable evidence file {path.name}: {type(exc).__name__}: {exc}"
 
     def located(
-        *, fetched_at: datetime | None = None, source_url: str = request.url, http_status: int = 0
+        *, fetched_at: datetime | None = None, source_url: str = request.url,
+        http_status: int = 0, usable_for_parse: bool = True,
     ) -> _LocatedRaw:
         return _LocatedRaw(
             request_name=request.name,
@@ -291,6 +366,7 @@ def _locate(
             fetched_at=fetched_at,
             source_url=source_url,
             http_status=http_status,
+            usable_for_parse=usable_for_parse,
         )
 
     sidecar = path.with_name(path.name + META_SUFFIX)
@@ -306,24 +382,51 @@ def _locate(
     if not isinstance(document, dict):
         return located(), f"sidecar {sidecar.name} must be a JSON object"
     status = _sidecar_status(document)
+    sidecar_url = document.get("url")
+    source_url = (
+        sidecar_url.strip()
+        if isinstance(sidecar_url, str) and sidecar_url.strip()
+        else request.url
+    )
     if "status" in document and not 200 <= status < 300:
-        return None, f"{sidecar.name}: rejected HTTP status {status}"
+        return located(
+            fetched_at=_sidecar_timestamp_if_valid(document),
+            source_url=source_url,
+            http_status=status,
+            usable_for_parse=False,
+        ), f"{sidecar.name}: rejected HTTP status {status}"
     expected_hash = document.get("sha256")
     if expected_hash is not None and expected_hash != hashlib.sha256(content).hexdigest():
-        return None, f"{sidecar.name}: response SHA-256 mismatch"
+        return located(
+            fetched_at=_sidecar_timestamp_if_valid(document),
+            source_url=source_url,
+            http_status=status,
+            usable_for_parse=False,
+        ), f"{sidecar.name}: response SHA-256 mismatch"
     expected_bytes = document.get("bytes")
     if expected_bytes is not None and expected_bytes != len(content):
-        return None, f"{sidecar.name}: response byte count mismatch"
+        return located(
+            fetched_at=_sidecar_timestamp_if_valid(document),
+            source_url=source_url,
+            http_status=status,
+            usable_for_parse=False,
+        ), f"{sidecar.name}: response byte count mismatch"
     fetched_at, problem = _sidecar_time(document, sidecar.name)
-    url = document.get("url")
     return (
         located(
             fetched_at=fetched_at,
-            source_url=url if isinstance(url, str) and url.strip() else request.url,
+            source_url=source_url,
             http_status=_sidecar_status(document),
         ),
         problem,
     )
+
+
+def _sidecar_timestamp_if_valid(document: Mapping[str, object]) -> datetime | None:
+    """Return a valid original fetch timestamp for rejected evidence, else unknown."""
+
+    fetched_at, _problem = _sidecar_time(document, "response metadata")
+    return fetched_at
 
 
 def _prepare_draft(

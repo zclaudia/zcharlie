@@ -10,6 +10,8 @@ from sqlalchemy.exc import OperationalError
 from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.domain.security import DEFAULT_PILOT_LIST_PATH, load_pilot_identities
 from investment_agent.materials.bootstrap import import_pilot_materials, initialize_pilot
+from investment_agent.materials.handlers import default_adapters
+from investment_agent.materials.replay import ReplayError, replay_acquisition
 from investment_agent.storage.database import run_with_engine, session_scope
 
 app = typer.Typer(help="Initialize and import controlled HK/US material offline")
@@ -43,12 +45,16 @@ def _run(pilot_list: Path, source_dir: Path | None, company_keys: list[str]) -> 
             }
             if source_dir is not None:
                 report = await import_pilot_materials(
-                    session, identities=selected, company_ids=setup.company_ids,
-                    source_dir=source_dir, data_dir=settings.data_dir,
+                    session,
+                    identities=selected,
+                    company_ids=setup.company_ids,
+                    source_dir=source_dir,
+                    data_dir=settings.data_dir,
                 )
                 output.update(
                     datasets_created=sum(item.created for item in report.saved),
                     datasets_reused=sum(not item.created for item in report.saved),
+                    acquisition_ids=list(report.acquisition_ids),
                     problems=list(report.problems),
                     skipped=list(report.skipped),
                     informational=list(report.informational),
@@ -97,3 +103,47 @@ def import_materials(
     Missing sidecars retain unknown original fetch time. No network calls.
     """
     _run(pilot_list, source_dir, company_key)
+
+
+@app.command("replay")
+def replay_materials(
+    acquisition_id: int = typer.Option(..., min=1, help="Saved acquisition row ID"),
+) -> None:
+    """Reparse one archived acquisition using its saved manifest and response bodies only."""
+
+    try:
+        identities = load_pilot_identities(DEFAULT_PILOT_LIST_PATH)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    settings = bootstrap_settings()
+
+    async def main() -> dict[str, Any]:
+        async with session_scope() as session:
+            report = await replay_acquisition(
+                session,
+                acquisition_id=acquisition_id,
+                data_dir=settings.data_dir,
+                identities=identities,
+                adapters=default_adapters(),
+            )
+            return {
+                "acquisition_id": report.acquisition_id,
+                "datasets_created": sum(item.created for item in report.saved),
+                "datasets_reused": sum(not item.created for item in report.saved),
+                "problems": list(report.problems),
+                "skipped": list(report.skipped),
+                "informational": list(report.informational),
+            }
+
+    try:
+        output = run_with_engine(settings.database_url, main)
+    except OperationalError as exc:
+        typer.echo("Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True)
+        raise typer.Exit(1) from exc
+    except (ReplayError, ValueError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps(output, ensure_ascii=False, indent=2))
+    if output.get("problems") or output.get("skipped"):
+        raise typer.Exit(2)

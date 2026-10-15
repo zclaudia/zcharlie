@@ -49,6 +49,7 @@ from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Final
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.domain.security import (
@@ -76,6 +77,7 @@ from investment_agent.materials.metrics import (
     compute_metrics,
     profile_from_identity,
 )
+from investment_agent.storage.models.material_acquisition import ResearchMaterialAcquisition
 from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.research_material import ResearchDataset
 from investment_agent.storage.repositories.research_material import (
@@ -153,6 +155,7 @@ STATUS_CODES: Final[tuple[str, ...]] = (
     "partial_verification",
     "metric_not_applicable",
     "source_conflict",
+    "raw_archive_missing",
     "material_stale",
     "online_refresh_disabled",
 )
@@ -189,6 +192,10 @@ STATUS_COPY: Final[dict[str, _StatusCopy]] = {
     "source_conflict": _StatusCopy(
         affected=(),
         next_step="人工判定来源差异后再使用；系统不会自动挑选对结论更有利的一边。",
+    ),
+    "raw_archive_missing": _StatusCopy(
+        affected=("原始响应归档",),
+        next_step="这批旧资料没有采集原件包；保留现有资料读取，并在下一次采集时归档上游响应。",
     ),
     "material_stale": _StatusCopy(
         affected=("财务展示", "指标计算"),
@@ -394,6 +401,9 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
         subject_id=company.id,
     )
     material = _current_versions(datasets)
+    missing_archive_sources = await _missing_archive_sources(
+        session, subject_id=company.id, datasets=material
+    )
     records = tuple(
         (dataset, fact) for dataset in material for fact in dataset_facts(dataset)
     )
@@ -429,6 +439,18 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
         newest_period_end=fiscal_views[-1].end if fiscal_views else None,
         today=date.today(),
     )
+    if missing_archive_sources:
+        statuses = (
+            *statuses,
+            _status(
+                "raw_archive_missing",
+                affected=tuple(
+                    SOURCE_DOCUMENT_LABELS.get(source, OTHER_DOCUMENT_LABEL)
+                    for source in missing_archive_sources
+                ),
+            ),
+        )
+    statuses = tuple(sorted(statuses, key=lambda item: STATUS_CODES.index(item.code)))
     return FinancialContextView(
         listing_id=listing.id,
         market=listing.market_code,
@@ -512,6 +534,34 @@ def _current_versions(datasets: Sequence[ResearchDataset]) -> tuple[ResearchData
             ),
             key=lambda row: (row.period_end or date.min, row.source),
         )
+    )
+
+
+async def _missing_archive_sources(
+    session: AsyncSession,
+    *,
+    subject_id: int,
+    datasets: Sequence[ResearchDataset],
+) -> tuple[str, ...]:
+    """Find current saved datasets with no acquisition linkage, using DB only."""
+
+    if not datasets:
+        return ()
+    acquisitions = (
+        await session.execute(
+            select(ResearchMaterialAcquisition).where(
+                ResearchMaterialAcquisition.subject_id == subject_id
+            )
+        )
+    ).scalars()
+    linked_ids = {
+        link.get("id")
+        for acquisition in acquisitions
+        for link in acquisition.dataset_links
+        if isinstance(link, dict) and isinstance(link.get("id"), int)
+    }
+    return tuple(
+        sorted({dataset.source for dataset in datasets if dataset.id not in linked_ids})
     )
 
 

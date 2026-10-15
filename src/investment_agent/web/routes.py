@@ -100,6 +100,7 @@ STATUS_LABELS: Final[dict[str, str]] = {
     "source_conflict": "来源冲突",
     "material_stale": "资料待更新",
     "online_refresh_disabled": "在线刷新未开启",
+    "raw_archive_missing": "原件归档不完整",
 }
 """Business wording of every read-model status code (no supplier/run identifier)."""
 

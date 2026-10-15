@@ -83,7 +83,7 @@ def main() -> int:
         for path in sorted(args.backup_dir.rglob("*"))
         if path.is_file()
         and not path.is_symlink()
-        and path.name != "manifest.json"
+        and path != args.backup_dir / "manifest.json"
         and str(path.relative_to(args.backup_dir)) not in seen
     ]
     for relative in extra:

@@ -8,7 +8,7 @@ Usage::
 named volume ``/app/db/app.db``); it defaults to ``<data-dir>/app.db``.
 
 Produces ``<output>/app.db`` (consistent SQLite backup), copies
-``research-runs/`` and ``notifications/`` next to it, and writes a
+``research-runs/``, ``notifications/`` and ``research-material/`` next to it, and writes a
 ``manifest.json`` recording every file's size and SHA-256 for offline
 verification (see docs/product/backup-and-recovery.md).
 
@@ -80,7 +80,7 @@ def main() -> int:
     (output / "app.db").chmod(0o600)
 
     entries: list[dict[str, object]] = []
-    for relative in ("research-runs", "notifications"):
+    for relative in ("research-runs", "notifications", "research-material"):
         source_dir = data_dir / relative
         if source_dir.is_symlink() or not source_dir.is_dir():
             continue
@@ -96,7 +96,7 @@ def main() -> int:
     for path in sorted(output.rglob("*")):
         if path.is_symlink():
             continue
-        if path.is_file() and path.name != "manifest.json":
+        if path.is_file() and path != output / "manifest.json":
             entries.append(
                 {
                     "path": str(path.relative_to(output)),
