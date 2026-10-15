@@ -1,0 +1,733 @@
+[
+  {
+    "company_key": "tencent-holdings",
+    "year": 2022,
+    "category": "revenue",
+    "metric": "revenue_operating",
+    "value": "554552",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2022-01-01",
+    "period_end": "2022-12-31",
+    "source_label": "Revenues",
+    "source_field": "Revenues",
+    "locator": "PDF page4 printed3 FinancialSummary Revenues FY2022 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Revenues",
+      "column": "2022"
+    },
+    "excerpt": "Revenues 560,118 554,552 609,015 660,257 751,766",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "560118",
+      "554552",
+      "609015",
+      "660257",
+      "751766"
+    ],
+    "selected_year": 2022,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2023,
+    "category": "revenue",
+    "metric": "revenue_operating",
+    "value": "609015",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2023-01-01",
+    "period_end": "2023-12-31",
+    "source_label": "Revenues",
+    "source_field": "Revenues",
+    "locator": "PDF page4 printed3 FinancialSummary Revenues FY2023 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Revenues",
+      "column": "2023"
+    },
+    "excerpt": "Revenues 560,118 554,552 609,015 660,257 751,766",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "560118",
+      "554552",
+      "609015",
+      "660257",
+      "751766"
+    ],
+    "selected_year": 2023,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2024,
+    "category": "revenue",
+    "metric": "revenue_operating",
+    "value": "660257",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "source_label": "Revenues",
+    "source_field": "Revenues",
+    "locator": "PDF page4 printed3 FinancialSummary Revenues FY2024 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Revenues",
+      "column": "2024"
+    },
+    "excerpt": "Revenues 560,118 554,552 609,015 660,257 751,766",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "560118",
+      "554552",
+      "609015",
+      "660257",
+      "751766"
+    ],
+    "selected_year": 2024,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2025,
+    "category": "revenue",
+    "metric": "revenue_operating",
+    "value": "751766",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "source_label": "Revenues",
+    "source_field": "Revenues",
+    "locator": "PDF page4 printed3 FinancialSummary Revenues FY2025 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Revenues",
+      "column": "2025"
+    },
+    "excerpt": "Revenues 560,118 554,552 609,015 660,257 751,766",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "560118",
+      "554552",
+      "609015",
+      "660257",
+      "751766"
+    ],
+    "selected_year": 2025,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2022,
+    "category": "profit",
+    "metric": "profit_parent",
+    "value": "188243",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2022-01-01",
+    "period_end": "2022-12-31",
+    "source_label": "Profit attributable to equity holders of the Company",
+    "source_field": "Profit attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Profit attributable to equity holders of the Company FY2022 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Profit attributable to equity holders of the Company",
+      "column": "2022"
+    },
+    "excerpt": "Profit attributable to equity holders of the Company 224,822 188,243 115,216 194,073 224,842",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "224822",
+      "188243",
+      "115216",
+      "194073",
+      "224842"
+    ],
+    "selected_year": 2022,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2023,
+    "category": "profit",
+    "metric": "profit_parent",
+    "value": "115216",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2023-01-01",
+    "period_end": "2023-12-31",
+    "source_label": "Profit attributable to equity holders of the Company",
+    "source_field": "Profit attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Profit attributable to equity holders of the Company FY2023 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Profit attributable to equity holders of the Company",
+      "column": "2023"
+    },
+    "excerpt": "Profit attributable to equity holders of the Company 224,822 188,243 115,216 194,073 224,842",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "224822",
+      "188243",
+      "115216",
+      "194073",
+      "224842"
+    ],
+    "selected_year": 2023,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2024,
+    "category": "profit",
+    "metric": "profit_parent",
+    "value": "194073",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2024-01-01",
+    "period_end": "2024-12-31",
+    "source_label": "Profit attributable to equity holders of the Company",
+    "source_field": "Profit attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Profit attributable to equity holders of the Company FY2024 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Profit attributable to equity holders of the Company",
+      "column": "2024"
+    },
+    "excerpt": "Profit attributable to equity holders of the Company 224,822 188,243 115,216 194,073 224,842",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "224822",
+      "188243",
+      "115216",
+      "194073",
+      "224842"
+    ],
+    "selected_year": 2024,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2025,
+    "category": "profit",
+    "metric": "profit_parent",
+    "value": "224842",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "source_label": "Profit attributable to equity holders of the Company",
+    "source_field": "Profit attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Profit attributable to equity holders of the Company FY2025 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Profit attributable to equity holders of the Company",
+      "column": "2025"
+    },
+    "excerpt": "Profit attributable to equity holders of the Company 224,822 188,243 115,216 194,073 224,842",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "224822",
+      "188243",
+      "115216",
+      "194073",
+      "224842"
+    ],
+    "selected_year": 2025,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2021,
+    "category": "equity",
+    "metric": "equity_parent",
+    "value": "806299",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2021-12-31",
+    "source_label": "Equity attributable to equity holders of the Company",
+    "source_field": "Equity attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Equity attributable to equity holders of the Company FY2021 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Equity attributable to equity holders of the Company",
+      "column": "2021"
+    },
+    "excerpt": "Equity attributable to equity holders of the Company 806,299 721,391 808,591 973,548 1,154,152",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "806299",
+      "721391",
+      "808591",
+      "973548",
+      "1154152"
+    ],
+    "selected_year": 2021,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2022,
+    "category": "equity",
+    "metric": "equity_parent",
+    "value": "721391",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2022-12-31",
+    "source_label": "Equity attributable to equity holders of the Company",
+    "source_field": "Equity attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Equity attributable to equity holders of the Company FY2022 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Equity attributable to equity holders of the Company",
+      "column": "2022"
+    },
+    "excerpt": "Equity attributable to equity holders of the Company 806,299 721,391 808,591 973,548 1,154,152",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "806299",
+      "721391",
+      "808591",
+      "973548",
+      "1154152"
+    ],
+    "selected_year": 2022,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2023,
+    "category": "equity",
+    "metric": "equity_parent",
+    "value": "808591",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2023-12-31",
+    "source_label": "Equity attributable to equity holders of the Company",
+    "source_field": "Equity attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Equity attributable to equity holders of the Company FY2023 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Equity attributable to equity holders of the Company",
+      "column": "2023"
+    },
+    "excerpt": "Equity attributable to equity holders of the Company 806,299 721,391 808,591 973,548 1,154,152",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "806299",
+      "721391",
+      "808591",
+      "973548",
+      "1154152"
+    ],
+    "selected_year": 2023,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2024,
+    "category": "equity",
+    "metric": "equity_parent",
+    "value": "973548",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2024-12-31",
+    "source_label": "Equity attributable to equity holders of the Company",
+    "source_field": "Equity attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Equity attributable to equity holders of the Company FY2024 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Equity attributable to equity holders of the Company",
+      "column": "2024"
+    },
+    "excerpt": "Equity attributable to equity holders of the Company 806,299 721,391 808,591 973,548 1,154,152",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "806299",
+      "721391",
+      "808591",
+      "973548",
+      "1154152"
+    ],
+    "selected_year": 2024,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2025,
+    "category": "equity",
+    "metric": "equity_parent",
+    "value": "1154152",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2025-12-31",
+    "source_label": "Equity attributable to equity holders of the Company",
+    "source_field": "Equity attributable to equity holders of the Company",
+    "locator": "PDF page4 printed3 FinancialSummary Equity attributable to equity holders of the Company FY2025 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Equity attributable to equity holders of the Company",
+      "column": "2025"
+    },
+    "excerpt": "Equity attributable to equity holders of the Company 806,299 721,391 808,591 973,548 1,154,152",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "806299",
+      "721391",
+      "808591",
+      "973548",
+      "1154152"
+    ],
+    "selected_year": 2025,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2022,
+    "category": "assets",
+    "metric": "total_assets",
+    "value": "1578131",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2022-12-31",
+    "source_label": "Total assets",
+    "source_field": "Total assets",
+    "locator": "PDF page4 printed3 FinancialSummary Total assets FY2022 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Total assets",
+      "column": "2022"
+    },
+    "excerpt": "Total assets 1,612,364 1,578,131 1,577,246 1,780,995 2,038,986",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "1612364",
+      "1578131",
+      "1577246",
+      "1780995",
+      "2038986"
+    ],
+    "selected_year": 2022,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2023,
+    "category": "assets",
+    "metric": "total_assets",
+    "value": "1577246",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2023-12-31",
+    "source_label": "Total assets",
+    "source_field": "Total assets",
+    "locator": "PDF page4 printed3 FinancialSummary Total assets FY2023 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Total assets",
+      "column": "2023"
+    },
+    "excerpt": "Total assets 1,612,364 1,578,131 1,577,246 1,780,995 2,038,986",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "1612364",
+      "1578131",
+      "1577246",
+      "1780995",
+      "2038986"
+    ],
+    "selected_year": 2023,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2024,
+    "category": "assets",
+    "metric": "total_assets",
+    "value": "1780995",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2024-12-31",
+    "source_label": "Total assets",
+    "source_field": "Total assets",
+    "locator": "PDF page4 printed3 FinancialSummary Total assets FY2024 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Total assets",
+      "column": "2024"
+    },
+    "excerpt": "Total assets 1,612,364 1,578,131 1,577,246 1,780,995 2,038,986",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "1612364",
+      "1578131",
+      "1577246",
+      "1780995",
+      "2038986"
+    ],
+    "selected_year": 2024,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2025,
+    "category": "assets",
+    "metric": "total_assets",
+    "value": "2038986",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": null,
+    "period_end": "2025-12-31",
+    "source_label": "Total assets",
+    "source_field": "Total assets",
+    "locator": "PDF page4 printed3 FinancialSummary Total assets FY2025 column",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 4,
+      "row": "Total assets",
+      "column": "2025"
+    },
+    "excerpt": "Total assets 1,612,364 1,578,131 1,577,246 1,780,995 2,038,986",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "row_values": [
+      "1612364",
+      "1578131",
+      "1577246",
+      "1780995",
+      "2038986"
+    ],
+    "selected_year": 2025,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2025,
+    "category": "operating_cash_flow",
+    "metric": "operating_cash_flow",
+    "value": "303052",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "source_label": "Net cash flows generated from operating activities",
+    "source_field": "Net cash flows generated from operating activities",
+    "locator": "PDFpage139 printed138 cashflow FY2025 Net cash flows generated from operating activities",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 139,
+      "row": "Net cash flows generated from operating activities",
+      "column": "2025"
+    },
+    "excerpt": "Net cash flows generated from operating activities 303,052 258,521",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2025,
+      2024
+    ],
+    "row_values": [
+      "303052",
+      "258521"
+    ],
+    "selected_year": 2025,
+    "notes": []
+  },
+  {
+    "company_key": "tencent-holdings",
+    "year": 2025,
+    "category": "capex",
+    "metric": "capex_ppe",
+    "value": "87482",
+    "scale": 1000000,
+    "raw_unit": "RMB million",
+    "currency": "CNY",
+    "period_start": "2025-01-01",
+    "period_end": "2025-12-31",
+    "source_label": "Purchase of/prepayments for property, plant and equipment,",
+    "source_field": "Purchase of/prepayments for property, plant and equipment,",
+    "locator": "PDFpage139 printed138 cashflow FY2025 Purchase of/prepayments for property, plant and equipment,",
+    "structured_locator": {
+      "kind": "pdf",
+      "page": 139,
+      "row": "Purchase of/prepayments for property, plant and equipment,",
+      "column": "2025"
+    },
+    "excerpt": "Purchase of/prepayments for property, plant and equipment, \n construction in progress and investment properties (87,482) (62,927)",
+    "raw_path": "issuer/tencent-holdings/2025/annual_report.pdf",
+    "column_years": [
+      2025,
+      2024
+    ],
+    "row_values": [
+      "87482",
+      "62927"
+    ],
+    "selected_year": 2025,
+    "notes": [
+      "Combined PPE/construction/investmentproperties. Definition is broader than pure PPE; keep caveat or explicitgap, no silent substitution."
+    ]
+  }
+]

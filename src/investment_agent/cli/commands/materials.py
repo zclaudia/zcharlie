@@ -1,6 +1,7 @@
 """Offline administration of the checked HK/US financial material."""
 
 import json
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -9,12 +10,14 @@ from sqlalchemy.exc import OperationalError
 
 from investment_agent.cli.runtime import bootstrap_settings
 from investment_agent.domain.security import DEFAULT_PILOT_LIST_PATH, load_pilot_identities
+from investment_agent.materials.annual_validation import verify_annual_package
 from investment_agent.materials.bootstrap import import_pilot_materials, initialize_pilot
 from investment_agent.materials.handlers import default_adapters
+from investment_agent.materials.publication_prepare import prepare_material_publication_payload
 from investment_agent.materials.replay import ReplayError, replay_acquisition
 from investment_agent.storage.database import run_with_engine, session_scope
 
-app = typer.Typer(help="Initialize and import controlled HK/US material offline")
+app = typer.Typer(help="Import, replay, verify and prepare controlled HK/US material offline")
 
 
 def _run(pilot_list: Path, source_dir: Path | None, company_keys: list[str]) -> None:
@@ -146,4 +149,66 @@ def replay_materials(
         raise typer.Exit(1) from exc
     typer.echo(json.dumps(output, ensure_ascii=False, indent=2))
     if output.get("problems") or output.get("skipped"):
+        raise typer.Exit(2)
+
+
+@app.command("prepare-publication")
+def prepare_publication(
+    listing_id: int = typer.Option(..., min=1, help="Controlled listing ID"),
+    as_of: str = typer.Option(..., help="Evidence visibility cutoff, ISO timestamp with timezone"),
+    dataset_id: list[int] = typer.Option(  # noqa: B008
+        [], min=1, help="Explicit current dataset selection; repeat for multiple versions"
+    ),
+) -> None:
+    """Compute and save exact fact references for numeric publication, without network IO.
+
+    Exit 2 means some metrics have gaps. Successful calculations are committed
+    and returned individually; repeating the same operation reuses their refs.
+    """
+    try:
+        cutoff = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+        if cutoff.tzinfo is None or cutoff.utcoffset() is None:
+            raise ValueError("timestamp must include a timezone")
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--as-of") from exc
+    settings = bootstrap_settings()
+
+    async def main() -> dict[str, Any]:
+        async with session_scope() as session:
+            return await prepare_material_publication_payload(
+                session, listing_id=listing_id, as_of=cutoff, dataset_ids=dataset_id or None
+            )
+
+    try:
+        output = run_with_engine(settings.database_url, main)
+    except OperationalError as exc:
+        typer.echo("Database is not ready; run `ia migrate up` with the same DATABASE_URL.", err=True)
+        raise typer.Exit(1) from exc
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(1) from exc
+    typer.echo(json.dumps(output, ensure_ascii=False, indent=2))
+    if output["gaps"] or not output["metrics"]:
+        raise typer.Exit(2)
+
+
+@app.command("verify-annual")
+def verify_annual(
+    manifest: Path = typer.Option(..., exists=True, dir_okay=False),  # noqa: B008
+    source_root: Path = typer.Option(..., exists=True, file_okay=False),  # noqa: B008
+    as_of: str | None = typer.Option(None, help="Optional ISO date; must match manifest cutoff"),
+    company_key: list[str] = typer.Option(  # noqa: B008
+        [], help="Explicit subset; subset success never marks the eight-company package complete"
+    ),
+) -> None:
+    """Verify original bytes and reviewed annual inputs offline; exit 2 for incomplete coverage."""
+    try:
+        cutoff = date.fromisoformat(as_of) if as_of else None
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--as-of") from exc
+    output = verify_annual_package(
+        manifest, source_root, as_of_date=cutoff, identities=company_key or None
+    )
+    typer.echo(json.dumps(output, ensure_ascii=False, indent=2))
+    if not output["complete"]:
         raise typer.Exit(2)
