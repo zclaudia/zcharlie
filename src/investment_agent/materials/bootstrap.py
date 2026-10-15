@@ -114,4 +114,5 @@ async def import_pilot_materials(
         problems=tuple(item for report in reports for item in report.problems),
         skipped=tuple(item for report in reports for item in report.skipped),
         informational=tuple(item for report in reports for item in report.informational),
+        acquisition_ids=tuple(item for report in reports for item in report.acquisition_ids),
     )

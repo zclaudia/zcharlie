@@ -83,7 +83,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | 组 | 命令 | 用途 |
 |---|---|---|
 | `ia migrate` | `up/down/current/history` | alembic 迁移（尊重 `DATABASE_URL`） |
-| `ia materials` | `init`、`import --source-dir PATH [--company-key KEY]` | 港美受控证券初始化与离线资料导入（见 [用法](docs/product/hk-us-expansion.md#4-离线导入用法)） |
+| `ia materials` | `init`、`import`、`replay`、`prepare-publication`、`verify-annual` | 港美受控证券初始化、离线归档重放、指标发布准备与年度证据核验（见 [用法](docs/product/hk-us-expansion.md#4-离线导入用法)） |
 | `ia api` | `serve` | FastAPI 服务 |
 | `ia worker` | `start [--once] [--kinds ...]` | 队列 worker（研究 + 快照采集，按 kind 分派） |
 | `ia scheduler` | `start` | 日终刷新与快照采集调度 |
@@ -429,9 +429,12 @@ CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认�
 - 港美**在线刷新默认关闭**（`ONLINE_REFRESH_ENABLED = False`，不是运行时设置项）：东财/Yahoo
   的使用许可未确认，采集任务在上游调用前停止并记录 `online_refresh_disabled`。
   打开前需确认展示/缓存/商业授权并补联网验收。
-- 港美资料的**最新实际年报尚未补验**（本地证据只覆盖 2021–2024），需联网逐家核对。
+- 港美资料已有 [2026-10-15 年度补验清单](docs/product/plans/hk-us-expansion/20-latest-annual-evidence.md)：逐家记录最新实际财年、六类字段、原件和连续年度输入。尚未解决的口径与可计算性缺口逐项保留，旧调研样本不能替代最新年度验收；复核清单不自动导入生产资料。
 - 港美**行情 / FX / 市净率 / TTM 未启用**：`capabilities` 里 `price`/`annual_pe`/`dividends`/`pb`
-  为假是决定而非检查失败，缺口同时出现在 `statuses` 中（年度 PE 门控与分红事件的数据与展示已交付，能力位默认关）。
+  为假是当前产品决定，缺口同时出现在 `statuses` 中。年度 PE 与分红有纯计算/契约模块，
+  但没有接入当前财务上下文、API 和股票页；分红事件也没有生产资料存储与在线来源。
+- 八家 provider symbol、财务/申报/行情/FX/分红来源的实现状态、许可未知项及逐能力启用条件见
+  [`docs/product/plans/hk-us-expansion/17-capability-source-matrix.md`](docs/product/plans/hk-us-expansion/17-capability-source-matrix.md)。
 - 港美发布只支持原币，跨币种发布仍被拒绝（汇率时间点与使用许可未验收）。
 - 无任何交易执行路径；未来若考虑自动交易必须作为独立项目重新评审。
 

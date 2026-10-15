@@ -830,7 +830,7 @@ async def test_material_calculation_hash_covers_value_unit_currency_and_period(
     )
     assert base != material_calculation_input_hash(
         (operating_cash_flow, capital_expenditure), method=MATERIAL_CALCULATION_METHOD,
-        method_version="material.metrics.v2",
+        method_version="material.metrics.v1",
     )
 
 
@@ -861,7 +861,7 @@ async def test_material_calculation_saves_its_facts_and_exact_input_hash(
     assert saved is not None
     assert saved.status is CalculationStatus.OK and saved.applicable
     assert saved.method == MATERIAL_CALCULATION_METHOD
-    assert saved.method_version == MATERIAL_CALCULATION_VERSION == "material.metrics.v1"
+    assert saved.method_version == MATERIAL_CALCULATION_VERSION == "material.metrics.v2"
     assert saved.fact_refs == (operating_cash_flow_ref, capital_expenditure_ref)
     assert saved.results == {"fcf_simple": result}
     assert saved.input_hash == material_calculation_input_hash(

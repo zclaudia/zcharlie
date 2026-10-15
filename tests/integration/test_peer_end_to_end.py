@@ -49,6 +49,7 @@ from uuid import UUID, uuid4
 import pytest
 from alembic import command
 from alembic.config import Config as AlembicConfig
+from alembic.script import ScriptDirectory
 from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelResponse, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import FunctionModel
@@ -330,12 +331,12 @@ async def test_golden_chain_migration_to_agent_tool_reads_one_batch(
 ) -> None:
     world = peer_world
 
-    # WP1: the migrations built the peer tables (048 is head).
+    # WP1: the current migration head includes the peer tables.
     from sqlalchemy import text
 
     async with session_scope() as session:
         version = (await session.execute(text("SELECT version_num FROM alembic_version"))).scalar()
-        assert version == "048"
+        assert version == ScriptDirectory(str(REPO_ROOT / "alembic")).get_current_head()
         for table in ("peer_cohort_snapshot", "peer_annual_snapshot"):
             await session.execute(text(f"SELECT 1 FROM {table}"))
 

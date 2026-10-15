@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "company_key": "hsbc-holdings",
+  "restatement_id": "ifrs17-opening-equity-2022-01-01",
+  "transition_date": "2022-01-01",
+  "reporting_currency": "USD",
+  "raw_unit": "USD million",
+  "scale": 1000000,
+  "metric": "equity_ordinary",
+  "equity_scope": "ordinary_shareholders",
+  "published_on": "2024-02-21",
+  "publication_evidence": {
+    "document": {
+      "raw_path": "hsbc-restatement/official-report-index-2023.html",
+      "url": "https://www.hsbc.com/investors/results-and-announcements/all-reporting/group?page=1&reporting-type=annual&take=20&year=2024",
+      "final_url": "https://www.hsbc.com/investors/results-and-announcements/all-reporting/group?page=1&reporting-type=annual&take=20&year=2024",
+      "captured_at": "2026-10-15T14:46:01Z",
+      "http_status": 200,
+      "media_type": "text/html; charset=utf-8",
+      "bytes": 882278,
+      "sha256": "2a50fc76ff01bc7c23925c5e2dbd103cdbbbe0f45aaa44e6105d7c85dd45229c"
+    },
+    "locator": {
+      "kind": "text",
+      "anchor": "21 Feb 2024 Annual Annual Results 2023 documents 24 items Show all Show all documents. Annual Results 2023 media release PDF 277KB 33 pages Add Annual Results 2023 media release to download basket Annual Report and Accounts 2023 PDF 7MB 450 pages"
+    },
+    "excerpt": "21 Feb 2024 Annual Annual Results 2023 documents 24 items Show all Show all documents. Annual Results 2023 media release PDF 277KB 33 pages Add Annual Results 2023 media release to download basket Annual Report and Accounts 2023 PDF 7MB 450 pages"
+  },
+  "source_document": {
+    "raw_path": "hsbc-restatement/hsbc-annual-report-2023.pdf",
+    "url": "https://www.hsbc.com/-/files/hsbc/investors/hsbc-results/2023/annual/pdfs/hsbc-holdings-plc/240226-annual-report-and-accounts-2023.pdf?download=1",
+    "final_url": "https://www.hsbc.com/-/files/hsbc/investors/hsbc-results/2023/annual/pdfs/hsbc-holdings-plc/240226-annual-report-and-accounts-2023.pdf?download=1",
+    "captured_at": "2026-10-15T14:44:20Z",
+    "http_status": 200,
+    "media_type": "application/pdf",
+    "bytes": 7034549,
+    "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+    "published_on": "2024-02-21",
+    "report_title": "HSBC Holdings plc Annual Report and Accounts 2023"
+  },
+  "original_ifrs4": {
+    "value": "175836",
+    "total_shareholders_equity": "198250",
+    "other_equity_instruments": "22414",
+    "period_end": "2021-12-31",
+    "source_label": "Total ordinary shareholders’ equity (IFRS 4, at 31 December 2021)",
+    "locator": {
+      "kind": "pdf",
+      "page": 427,
+      "printed_page": 425,
+      "row": "Total shareholders’ equity; Other equity instruments",
+      "column": "Under IFRS 4, 1 Jan 2022"
+    },
+    "excerpt": "Other equity instruments 19,746 22,414 19,746 22,414; Total shareholders’ equity 177,833 189,015 187,484 198,250",
+    "reported_comparator": {
+      "source_label": "Total ordinary shareholders’ equity",
+      "locator": {
+        "kind": "pdf",
+        "page": 135,
+        "printed_page": 133
+      },
+      "excerpt": "Total shareholders’ equity 185,329 177,833 198,250; Preference shares and other equity instruments (17,719) (19,746) (22,414); Total ordinary shareholders’ equity 167,610 158,087 175,836",
+      "note": "2021 comparative data are prepared on an IFRS 4 basis."
+    }
+  },
+  "restated_ifrs17": {
+    "year": 2022,
+    "category": "beginning_equity",
+    "metric": "equity_ordinary",
+    "value": "166601",
+    "scale": 1000000,
+    "raw_unit": "USD million",
+    "currency": "USD",
+    "period_start": null,
+    "period_end": "2021-12-31",
+    "source_label": "Total ordinary shareholders’ equity at transition to IFRS 17",
+    "source_field": "Total shareholders’ equity less other equity instruments",
+    "locator": {
+      "kind": "pdf",
+      "page": 427,
+      "printed_page": 425,
+      "row": "Total shareholders’ equity; Other equity instruments",
+      "column": "Under IFRS 17, 1 Jan 2022"
+    },
+    "excerpt": "Other equity instruments 19,746 22,414 19,746 22,414; Total shareholders’ equity 177,833 189,015 187,484 198,250",
+    "raw_path": "hsbc-restatement/hsbc-annual-report-2023.pdf",
+    "notes": [
+      "Derived exactly as $189,015m total shareholders’ equity less $22,414m other equity instruments; both inputs are shown in the same 1 January 2022 balance-sheet table under IFRS 17.",
+      "This is the IFRS 17 restated opening ordinary-equity balance for FY2022; it does not rewrite the contemporaneous FY2021 IFRS 4 closing fact."
+    ]
+  },
+  "transition_bridge": {
+    "basis": "Total shareholders’ equity under IFRS 17 minus unchanged other equity instruments equals ordinary shareholders’ equity.",
+    "ifrs4_total_shareholders_equity": "198250",
+    "ifrs17_total_shareholders_equity": "189015",
+    "other_equity_instruments_under_ifrs4": "22414",
+    "other_equity_instruments_under_ifrs17": "22414",
+    "ifrs4_ordinary_equity": "175836",
+    "ifrs17_ordinary_equity": "166601",
+    "ordinary_equity_transition_adjustment": "-9235",
+    "total_shareholders_equity_adjustment_components": [
+      {
+        "label": "Removal of PVIF and IFRS 4 balances",
+        "value": 92738
+      },
+      {
+        "label": "Remeasurement effect of IFRS 9 re-designations",
+        "value": 4558
+      },
+      {
+        "label": "Recognition of IFRS 17 fulfilment cash flows",
+        "value": -99631
+      },
+      {
+        "label": "Recognition of IFRS 17 contractual service margin",
+        "value": -8847
+      },
+      {
+        "label": "Tax effect",
+        "value": 1947
+      }
+    ],
+    "total_shareholders_equity_transition_adjustment": "-9235",
+    "transition_table_locator": {
+      "kind": "pdf",
+      "page": 424,
+      "printed_page": 422,
+      "row": "Total shareholders’ equity",
+      "columns": [
+        "Under IFRS 4",
+        "Removal of PVIF and IFRS 4 balances",
+        "Remeasurement effect of IFRS 9 re-designations",
+        "Recognition of IFRS 17 fulfilment cash flows",
+        "Recognition of IFRS 17 contractual service margin",
+        "Tax effect",
+        "Under IFRS 17",
+        "Total movements"
+      ]
+    },
+    "transition_table_excerpt": "Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235)",
+    "transition_source_text": "IFRS 17 transition impact on the Group consolidated balance sheet at 1 January 2022 Under IFRS 4 Removal of PVIF and IFRS 4 balances Remeasure- ment effect of IFRS 9 re- designations Recognition of IFRS 17 fulfilment cash flows Recognition of IFRS 17 contractual service margin Tax effect Under IFRS 17 Total movements $m $m $m $m $m $m $m $m Assets Financial assets designated and otherwise mandatorily measured at fair value through profit or loss 49,804 — 60,991 — — — 110,795 60,991 Loans and advances to banks 83,136 — (569) — — — 82,567 (569) Loans and advances to customers 1,045,814 — (1,280) — — — 1,044,534 (1,280) Financial investments 446,274 — (54,269) — — — 392,005 (54,269) Goodwill and intangible assets 20,622 (9,453) — — — — 11,169 (9,453) Deferred tax assets 4,624 — — — — 808 5,432 808 All other assets 1,307,665 (4,468) — 4,198 (105) — 1,307,290 (375) Total assets 2,957,939 (13,921) 4,873 4,198 (105) 808 2,953,792 (4,147) Liabilities and equity Liabilities Insurance contract liabilities 112,745 (112,745) — 109,393 9,914 — 119,307 6,562 Deferred tax liabilities 4,673 — — — — (1,379) 3,294 (1,379) All other liabilities 2,633,744 78 — 1,102 (51) — 2,634,873 1,129 Total liabilities 2,751,162 (112,667) — 110,495 9,863 (1,379) 2,757,474 6,312 Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235) Non-controlling interests 8,527 6,008 315 (6,666) (1,121) 240 7,303 (1,224) Total equity 206,777 98,746 4,873 (106,297) (9,968) 2,187 196,318 (10,459) Total liabilities and equity 2,957,939 (13,921) 4,873 4,198 (105) 808 2,953,792 (4,147) ",
+    "opening_balance_sheet_source_text": "Other equity instruments 19,746 22,414 19,746 22,414 Other reserves (9,133) 6,447 (9,141) 6,460 Retained earnings 142,409 135,236 152,068 144,458 Total shareholders’ equity 177,833 189,015 187,484 198,250 Non-controlling interests 7,364 7,303 8,544 8,527 Total equity 185,197 196,318 196,028 206,777 "
+  }
+}

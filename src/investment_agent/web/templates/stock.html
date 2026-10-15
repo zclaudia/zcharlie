@@ -60,10 +60,75 @@
         <p id="financial-verification-coverage" class="financial-coverage"
            data-facts-verified="{{ financial.coverage.facts_verified }}"
            data-facts-candidate="{{ financial.coverage.facts_candidate }}">
-          核对覆盖：{{ financial.coverage.facts_verified }} / {{ financial.coverage.facts_total }} 项已核对原件（候选 {{ financial.coverage.facts_candidate }} 项）
+          核对覆盖：{{ financial.coverage.facts_verified }} / {{ financial.coverage.facts_total }} 项事实已复核（候选 {{ financial.coverage.facts_candidate }} 项）
         </p>
       </div>
       <p class="faint">资料覆盖与核对覆盖分别计数，不合成一个完整度。</p>
+    </section>
+
+    <section class="card" id="financial-freshness">
+      <div class="card-head">
+        <h2>核对与资料时间</h2>
+        <span class="badge" data-latestness="{{ financial.freshness.latestness }}">
+          {{ labels.latestness.get(financial.freshness.latestness, "未知") }}
+        </span>
+      </div>
+      <dl class="kv-list financial-freshness-list">
+        <div class="fin-item">
+          <dt>最近核对原件日期</dt>
+          <dd id="financial-last-verified-on">{{ financial.freshness.last_verified_on | financial_timestamp }}</dd>
+        </div>
+        <div class="fin-item">
+          <dt>最新披露核对至</dt>
+          <dd id="financial-latestness-checked-on">{{ financial.freshness.latestness_checked_on | financial_timestamp }}</dd>
+        </div>
+        <div class="fin-item">
+          <dt>资料实际更新</dt>
+          <dd id="financial-last-imported-at">{{ financial.freshness.last_imported_at | financial_timestamp }}</dd>
+        </div>
+        <div class="fin-item">
+          <dt>最近请求</dt>
+          <dd id="financial-last-requested-at">{{ financial.freshness.last_requested_at | financial_timestamp }}</dd>
+        </div>
+        <div class="fin-item">
+          <dt>最近尝试</dt>
+          <dd id="financial-last-attempt-at">{{ financial.freshness.last_attempt_at | financial_timestamp }}</dd>
+        </div>
+        <div class="fin-item">
+          <dt>最近采集成功</dt>
+          <dd id="financial-last-success-at">{{ financial.freshness.last_success_at | financial_timestamp }}</dd>
+        </div>
+        <div class="fin-item">
+          <dt>资料覆盖至</dt>
+          <dd id="financial-latest-period-end">{{ financial.freshness.latest_period_end or "未知" }}</dd>
+        </div>
+      </dl>
+      <p class="faint">核对日期表示原件核对到何时；资料更新时间表示导入时间，两者不会互相替代。未保存日期时显示“未知”。</p>
+      {% if financial.freshness.sources %}
+      <div class="financial-source-controls" aria-label="资料来源状态">
+        {% for source, control in financial.freshness.sources.items() %}
+        <p class="financial-source-control" data-source-enabled="{{ 'true' if control.enabled else 'false' }}">
+          <span>{{ labels.sources.get(source, "受控资料来源") }}</span>
+          <span class="badge {{ 'warn' if not control.enabled else '' }}">{{ "来源已开启" if control.enabled else "来源已关闭" }}</span>
+          {% if control.licensing %}<span class="faint">使用许可：{{ labels.licensing.get(control.licensing, "未确认") }}</span>{% endif %}
+        </p>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if financial.refresh.status or financial.refresh.run_id or financial.refresh.reason %}
+      <details class="financial-refresh-proof" id="financial-refresh-proof">
+        <summary>查看最近任务记录</summary>
+        <dl class="kv-list financial-refresh-proof-list">
+          {% if financial.refresh.run_id is not none %}<div class="fin-item"><dt>任务编号</dt><dd id="financial-current-run-id">{{ financial.refresh.run_id }}</dd></div>{% endif %}
+          {% if financial.refresh.status %}<div class="fin-item"><dt>任务状态</dt><dd id="financial-current-run-status">{{ labels.refresh_status.get(financial.refresh.status, "处理中") }}</dd></div>{% endif %}
+          {% if financial.refresh.reason %}<div class="fin-item"><dt>状态说明</dt><dd id="financial-current-run-reason">{{ labels.refresh_reason.get(financial.refresh.reason, "资料刷新请求") }}</dd></div>{% endif %}
+          {% if financial.refresh.started_at %}<div class="fin-item"><dt>开始时间</dt><dd id="financial-current-run-started-at">{{ financial.refresh.started_at | financial_timestamp }}</dd></div>{% endif %}
+          {% if financial.refresh.completed_at %}<div class="fin-item"><dt>结束时间</dt><dd id="financial-current-run-completed-at">{{ financial.refresh.completed_at | financial_timestamp }}</dd></div>{% endif %}
+        </dl>
+      </details>
+      {% else %}
+      <p class="faint" id="financial-no-refresh-run">尚无资料刷新任务记录。</p>
+      {% endif %}
     </section>
 
     <section class="card" id="financial-statuses">
@@ -119,7 +184,8 @@
             <td data-label="{{ year.end }}">
               {% if cells %}
               {% for cell in cells %}
-              <div class="financial-fact" data-metric="{{ metric }}" data-period-end="{{ year.end }}">
+              {% set derived = cell.evidence_kind | default("reported") == "derived_calculation" %}
+              <div class="financial-fact" data-metric="{{ metric }}" data-period-end="{{ year.end }}" data-evidence-kind="{{ cell.evidence_kind | default('reported') }}">
                 {% if cell.amount is not none %}
                 <span class="financial-amount">{{ cell.amount }}</span>
                 <span class="financial-unit">{{ cell.unit }}{% if cell.currency and cell.currency != cell.unit %} · {{ cell.currency }}{% endif %}</span>
@@ -127,10 +193,13 @@
                 <span class="financial-missing">缺失</span>
                 <span class="financial-missing-reason">{{ cell.missing_reason or "原件未标注缺失原因" }}</span>
                 {% endif %}
-                <span class="verify">{{ labels.verification.get(cell.verification, cell.verification) }}</span>
+                <span class="verify">{% if derived and cell.verification == "verified" %}计算已复核{% elif derived and cell.verification == "candidate" %}计算待复核{% else %}{{ labels.verification.get(cell.verification, cell.verification) }}{% endif %}</span>
                 {% if cell.conflict != "none" %}<span class="badge warn">{{ labels.conflict.get(cell.conflict, cell.conflict) }}</span>{% endif %}
-                <span class="faint">{{ cell.source }}{% if cell.source_date %} · 来源日期 {{ cell.source_date }}{% else %} · 来源日期未标注{% endif %}</span>
-                {% if cell.locator %}<span class="faint">原件定位：{{ cell.locator }}</span>{% endif %}
+                <span class="faint">{{ cell.source }}{% if cell.source_date %}{% if derived %} · 计算依据日期 {{ cell.source_date }}{% else %} · 来源日期 {{ cell.source_date }}{% endif %}{% elif not derived %} · 来源日期未标注{% endif %}</span>
+                {% if cell.locator %}
+                {% if derived %}<details class="financial-proof-details"><summary>查看计算依据</summary><span class="faint">输入定位：{{ cell.locator }}</span></details>
+                {% else %}<span class="faint">原件定位：{{ cell.locator }}</span>{% endif %}
+                {% endif %}
               </div>
               {% endfor %}
               {% else %}
@@ -171,6 +240,13 @@
             <span class="financial-missing">无值</span>：{{ labels.metric_status.get(metric.status, metric.status) }}
             {% endif %}
           </div>
+          {% set evidence = financial.metric_coverage.get(metric.key) if financial.metric_coverage else none %}
+          {% if evidence %}
+          <div class="financial-metric-evidence" data-applicable="{{ 'true' if evidence.applicable else 'false' }}" data-evidence-status="{{ evidence.evidence_status }}">
+            <span class="badge">{{ labels.metric_evidence.get(evidence.evidence_status, evidence.evidence_status) }}</span>
+            <span>可用事实 {{ evidence.usable_facts }} 项 · 已核对 {{ evidence.verified_facts }} 项</span>
+          </div>
+          {% endif %}
           <div class="faint financial-metric-basis">{{ metric.basis }}</div>
           {% for note in metric.notes %}
           <div class="financial-metric-note">{{ note }}</div>
@@ -184,12 +260,13 @@
     <section class="card financial-refresh" id="financial-refresh">
       <div class="card-head"><h2>资料刷新</h2></div>
       {% if financial.covered %}
-      <button type="button" id="financial-refresh-button" data-listing-id="{{ financial.listing_id }}">刷新资料</button>
+      <button type="button" id="financial-refresh-button" data-listing-id="{{ financial.listing_id }}"
+              data-context-url="/research/listings/{{ financial.listing_id }}/financial-context">刷新资料</button>
       <p class="faint" id="financial-refresh-hint">
         {% if financial.capabilities.online_refresh %}
         在线刷新已开启：登记后由采集流程执行，完成后页面数据才会更新。
         {% else %}
-        在线刷新未开启：点按只会登记一次采集任务，不会联网采集，也不会立即更新本页数据。
+        在线刷新未开启：点按只会登记一次采集任务，不会联网采集，也不会立即更新本页数据。登记成功只代表任务已排队，不代表采集已执行或资料已更新。
         {% endif %}
       </p>
       <div id="financial-refresh-result" class="financial-refresh-result" aria-live="polite"></div>

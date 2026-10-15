@@ -195,6 +195,23 @@
 .financial-refresh { display: grid; gap: 8px; justify-items: start; }
 .financial-refresh button { white-space: normal; }
 .financial-refresh-result:empty { display: none; }
+.financial-freshness-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 16px; margin: 0 0 12px; }
+.financial-freshness-list dd, .financial-refresh-proof-list dd { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.financial-source-controls { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.financial-source-control { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; margin: 0; font-size: 13px; }
+.financial-source-control .badge { margin: 0; }
+.financial-refresh-proof { width: 100%; padding-top: 8px; border-top: 1px solid var(--line); }
+.financial-refresh-proof > summary { color: var(--accent); cursor: pointer; font-size: 13px; }
+.financial-refresh-proof-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 10px 16px; margin: 10px 0 0; }
+.financial-metric-evidence { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: var(--ink-2); font-size: 12.5px; }
+.financial-metric-evidence .badge { margin: 0; }
+.financial-status[data-status-code="source_conflict"] .badge,
+.financial-status[data-status-code="failed_refresh"] .badge,
+.financial-status[data-status-code="latestness_unknown"] .badge { background: var(--warn-soft); color: var(--warn); }
+.financial-status[data-status-code="awaiting_original_review"] .badge,
+.financial-status[data-status-code="partial_coverage"] .badge { background: var(--sunken); color: var(--ink-2); }
+.financial-facts { max-width: 100%; }
+.financial-facts td, .financial-facts th { overflow-wrap: anywhere; }
 
 /* ---- 手机（< 56rem）：单列、吸顶标签、底部操作条 ---- */
 @media (max-width: 56rem) {
@@ -263,6 +280,7 @@
 
   .stock-abar { z-index: 25; }
   .financial-identity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .financial-freshness-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fin-coverage { grid-template-columns: minmax(0, 1fr); }
   .financial-metric-list { grid-template-columns: minmax(0, 1fr); }
 }

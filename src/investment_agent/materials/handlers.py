@@ -12,17 +12,17 @@ collecting one security's research material:
 3. refuse to fetch while :data:`ONLINE_REFRESH_ENABLED` is false (the default:
    the Eastmoney / Yahoo licences are not confirmed) — zero network calls;
 4. otherwise ask the adapter which bounded requests it needs, fetch them
-   through the rate-limited, user-agent-carrying fetcher, parse, and store
-   every draft through ``MaterialStore`` (immutable, content-hash versioned);
+   through the rate-limited, user-agent-carrying fetcher, archive every source
+   response, parse, and store every draft through ``MaterialStore``;
 5. commit after every source and record a checkpoint, so a retried attempt
    resumes instead of redoing a source that already finished;
 6. structural parse problems (a changed upstream shape, a truncated page) are
    reported per source and never retried blindly; informational counters
    (``unmapped_items:`` and friends) go to the run metadata's
    ``informational`` list and leave the outcome untouched;
-7. transient network failures keep the retry budget: the checkpoint is written
-   first and the :class:`ProviderTransientError` is re-raised, so the worker
-   schedules the retry and the next attempt skips the finished sources;
+7. transient network failures keep the retry budget: received responses and
+   their acquisition record are checkpointed first, then the
+   :class:`ProviderTransientError` is re-raised;
 8. the run is ``completed`` only when every requested source was stored
    cleanly; anything else is ``partial`` and names its reason in the metadata.
 
@@ -54,6 +54,16 @@ from investment_agent.domain.security import (
     source_symbol,
 )
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
+from investment_agent.materials.archive import (
+    ArchiveCapture,
+    DatasetLink,
+    ResponseEvidence,
+    archive_capture,
+    identity_snapshot,
+    period_snapshot,
+    record_acquisition,
+    sanitize_url,
+)
 from investment_agent.materials.contracts import (
     DatasetDraft,
     FactPeriod,
@@ -227,7 +237,36 @@ class HttpxMaterialFetcher:
                 response = await self._send(client, request)
         else:
             response = await self._send(self._client, request)
-        return self._payload(request, response)
+        raw = self._payload(request, response)
+        status = response.status_code
+        if status in {408, 429} or status >= 500:
+            raise _MaterialTransientError(
+                f"{request.name}: upstream HTTP {status}",
+                provider=self._provider(request),
+                error_code=f"http_{status}",
+                raw_payload=raw,
+                parse_eligible=False,
+            )
+        if status >= 400:
+            raise _MaterialDataError(
+                f"{request.name}: upstream HTTP {status}",
+                provider=self._provider(request),
+                error_code=f"http_{status}",
+                raw_payload=raw,
+                parse_eligible=False,
+            )
+        if request.media_type == "application/json":
+            try:
+                json.loads(raw.content)
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise _MaterialDataError(
+                    f"{request.name}: the response body is not JSON: {exc}",
+                    provider=self._provider(request),
+                    error_code="not_json",
+                    raw_payload=raw,
+                    parse_eligible=False,
+                ) from exc
+        return raw
 
     def limiter_for(self, request: UpstreamRequest) -> AsyncRateLimiter:
         """The limiter of ``request``'s upstream host (one per host, shared)."""
@@ -263,32 +302,10 @@ class HttpxMaterialFetcher:
                 provider=provider,
                 error_code="transport",
             ) from exc
-        status = response.status_code
-        if status in {408, 429} or status >= 500:
-            raise ProviderTransientError(
-                f"{request.name}: upstream HTTP {status}",
-                provider=provider,
-                error_code=f"http_{status}",
-            )
-        if status >= 400:
-            raise ProviderDataError(
-                f"{request.name}: upstream HTTP {status}",
-                provider=provider,
-                error_code=f"http_{status}",
-            )
         return response
 
     def _payload(self, request: UpstreamRequest, response: httpx.Response) -> RawPayload:
         content = response.content
-        if request.media_type == "application/json":
-            try:
-                json.loads(content)
-            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-                raise ProviderDataError(
-                    f"{request.name}: the response body is not JSON: {exc}",
-                    provider=self._provider(request),
-                    error_code="not_json",
-                ) from exc
         return RawPayload(
             name=request.name,
             content=content,
@@ -304,6 +321,30 @@ class HttpxMaterialFetcher:
             if source_host == host:
                 return source
         return host or "unknown"
+
+
+class _MaterialTransientError(ProviderTransientError):
+    """Retryable material error that retains the response body when present."""
+
+    def __init__(
+        self, message: str, *, provider: str, error_code: str,
+        raw_payload: RawPayload, parse_eligible: bool,
+    ):
+        super().__init__(message, provider=provider, error_code=error_code)
+        self.raw_payload = raw_payload
+        self.parse_eligible = parse_eligible
+
+
+class _MaterialDataError(ProviderDataError):
+    """Terminal material error that retains the response body for archiving."""
+
+    def __init__(
+        self, message: str, *, provider: str, error_code: str,
+        raw_payload: RawPayload, parse_eligible: bool,
+    ):
+        super().__init__(message, provider=provider, error_code=error_code)
+        self.raw_payload = raw_payload
+        self.parse_eligible = parse_eligible
 
 
 def default_adapters() -> dict[str, MaterialSourceAdapter]:
@@ -403,14 +444,21 @@ class MaterialCollectionHandler(BaseJobHandler):
                     # A source that finished in an earlier attempt is not redone.
                     state.skip(source, SKIPPED_ALREADY_CHECKED)
                     continue
-                await self._run_source(
-                    state=state,
-                    source=source,
-                    subject=subject,
-                    payload=payload,
-                    adapters=adapters,
-                    store=store,
-                )
+                try:
+                    await self._run_source(
+                        session=session,
+                        state=state,
+                        source=source,
+                        subject=subject,
+                        payload=payload,
+                        adapters=adapters,
+                        store=store,
+                    )
+                except ProviderTransientError:
+                    # A retry must not lose already received responses from a
+                    # partially completed source attempt.
+                    await self._checkpoint(session, repository, job, state)
+                    raise
                 await self._checkpoint(session, repository, job, state)
             if self._outcome(state) == "completed":
                 await repository.mark_success(job.run_id, lease=job.lease)
@@ -423,6 +471,7 @@ class MaterialCollectionHandler(BaseJobHandler):
     async def _run_source(
         self,
         *,
+        session: AsyncSession,
         state: _RunState,
         source: str,
         subject: _Subject,
@@ -436,6 +485,7 @@ class MaterialCollectionHandler(BaseJobHandler):
             state.mark(source, SOURCE_NOT_BOUND)
             state.skip(source, SOURCE_NOT_BOUND)
             return
+        state.begin_source(source)
         adapter = adapters.get(source)
         if adapter is None:
             # A wiring defect, not a data problem: no adapter may silently
@@ -457,30 +507,117 @@ class MaterialCollectionHandler(BaseJobHandler):
                 periods=_requested_periods(payload),
                 state=state,
             )
-        except ProviderTransientError:
+        except ProviderTransientError as exc:
+            carried = getattr(exc, "raw_payload", None)
+            if isinstance(carried, RawPayload):
+                state.record_payload(source, carried)
+                state.mark_parse_ineligible(source, carried.name)
+                state.record_responses(source, state.payloads[source])
+            await self._archive_source(
+                session=session,
+                state=state,
+                source=source,
+                subject=subject,
+                adapter=adapter,
+                periods=_requested_periods(payload),
+                problems=(f"{source}: transient_error: {exc.error_code or type(exc).__name__}",),
+            )
             # The caller's checkpoint keeps what already finished; the worker
             # decides whether the retry budget allows another attempt.
             raise
         except ProviderDataError as exc:
+            carried = getattr(exc, "raw_payload", None)
+            if isinstance(carried, RawPayload):
+                state.record_payload(source, carried)
+                state.mark_parse_ineligible(source, carried.name)
+                state.record_responses(source, state.payloads[source])
+            await self._archive_source(
+                session=session,
+                state=state,
+                source=source,
+                subject=subject,
+                adapter=adapter,
+                periods=_requested_periods(payload),
+                problems=(f"{source}: data_error: {exc.error_code or type(exc).__name__}",),
+            )
             state.mark(source, SOURCE_DATA_ERROR)
-            state.note_problem(f"{source}: data_error: {exc}")
+            state.note_problem(f"{source}: data_error: {exc.error_code or type(exc).__name__}")
             return
 
         structural = [problem for problem in problems if not is_informational_problem(problem)]
+        capture_problems = list(problems)
         for problem in problems:
             if is_informational_problem(problem):
                 state.note_informational(f"{source}: {problem}")
             else:
                 state.note_problem(f"{source}: {problem}")
+        saved: list[SavedDataset] = []
         if drafts:
             storeable = _attach_raw(coalesce_annual_tables(drafts), raw)
-            state.record_saved(source, [await store.save(draft) for draft in storeable])
+            saved = [await store.save(draft) for draft in storeable]
+            state.record_saved(source, saved)
         elif not structural:
-            state.note_problem(
-                f"{source}: the adapter produced no dataset and reported no problem; "
-                "nothing was stored"
-            )
+            no_dataset = f"{source}: no_dataset: adapter produced no dataset or problem"
+            state.note_problem(no_dataset)
+            capture_problems.append(no_dataset)
         state.mark(source, SOURCE_STRUCTURAL_FAILURE if structural else SOURCE_SAVED)
+        await self._archive_source(
+            session=session,
+            state=state,
+            source=source,
+            subject=subject,
+            adapter=adapter,
+            periods=_requested_periods(payload),
+            problems=tuple(capture_problems),
+            datasets=saved,
+        )
+
+    async def _archive_source(
+        self,
+        *,
+        session: AsyncSession,
+        state: _RunState,
+        source: str,
+        subject: _Subject,
+        adapter: MaterialSourceAdapter,
+        periods: Sequence[FactPeriod],
+        problems: Sequence[str],
+        datasets: Sequence[SavedDataset] = (),
+    ) -> None:
+        """Persist the immutable capture before the source checkpoint commits."""
+
+        archived = archive_capture(
+            self.settings.data_dir,
+            ArchiveCapture(
+                identity=identity_snapshot(subject.identity),
+                subject_id=subject.company_id,
+                source=source,
+                adapter_version=adapter.adapter_version,
+                periods=tuple(period_snapshot(period) for period in periods),
+                expected_requests=tuple(state.expected_requests.get(source, ())),
+                responses=tuple(
+                    ResponseEvidence(
+                        name=raw.name,
+                        content=raw.content,
+                        source_url=raw.source_url,
+                        media_type=raw.media_type,
+                        http_status=raw.http_status,
+                        fetched_at=raw.fetched_at,
+                        parse_eligible=raw.name not in state.parse_ineligible.get(source, set()),
+                    )
+                    for raw in state.payloads.get(source, ())
+                ),
+                problems=tuple(problems),
+            ),
+        )
+        record = await record_acquisition(
+            session,
+            archived,
+            datasets=tuple(
+                DatasetLink(item.id, item.revision, item.content_hash) for item in datasets
+            ),
+        )
+        state.record_acquisition(source, record.id, archived.manifest_ref, archived.manifest_sha256)
 
     async def _fetch_and_parse(
         self,
@@ -494,10 +631,10 @@ class MaterialCollectionHandler(BaseJobHandler):
         """Fetch every request the adapter asks for, then parse the responses.
 
         An adapter may name further documents only after a parse (the SEC
-        submissions shards), so this asks again after each round. Every
-        response fetched so far is recorded in the run metadata: when no raw
-        artifact is kept (several responses per source cannot be attributed to
-        a single dataset) that record is the audit trail of what came back.
+        submissions shards), so this asks again after each round. Every pending
+        request name is recorded before fetching; captured response bytes are
+        kept for the source acquisition even when several responses have no
+        single-dataset attribution.
         """
 
         raw: list[RawPayload] = []
@@ -512,9 +649,12 @@ class MaterialCollectionHandler(BaseJobHandler):
             if not pending:
                 break
             for request in pending:
+                state.record_expected_request(source, request.name)
+            for request in pending:
                 fetched = await self.fetcher.fetch(request, identity=subject.identity)
                 seen.add(fetched.name)
                 raw.append(fetched)
+                state.record_payload(source, fetched)
                 state.record_responses(source, raw)
             result = adapter.parse(
                 subject.identity,
@@ -522,6 +662,13 @@ class MaterialCollectionHandler(BaseJobHandler):
                 periods=periods,
                 subject_id=subject.company_id,
             )
+        remaining = tuple(
+            request
+            for request in adapter.requests(subject.identity, periods=periods)
+            if request.name not in seen
+        )
+        for request in remaining:
+            state.record_expected_request(source, request.name)
         if result is None:
             # Nothing was requested (or only already-seen documents): the
             # adapter's own parse is still what reports the problem.
@@ -530,6 +677,14 @@ class MaterialCollectionHandler(BaseJobHandler):
                 raw=tuple(raw),
                 periods=periods,
                 subject_id=subject.company_id,
+            )
+        if remaining:
+            result = replace(
+                result,
+                problems=(
+                    *result.problems,
+                    "request_limit_exceeded: adapter named additional requests beyond the pass limit",
+                ),
             )
         return result.drafts, result.problems, tuple(raw)
 
@@ -635,6 +790,10 @@ class _RunState:
         self.saved = _mapping_list(previous.get("saved"))
         self.skipped = _mapping_list(previous.get("skipped"))
         self.responses = _response_map(previous.get("responses"))
+        self.acquisitions = _mapping_list(previous.get("acquisitions"))
+        self.expected_requests: dict[str, list[str]] = {}
+        self.payloads: dict[str, list[RawPayload]] = {}
+        self.parse_ineligible: dict[str, set[str]] = {}
         self.problems = _string_list(previous.get("problems"))
         self.informational = _string_list(previous.get("informational"))
 
@@ -674,6 +833,36 @@ class _RunState:
     def record_responses(self, source: str, raw: Sequence[RawPayload]) -> None:
         self.responses[source] = [_response_record(item) for item in raw]
 
+    def begin_source(self, source: str) -> None:
+        self.expected_requests[source] = []
+        self.payloads[source] = []
+        self.parse_ineligible[source] = set()
+
+    def record_expected_request(self, source: str, name: str) -> None:
+        names = self.expected_requests.setdefault(source, [])
+        if name not in names:
+            names.append(name)
+
+    def record_payload(self, source: str, raw: RawPayload) -> None:
+        payloads = self.payloads.setdefault(source, [])
+        if all(item.name != raw.name for item in payloads):
+            payloads.append(raw)
+
+    def mark_parse_ineligible(self, source: str, name: str) -> None:
+        self.parse_ineligible.setdefault(source, set()).add(name)
+
+    def record_acquisition(
+        self, source: str, acquisition_id: int, manifest_ref: str, manifest_sha256: str
+    ) -> None:
+        row = {
+            "source": source,
+            "acquisition_id": acquisition_id,
+            "manifest_ref": manifest_ref,
+            "manifest_sha256": manifest_sha256,
+        }
+        if row not in self.acquisitions:
+            self.acquisitions.append(row)
+
     def as_metadata(self) -> dict[str, object]:
         """The checkpoint/terminal metadata of this run (values are JSON-safe)."""
 
@@ -694,6 +883,7 @@ class _RunState:
             "saved": self.saved,
             "skipped": self.skipped,
             "responses": self.responses,
+            "acquisitions": self.acquisitions,
             "problems": self.problems,
             "informational": self.informational,
         }
@@ -707,13 +897,10 @@ def _attach_raw(
 ) -> tuple[DatasetDraft, ...]:
     """Attach the response a single-response source produced to every draft.
 
-    The store keeps the response bytes as the version's raw artifact. With one
-    response for the source the link is unambiguous; with several the adapter's
-    payloads cannot be attributed to one of them without guessing, so no
-    artifact is written (the same rule the offline importer applies, and the
-    run metadata keeps the response digests instead). ``source_fetched_at``
-    stays untouched: on this path the fetch *is* now, and that field belongs to
-    the imports of older evidence.
+    The store may keep a single-response artifact on a dataset for compatibility.
+    Every response, including multi-response sets and failures, is separately
+    retained by the source acquisition archive. ``source_fetched_at`` stays
+    untouched: this path's archive records each real response fetch time.
     """
 
     if len(raw) != 1:
@@ -789,7 +976,7 @@ def _response_record(raw: RawPayload) -> dict[str, object]:
         "bytes": len(raw.content),
         "media_type": raw.media_type,
         "http_status": raw.http_status,
-        "source_url": raw.source_url,
+        "source_url": sanitize_url(raw.source_url),
         "fetched_at": raw.fetched_at.isoformat(),
     }
 

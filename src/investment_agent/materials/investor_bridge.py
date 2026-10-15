@@ -37,7 +37,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,17 +48,17 @@ from investment_agent.evidence.store import EvidenceService
 from investment_agent.investor.common import Mutation, ObjectRef, OwnerId, Quantity
 from investment_agent.investor.contracts import Case
 from investment_agent.investor.enums import CalculationStatus
-from investment_agent.investor.foundations import InvestorError, InvestorService
+from investment_agent.investor.foundations import InvestorError, InvestorService, storage_conflicts
 from investment_agent.materials.contracts import SubjectKind
 from investment_agent.materials.evidence import material_evidence
-from investment_agent.storage.models.evidence import SavedEvidence
+from investment_agent.storage.models.evidence import SavedCalculation, SavedEvidence
 from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.models.research_material import ResearchDataset
 
 MATERIAL_CALCULATION_METHOD = "material_metrics"
 """Method name of a calculation over saved material evidence facts."""
 
-MATERIAL_CALCULATION_VERSION = "material.metrics.v1"
+MATERIAL_CALCULATION_VERSION = "material.metrics.v2"
 """Fixed formula version recorded on every material calculation."""
 
 
@@ -203,6 +203,7 @@ def material_calculation_input_hash(
     )
 
 
+@storage_conflicts
 async def save_material_calculation(
     session: AsyncSession,
     *,
@@ -233,8 +234,16 @@ async def save_material_calculation(
     records = await _visible_facts(
         session, owner_id, _listing_ref(listing), fact_refs, as_of
     )
+    result_digest = digest(
+        {key: value.model_dump(mode="json") for key, value in results.items()}
+    )
     record = CalculationRecord(
-        id=uuid4(),
+        id=uuid5(
+            NAMESPACE_URL,
+            f"material-calculation-record:{owner_id}:{listing_id}:{method}:{method_version}:"
+            f"{material_calculation_input_hash(records, method=method, method_version=method_version)}:"
+            f"{as_of.isoformat()}:{result_digest}",
+        ),
         revision=1,
         created_at=as_of,
         actor="material_calculation",
@@ -243,17 +252,62 @@ async def save_material_calculation(
         method_version=method_version,
         fact_refs=tuple(fact_refs),
         assumption_refs=(),
-        input_hash=material_calculation_input_hash(
-            records, method=method, method_version=method_version
-        ),
+        input_hash=material_calculation_input_hash(records, method=method, method_version=method_version),
         assumptions=(),
         as_of=as_of,
         applicable=True,
         status=CalculationStatus.OK,
         results=dict(results),
     )
-    return await EvidenceService(session).save_calculation(
-        owner_id, record, operation_id or uuid4()
+    stable_operation_id = operation_id or uuid5(
+        NAMESPACE_URL,
+        f"material-calculation:{owner_id}:{listing_id}:{record.input_hash}:"
+        f"{record.as_of.isoformat()}:{result_digest}",
+    )
+    evidence_service = EvidenceService(session)
+    request = {"operation": "save_calculation", "record": record.model_dump(mode="json")}
+    replay = await evidence_service.receipts._replay(owner_id, stable_operation_id, request)
+    if replay is not None:
+        return ObjectRef.model_validate(replay)
+    # A caller retry can reach this function with a fresh operation UUID. Reuse
+    # the semantic calculation first, scoped to an eligible as-of boundary, so
+    # the immutable row and its receipt cannot multiply for the same inputs.
+    prior_rows = (
+        await session.scalars(
+            select(SavedCalculation).where(SavedCalculation.owner_id == owner_id)
+        )
+    ).all()
+    for row in prior_rows:
+        prior = CalculationRecord.model_validate(row.payload)
+        same_output = set(prior.results) == set(record.results)
+        if (
+            same_output
+            and prior.method == method
+            and prior.method_version == method_version
+            and prior.input_hash == record.input_hash
+            and prior.fact_refs == record.fact_refs
+            and prior.results == record.results
+            and prior.as_of <= record.as_of
+        ):
+            ref = ObjectRef(kind="calculation", id=UUID(str(row.id)), revision=row.revision)
+            async with session.begin_nested():
+                evidence_service.receipts._receipt(owner_id, stable_operation_id, request, ref)
+                await session.flush()
+            return ref
+        if (
+            same_output
+            and prior.method == method
+            and prior.method_version == method_version
+            and prior.input_hash == record.input_hash
+            and prior.fact_refs == record.fact_refs
+            and prior.as_of <= record.as_of
+            and prior.results != record.results
+        ):
+            raise InvestorError(
+                "invalid_reference", "Material calculation idempotency key has different results"
+            )
+    return await evidence_service.save_calculation(
+        owner_id, record, stable_operation_id
     )
 
 

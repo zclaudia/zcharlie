@@ -28,6 +28,7 @@ from freezegun import freeze_time
 from sqlalchemy import func, select
 
 from investment_agent.domain.security import ControlledIdentity
+from investment_agent.materials.archive import verify_capture
 from investment_agent.materials.contracts import (
     SCHEMA_VERSION,
     AccountingStandard,
@@ -52,6 +53,7 @@ from investment_agent.materials.contracts import (
 )
 from investment_agent.materials.offline_import import import_offline_evidence
 from investment_agent.materials.store import MaterialStore
+from investment_agent.storage.models.material_acquisition import ResearchMaterialAcquisition
 from investment_agent.storage.models.research_material import ResearchDataset
 from tests.unit._hk_us_support import pilot_identities
 
@@ -504,7 +506,14 @@ async def test_failed_http_evidence_never_reaches_the_adapter(
     assert not adapter.received and not report.saved
     assert any("rejected HTTP status" in problem for problem in report.problems)
     assert await load_rows(db_session) == []
-    assert not data_dir.exists()
+    assert len(report.acquisition_ids) == 1
+    acquisition = await db_session.get(ResearchMaterialAcquisition, report.acquisition_ids[0])
+    assert acquisition is not None and acquisition.dataset_links == []
+    capture = verify_capture(data_dir, acquisition.archive_ref, acquisition.manifest_sha256)
+    assert len(capture.responses) == 1
+    assert capture.responses[0].content == (evidence_dir / "native/00005" / INCOME_NAME).read_bytes()
+    assert capture.responses[0].parse_eligible is False
+    assert not (data_dir / "research-material/company").exists()
 
 
 @pytest.mark.parametrize("field,value", [("sha256", "0" * 64), ("bytes", 1)])

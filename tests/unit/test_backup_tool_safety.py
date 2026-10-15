@@ -1,6 +1,7 @@
 """Backup tooling safety: symlinks are never followed, output is private,
 and verification refuses manifest paths outside the backup directory."""
 
+import hashlib
 import json
 import sqlite3
 import stat
@@ -100,3 +101,60 @@ def test_verify_rejects_paths_outside_backup_dir(tmp_path):
     assert result.returncode == 1
     assert result.stderr.count("unsafe manifest path") == 3
     assert "sha256 mismatch" not in result.stderr
+
+
+def test_backup_refuses_nonempty_or_overlapping_output_and_missing_source(tmp_path):
+    data_dir, _ = _data_dir_with_symlinks(tmp_path)
+    occupied = tmp_path / "occupied"
+    occupied.mkdir()
+    (occupied / "keep.txt").write_text("keep")
+    result = _run(BACKUP, "--data-dir", str(data_dir), "--output", str(occupied))
+    assert result.returncode == 2
+    assert (occupied / "keep.txt").read_text() == "keep"
+
+    result = _run(BACKUP, "--data-dir", str(data_dir), "--output", str(data_dir / "nested"))
+    assert result.returncode == 2
+    assert not (data_dir / "nested").exists()
+
+    absent_data = tmp_path / "absent"
+    result = _run(BACKUP, "--data-dir", str(absent_data), "--output", str(tmp_path / "missing-db-backup"))
+    assert result.returncode == 2
+    assert not (absent_data / "app.db").exists()
+
+
+def test_verify_rejects_empty_duplicate_and_uncovered_manifests(tmp_path):
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    with sqlite3.connect(backup / "app.db") as connection:
+        connection.execute("CREATE TABLE marker (value TEXT)")
+    entry = {
+        "path": "app.db",
+        "size": (backup / "app.db").stat().st_size,
+        "sha256": hashlib.sha256((backup / "app.db").read_bytes()).hexdigest(),
+    }
+    (backup / "extra.txt").write_text("unlisted")
+    manifest = {"schema": "zcharlie-backup-manifest.v1", "files": [entry, entry]}
+    (backup / "manifest.json").write_text(json.dumps(manifest))
+    result = _run(VERIFY, "--backup-dir", str(backup))
+    assert result.returncode == 1
+    assert "duplicate manifest path: app.db" in result.stderr
+    assert "file not covered by manifest: extra.txt" in result.stderr
+
+
+def test_verify_rejects_noncanonical_alias_paths(tmp_path):
+    backup = tmp_path / "backup"
+    backup.mkdir()
+    with sqlite3.connect(backup / "app.db") as connection:
+        connection.execute("CREATE TABLE marker (value TEXT)")
+    entry = {
+        "path": "app.db",
+        "size": (backup / "app.db").stat().st_size,
+        "sha256": hashlib.sha256((backup / "app.db").read_bytes()).hexdigest(),
+    }
+    alias = {**entry, "path": "./app.db"}
+    (backup / "manifest.json").write_text(json.dumps({
+        "schema": "zcharlie-backup-manifest.v1", "files": [entry, alias]
+    }))
+    result = _run(VERIFY, "--backup-dir", str(backup))
+    assert result.returncode == 1
+    assert "unsafe manifest path: ./app.db" in result.stderr

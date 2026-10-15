@@ -1,5 +1,9 @@
 # 港股与美股扩展实施计划 · 总计划
 
+> 2026-10-16 后续阶段：HK2-08 M1 本地发布、配套备份恢复和恢复后的浏览器验收已通过，见 [29](29-hk2-08-m1-acceptance.md)。在线刷新保持关闭，生产环境尚未迁移、导入或部署。本总计划的首期波次、时间窗口及历史遗留表保留原日期；当前剩余工作以 [15](15-next-phase.md) 为准。
+
+> 合入本地 main 的联合验收见 [30](30-main-integration-acceptance.md)；之前各阶段文档保留当时的分支和发布状态。
+
 > 依据：[`research/market-data-validation/hk-us-expansion-design.md`](../../../../research/market-data-validation/hk-us-expansion-design.md)（v0.1，2026-10-12，供评审草案）。
 > 本目录把该草案拆成 14 个**可独立验证**的子任务（01～12 为核心，13～14 为可选尾部），每个子任务交给一个独立 sub-agent 执行。
 > 执行前先读本文件与 [`00-conventions.md`](00-conventions.md)，再读自己的子计划。

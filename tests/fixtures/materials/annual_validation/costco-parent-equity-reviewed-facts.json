@@ -1,0 +1,250 @@
+{
+  "company_key": "costco",
+  "purpose": "Reviewed parent-equity bridge for the FY2023 opening balance and FY2023 closing balance. Parent equity, noncontrolling interests, and reported total equity are retained as separate source facts.",
+  "source_capture": {
+    "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+    "raw_path": "data/hk2-latest-evidence/2026-10-15/raw/costco-equity/cost-20230903.htm",
+    "metadata_path": "data/hk2-latest-evidence/2026-10-15/raw/costco-equity/cost-20230903.htm.meta.json",
+    "filing_form": "10-K",
+    "filing_date": "2023-10-11",
+    "accession": "0000909832-23-000042",
+    "captured_at": "2026-10-15T14:43:54Z",
+    "http_status": 200,
+    "media_type": "text/html",
+    "bytes": 1502730,
+    "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+    "fragment_note": "The reviewed row excerpts below are compact text extracts from this captured official filing. They are not presented as the full filing."
+  },
+  "source_contexts": {
+    "c-12": {
+      "instant": "2023-09-03",
+      "entity_cik": "0000909832"
+    },
+    "c-13": {
+      "instant": "2022-08-28",
+      "entity_cik": "0000909832"
+    }
+  },
+  "reviewed_parent_equity_rows": [
+    {
+      "company_key": "costco",
+      "year": 2022,
+      "category": "beginning_equity",
+      "metric": "equity_parent",
+      "value": "20,642",
+      "scale": 1000000,
+      "raw_unit": "USD million",
+      "currency": "USD",
+      "period_start": null,
+      "period_end": "2022-08-28",
+      "beginning_of_year_for_fy": 2023,
+      "source_label": "Total Costco stockholders’ equity",
+      "source_field": "Total Costco stockholders’ equity",
+      "locator": "2023 Form 10-K, Consolidated Balance Sheets, August 28, 2022 column; Total Costco stockholders’ equity",
+      "excerpt": "Total Costco stockholders’ equity | 25,058 | 20,642",
+      "row_visible_text": "Total Costco stockholders’ equity | 25,058 | 20,642",
+      "raw_path": "data/hk2-latest-evidence/2026-10-15/raw/costco-equity/cost-20230903.htm",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+      "source_sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+      "filing_form": "10-K",
+      "filing_date": "2023-10-11",
+      "accession": "0000909832-23-000042",
+      "captured_at": "2026-10-15T14:43:54Z",
+      "http_status": 200,
+      "media_type": "text/html",
+      "inline_xbrl": {
+        "name": "us-gaap:StockholdersEquity",
+        "context_ref": "c-13",
+        "unit_ref": "usd",
+        "scale": "6",
+        "decimals": "-6",
+        "id": "f-161",
+        "fact_value": "20,642",
+        "sign": null
+      },
+      "locator_detail": {
+        "kind": "html",
+        "document_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+        "anchor": "#f-161",
+        "anchor_text": "Total Costco stockholders’ equity",
+        "context_ref": "c-13",
+        "xbrl_tag": "us-gaap:StockholdersEquity",
+        "table_column_header": "September 3, | 2023 | August 28, | 2022",
+        "row_label": "Total Costco stockholders’ equity",
+        "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#cceeff;padding:2px 1pt 2px 37pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:400;line-height:100%\">Total Costco stockholders&#8217; equity</span></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-160\">25,058</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#cceeff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-161\">20,642</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+      }
+    },
+    {
+      "company_key": "costco",
+      "year": 2023,
+      "category": "equity",
+      "metric": "equity_parent",
+      "value": "25,058",
+      "scale": 1000000,
+      "raw_unit": "USD million",
+      "currency": "USD",
+      "period_start": null,
+      "period_end": "2023-09-03",
+      "source_label": "Total Costco stockholders’ equity",
+      "source_field": "Total Costco stockholders’ equity",
+      "locator": "2023 Form 10-K, Consolidated Balance Sheets, September 3, 2023 column; Total Costco stockholders’ equity",
+      "excerpt": "Total Costco stockholders’ equity | 25,058 | 20,642",
+      "row_visible_text": "Total Costco stockholders’ equity | 25,058 | 20,642",
+      "raw_path": "data/hk2-latest-evidence/2026-10-15/raw/costco-equity/cost-20230903.htm",
+      "source_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+      "source_sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+      "filing_form": "10-K",
+      "filing_date": "2023-10-11",
+      "accession": "0000909832-23-000042",
+      "captured_at": "2026-10-15T14:43:54Z",
+      "http_status": 200,
+      "media_type": "text/html",
+      "inline_xbrl": {
+        "name": "us-gaap:StockholdersEquity",
+        "context_ref": "c-12",
+        "unit_ref": "usd",
+        "scale": "6",
+        "decimals": "-6",
+        "id": "f-160",
+        "fact_value": "25,058",
+        "sign": null
+      },
+      "locator_detail": {
+        "kind": "html",
+        "document_url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+        "anchor": "#f-160",
+        "anchor_text": "Total Costco stockholders’ equity",
+        "context_ref": "c-12",
+        "xbrl_tag": "us-gaap:StockholdersEquity",
+        "table_column_header": "September 3, | 2023 | August 28, | 2022",
+        "row_label": "Total Costco stockholders’ equity",
+        "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#cceeff;padding:2px 1pt 2px 37pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:400;line-height:100%\">Total Costco stockholders&#8217; equity</span></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-160\">25,058</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#cceeff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-161\">20,642</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+      }
+    }
+  ],
+  "reported_total_and_nci": [
+    {
+      "date": "2022-08-28",
+      "parent_equity_usd_millions": "20,642",
+      "parent_tag": "us-gaap:StockholdersEquity",
+      "nci_usd_millions": "5",
+      "nci_tag": "us-gaap:MinorityInterest",
+      "nci_fact_id": "f-163",
+      "total_equity_usd_millions": "20,647",
+      "total_tag": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+      "total_fact_id": "f-165",
+      "context_ref": "c-13",
+      "reported_statement_excerpt": "Total Costco stockholders’ equity | 20,642\nNoncontrolling interests | 5\nTOTAL EQUITY | 20,647",
+      "reconciliation": "20,642 + 5 = 20,647",
+      "source_fact_details": [
+        {
+          "role": "parent_equity",
+          "source_label": "Total Costco stockholders’ equity",
+          "raw_value": "20,642",
+          "normalized_value_usd_millions": "20,642",
+          "tag": "us-gaap:StockholdersEquity",
+          "context_ref": "c-13",
+          "unit_ref": "usd",
+          "currency": "USD",
+          "xbrl_scale": "6",
+          "xbrl_decimals": "-6",
+          "fact_id": "f-161",
+          "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#cceeff;padding:2px 1pt 2px 37pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:400;line-height:100%\">Total Costco stockholders&#8217; equity</span></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-160\">25,058</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#cceeff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-161\">20,642</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+        },
+        {
+          "role": "noncontrolling_interest",
+          "source_label": "Noncontrolling interests",
+          "raw_value": "5",
+          "normalized_value_usd_millions": "5",
+          "tag": "us-gaap:MinorityInterest",
+          "context_ref": "c-13",
+          "unit_ref": "usd",
+          "currency": "USD",
+          "xbrl_scale": "6",
+          "xbrl_decimals": "-6",
+          "fact_id": "f-163",
+          "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#ffffff;padding:2px 1pt 2px 19pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:400;line-height:100%\">Noncontrolling interests</span></td><td colspan=\"2\" style=\"background-color:#ffffff;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:MinorityInterest\" format=\"ixt:fixed-zero\" scale=\"6\" id=\"f-162\">&#8212;</ix:nonFraction>&#160;</span></td><td style=\"background-color:#ffffff;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#ffffff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#ffffff;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:MinorityInterest\" scale=\"6\" id=\"f-163\">5</ix:nonFraction>&#160;</span></td><td style=\"background-color:#ffffff;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+        },
+        {
+          "role": "reported_total_equity",
+          "source_label": "TOTAL EQUITY",
+          "raw_value": "20,647",
+          "normalized_value_usd_millions": "20,647",
+          "tag": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+          "context_ref": "c-13",
+          "unit_ref": "usd",
+          "currency": "USD",
+          "xbrl_scale": "6",
+          "xbrl_decimals": "-6",
+          "fact_id": "f-165",
+          "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#cceeff;padding:2px 1pt 2px 37pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:700;line-height:100%\">TOTAL EQUITY</span></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-164\">25,058</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#cceeff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-165\">20,647</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+        }
+      ]
+    },
+    {
+      "date": "2023-09-03",
+      "parent_equity_usd_millions": "25,058",
+      "parent_tag": "us-gaap:StockholdersEquity",
+      "nci_usd_millions": "0",
+      "nci_display": "—",
+      "nci_tag": "us-gaap:MinorityInterest",
+      "nci_fact_id": "f-162",
+      "total_equity_usd_millions": "25,058",
+      "total_tag": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+      "total_fact_id": "f-164",
+      "context_ref": "c-12",
+      "reported_statement_excerpt": "Total Costco stockholders’ equity | 25,058\nNoncontrolling interests | —\nTOTAL EQUITY | 25,058",
+      "reconciliation": "25,058 + 0 = 25,058",
+      "source_fact_details": [
+        {
+          "role": "parent_equity",
+          "source_label": "Total Costco stockholders’ equity",
+          "raw_value": "25,058",
+          "normalized_value_usd_millions": "25,058",
+          "tag": "us-gaap:StockholdersEquity",
+          "context_ref": "c-12",
+          "unit_ref": "usd",
+          "currency": "USD",
+          "xbrl_scale": "6",
+          "xbrl_decimals": "-6",
+          "fact_id": "f-160",
+          "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#cceeff;padding:2px 1pt 2px 37pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:400;line-height:100%\">Total Costco stockholders&#8217; equity</span></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-160\">25,058</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#cceeff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:StockholdersEquity\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-161\">20,642</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+        },
+        {
+          "role": "noncontrolling_interest",
+          "source_label": "Noncontrolling interests",
+          "raw_value": "—",
+          "normalized_value_usd_millions": "0",
+          "tag": "us-gaap:MinorityInterest",
+          "context_ref": "c-12",
+          "unit_ref": "usd",
+          "currency": "USD",
+          "xbrl_scale": "6",
+          "xbrl_decimals": "-6",
+          "fact_id": "f-162",
+          "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#ffffff;padding:2px 1pt 2px 19pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:400;line-height:100%\">Noncontrolling interests</span></td><td colspan=\"2\" style=\"background-color:#ffffff;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:MinorityInterest\" format=\"ixt:fixed-zero\" scale=\"6\" id=\"f-162\">&#8212;</ix:nonFraction>&#160;</span></td><td style=\"background-color:#ffffff;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#ffffff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#ffffff;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:MinorityInterest\" scale=\"6\" id=\"f-163\">5</ix:nonFraction>&#160;</span></td><td style=\"background-color:#ffffff;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+        },
+        {
+          "role": "reported_total_equity",
+          "source_label": "TOTAL EQUITY",
+          "raw_value": "25,058",
+          "normalized_value_usd_millions": "25,058",
+          "tag": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+          "context_ref": "c-12",
+          "unit_ref": "usd",
+          "currency": "USD",
+          "xbrl_scale": "6",
+          "xbrl_decimals": "-6",
+          "fact_id": "f-164",
+          "raw_html_row": "<tr><td colspan=\"3\" style=\"background-color:#cceeff;padding:2px 1pt 2px 37pt;text-align:left;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:9pt;font-weight:700;line-height:100%\">TOTAL EQUITY</span></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-12\" decimals=\"-6\" name=\"us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-164\">25,058</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td><td colspan=\"3\" style=\"background-color:#cceeff;padding:0 1pt\"></td><td colspan=\"2\" style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 0 2px 1pt;text-align:right;vertical-align:bottom\"><span style=\"color:#000000;font-family:'Arial',sans-serif;font-size:10pt;font-weight:400;line-height:100%\"><ix:nonFraction unitRef=\"usd\" contextRef=\"c-13\" decimals=\"-6\" name=\"us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest\" format=\"ixt:num-dot-decimal\" scale=\"6\" id=\"f-165\">20,647</ix:nonFraction>&#160;</span></td><td style=\"background-color:#cceeff;border-top:1pt solid #000000;padding:2px 1pt 2px 0;text-align:right;vertical-align:bottom\"></td></tr>"
+        }
+      ]
+    }
+  ],
+  "review_notes": [
+    "The previous reviewed FY2022/FY2023 values 20,647 and 25,058 remain verbatim reported total-equity facts under the all-in tag; this supplement does not overwrite or relabel them.",
+    "The FY2022 parent-only balance is directly reported as 20,642 in the explicit Total Costco stockholders’ equity row. NCI of 5 is separately reported and explains the 20,647 total.",
+    "FY2023 parent-only balance is directly reported as 25,058. The filing displays NCI as an em dash, encoded as a zero-valued MinorityInterest fact (format ixt:fixed-zero), and reports the same amount as total equity.",
+    "These balances are instant facts in USD with XBRL scale 6 (USD millions), not duration facts. FY2022 is the actual August 28, 2022 close used as the FY2023 opening balance."
+  ]
+}

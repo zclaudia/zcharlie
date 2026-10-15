@@ -60,6 +60,7 @@ from investment_agent.investor.common import Quantity
 from investment_agent.investor.enums import CalculationStatus
 from investment_agent.materials.contracts import (
     CURRENCY_UNITS,
+    AccountingStandard,
     EquityScope,
     FactPeriod,
     FactRecord,
@@ -411,7 +412,7 @@ def _roe_avg_equity(index: _FactIndex, profile: CompanyProfile, period: FactPeri
         f"original reporting currency {profile.report_currency}, no display conversion"
     )
     beginning_end = _instant_before(period)
-    profit_pick = _pick(index, _ROE_PROFIT_PREFERENCE, period.end)
+    profit_pick = _roe_profit_pick(index, period.end)
     equity_end_pick = _pick(index, _EQUITY_PREFERENCE, period.end)
     equity_begin_pick = _pick(index, _EQUITY_PREFERENCE, beginning_end)
     inputs = tuple(
@@ -426,6 +427,12 @@ def _roe_avg_equity(index: _FactIndex, profile: CompanyProfile, period: FactPeri
             f"{equity_end_pick.fact.metric} at the two period ends"
         )
     notes: list[str] = []
+    if profit_pick.fact is not None and profit_pick.fact.metric == "net_profit":
+        notes.append(
+            "accepted net_profit for ROE because its source explicitly identifies US GAAP and "
+            f"equity_scope={profit_pick.fact.semantics.equity_scope.value}; the fact name, source "
+            "label, source field and provenance are preserved"
+        )
     if profile.is_bank:
         notes.append("bank: the ordinary-corporate profitability comparison is not applied")
         return _result(
@@ -514,7 +521,9 @@ def _roe_avg_equity(index: _FactIndex, profile: CompanyProfile, period: FactPeri
             notes=tuple(notes),
             inputs=inputs,
         )
-    inputs = inputs + (_input_ref(equity_begin_fact),)
+    beginning_ref = _input_ref(equity_begin_fact)
+    if beginning_ref not in inputs:
+        inputs = inputs + (beginning_ref,)
     notes.extend(_currency_problem(profile, (equity_begin_fact,))[1])
     periods = _unique_periods(period, equity_end_fact.period, equity_begin_fact.period)
     profit_amount = _amount(profit_fact)
@@ -1318,6 +1327,122 @@ def _cash_profit_pick(index: _FactIndex, end: date | None) -> _Pick:
             continue
         return _Pick(fact=fact, problems=())
     return _Pick(fact=None, problems=tuple(problems))
+
+
+def _roe_profit_pick(index: _FactIndex, end: date | None) -> _Pick:
+    """Select an ROE numerator without rewriting the source fact's metric name.
+
+    The SEC US GAAP ``NetIncomeLoss`` concept is comparable to a parent-profit
+    numerator when the reviewed fact explicitly carries a parent-attributable
+    equity scope. That adaptation is limited to ROE; the cash-conversion policy
+    continues to require its existing ordinary-shareholder definitions.
+    """
+
+    net_profit, net_profit_problem = index.one("net_profit", end)
+    if net_profit_problem is not None:
+        # A conflict in the newly supported source spelling is not permission to
+        # fall back to another numerator.
+        return _Pick(fact=None, problems=(net_profit_problem,))
+
+    if net_profit is None:
+        # Keep the historical sequential preference semantics exactly when the
+        # new source spelling is absent: a usable preferred fact wins even if a
+        # lower-preference spelling is independently conflicted.
+        return _pick(index, _ROE_PROFIT_PREFERENCE, end)
+
+    net_profit_ineligible: str | None = None
+    explicit_parent_basis = (
+        net_profit.semantics.accounting_standard == AccountingStandard.US_GAAP
+        and net_profit.semantics.equity_scope in {EquityScope.ORDINARY, EquityScope.ALL_PARENT}
+    )
+    if not explicit_parent_basis:
+        net_profit_ineligible = (
+            f"{_input_ref(net_profit)} is not an eligible ROE net_profit alias: it requires "
+            "explicit us_gaap and equity_scope=ordinary_shareholders or "
+            "all_parent_equity_holders"
+        )
+        # An ineligible net_profit is not an alias; retain the old direct-fact
+        # path where possible, and report the eligibility gap if it is all we have.
+        direct = _pick(index, _ROE_PROFIT_PREFERENCE, end)
+        if direct.fact is not None or direct.problems:
+            return direct
+        return _Pick(fact=None, problems=(net_profit_ineligible,))
+
+    existing: list[FactRecord] = []
+    problems: list[str] = []
+    for metric in _ROE_PROFIT_PREFERENCE:
+        fact, problem = index.one(metric, end)
+        if problem is not None:
+            problems.append(problem)
+        elif fact is not None:
+            existing.append(fact)
+
+    if problems:
+        # A conflicted direct source alias must not be bypassed by the new
+        # spelling; doing so could make the result depend on a favorable value.
+        return _Pick(fact=None, problems=tuple(problems))
+
+    for fact in existing:
+        if fact.semantics.equity_scope != net_profit.semantics.equity_scope:
+            continue
+        basis_mismatches: list[str] = []
+        if (fact.value.currency, fact.value.unit) != (
+            net_profit.value.currency,
+            net_profit.value.unit,
+        ):
+            basis_mismatches.append("currency/unit")
+        if fact.semantics.accounting_standard != net_profit.semantics.accounting_standard:
+            basis_mismatches.append("accounting standard")
+        if fact.semantics.reporting_scope != net_profit.semantics.reporting_scope:
+            basis_mismatches.append("reporting scope")
+        if (
+            fact.period.start,
+            fact.period.end,
+            fact.period.basis,
+        ) != (
+            net_profit.period.start,
+            net_profit.period.end,
+            net_profit.period.basis,
+        ):
+            basis_mismatches.append("period start/end/basis")
+        if basis_mismatches:
+            return _Pick(
+                fact=None,
+                problems=(
+                    f"incomparable same-scope ROE profit aliases at "
+                    f"{end.isoformat() if end is not None else 'unknown date'}: "
+                    f"{_input_ref(fact)} and {_input_ref(net_profit)} differ in "
+                    f"{', '.join(basis_mismatches)}; no numerator is selected",
+                ),
+            )
+        fact_amount, net_profit_amount = _amount(fact), _amount(net_profit)
+        if (
+            fact_amount is not None
+            and net_profit_amount is not None
+            and fact_amount != net_profit_amount
+        ):
+            return _Pick(
+                fact=None,
+                problems=(
+                    f"conflicting same-scope ROE profit aliases at "
+                    f"{end.isoformat() if end is not None else 'unknown date'}: "
+                    f"{_input_ref(fact)} and {_input_ref(net_profit)} differ; no numerator "
+                    "is selected",
+                ),
+            )
+
+    # Preserve legacy preference if a comparable direct fact exists; otherwise
+    # use the reviewed alias with its original metric and provenance intact.
+    for fact in existing:
+        if _amount(fact) is not None:
+            return _Pick(fact=fact, problems=())
+    if _amount(net_profit) is None:
+        reason = net_profit.value.missing_reason or "no reason recorded"
+        return _Pick(
+            fact=None,
+            problems=(f"{_input_ref(net_profit)} has no value ({reason})",),
+        )
+    return _Pick(fact=net_profit, problems=())
 
 
 def _pick_problem(pick: _Pick) -> str | None:
