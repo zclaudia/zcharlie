@@ -353,6 +353,11 @@ async def portfolio_page(request: Request) -> HTMLResponse:
     return _render("portfolio.html", request, page_title="持仓池", active_nav="portfolio")
 
 
+@router.get("/industries", response_class=HTMLResponse)
+async def industries_page(request: Request) -> HTMLResponse:
+    return _render("industries.html", request, page_title="行业年度研究", active_nav="industries")
+
+
 @router.get("/agent", response_class=HTMLResponse)
 async def agent_page(request: Request) -> HTMLResponse:
     return _render("agent.html", request, page_title="AI", active_nav="agent")

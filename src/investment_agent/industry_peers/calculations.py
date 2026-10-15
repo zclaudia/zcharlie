@@ -2,7 +2,7 @@
 
 The pure layer turns one *frozen batch input* - the cohort roster membership
 plus every company's annual fields (or their explicit gaps) for one target and
-one report period - into the three fixed metrics:
+one report period - into a versioned metric pack. The legacy baijiu pack has:
 
 * ``roe``               = ``roe_weighted_annual`` (issuer weighted-average ROE,
   already saved as a fraction at import; never divided again, never recomputed
@@ -82,6 +82,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.evidence.contracts import CalculationRecord
 from investment_agent.evidence.store import EvidenceService
 from investment_agent.industry_peers.contracts import PeerAnnualField, PeerMetricStatus
+from investment_agent.industry_peers.metric_packs import (
+    BAIJIU_PACK,
+    metric_keys_for_pack,
+)
 from investment_agent.investor.common import ObjectRef, OwnerId, Quantity
 from investment_agent.investor.enums import CalculationStatus
 from investment_agent.storage.models.evidence import SavedCalculation
@@ -114,8 +118,8 @@ ROE = "roe"
 CONTRACT_REVENUE = "contract_revenue"
 CFO_PARENT_PROFIT = "cfo_parent_profit"
 
-METRIC_KEYS: tuple[str, ...] = (ROE, CONTRACT_REVENUE, CFO_PARENT_PROFIT)
-"""The three fixed metric keys; nothing else is computed or saved."""
+METRIC_KEYS: tuple[str, ...] = metric_keys_for_pack(BAIJIU_PACK)
+"""Legacy baijiu keys; other packs use ``metric_keys_for_pack`` explicitly."""
 
 # Exclusion audit reasons (per company x metric; part of the input hash).
 NOT_IN_COHORT = "not_in_cohort"
@@ -145,10 +149,10 @@ class MetricSpec:
     numerator_field: str
     """Field carrying the value (ROE) or the numerator (the two ratios)."""
     denominator_field: str | None
-    """Divisor field; ``None`` for ROE (the disclosed ratio is used as saved)."""
+    """Divisor field; ``None`` for directly disclosed annual ratios."""
     applicability_field: str | None
-    """Field whose presence and positivity prove applicability; the denominator
-    itself for the ratios, parent equity for ROE."""
+    """Positive applicability input: denominator for calculated ratios, parent
+    equity for ROE, or ``None`` for directly disclosed bank ratios."""
     unit: str
     formula: str
 
@@ -190,13 +194,19 @@ _METRIC_SPECS: dict[str, MetricSpec] = {
             unit="ratio",
             formula="operating_cash_flow / net_profit_parent",
         ),
+        MetricSpec("net_interest_margin", "net_interest_margin", None, None, "fraction", "net_interest_margin (issuer disclosed ratio as fraction)"),
+        MetricSpec("npl_ratio", "npl_ratio", None, None, "fraction", "npl_ratio (issuer disclosed ratio as fraction)"),
+        MetricSpec("provision_coverage", "provision_coverage", None, None, "fraction", "provision_coverage (issuer disclosed ratio as fraction)"),
     )
 }
 
 
-def metric_spec(metric_key: str) -> MetricSpec:
+def metric_spec(metric_key: str, metric_pack: str = BAIJIU_PACK) -> MetricSpec:
     """The fixed spec of one metric; an unknown key is a caller error."""
 
+    keys = metric_keys_for_pack(metric_pack)
+    if metric_key not in keys:
+        raise ValueError(f"metric {metric_key!r} is not in {metric_pack}")
     try:
         return _METRIC_SPECS[metric_key]
     except KeyError:
@@ -267,8 +277,10 @@ class FrozenBatch:
     cohort_ref: ObjectRef
     cohort_content_hash: str
     companies: tuple[BatchCompany, ...]
+    metric_pack: str = BAIJIU_PACK
 
     def __post_init__(self) -> None:
+        metric_keys_for_pack(self.metric_pack)
         if self.cohort_ref.kind != "peer_cohort_snapshot":
             raise ValueError("cohort_ref must reference a peer_cohort_snapshot")
         matches = [c for c in self.companies if c.company_id == self.target_company_id]
@@ -486,7 +498,9 @@ def _evaluate(spec: MetricSpec, company: BatchCompany) -> _Evaluation:
         return _Evaluation(numerator.value / denominator.value, None, numerator, denominator)
 
     applicability_name = spec.applicability_field
-    assert applicability_name is not None
+    if applicability_name is None:
+        # Directly disclosed bank ratios need no inferred balance-sheet test.
+        return _Evaluation(numerator.value, None, numerator, None)
     applicability = company.fields.get(applicability_name)
     if applicability is None or applicability.value is None:
         return _Evaluation(
@@ -592,7 +606,7 @@ def compute_peer_metric(batch: FrozenBatch, metric_key: str) -> MetricOutcome | 
     returns a :class:`MetricGap` - the caller keeps the gap and saves nothing.
     """
 
-    spec = metric_spec(metric_key)
+    spec = metric_spec(metric_key, batch.metric_pack)
     target = batch.target_company
 
     by_id: dict[int, BatchCompany] = {}
@@ -817,13 +831,14 @@ def metric_input_hash(
     this dependency scope - the first phase does no per-result-key trimming.
     """
 
-    spec = metric_spec(metric_key)
+    spec = metric_spec(metric_key, batch.metric_pack)
     target = batch.target_company
     payload = {
         "schema": INPUT_HASH_SCHEMA,
         "method": METHOD,
         "method_version": METHOD_VERSION,
         "metric_key": metric_key,
+        **({"metric_pack": batch.metric_pack} if batch.metric_pack != BAIJIU_PACK else {}),
         "rules": _rules_payload(spec),
         "cohort_content_hash": batch.cohort_content_hash,
         "cohort_ref": batch.cohort_ref.model_dump(mode="json"),
@@ -970,7 +985,7 @@ def verify_built_metric_record(
             f"peer metric {metric_key} recomputes to a gap ({outcome.reason}); "
             "no ok record may be saved for it"
         )
-    spec = metric_spec(metric_key)
+    spec = metric_spec(metric_key, batch.metric_pack)
     if record.method != METHOD or record.method_version != METHOD_VERSION:
         raise ValueError("peer metric record carries a foreign method or version")
     expected_hash = outcome_input_hash(batch, metric_key, outcome)
@@ -992,6 +1007,8 @@ def verify_built_metric_record(
         "target.ticker": target.ticker,
         "cohort.content_hash": batch.cohort_content_hash,
     }
+    if batch.metric_pack != BAIJIU_PACK and details.get("metric_pack") != batch.metric_pack:
+        raise ValueError("peer metric record metric_pack does not match the frozen batch")
     actual_details = {
         "metric_key": details.get("metric_key"),
         "metric_status": details.get("metric_status"),
@@ -1047,7 +1064,7 @@ def build_peer_metric_record(
         return BuiltMetricCalculation(
             metric_key=metric_key, record=None, gap=outcome, input_hash=outcome.input_hash
         )
-    spec = metric_spec(metric_key)
+    spec = metric_spec(metric_key, batch.metric_pack)
 
     refs: list[ObjectRef] = []
     fact_evidence: list[dict[str, Any]] = []
@@ -1078,6 +1095,7 @@ def build_peer_metric_record(
     input_hash = outcome_input_hash(batch, metric_key, outcome)
     details: dict[str, Any] = {
         "schema": DETAILS_SCHEMA,
+        "metric_pack": batch.metric_pack,
         "metric_key": metric_key,
         "metric_status": outcome.metric_status.value,
         "target": {
@@ -1228,7 +1246,16 @@ def _peer_details(record: CalculationRecord) -> dict[str, Any] | None:
     details = record.details if isinstance(record.details, dict) else {}
     if record.method != METHOD or details.get("schema") != DETAILS_SCHEMA:
         return None
-    if details.get("metric_key") not in METRIC_KEYS:
+    pack = details.get("metric_pack", BAIJIU_PACK)
+    if not isinstance(pack, str):
+        return None
+    try:
+        keys = metric_keys_for_pack(pack)
+    except ValueError:
+        # Unsupported saved versions are unreadable, not a reason to break
+        # every otherwise valid current or historical result for this target.
+        return None
+    if details.get("metric_key") not in keys:
         return None
     if not isinstance(details.get("target"), dict):
         return None
@@ -1325,7 +1352,7 @@ async def save_peer_calculations(
     service = EvidenceService(session)
     target = batch.target_company
     metric_refs: list[MetricCalculationRef] = []
-    for metric_key in METRIC_KEYS:
+    for metric_key in metric_keys_for_pack(batch.metric_pack):
         built = build_peer_metric_record(
             batch,
             metric_key,

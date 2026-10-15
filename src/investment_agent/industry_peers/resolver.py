@@ -110,7 +110,6 @@ from investment_agent.industry_peers.calculations import (
     DETAILS_SCHEMA,
     METHOD,
     METHOD_VERSION,
-    METRIC_KEYS,
     MIN_VALID_PEERS,
     POSITION_RULE,
     PeerExclusion,
@@ -120,6 +119,11 @@ from investment_agent.industry_peers.calculations import (
 )
 from investment_agent.industry_peers.contracts import PeerContextBinding
 from investment_agent.industry_peers.evidence import peer_field_evidence, peer_field_states
+from investment_agent.industry_peers.metric_packs import (
+    BAIJIU_PACK,
+    cohort_metric_pack,
+    metric_keys_for_pack,
+)
 from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.investor.contracts import NumericNode
 from investment_agent.investor.enums import NumericRole
@@ -143,7 +147,7 @@ _POSITION_UNIT = "percent"
 
 _FLOW_FIELDS = frozenset({"operating_revenue", "net_profit_parent", "operating_cash_flow"})
 _STOCK_FIELDS = frozenset({"equity_parent", "contract_liabilities"})
-_RATIO_FIELDS = frozenset({"roe_weighted_annual"})
+_RATIO_FIELDS = frozenset({"roe_weighted_annual", "net_interest_margin", "npl_ratio", "provision_coverage"})
 """Per-field period/basis semantics (the WP3 importer's field kinds; pinned
 by a unit test against ``cli.commands.peer_annual.FIELD_SPECS``)."""
 
@@ -280,6 +284,7 @@ class PeerMetricValidation:
 
     ref: ObjectRef
     metric_key: str
+    metric_pack: str
     record: CalculationRecord
     target_ref: ObjectRef
     """The bound target's listing reference - the only identity this
@@ -407,6 +412,10 @@ class PeerContextResolver:
             assert self._mapping is not None
             if self._mapping.cohort_ref != self.binding.cohort_ref:
                 self._reject("the bound batch was built against a different roster version")
+            if self._mapping.metric_pack != self.binding.metric_pack:
+                self._reject("the bound batch metric pack differs from the research binding")
+            if self._mapping.report_period != self.binding.report_period:
+                self._reject("the bound batch report period differs from the research binding")
         return self._mapping
 
     async def _roster_entries(self) -> dict[int, dict[str, Any]]:
@@ -419,6 +428,8 @@ class PeerContextResolver:
             entries = row.payload.get("entries") if isinstance(row.payload, dict) else None
             if not isinstance(entries, list):
                 self._reject("the bound cohort roster has no member entries")
+            if cohort_metric_pack(row.payload) != self.binding.metric_pack:
+                self._reject("the bound roster metric pack differs from the research binding")
             roster: dict[int, dict[str, Any]] = {}
             for entry in entries:
                 if isinstance(entry, dict) and isinstance(entry.get("company_id"), int):
@@ -633,7 +644,7 @@ class PeerContextResolver:
         metric_key = self._metric_key(details)
         await self._identity(details)
         self._binding_and_mapping(ref, metric_key)
-        spec = metric_spec(metric_key)
+        spec = metric_spec(metric_key, self.binding.metric_pack)
         roster = await self._roster_entries()
         audit = self._audit(details, roster)
         facts, inconsistent, full_citation = await self._facts(
@@ -662,6 +673,7 @@ class PeerContextResolver:
         return PeerMetricValidation(
             ref=ref,
             metric_key=metric_key,
+            metric_pack=self.binding.metric_pack,
             record=record,
             target_ref=await self.target_ref(),
             facts=tuple(facts),
@@ -701,9 +713,11 @@ class PeerContextResolver:
         return details
 
     def _metric_key(self, details: dict[str, Any]) -> str:
+        if details.get("metric_pack", BAIJIU_PACK) != self.binding.metric_pack:
+            self._reject("the peer metric record carries a different metric pack")
         metric_key = details.get("metric_key")
-        if metric_key not in METRIC_KEYS:
-            self._reject("the record's metric key is not one of the three fixed metrics")
+        if metric_key not in metric_keys_for_pack(self.binding.metric_pack):
+            self._reject("the record's metric key is outside the bound metric pack")
         return str(metric_key)
 
     async def _identity(self, details: dict[str, Any]) -> None:
@@ -750,6 +764,11 @@ class PeerContextResolver:
         target_entry = self._batch_mapping().target_for(self._target_company_id())
         if target_entry is None:
             self._reject("the bound batch holds no mapping entry for the bound target")
+        if (
+            target_entry.metric_pack != self.binding.metric_pack
+            or target_entry.report_period != self.binding.report_period
+        ):
+            self._reject("the bound target mapping differs from the research metric scope")
         submitted = target_entry.ref_for(metric_key)
         if (
             submitted is None
@@ -1229,7 +1248,7 @@ def metric_digest(
 
     record = validation.record
     details = record.details if isinstance(record.details, dict) else {}
-    spec = metric_spec(validation.metric_key)
+    spec = metric_spec(validation.metric_key, validation.metric_pack)
     raw_target = details.get("target")
     target: dict[str, Any] = raw_target if isinstance(raw_target, dict) else {}
     exclusion_counts: dict[str, int] = {}

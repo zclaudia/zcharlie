@@ -57,11 +57,11 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import NAMESPACE_URL, uuid5
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.industry_peers.calculations import METRIC_KEYS
+from investment_agent.industry_peers.metric_packs import BAIJIU_PACK, metric_keys_for_pack
 from investment_agent.investor.common import Contract, ObjectRef, OwnerId, Text
 from investment_agent.storage.models.investor import InvestorMutation
 
@@ -170,7 +170,9 @@ class MetricMappingEntry(Contract):
 
 
 class TargetMapping(Contract):
-    """One built target's three metric references inside the batch."""
+    """One built target's metric references inside the batch."""
+
+    _metric_pack_omitted: bool = PrivateAttr(default=False)
 
     company_id: int
     listing_id: int
@@ -178,6 +180,7 @@ class TargetMapping(Contract):
     name: str
     report_period: date
     metric_calculation_refs: tuple[MetricMappingEntry, ...]
+    metric_pack: str = BAIJIU_PACK
 
     def ref_for(self, metric_key: str) -> MetricMappingEntry | None:
         return next(
@@ -188,10 +191,10 @@ class TargetMapping(Contract):
     @model_validator(mode="after")
     def covers_the_three_fixed_metrics(self) -> TargetMapping:
         keys = [entry.metric_key for entry in self.metric_calculation_refs]
-        if sorted(keys) != sorted(METRIC_KEYS):
+        expected = metric_keys_for_pack(self.metric_pack)
+        if sorted(keys) != sorted(expected):
             raise ValueError(
-                "a target mapping carries exactly the three fixed metric keys "
-                f"{list(METRIC_KEYS)}; got {keys}"
+                f"a target mapping carries exactly {'three' if len(expected) == 3 else len(expected)} fixed metric keys for {self.metric_pack}: {list(expected)}; got {keys}"
             )
         return self
 
@@ -232,6 +235,8 @@ class PeerBatchMapping(Contract):
     a mutated or truncated file fails validation instead of being read.
     """
 
+    _metric_pack_omitted: bool = PrivateAttr(default=False)
+
     schema_name: Literal["peer_batch_mapping/1"] = Field(
         default=MAPPING_SCHEMA, alias="schema"
     )
@@ -243,6 +248,7 @@ class PeerBatchMapping(Contract):
     """The roster version the batch was built against (UUID + revision)."""
     cohort_content_hash: Text
     report_period: date
+    metric_pack: str = BAIJIU_PACK
     provider: Text
     adapter_version: Text
     generation: int
@@ -267,17 +273,19 @@ class PeerBatchMapping(Contract):
             raise ValueError("cohort_ref must use the snapshot UUID")
         if self.generation < 1:
             raise ValueError("generation is a positive batch number inside the scope")
+        metric_keys_for_pack(self.metric_pack)
         seen: set[int] = set()
         for target in self.targets:
+            if target.metric_pack != self.metric_pack:
+                raise ValueError("target mapping metric pack differs from batch")
             if target.company_id in seen:
                 raise ValueError(f"target company {target.company_id} appears twice")
             seen.add(target.company_id)
         return self
 
     def body(self) -> dict[str, Any]:
-        """The payload without ``content_hash`` (the hash input)."""
-
-        return self.model_dump(mode="json", exclude={"content_hash"}, by_alias=True)
+        """The payload without its hash."""
+        return _mapping_body(self, include_hash=False)
 
     def target_for(self, company_id: int) -> TargetMapping | None:
         return next((entry for entry in self.targets if entry.company_id == company_id), None)
@@ -287,7 +295,7 @@ class PeerBatchMapping(Contract):
         """Build a mapping and derive its ``content_hash`` from the body."""
 
         draft = cls.model_validate({**fields, "content_hash": "0" * 64})
-        body = draft.model_dump(mode="json", exclude={"content_hash"}, by_alias=True)
+        body = _mapping_body(draft, include_hash=False)
         return draft.model_copy(update={"content_hash": body_sha256(body)})
 
     @classmethod
@@ -295,14 +303,37 @@ class PeerBatchMapping(Contract):
         """Validate a stored payload and re-derive its integrity hash."""
 
         mapping = cls.model_validate(payload)
+        object.__setattr__(mapping, "_metric_pack_omitted", "metric_pack" not in payload)
+        raw_targets = payload.get("targets", [])
+        if isinstance(raw_targets, list):
+            for target, raw_target in zip(mapping.targets, raw_targets, strict=False):
+                if isinstance(raw_target, dict):
+                    object.__setattr__(
+                        target, "_metric_pack_omitted", "metric_pack" not in raw_target
+                    )
+        # Hash the original serialized representation so old schema-1 files
+        # without default metric_pack fields remain readable. New writes always
+        # include the pack fields and therefore bind them into this hash.
         expected = body_sha256(
-            mapping.model_dump(mode="json", exclude={"content_hash"}, by_alias=True)
+            {key: value for key, value in payload.items() if key != "content_hash"}
         )
         if mapping.content_hash != expected:
             raise MappingArtifactError(
                 f"batch mapping {mapping.batch_run_id} fails its content hash check"
             )
         return mapping
+
+
+def _mapping_body(mapping: PeerBatchMapping, *, include_hash: bool) -> dict[str, Any]:
+    payload = mapping.model_dump(mode="json", by_alias=True)
+    if not include_hash:
+        payload.pop("content_hash", None)
+    if getattr(mapping, "_metric_pack_omitted", False):
+        payload.pop("metric_pack", None)
+    for target, raw_target in zip(mapping.targets, payload.get("targets", []), strict=False):
+        if getattr(target, "_metric_pack_omitted", False):
+            raw_target.pop("metric_pack", None)
+    return payload
 
 
 def mapping_artifact_path(data_dir: Path, batch_run_id: str) -> Path:
@@ -327,7 +358,7 @@ def write_batch_mapping(data_dir: Path, mapping: PeerBatchMapping) -> Path:
 
     path = mapping_artifact_path(data_dir, mapping.batch_run_id)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = mapping.model_dump(mode="json", by_alias=True)
+    payload = _mapping_body(mapping, include_hash=True)
     tmp = path.with_name(f"{MAPPING_FILENAME}.{os.getpid()}.tmp")
     try:
         tmp.write_text(

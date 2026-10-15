@@ -1,0 +1,79 @@
+{
+  "captured_at": "2026-10-11T15:06:06.796243+00:00",
+  "membership_semantics": "Current observed constituents/classification; older financial periods belong to the current cohort, never a historical investable universe.",
+  "selection": "All current baijiu index constituents; banks include large/state-owned, joint-stock, city, rural; PV includes silicon/wafer/cell/module/inverter/production equipment. Bank/PV sample is purposive, not random or whole-sector coverage.",
+  "bank": [
+    "601398.SH",
+    "601939.SH",
+    "601288.SH",
+    "600036.SH",
+    "601166.SH",
+    "000001.SZ",
+    "600919.SH",
+    "601009.SH",
+    "002142.SZ",
+    "601128.SH"
+  ],
+  "bank_classifications": {
+    "601398.SH": {
+      "symbol": "601398",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480201",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601939.SH": {
+      "symbol": "601939",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480201",
+      "update_time": "2022-12-09T00:00:00.000"
+    },
+    "601288.SH": {
+      "symbol": "601288",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480201",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "600036.SH": {
+      "symbol": "600036",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480301",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601166.SH": {
+      "symbol": "601166",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480301",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "000001.SZ": {
+      "symbol": "000001",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480301",
+      "update_time": "2025-12-15T00:00:00.000"
+    },
+    "600919.SH": {
+      "symbol": "600919",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480401",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601009.SH": {
+      "symbol": "601009",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480401",
+      "update_time": "2025-12-15T00:00:00.000"
+    },
+    "002142.SZ": {
+      "symbol": "002142",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480401",
+      "update_time": "2021-07-31T00:00:00.000"
+    },
+    "601128.SH": {
+      "symbol": "601128",
+      "start_date": "2021-07-30T00:00:00.000",
+      "industry_code": "480501",
+      "update_time": "2021-07-31T00:00:00.000"
+    }
+  }
+}

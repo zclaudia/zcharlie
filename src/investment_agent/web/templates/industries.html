@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block page_css %}<link rel="stylesheet" href="/app/static/industries.css">{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>行业年度研究</h1>
+  <p>查看已保存名单和已提交批次。统计严格对应所选批次，名单是研究样本，不能代表历史可投资行业。字段材料引用表示计算记录可追溯，不等于原件已经核验。</p>
+</header>
+<div class="callout callout-warn"><span>{{ icon("info", "ico", 16) }}</span><span>部分名单或指标可能仍是候选待核；缺失数据不按零处理。不同年度沿用当前名单时，不代表当年的历史成分。</span></div>
+<section class="industry-controls card" aria-label="行业和年度选择">
+  <label>行业<select id="industry-select"><option value="">加载中…</option></select></label>
+  <label>已保存年度<select id="industry-period" disabled><option value="">选择行业</option></select></label>
+</section>
+<div id="industries-list" class="data-region" aria-live="polite"><p class="notice notice-loading">正在读取已保存名单…</p></div>
+<section id="industry-detail" class="data-region" aria-live="polite"></section>
+<script type="module" src="/app/static/industries.js"></script>
+{% endblock %}

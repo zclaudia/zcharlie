@@ -90,6 +90,7 @@ from investment_agent.industry_peers.contracts import (
     PeerQuantity,
 )
 from investment_agent.industry_peers.evidence import peer_field_states
+from investment_agent.industry_peers.metric_packs import BAIJIU_PACK, cohort_metric_pack
 from investment_agent.investor.common import Contract, ObjectRef, OwnerId
 from investment_agent.storage.models.earnings_events import DisclosureScheduleRecord
 from investment_agent.storage.models.evidence import SavedEvidence
@@ -197,6 +198,7 @@ class PeerContextResult(Contract):
     target: PeerTargetIdentity
     cohort_ref: ObjectRef | None = None
     cohort_content_hash: str | None = None
+    metric_pack: str = BAIJIU_PACK
     report_period: date | None = None
     """The period of the returned batch (the old year on an old reference)."""
     current_report_period: date | None = None
@@ -259,6 +261,7 @@ class PeerCompaniesResult(Contract):
     target: PeerTargetIdentity
     batch_run_id: str | None = None
     report_period: date | None = None
+    metric_pack: str = BAIJIU_PACK
     cohort_ref: ObjectRef | None = None
     companies: tuple[PeerCompanyDetail, ...] = ()
     field_evidence: tuple[PeerFieldEvidenceLink, ...] = ()
@@ -514,7 +517,7 @@ def _used_stale_inputs(record: CalculationRecord) -> list[tuple[int, str, str]]:
     if not isinstance(raw_key, str):
         return []
     try:
-        spec = metric_spec(raw_key)
+        spec = metric_spec(raw_key, details.get("metric_pack", BAIJIU_PACK))
     except ValueError:
         return []
     fields = sorted(
@@ -561,6 +564,11 @@ async def _assemble_target(
     if target_entry is None:
         return assembly
 
+    cohort_row = await session.get(PeerCohortSnapshot, str(mapping.cohort_ref.id))
+    if cohort_row is None or cohort_metric_pack(cohort_row.payload) != mapping.metric_pack:
+        assembly.gaps.append("the submitted batch metric pack differs from its saved roster")
+        return assembly
+
     saved = await find_peer_calculations(
         session,
         owner_id=owner_id,
@@ -570,7 +578,7 @@ async def _assemble_target(
     by_id = {item.ref.id: item for item in saved}
 
     for entry in sorted(target_entry.metric_calculation_refs, key=lambda item: item.metric_key):
-        spec = metric_spec(entry.metric_key)
+        spec = metric_spec(entry.metric_key, mapping.metric_pack)
         if entry.state == "gap":
             assembly.contexts.append(
                 PeerMetricContext(
@@ -598,7 +606,12 @@ async def _assemble_target(
             continue
         record = item.record
         details = record.details if isinstance(record.details, dict) else {}
-        if details.get("schema") != DETAILS_SCHEMA or record.method != METHOD:
+        if (
+            details.get("schema") != DETAILS_SCHEMA
+            or record.method != METHOD
+            or details.get("metric_pack", BAIJIU_PACK) != mapping.metric_pack
+            or details.get("metric_key") != entry.metric_key
+        ):
             assembly.gaps.append(f"{entry.metric_key}: {_UNREADABLE_RECORD}")
             assembly.contexts.append(
                 PeerMetricContext(
@@ -783,6 +796,7 @@ def _missing_result(
     as_of: datetime,
     cohort_ref: ObjectRef | None = None,
     cohort_content_hash: str | None = None,
+    metric_pack: str = BAIJIU_PACK,
     gaps: list[str],
     warnings: tuple[str, ...] = (),
     current_report_period: date | None = None,
@@ -792,6 +806,7 @@ def _missing_result(
         target=identity,
         cohort_ref=cohort_ref,
         cohort_content_hash=cohort_content_hash,
+        metric_pack=metric_pack,
         current_report_period=current_report_period,
         gaps=tuple(gaps),
         warnings=warnings,
@@ -839,6 +854,7 @@ def peer_context_binding_from(result: PeerContextResult) -> PeerContextBinding |
         report_period=result.report_period,
         cutoff=result.data_as_of,
         metric_calculation_refs=refs,
+        metric_pack=result.metric_pack,
     )
 
 
@@ -885,6 +901,7 @@ async def get_industry_peer_context(
         return PeerContextResult(
             status=PeerContextStatus.NOT_SUPPORTED,
             target=identity,
+            metric_pack=(historical.metric_pack if batch_run_id is not None else BAIJIU_PACK),
             data_as_of=as_of,
             gaps=(
                 f"{identity.ticker} is not a member of any saved peer cohort roster; "
@@ -910,6 +927,7 @@ async def get_industry_peer_context(
                 as_of=as_of,
                 cohort_ref=cohort_ref,
                 cohort_content_hash=cohort.content_hash,
+                metric_pack=cohort_metric_pack(cohort.payload),
                 gaps=[f"batch mapping unreadable: {exc}"],
                 warnings=tuple(warnings),
             )
@@ -918,7 +936,12 @@ async def get_industry_peer_context(
                 f"batch {batch_run_id} holds no result for target {identity.ticker}"
             )
         if not await batch_is_committed(session, mapping, owner=owner_id):
-            return _missing_result(identity=identity, as_of=as_of, gaps=["batch has no committed submission receipt"])
+            return _missing_result(
+                identity=identity, as_of=as_of, cohort_ref=cohort_ref,
+                cohort_content_hash=cohort.content_hash,
+                metric_pack=cohort_metric_pack(cohort.payload),
+                gaps=["batch has no committed submission receipt"],
+            )
         if mapping.cohort_ref != cohort_ref:
             warnings.append(
                 f"batch {batch_run_id} was built against roster revision "
@@ -930,6 +953,7 @@ async def get_industry_peer_context(
                 as_of=as_of,
                 cohort_ref=cohort_ref,
                 cohort_content_hash=cohort.content_hash,
+                metric_pack=cohort_metric_pack(cohort.payload),
                 gaps=[
                     f"batch {batch_run_id} was submitted at {mapping.submitted_at.isoformat()}, "
                     f"after the cutoff {cutoff.astimezone(UTC).isoformat()}"
@@ -946,6 +970,7 @@ async def get_industry_peer_context(
                 as_of=as_of,
                 cohort_ref=cohort_ref,
                 cohort_content_hash=cohort.content_hash,
+                metric_pack=cohort_metric_pack(cohort.payload),
                 gaps=[
                     "cannot determine the target year from local disclosure records, and no "
                     "submitted peer batch exists"
@@ -978,6 +1003,7 @@ async def get_industry_peer_context(
                     as_of=as_of,
                     cohort_ref=cohort_ref,
                     cohort_content_hash=cohort.content_hash,
+                    metric_pack=cohort_metric_pack(cohort.payload),
                     gaps=[f"no submitted peer batch for {current_period.isoformat()}"],
                     warnings=tuple(warnings),
                     current_report_period=current_period,
@@ -1021,6 +1047,7 @@ async def get_industry_peer_context(
         target=identity,
         cohort_ref=mapping.cohort_ref,
         cohort_content_hash=mapping.cohort_content_hash,
+        metric_pack=mapping.metric_pack,
         report_period=mapping.report_period,
         current_report_period=current_period,
         batch_run_id=mapping.batch_run_id,
@@ -1071,6 +1098,7 @@ async def list_industry_peer_companies(
             status=PeerContextStatus.MISSING,
             target=identity,
             batch_run_id=batch_run_id,
+            metric_pack=BAIJIU_PACK,
             gaps=(f"batch mapping unreadable: {exc}",),
             data_as_of=as_of,
         )
@@ -1131,6 +1159,7 @@ async def list_industry_peer_companies(
         target=identity,
         batch_run_id=mapping.batch_run_id,
         report_period=mapping.report_period,
+        metric_pack=mapping.metric_pack,
         cohort_ref=mapping.cohort_ref,
         companies=tuple(companies),
         field_evidence=tuple(assembly.field_links),

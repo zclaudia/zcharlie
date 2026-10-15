@@ -217,6 +217,7 @@ def _register_protected_routes(app: FastAPI) -> None:
         data_health,
         gateway,
         holding_rules,
+        industries,
         industry_peers,
         investor,
         market,
@@ -249,6 +250,7 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(agent.router)
     app.include_router(stocks.router)
     app.include_router(industry_peers.router)
+    app.include_router(industries.router)
     app.include_router(watchlist.router)
     app.include_router(admin.router)
     app.include_router(verification.router)

@@ -10,6 +10,7 @@
   "candidates": {"group": "研究漏斗", "label": "候选池"},
   "watchlist": {"group": "研究漏斗", "label": "观察池"},
   "portfolio": {"group": "研究漏斗", "label": "持仓池"},
+  "industries": {"group": "研究", "label": "行业年度研究"},
   "templates": {"group": "规则与方法", "label": "模板"},
   "methods": {"group": "规则与方法", "label": "研究方法"},
   "runs": {"group": "系统", "label": "运行中心"},
@@ -66,6 +67,10 @@
           {{ nav_link("watchlist", "/app/watchlist", "观察池") }}
           <i class="funnel-arrow" aria-hidden="true"></i>
           {{ nav_link("portfolio", "/app/portfolio", "持仓池") }}
+        </div>
+        <div class="nav-group">
+          <span class="nav-label">研究</span>
+          {{ nav_link("industries", "/app/industries", "行业年度研究") }}
         </div>
         <div class="nav-group">
           <span class="nav-label">规则与方法</span>
@@ -148,6 +153,7 @@
     <div class="more-grid">
       {{ more_link("runs", "/app/runs", "运行中心") }}
       {{ more_link("health", "/app/health", "数据健康") }}
+      {{ more_link("industries", "/app/industries", "行业年度研究") }}
       {{ more_link("templates", "/app/templates", "模板") }}
       {{ more_link("methods", "/app/methods", "研究方法") }}
       {{ more_link("settings", "/app/settings", "设置") }}

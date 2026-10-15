@@ -78,6 +78,7 @@ from investment_agent.industry_peers.evidence import (
     peer_field_operation_id,
     peer_field_states,
 )
+from investment_agent.industry_peers.metric_packs import cohort_metric_pack
 from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.storage.models.peer import PeerAnnualSnapshot, PeerCohortSnapshot
 from investment_agent.storage.repositories.peer import (
@@ -274,6 +275,7 @@ def _frozen_batch(
         ),
         cohort_content_hash=cohort_row.content_hash,
         companies=tuple(companies),
+        metric_pack=cohort_metric_pack(cohort_row.payload),
     )
 
 
@@ -366,6 +368,7 @@ def _mapping_from_results(
                 name=frozen[company_id].name,
                 report_period=result.report_period,
                 metric_calculation_refs=tuple(entries),
+                metric_pack=cohort_metric_pack(cohort_row.payload),
             )
         )
 
@@ -383,6 +386,7 @@ def _mapping_from_results(
         ),
         cohort_content_hash=cohort_row.content_hash,
         report_period=report_period,
+        metric_pack=cohort_metric_pack(cohort_row.payload),
         provider=provider,
         adapter_version=adapter_version,
         generation=generation,

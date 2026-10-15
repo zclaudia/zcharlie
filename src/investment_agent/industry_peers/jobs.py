@@ -103,6 +103,7 @@ from investment_agent.industry_peers.calculations import (
 )
 from investment_agent.industry_peers.contracts import PeerAnnualField, PeerFieldVerification
 from investment_agent.industry_peers.hashing import SEMANTIC_HASH_SCHEMA, canonical_json
+from investment_agent.industry_peers.metric_packs import BAIJIU_PACK, cohort_metric_pack
 from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.providers.eastmoney_annual import (
@@ -371,6 +372,13 @@ async def enqueue_peer_collect(
             "no cohort roster saved"
             + (f" under cohort_key={cohort_key!r}" if cohort_key else "")
             + "; run `ia peers import-roster` first"
+        )
+
+    pack = cohort_metric_pack(cohort_row.payload)
+    if pack != BAIJIU_PACK:
+        raise ValueError(
+            f"online peer collection does not support metric pack {pack}; "
+            "bank annual fields remain offline/candidate until the adapter is extended"
         )
 
     active = await find_active_scope_run(
@@ -762,6 +770,16 @@ class PeerCollectHandler(BaseJobHandler):
 
     async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
         payload = PeerCollectPayload.model_validate(job.request_json)
+        async with session_scope() as session:
+            cohort_row = await session.get(PeerCohortSnapshot, payload.cohort_snapshot_id)
+            if cohort_row is None or cohort_row.revision != payload.cohort_revision:
+                raise _HandlerError("the online collection roster version is unavailable")
+            pack = cohort_metric_pack(cohort_row.payload)
+            if pack != BAIJIU_PACK:
+                raise _HandlerError(
+                    f"online peer collection does not support metric pack {pack}; "
+                    "no collection was started"
+                )
         store = CollectArtifactStore(self.settings.data_dir, job.run_id)
         index = store.load_index()
         if not index:
@@ -1075,6 +1093,8 @@ class PeerCollectHandler(BaseJobHandler):
                     f"cohort snapshot {payload.cohort_snapshot_id} revision "
                     f"{payload.cohort_revision} does not exist"
                 )
+            if cohort_metric_pack(cohort_row.payload) != BAIJIU_PACK:
+                raise _HandlerError("online collection cannot finalize a non-baijiu metric pack")
             await reserve_batch_transaction(session)
             # The functions below are the WP6 offline submission pipeline,
             # reused function-for-function: freeze -> materialize -> build+save.

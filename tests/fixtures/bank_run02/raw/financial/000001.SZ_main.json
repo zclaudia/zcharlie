@@ -1,0 +1,20 @@
+{
+  "result": {
+    "data": [
+      {
+        "SECUCODE": "000001.SZ",
+        "SECURITY_CODE": "000001",
+        "SECURITY_NAME_ABBR": "平安银行",
+        "REPORT_DATE": "2025-12-31 00:00:00",
+        "REPORT_TYPE": "年报",
+        "NOTICE_DATE": "2026-03-21 00:00:00",
+        "UPDATE_DATE": "2026-03-21 00:00:00",
+        "CURRENCY": "CNY",
+        "NET_INTEREST_MARGIN": 1.78,
+        "NONPERLOAN": 1.05,
+        "BLDKBBL": 220.88,
+        "ROEJQ": 9.15
+      }
+    ]
+  }
+}

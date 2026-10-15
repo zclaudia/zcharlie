@@ -884,3 +884,86 @@ def _binding_payload() -> dict[str, Any]:
         ),
     )
     return binding.model_dump(mode="json")
+
+
+def test_industry_overview_uses_committed_batches_and_preserves_old_rosters(
+    api_client, requires_originals, tmp_path
+) -> None:
+    """The standalone view reads a fixed receipt and resolves its own roster revision."""
+    batch_id = seed_golden_chain(tmp_path)
+
+    listing = _get(api_client, "/industries")
+    assert listing.status_code == 200, listing.text
+    item = next(row for row in listing.json()["industries"] if row["cohort_key"] == "baijiu_current")
+    assert item["periods"] == ["2025-12-31"]
+
+    current = _get(api_client, "/industries/baijiu_current?report_period=2025-12-31")
+    assert current.status_code == 200, current.text
+    body = current.json()
+    assert body["batch_run_id"] == batch_id
+    assert body["candidate_count"] == 19
+    assert len(body["metrics"]) == 3
+    roe = next(metric for metric in body["metrics"] if metric["metric_key"] == "roe")
+    assert roe["valid_count"] == 19
+    assert roe["median"] is not None
+    assert roe["target_value"] is not None
+    assert roe["target_excluded_median"] is not None
+
+    async def append_revised_roster() -> None:
+        from sqlalchemy import select
+
+        from investment_agent.storage.models.peer import PeerCohortSnapshot
+
+        async with session_scope() as session:
+            original = await session.scalar(select(PeerCohortSnapshot).where(
+                PeerCohortSnapshot.cohort_key == "baijiu_current",
+                PeerCohortSnapshot.revision == 1,
+            ))
+            assert original is not None
+            session.add(PeerCohortSnapshot(
+                id=str(uuid4()),
+                cohort_key=original.cohort_key,
+                revision=2,
+                observed_on=date(2026, 10, 13),
+                acquired_at=datetime(2026, 10, 13, tzinfo=UTC),
+                verification=original.verification,
+                inclusion_rule_version=original.inclusion_rule_version,
+                content_hash=original.content_hash,
+                payload=original.payload,
+            ))
+            session.add(PeerCohortSnapshot(
+                id=str(uuid4()),
+                cohort_key="another_saved_industry",
+                revision=1,
+                observed_on=original.observed_on,
+                acquired_at=original.acquired_at,
+                verification=original.verification,
+                inclusion_rule_version=original.inclusion_rule_version,
+                content_hash=original.content_hash,
+                payload=original.payload,
+            ))
+
+    asyncio_run(append_revised_roster())
+    history = _get(api_client, f"/industries/baijiu_current?batch_run_id={batch_id}")
+    assert history.status_code == 200, history.text
+    assert history.json()["cohort_ref"]["revision"] == 1
+    assert history.json()["observed_on"] == "2026-10-11"
+
+    uncommitted = _get(api_client, "/industries/baijiu_current?batch_run_id=not-a-submitted-batch")
+    assert uncommitted.status_code == 404
+    wrong_cohort = _get(api_client, f"/industries/another_saved_industry?batch_run_id={batch_id}")
+    assert wrong_cohort.status_code == 404
+
+
+def test_industry_overview_feature_gate_is_a_read_only_business_state(
+    api_client, monkeypatch
+) -> None:
+    monkeypatch.setenv("INDUSTRY_PEER_CONTEXT_ENABLED", "false")
+    listing = _get(api_client, "/industries")
+    assert listing.status_code == 200
+    assert listing.json()["enabled"] is False
+    assert listing.json()["industries"] == []
+    detail = _get(api_client, "/industries/baijiu_current")
+    assert detail.status_code == 200
+    assert detail.json()["enabled"] is False
+    assert detail.json()["gaps"]

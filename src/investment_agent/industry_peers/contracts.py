@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import model_validator
 
 from investment_agent.evidence.contracts import Period
+from investment_agent.industry_peers.metric_packs import BAIJIU_PACK, metric_keys_for_pack
 from investment_agent.investor.common import (
     Contract,
     DecimalValue,
@@ -141,7 +142,7 @@ class PeerAnnualField(Contract):
         return self
 
 
-BINDING_METRIC_KEYS: tuple[str, ...] = ("roe", "contract_revenue", "cfo_parent_profit")
+BINDING_METRIC_KEYS: tuple[str, ...] = metric_keys_for_pack(BAIJIU_PACK)
 """The fixed metric keys of a peer-context binding.
 
 Mirrors ``calculations.METRIC_KEYS`` (pinned equal by a unit test - this
@@ -185,6 +186,7 @@ class PeerContextBinding(Contract):
     report_period: date
     cutoff: datetime
     metric_calculation_refs: tuple[PeerMetricBinding, ...]
+    metric_pack: str = BAIJIU_PACK
 
     @model_validator(mode="after")
     def cohort_is_a_snapshot_ref(self) -> "PeerContextBinding":
@@ -195,9 +197,9 @@ class PeerContextBinding(Contract):
     @model_validator(mode="after")
     def covers_the_fixed_metrics(self) -> "PeerContextBinding":
         keys = [entry.metric_key for entry in self.metric_calculation_refs]
-        if sorted(keys) != sorted(BINDING_METRIC_KEYS):
+        expected = metric_keys_for_pack(self.metric_pack)
+        if sorted(keys) != sorted(expected):
             raise ValueError(
-                "a peer-context binding carries exactly the three fixed metric keys "
-                f"{list(BINDING_METRIC_KEYS)}; got {keys}"
+                f"a peer-context binding carries exactly {'three' if len(expected) == 3 else len(expected)} fixed metric keys for {self.metric_pack}: {list(expected)}; got {keys}"
             )
         return self

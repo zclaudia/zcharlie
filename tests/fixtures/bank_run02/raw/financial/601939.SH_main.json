@@ -1,0 +1,20 @@
+{
+  "result": {
+    "data": [
+      {
+        "SECUCODE": "601939.SH",
+        "SECURITY_CODE": "601939",
+        "SECURITY_NAME_ABBR": "建设银行",
+        "REPORT_DATE": "2025-12-31 00:00:00",
+        "REPORT_TYPE": "年报",
+        "NOTICE_DATE": "2026-03-28 00:00:00",
+        "UPDATE_DATE": "2026-03-28 00:00:00",
+        "CURRENCY": "CNY",
+        "NET_INTEREST_MARGIN": 1.34,
+        "NONPERLOAN": 1.31,
+        "BLDKBBL": 233.15,
+        "ROEJQ": 10.04
+      }
+    ]
+  }
+}

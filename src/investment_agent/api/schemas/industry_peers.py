@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from investment_agent.industry_peers.contracts import PeerContextStatus
+from investment_agent.industry_peers.metric_packs import BAIJIU_PACK
 from investment_agent.industry_peers.service import (
     SERVICE_SCHEMA_VERSION,
     PeerCompanyDetail,
@@ -58,6 +59,7 @@ class IndustryPeerContextOut(BaseModel):
     schema_version: int = SERVICE_SCHEMA_VERSION
     status: PeerContextStatus
     target: PeerTargetIdentity | None = None
+    metric_pack: str = BAIJIU_PACK
     report_period: date | None = None
     """The period of the returned batch (the old year on an old reference)."""
     current_report_period: date | None = None
@@ -92,6 +94,7 @@ class PeerCompaniesOut(BaseModel):
     target: PeerTargetIdentity | None = None
     batch_run_id: str | None = None
     report_period: date | None = None
+    metric_pack: str = BAIJIU_PACK
     cohort_ref: ObjectRef | None = None
     companies: tuple[PeerCompanyDetail, ...] = ()
     field_evidence: tuple[PeerFieldEvidenceLink, ...] = ()

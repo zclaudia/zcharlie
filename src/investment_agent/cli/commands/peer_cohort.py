@@ -80,6 +80,11 @@ SAMPLE_ROSTER_FIELD = "baijiu"
 SAMPLE_CLASSIFICATION_FIELD = "baijiu_classification_codes"
 """The sample file's roster list and its Shenwan baijiu classification list."""
 
+BANK_ROSTER_FIELD = "bank"
+BANK_CLASSIFICATION_FIELD = "bank_classifications"
+BANK_COHORT_KEY = "bank_run02_sample"
+BANK_METRIC_PACK = "bank_annual_v1"
+
 CLASSIFICATION_CODE = "340501"
 """Shenwan 2021 baijiu III code (``config/shenwan_2021.yaml``: 白酒Ⅲ)."""
 
@@ -377,7 +382,8 @@ async def import_sample_roster(
     session: AsyncSession,
     *,
     sample_path: Path,
-    cohort_key: str = COHORT_KEY,
+    cohort_key: str | None = None,
+    industry: str = "baijiu",
     acquired_at: datetime | None = None,
 ) -> CohortImportResult:
     """Import one roster version from a run-02 style sample file.
@@ -390,6 +396,14 @@ async def import_sample_roster(
     tests. Nothing here registers a screening universe or watchlist entry.
     """
 
+    if industry == "bank":
+        return await import_bank_roster(
+            session, sample_path=sample_path, cohort_key=cohort_key or BANK_COHORT_KEY,
+            acquired_at=acquired_at,
+        )
+    if industry != "baijiu":
+        raise ValueError("industry must be baijiu or bank")
+    cohort_key = cohort_key or COHORT_KEY
     sample, source_sha256 = load_sample(sample_path)
     observed_at = _parse_captured_at(sample.captured_at, sample_path)
     resolved = await resolve_roster_identities(session, sample.roster)
@@ -426,6 +440,75 @@ async def import_sample_roster(
     return CohortImportResult(snapshot=await repo.add(row), created=True)
 
 
+async def import_bank_roster(
+    session: AsyncSession,
+    *,
+    sample_path: Path,
+    cohort_key: str = BANK_COHORT_KEY,
+    acquired_at: datetime | None = None,
+) -> CohortImportResult:
+    """Import the purposive run-02 bank research sample, never a full sector."""
+    raw = sample_path.read_bytes()  # noqa: ASYNC240
+    source_hash = hashlib.sha256(raw).hexdigest()
+    data = json.loads(raw)
+    tickers = _ticker_list(data, BANK_ROSTER_FIELD, sample_path)
+    classes = data.get(BANK_CLASSIFICATION_FIELD)
+    if not isinstance(classes, dict) or set(classes) != set(tickers):
+        raise ValueError(f"{sample_path}: bank_classifications must cover exactly the bank roster")
+    captured_at = data.get("captured_at")
+    if not isinstance(captured_at, str) or _parse_captured_at(captured_at, sample_path).tzinfo is None:
+        raise ValueError(f"{sample_path}: captured_at must be timezone-aware")
+    identities = await resolve_roster_identities(session, tickers)
+    entries = []
+    for ticker in tickers:
+        listing, name = identities[ticker]
+        classification = classes[ticker]
+        if not isinstance(classification, dict) or classification.get("symbol") != ticker[:6]:
+            raise ValueError(f"{sample_path}: invalid bank classification for {ticker}")
+        entries.append({
+            "ticker": ticker, "company_id": listing.company_id, "listing_id": listing.id,
+            "market_code": listing.market_code, "name": name,
+            "name_source": "local_directory.company.canonical_name",
+            "classification": classification,
+            "classification_source": "sample.json.bank_classifications",
+            "listing_status": None, "listing_status_evidence": NOT_PROVIDED,
+            "comparability_flags": None, "comparability_flags_evidence": NOT_PROVIDED,
+        })
+    payload = {
+        "schema": PAYLOAD_SCHEMA, "cohort_key": cohort_key,
+        "metric_pack": BANK_METRIC_PACK,
+        "classification": {"system": SW2021_SYSTEM, "version": CLASSIFICATION_VERSION,
+                            "per_company_source": BANK_CLASSIFICATION_FIELD},
+        "index_code": None,
+        "source": {"kind": "offline_evidence_file", "path": _locator(sample_path),
+                   "sha256": source_hash, "captured_at": captured_at,
+                   "membership_semantics": data.get("membership_semantics"),
+                   "selection": data.get("selection"), "roster_field": BANK_ROSTER_FIELD},
+        "entries": entries,
+        "included": [{"ticker": ticker, "company_id": identities[ticker][0].company_id,
+                      "reason": "member of the explicit run-02 purposive bank research sample"}
+                     for ticker in tickers],
+        "excluded": [],
+        "source_differences": {"classification_only": [], "not_a_complete_sector_list": True},
+        "notes": ["purposive 10-bank research sample; not a bank index constituent list",
+                  "no official complete-sector membership verification was performed",
+                  "source classification is retained as captured; no index is inferred"],
+    }
+    content_hash = payload_sha256(payload)
+    repo = PeerCohortSnapshotRepository(session)
+    existing = await repo.by_content_hash(cohort_key=cohort_key, content_hash=content_hash)
+    if existing is not None:
+        return CohortImportResult(snapshot=existing, created=False)
+    row = PeerCohortSnapshot(
+        id=str(uuid.uuid4()), cohort_key=cohort_key,
+        revision=await repo.next_revision(cohort_key),
+        observed_on=_parse_captured_at(captured_at, sample_path).date(),
+        acquired_at=acquired_at or datetime.now(UTC), verification=IMPORTER_VERIFICATION,
+        inclusion_rule_version="run-02-bank-purposeful/1", content_hash=content_hash, payload=payload,
+    )
+    return CohortImportResult(snapshot=await repo.add(row), created=True)
+
+
 @app.command("import-roster")
 def import_roster(
     sample_path: Path = typer.Argument(  # noqa: B008
@@ -436,8 +519,9 @@ def import_roster(
         help="run-02 style sample file (default: the committed run-02 evidence)",
     ),
     cohort_key: str = typer.Option(
-        COHORT_KEY, "--cohort-key", help="Stable roster name the snapshot is filed under"
+        "", "--cohort-key", help="Stable roster name the snapshot is filed under (default depends on industry)"
     ),
+    industry: str = typer.Option("baijiu", "--industry", help="Roster source selector: baijiu or bank"),
 ) -> None:
     """Import the fixed sample roster as one immutable cohort snapshot (WP2).
 
@@ -453,7 +537,9 @@ def import_roster(
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
             result = await import_sample_roster(
-                session, sample_path=sample_path, cohort_key=cohort_key
+                session, sample_path=sample_path,
+                cohort_key=cohort_key or (BANK_COHORT_KEY if industry == "bank" else COHORT_KEY),
+                industry=industry,
             )
             row = result.snapshot
             return {

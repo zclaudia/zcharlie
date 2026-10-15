@@ -1,0 +1,20 @@
+{
+  "result": {
+    "data": [
+      {
+        "SECUCODE": "600036.SH",
+        "SECURITY_CODE": "600036",
+        "SECURITY_NAME_ABBR": "招商银行",
+        "REPORT_DATE": "2025-12-31 00:00:00",
+        "REPORT_TYPE": "年报",
+        "NOTICE_DATE": "2026-03-28 00:00:00",
+        "UPDATE_DATE": "2026-03-28 00:00:00",
+        "CURRENCY": "CNY",
+        "NET_INTEREST_MARGIN": 1.87,
+        "NONPERLOAN": 0.94,
+        "BLDKBBL": 391.79,
+        "ROEJQ": 13.44
+      }
+    ]
+  }
+}

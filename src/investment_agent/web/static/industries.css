@@ -1,0 +1,18 @@
+.industry-controls { display: flex; flex-wrap: wrap; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.industry-controls label { display: grid; gap: 6px; min-width: min(100%, 14rem); color: var(--ink-2); font-size: var(--fs-sm); }
+.industry-controls select { min-height: 40px; padding: 7px 10px; color: var(--ink); background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r-sm); }
+.industry-notice { margin: 0 0 var(--sp-3); }
+.industry-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: var(--sp-2) 0; color: var(--ink-2); font-size: var(--fs-sm); }
+.industry-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
+.industry-metric { padding: var(--sp-3); margin: 0; }
+.industry-metric h3 { margin: 0 0 var(--sp-2); font-size: 15px; }
+.industry-metric dl { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; margin: 0; font-size: var(--fs-sm); }
+.industry-metric dt { color: var(--ink-2); }
+.industry-metric dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.industry-table-wrap { overflow-x: auto; }
+.industry-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.industry-table th, .industry-table td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+.industry-table th { color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+.industry-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.industry-table a { margin-right: 8px; }
+@media (max-width: 56rem) { .industry-controls { display: grid; grid-template-columns: 1fr; } .industry-controls label { min-width: 0; } .industry-table { min-width: 760px; } }

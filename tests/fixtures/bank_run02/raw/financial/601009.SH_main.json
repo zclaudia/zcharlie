@@ -1,0 +1,20 @@
+{
+  "result": {
+    "data": [
+      {
+        "SECUCODE": "601009.SH",
+        "SECURITY_CODE": "601009",
+        "SECURITY_NAME_ABBR": "南京银行",
+        "REPORT_DATE": "2025-12-31 00:00:00",
+        "REPORT_TYPE": "年报",
+        "NOTICE_DATE": "2026-04-23 00:00:00",
+        "UPDATE_DATE": "2026-04-23 00:00:00",
+        "CURRENCY": "CNY",
+        "NET_INTEREST_MARGIN": 1.82,
+        "NONPERLOAN": 0.83,
+        "BLDKBBL": 313.62,
+        "ROEJQ": 12.05
+      }
+    ]
+  }
+}

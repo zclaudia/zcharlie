@@ -56,6 +56,9 @@ const METRIC_LABELS = Object.freeze({
   roe: "净资产收益率（ROE）",
   contract_revenue: "合同负债 / 营业收入",
   cfo_parent_profit: "经营现金流 / 归母净利润",
+  net_interest_margin: "净息差",
+  npl_ratio: "不良贷款率",
+  provision_coverage: "拨备覆盖率",
 });
 
 // 年度快照的规范字段名 → 中文名（不是来源的原始字段名；来源字段名永不上屏）。
@@ -67,6 +70,9 @@ const FIELD_LABELS = Object.freeze({
   operating_cash_flow: "经营现金流",
   equity_parent: "归母净资产",
   revenue_total_check: "营业总收入（仅核对项）",
+  net_interest_margin: "净息差",
+  npl_ratio: "不良贷款率",
+  provision_coverage: "拨备覆盖率",
 });
 
 // ---- 十进制字符串的展示格式化（不经 float，不重算统计） -------------------

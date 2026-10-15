@@ -167,6 +167,7 @@ def _context_out(result: PeerContextResult) -> IndustryPeerContextOut:
         schema_version=result.schema_version,
         status=result.status,
         target=result.target,
+        metric_pack=result.metric_pack,
         report_period=result.report_period,
         current_report_period=result.current_report_period,
         old_reference=result.old_reference,

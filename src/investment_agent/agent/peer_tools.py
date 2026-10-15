@@ -202,7 +202,11 @@ async def _binding_source_available(
     except MappingArtifactError:
         return False
     from investment_agent.industry_peers.artifacts import batch_is_committed
-    return await batch_is_committed(session, mapping)
+    return (
+        mapping.metric_pack == binding.metric_pack
+        and mapping.cohort_ref == binding.cohort_ref
+        and await batch_is_committed(session, mapping)
+    )
 
 
 async def inherit_peer_context(
@@ -471,6 +475,12 @@ async def _bound_read(
         # The binding is trusted and was built from this exact batch; a read
         # that can no longer be honored fails closed instead of substituting.
         raise ExecutionDeniedError("peer_context_binding_unavailable") from exc
+    expected = {entry.metric_key: entry.ref for entry in binding.metric_calculation_refs}
+    actual = {metric.metric_key: metric.calculation_ref for metric in result.metrics}
+    if result.metric_pack != binding.metric_pack or set(actual) != set(expected):
+        raise ExecutionDeniedError("peer_context_binding_unavailable")
+    if any(actual[key] is not None and actual[key] != expected[key] for key in expected):
+        raise ExecutionDeniedError("peer_context_binding_unavailable")
     payload = _project(result)
     return ToolResult(
         status=OUTER_STATUS[result.status],
@@ -489,8 +499,8 @@ def registrations() -> tuple[ToolRegistration, ...]:
             peer_scope,
             database=read_peer_context,
             description=(
-                "Read the industry-peer reference statistics bound to this task's trusted admission "
-                "(roe, contract_revenue, cfo_parent_profit) for the exact authorized target ticker. "
+                "Read the industry-peer reference statistics for the exact metric keys in this task's "
+                "trusted peer-context binding and the authorized target ticker. "
                 "The server reads the frozen batch at the binding cutoff and returns per-metric "
                 "values, units, report period, sample counts, verification coverage, limitations and "
                 "calculation.results.* references - never raw source responses, the peer identity "

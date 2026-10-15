@@ -1,0 +1,2 @@
+# Preserve the upstream Adobe CMap verbatim, including comment whitespace.
+src/investment_agent/industry_peers/data/Adobe-GB1-UCS2 whitespace=-blank-at-eol

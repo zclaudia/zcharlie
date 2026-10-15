@@ -72,6 +72,7 @@ app = typer.Typer(
     help="Import peer annual fact snapshots with per-field verification proofs (WP3)"
 )
 
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _DERIVED = _REPO_ROOT / "research" / "industry-data-validation" / "evidence" / "run-02" / "derived"
 DEFAULT_SAMPLE_PATH = _DERIVED / "baijiu-peer-sample.json"
@@ -954,3 +955,19 @@ def import_annual(
             indent=2,
         )
     )
+
+
+@app.command("import-bank")
+def import_bank_command(
+    evidence_root: Path = typer.Option(..., "--evidence-root", exists=True, file_okay=False),  # noqa: B008
+    report_period: str = typer.Option(..., "--report-period"),  # noqa: B008
+    audit_path: Path | None = typer.Option(None, "--audit-path", exists=True, dir_okay=False),  # noqa: B008
+    originals_root: Path | None = typer.Option(None, "--originals-root", exists=True, file_okay=False),  # noqa: B008
+) -> None:
+    """Import the fixed bank FY annual source data without network access."""
+    # Lazy import avoids a command-module cycle; the bank importer uses this
+    # module's exact directory identity resolver.
+    from investment_agent.cli.commands.bank_annual import import_bank
+
+    import_bank(evidence_root=evidence_root, report_period=report_period,
+                audit_path=audit_path, originals_root=originals_root)
