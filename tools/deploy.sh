@@ -160,11 +160,17 @@ preflight() {
 # Builds from `git archive HEAD`, never the working tree, so uncommitted or
 # untracked files (including another session's work in progress) never ship.
 build_image() {
-    local dir status=0
+    local dir status=0 log="$STATE_DIR/build.log"
     dir="$(mktemp -d)"
+    mkdir -p "$STATE_DIR"
     git archive --format=tar HEAD | tar -x -C "$dir" \
-        && docker build -t "$IMAGE" --build-arg GIT_SHA="$GIT_SHA" "$dir" || status=$?
+        && docker build -t "$IMAGE" --build-arg GIT_SHA="$GIT_SHA" "$dir" >"$log" 2>&1 \
+        || status=$?
     rm -rf -- "$dir"
+    if [ "$status" -ne 0 ]; then
+        tail -n 30 "$log" >&2
+        warn "完整构建日志：$log"
+    fi
     return "$status"
 }
 
