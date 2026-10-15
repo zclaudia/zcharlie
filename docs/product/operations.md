@@ -61,6 +61,7 @@ tools/deploy.sh rollback    # 回到上一次部署的镜像（不跑迁移）
 - **健康检查**：api 查 `/healthz`；worker / scheduler 在事件循环里每 15 秒刷新 `$LIVENESS_FILE`（`/tmp/*.alive`），超过 120 秒未刷新判为不健康。
 - **验证**：等三个服务都 healthy（默认最多 300 秒，`DEPLOY_WAIT_SECONDS`），并确认 api 报告的版本就是刚构建的提交号。部署记录写在 `.deploy/last.env`。
 - **回退**：把 `:prev` 标回 `:dev`，只重建 api / worker / scheduler（跳过 `migrate`：旧代码不认识新迁移）。如果上次部署改了数据库迁移版本，脚本拒绝回退，提示先用部署前备份按 [备份与恢复](backup-and-recovery.md) 恢复数据库；确认兼容可加 `--force`。被替换的镜像保存为 `investment-agent:rolled-back`。
+- **回退到加存活检查之前的版本（一次性注意事项）**：worker / scheduler 的存活文件健康检查从 `27b354c`（2026-10-15）开始才有。第一次用 `tools/deploy.sh` 部署时，`:prev` 是这之前的旧镜像，它的 worker / scheduler 不会写存活文件，回退后会一直被判为不健康，脚本等待超时报错——但进程本身是正常在跑的。遇到这种情况用 `docker compose logs worker scheduler` 确认它们在工作即可，或者别回退到那个版本。之后再正常部署一次，`:prev` 就是带存活检查的版本，这个问题不再出现。
 
 ## 3. 调度（Asia/Shanghai，标准 crontab 星期：0 = 周日）
 
