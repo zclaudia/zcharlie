@@ -27,6 +27,7 @@ from investment_agent.config import (
     SnapshotScheduleConfig,
     VerificationScheduleConfig,
 )
+from investment_agent.liveness import liveness
 from investment_agent.logging import configure_logging
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
 from investment_agent.scheduler.calendar_refresh import refresh_years
@@ -827,7 +828,7 @@ async def run_forever(app_config_path: str = "config/app.yaml") -> None:
     """Entry point: configure logging, init engine, start scheduler, idle until cancelled."""
     settings = Settings()  # type: ignore[call-arg]
     configure_logging(settings.log_level)
-    async with engine_lifespan(settings.database_url):
+    async with engine_lifespan(settings.database_url), liveness():
         await _run_scheduler(settings, app_config_path)
 
 

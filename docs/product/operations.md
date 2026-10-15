@@ -44,6 +44,25 @@
 4. 同步规则模板：`ia rules sync`（筛选任务每次运行前也会自动同步）。
 5. 启动三个常驻进程：`ia api serve`、`ia worker start`、`ia scheduler start`。
 
+### 2.1 Docker 一键部署 / 回滚
+
+`tools/deploy.sh` 把 api、worker、scheduler 作为一组部署（本机差异——端口、外部网络、数据库卷——只写在未提交的 `docker-compose.override.yml`）：
+
+```bash
+tools/deploy.sh             # 预检 → 停 worker/scheduler → 备份 → 构建 → 迁移 → 启动 → 验证
+tools/deploy.sh status      # 三个服务的状态与健康、运行版本、数据库迁移版本、上次部署
+tools/deploy.sh rollback    # 回到上一次部署的镜像（不跑迁移）
+```
+
+- **预检**：docker 可用；`.env` 有 `API_KEY`、`SETTINGS_ENCRYPTION_KEY`；compose 引用的外部网络（如 `ifind-proxy_default`）已存在；所有服务的 `DATABASE_URL` 一致（防止 `migrate` 迁到另一个库）。
+- **备份**：先停 worker / scheduler，用当前镜像在线备份 SQLite 并校验、压缩，存到 `~/backups/deploy-<时间>-<提交号>`（保留最近 5 份；`BACKUP_ROOT` 可改）。备份失败会恢复原服务并中止，镜像和数据库都不动。`--no-backup` 可跳过。
+- **构建**：只从 `git archive HEAD` 构建，工作区里未提交 / 未跟踪的文件不会进入镜像；当前镜像先另存为 `investment-agent:prev`。提交号写进镜像，`/healthz` 返回 `{"status":"ok","version":"<提交号>"}`。
+- **启动顺序**（`docker-compose.yml` 自带，直接 `docker compose up -d` 也一样）：一次性服务 `migrate`（`ia migrate up`）成功后启动 api，api 健康后再启动 worker 与 scheduler。
+- **健康检查**：api 查 `/healthz`；worker / scheduler 在事件循环里每 15 秒刷新 `$LIVENESS_FILE`（`/tmp/*.alive`），超过 120 秒未刷新判为不健康。
+- **验证**：等三个服务都 healthy（默认最多 300 秒，`DEPLOY_WAIT_SECONDS`），并确认 api 报告的版本就是刚构建的提交号。部署记录写在 `.deploy/last.env`。
+- **回退**：把 `:prev` 标回 `:dev`，只重建 api / worker / scheduler（跳过 `migrate`：旧代码不认识新迁移）。如果上次部署改了数据库迁移版本，脚本拒绝回退，提示先用部署前备份按 [备份与恢复](backup-and-recovery.md) 恢复数据库；确认兼容可加 `--force`。被替换的镜像保存为 `investment-agent:rolled-back`。
+- **回退到加存活检查之前的版本（一次性注意事项）**：worker / scheduler 的存活文件健康检查从 `27b354c`（2026-10-15）开始才有。第一次用 `tools/deploy.sh` 部署时，`:prev` 是这之前的旧镜像，它的 worker / scheduler 不会写存活文件，回退后会一直被判为不健康，脚本等待超时报错——但进程本身是正常在跑的。遇到这种情况用 `docker compose logs worker scheduler` 确认它们在工作即可，或者别回退到那个版本。之后再正常部署一次，`:prev` 就是带存活检查的版本，这个问题不再出现。
+
 ## 3. 调度（Asia/Shanghai，标准 crontab 星期：0 = 周日）
 
 | 任务 | 时间 | 门控 | 说明 |

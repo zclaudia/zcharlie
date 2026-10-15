@@ -14,7 +14,9 @@ from investment_agent.providers.akshare_eastmoney import (
     FORECAST_TYPES,
     SCHEDULE_COLUMNS,
     SEGMENT_COLUMNS,
+    SUMMARY_CODE_COLUMN,
     SUMMARY_COLUMNS,
+    SUMMARY_NOTICE_COLUMN,
     AkshareEastmoneyClient,
     EastmoneyError,
     EastmoneySchemaError,
@@ -132,14 +134,34 @@ async def test_mislabelled_debt_ratio_is_detected():
         await fake_client(backend).fetch_period_summaries(FY2024)
 
 
-def test_notice_after_capture_is_lookahead():
+def test_notice_after_capture_defers_only_that_listing():
     tables = {
         endpoint: summary_table(endpoint, "20260630") for endpoint in SUMMARY_COLUMNS
     }
-    with pytest.raises(LookaheadDataError):
-        parse_period_summaries(
-            tables, report_period=H1_2026, captured_at=datetime(2026, 8, 20, tzinfo=UTC)
-        )
+    captured_at = datetime(2026, 9, 5, tzinfo=UTC)
+    baseline = parse_period_summaries(tables, report_period=H1_2026, captured_at=captured_at)
+    assert baseline.summaries and not baseline.deferred
+    # One listing's income statement is dated the day after the capture (evening release).
+    lrb = tables["stock_lrb_em"]
+    victim = str(lrb.rows[0][SUMMARY_CODE_COLUMN])
+    rows = (
+        {**lrb.rows[0], SUMMARY_NOTICE_COLUMN: "2026-09-06"},
+        *lrb.rows[1:],
+    )
+    tables["stock_lrb_em"] = replace(lrb, rows=rows)
+
+    parsed = parse_period_summaries(tables, report_period=H1_2026, captured_at=captured_at)
+
+    assert [ticker.split(".")[0] for ticker, _ in parsed.deferred] == [victim]
+    assert parsed.deferred[0][1] == date(2026, 9, 6)
+    assert set(baseline.summaries) - set(parsed.summaries) == {parsed.deferred[0][0]}
+    assert len(parsed.summaries) == len(baseline.summaries) - 1
+    # The next capture on the notice date stores it.
+    later = parse_period_summaries(
+        tables, report_period=H1_2026, captured_at=datetime(2026, 9, 6, tzinfo=UTC)
+    )
+    assert not later.deferred
+    assert len(later.summaries) == len(baseline.summaries)
 
 
 async def test_cash_flow_statement_restated_and_fcf():

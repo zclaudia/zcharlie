@@ -420,6 +420,43 @@ def test_list_research_runs_supports_status_filter(api_client, monkeypatch):
     assert rows[0]["run_id"] > first.json()["run_id"]
 
 
+def test_runs_list_defaults_to_research_and_kind_all_lists_every_job(api_client):
+    async def seed() -> tuple[int, int]:
+        async with session_scope() as session:
+            runs = PipelineRunRepository(session)
+            research = await runs.create(kind="ifind_research", status="queued", stage="queued")
+            snapshot = await runs.create(
+                kind="financial_snapshot",
+                universe_code="CSI300",
+                status="queued",
+                stage="queued",
+                request_json={"scope": "universe", "part": "summary", "report_period": "2026-09-30"},
+            )
+            return research.id, snapshot.id
+
+    research_id, snapshot_id = asyncio.run(seed())
+    headers = {"X-API-Key": "secret"}
+
+    default = api_client.get("/research/runs", headers=headers).json()
+    assert [row["run_id"] for row in default] == [research_id]
+    assert default[0]["kind"] == "ifind_research"
+
+    everything = api_client.get("/research/runs?kind=all", headers=headers).json()
+    assert [row["run_id"] for row in everything] == [snapshot_id, research_id]
+    assert everything[0]["kind"] == "financial_snapshot"
+    assert everything[0]["universe_code"] == "CSI300"
+    assert everything[0]["subtitle"] == "universe · summary · 2026-09-30"
+    assert everything[0]["ticker"] is None
+
+    only = api_client.get("/research/runs?kind=financial_snapshot", headers=headers).json()
+    assert [row["run_id"] for row in only] == [snapshot_id]
+
+    detail = api_client.get(f"/research/runs/{snapshot_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["kind"] == "financial_snapshot"
+    assert detail.json()["result"] is None
+
+
 def test_research_idempotency_returns_existing_queued_run(api_client, monkeypatch):
     monkeypatch.setenv("IFIND_PROXY_API_KEY", "ifind-test-key")
     headers = {

@@ -40,6 +40,9 @@ from investment_agent.storage.repositories.research_snapshot import (
     score_item_from_payload,
 )
 
+RESEARCH_RUN_KIND = "ifind_research"
+ALL_RUN_KINDS = "all"
+
 router = APIRouter(
     prefix="/research",
     tags=["research"],
@@ -50,6 +53,11 @@ router = APIRouter(
 @router.get("/runs", response_model=list[ResearchRunSummary])
 async def list_research_runs(
     run_status: str | None = Query(None, alias="status", max_length=16),
+    kind: str = Query(
+        RESEARCH_RUN_KIND,
+        max_length=64,
+        description="Job kind to list; 'all' lists every kind the worker runs.",
+    ),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> list[ResearchRunSummary]:
@@ -64,11 +72,12 @@ async def list_research_runs(
                 ResearchChangeSet,
                 ResearchChangeSet.current_snapshot_id == ResearchSnapshot.id,
             )
-            .where(PipelineRun.kind == "ifind_research")
             .order_by(PipelineRun.id.desc())
             .offset(offset)
             .limit(limit)
         )
+        if kind != ALL_RUN_KINDS:
+            statement = statement.where(PipelineRun.kind == kind)
         if run_status is not None:
             statement = statement.where(PipelineRun.status == run_status)
         rows = (await session.execute(statement)).all()
@@ -136,7 +145,7 @@ async def stock_snapshot_history(
 async def get_research_run(run_id: int) -> ResearchRunDetail:
     async with session_scope() as session:
         run = await session.get(PipelineRun, run_id)
-        if run is None or run.kind != "ifind_research":
+        if run is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Research run {run_id} not found",
@@ -314,6 +323,20 @@ async def research_single_stock(
     )
 
 
+_SUBTITLE_KEYS = ("scope", "part", "report_period", "trade_date", "slot", "as_of")
+
+
+def _run_subtitle(request: dict[str, object]) -> str | None:
+    """Short, non-sensitive hint of what a non-research run was asked to do."""
+
+    parts = [
+        text
+        for key in _SUBTITLE_KEYS
+        if (text := _optional_str(request.get(key))) is not None
+    ]
+    return " · ".join(dict.fromkeys(parts)) or None
+
+
 def _to_summary(
     run: PipelineRun,
     snapshot: ResearchSnapshot | None,
@@ -340,6 +363,9 @@ def _to_summary(
         needs_agent_review = review_value if isinstance(review_value, bool) else None
     return ResearchRunSummary(
         run_id=run.id,
+        kind=run.kind,
+        universe_code=run.universe_code,
+        subtitle=_run_subtitle(request),
         status=run.status,
         stage=run.stage,
         ticker=ticker,
@@ -360,6 +386,7 @@ def _to_summary(
         max_attempts=run.max_attempts,
         worker_id=run.worker_id,
         started_at=run.started_at,
+        claimed_at=run.claimed_at,
         finished_at=run.finished_at,
         error_summary=run.error_summary,
     )

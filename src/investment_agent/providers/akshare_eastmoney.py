@@ -638,6 +638,9 @@ class PeriodSummaries:
     empty_endpoints: tuple[SummaryEndpoint, ...] = ()
     """Endpoints that answered "no data" (period not disclosed by anybody)."""
     skipped_symbols: tuple[str, ...] = ()
+    deferred: tuple[tuple[str, date], ...] = ()
+    """(ticker, notice date) of listings dated after the capture date: left out of
+    ``summaries`` entirely and picked up by the first capture on or after the notice."""
     raw: Mapping[str, RawTable] = field(default_factory=dict, repr=False)
 
     def raw_rows_for(self, tickers: Sequence[str]) -> dict[str, list[dict[str, Any]]]:
@@ -697,6 +700,7 @@ def parse_period_summaries(
     by_ticker: dict[str, dict[SummaryEndpoint, Mapping[str, Any]]] = {}
     notices: dict[str, date | None] = {}
     skipped: set[str] = set()
+    deferred: dict[str, date] = {}
     empty: list[SummaryEndpoint] = []
     raw: dict[str, RawTable] = {}
     for endpoint in SUMMARY_ENDPOINTS:
@@ -716,11 +720,10 @@ def parse_period_summaries(
                 continue
             notice = _day(row.get(SUMMARY_NOTICE_COLUMN), field_name=f"{endpoint}.公告日期")
             if notice is not None and notice > capture_date:
-                raise LookaheadDataError(
-                    f"akshare {endpoint}: {ticker} notice date {notice.isoformat()} is after "
-                    f"the capture date {capture_date.isoformat()}",
-                    provider=PROVIDER,
-                )
+                # Eastmoney dates notices released in the evening with the next day. Never
+                # stored early, never fatal for the rest of the market (as for forecasts).
+                deferred[ticker] = max(notice, deferred.get(ticker, notice))
+                continue
             rows = by_ticker.setdefault(ticker, {})
             previous = rows.get(endpoint)
             if previous is not None:
@@ -737,6 +740,8 @@ def parse_period_summaries(
                 notices.setdefault(ticker, current)
     summaries: dict[str, PeriodSummary] = {}
     for ticker, rows in sorted(by_ticker.items()):
+        if ticker in deferred:
+            continue  # a half-published report is not stored: wait for the full set
         fields: dict[str, float | None] = {}
         source_values: dict[str, float | None] = {}
         for spec in SUMMARY_FIELDS:
@@ -758,12 +763,20 @@ def parse_period_summaries(
         )
     if skipped:
         log.info("eastmoney_symbols_skipped", count=len(skipped), sample=sorted(skipped)[:10])
+    if deferred:
+        log.info(
+            "eastmoney_summaries_deferred",
+            count=len(deferred),
+            capture_date=capture_date.isoformat(),
+            sample=[f"{ticker} {day.isoformat()}" for ticker, day in sorted(deferred.items())[:10]],
+        )
     return PeriodSummaries(
         report_period=report_period,
         captured_at=captured_at,
         summaries=summaries,
         empty_endpoints=tuple(empty),
         skipped_symbols=tuple(sorted(skipped)),
+        deferred=tuple(sorted(deferred.items())),
         raw=raw,
     )
 

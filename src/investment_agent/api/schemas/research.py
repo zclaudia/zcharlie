@@ -45,6 +45,9 @@ class ResearchArtifactOut(BaseModel):
 
 class ResearchRunSummary(BaseModel):
     run_id: int
+    kind: str
+    universe_code: str | None
+    subtitle: str | None
     status: str
     stage: str
     ticker: str | None
@@ -61,6 +64,8 @@ class ResearchRunSummary(BaseModel):
     max_attempts: int
     worker_id: str | None
     started_at: datetime
+    claimed_at: datetime | None
+    """When a worker last picked the run up (``started_at`` is when it was queued)."""
     finished_at: datetime | None
     error_summary: str | None
 

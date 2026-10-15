@@ -11,4 +11,5 @@ def test_healthz_does_not_require_auth(monkeypatch):
     with TestClient(app) as client:
         r = client.get("/healthz")
         assert r.status_code == 200
-        assert r.json() == {"status": "ok"}
+        assert r.json()["status"] == "ok"
+        assert r.json()["version"]

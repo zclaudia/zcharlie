@@ -1,61 +1,91 @@
+# One-command deploy: `tools/deploy.sh` (pre-flight, backup, build, migrate,
+# start, verify). Plain `docker compose up -d` also works and keeps the order:
+# migrate (one-shot) -> api -> worker + scheduler once the api is healthy.
+#
+# Shared by every service:
+# - code (src/, alembic/) ships in the image; only data is writable. On Linux
+#   the host ./data must be writable by uid 10001 (or rebuild with
+#   --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
+# - config/ stays read-only: the calendar the health page applies lives in
+#   DATA_DIR/calendars/ and takes precedence over the committed baseline.
+# - GIT_SHA is baked into the image and reported by /healthz (`version`).
+x-app: &app
+  image: investment-agent:dev
+  # Only `migrate` carries the build section, so the image is built once;
+  # the long-running services never try to pull it from a registry.
+  pull_policy: never
+  env_file:
+    - .env
+  volumes:
+    - ./data:/app/data
+    - ./config:/app/config:ro
+  working_dir: /app
+
+# worker / scheduler have no HTTP port: they keep $LIVENESS_FILE fresh while
+# their event loop runs (src/investment_agent/liveness.py); the check fails
+# when it is missing or older than 120 s.
+x-liveness-check: &liveness-check
+  test: ["CMD-SHELL", "test -f \"$$LIVENESS_FILE\" && test $$(( $$(date +%s) - $$(stat -c %Y \"$$LIVENESS_FILE\") )) -lt 120"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 60s
+
 services:
+  migrate:
+    <<: *app
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    pull_policy: missing
+    container_name: investment-agent-migrate
+    command: ["ia", "migrate", "up"]
+    restart: "no"
+
   api:
-    build: .
-    image: investment-agent:dev
+    <<: *app
     container_name: investment-agent-api
-    env_file:
-      - .env
-    # Code (src/, alembic/) ships in the image; only data is writable.
-    # On Linux the host ./data must be writable by uid 10001 (or rebuild with
-    # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
-    # config/ stays read-only: the calendar the health page applies lives in
-    # DATA_DIR/calendars/ and takes precedence over the committed baseline.
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config:ro
-    working_dir: /app
     # Published on loopback only; put a TLS reverse proxy in front for remote
     # access (then set WEB_COOKIE_SECURE=true and WEB_PUBLIC_ORIGIN).
     ports:
       - "127.0.0.1:8000:8000"
     command: ["ia", "api", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 30s
       timeout: 5s
       retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   scheduler:
-    build: .
-    image: investment-agent:dev
+    <<: *app
     container_name: investment-agent-scheduler
-    env_file:
-      - .env
-    # Code (src/, alembic/) ships in the image; only data is writable.
-    # On Linux the host ./data must be writable by uid 10001 (or rebuild with
-    # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config:ro
-    working_dir: /app
     command: ["ia", "scheduler", "start"]
+    environment:
+      LIVENESS_FILE: /tmp/scheduler.alive
     depends_on:
-      - api
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    healthcheck: *liveness-check
     restart: unless-stopped
 
   worker:
-    build: .
-    image: investment-agent:dev
+    <<: *app
     container_name: investment-agent-worker
-    env_file:
-      - .env
-    # Code (src/, alembic/) ships in the image; only data is writable.
-    # On Linux the host ./data must be writable by uid 10001 (or rebuild with
-    # --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g)).
-    volumes:
-      - ./data:/app/data
-      - ./config:/app/config:ro
-    working_dir: /app
     command: ["ia", "worker", "start"]
+    environment:
+      LIVENESS_FILE: /tmp/worker.alive
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    healthcheck: *liveness-check
     restart: unless-stopped
