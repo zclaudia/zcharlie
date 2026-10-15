@@ -6,6 +6,7 @@ import socket
 import typer
 
 from investment_agent.cli.runtime import bootstrap_settings
+from investment_agent.liveness import liveness
 from investment_agent.logging import configure_logging
 from investment_agent.research.worker import run_worker
 from investment_agent.storage.database import run_with_engine
@@ -48,10 +49,9 @@ def start(
     identity = worker_id or f"{socket.gethostname()}:{os.getpid()}"
     if len(identity) > 128:
         raise typer.BadParameter("must be at most 128 characters", param_hint="--worker-id")
-    try:
-        run_with_engine(
-            settings.database_url,
-            lambda: run_worker(
+    async def serve() -> None:
+        async with liveness():
+            await run_worker(
                 settings=settings,
                 worker_id=identity,
                 poll_interval_seconds=poll_interval,
@@ -59,7 +59,9 @@ def start(
                 once=once,
                 kinds=parse_kinds(kinds),
             )
-        )
+
+    try:
+        run_with_engine(settings.database_url, serve)
     except ValueError as exc:
         if "no handler registered" in str(exc):
             raise typer.BadParameter(str(exc), param_hint="--kinds") from exc

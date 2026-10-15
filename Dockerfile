@@ -36,8 +36,12 @@ COPY alembic/ alembic/
 COPY alembic.ini ./
 RUN mkdir -p /app/data && chown -R app:app /app/data
 
+# Git revision of the build (tools/deploy.sh passes it); /healthz reports it.
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app/src
+    PYTHONPATH=/app/src \
+    APP_VERSION=${GIT_SHA}
 
 USER app
 

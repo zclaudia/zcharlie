@@ -45,3 +45,6 @@ docs/superpowers/
 
 # Local research data validation artifacts (large, not for remote)
 /research/
+
+# Deploy state (tools/deploy.sh)
+.deploy/
