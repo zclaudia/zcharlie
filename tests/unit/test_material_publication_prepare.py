@@ -90,6 +90,39 @@ async def _count(session, model):
 
 
 @pytest.mark.asyncio
+async def test_method_upgrade_preserves_old_calculations_and_uses_distinct_receipts(
+    db_session, tmp_path, monkeypatch
+):
+    import investment_agent.materials.publication_prepare as preparation
+
+    listing, dataset = await _four_year_dataset(db_session, tmp_path)
+    as_of = datetime.now(UTC) + timedelta(seconds=1)
+    monkeypatch.setattr(preparation, "MATERIAL_CALCULATION_VERSION", "material.metrics.v1")
+    old = await prepare_material_publication(
+        db_session, listing_id=listing.id, dataset_ids=(dataset.id,), as_of=as_of
+    )
+    monkeypatch.setattr(preparation, "MATERIAL_CALCULATION_VERSION", "material.metrics.v2")
+    new = await prepare_material_publication(
+        db_session, listing_id=listing.id, dataset_ids=(dataset.id,), as_of=as_of
+    )
+    repeated = await prepare_material_publication(
+        db_session, listing_id=listing.id, dataset_ids=(dataset.id,), as_of=as_of
+    )
+    old_refs = [item.calculation_ref for item in old.metrics if item.calculation_ref]
+    new_refs = [item.calculation_ref for item in new.metrics if item.calculation_ref]
+    assert old_refs and new_refs and not set(old_refs).intersection(new_refs)
+    assert [item.calculation_ref for item in repeated.metrics if item.calculation_ref] == new_refs
+    service = EvidenceService(db_session)
+    for ref in old_refs:
+        record = await service.get_calculation("local_owner", ref, as_of)
+        assert record.data is not None and record.data.method_version == "material.metrics.v1"
+    for ref in new_refs:
+        record = await service.get_calculation("local_owner", ref, as_of)
+        assert record.data is not None and record.data.method_version == "material.metrics.v2"
+    assert await _count(db_session, SavedCalculation) == len(old_refs) + len(new_refs)
+
+
+@pytest.mark.asyncio
 async def test_service_persists_all_six_automatic_metric_outputs_and_resolves_publication(
     db_session, tmp_path
 ):
@@ -120,7 +153,9 @@ async def test_service_persists_all_six_automatic_metric_outputs_and_resolves_pu
             assert calculation.as_of == as_of.astimezone(UTC)
             input_records = [
                 await EvidenceService(db_session).get_evidence(
-                    "local_owner", ref, as_of,
+                    "local_owner",
+                    ref,
+                    as_of,
                     subject_ref=ObjectRef(kind="listing", id=listing.id, revision=1),
                 )
                 for ref in item.fact_refs
@@ -188,7 +223,15 @@ async def test_missing_inputs_remain_metric_gaps_without_numeric_calculations(db
     listing, dataset = await _four_year_dataset(
         db_session,
         tmp_path,
-        omit=("profit_parent", "profit_ordinary_shareholders", "equity_parent", "total_assets", "total_liabilities", "operating_cash_flow", "capex_ppe"),
+        omit=(
+            "profit_parent",
+            "profit_ordinary_shareholders",
+            "equity_parent",
+            "total_assets",
+            "total_liabilities",
+            "operating_cash_flow",
+            "capex_ppe",
+        ),
     )
     report = await prepare_material_publication(
         db_session,
@@ -197,7 +240,11 @@ async def test_missing_inputs_remain_metric_gaps_without_numeric_calculations(db
         as_of=datetime.now(UTC) + timedelta(seconds=1),
     )
     assert report.status == "partial"
-    missing = [item for item in report.metrics if item.key != "revenue_yoy" and item.key != "revenue_cagr_3y"]
+    missing = [
+        item
+        for item in report.metrics
+        if item.key != "revenue_yoy" and item.key != "revenue_cagr_3y"
+    ]
     assert missing and all(item.calculation_ref is None for item in missing)
     assert all(any("metric_status:missing_inputs" in gap for gap in item.gaps) for item in missing)
 
@@ -206,7 +253,9 @@ async def test_missing_inputs_remain_metric_gaps_without_numeric_calculations(db
 async def test_unknown_and_future_publication_evidence_never_creates_numeric_calculation(
     db_session, tmp_path
 ):
-    listing, dataset = await _four_year_dataset(db_session, tmp_path, precision=DatePrecision.UNKNOWN)
+    listing, dataset = await _four_year_dataset(
+        db_session, tmp_path, precision=DatePrecision.UNKNOWN
+    )
     report = await prepare_material_publication(
         db_session,
         listing_id=listing.id,
@@ -257,7 +306,8 @@ async def test_new_material_revision_gets_new_calculation_and_keeps_historical_r
         db_session, listing_id=listing.id, dataset_ids=(original.id,), as_of=as_of
     )
     old_growth = next(
-        item for item in original_report.metrics
+        item
+        for item in original_report.metrics
         if item.key == "revenue_yoy" and item.calculation_ref is not None
     )
     revised, second = await _four_year_dataset(
@@ -271,7 +321,8 @@ async def test_new_material_revision_gets_new_calculation_and_keeps_historical_r
         db_session, listing_id=listing.id, dataset_ids=(second.id,), as_of=as_of
     )
     new_growth = next(
-        item for item in revised_report.metrics
+        item
+        for item in revised_report.metrics
         if item.key == "revenue_yoy" and item.calculation_ref is not None
     )
 

@@ -2881,6 +2881,30 @@
           "http_status": 200,
           "media_type": "application/json",
           "published_on": null
+        },
+        {
+          "id": "hsbc-holdings:restatement-annual-2023",
+          "role": "issuer_annual",
+          "path": "hsbc-restatement/hsbc-annual-report-2023.pdf",
+          "url": "https://www.hsbc.com/-/files/hsbc/investors/hsbc-results/2023/annual/pdfs/hsbc-holdings-plc/240226-annual-report-and-accounts-2023.pdf?download=1",
+          "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+          "bytes": 7034549,
+          "captured_at": "2026-10-15T14:44:20Z",
+          "http_status": 200,
+          "media_type": "application/pdf",
+          "published_on": "2024-02-21"
+        },
+        {
+          "id": "hsbc-holdings:restatement-publication-index",
+          "role": "official_index",
+          "path": "hsbc-restatement/official-report-index-2023.html",
+          "url": "https://www.hsbc.com/investors/results-and-announcements/all-reporting/group?page=1&reporting-type=annual&take=20&year=2024",
+          "sha256": "2a50fc76ff01bc7c23925c5e2dbd103cdbbbe0f45aaa44e6105d7c85dd45229c",
+          "bytes": 882278,
+          "captured_at": "2026-10-15T14:46:01Z",
+          "http_status": 200,
+          "media_type": "text/html; charset=utf-8",
+          "published_on": "2024-02-21"
         }
       ],
       "fields": [
@@ -3626,15 +3650,15 @@
               },
               "semantics": {
                 "metric": "equity_ordinary",
-                "source_label": "Total ordinary shareholders’ equity",
-                "source_field": "Total ordinary shareholders’ equity",
+                "source_label": "Derived IFRS 17 ordinary opening equity",
+                "source_field": "IFRS 17 parent equity less other equity instruments",
                 "accounting_standard": "ifrs",
                 "reporting_scope": "consolidated",
                 "equity_scope": "ordinary_shareholders",
                 "per_share_basis": "not_applicable"
               },
               "value": {
-                "raw_value": "175836",
+                "raw_value": "166601",
                 "raw_unit": "USD million",
                 "scale": 1000000,
                 "unit": "USD",
@@ -3643,11 +3667,11 @@
                 "missing_reason": null
               },
               "provenance": {
-                "source": "issuer.annual_report",
+                "source": "material.equity_reconciliation",
                 "accession": null,
-                "original_hash": "94aab2f5c83d1060ee95d344f1915833869fe4502dc635e4ab9ca84f496ee94b",
+                "original_hash": "3ced29e2f3aef6293741ff5f6f1e3ddca24bb28c976f917cf886a8798a4c7dea",
                 "source_published_at": null,
-                "source_published_date": "2026-02-25",
+                "source_published_date": "2024-02-21",
                 "source_published_precision": "date",
                 "accepted_at": null,
                 "source_available_at": null
@@ -3655,37 +3679,18 @@
               "verification": "verified",
               "conflict": "none",
               "applicability": "applicable",
-              "source_label": "Total ordinary shareholders’ equity",
-              "source_field": "Total ordinary shareholders’ equity",
-              "original_locator": "{\"kind\":\"pdf\",\"page\":74,\"row\":\"Total ordinary shareholders\\u2019 equity\"}",
+              "source_label": "Derived IFRS 17 ordinary opening equity",
+              "source_field": "IFRS 17 parent equity less other equity instruments",
+              "original_locator": "{\"kind\":\"calculation\",\"ref\":\"sha256:3ced29e2f3aef6293741ff5f6f1e3ddca24bb28c976f917cf886a8798a4c7dea\"}",
               "missing_reason": null,
               "conflict_note": null,
               "source_version": null
             },
+            "calculation_ref": "sha256:3ced29e2f3aef6293741ff5f6f1e3ddca24bb28c976f917cf886a8798a4c7dea",
             "evidence": {
-              "document_id": "hsbc-holdings:issuer_annual:issuer/hsbc-holdings/2025/annual_report.attempt-2.pdf",
-              "locator": {
-                "kind": "pdf",
-                "page": 74,
-                "row": "Total ordinary shareholders’ equity"
-              },
-              "excerpt": "Total ordinary shareholders’ equity  177,509 165,903 167,610 158,087 175,836",
-              "source_label": "Total ordinary shareholders’ equity",
-              "column_years": [
-                "2025",
-                "2024",
-                "2023",
-                "2022",
-                "2021"
-              ],
-              "row_values": [
-                "177,509",
-                "165,903",
-                "167,610",
-                "158,087",
-                "175,836"
-              ],
-              "selected_year": "2021"
+              "kind": "derived_calculation",
+              "calculation_ref": "sha256:3ced29e2f3aef6293741ff5f6f1e3ddca24bb28c976f917cf886a8798a4c7dea",
+              "availability_basis": "Latest publication date of the cited calculation inputs; not a directly disclosed amount."
             }
           }
         },
@@ -4975,7 +4980,492 @@
         {
           "kind": "ifrs_17_restatement",
           "period": "FY2021/FY2022 comparative and opening equity",
-          "detail": "HSBC FY2021 was originally reported under IFRS 4 and later presented on an IFRS 17-restated basis; the evidence uses the FY2025 report's consistent restated FY2022–FY2025 series and does not substitute contemporaneous IFRS 4 comparatives."
+          "detail": "The original IFRS 4 opening ordinary equity is retained in superseded_facts. FY2022 selects the audited IFRS 17 derived opening balance, with all source amounts and transition adjustments retained in equity_reconciliations.",
+          "status": "resolved",
+          "resolution_ref": "sha256:3ced29e2f3aef6293741ff5f6f1e3ddca24bb28c976f917cf886a8798a4c7dea",
+          "original_detail": "HSBC FY2021 was originally reported under IFRS 4 and later presented on an IFRS 17-restated basis; the evidence uses the FY2025 report's consistent restated FY2022–FY2025 series and does not substitute contemporaneous IFRS 4 comparatives."
+        }
+      ],
+      "reconciliation_publication_evidence": {
+        "document_id": "hsbc-holdings:restatement-publication-index",
+        "locator": {
+          "kind": "text",
+          "anchor": "21 Feb 2024 Annual Annual Results 2023 documents 24 items Show all Show all documents. Annual Results 2023 media release PDF 277KB 33 pages Add Annual Results 2023 media release to download basket Annual Report and Accounts 2023 PDF 7MB 450 pages"
+        },
+        "excerpt": "21 Feb 2024 Annual Annual Results 2023 documents 24 items Show all Show all documents. Annual Results 2023 media release PDF 277KB 33 pages Add Annual Results 2023 media release to download basket Annual Report and Accounts 2023 PDF 7MB 450 pages",
+        "published_on": "2024-02-21",
+        "link_url": "https://www.hsbc.com/-/files/hsbc/investors/hsbc-results/2023/annual/pdfs/hsbc-holdings-plc/240226-annual-report-and-accounts-2023.pdf"
+      },
+      "equity_reconciliations": [
+        {
+          "method_version": "hsbc.ifrs17.ordinary_opening.v1",
+          "inputs": [
+            {
+              "id": "old_parent",
+              "value": "198250",
+              "basis": "ifrs4",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders‘ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders‘ equity 177,833 189,015 187,484 198,250",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 427,
+                  "row": "Total shareholders‘ equity",
+                  "column_index": 3,
+                  "column_values": [
+                    "177833",
+                    "189015",
+                    "187484",
+                    "198250"
+                  ],
+                  "column_headers": [
+                    "ifrs17:2022-12-31",
+                    "ifrs17:2022-01-01",
+                    "ifrs4:2022-12-31",
+                    "ifrs4:2022-01-01"
+                  ],
+                  "selected_column": "ifrs4:2022-01-01"
+                }
+              }
+            },
+            {
+              "id": "old_instruments",
+              "value": "22414",
+              "basis": "ifrs4",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Other equity instruments",
+                "published_on": "2024-02-21",
+                "excerpt": "Other equity instruments 19,746 22,414 19,746 22,414",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 427,
+                  "row": "Other equity instruments",
+                  "column_index": 3,
+                  "column_values": [
+                    "19746",
+                    "22414",
+                    "19746",
+                    "22414"
+                  ],
+                  "column_headers": [
+                    "ifrs17:2022-12-31",
+                    "ifrs17:2022-01-01",
+                    "ifrs4:2022-12-31",
+                    "ifrs4:2022-01-01"
+                  ],
+                  "selected_column": "ifrs4:2022-01-01"
+                }
+              }
+            },
+            {
+              "id": "old_ordinary",
+              "value": "175836",
+              "basis": "ifrs4",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total ordinary shareholders’ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total ordinary shareholders’ equity 167,610 158,087 175,836",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 135,
+                  "row": "Total ordinary shareholders’ equity",
+                  "column_index": 2,
+                  "column_values": [
+                    "167610",
+                    "158087",
+                    "175836"
+                  ],
+                  "column_headers": [
+                    "2023-12-31",
+                    "2022-12-31",
+                    "2021-12-31"
+                  ],
+                  "selected_column": "2021-12-31"
+                }
+              }
+            },
+            {
+              "id": "new_parent",
+              "value": "189015",
+              "basis": "ifrs17",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders‘ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders‘ equity 177,833 189,015 187,484 198,250",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 427,
+                  "row": "Total shareholders‘ equity",
+                  "column_index": 1,
+                  "column_values": [
+                    "177833",
+                    "189015",
+                    "187484",
+                    "198250"
+                  ],
+                  "column_headers": [
+                    "ifrs17:2022-12-31",
+                    "ifrs17:2022-01-01",
+                    "ifrs4:2022-12-31",
+                    "ifrs4:2022-01-01"
+                  ],
+                  "selected_column": "ifrs17:2022-01-01"
+                }
+              }
+            },
+            {
+              "id": "new_instruments",
+              "value": "22414",
+              "basis": "ifrs17",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Other equity instruments",
+                "published_on": "2024-02-21",
+                "excerpt": "Other equity instruments 19,746 22,414 19,746 22,414",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 427,
+                  "row": "Other equity instruments",
+                  "column_index": 1,
+                  "column_values": [
+                    "19746",
+                    "22414",
+                    "19746",
+                    "22414"
+                  ],
+                  "column_headers": [
+                    "ifrs17:2022-12-31",
+                    "ifrs17:2022-01-01",
+                    "ifrs4:2022-12-31",
+                    "ifrs4:2022-01-01"
+                  ],
+                  "selected_column": "ifrs17:2022-01-01"
+                }
+              }
+            },
+            {
+              "id": "adjustment_1",
+              "value": "92738",
+              "basis": "transition",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders’ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235)",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 424,
+                  "row": "Total shareholders’ equity",
+                  "column_index": 1,
+                  "column_values": [
+                    "198250",
+                    "92738",
+                    "4558",
+                    "-99631",
+                    "-8847",
+                    "1947",
+                    "189015",
+                    "-9235"
+                  ],
+                  "column_headers": [
+                    "ifrs4",
+                    "removal",
+                    "remeasurement",
+                    "fulfilment",
+                    "csm",
+                    "tax",
+                    "ifrs17",
+                    "movement"
+                  ],
+                  "selected_column": "removal"
+                }
+              }
+            },
+            {
+              "id": "adjustment_2",
+              "value": "4558",
+              "basis": "transition",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders’ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235)",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 424,
+                  "row": "Total shareholders’ equity",
+                  "column_index": 2,
+                  "column_values": [
+                    "198250",
+                    "92738",
+                    "4558",
+                    "-99631",
+                    "-8847",
+                    "1947",
+                    "189015",
+                    "-9235"
+                  ],
+                  "column_headers": [
+                    "ifrs4",
+                    "removal",
+                    "remeasurement",
+                    "fulfilment",
+                    "csm",
+                    "tax",
+                    "ifrs17",
+                    "movement"
+                  ],
+                  "selected_column": "remeasurement"
+                }
+              }
+            },
+            {
+              "id": "adjustment_3",
+              "value": "-99631",
+              "basis": "transition",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders’ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235)",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 424,
+                  "row": "Total shareholders’ equity",
+                  "column_index": 3,
+                  "column_values": [
+                    "198250",
+                    "92738",
+                    "4558",
+                    "-99631",
+                    "-8847",
+                    "1947",
+                    "189015",
+                    "-9235"
+                  ],
+                  "column_headers": [
+                    "ifrs4",
+                    "removal",
+                    "remeasurement",
+                    "fulfilment",
+                    "csm",
+                    "tax",
+                    "ifrs17",
+                    "movement"
+                  ],
+                  "selected_column": "fulfilment"
+                }
+              }
+            },
+            {
+              "id": "adjustment_4",
+              "value": "-8847",
+              "basis": "transition",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders’ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235)",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 424,
+                  "row": "Total shareholders’ equity",
+                  "column_index": 4,
+                  "column_values": [
+                    "198250",
+                    "92738",
+                    "4558",
+                    "-99631",
+                    "-8847",
+                    "1947",
+                    "189015",
+                    "-9235"
+                  ],
+                  "column_headers": [
+                    "ifrs4",
+                    "removal",
+                    "remeasurement",
+                    "fulfilment",
+                    "csm",
+                    "tax",
+                    "ifrs17",
+                    "movement"
+                  ],
+                  "selected_column": "csm"
+                }
+              }
+            },
+            {
+              "id": "adjustment_5",
+              "value": "1947",
+              "basis": "transition",
+              "scale": 1000000,
+              "currency": "USD",
+              "period_end": "2021-12-31",
+              "source_ref": {
+                "document_id": "hsbc-holdings:restatement-annual-2023",
+                "sha256": "2c03736c288399da08b665d72616e45b93c99764ec47891d9c2bc8fa5175c6c5",
+                "source_label": "Total shareholders’ equity",
+                "published_on": "2024-02-21",
+                "excerpt": "Total shareholders’ equity 198,250 92,738 4,558 (99,631) (8,847) 1,947 189,015 (9,235)",
+                "locator": {
+                  "kind": "pdf",
+                  "page": 424,
+                  "row": "Total shareholders’ equity",
+                  "column_index": 5,
+                  "column_values": [
+                    "198250",
+                    "92738",
+                    "4558",
+                    "-99631",
+                    "-8847",
+                    "1947",
+                    "189015",
+                    "-9235"
+                  ],
+                  "column_headers": [
+                    "ifrs4",
+                    "removal",
+                    "remeasurement",
+                    "fulfilment",
+                    "csm",
+                    "tax",
+                    "ifrs17",
+                    "movement"
+                  ],
+                  "selected_column": "tax"
+                }
+              }
+            }
+          ],
+          "output": {
+            "metric": "equity_ordinary",
+            "value": "166601",
+            "scale": 1000000,
+            "currency": "USD",
+            "period_end": "2021-12-31",
+            "equity_scope": "ordinary_shareholders",
+            "basis": "ifrs17"
+          },
+          "calculation_ref": "sha256:3ced29e2f3aef6293741ff5f6f1e3ddca24bb28c976f917cf886a8798a4c7dea"
+        }
+      ],
+      "superseded_facts": [
+        {
+          "category": "equity",
+          "fact": {
+            "metric": "equity_ordinary",
+            "period": {
+              "start": null,
+              "end": "2021-12-31",
+              "basis": "instant",
+              "label": "FY2021",
+              "days": null
+            },
+            "semantics": {
+              "metric": "equity_ordinary",
+              "source_label": "Total ordinary shareholders’ equity",
+              "source_field": "Total ordinary shareholders’ equity",
+              "accounting_standard": "ifrs",
+              "reporting_scope": "consolidated",
+              "equity_scope": "ordinary_shareholders",
+              "per_share_basis": "not_applicable"
+            },
+            "value": {
+              "raw_value": "175836",
+              "raw_unit": "USD million",
+              "scale": 1000000,
+              "unit": "USD",
+              "currency": "USD",
+              "sign_convention": "as_reported",
+              "missing_reason": null
+            },
+            "provenance": {
+              "source": "issuer.annual_report",
+              "accession": null,
+              "original_hash": "94aab2f5c83d1060ee95d344f1915833869fe4502dc635e4ab9ca84f496ee94b",
+              "source_published_at": null,
+              "source_published_date": "2026-02-25",
+              "source_published_precision": "date",
+              "accepted_at": null,
+              "source_available_at": null
+            },
+            "verification": "verified",
+            "conflict": "none",
+            "applicability": "applicable",
+            "source_label": "Total ordinary shareholders’ equity",
+            "source_field": "Total ordinary shareholders’ equity",
+            "original_locator": "{\"kind\":\"pdf\",\"page\":74,\"row\":\"Total ordinary shareholders\\u2019 equity\"}",
+            "missing_reason": null,
+            "conflict_note": null,
+            "source_version": null
+          },
+          "evidence": {
+            "document_id": "hsbc-holdings:issuer_annual:issuer/hsbc-holdings/2025/annual_report.attempt-2.pdf",
+            "locator": {
+              "kind": "pdf",
+              "page": 74,
+              "row": "Total ordinary shareholders’ equity"
+            },
+            "excerpt": "Total ordinary shareholders’ equity  177,509 165,903 167,610 158,087 175,836",
+            "source_label": "Total ordinary shareholders’ equity",
+            "column_years": [
+              "2025",
+              "2024",
+              "2023",
+              "2022",
+              "2021"
+            ],
+            "row_values": [
+              "177,509",
+              "165,903",
+              "167,610",
+              "158,087",
+              "175,836"
+            ],
+            "selected_year": "2021"
+          }
         }
       ]
     },
@@ -9044,6 +9534,18 @@
           "http_status": 200,
           "media_type": "application/json",
           "published_on": null
+        },
+        {
+          "id": "0000909832-23-000042",
+          "role": "sec_filing",
+          "path": "costco-equity/cost-20230903.htm",
+          "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+          "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+          "bytes": 1502730,
+          "captured_at": "2026-10-15T14:43:54Z",
+          "http_status": 200,
+          "media_type": "text/html",
+          "published_on": "2023-10-11"
         }
       ],
       "fields": [
@@ -9529,7 +10031,7 @@
             {
               "category": "equity",
               "fact": {
-                "metric": "total_equity",
+                "metric": "equity_parent",
                 "period": {
                   "start": null,
                   "end": "2023-09-03",
@@ -9538,12 +10040,12 @@
                   "days": null
                 },
                 "semantics": {
-                  "metric": "total_equity",
-                  "source_label": "TOTAL EQUITY",
-                  "source_field": "TOTAL EQUITY",
+                  "metric": "equity_parent",
+                  "source_label": "Total Costco stockholders’ equity",
+                  "source_field": "Total Costco stockholders’ equity",
                   "accounting_standard": "us_gaap",
                   "reporting_scope": "consolidated",
-                  "equity_scope": "total",
+                  "equity_scope": "all_parent_equity_holders",
                   "per_share_basis": "not_applicable"
                 },
                 "value": {
@@ -9568,28 +10070,28 @@
                 "verification": "verified",
                 "conflict": "none",
                 "applicability": "applicable",
-                "source_label": "TOTAL EQUITY",
-                "source_field": "TOTAL EQUITY",
-                "original_locator": "{\"anchor\":\"TOTAL EQUITY 25,058 20,647\",\"kind\":\"text\"}",
+                "source_label": "Total Costco stockholders’ equity",
+                "source_field": "Total Costco stockholders’ equity",
+                "original_locator": "{\"anchor\":\"Total Costco stockholders\\u2019 equity 25,058 20,642\",\"kind\":\"text\"}",
                 "missing_reason": null,
                 "conflict_note": null,
                 "source_version": null
               },
               "evidence": {
-                "document_id": "costco:sec_filing:sec/costco/2023-09-03/cost-20230903.attempt-2.htm",
+                "document_id": "0000909832-23-000042",
                 "locator": {
                   "kind": "text",
-                  "anchor": "TOTAL EQUITY 25,058 20,647"
+                  "anchor": "Total Costco stockholders’ equity 25,058 20,642"
                 },
-                "excerpt": "TOTAL EQUITY 25,058 20,647",
-                "source_label": "TOTAL EQUITY"
+                "excerpt": "Total Costco stockholders’ equity 25,058 20,642",
+                "source_label": "Total Costco stockholders’ equity"
               }
             }
           ],
           "beginning_equity_fact": {
             "category": "equity",
             "fact": {
-              "metric": "total_equity",
+              "metric": "equity_parent",
               "period": {
                 "start": null,
                 "end": "2022-08-28",
@@ -9598,16 +10100,16 @@
                 "days": null
               },
               "semantics": {
-                "metric": "total_equity",
-                "source_label": "TOTAL EQUITY",
-                "source_field": "TOTAL EQUITY",
+                "metric": "equity_parent",
+                "source_label": "Total Costco stockholders’ equity",
+                "source_field": "Total Costco stockholders’ equity",
                 "accounting_standard": "us_gaap",
                 "reporting_scope": "consolidated",
-                "equity_scope": "total",
+                "equity_scope": "all_parent_equity_holders",
                 "per_share_basis": "not_applicable"
               },
               "value": {
-                "raw_value": "20647",
+                "raw_value": "20642",
                 "raw_unit": "USD million",
                 "scale": 1000000,
                 "unit": "USD",
@@ -9628,21 +10130,21 @@
               "verification": "verified",
               "conflict": "none",
               "applicability": "applicable",
-              "source_label": "TOTAL EQUITY",
-              "source_field": "TOTAL EQUITY",
-              "original_locator": "{\"anchor\":\"TOTAL EQUITY 25,058 20,647\",\"kind\":\"text\"}",
+              "source_label": "Total Costco stockholders’ equity",
+              "source_field": "Total Costco stockholders’ equity",
+              "original_locator": "{\"anchor\":\"Total Costco stockholders\\u2019 equity 25,058 20,642\",\"kind\":\"text\"}",
               "missing_reason": null,
               "conflict_note": null,
               "source_version": null
             },
             "evidence": {
-              "document_id": "costco:sec_filing:sec/costco/2023-09-03/cost-20230903.attempt-2.htm",
+              "document_id": "0000909832-23-000042",
               "locator": {
                 "kind": "text",
-                "anchor": "TOTAL EQUITY 25,058 20,647"
+                "anchor": "Total Costco stockholders’ equity 25,058 20,642"
               },
-              "excerpt": "TOTAL EQUITY 25,058 20,647",
-              "source_label": "TOTAL EQUITY"
+              "excerpt": "Total Costco stockholders’ equity 25,058 20,642",
+              "source_label": "Total Costco stockholders’ equity"
             }
           }
         },
@@ -9832,7 +10334,7 @@
           "beginning_equity_fact": {
             "category": "equity",
             "fact": {
-              "metric": "total_equity",
+              "metric": "equity_parent",
               "period": {
                 "start": null,
                 "end": "2023-09-03",
@@ -9841,12 +10343,12 @@
                 "days": null
               },
               "semantics": {
-                "metric": "total_equity",
-                "source_label": "TOTAL EQUITY",
-                "source_field": "TOTAL EQUITY",
+                "metric": "equity_parent",
+                "source_label": "Total Costco stockholders’ equity",
+                "source_field": "Total Costco stockholders’ equity",
                 "accounting_standard": "us_gaap",
                 "reporting_scope": "consolidated",
-                "equity_scope": "total",
+                "equity_scope": "all_parent_equity_holders",
                 "per_share_basis": "not_applicable"
               },
               "value": {
@@ -9871,21 +10373,21 @@
               "verification": "verified",
               "conflict": "none",
               "applicability": "applicable",
-              "source_label": "TOTAL EQUITY",
-              "source_field": "TOTAL EQUITY",
-              "original_locator": "{\"anchor\":\"TOTAL EQUITY 25,058 20,647\",\"kind\":\"text\"}",
+              "source_label": "Total Costco stockholders’ equity",
+              "source_field": "Total Costco stockholders’ equity",
+              "original_locator": "{\"anchor\":\"Total Costco stockholders\\u2019 equity 25,058 20,642\",\"kind\":\"text\"}",
               "missing_reason": null,
               "conflict_note": null,
               "source_version": null
             },
             "evidence": {
-              "document_id": "costco:sec_filing:sec/costco/2023-09-03/cost-20230903.attempt-2.htm",
+              "document_id": "0000909832-23-000042",
               "locator": {
                 "kind": "text",
-                "anchor": "TOTAL EQUITY 25,058 20,647"
+                "anchor": "Total Costco stockholders’ equity 25,058 20,642"
               },
-              "excerpt": "TOTAL EQUITY 25,058 20,647",
-              "source_label": "TOTAL EQUITY"
+              "excerpt": "Total Costco stockholders’ equity 25,058 20,642",
+              "source_label": "Total Costco stockholders’ equity"
             }
           }
         },
@@ -10563,7 +11065,269 @@
         {
           "kind": "equity_scope_tag_change",
           "period": "FY2022–FY2023 vs FY2024–FY2026",
-          "detail": "Reviewed SEC history uses Costco total equity including NCI for FY2022–FY2023 per the reported tag, while later filing rows use StockholdersEquity. Scope is retained as reported; do not treat the four-year denominator series as fully scope-homogeneous."
+          "detail": "The earlier reviewed FY2022/FY2023 total-equity inputs including NCI remain in superseded_facts. The selected historical inputs now use directly disclosed parent stockholders' equity, consistent with later parent-equity inputs; parent, NCI and reported totals are independently retained and reconciled.",
+          "status": "resolved",
+          "resolution_ref": "sha256:1d50e17f4bce47aa524dafa6280469829b3dd6b06e5d9dcd137b1df7790e3bc3",
+          "affected_period_ends": [
+            "2022-08-28",
+            "2023-09-03"
+          ],
+          "original_detail": "Reviewed SEC history uses Costco total equity including NCI for FY2022–FY2023 per the reported tag, while later filing rows use StockholdersEquity. Scope is retained as reported; do not treat the four-year denominator series as fully scope-homogeneous."
+        }
+      ],
+      "superseded_facts": [
+        {
+          "category": "equity",
+          "fact": {
+            "metric": "total_equity",
+            "period": {
+              "start": null,
+              "end": "2022-08-28",
+              "basis": "instant",
+              "label": "FY2022",
+              "days": null
+            },
+            "semantics": {
+              "metric": "total_equity",
+              "source_label": "TOTAL EQUITY",
+              "source_field": "TOTAL EQUITY",
+              "accounting_standard": "us_gaap",
+              "reporting_scope": "consolidated",
+              "equity_scope": "total",
+              "per_share_basis": "not_applicable"
+            },
+            "value": {
+              "raw_value": "20647",
+              "raw_unit": "USD million",
+              "scale": 1000000,
+              "unit": "USD",
+              "currency": "USD",
+              "sign_convention": "as_reported",
+              "missing_reason": null
+            },
+            "provenance": {
+              "source": "issuer.annual_report",
+              "accession": "0000909832-23-000042",
+              "original_hash": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+              "source_published_at": null,
+              "source_published_date": "2023-10-11",
+              "source_published_precision": "date",
+              "accepted_at": null,
+              "source_available_at": null
+            },
+            "verification": "verified",
+            "conflict": "none",
+            "applicability": "applicable",
+            "source_label": "TOTAL EQUITY",
+            "source_field": "TOTAL EQUITY",
+            "original_locator": "{\"anchor\":\"TOTAL EQUITY 25,058 20,647\",\"kind\":\"text\"}",
+            "missing_reason": null,
+            "conflict_note": null,
+            "source_version": null
+          },
+          "evidence": {
+            "document_id": "costco:sec_filing:sec/costco/2023-09-03/cost-20230903.attempt-2.htm",
+            "locator": {
+              "kind": "text",
+              "anchor": "TOTAL EQUITY 25,058 20,647"
+            },
+            "excerpt": "TOTAL EQUITY 25,058 20,647",
+            "source_label": "TOTAL EQUITY"
+          }
+        },
+        {
+          "category": "equity",
+          "fact": {
+            "metric": "total_equity",
+            "period": {
+              "start": null,
+              "end": "2023-09-03",
+              "basis": "instant",
+              "label": "FY2023",
+              "days": null
+            },
+            "semantics": {
+              "metric": "total_equity",
+              "source_label": "TOTAL EQUITY",
+              "source_field": "TOTAL EQUITY",
+              "accounting_standard": "us_gaap",
+              "reporting_scope": "consolidated",
+              "equity_scope": "total",
+              "per_share_basis": "not_applicable"
+            },
+            "value": {
+              "raw_value": "25058",
+              "raw_unit": "USD million",
+              "scale": 1000000,
+              "unit": "USD",
+              "currency": "USD",
+              "sign_convention": "as_reported",
+              "missing_reason": null
+            },
+            "provenance": {
+              "source": "issuer.annual_report",
+              "accession": "0000909832-23-000042",
+              "original_hash": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+              "source_published_at": null,
+              "source_published_date": "2023-10-11",
+              "source_published_precision": "date",
+              "accepted_at": null,
+              "source_available_at": null
+            },
+            "verification": "verified",
+            "conflict": "none",
+            "applicability": "applicable",
+            "source_label": "TOTAL EQUITY",
+            "source_field": "TOTAL EQUITY",
+            "original_locator": "{\"anchor\":\"TOTAL EQUITY 25,058 20,647\",\"kind\":\"text\"}",
+            "missing_reason": null,
+            "conflict_note": null,
+            "source_version": null
+          },
+          "evidence": {
+            "document_id": "costco:sec_filing:sec/costco/2023-09-03/cost-20230903.attempt-2.htm",
+            "locator": {
+              "kind": "text",
+              "anchor": "TOTAL EQUITY 25,058 20,647"
+            },
+            "excerpt": "TOTAL EQUITY 25,058 20,647",
+            "source_label": "TOTAL EQUITY"
+          }
+        }
+      ],
+      "equity_scope_reviews": [
+        {
+          "id": "costco.parent-equity.v1",
+          "currency": "USD",
+          "raw_unit": "USD million",
+          "scale": 1000000,
+          "period_type": "instant",
+          "source_ref": {
+            "document_id": "0000909832-23-000042",
+            "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+            "published_on": "2023-10-11",
+            "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm"
+          },
+          "periods": [
+            {
+              "date": "2022-08-28",
+              "context_ref": "c-13",
+              "parent": {
+                "scope": "parent",
+                "amount": 20642,
+                "source_ref": {
+                  "document_id": "0000909832-23-000042",
+                  "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+                  "published_on": "2023-10-11",
+                  "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+                  "context_ref": "c-13",
+                  "tag": "us-gaap:StockholdersEquity",
+                  "source_label": "Total Costco stockholders’ equity",
+                  "locator": {
+                    "kind": "text",
+                    "anchor": "Total Costco stockholders’ equity 25,058 20,642"
+                  },
+                  "excerpt": "Total Costco stockholders’ equity | 25,058 | 20,642"
+                }
+              },
+              "nci": {
+                "scope": "nci",
+                "amount": 5,
+                "source_ref": {
+                  "document_id": "0000909832-23-000042",
+                  "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+                  "published_on": "2023-10-11",
+                  "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+                  "context_ref": "c-13",
+                  "tag": "us-gaap:MinorityInterest",
+                  "source_label": "Noncontrolling interests",
+                  "locator": {
+                    "kind": "text",
+                    "anchor": "Noncontrolling interests — 5"
+                  },
+                  "excerpt": "Noncontrolling interests | — | 5"
+                },
+                "amount_notation": "reported"
+              },
+              "total": {
+                "scope": "total",
+                "amount": 20647,
+                "source_ref": {
+                  "document_id": "0000909832-23-000042",
+                  "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+                  "published_on": "2023-10-11",
+                  "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+                  "context_ref": "c-13",
+                  "tag": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+                  "source_label": "TOTAL EQUITY",
+                  "locator": {
+                    "kind": "text",
+                    "anchor": "TOTAL EQUITY 25,058 20,647"
+                  },
+                  "excerpt": "TOTAL EQUITY | 25,058 | 20,647"
+                }
+              }
+            },
+            {
+              "date": "2023-09-03",
+              "context_ref": "c-12",
+              "parent": {
+                "scope": "parent",
+                "amount": 25058,
+                "source_ref": {
+                  "document_id": "0000909832-23-000042",
+                  "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+                  "published_on": "2023-10-11",
+                  "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+                  "context_ref": "c-12",
+                  "tag": "us-gaap:StockholdersEquity",
+                  "source_label": "Total Costco stockholders’ equity",
+                  "locator": {
+                    "kind": "text",
+                    "anchor": "Total Costco stockholders’ equity 25,058 20,642"
+                  },
+                  "excerpt": "Total Costco stockholders’ equity | 25,058 | 20,642"
+                }
+              },
+              "nci": {
+                "scope": "nci",
+                "amount": 0,
+                "source_ref": {
+                  "document_id": "0000909832-23-000042",
+                  "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+                  "published_on": "2023-10-11",
+                  "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+                  "context_ref": "c-12",
+                  "tag": "us-gaap:MinorityInterest",
+                  "source_label": "Noncontrolling interests",
+                  "locator": {
+                    "kind": "text",
+                    "anchor": "Noncontrolling interests — 5"
+                  },
+                  "excerpt": "Noncontrolling interests | — | 5"
+                },
+                "amount_notation": "em_dash_zero"
+              },
+              "total": {
+                "scope": "total",
+                "amount": 25058,
+                "source_ref": {
+                  "document_id": "0000909832-23-000042",
+                  "sha256": "4ad0ed774dc46baca606e6d6db5f86d841211c3de97986861df71194e6bd8cc1",
+                  "published_on": "2023-10-11",
+                  "url": "https://www.sec.gov/Archives/edgar/data/909832/000090983223000042/cost-20230903.htm",
+                  "context_ref": "c-12",
+                  "tag": "us-gaap:StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+                  "source_label": "TOTAL EQUITY",
+                  "locator": {
+                    "kind": "text",
+                    "anchor": "TOTAL EQUITY 25,058 20,647"
+                  },
+                  "excerpt": "TOTAL EQUITY | 25,058 | 20,647"
+                }
+              }
+            }
+          ]
         }
       ]
     },

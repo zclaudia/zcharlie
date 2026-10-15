@@ -1,5 +1,7 @@
 # 港股与美股扩展实施计划 · 总计划
 
+> 后续阶段当前状态：HK2-04 八家年度证据包已通过断网核验；三项 P0 收口与 HK2-07 实施顺序见 [25](25-hk2-04-closeout-acceptance.md)。本总计划的首期波次、时间窗口及历史遗留表保留原日期；复核事实导入、页面状态及浏览器验收继续按下一阶段计划实施。
+
 > 依据：[`research/market-data-validation/hk-us-expansion-design.md`](../../../../research/market-data-validation/hk-us-expansion-design.md)（v0.1，2026-10-12，供评审草案）。
 > 本目录把该草案拆成 14 个**可独立验证**的子任务（01～12 为核心，13～14 为可选尾部），每个子任务交给一个独立 sub-agent 执行。
 > 执行前先读本文件与 [`00-conventions.md`](00-conventions.md)，再读自己的子计划。

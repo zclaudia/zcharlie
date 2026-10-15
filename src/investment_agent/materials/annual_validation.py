@@ -40,6 +40,9 @@ from investment_agent.materials.contracts import (
 from investment_agent.materials.contracts import (
     SCHEMA_VERSION as CONTRACT_SCHEMA_VERSION,
 )
+from investment_agent.materials.equity_reconciliation import (
+    evaluate_equity_reconciliation,
+)
 from investment_agent.materials.metrics import compute_metrics, profile_from_identity
 
 SCHEMA_VERSION = 1
@@ -68,6 +71,143 @@ _SEC_HOSTS = frozenset({"sec.gov"})
 _HKEX_HOSTS = frozenset({"hkexnews.hk"})
 _SEC_ANNUAL_FORMS = frozenset({"10-K", "10-K/A", "20-F", "20-F/A"})
 _BANK_COMPANIES = frozenset({"hsbc-holdings", "jpmorgan-chase"})
+_HSBC_RECONCILIATION_COLUMNS: dict[str, dict[str, Any]] = {
+    "old_parent": {
+        "page": 427,
+        "label": "Total shareholders‘ equity",
+        "values": ["177833", "189015", "187484", "198250"],
+        "headers": [
+            "ifrs17:2022-12-31",
+            "ifrs17:2022-01-01",
+            "ifrs4:2022-12-31",
+            "ifrs4:2022-01-01",
+        ],
+        "index": 3,
+    },
+    "new_parent": {
+        "page": 427,
+        "label": "Total shareholders‘ equity",
+        "values": ["177833", "189015", "187484", "198250"],
+        "headers": [
+            "ifrs17:2022-12-31",
+            "ifrs17:2022-01-01",
+            "ifrs4:2022-12-31",
+            "ifrs4:2022-01-01",
+        ],
+        "index": 1,
+    },
+    "old_instruments": {
+        "page": 427,
+        "label": "Other equity instruments",
+        "values": ["19746", "22414", "19746", "22414"],
+        "headers": [
+            "ifrs17:2022-12-31",
+            "ifrs17:2022-01-01",
+            "ifrs4:2022-12-31",
+            "ifrs4:2022-01-01",
+        ],
+        "index": 3,
+    },
+    "new_instruments": {
+        "page": 427,
+        "label": "Other equity instruments",
+        "values": ["19746", "22414", "19746", "22414"],
+        "headers": [
+            "ifrs17:2022-12-31",
+            "ifrs17:2022-01-01",
+            "ifrs4:2022-12-31",
+            "ifrs4:2022-01-01",
+        ],
+        "index": 1,
+    },
+    "old_ordinary": {
+        "page": 135,
+        "label": "Total ordinary shareholders’ equity",
+        "values": ["167610", "158087", "175836"],
+        "headers": ["2023-12-31", "2022-12-31", "2021-12-31"],
+        "index": 2,
+    },
+    "adjustment_1": {
+        "page": 424,
+        "label": "Total shareholders’ equity",
+        "values": ["198250", "92738", "4558", "-99631", "-8847", "1947", "189015", "-9235"],
+        "headers": [
+            "ifrs4",
+            "removal",
+            "remeasurement",
+            "fulfilment",
+            "csm",
+            "tax",
+            "ifrs17",
+            "movement",
+        ],
+        "index": 1,
+    },
+    "adjustment_2": {
+        "page": 424,
+        "label": "Total shareholders’ equity",
+        "values": ["198250", "92738", "4558", "-99631", "-8847", "1947", "189015", "-9235"],
+        "headers": [
+            "ifrs4",
+            "removal",
+            "remeasurement",
+            "fulfilment",
+            "csm",
+            "tax",
+            "ifrs17",
+            "movement",
+        ],
+        "index": 2,
+    },
+    "adjustment_3": {
+        "page": 424,
+        "label": "Total shareholders’ equity",
+        "values": ["198250", "92738", "4558", "-99631", "-8847", "1947", "189015", "-9235"],
+        "headers": [
+            "ifrs4",
+            "removal",
+            "remeasurement",
+            "fulfilment",
+            "csm",
+            "tax",
+            "ifrs17",
+            "movement",
+        ],
+        "index": 3,
+    },
+    "adjustment_4": {
+        "page": 424,
+        "label": "Total shareholders’ equity",
+        "values": ["198250", "92738", "4558", "-99631", "-8847", "1947", "189015", "-9235"],
+        "headers": [
+            "ifrs4",
+            "removal",
+            "remeasurement",
+            "fulfilment",
+            "csm",
+            "tax",
+            "ifrs17",
+            "movement",
+        ],
+        "index": 4,
+    },
+    "adjustment_5": {
+        "page": 424,
+        "label": "Total shareholders’ equity",
+        "values": ["198250", "92738", "4558", "-99631", "-8847", "1947", "189015", "-9235"],
+        "headers": [
+            "ifrs4",
+            "removal",
+            "remeasurement",
+            "fulfilment",
+            "csm",
+            "tax",
+            "ifrs17",
+            "movement",
+        ],
+        "index": 5,
+    },
+}
 
 
 def verify_annual_package(
@@ -194,6 +334,9 @@ def _validate_company(
     fields: list[object] = []
     if entry is None:
         issues.append("company is absent from manifest")
+        calculations: dict[str, dict[str, Any]] = {}
+        calculation_superseded: set[str] = set()
+        equity_scope_reviews: dict[str, dict[str, Any]] = {}
     else:
         if entry.get("report_currency") != report_currency:
             issues.append(
@@ -203,6 +346,34 @@ def _validate_company(
         documents = _validate_documents(
             entry.get("documents"), source_root, as_of, issues, company_key=key
         )
+        calculations, reconciliation_issues = _validate_equity_reconciliations(
+            entry,
+            documents,
+            report_currency,
+            as_of,
+        )
+        issues.extend(reconciliation_issues)
+        calculation_superseded, superseded_issues = _validate_reconciliation_superseded_facts(
+            entry,
+            calculations,
+            documents,
+            report_currency,
+            as_of,
+        )
+        issues.extend(superseded_issues)
+        try:
+            from investment_agent.materials.annual_scope_validation import (  # noqa: PLC0415
+                validate_scope_reviews,
+            )
+
+            equity_scope_reviews, scope_review_issues = validate_scope_reviews(
+                entry, documents, report_currency, as_of
+            )
+            issues.extend(scope_review_issues)
+        except (ImportError, ValueError, TypeError, KeyError) as exc:
+            equity_scope_reviews = {}
+            if "equity_scope_reviews" in entry:
+                issues.append(f"equity scope review validation failed: {type(exc).__name__}: {exc}")
         annual = entry.get("latest_annual")
         latest_period: tuple[date, date] | None = None
         latest_discovery_checked = False
@@ -342,9 +513,7 @@ def _validate_company(
             year_rows = [item for item in year_rows_raw if isinstance(item, Mapping)]
             if len(year_rows) != len(year_rows_raw):
                 issues.append("each fiscal_years item must be an object")
-        unresolved_conflicts = bool(entry.get("conflicts", []))
-        if unresolved_conflicts:
-            issues.append("manifest declares unresolved source/restatement conflicts")
+        unresolved_conflicts = False
 
         shards = entry.get("expected_shards", [])
         if "expected_shards" not in entry:
@@ -417,6 +586,7 @@ def _validate_company(
     equity_by_end: dict[date, tuple[str | None, int, str | None]] = {}
     equity_facts: dict[date, FactRecord] = {}
     beginnings: dict[date, tuple[FactRecord | None, list[str]]] = {}
+    beginning_calculation_facts: dict[str, tuple[date, FactRecord, bool]] = {}
     invalid_beginnings: set[date] = set()
     fact_values: dict[tuple[date, str], tuple[str | None, int, str | None]] = {}
     for field in fields:
@@ -510,11 +680,17 @@ def _validate_company(
                 report_currency,
                 as_of,
                 where=f"fiscal_years[{index}].beginning_equity_fact",
+                calculations=calculations,
             )
             issues.extend(result["issues"])
             fact_record = result["fact"]
             if result["ok"] and fact_record is not None:
                 metric_facts[_metric_fact_key(fact_record)] = fact_record
+                calculation_ref = (
+                    beginning.get("calculation_ref") if isinstance(beginning, Mapping) else None
+                )
+                if isinstance(calculation_ref, str):
+                    beginning_calculation_facts[calculation_ref] = (end, fact_record, result["ok"])
             if result["ok"] and (
                 fact_record.metric not in _CATEGORY_METRICS["equity"]
                 or fact_record.period.basis != PeriodBasis.INSTANT
@@ -544,6 +720,17 @@ def _validate_company(
             beginnings[end] = (fact_record if result["ok"] else None, result["issues"])
             if not result["ok"]:
                 invalid_beginnings.add(end)
+
+    unresolved_conflicts, resolution_issues, resolved_conflict_summaries = (
+        _validate_conflict_resolutions(
+            entry,
+            calculations,
+            calculation_superseded,
+            beginning_calculation_facts,
+            equity_scope_reviews,
+        )
+    )
+    issues.extend(resolution_issues)
 
     periods.sort(key=lambda item: item[0])
     if len({end for _, end, _ in periods}) != len(periods):
@@ -720,6 +907,24 @@ def _validate_company(
             "invalid_or_missing": raw_doc_total - raw_doc_valid,
         },
         "source_documents": _document_summaries(documents),
+        "equity_reconciliations": [
+            {
+                "calculation_ref": ref,
+                "method_version": calculation.get("method_version"),
+                "output": calculation.get("output"),
+                "input_count": len(calculation.get("inputs", [])),
+                "superseded_fact_retained": ref in calculation_superseded,
+            }
+            for ref, calculation in sorted(calculations.items())
+        ],
+        "equity_scope_reviews": [
+            {
+                "review_id": review_id,
+                "review_ref": result.get("review_ref"),
+            }
+            for review_id, result in sorted(equity_scope_reviews.items())
+        ],
+        "validated_conflict_resolutions": resolved_conflict_summaries,
         "latest_annual": _latest_annual_summary(entry, documents) if entry else None,
         "latestness_method": _latestness_method(entry, documents),
         "sec_shards": {
@@ -826,6 +1031,370 @@ def _validate_documents(
     return result
 
 
+def _validate_equity_reconciliations(
+    entry: Mapping[str, Any],
+    documents: Mapping[str, Mapping[str, Any]],
+    report_currency: str | None,
+    as_of: date,
+) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Validate audited calculation inputs against frozen issuer source bodies."""
+
+    if "equity_reconciliations" not in entry:
+        return {}, []
+    issues: list[str] = []
+    company_key = entry.get("company_key")
+    if company_key != "hsbc-holdings" or report_currency != "USD":
+        return {}, ["equity_reconciliations are only valid for HSBC Holdings USD facts"]
+    records = entry.get("equity_reconciliations")
+    if not isinstance(records, list) or not records:
+        return {}, ["equity_reconciliations must be a non-empty list"]
+    accepted: dict[str, dict[str, Any]] = {}
+    for index, record in enumerate(records):
+        where = f"equity_reconciliations[{index}]"
+        if not isinstance(record, Mapping):
+            issues.append(f"{where} must be an object")
+            continue
+        try:
+            evaluated = evaluate_equity_reconciliation(record)
+        except (ValueError, TypeError, KeyError) as exc:
+            issues.append(f"{where} is invalid: {exc}")
+            continue
+        calculation_ref = evaluated["calculation_ref"]
+        if calculation_ref in accepted:
+            issues.append(f"duplicate equity reconciliation reference: {calculation_ref}")
+            continue
+        source_issues = _validate_hsbc_reconciliation_sources(
+            entry, evaluated, documents, as_of, where
+        )
+        if source_issues:
+            issues.extend(source_issues)
+            continue
+        accepted[calculation_ref] = evaluated
+    return accepted, issues
+
+
+def _validate_hsbc_reconciliation_sources(
+    entry: Mapping[str, Any],
+    evaluation: Mapping[str, Any],
+    documents: Mapping[str, Mapping[str, Any]],
+    as_of: date,
+    where: str,
+) -> list[str]:
+    issues: list[str] = []
+    input_rows = evaluation.get("inputs")
+    if not isinstance(input_rows, list):
+        return [f"{where}.inputs are malformed after calculation validation"]
+    report_documents: set[str] = set()
+    for item in input_rows:
+        input_id = item["id"]
+        source_ref = item["source_ref"]
+        source_where = f"{where}.{input_id}.source_ref"
+        doc_id = source_ref["document_id"]
+        doc = documents.get(doc_id)
+        expected = _HSBC_RECONCILIATION_COLUMNS[input_id]
+        if not isinstance(doc, Mapping) or doc.get("_valid") is not True:
+            issues.append(f"{source_where} references a missing or invalid source document")
+            continue
+        report_documents.add(doc_id)
+        if doc.get("role") not in {"issuer_annual", "sec_filing"}:
+            issues.append(f"{source_where} must cite an issuer annual report or SEC filing")
+        if doc.get("sha256") != source_ref["sha256"]:
+            issues.append(f"{source_where}.sha256 does not match the captured document")
+        published = _date(source_ref.get("published_on"))
+        if published is None or published > as_of:
+            issues.append(f"{source_where}.published_on is missing, invalid, or after as_of")
+        if doc.get("published_on") != source_ref.get("published_on"):
+            issues.append(f"{source_where}.published_on disagrees with source document metadata")
+        if source_ref.get("published_on") != "2024-02-21":
+            issues.append(
+                f"{source_where}.published_on must be the documented report date 2024-02-21"
+            )
+        if item["scale"] != 1_000_000 or item["currency"] != "USD":
+            issues.append(f"{where}.{input_id} must retain USD million units")
+        locator = source_ref.get("locator")
+        if not isinstance(locator, Mapping):
+            issues.append(f"{source_where}.locator must be a structured PDF row citation")
+            continue
+        expected_locator_keys = {
+            "kind",
+            "page",
+            "row",
+            "column_index",
+            "column_values",
+            "column_headers",
+            "selected_column",
+        }
+        if set(locator) != expected_locator_keys or locator.get("kind") != "pdf":
+            issues.append(f"{source_where}.locator must include exact page, row, and column proof")
+            continue
+        if (
+            locator.get("page") != expected["page"]
+            or locator.get("row") != expected["label"]
+            or source_ref.get("source_label") != expected["label"]
+            or locator.get("column_index") != expected["index"]
+            or locator.get("column_values") != expected["values"]
+            or locator.get("column_headers") != expected["headers"]
+            or locator.get("selected_column") != expected["headers"][expected["index"]]
+        ):
+            issues.append(f"{source_where}.locator selects the wrong audited row or column")
+        if not isinstance(locator.get("page"), int) or isinstance(locator.get("page"), bool):
+            issues.append(f"{source_where}.locator.page must be an integer")
+            continue
+        context = _located_context(doc, locator)
+        excerpt = source_ref.get("excerpt")
+        source_label = source_ref.get("source_label")
+        if context is None:
+            issues.append(f"{source_where}.locator does not resolve to a source PDF page and row")
+            continue
+        if (
+            not isinstance(excerpt, str)
+            or not excerpt.strip()
+            or _normalize_source_whitespace(excerpt) not in _normalize_source_whitespace(context)
+        ):
+            issues.append(f"{source_where}.excerpt does not occur in the located source page")
+            continue
+        if not isinstance(source_label, str) or source_label not in excerpt:
+            issues.append(f"{source_where}.source_label is not present in its excerpt")
+        try:
+            parsed_values = _numeric_row_tokens(excerpt, str(source_label))
+        except ValueError:
+            parsed_values = []
+        if parsed_values != expected["values"]:
+            issues.append(f"{source_where}.excerpt does not prove the published row values")
+        if item["value"] != expected["values"][expected["index"]]:
+            issues.append(f"{where}.{input_id}.value does not match the selected source column")
+    if len(report_documents) != 1:
+        issues.append(f"{where} inputs must cite one consistent original issuer report")
+    publication_issues = _validate_reconciliation_publication_evidence(
+        entry, documents, report_documents, as_of, where
+    )
+    issues.extend(publication_issues)
+    return issues
+
+
+def _numeric_row_tokens(excerpt: str, label: str) -> list[str]:
+    offset = excerpt.find(label)
+    if offset < 0:
+        raise ValueError("source row label is absent")
+    row = excerpt[offset + len(label) :]
+    tokens = re.findall(
+        r"\([0-9][0-9,_]*(?:\.[0-9]+)?\)|[+-]?[0-9][0-9,_]*(?:\.[0-9]+)?",
+        row,
+    )
+    normalized: list[str] = []
+    for token in tokens:
+        parenthesized = token.startswith("(") and token.endswith(")")
+        number = _numeric_token(token[1:-1] if parenthesized else token)
+        normalized.append(f"-{number}" if parenthesized else number)
+    return normalized
+
+
+def _normalize_source_whitespace(value: str) -> str:
+    """Collapse layout whitespace without changing source words or values."""
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def _validate_reconciliation_publication_evidence(
+    entry: Mapping[str, Any],
+    documents: Mapping[str, Mapping[str, Any]],
+    report_documents: set[str],
+    as_of: date,
+    where: str,
+) -> list[str]:
+    issues: list[str] = []
+    evidence = entry.get("reconciliation_publication_evidence")
+    if not isinstance(evidence, Mapping):
+        return [f"{where} requires original publication-index evidence"]
+    doc_id = evidence.get("document_id")
+    index = documents.get(doc_id) if isinstance(doc_id, str) else None
+    if not isinstance(index, Mapping) or index.get("_valid") is not True:
+        return [f"{where} publication evidence references a missing or invalid document"]
+    if index.get("role") != "official_index":
+        issues.append(f"{where} publication evidence must cite the official issuer reporting index")
+    published = _date(evidence.get("published_on"))
+    if published is None or published > as_of:
+        issues.append(f"{where} publication evidence date is invalid or after as_of")
+    if evidence.get("published_on") != index.get("published_on"):
+        issues.append(f"{where} publication evidence date disagrees with index metadata")
+    if evidence.get("published_on") != "2024-02-21":
+        issues.append(f"{where} publication date must be proven as 2024-02-21")
+    locator = evidence.get("locator")
+    context = _located_context(index, locator)
+    excerpt = evidence.get("excerpt")
+    if (
+        context is None
+        or not isinstance(excerpt, str)
+        or _normalize_source_whitespace(excerpt) not in _normalize_source_whitespace(context)
+        or "21 Feb 2024" not in excerpt
+        or "Annual Results 2023" not in excerpt
+        or "Annual Report and Accounts 2023" not in excerpt
+    ):
+        issues.append(f"{where} publication-index excerpt does not prove the report date and title")
+    report_url = evidence.get("link_url")
+    links = index.get("_links", [])
+    if not isinstance(report_url, str) or not isinstance(links, list):
+        issues.append(f"{where} publication evidence must link to the captured annual report")
+    else:
+        linked_urls = {
+            urljoin(str(index.get("url", "")), link) for link in links if isinstance(link, str)
+        }
+        target_docs = [documents.get(doc_id) for doc_id in report_documents]
+        if not any(
+            isinstance(doc, Mapping)
+            and _same_hsbc_report_download(doc.get("url"), report_url)
+            and report_url in linked_urls
+            for doc in target_docs
+        ):
+            issues.append(f"{where} publication-index link does not resolve to the cited report")
+    if report_documents and evidence.get("published_on") != "2024-02-21":
+        issues.append(f"{where} report publication date does not match its source evidence")
+    return issues
+
+
+def _same_hsbc_report_download(captured_url: object, indexed_url: str) -> bool:
+    """Preserve original URLs while matching this report's download flag only."""
+    if captured_url == indexed_url:
+        return True
+    report = (
+        "https://www.hsbc.com/-/files/hsbc/investors/hsbc-results/2023/annual/"
+        "pdfs/hsbc-holdings-plc/240226-annual-report-and-accounts-2023.pdf"
+    )
+    return indexed_url == report and captured_url == report + "?download=1"
+
+
+def _validate_reconciliation_superseded_facts(
+    entry: Mapping[str, Any],
+    calculations: Mapping[str, Mapping[str, Any]],
+    documents: Mapping[str, Mapping[str, Any]],
+    report_currency: str | None,
+    as_of: date,
+) -> tuple[set[str], list[str]]:
+    if not calculations:
+        return set(), []
+    issues: list[str] = []
+    raw_fields = entry.get("superseded_facts")
+    if not isinstance(raw_fields, list):
+        return set(), [
+            "HSBC equity reconciliation requires superseded_facts retaining IFRS 4 equity"
+        ]
+    checked: list[tuple[Mapping[str, Any], FactRecord, bool]] = []
+    for index, field in enumerate(raw_fields):
+        result = _check_fact(
+            field,
+            documents,
+            report_currency,
+            as_of,
+            where=f"superseded_facts[{index}]",
+        )
+        issues.extend(result["issues"])
+        fact = result.get("fact")
+        if isinstance(field, Mapping) and isinstance(fact, FactRecord):
+            checked.append((field, fact, result["ok"]))
+    accepted: set[str] = set()
+    for calculation_ref, evaluation in calculations.items():
+        old_input = next(
+            (item for item in evaluation["inputs"] if item["id"] == "old_ordinary"), None
+        )
+        if old_input is None:
+            issues.append(f"{calculation_ref} has no original IFRS 4 ordinary-equity input")
+            continue
+        matches: list[bool] = []
+        for field, fact, valid in checked:
+            matching = (
+                valid
+                and field.get("category") == "equity"
+                and fact.metric == "equity_ordinary"
+                and fact.value.raw_value == old_input["value"]
+                and fact.value.scale == old_input["scale"]
+                and fact.value.currency == old_input["currency"]
+                and fact.period.end.isoformat() == old_input["period_end"]
+                and fact.period.basis == PeriodBasis.INSTANT
+                and fact.semantics.accounting_standard.value == "ifrs"
+                and fact.semantics.equity_scope.value == "ordinary_shareholders"
+            )
+            if matching:
+                matches.append(True)
+        if len(matches) == 1:
+            accepted.add(calculation_ref)
+        else:
+            issues.append(
+                f"{calculation_ref} requires exactly one valid superseded IFRS 4 ordinary-equity fact matching its source input"
+            )
+    return accepted, issues
+
+
+def _validate_conflict_resolutions(
+    entry: Mapping[str, Any] | None,
+    calculations: Mapping[str, Mapping[str, Any]],
+    calculation_superseded: set[str],
+    beginning_facts: Mapping[str, tuple[date, FactRecord, bool]],
+    equity_scope_reviews: Mapping[str, Mapping[str, Any]],
+) -> tuple[bool, list[str], list[dict[str, Any]]]:
+    if entry is None:
+        return False, [], []
+    conflicts = entry.get("conflicts", [])
+    if not isinstance(conflicts, list):
+        return True, ["conflicts must be a list"], []
+    issues: list[str] = []
+    summaries: list[dict[str, Any]] = []
+    unresolved = False
+    scope_refs = {
+        value.get("review_ref"): (review_id, value)
+        for review_id, value in equity_scope_reviews.items()
+        if isinstance(value, Mapping) and isinstance(value.get("review_ref"), str)
+    }
+    for index, conflict in enumerate(conflicts):
+        where = f"conflicts[{index}]"
+        if not isinstance(conflict, Mapping):
+            unresolved = True
+            issues.append(f"{where} must be an object")
+            continue
+        if conflict.get("status") != "resolved":
+            unresolved = True
+            issues.append(f"{where} is unresolved")
+            continue
+        ref = conflict.get("resolution_ref")
+        kind = conflict.get("kind")
+        accepted = False
+        if (
+            kind == "ifrs_17_restatement"
+            and isinstance(ref, str)
+            and ref in calculations
+            and ref in calculation_superseded
+        ):
+            beginning = beginning_facts.get(ref)
+            evaluation = calculations[ref]
+            output = evaluation["output"]
+            if beginning is not None:
+                fiscal_end, fact, fact_ok = beginning
+                accepted = (
+                    fact_ok
+                    and fiscal_end == date(2022, 12, 31)
+                    and fact.metric == output["metric"]
+                    and fact.value.raw_value == output["value"]
+                    and fact.value.scale == output["scale"]
+                    and fact.value.currency == output["currency"]
+                    and fact.period.end.isoformat() == output["period_end"]
+                    and fact.semantics.equity_scope.value == output["equity_scope"]
+                )
+        elif kind == "equity_scope_tag_change" and isinstance(ref, str):
+            accepted = (
+                ref in scope_refs
+                and scope_refs[ref][0] == "costco.parent-equity.v1"
+                and entry.get("company_key") == "costco"
+                and conflict.get("period") == "FY2022–FY2023 vs FY2024–FY2026"
+                and conflict.get("affected_period_ends") == ["2022-08-28", "2023-09-03"]
+            )
+        if not accepted:
+            unresolved = True
+            issues.append(f"{where} resolution_ref is not backed by its matching validated review")
+            continue
+        summaries.append({"kind": kind, "resolution_ref": ref, "status": "validated"})
+    if unresolved:
+        issues.append("manifest declares unresolved or unbacked source/restatement conflicts")
+    return unresolved, issues, summaries
+
+
 def _check_fact(
     field: object,
     documents: Mapping[str, Mapping[str, Any]],
@@ -834,6 +1403,7 @@ def _check_fact(
     *,
     where: str,
     expected_period: tuple[date, date] | None = None,
+    calculations: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     issues: list[str] = []
     if not isinstance(field, Mapping):
@@ -935,6 +1505,22 @@ def _check_fact(
         ):
             issues.append(f"{where}.fact equity scope is unknown")
 
+    if fact is not None and fact.provenance.source == "material.equity_reconciliation":
+        issues.extend(
+            _check_equity_reconciliation_fact(
+                field,
+                fact,
+                calculations or {},
+                report_currency,
+                where,
+            )
+        )
+        return {"ok": not issues, "fact": fact, "issues": issues}
+    if field.get("calculation_ref") is not None:
+        issues.append(
+            f"{where}.calculation_ref is only permitted for a derived reconciliation fact"
+        )
+
     evidence = field.get("evidence")
     if not isinstance(evidence, Mapping):
         issues.append(f"{where}.evidence must identify an original document, locator, and excerpt")
@@ -1030,6 +1616,115 @@ def _check_fact(
         if doc_published is not None and fact.provenance.source_published_date != doc_published:
             issues.append(f"{where}.fact publication date disagrees with its document")
     return {"ok": not issues, "fact": fact, "issues": issues}
+
+
+def _check_equity_reconciliation_fact(
+    field: Mapping[str, Any],
+    fact: FactRecord,
+    calculations: Mapping[str, Mapping[str, Any]],
+    report_currency: str | None,
+    where: str,
+) -> list[str]:
+    issues: list[str] = []
+    ref = field.get("calculation_ref")
+    if not isinstance(ref, str) or not ref.startswith("sha256:"):
+        return [f"{where}.calculation_ref must identify a validated calculation"]
+    calculation = calculations.get(ref)
+    if not isinstance(calculation, Mapping):
+        return [f"{where}.calculation_ref does not identify a validated reconciliation"]
+    output = calculation.get("output")
+    if not isinstance(output, Mapping):
+        return [f"{where}.calculation_ref has no validated output"]
+    expected_locator = json.dumps(
+        {"kind": "calculation", "ref": ref},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    expected_published_dates = {
+        item.get("source_ref", {}).get("published_on")
+        for item in calculation.get("inputs", [])
+        if isinstance(item, Mapping) and isinstance(item.get("source_ref"), Mapping)
+    }
+    expected_published_date = (
+        next(iter(expected_published_dates)) if len(expected_published_dates) == 1 else None
+    )
+    checks = (
+        (field.get("category") == "equity", "category must be equity"),
+        (
+            fact.metric == output.get("metric") == "equity_ordinary",
+            "metric must match derived ordinary equity",
+        ),
+        (
+            fact.value.raw_value == output.get("value"),
+            "amount must exactly match the calculation output",
+        ),
+        (
+            fact.value.scale == output.get("scale") == 1_000_000,
+            "scale must match USD million output",
+        ),
+        (
+            fact.value.currency == output.get("currency") == report_currency == "USD",
+            "currency must match output and company",
+        ),
+        (
+            fact.value.unit == "USD" and fact.value.raw_unit == "USD million",
+            "raw and canonical units must be USD million and USD",
+        ),
+        (
+            fact.period.basis == PeriodBasis.INSTANT and fact.period.start is None,
+            "period must be an instant",
+        ),
+        (
+            fact.period.end.isoformat() == output.get("period_end") == "2021-12-31",
+            "period_end must match the opening balance",
+        ),
+        (
+            fact.semantics.equity_scope.value
+            == output.get("equity_scope")
+            == "ordinary_shareholders",
+            "scope must be ordinary shareholders",
+        ),
+        (
+            fact.semantics.reporting_scope.value == "consolidated",
+            "reporting scope must be consolidated",
+        ),
+        (fact.semantics.accounting_standard.value == "ifrs", "accounting standard must be IFRS"),
+        (
+            fact.provenance.original_hash == calculation.get("input_hash"),
+            "original_hash must match the calculation input hash",
+        ),
+        (
+            fact.original_locator == expected_locator,
+            "original_locator must identify this calculation",
+        ),
+        (
+            expected_published_date is not None
+            and fact.provenance.source_published_date is not None
+            and fact.provenance.source_published_date.isoformat() == expected_published_date,
+            "source publication date must match the cited calculation inputs",
+        ),
+        (
+            fact.provenance.source_published_precision.value == "date",
+            "source publication precision must be date",
+        ),
+    )
+    for okay, message in checks:
+        if not okay:
+            issues.append(f"{where}.fact {message}")
+    evidence = field.get("evidence")
+    if not isinstance(evidence, Mapping):
+        issues.append(f"{where}.evidence must describe the derived calculation")
+    elif (
+        evidence.get("kind") != "derived_calculation"
+        or evidence.get("calculation_ref") != ref
+        or not isinstance(evidence.get("availability_basis"), str)
+        or "not a directly disclosed amount"
+        not in evidence.get("availability_basis", "").casefold()
+    ):
+        issues.append(
+            f"{where}.evidence must identify this derived calculation and its availability basis"
+        )
+    return issues
 
 
 def _numeric_token(value: str) -> str:
@@ -1549,7 +2244,9 @@ def _located_context(document: Mapping[str, Any], locator: object) -> str | None
         for key in ("section", "row", "column"):
             value = locator.get(key)
             if value is not None and (
-                not isinstance(value, str) or value.casefold() not in context.casefold()
+                not isinstance(value, str)
+                or _normalize_source_whitespace(value).casefold()
+                not in _normalize_source_whitespace(context).casefold()
             ):
                 return None
         return context

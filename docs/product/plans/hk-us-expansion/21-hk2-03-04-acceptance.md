@@ -1,5 +1,7 @@
 # HK2-03、HK2-04 集成验收
 
+> 本文保留当时的 partial 结论；后续三项 P0 已收口，当前八家通过结果及边界见 [25](25-hk2-04-closeout-acceptance.md)。
+
 验收日期：2026-10-15。工作树：`/Users/zhvala/.codex/worktrees/hkus-archive/zcharlie`。
 分支：`codex/hkus-archive`。本记录承接 [实施拆分](19-hk2-03-04-execution.md)，保留上一轮验收记录。
 

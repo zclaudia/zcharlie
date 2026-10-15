@@ -183,7 +183,7 @@ ia materials verify-annual \
 
 | 项 | 原因 | 恢复条件 |
 |---|---|---|
-| 八家最新年度口径与可计算性收口 | 已有 [2026-10-15 补验包](plans/hk-us-expansion/20-latest-annual-evidence.md)，包含八家最新财年、六类字段与连续年度复核；整体结论按逐家公司报告判定，复核记录不自动导入生产资料 | 解决报告中尚未通过的定义、权益归属或重述冲突；保持精确来源与历史版本，完成规范资料导入后再验收页面 |
+| 八家最新年度口径与可计算性收口 | 已有 [2026-10-15 补验包](plans/hk-us-expansion/20-latest-annual-evidence.md)，包含八家最新财年、六类字段与连续年度复核；整体结论按逐家公司报告判定，复核记录不自动导入生产资料 | 三项 P0 已收口，八家证据包断网核验通过，见 [25](plans/hk-us-expansion/25-hk2-04-closeout-acceptance.md)；保持精确来源与历史版本，完成规范资料导入后再验收页面 |
 | 在线刷新开关打开 | 东财/Yahoo/新浪/HKMA 的使用许可未确认 | 确认展示/缓存/商业授权后置 `online_refresh=true` |
 | 供应商付费权限（FMP/EODHD/HKEX） | 无真实账户端点证据 | 账户与端点逐项验收后作为可替换来源 |
 | 港股公布/修订历史、跨日稳定性 | 无完整已验证时间链与多日保障 | 多日 fresh fetch 与官方披露关联验收 |
@@ -199,4 +199,6 @@ ia materials verify-annual \
 [`18-hk2-01-02-acceptance.md`](plans/hk-us-expansion/18-hk2-01-02-acceptance.md) 为准。
 HK2-03 指标发布准备及 HK2-04 年度补验的本轮结果见
 [`21-hk2-03-04-acceptance.md`](plans/hk-us-expansion/21-hk2-03-04-acceptance.md)。
+最新 HK2-04 三项 P0 收口及 HK2-07 开工评估见
+[`25-hk2-04-closeout-acceptance.md`](plans/hk-us-expansion/25-hk2-04-closeout-acceptance.md)。
 来源启用和后续产品能力仍须分别验收。

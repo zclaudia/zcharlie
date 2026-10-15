@@ -34,6 +34,8 @@ from investment_agent.materials.contracts import (
     Verification,
     fact_to_payload,
 )
+from investment_agent.materials.equity_reconciliation import evaluate_equity_reconciliation
+from investment_agent.materials.equity_scope_review import evaluate_equity_scope_review
 
 ROOT = Path(__file__).resolve().parents[1]
 AS_OF = "2026-10-15"
@@ -464,6 +466,277 @@ def _resolve_review_paths(rows: list[dict[str, Any]], records: list[dict[str, An
             row["raw_path"] = match["path"]
 
 
+def _close_equity_reviews(entry: dict[str, Any]) -> None:
+    """Keep the earlier review intact beside explicitly audited replacements."""
+    if entry["company_key"] == "hsbc-holdings":
+        _close_hsbc_review(entry)
+    elif entry["company_key"] == "costco":
+        _close_costco_review(entry)
+
+
+def _close_hsbc_review(entry: dict[str, Any]) -> None:
+    review = json.loads((FIXTURES / "hsbc-restatement-reviewed-facts.json").read_text())
+    doc = _root_capture_doc(
+        review["source_document"]["raw_path"],
+        "hsbc-holdings",
+        "hsbc-holdings:restatement-annual-2023",
+        "issuer_annual",
+        "2024-02-21",
+    )
+    pub = review["publication_evidence"]
+    index = _root_capture_doc(
+        pub["document"]["raw_path"],
+        "hsbc-holdings",
+        "hsbc-holdings:restatement-publication-index",
+        "official_index",
+        "2024-02-21",
+    )
+    entry["documents"].extend([doc, index])
+    entry["reconciliation_publication_evidence"] = {
+        "document_id": index["id"],
+        "locator": pub["locator"],
+        "excerpt": pub["excerpt"],
+        "published_on": "2024-02-21",
+        "link_url": doc["url"].removesuffix("?download=1"),
+    }
+    balance_headers = [
+        "ifrs17:2022-12-31",
+        "ifrs17:2022-01-01",
+        "ifrs4:2022-12-31",
+        "ifrs4:2022-01-01",
+    ]
+    inputs = []
+
+    def cited(identifier, value, basis, page, label, excerpt, values, headers, column):
+        inputs.append(
+            {
+                "id": identifier,
+                "value": str(value),
+                "basis": basis,
+                "scale": 1000000,
+                "currency": "USD",
+                "period_end": "2021-12-31",
+                "source_ref": {
+                    "document_id": doc["id"],
+                    "sha256": doc["sha256"],
+                    "source_label": label,
+                    "published_on": "2024-02-21",
+                    "excerpt": excerpt,
+                    "locator": {
+                        "kind": "pdf",
+                        "page": page,
+                        "row": label,
+                        "column_index": column,
+                        "column_values": values,
+                        "column_headers": headers,
+                        "selected_column": headers[column],
+                    },
+                },
+            }
+        )
+
+    parent_label = "Total shareholders‘ equity"
+    parent_excerpt = parent_label + " 177,833 189,015 187,484 198,250"
+    parent_values = ["177833", "189015", "187484", "198250"]
+    instruments_label = "Other equity instruments"
+    instruments_excerpt = instruments_label + " 19,746 22,414 19,746 22,414"
+    instruments_values = ["19746", "22414", "19746", "22414"]
+    for prefix, basis, column in [("old", "ifrs4", 3), ("new", "ifrs17", 1)]:
+        cited(
+            prefix + "_parent",
+            parent_values[column],
+            basis,
+            427,
+            parent_label,
+            parent_excerpt,
+            parent_values,
+            balance_headers,
+            column,
+        )
+        cited(
+            prefix + "_instruments",
+            instruments_values[column],
+            basis,
+            427,
+            instruments_label,
+            instruments_excerpt,
+            instruments_values,
+            balance_headers,
+            column,
+        )
+    ordinary_label = "Total ordinary shareholders’ equity"
+    cited(
+        "old_ordinary",
+        "175836",
+        "ifrs4",
+        135,
+        ordinary_label,
+        ordinary_label + " 167,610 158,087 175,836",
+        ["167610", "158087", "175836"],
+        ["2023-12-31", "2022-12-31", "2021-12-31"],
+        2,
+    )
+    transition_values = ["198250", "92738", "4558", "-99631", "-8847", "1947", "189015", "-9235"]
+    transition_headers = [
+        "ifrs4",
+        "removal",
+        "remeasurement",
+        "fulfilment",
+        "csm",
+        "tax",
+        "ifrs17",
+        "movement",
+    ]
+    for column in range(1, 6):
+        cited(
+            f"adjustment_{column}",
+            transition_values[column],
+            "transition",
+            424,
+            "Total shareholders’ equity",
+            review["transition_bridge"]["transition_table_excerpt"],
+            transition_values,
+            transition_headers,
+            column,
+        )
+    calculation = evaluate_equity_reconciliation(
+        {
+            "method_version": "hsbc.ifrs17.ordinary_opening.v1",
+            "inputs": inputs,
+        }
+    )
+    entry["equity_reconciliations"] = [
+        {key: calculation[key] for key in ("method_version", "inputs", "output", "calculation_ref")}
+    ]
+    first = entry["fiscal_years"][0]
+    original = first["beginning_equity_fact"]
+    entry["superseded_facts"] = [original]
+    fact = dict(original["fact"])
+    fact["value"] = {**fact["value"], "raw_value": calculation["output"]["value"]}
+    fact["semantics"] = {
+        **fact["semantics"],
+        "source_label": "Derived IFRS 17 ordinary opening equity",
+        "source_field": "IFRS 17 parent equity less other equity instruments",
+    }
+    fact["source_label"] = fact["semantics"]["source_label"]
+    fact["source_field"] = fact["semantics"]["source_field"]
+    fact["provenance"] = {
+        **fact["provenance"],
+        "source": "material.equity_reconciliation",
+        "original_hash": calculation["input_hash"],
+        "source_published_date": "2024-02-21",
+        "source_published_precision": "date",
+    }
+    fact["original_locator"] = compact(
+        {"kind": "calculation", "ref": calculation["calculation_ref"]}
+    )
+    first["beginning_equity_fact"] = {
+        "category": "equity",
+        "fact": fact,
+        "calculation_ref": calculation["calculation_ref"],
+        "evidence": {
+            "kind": "derived_calculation",
+            "calculation_ref": calculation["calculation_ref"],
+            "availability_basis": "Latest publication date of the cited calculation inputs; not a directly disclosed amount.",
+        },
+    }
+    entry["conflicts"][0].update(
+        {
+            "status": "resolved",
+            "resolution_ref": calculation["calculation_ref"],
+            "original_detail": entry["conflicts"][0]["detail"],
+            "detail": "The original IFRS 4 opening ordinary equity is retained in superseded_facts. FY2022 selects the audited IFRS 17 derived opening balance, with all source amounts and transition adjustments retained in equity_reconciliations.",
+        }
+    )
+
+
+def _close_costco_review(entry: dict[str, Any]) -> None:
+    review = json.loads((FIXTURES / "costco-parent-equity-reviewed-facts.json").read_text())
+    source = review["source_capture"]
+    rel = "costco-equity/cost-20230903.htm"
+    doc = _root_capture_doc(rel, "costco", "0000909832-23-000042", "sec_filing", "2023-10-11")
+    entry["documents"].append(doc)
+    replacements = {}
+    for raw in review["reviewed_parent_equity_rows"]:
+        row = {**raw, "category": "equity", "raw_path": rel}
+        replacements[row["period_end"]] = _make_reviewed_fact(row, doc, published="2023-10-11")
+    superseded = {}
+    for year in entry["fiscal_years"]:
+        for index, field in enumerate(year["facts"]):
+            end = field["fact"]["period"]["end"]
+            if field["category"] == "equity" and end in replacements:
+                superseded[end] = field
+                year["facts"][index] = replacements[end]
+        beginning = year["beginning_equity_fact"]
+        if beginning and beginning["fact"]["period"]["end"] in replacements:
+            end = beginning["fact"]["period"]["end"]
+            superseded[end] = beginning
+            year["beginning_equity_fact"] = replacements[end]
+    entry["superseded_facts"] = [superseded[key] for key in sorted(superseded)]
+    canonical = {
+        "document_id": doc["id"],
+        "sha256": source["sha256"],
+        "published_on": "2023-10-11",
+        "url": source["url"],
+    }
+    periods = []
+    roles = {
+        "parent_equity": ("parent", "parent"),
+        "noncontrolling_interest": ("nci", "nci"),
+        "reported_total_equity": ("total", "total"),
+    }
+    reviewed_excerpts = {
+        "parent": "Total Costco stockholders’ equity | 25,058 | 20,642",
+        "nci": "Noncontrolling interests | — | 5",
+        "total": "TOTAL EQUITY | 25,058 | 20,647",
+    }
+    for period in review["reported_total_and_nci"]:
+        item = {"date": period["date"], "context_ref": period["context_ref"]}
+        for detail in period["source_fact_details"]:
+            key, scope = roles[detail["role"]]
+            excerpt = _visible_text(detail["raw_html_row"])
+            component = {
+                "scope": scope,
+                "amount": int(detail["normalized_value_usd_millions"].replace(",", "")),
+                "source_ref": {
+                    **canonical,
+                    "context_ref": detail["context_ref"],
+                    "tag": detail["tag"],
+                    "source_label": detail["source_label"],
+                    "locator": {"kind": "text", "anchor": excerpt},
+                    "excerpt": reviewed_excerpts[key],
+                },
+            }
+            if key == "nci":
+                component["amount_notation"] = (
+                    "em_dash_zero" if component["amount"] == 0 else "reported"
+                )
+            item[key] = component
+        periods.append(item)
+    entry["equity_scope_reviews"] = [
+        {
+            "id": "costco.parent-equity.v1",
+            "currency": "USD",
+            "raw_unit": "USD million",
+            "scale": 1000000,
+            "period_type": "instant",
+            "source_ref": canonical,
+            "periods": periods,
+        }
+    ]
+    entry["conflicts"][0].update(
+        {
+            "status": "resolved",
+            "resolution_ref": evaluate_equity_scope_review(entry["equity_scope_reviews"][0])[
+                "review_ref"
+            ],
+            "affected_period_ends": ["2022-08-28", "2023-09-03"],
+            "original_detail": entry["conflicts"][0]["detail"],
+            "detail": "The earlier reviewed FY2022/FY2023 total-equity inputs including NCI remain in superseded_facts. The selected historical inputs now use directly disclosed parent stockholders' equity, consistent with later parent-equity inputs; parent, NCI and reported totals are independently retained and reconciled.",
+        }
+    )
+
+
 def main() -> None:
     records, by_path = _capture_records()
     reviewed = _review_rows()
@@ -830,6 +1103,7 @@ def main() -> None:
             "expected_shards": expected,
             "conflicts": conflict,
         }
+        _close_equity_reviews(entry)
         companies.append(entry)
     MANIFEST.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST.write_text(

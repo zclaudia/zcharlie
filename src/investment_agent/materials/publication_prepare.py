@@ -68,7 +68,10 @@ class MaterialPublicationReport:
 
 
 async def prepare_material_publication_payload(
-    session: AsyncSession, *, listing_id: int, as_of: datetime,
+    session: AsyncSession,
+    *,
+    listing_id: int,
+    as_of: datetime,
     dataset_ids: Sequence[int] | None = None,
 ) -> dict[str, Any]:
     """JSON application boundary for offline commands, with public input errors."""
@@ -89,7 +92,9 @@ async def prepare_material_publication_payload(
                 "status": metric.status,
                 "calculation_status": metric.calculation_status,
                 "calculation_ref": (
-                    metric.calculation_ref.model_dump(mode="json") if metric.calculation_ref else None
+                    metric.calculation_ref.model_dump(mode="json")
+                    if metric.calculation_ref
+                    else None
                 ),
                 "fact_refs": [ref.model_dump(mode="json") for ref in metric.fact_refs],
                 "gaps": list(metric.gaps),
@@ -180,13 +185,9 @@ async def _prepare(
     facts_by_dataset: dict[int, tuple[FactRecord, ...]] = {
         row.id: dataset_facts(row) for row in material
     }
-    fact_sources = tuple(
-        (row, fact) for row in material for fact in facts_by_dataset[row.id]
-    )
+    fact_sources = tuple((row, fact) for row in material for fact in facts_by_dataset[row.id])
     all_facts = tuple(fact for _, fact in fact_sources)
-    profile = profile_from_identity(
-        identity, is_bank=identity.company_key in BANK_COMPANY_KEYS
-    )
+    profile = profile_from_identity(identity, is_bank=identity.company_key in BANK_COMPANY_KEYS)
     metric_set = compute_metrics(facts=all_facts, profile=profile, fiscal_years=_periods(all_facts))
 
     outcomes: list[PreparedMetric] = []
@@ -277,7 +278,11 @@ def _periods(facts: Sequence[FactRecord]) -> tuple[FactPeriod, ...]:
         existing = periods.get(period.end)
         rank = (period.basis.value == "annual", period.label is not None, period.days is not None)
         existing_rank = (
-            (existing.basis.value == "annual", existing.label is not None, existing.days is not None)
+            (
+                existing.basis.value == "annual",
+                existing.label is not None,
+                existing.days is not None,
+            )
             if existing is not None
             else None
         )
@@ -330,7 +335,8 @@ async def _materialize_exact_facts(
             created_at=_aware(dataset.captured_at),
         )
         matching = tuple(
-            record for record in records
+            record
+            for record in records
             if record.period is not None
             and record.period.end == fact.period.end
             and record.source_ref.id == dataset.id
@@ -391,9 +397,7 @@ async def _saved_fact_ref(
     content_hash: str,
 ) -> ObjectRef | None:
     rows = (
-        await session.scalars(
-            select(SavedEvidence).where(SavedEvidence.owner_id == owner_id)
-        )
+        await session.scalars(select(SavedEvidence).where(SavedEvidence.owner_id == owner_id))
     ).all()
     for row in rows:
         payload = row.payload
@@ -424,7 +428,7 @@ def _calculation_operation_id(
     facts = ",".join(f"{ref.kind}:{ref.id}:{ref.revision}" for ref in fact_refs)
     return uuid5(
         NAMESPACE_URL,
-        f"material-metric:{owner_id}:{listing_id}:{key}:{period_end}:{facts}:"
+        f"material-metric:{MATERIAL_CALCULATION_VERSION}:{owner_id}:{listing_id}:{key}:{period_end}:{facts}:"
         f"{value.value}:{value.unit}:{value.currency}:{as_of.isoformat()}",
     )
 

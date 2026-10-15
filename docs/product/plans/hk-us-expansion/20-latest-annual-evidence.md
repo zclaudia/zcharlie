@@ -1,5 +1,7 @@
 # HK2-04 最新年度原件与字段证据
 
+> 本文保留当时的 partial 结论；后续三项 P0 已收口，当前八家通过结果及边界见 [25](25-hk2-04-closeout-acceptance.md)。
+
 核对截至日：2026-10-15。事实均以发行人年度报告或 SEC 年报为准；下表采用报告币种、百万单位。期间按各发行人的实际完整财年，不把临时报告当成年报。版本化事实清单为 [annual_validation_2026-10-15.json](../../../../config/research_material/annual_validation_2026-10-15.json)，离线生成器为 [build_hk_us_annual_validation_manifest.py](../../../../tools/build_hk_us_annual_validation_manifest.py)。
 
 | 公司 | 最新年度与公布/申报日 | 收入 | 利润 | 期末资产 | 期末权益 | 经营现金流 | 资本开支 |

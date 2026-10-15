@@ -58,7 +58,7 @@ from investment_agent.storage.models.research_material import ResearchDataset
 MATERIAL_CALCULATION_METHOD = "material_metrics"
 """Method name of a calculation over saved material evidence facts."""
 
-MATERIAL_CALCULATION_VERSION = "material.metrics.v1"
+MATERIAL_CALCULATION_VERSION = "material.metrics.v2"
 """Fixed formula version recorded on every material calculation."""
 
 

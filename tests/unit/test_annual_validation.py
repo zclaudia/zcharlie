@@ -765,7 +765,7 @@ def test_issuer_publication_date_can_be_verified_at_a_separate_locator(tmp_path:
     assert result["latest_annual_checked"] is True
 
 
-def test_core_formula_status_rejects_consolidated_net_profit_for_roe(tmp_path: Path) -> None:
+def test_core_formula_status_rejects_unscoped_net_profit_for_roe(tmp_path: Path) -> None:
     manifest_path, source_root, manifest = _make_package(tmp_path, company_keys=["apple"])
     company = manifest["companies"][0]
     profit_fields = [
@@ -778,6 +778,7 @@ def test_core_formula_status_rejects_consolidated_net_profit_for_roe(tmp_path: P
     for field in profit_fields:
         field["fact"]["metric"] = "net_profit"
         field["fact"]["semantics"]["metric"] = "net_profit"
+        field["fact"]["semantics"]["equity_scope"] = "total"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
     result = verify_annual_package(manifest_path, source_root, identities=["apple"])["companies"][0]
