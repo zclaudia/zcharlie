@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Pairing } from "../storage";
-import { GatewayError, pairDevice } from "../transport";
+import { discoverBackends, GatewayError, pairDevice, type ReachableBackend } from "../transport";
 
 type Props = { onPaired: (pairing: Pairing) => void };
 
@@ -10,9 +10,10 @@ export function PairForm({ onPaired }: Props) {
   const [deviceToken, setDeviceToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // 服务 ID 留空且发现多个在线后端时展示挑选列表（gateway 已按在线优先排序）。
+  const [candidates, setCandidates] = useState<ReachableBackend[] | null>(null);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function pairWith(backendId: string) {
     setBusy(true);
     setError("");
     try {
@@ -24,6 +25,39 @@ export function PairForm({ onPaired }: Props) {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!backendId.trim()) {
+      setBusy(true);
+      setError("");
+      try {
+        // 组件侧分支用于渲染挑选列表；pairDevice 内部保留同样发现逻辑兜底。
+        const reachable = await discoverBackends({ gatewayUrl, deviceToken });
+        const online = reachable.filter((b) => b.online);
+        if (reachable.length === 0) {
+          setError("该凭证没有可寻址的后端，请重新签发设备凭证。");
+          return;
+        }
+        if (online.length === 0) {
+          setError("凭证可达的后端当前都离线，请等后端上线后再配对。");
+          return;
+        }
+        if (online.length > 1) {
+          setCandidates(reachable);
+          return;
+        }
+        await pairWith(online[0].backendId);
+        return;
+      } catch (reason) {
+        setError(reason instanceof GatewayError ? reason.message : "配对失败，请检查输入后重试。");
+        return;
+      } finally {
+        setBusy(false);
+      }
+    }
+    await pairWith(backendId);
   }
 
   return (
@@ -42,6 +76,24 @@ export function PairForm({ onPaired }: Props) {
         <label>设备凭证
           <input autoCapitalize="none" autoCorrect="off" autoComplete="off" type="password" placeholder="zgd_…" value={deviceToken} onChange={(e) => setDeviceToken(e.target.value)} required />
         </label>
+        {candidates && !backendId && (
+          <div className="backend-picker" role="listbox" aria-label="选择后端">
+            {candidates.map((backend) => (
+              <button
+                key={backend.backendId}
+                type="button"
+                className="backend-row"
+                disabled={busy || !backend.online}
+                onClick={() => void pairWith(backend.backendId)}
+              >
+                <span className="backend-name">{backend.name || backend.backendId.slice(0, 8)}</span>
+                <span className={`backend-state ${backend.online ? "is-online" : "is-offline"}`}>
+                  {backend.online ? "在线" : "离线"}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button" type="submit" disabled={busy}>{busy ? "正在验证…" : "验证并连接"}</button>
       </form>

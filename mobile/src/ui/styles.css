@@ -68,6 +68,13 @@ button:disabled { cursor: default; opacity: .55; }
 .bottom-nav button.active { color: var(--c-accent); background: var(--c-accent-soft); }
 
 button, .primary-button, .secondary-button, .text-button, .icon-button, .cancel-button { min-height: 44px; }
+.backend-picker { display: grid; gap: 7px; margin-bottom: 4px; }
+.backend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--c-line); border-radius: var(--r-md); padding: 10px 12px; text-align: left; background: var(--c-surface); }
+.backend-row:disabled { opacity: 0.55; }
+.backend-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--c-ink-1, inherit); }
+.backend-state { flex-shrink: 0; font-size: 12px; }
+.backend-state.is-online { color: var(--c-accent); }
+.backend-state.is-offline { color: var(--c-ink-3, var(--c-ink-2)); }
 .primary-button { display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: var(--r-md); padding: 0 18px; color: #fff; background: var(--c-accent); font-weight: 700; }
 .secondary-button { border: 1px solid var(--c-line); border-radius: var(--r-md); padding: 0 12px; color: var(--c-ink-2); background: var(--c-surface); font-size: 13px; }
 .text-button { border: 0; padding: 0 10px; color: var(--c-accent); background: transparent; font-size: 13px; }

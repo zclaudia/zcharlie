@@ -13,6 +13,8 @@ export function App() {
   const [hasPairing, setHasPairing] = useState<boolean | null>(null);
   const [page, setPage] = useState<Page>("agent");
   const [online, setOnline] = useState<boolean | null>(null);
+  // 网关可达但后端离线（代理 502 BACKEND_OFFLINE）——与网关不可达分开呈现。
+  const [backendDown, setBackendDown] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [hasConversation, setHasConversation] = useState(false);
@@ -72,9 +74,11 @@ export function App() {
     try {
       await checkConnection(signal);
       setOnline(true);
+      setBackendDown(false);
     } catch (error) {
       if (signal?.aborted) return;
       setOnline(false);
+      setBackendDown(error instanceof GatewayError && error.code === "backend_offline");
       if (error instanceof GatewayError && error.code === "pairing_required") setHasPairing(false);
     }
   }, []);
@@ -82,6 +86,7 @@ export function App() {
   useEffect(() => {
     if (!hasPairing) {
       setOnline(null);
+      setBackendDown(false);
       return;
     }
     const controller = new AbortController();
@@ -96,6 +101,7 @@ export function App() {
   const paired = useCallback((_pairing: Pairing) => {
     setHasPairing(true);
     setOnline(true);
+    setBackendDown(false);
     setPage("agent");
     setRefresh((value) => value + 1);
   }, []);
@@ -104,6 +110,7 @@ export function App() {
     await removePairing();
     setHasPairing(false);
     setOnline(null);
+    setBackendDown(false);
   };
 
   if (hasPairing === null) return <div className="boot">正在打开 zcharlie…</div>;
@@ -120,12 +127,14 @@ export function App() {
         </div>
         <div className={`connection-pill ${online === false ? "is-offline" : ""}`} aria-live="polite">
           <span className="connection-dot" />
-          {online === false ? "连接中断" : online ? "已连接" : "检查连接"}
+          {online === false ? (backendDown ? "服务离线" : "连接中断") : online ? "已连接" : "检查连接"}
         </div>
       </header>
       {online === false && (
         <div className="offline-banner" role="status">
-          网关暂时不可达，正在自动重试；已保存的对话仍可查看。
+          {backendDown
+            ? "zcharlie 服务暂不可达，正在自动重试；已保存的对话仍可查看。"
+            : "网关暂时不可达，正在自动重试；已保存的对话仍可查看。"}
         </div>
       )}
       <main className="app-main" key={page}>
