@@ -510,6 +510,7 @@ export function bootAgent() {
     }
     async function poll() {
       if (!alive()) return;
+      let wait = 2000;
       try {
         const data = await get(`${endpoint}/events?transport=poll&after_event_id=${cursor}`);
         if (!alive()) return;
@@ -520,9 +521,10 @@ export function bootAgent() {
         if (error.status === 410) {
           try { await snapshot(); } catch (snapshotError) { if (alive()) notice(`快照恢复失败：${snapshotError.message}。继续重试；后台任务仍保留。`); }
         }
+        else if (error.status === 429) { wait = 10000; notice("请求过于频繁，已降低刷新频率，稍后自动恢复。后台任务仍保留。"); }
         else { notice(`任务连接暂不可用：${error.message}。后台任务仍保留。`); }
       }
-      if (alive()) timer = setTimeout(poll, 2000);
+      if (alive()) timer = setTimeout(poll, wait);
     }
     async function connect() {
       if (!alive()) return;

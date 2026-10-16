@@ -91,7 +91,8 @@ export function App() {
     }
     const controller = new AbortController();
     void probe(controller.signal);
-    const timer = window.setInterval(() => void probe(controller.signal), 8_000);
+    // 探活同样计入网关按 IP 的限流桶，30s 一次足够维持在线指示。
+    const timer = window.setInterval(() => void probe(controller.signal), 30_000);
     return () => {
       controller.abort();
       window.clearInterval(timer);

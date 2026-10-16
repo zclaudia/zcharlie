@@ -68,6 +68,9 @@ function classifyStatus(status: number): never {
   if (status === 401 || status === 403) {
     throw new GatewayError(status, "设备凭证无效或已过期，请重新配对。", "invalid_device_token");
   }
+  if (status === 429) {
+    throw new GatewayError(status, "请求太频繁，网关正在限流，请稍候再试。", "rate_limited");
+  }
   if (status === 502 || status === 504) {
     throw new GatewayError(status, "服务暂时离线，请检查 zcharlie 服务状态。", "backend_offline");
   }
@@ -422,6 +425,7 @@ export async function watchTask(
       }
       options.onConnectionMode?.("poll");
       while (!signal.aborted) {
+        let waitMs = 2_000;
         try {
           const result = await pollOnce(taskId, cursor, signal, options.onEvent, options.onTask);
           cursor = result.cursor;
@@ -434,9 +438,12 @@ export async function watchTask(
             options.onTask(snapshot.task);
             options.onSnapshot?.(snapshot);
             if (TERMINAL.has(snapshot.task.status)) return;
+          } else if (pollError instanceof GatewayError && pollError.code === "rate_limited") {
+            // 网关限流窗口内继续 2s 重试只会延长封锁，退避到 10s。
+            waitMs = 10_000;
           }
         }
-        await delay(2_000, signal);
+        await delay(waitMs, signal);
       }
       return;
     }

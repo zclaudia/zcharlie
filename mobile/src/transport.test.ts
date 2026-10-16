@@ -169,6 +169,16 @@ describe("mobile gateway transport", () => {
     expect(new Headers(init.headers).has("x-api-key")).toBe(false);
   });
 
+  it("maps gateway rate limiting to a retry-later error", async () => {
+    readPairing.mockResolvedValue({ gatewayUrl: "https://gateway.example", backendId: "svc", deviceToken: "zgd_test-token" });
+    nativeFetch.mockResolvedValue(new Response("limited", { status: 429 }));
+    await expect(request("/healthz")).rejects.toMatchObject({
+      status: 429,
+      code: "rate_limited",
+      message: expect.stringContaining("请求太频繁"),
+    });
+  });
+
   it("parses event ids and the snapshot-expired event", () => {
     expect(parseSseFrame('id: 4\nevent: progress\ndata: {"event_id":4,"task_id":"t1","type":"progress","payload":{"summary":"正在查证"}}'))
       .toMatchObject({ kind: "event", id: 4, event: { event_id: 4, type: "progress" } });
