@@ -87,6 +87,7 @@ tools/deploy-remote.sh rollback
 - 首次在一台开发机上使用：`git remote add ai-server ai-server:services/zcharlie`（`~/.ssh/config` 里要有 `ai-server`）。
 - 只部署已提交的 `main`；推送后脚本核对 ai-server 的 HEAD 与本地一致。ai-server 工作区里已跟踪文件有改动时 push 会被拒绝，不要在 ai-server 上直接改代码。
 - Mac checkout 里有未提交的 `.deploy/remote`（内容 `ai-server`），本机 `tools/deploy.sh deploy|rollback` 会直接拒绝，防止在 Mac 上再起一套服务连着过期数据库重复跑任务；`status` 不受影响。
+- 标记是机器状态、不入库（入库会把标记推到生产机、令生产自部署被拒）。全新 clone 没有它，由第二道防线兜底：非 Linux 机器上 `deploy|rollback` 也会拒绝（生产是 Linux），确要本机部署加 `--allow-local` 显式放行。
 - 每台主机的差异文件不在 git 里，换主机时手工拷：`.env`（`SETTINGS_ENCRYPTION_KEY` 必须原样保留，否则库里加密的 key 解不开）、`docker-compose.override.yml`（8001 端口、`zcharlie-db` 卷、`ifind-proxy_default` 网络）。
 - Linux 上 `tools/deploy.sh` 用宿主机 uid/gid 构建镜像（`APP_UID=$(id -u)`），`./data`、`~/backups` 与数据库卷都归部署用户所有；Mac/colima 保持镜像默认 10001。
 - ifind-proxy 的代码改动：在其 Mac checkout 里 `git push ai-server HEAD:main`，再 `ssh ai-server 'cd ~/services/ifind-proxy && docker compose up -d --build'`；它必须先于 zcharlie 启动（外部网络 `ifind-proxy_default` 由它创建）。

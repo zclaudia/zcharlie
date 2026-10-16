@@ -27,6 +27,9 @@
 # with tools/deploy-remote.sh. A checkout that is not the production host keeps
 # an untracked .deploy/remote (one line: the production host); deploy and
 # rollback then refuse to start a second stack against a stale database.
+# The marker is machine state and not tracked, so a fresh clone lacks it: on a
+# non-Linux machine (production is Linux) deploy/rollback then refuse too,
+# with --allow-local as the explicit escape hatch for intentional local runs.
 #
 # Machine-specific settings (ports, external networks, the DB volume) stay in
 # docker-compose.override.yml. Env knobs: BACKUP_ROOT (default ~/backups),
@@ -55,6 +58,20 @@ refuse_if_remote() {
     [ -f "$REMOTE_MARKER" ] || return 0
     die "生产环境在 $(head -n1 "$REMOTE_MARKER")，本机不部署（${REMOTE_MARKER}）。
    用 tools/deploy-remote.sh ${1:-deploy}；确需在本机运行先删除该文件。"
+}
+
+# The remote marker is machine state (deliberately untracked), so a fresh
+# clone has no protection against accidentally starting a second stack on the
+# dev machine. Production runs on Linux; on any other machine, refuse unless
+# --allow-local confirms an intentional local run.
+refuse_unconfirmed_local() {
+    [ "$(uname -s)" = "Linux" ] && return 0
+    [ -f "$REMOTE_MARKER" ] && return 0
+    [ "${ALLOW_LOCAL:-0}" = 1 ] && return 0
+    die "这台机器没有 .deploy/remote 标记，而生产环境跑在 Linux 主机 ai-server
+   （docs/product/operations.md 2.2）。本机部署会另起一套独立的栈（空数据库，
+   worker 可能与生产任务重复）。确要本机部署加 --allow-local；这台机器若就是
+   生产/带生产卷的主机，恢复标记：mkdir -p .deploy && echo <生产主机名> > .deploy/remote。"
 }
 
 image_exists() { docker image inspect "$1" >/dev/null 2>&1; }
@@ -232,6 +249,7 @@ deploy() {
     for arg in "$@"; do
         case "$arg" in
             --no-backup) no_backup=1 ;;
+            --allow-local) ;;
             *) die "未知参数: $arg" ;;
         esac
     done
@@ -292,6 +310,7 @@ rollback() {
     for arg in "$@"; do
         case "$arg" in
             --force) force=1 ;;
+            --allow-local) ;;
             *) die "未知参数: $arg" ;;
         esac
     done
@@ -321,12 +340,16 @@ rollback() {
 cmd="${1:-deploy}"
 [ $# -gt 0 ] && shift
 case "$cmd" in
-    deploy|rollback) refuse_if_remote "$cmd" ;;
+    deploy|rollback)
+        for arg in "$@"; do [ "$arg" = "--allow-local" ] && ALLOW_LOCAL=1; done
+        refuse_if_remote "$cmd"
+        refuse_unconfirmed_local
+        ;;
 esac
 case "$cmd" in
     deploy) deploy "$@" ;;
     status) docker info >/dev/null 2>&1 || die "docker 未运行"; print_status ;;
     rollback) rollback "$@" ;;
-    -h|--help|help) sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//' ;;
+    -h|--help|help) sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//' ;;
     *) die "未知命令: $cmd（deploy | status | rollback）" ;;
 esac
