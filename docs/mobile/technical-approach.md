@@ -102,14 +102,27 @@ Bearer，返回可达后端精简列表）自动发现：恰一个在线后端�
 必须留这条出路；fetch/API 请求保持纯文本（JS 原样展示错误信息）。模板的绝对资源路径在协议源上自然成立——**后端模板与
 路由零改动**。
 
-### 4.2 请求体桥（平台硬限制的解法）
+### 4.2 传输通道：IPC 桥（主）+ 头桥（兜底）
 
-Android 拦截请求**不带 body**（wry 恒以空 body 重建）。内嵌模式下 `api.js` 把 JSON 载荷
-base64(UTF-8) 编码进 `X-Zcharlie-Body` 头，handler 对非 GET/HEAD 解码还原；仅
-`data-embedded="android"` 时启用，浏览器路径零变化。**限制**：头编码有大小上限，
-`api.js` 在超限（12000 字符 base64 ≈ 9KB 载荷 ≈ 3000 汉字）时显式报错引导去桌面端，
-不静默失败；FormData 上传类不适用（当前全部写入均为 JSON）。长输入通道的根治方案
-（如经 Tauri IPC 由 Rust 侧发请求）待讨论。
+Android 拦截层对页面 fetch **无进无出**（wry 拿不到请求体、响应必须整包缓冲、~30s
+截止）。2026-10-16 起内嵌页改走 **Tauri IPC 桥**（64c96fe/5b4c9a3）——invoke 不经过
+拦截器，两条限制同时消失：
+
+- `proxy_request(method, path, body, idempotency_key)`（`api.js` request() 内嵌模式
+  默认路径）：真实 body（**长输入不再有 12K 上限**）、真实状态码；路径校验复用
+  handler 同一套 `proxy_target` 规则、设备凭证 Rust 侧现读现注入，页面拿不到 token。
+  返回值映射为真 `Response`，401/parseBody/错误分类全部复用。
+- `stream_task_events(task_id, cursor, Channel)`（`agent.js` 内嵌 live）：Rust 读网关
+  SSE 逐事件推送（**实时性恢复，轮询降为兜底**）；410→页面重读快照、429→按
+  Retry-After 退避、失败 3 次→degrade 落回 2s 轮询。`transport` 标记 stream|poll
+  供验收断言；terminal 判定复用页面既有 task_state 逻辑，Rust 不做状态机。
+- **头桥兜底**：桥不可用（非 App 环境/桥故障）时回退 fetch + `X-Zcharlie-Body` 头桥；
+  12K 守卫（≈3000 汉字）只存在于兜底路径，超限显式报错。FormData 上传类两条路径
+  均不适用（当前写入全为 JSON）。
+- 前置：handler 给文档响应补写 CSP `connect-src ipc: http://ipc.localhost`；
+  capabilities 声明 zcharlie.localhost 的 remote 上下文。桥的实现见 bridge.rs
+  （流式客户端 connect 10s + read 60s、无总超时；单个 block_on 包住流循环——
+  嵌套 block_on 会被 tokio 拒绝且线程无声死亡）。
 
 ### 4.3 返回键（MainActivity.dispatchKeyEvent 接管）
 
@@ -137,8 +150,8 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
 一次页面导航 ~15 笔（HTML + ~10 静态资源 + 页面 API），AI 任务轮询 30 笔/分钟，App 探活
 常驻。App 侧三项对策：handler 进程内缓存 `/app/static/` GET 200（TTL 取后端
 `Cache-Control`，缺省 600s——Android WebView 对拦截响应不走 HTTP 缓存，这是唯一保准生效的
-缓存层）；探活 8s → 30s；轮询/探活识别 429（`rate_limited`）退避 10s。组合后活跃使用
-峰值 ~30–60 笔/分钟，余量充足。**注意**：将来网关置于 Caddy 之后必须开 `trustProxy`，否则
+缓存层）；探活 8s → 30s；轮询/探活识别 429（`rate_limited`）退避 10s；**IPC 事件流上线后
+AI 任务常态零轮询**（流断开才兜底轮询，5b4c9a3）。活跃使用峰值 ~30–60 笔/分钟，余量充足。**注意**：将来网关置于 Caddy 之后必须开 `trustProxy`，否则
 `req.ip` 是反代地址，所有设备共用一个桶。
 
 ## 5. 安全模型汇总
@@ -195,7 +208,6 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
      Caddy 反代段待搭）。
 4. **iOS 复刻**：两条数据面的 Rust 层（协议 handler、insets/BACK 接管）需按 WKWebView
    约束重做，transport.ts 与 URL 映射设计可复用。
-5. **主界面化收尾**：研究台成为唯一主界面后，长输入通道（头桥 12K 上限）与实时性
-   （轮询 vs SSE）的根治方案待定——候选：Tauri IPC 让内嵌页经 Rust 发请求（同时解决
-   两者），或恢复轻量原生对话入口。
+5. ~~主界面化收尾~~（**已完成**，2026-10-16：IPC 桥 64c96fe/5b4c9a3 同时解决长输入与
+   实时性；逃生页议题已关闭——设置页 + 错误页链接 + BACK 最小化即兜底）。
 6. **P3 修缮**：会话标题回填（研究台 AI 页）、`M2E_SHOTS` 缺省告警进 harness。
