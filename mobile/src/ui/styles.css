@@ -87,7 +87,7 @@ textarea { resize: vertical; }
 .pair-screen > .muted { max-width: 460px; margin: 10px 0 24px; font-size: 14px; line-height: 1.55; }
 .form-card { display: grid; gap: 16px; max-width: 480px; padding: 18px; border: 1px solid var(--c-line); border-radius: var(--r-lg); background: var(--c-surface); box-shadow: 0 2px 8px rgb(20 30 50 / 4%); }
 .form-card label, .note-field { display: grid; gap: 7px; font-size: 13px; font-weight: 650; }
- margin: 0; border-radius: var(--r-md); padding: 11px 12px; color: var(--c-warn); background: var(--c-warn-soft); font-size: 13px; line-height: 1.45; }
+.form-error { margin: 0; border-radius: var(--r-md); padding: 11px 12px; color: var(--c-warn); background: var(--c-warn-soft); font-size: 13px; line-height: 1.45; }
 .form-card .primary-button { width: 100%; margin-top: 2px; }
 .fine-print { max-width: 440px; margin: 18px 2px; font-size: 12px; line-height: 1.5; }
 
