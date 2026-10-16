@@ -51,5 +51,26 @@ logo 相比初版图标缩小 15%，保持居中；普通图标的矢量源为
 会自动将这些资源复制到生成工程，因此删除 `src-tauri/gen/android` 后重建也能保留图标。
 
 Tauri Rust 版本、插件版本和前端依赖以 `src-tauri/Cargo.lock` 与
-`pnpm-lock.yaml` 为准。设备凭证由 Store 插件写入应用私有数据目录；不要把配对信息、
-本机凭证或签名密钥提交到仓库。
+`pnpm-lock.yaml` 为准。设备凭证由 secure-keystore 插件加密写入应用私有数据目录；
+不要把配对信息、本机凭证或签名密钥提交到仓库。
+
+## Release 构建
+
+```bash
+cd mobile
+pnpm build && ./scripts/tauri.sh android build --apk --target aarch64
+# 产物: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+```
+
+签名配置在 `gen/android/app/build.gradle.kts`（生成工程，不入库），从
+`gen/android/keystore.properties` 读取；keystore 本体在仓库外 `~/keystores/zcharlie-release.keystore`。
+两者丢失即无法再对同一 applicationId 发升级包（Android 要求同签名），所以
+keystore、密码（keystore.properties）务必在密码管理器留一份备份。
+`gen/android` 被删后重建时：重新生成 keystore.properties + 把签名块和
+`-keep class io.github.abdullah5603.securekeystore.**`（R8 反射注册的插件类）
+加回 `app/build.gradle.kts` / `app/proguard-rules.pro`。
+
+Release 语义：`validateGatewayUrl` 拒绝 `http:` 网关（正式构建只能连 HTTPS 网关），
+明文许可只注入 Debug manifest。当前局域网网关（192.168.2.1:3200）为 HTTP——
+Release 包要配对，需先给网关加受信证书反代（Caddy + 域名 DNS-01）或实现
+App 侧自签 CA 信任（见 docs/mobile/technical-approach.md §9）。
