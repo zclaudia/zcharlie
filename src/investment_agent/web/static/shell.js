@@ -295,13 +295,20 @@ function wireEmbeddedBack() {
   window.addEventListener("popstate", () => {
     if (!pushed) return;
     pushed = false;
-    window.zcOverlay.close();
+    // 返回键的"收起最上层"是一个可扩展契约：zcOverlay 弹层是默认订阅者，
+    // 页面自有层级（如 AI 页的会话/档案抽屉）可订阅 overlay:back 收自己。
+    document.dispatchEvent(new CustomEvent("overlay:back"));
   });
   document.addEventListener("click", (event) => {
     if (window.zcOverlay.isOpen() && event.target.closest?.(".is-open a[href]")) leaving = true;
   }, true);
   window.addEventListener("pageshow", () => { leaving = false; });
 }
+
+// zcOverlay 是 overlay:back 的默认订阅者；已有页面的返回键行为不变。
+document.addEventListener("overlay:back", () => {
+  if (window.zcOverlay?.isOpen()) window.zcOverlay.close();
+});
 
 wirePalette();
 wireTopbar();

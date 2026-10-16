@@ -119,6 +119,9 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
 （其 close 路径自行消费历史条目，配合 `shell.js` 的 `wireEmbeddedBack`），非根部文档走
 `history.back()`（研究台内逐级返回），**根部 BACK 等价 `moveTaskToBack`**（原生壳会自动跳回
 研究台，走历史返回会打乒乓）；配对/设置页走原分发链（React `onBackButtonPress` 链不变）。
+**层级返回契约（2026-10-16 泛化）**：popstate 统一派发 `overlay:back`，`zcOverlay` 弹层是
+默认订阅者，页面自有层级可订阅收自己——AI 页的会话抽屉/档案抽屉/「＋」面板已纳入
+（打开压历史条目、BACK 只收层、界面关闭消费条目），模拟器 E2E 六例全过。
 
 ### 4.4 后端内嵌模式（routes.py，4edda31）
 

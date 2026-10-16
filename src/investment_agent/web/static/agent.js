@@ -80,12 +80,39 @@ export function bootAgent() {
   }
   // 窄屏：会话是左侧抽屉、档案与「＋」是底部面板，共用一层遮罩。
   const narrow = () => window.matchMedia("(max-width: 56rem)").matches;
+  // ---- 安卓内嵌：会话抽屉 / 档案抽屉 /「＋」面板各算一层，系统返回键先收层 ----
+  // 复用 shell.js 的 overlay 历史契约：层打开时压一条历史记录（overlay:open），
+  // 返回键（popstate → overlay:back）只收层，从界面关闭时消费这条记录
+  // （overlay:close）。paneLevel 区分"BACK 收层"与"界面关闭"，避免双重导航。
+  let paneLevel = false;
+  const embeddedNarrow = () => document.body.dataset.embedded === "android" && narrow();
+  function enterBackLevel() {
+    if (paneLevel || !embeddedNarrow()) return;
+    paneLevel = true;
+    document.dispatchEvent(new CustomEvent("overlay:open"));
+  }
+  function exitBackLevel() {
+    if (!paneLevel) return;
+    paneLevel = false;
+    document.dispatchEvent(new CustomEvent("overlay:close"));
+  }
+  // 当前是否还有未收起的层：「＋」面板优先于 pane（二者不会同时挂历史条目）。
+  const agentLevelOpen = () => root.dataset.sheet === "plus" || root.dataset.pane !== "chat";
+  document.addEventListener("overlay:back", () => {
+    if (!paneLevel) return;
+    paneLevel = false;
+    if (root.dataset.sheet === "plus") openPlus(false);
+    else setPane("chat");
+  });
   function setPane(pane) {
     if (!PANES.includes(pane)) pane = "chat";
     if (pane !== "chat") openPlus(false);
     root.dataset.pane = pane;
     const scroller = pane === "list" ? root.querySelector(".ai-side") : pane === "drawer" ? $("artifact-panel") : null;
     if (scroller) scroller.scrollTop = 0;
+    if (!embeddedNarrow()) return;
+    if (pane !== "chat") enterBackLevel();
+    else if (!root.dataset.sheet) exitBackLevel();
   }
   function setDrawer(open) {
     root.dataset.drawer = open ? "open" : "closed";
@@ -166,6 +193,9 @@ export function bootAgent() {
     $("picker").hidden = !open; $("mode-pop").hidden = !open;
     $("add-object").setAttribute("aria-expanded", String(open)); $("mode-btn").setAttribute("aria-expanded", String(open));
     if (open && focus === "mode") $("mode-pop").scrollIntoView({block:"nearest"});
+    if (!embeddedNarrow()) return;
+    if (open) enterBackLevel();
+    else if (!agentLevelOpen()) exitBackLevel();
   }
   function openMode(open) {
     if (narrow()) { openPlus(open, "mode"); return; }
