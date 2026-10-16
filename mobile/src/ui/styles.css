@@ -73,6 +73,7 @@ button, .primary-button, .secondary-button, .text-button, .icon-button, .cancel-
 .text-button { border: 0; padding: 0 10px; color: var(--c-accent); background: transparent; font-size: 13px; }
 .text-button.compact { min-height: 44px; padding: 0 8px; }
 .icon-button { width: 44px; border: 1px solid var(--c-line); border-radius: 50%; color: var(--c-accent); background: var(--c-surface); font-size: 22px; }
+.bench-button { font-size: 15px; font-weight: 600; }
 input, select, textarea { width: 100%; min-height: 46px; border: 1px solid var(--c-line); border-radius: var(--r-md); padding: 10px 12px; color: var(--c-ink); background: var(--c-surface); outline: none; }
 input:focus, select:focus, textarea:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 17%, transparent); }
 textarea { resize: vertical; }
@@ -90,7 +91,7 @@ textarea { resize: vertical; }
 .fine-print { max-width: 440px; margin: 18px 2px; font-size: 12px; line-height: 1.5; }
 
 .agent-screen { display: flex; height: 100%; min-height: 0; flex-direction: column; }
-.agent-toolbar { z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) 44px; gap: 8px; align-items: center; min-height: 58px; padding: 6px 12px; border-bottom: 1px solid var(--c-line); background: var(--c-surface); }
+.agent-toolbar { z-index: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto 44px; gap: 8px; align-items: center; min-height: 58px; padding: 6px 12px; border-bottom: 1px solid var(--c-line); background: var(--c-surface); }
 .agent-toolbar strong { overflow: hidden; text-align: center; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .session-list { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px 24px; }
 .session-row { display: grid; width: 100%; min-height: 66px; align-content: center; gap: 4px; margin-bottom: 7px; border: 1px solid var(--c-line); border-radius: var(--r-md); padding: 8px 12px; text-align: left; background: var(--c-surface); }

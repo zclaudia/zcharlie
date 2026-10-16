@@ -23,6 +23,12 @@ export function App() {
   sessionsRef.current = sessionsOpen;
   conversationRef.current = hasConversation;
 
+  // The embedded web console links back with tauri.localhost/#pairing; land on
+  // the settings screen so "设备与配对" has a visible home.
+  useEffect(() => {
+    if (window.location.hash === "#pairing") setPage("settings");
+  }, []);
+
   useEffect(() => {
     let active = true;
     let listener: { unregister: () => Promise<void> } | undefined;

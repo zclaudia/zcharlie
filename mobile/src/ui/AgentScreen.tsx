@@ -268,6 +268,11 @@ export function AgentScreen({
       <div className="agent-toolbar">
         <button className="secondary-button" onClick={() => onSessionsOpenChange(!sessionsOpen)}>{sessionsOpen ? "返回对话" : "会话列表"}</button>
         <strong>{sessionsOpen ? "最近会话" : currentTitle}</strong>
+        <button className="icon-button bench-button" aria-label="打开研究台" title="研究台" onClick={() => {
+            // wry's Android scheme workaround only intercepts the http://<scheme>.localhost
+            // form on JS-initiated navigations; the bare zcharlie:// scheme is not rewritten.
+            window.location.href = "http://zcharlie.localhost/app";
+          }}>台</button>
         <button className="icon-button" aria-label="新建对话" onClick={() => void createConversation()}>＋</button>
       </div>
 

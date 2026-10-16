@@ -37,6 +37,15 @@ async function parseBody(response) {
   return response.text();
 }
 
+function encodeUtf8Base64(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary);
+}
+
 async function request(path, { method = "GET", body, idempotency = false, signal } = {}) {
   const headers = { ...FETCH_MARKER_HEADERS };
   let payload;
@@ -47,6 +56,12 @@ async function request(path, { method = "GET", body, idempotency = false, signal
       headers["Content-Type"] = "application/json";
       payload = JSON.stringify(body);
     }
+  }
+  // Android 的 WebView 请求拦截层拿不到请求体（wry 恒以空 body 重建），内嵌模式把
+  // JSON 载荷编码进请求头，由 App 的 zcharlie:// 协议处理器解码后还原为真实请求体。
+  if (typeof payload === "string" && document.body?.dataset.embedded === "android") {
+    headers["X-Zcharlie-Body"] = encodeUtf8Base64(payload);
+    payload = undefined;
   }
   if (idempotency && method !== "GET") {
     headers["Idempotency-Key"] = idempotencyKey();

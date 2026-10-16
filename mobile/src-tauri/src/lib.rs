@@ -1,3 +1,5 @@
+mod gateway_proxy;
+
 #[tauri::command]
 fn is_debug_build() -> bool {
     cfg!(debug_assertions)
@@ -11,6 +13,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .invoke_handler(tauri::generate_handler![is_debug_build])
+        .register_asynchronous_uri_scheme_protocol("zcharlie", gateway_proxy::handle)
         .run(tauri::generate_context!())
         .expect("failed to run zcharlie mobile")
 }
