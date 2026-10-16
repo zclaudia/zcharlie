@@ -231,11 +231,13 @@ def default_job_handlers(
     from investment_agent.portfolio.suitability_jobs import AccountFitHandler
     from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
     from investment_agent.rules.zone_jobs import ZoneDetectionHandler
+    from investment_agent.supplemental_rules.jobs import SupplementalRuleHandler
 
     return [
         *agent_job_handlers(settings),
         AccountFitHandler(settings=settings),
         CandidateRankingHandler(settings=settings),
+        SupplementalRuleHandler(settings=settings),
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
         MaterialCollectionHandler(settings=settings),

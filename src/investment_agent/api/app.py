@@ -226,6 +226,7 @@ def _register_protected_routes(app: FastAPI) -> None:
         research_materials,
         rule_templates,
         stocks,
+        supplemental_rules,
         verification,
         watchlist,
     )
@@ -248,6 +249,7 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(portfolio.router)
     from investment_agent.api.routes import investment_assessments
     app.include_router(investment_assessments.router)
+    app.include_router(supplemental_rules.router)
     app.include_router(holding_rules.router)
     app.include_router(agent.router)
     app.include_router(stocks.router)

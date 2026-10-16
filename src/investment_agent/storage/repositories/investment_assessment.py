@@ -15,8 +15,10 @@ from investment_agent.storage.models.investment_assessment import (
     CandidateRankingEntry as CandidateRankingEntryRow,
 )
 from investment_agent.storage.models.investment_assessment import InvestmentAssessment
+from investment_agent.supplemental_rules.canonical import stable_series_key
+from investment_agent.supplemental_rules.contracts import RuleApplication
 
-Assessment = AccountFitAssessment | RankingSnapshot
+Assessment = AccountFitAssessment | RankingSnapshot | RuleApplication
 
 
 class StoredRanking(NamedTuple):
@@ -79,12 +81,69 @@ class InvestmentAssessmentRepository:
             await self.session.flush()
         return assessment
 
+    async def save_rule_application(
+        self, owner_id: OwnerId, application: RuleApplication
+    ) -> RuleApplication:
+        """Persist a strict P2 application in the shared immutable assessment table."""
+
+        _check_owner(owner_id)
+        application = RuleApplication.model_validate(application.model_dump(mode="json"))
+        if application.owner_id != owner_id or application.application_sequence < 1:
+            raise ValueError("rule application owner/sequence is invalid")
+        if application.series_key != stable_series_key(
+            owner_id, _listing_id(application.listing_ref), str(application.rule_ref.id), application.context
+        ):
+            raise ValueError("rule application series_key does not match its stable identity")
+        if application.previous_application_ref is not None:
+            previous_row = await self.session.get(
+                InvestmentAssessment,
+                (str(application.previous_application_ref.id), application.previous_application_ref.revision),
+            )
+            if previous_row is None or previous_row.owner_id != owner_id or previous_row.kind != "rule_application":
+                raise ValueError("previous application must resolve to an owned rule application")
+            previous = RuleApplication.model_validate(previous_row.payload)
+            if previous.series_key != application.series_key or previous.application_mode != "live":
+                raise ValueError("previous application must be a live predecessor from the same series")
+        existing = await self.session.get(
+            InvestmentAssessment, (str(application.id), application.revision)
+        )
+        if existing is not None:
+            if existing.owner_id != owner_id or existing.kind != "rule_application":
+                raise ValueError("application UUID is already used by another owner or kind")
+            saved = _parse_assessment(existing)
+            _check_header_columns(existing, saved)
+            if not isinstance(saved, RuleApplication) or _json_payload(saved) != _json_payload(application):
+                raise ValueError("application UUID conflicts with immutable input or payload")
+            return saved
+
+        new_row = InvestmentAssessment(
+            id=str(application.id),
+            revision=application.revision,
+            owner_id=owner_id,
+            kind="rule_application",
+            account_id=None,
+            listing_id=_listing_id(application.listing_ref),
+            as_of=application.as_of,
+            input_hash=application.input_hash,
+            entry_count=None,
+            manifest_hash=None,
+            universe_hash=None,
+            series_key=application.series_key,
+            application_sequence=application.application_sequence,
+            application_mode=application.application_mode,
+            payload=_json_payload(application),
+        )
+        async with self.session.begin_nested():
+            self.session.add(new_row)
+            await self.session.flush()
+        return application
+
     async def get_exact(
         self,
         owner_id: OwnerId,
         reference: ObjectRef,
         *,
-        expected_kind: Literal["account_fit", "candidate_ranking"] | None = None,
+        expected_kind: Literal["account_fit", "candidate_ranking", "rule_application"] | None = None,
     ) -> Assessment | None:
         """Read an exact UUID/revision only after checking owner and kind."""
 
@@ -238,8 +297,8 @@ def _check_owner(owner_id: OwnerId) -> None:
         raise ValueError("unsupported owner")
 
 
-def _kind_for_ref(reference: ObjectRef) -> Literal["account_fit", "candidate_ranking"]:
-    if reference.kind not in {"account_fit", "candidate_ranking"}:
+def _kind_for_ref(reference: ObjectRef) -> Literal["account_fit", "candidate_ranking", "rule_application"]:
+    if reference.kind not in {"account_fit", "candidate_ranking", "rule_application"}:
         raise ValueError("unsupported investment assessment reference kind")
     return reference.kind
 
@@ -250,7 +309,7 @@ def _listing_id(reference: ObjectRef) -> int:
     return reference.id
 
 
-def _json_payload(value: AccountFitAssessment | RankingSnapshot | RankingEntry) -> dict[str, object]:
+def _json_payload(value: AccountFitAssessment | RankingSnapshot | RankingEntry | RuleApplication) -> dict[str, object]:
     return value.model_dump(mode="json")
 
 
@@ -259,6 +318,8 @@ def _parse_assessment(row: InvestmentAssessment) -> Assessment:
         return AccountFitAssessment.model_validate(row.payload)
     if row.kind == "candidate_ranking":
         return RankingSnapshot.model_validate(row.payload)
+    if row.kind == "rule_application":
+        return RuleApplication.model_validate(row.payload)
     raise ValueError(f"unsupported investment assessment kind {row.kind!r}")
 
 
@@ -276,11 +337,25 @@ def _check_header_columns(row: InvestmentAssessment, artifact: Assessment) -> No
         raise ValueError("assessment identity columns do not match payload")
     if row.input_hash != artifact.input_hash:
         raise ValueError("assessment input hash column does not match payload")
-    if row.account_id != str(artifact.account_id):
-        raise ValueError("assessment account column does not match payload")
+    if row.kind == "rule_application":
+        if not isinstance(artifact, RuleApplication):
+            raise ValueError("assessment kind and payload disagree")
+        if (
+            row.account_id is not None
+            or row.listing_id != _listing_id(artifact.listing_ref)
+            or not _same_timestamp(row.as_of, artifact.as_of)
+            or row.series_key != artifact.series_key
+            or row.application_sequence != artifact.application_sequence
+            or row.application_mode != artifact.application_mode
+            or any(value is not None for value in (row.entry_count, row.manifest_hash, row.universe_hash))
+        ):
+            raise ValueError("rule-application header columns do not match payload")
+        return
     if row.kind == "account_fit":
         if not isinstance(artifact, AccountFitAssessment):
             raise ValueError("assessment kind and payload disagree")
+        if row.account_id != str(artifact.account_id):
+            raise ValueError("assessment account column does not match payload")
         if row.listing_id != _listing_id(artifact.listing_ref):
             raise ValueError("assessment listing column does not match payload")
         if not _same_timestamp(row.as_of, artifact.assessment_as_of) or any(
@@ -290,6 +365,8 @@ def _check_header_columns(row: InvestmentAssessment, artifact: Assessment) -> No
     else:
         if not isinstance(artifact, RankingSnapshot):
             raise ValueError("assessment kind and payload disagree")
+        if row.account_id != str(artifact.account_id):
+            raise ValueError("assessment account column does not match payload")
         if (
             row.listing_id is not None
             or not _same_timestamp(row.as_of, artifact.as_of)

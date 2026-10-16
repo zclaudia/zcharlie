@@ -231,6 +231,7 @@ async def test_active_open_survives_cooldown_but_watchlist_excludes_it() -> None
             WatchlistItem(
                 listing_id=listing.id,
                 added_at=NOW - timedelta(days=1),
+                updated_at=NOW - timedelta(days=1),
                 provider="test",
                 enabled=True,
                 last_refresh_status="never",
@@ -522,6 +523,7 @@ async def test_oversized_business_exclusion_raises_typed_capacity_error() -> Non
             WatchlistItem(
                 listing_id=listing.id,
                 added_at=NOW - timedelta(days=1),
+                updated_at=NOW - timedelta(days=1),
                 provider="test",
                 enabled=True,
                 last_refresh_status="never",

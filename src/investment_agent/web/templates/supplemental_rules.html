@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}补充事项{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="/app/static/pages/supplemental_rules.css">{% endblock %}
+{% block content %}
+<main class="supplemental-page" id="supplemental-rules-root">
+  <header class="supplemental-intro">
+    <p class="eyebrow">独立的研究辅助事项</p>
+    <h1>补充事项</h1>
+    <p>维护类别、公司和个股规则，登记研究事件线索，并查看逐条评估。它们不会改变基础分数、账户适配、候选排序或正式研究结论。</p>
+    <div class="supplemental-boundary" role="note">当前可登记用户线索；可信事件核验能力尚未接入。用户提交的事件不会标为“已核验”。</div>
+  </header>
+
+  <section class="supplemental-status card" aria-live="polite">
+    <div><b>功能状态</b><span id="supplemental-feature-state">正在检查…</span></div>
+    <div><b>规则代次</b><span id="supplemental-rules-generation">—</span></div>
+    <div><b>事件代次</b><span id="supplemental-events-generation">—</span></div>
+  </section>
+  <div class="supplemental-alert" id="supplemental-alert" role="status" aria-live="polite" hidden></div>
+  <section class="supplemental-run-tracking card" id="supplemental-run-tracking" aria-live="polite" aria-label="已接收的重评运行">
+    <h2>已接收的重评运行</h2>
+    <div id="supplemental-run-status"><p class="empty-note">尚无待跟踪的重评运行。</p></div>
+  </section>
+
+  <div class="supplemental-columns">
+    <aside class="card supplemental-list-card">
+      <div class="card-head"><div><h2>已启用规则</h2><p class="faint">草稿通过精确版本校验后，仍需你明确批准。</p></div><button class="btn btn-sm" type="button" id="supplemental-refresh">刷新</button></div>
+      <ul id="supplemental-rule-list" class="supplemental-rule-list"><li class="empty-note">正在读取规则…</li></ul>
+      <details class="supplemental-events-list">
+        <summary>登记事件线索</summary>
+        <form id="supplemental-event-form" class="stack-md">
+          <label>业务键<input name="event_key" required maxlength="200" autocomplete="off"></label>
+          <label>标题<input name="title" required maxlength="300"></label>
+          <div class="form-grid">
+            <label>类型<input name="event_type" required value="regulatory_update"></label>
+            <label>司法辖区<input name="jurisdiction" required value="CN"></label>
+          </div>
+          <label>政策阶段<select name="policy_stage"><option value="unknown">未知</option><option value="proposed">提议</option><option value="enacted">已发布</option><option value="effective">已生效</option><option value="modified">已修改</option><option value="repealed">已废止</option></select></label>
+          <label>涉及产品（每行一项）<textarea name="affected_products" rows="2"></textarea></label>
+          <label>涉及主体（每行一项）<textarea name="affected_subjects" rows="2"></textarea></label>
+          <div class="form-grid">
+            <label>公布时间<input name="published_at" type="datetime-local"></label>
+            <label>生效时间<input name="effective_from" type="datetime-local"></label>
+            <label>生效截止（可留空）<input name="effective_to" type="datetime-local"></label>
+          </div>
+          <label>来源引用（JSON数组，可留空）<input name="source_refs" placeholder="[]"></label>
+          <p class="hint">保存为用户报告；系统接收时间由服务器记录，不能由表单回填。</p>
+          <button class="btn btn-primary" type="submit">登记用户线索</button>
+        </form>
+        <div id="supplemental-event-list" class="supplemental-event-list" aria-live="polite"><p class="empty-note">正在读取事件线索…</p></div>
+      </details>
+    </aside>
+
+    <section class="card supplemental-editor-card">
+      <div class="card-head"><div><h2 id="supplemental-editor-title">创建规则草稿</h2><p class="faint">结构化录入；提交后可查看服务端保存的精确版本和校验诊断。</p></div></div>
+      <form id="supplemental-rule-form" class="supplemental-form">
+        <fieldset id="supplemental-editor-fields">
+          <legend>规则内容</legend>
+          <div class="form-grid">
+            <label>名称<input name="name" required maxlength="200"></label>
+            <label>影响级别<select name="severity"><option value="info">提示</option><option value="warning" selected>需要注意</option><option value="critical">重要</option></select></label>
+          </div>
+          <label>规则理由<textarea name="rationale" rows="3" required></textarea></label>
+          <label>重要性说明<textarea name="materiality" rows="2" required></textarea></label>
+          <div class="form-grid">
+            <label>适用场景<select name="context"><option value="company_research">公司研究</option><option value="candidate">候选</option><option value="account_fit">账户适配视角</option><option value="holding_review">持仓审视视角</option></select></label>
+            <label>规则类型<select name="rule_type"><option value="metric_condition">指标条件</option><option value="research_requirement">研究要求</option><option value="event_impact">事件影响</option></select></label>
+          </div>
+          <fieldset class="choice-field"><legend>匹配范围</legend>
+            <div class="form-grid">
+              <label>选择器<select name="selector_kind"><option value="listing">单个证券</option><option value="company">公司</option><option value="category">类别</option></select></label>
+              <label class="selector-listing">证券代码<select name="listing_id" id="supplemental-listing-select"><option value="">正在加载…</option></select></label>
+              <label class="selector-company" hidden>公司 ID<input name="company_id" type="number" min="1" step="1"></label>
+              <label class="selector-category">类别类型<select name="category_kind"><option value="industry">行业</option><option value="product">产品</option><option value="region">地区</option></select></label>
+            </div>
+            <div class="form-grid selector-category-fields">
+              <label class="industry-field">分类系统<input name="category_system" value="SW"></label>
+              <label class="industry-field">分类版本<input name="scheme_version" value="2021"></label>
+              <label class="industry-field">行业代码<input name="category_code"></label>
+              <label class="membership-field" hidden>名单成员（每行一项）<textarea name="category_members" rows="2"></textarea></label>
+              <label class="source-ref-field">来源类型<select name="category_source_kind"><option value="evidence">已保存证据</option><option value="research_material">研究材料</option></select></label>
+              <label class="source-ref-field">来源 UUID<input name="category_source_id" autocomplete="off"></label>
+              <label class="source-ref-field">来源版本<input name="category_source_revision" type="number" min="1" value="1"></label>
+            </div>
+            <label class="membership-field" hidden><input name="category_complete" type="checkbox"> 名单覆盖完整（仅在来源能证明完整时勾选）</label>
+          </fieldset>
+          <fieldset class="choice-field"><legend>影响方式</legend>
+            <div class="supplemental-checks">
+              <label><input type="checkbox" name="effect" value="annotate"> 标注</label>
+              <label><input type="checkbox" name="effect" value="require_evidence" checked> 要求补充证据</label>
+              <label><input type="checkbox" name="effect" value="require_review" checked> 要求人工复核</label>
+              <label><input type="checkbox" name="effect" value="limit_conclusion"> 限制结论</label>
+            </div>
+            <label>分析维度<select name="dimension"><option value="business_demand">业务需求</option><option value="competition_durability">竞争持续性</option><option value="financial_cash">财务现金</option><option value="balance_sheet_allocation">资产负债与配置</option><option value="price_expectations">价格预期</option><option value="downside_counter_case">下行情景</option><option value="portfolio_alternatives">组合替代项</option></select></label>
+          </fieldset>
+          <fieldset class="choice-field rule-type-fields" data-rule-type="metric_condition"><legend>指标条件</legend>
+            <div class="form-grid"><label>指标 ID<input name="factor_id" placeholder="revenue_growth"></label><label>比较<select name="operator"><option>&gt;=</option><option>&gt;</option><option>&lt;=</option><option>&lt;</option><option>==</option><option>!=</option><option>between</option><option>in</option></select></label></div>
+            <div class="form-grid"><label>阈值<input name="metric_value" inputmode="decimal" placeholder="0.10"></label><label>单位<input name="unit" placeholder="ratio"></label></div>
+            <p class="hint">阈值以十进制字符串提交，缺失或质量不足的指标会保留为未知。</p>
+          </fieldset>
+          <fieldset class="choice-field rule-type-fields" data-rule-type="research_requirement" hidden><legend>研究要求</legend>
+            <label>待回答问题<textarea name="question" rows="2"></textarea></label>
+            <label>所需证据（每行一项）<textarea name="required_evidence" rows="3"></textarea></label>
+            <label>完成标准<textarea name="completion_criteria" rows="2"></textarea></label>
+            <label>反证标准<textarea name="falsification_criteria" rows="2"></textarea></label>
+            <label>检查期限<input name="check_by" type="datetime-local"></label>
+          </fieldset>
+          <fieldset class="choice-field rule-type-fields" data-rule-type="event_impact" hidden><legend>事件影响</legend>
+            <div class="form-grid"><label>事件 UUID<input name="event_id"></label><label>事件版本<input name="event_revision" type="number" min="1" value="1"></label></div>
+            <label>受影响范围（每行一项）<textarea name="affected_scope" rows="2"></textarea></label>
+            <label>暴露核对证据（每行一项）<textarea name="exposure_evidence" rows="2"></textarea></label>
+            <label>可能影响路径<textarea name="impact_path" rows="2"></textarea></label>
+            <label>解除前仍需满足（每行一项）<textarea name="event_release_requirements" rows="2"></textarea></label>
+          </fieldset>
+          <div class="form-grid">
+            <label>生效起始时间<input name="valid_from" type="datetime-local" required></label>
+            <label>复核日期<input name="review_due_at" type="datetime-local" required></label>
+            <label>有效截止时间（可留空）<input name="valid_until" type="datetime-local"></label>
+          </div>
+          <label>解除前要求（每行一项）<textarea name="release_requirements" rows="2" required></textarea></label>
+          <label>来源引用（JSON数组，可留空）<input name="source_refs" value="[]"></label>
+          <label>问题键（可留空）<input name="issue_key" maxlength="200"></label>
+          <div class="button-row"><button class="btn btn-primary" type="submit" id="supplemental-save-rule">保存规则草稿</button><button class="btn" type="button" id="supplemental-new-rule">清空并新建</button></div>
+        </fieldset>
+      </form>
+      <section id="supplemental-rule-detail" class="supplemental-detail" aria-live="polite"><p class="empty-note">选择规则查看精确版本和决策历史。</p></section>
+    </section>
+  </div>
+</main>
+{% endblock %}

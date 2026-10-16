@@ -67,6 +67,39 @@ def test_get_unknown_research_run_returns_404(api_client):
     assert response.status_code == 404
 
 
+def test_generic_research_runs_hide_supplemental_manifests(api_client):
+    async def seed_run() -> int:
+        async with session_scope() as session:
+            run = await PipelineRunRepository(session).enqueue(
+                kind="supplemental_rule_evaluate",
+                idempotency_key="p2-test-owner-operation",
+                triggered_by="supplemental_rules_api",
+                request_json={
+                    "owner_id": "local_owner",
+                    "source_manifest_hash": "a" * 64,
+                    "source_manifest": {"synthetic": "private frozen input"},
+                },
+            )
+            return run[0].id
+
+    run_id = asyncio.run(seed_run())
+    for kind in ("all", "supplemental_rule_evaluate"):
+        response = api_client.get(
+            "/research/runs",
+            params={"kind": kind},
+            headers={"X-API-Key": "secret"},
+        )
+        assert response.status_code == 200
+        assert all(item["run_id"] != run_id for item in response.json())
+
+    detail = api_client.get(
+        f"/research/runs/{run_id}",
+        headers={"X-API-Key": "secret"},
+    )
+    assert detail.status_code == 404
+    assert "private frozen input" not in detail.text
+
+
 def test_get_research_run_returns_result_and_safe_artifacts(api_client, tmp_path):
     async def seed_run() -> int:
         async with session_scope() as session:

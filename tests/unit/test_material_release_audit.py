@@ -32,7 +32,7 @@ async def _valid_package(tmp_path: Path) -> tuple[Path, Path]:
             await connection.run_sync(Base.metadata.create_all)
         with sqlite3.connect(database) as connection:
             connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-            connection.execute("INSERT INTO alembic_version VALUES ('050')")
+            connection.execute("INSERT INTO alembic_version VALUES ('051')")
         async with session_scope() as session:
             setup = await initialize_pilot(session, identities)
             report = await import_reviewed_annual(
@@ -124,7 +124,7 @@ async def test_wrong_identity_migration_and_calculation_reference_fail(tmp_path)
                 payload["review"]["company_key"] = "wrong-company"
                 connection.execute("UPDATE research_dataset SET payload=? WHERE id=?", (json.dumps(payload), row_id))
             elif mutation == "migration":
-                connection.execute("UPDATE alembic_version SET version_num='048'")
+                connection.execute("UPDATE alembic_version SET version_num='049'")
             elif mutation == "calculation":
                 row_id, raw = connection.execute("SELECT id, payload FROM investor_calculation LIMIT 1").fetchone()
                 payload = json.loads(raw)

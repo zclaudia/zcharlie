@@ -339,22 +339,24 @@ async def test_account_fit_runtime_flags_are_overridden_by_database(
     db_session, tmp_path, monkeypatch
 ) -> None:
     _bootstrap_env(monkeypatch)
-    base = _settings(account_fit_enabled=True, candidate_ranking_enabled=True)
+    base = _settings(account_fit_enabled=True, candidate_ranking_enabled=True, supplemental_rules_enabled=True)
     assert await load_settings(db_session, base=base) is base
 
     await ensure_imported(db_session, base, tmp_path / "none.yaml")
     store = SettingsStore(db_session, encryption_key=KEY)
     await store.apply(
-        {"account_fit_enabled": False, "candidate_ranking_enabled": False}, actor="ui"
+        {"account_fit_enabled": False, "candidate_ranking_enabled": False, "supplemental_rules_enabled": False}, actor="ui"
     )
     effective = await load_settings(db_session, base=base)
     assert effective.account_fit_enabled is False
     assert effective.candidate_ranking_enabled is False
+    assert effective.supplemental_rules_enabled is False
 
-    await store.apply({"account_fit_enabled": True, "candidate_ranking_enabled": True}, actor="ui")
+    await store.apply({"account_fit_enabled": True, "candidate_ranking_enabled": True, "supplemental_rules_enabled": True}, actor="ui")
     effective = await load_settings(db_session, base=base)
     assert effective.account_fit_enabled is True
     assert effective.candidate_ranking_enabled is True
+    assert effective.supplemental_rules_enabled is True
 
 
 async def test_import_drops_invalid_values(db_session, tmp_path, monkeypatch) -> None:

@@ -51,6 +51,8 @@ import { PORTFOLIO_REGIONS, bootPortfolio } from "./portfolio.js";
 import { PRICE_RANGES, mountPriceChart } from "./pricechart.js";
 import { bootAccountFit } from "./account_fit.js";
 import { bootCandidateRanking } from "./candidate_ranking.js";
+import { bootSupplementalRules } from "./supplemental_rules.js";
+import { bootSupplementalItems } from "./supplemental_items.js";
 
 // ---- 共用小件 ---------------------------------------------------------
 
@@ -1739,6 +1741,8 @@ function boot() {
   bootHealth();
   bootSettings();
   bootFinancials();
+  bootSupplementalRules();
+  bootSupplementalItems();
 }
 
 if (document.readyState === "loading") {

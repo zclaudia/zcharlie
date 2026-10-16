@@ -64,7 +64,11 @@ INVESTOR_ERROR_STATUS: dict[str, int] = {
     "historical_manifest_unavailable": 422,
     "invalid_cursor": 422,
     "source_capacity_exceeded": 422,
+    "invalid_action": 422,
+    "revision_conflict": 409,
+    "idempotency_conflict": 409,
     "unsupported_assessment_view": 422,
+    "unsupported_subject": 422,
 }
 """Canonical ``InvestorError.detail.code`` -> HTTP status mapping."""
 

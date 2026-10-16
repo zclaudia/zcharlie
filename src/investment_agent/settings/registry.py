@@ -216,6 +216,7 @@ class RuntimeSettings(BaseModel):
     portfolio_ledger_enabled: bool = False
     account_fit_enabled: bool = False
     candidate_ranking_enabled: bool = False
+    supplemental_rules_enabled: bool = False
     portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
     investor_agent_enabled: bool = False
     investor_agent_background_enabled: bool = False
@@ -337,6 +338,7 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("portfolio_ledger_enabled", "agent", "启用真实账本录入", "A1b事实录入默认关闭；不执行交易。", "next_job"),
     _env("account_fit_enabled", "agent", "启用账户适配检查", "默认关闭；需同时启用真实账本入口，关闭时仍可读取历史结果。", "next_job"),
     _env("candidate_ranking_enabled", "agent", "启用本账户候选排序", "默认关闭；还需账户适配和真实账本入口，关闭时仍可读取历史快照。", "next_job"),
+    _env("supplemental_rules_enabled", "agent", "启用补充事项评估", "默认关闭；控制类别、公司及个股追加规则的独立管理与评估，关闭后运行中的评估停止新增应用。", "live"),
     _env(
         "portfolio_valuation_max_staleness_days", "agent", "估值价格时效（交易日）",
         "收盘价超过该交易日数视为过期，不参与市值与 NAV；未知年份按受限原因处理。",

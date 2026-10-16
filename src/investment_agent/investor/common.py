@@ -83,6 +83,9 @@ class ObjectRef(Contract):
         "peer_annual_snapshot",
         "account_fit",
         "candidate_ranking",
+        "supplemental_rule",
+        "research_event",
+        "rule_application",
     ]
     id: UUID | Annotated[int, Field(strict=True, ge=1)]
     revision: Revision

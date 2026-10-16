@@ -42,6 +42,10 @@ from investment_agent.storage.repositories.research_snapshot import (
 
 RESEARCH_RUN_KIND = "ifind_research"
 ALL_RUN_KINDS = "all"
+# Supplemental-rule runs contain a frozen source manifest in request_json. They
+# have their own owner- and receipt-checked run view, so the generic research
+# API must never expose them (especially when ``kind=all``).
+SUPPLEMENTAL_RULE_RUN_KIND = "supplemental_rule_evaluate"
 
 router = APIRouter(
     prefix="/research",
@@ -73,6 +77,7 @@ async def list_research_runs(
                 ResearchChangeSet.current_snapshot_id == ResearchSnapshot.id,
             )
             .order_by(PipelineRun.id.desc())
+            .where(PipelineRun.kind != SUPPLEMENTAL_RULE_RUN_KIND)
             .offset(offset)
             .limit(limit)
         )
@@ -145,7 +150,7 @@ async def stock_snapshot_history(
 async def get_research_run(run_id: int) -> ResearchRunDetail:
     async with session_scope() as session:
         run = await session.get(PipelineRun, run_id)
-        if run is None:
+        if run is None or run.kind == SUPPLEMENTAL_RULE_RUN_KIND:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Research run {run_id} not found",

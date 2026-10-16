@@ -111,8 +111,9 @@ async function submitFit(page, {accountId, price, fee, rate, action = 'open'}, {
   await account.selectOption(accountId);
   await page.waitForFunction(() => {
     const submit = document.querySelector('#account-fit-content button[type=submit]');
-    return submit && !submit.disabled;
-  });
+    const note = document.querySelector('#account-fit-content .fit-context-note')?.textContent || '';
+    return submit && !submit.disabled && (note.includes('标的参考来源：') || note.includes('账户快照、约定与标的信息已读取。'));
+  }, null, {timeout: 15000});
   const actionSelect = page.locator('#account-fit-content select[name=action]');
   await actionSelect.selectOption(action);
   for (const [name, value] of [['execution_price', price], ['fixed_fee', fee], ['fee_rate', rate]]) {
@@ -122,9 +123,23 @@ async function submitFit(page, {accountId, price, fee, rate, action = 'open'}, {
   }
   const requestPromise = fitPost(page);
   const responsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
+  await page.locator('#account-fit-root').scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const submitButton = page.getByRole('button', {name: '生成账户适配检查'});
-  if (doubleClick) await submitButton.dblclick({delay: 120});
-  else await submitButton.click();
+  await submitButton.scrollIntoViewIfNeeded();
+  const before = await submitButton.boundingBox();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+  const after = await page.getByRole('button', {name: '生成账户适配检查'}).boundingBox();
+  assert.ok(before && after && Math.abs(before.x - after.x) < 1 && Math.abs(before.y - after.y) < 1, 'fit submit button position must settle before clicking');
+  if (doubleClick && page.viewportSize().width <= 600) {
+    await page.getByRole('button', {name: '生成账户适配检查'}).click();
+    const secondClickAccepted = await page.getByRole('button', {name: '生成账户适配检查'}).click({timeout: 250}).then(() => true, () => false);
+    assert.equal(secondClickAccepted, false, 'mobile duplicate click must be blocked while the original operation is pending');
+  } else if (doubleClick) {
+    await page.getByRole('button', {name: '生成账户适配检查'}).dblclick({delay: 120});
+  } else {
+    await page.getByRole('button', {name: '生成账户适配检查'}).click();
+  }
   let request;
   try {
     request = await Promise.race([requestPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('no fit POST within 5s')), 5000))]);

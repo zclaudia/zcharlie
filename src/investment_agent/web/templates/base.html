@@ -12,6 +12,7 @@
   "portfolio": {"group": "研究漏斗", "label": "持仓池"},
   "industries": {"group": "研究", "label": "行业年度研究"},
   "templates": {"group": "规则与方法", "label": "模板"},
+  "supplemental_rules": {"group": "规则与方法", "label": "补充事项"},
   "methods": {"group": "规则与方法", "label": "研究方法"},
   "runs": {"group": "系统", "label": "运行中心"},
   "health": {"group": "系统", "label": "数据健康"},
@@ -76,6 +77,7 @@
         <div class="nav-group">
           <span class="nav-label">规则与方法</span>
           {{ nav_link("templates", "/app/templates", "模板") }}
+          {{ nav_link("supplemental_rules", "/app/supplemental-rules", "补充事项") }}
           {{ nav_link("methods", "/app/methods", "研究方法") }}
         </div>
         <div class="nav-group">
@@ -158,6 +160,7 @@
       {{ more_link("health", "/app/health", "数据健康") }}
       {{ more_link("industries", "/app/industries", "行业年度研究") }}
       {{ more_link("templates", "/app/templates", "模板") }}
+      {{ more_link("supplemental_rules", "/app/supplemental-rules", "补充事项") }}
       {{ more_link("methods", "/app/methods", "研究方法") }}
       {{ more_link("settings", "/app/settings", "设置") }}
       <button type="button" class="more-item" data-theme-toggle>{{ icon("moon", "ico ico-moon", 22) }}{{ icon("sun", "ico ico-sun", 22) }}<span>外观</span></button>
@@ -195,6 +198,7 @@
       <a class="palette-item" role="option" href="/app/watchlist" data-palette-page data-k="观察池 gcc watchlist 自选">{{ icon("watchlist", "ico", 16) }}<span>观察池</span></a>
       <a class="palette-item" role="option" href="/app/portfolio" data-palette-page data-k="持仓池 ccc portfolio">{{ icon("portfolio", "ico", 16) }}<span>持仓池</span></a>
       <a class="palette-item" role="option" href="/app/templates" data-palette-page data-k="模板 mb templates 规则模板">{{ icon("templates", "ico", 16) }}<span>模板</span></a>
+      <a class="palette-item" role="option" href="/app/supplemental-rules" data-palette-page data-k="补充事项规则事件 supplemental rules events">{{ icon("templates", "ico", 16) }}<span>补充事项</span></a>
       <a class="palette-item" role="option" href="/app/methods" data-palette-page data-k="研究方法 yjff methods">{{ icon("methods", "ico", 16) }}<span>研究方法</span></a>
       <a class="palette-item" role="option" href="/app/runs" data-palette-page data-k="运行中心 yxzx runs">{{ icon("runs", "ico", 16) }}<span>运行中心</span></a>
       <a class="palette-item" role="option" href="/app/health" data-palette-page data-k="数据健康 sjjk health">{{ icon("health", "ico", 16) }}<span>数据健康</span></a>

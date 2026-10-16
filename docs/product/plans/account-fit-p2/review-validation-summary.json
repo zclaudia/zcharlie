@@ -1,0 +1,115 @@
+{
+  "completed_at": "2026-10-16T15:34:06.090540+00:00",
+  "scope": "P2 follow-up review; initial validation-summary.json remains historical",
+  "source_snapshot": {
+    "files": 1187,
+    "sha256": "c4bbadb970eaa40d3725dc455f020ee7bcc02368a3760d27fefb1088be69c589",
+    "manifest": "/tmp/zcharlie-p2-review-source-snapshot.txt",
+    "scope": [
+      "src/investment_agent",
+      "tests",
+      "alembic"
+    ],
+    "excludes": [
+      "docs",
+      "mobile",
+      "production runtime data/settings"
+    ]
+  },
+  "suites": [
+    {
+      "name": "unit",
+      "command": "pytest -q tests/unit",
+      "testcases": 2437,
+      "passed": 2435,
+      "skipped": [
+        "tests.unit.test_costco_parent_equity_review::test_reviewed_fragments_are_byte_exact_rows_of_the_hashed_official_capture",
+        "tests.unit.test_hsbc_restatement_review.HsbcRestatementReviewTests::test_offline_reviewer_reproduces_the_frozen_record_from_captured_sources"
+      ],
+      "deselected": 6,
+      "modules": 180,
+      "seconds": 331.28,
+      "junit": "/tmp/zcharlie-p2-review-unit.dttdEf/unit.xml",
+      "junit_sha256": "398b3980a2741bc15c23b84834f448943d405f5488c36695456b1973b054f94c",
+      "log": "/tmp/zcharlie-p2-review-unit.dttdEf/unit.log",
+      "log_sha256": "e5975802984f5bddd26dbc72dda113de0d4dd629e36807188e2331a8b48c6a14",
+      "collection": "/tmp/zcharlie-p2-review-unit.dttdEf/unit.collection.txt",
+      "collection_sha256": "96efd721ece1a1771f006ff57d2bdbe9facf8fb6cd1e88db36d9a1410dad1c28"
+    },
+    {
+      "name": "integration",
+      "command": "pytest -q tests/integration",
+      "testcases": 732,
+      "passed": 732,
+      "skipped": [],
+      "deselected": 0,
+      "modules": 131,
+      "seconds": 656.1,
+      "junit": "/tmp/zcharlie-p2-review-integration.MhsMCz/integration.xml",
+      "junit_sha256": "da1cae8b10058ed1d85b1b62a667dafb0de03733ca07e4380f3e1253c651906c",
+      "log": "/tmp/zcharlie-p2-review-integration.MhsMCz/integration.log",
+      "log_sha256": "a767c699ed4fa92dea2b30c5cfa7237a1bd85aac0455e829d199211cbd3d32ff",
+      "collection": "/tmp/zcharlie-p2-review-integration.MhsMCz/integration.collection.txt",
+      "collection_sha256": "a302a788d373e2da855f7e48222da4b082473938744e8fb4221cf1781144a320"
+    },
+    {
+      "name": "root",
+      "command": "pytest -q tests/test_*.py",
+      "testcases": 717,
+      "passed": 717,
+      "skipped": [],
+      "deselected": 0,
+      "modules": 37,
+      "seconds": 182.0,
+      "junit": "/tmp/zcharlie-p2-review-root.P7IBO6/root.xml",
+      "junit_sha256": "60717e1cd2f65ef36e6fe5fb9f8022be1cf62981c153d959d8cbec3322ec9fb6",
+      "log": "/tmp/zcharlie-p2-review-root.P7IBO6/root.log",
+      "log_sha256": "5866b6f409547f0e595040d9705acfc610f81a79a4e6f7c4f05fbfc54e942d3e",
+      "collection": "/tmp/zcharlie-p2-review-root.P7IBO6/root.collection.txt",
+      "collection_sha256": "0e6d036a6dcc7576dbb73a68843609d213c27526b4ef5ddc0604eb9cae02922e"
+    },
+    {
+      "name": "focused",
+      "command": "pytest -q tests/unit/test_p2_review*.py tests/integration/test_p2_review*.py tests/unit/test_supplemental*.py tests/integration/test_supplemental*.py tests/integration/test_migration_051.py tests/integration/test_api_research.py tests/integration/test_web_supplemental_rules.py tests/unit/test_import_graph.py",
+      "testcases": 132,
+      "passed": 132,
+      "skipped": [],
+      "deselected": 0,
+      "modules": 20,
+      "seconds": 33.2,
+      "junit": "/tmp/zcharlie-p2-review-final.xml",
+      "junit_sha256": "c49be0bdf7528d07867652bcee6c83c884c8f38e5e0278fa7cdb33a18abc77aa",
+      "log": "/tmp/zcharlie-p2-review-final.log",
+      "log_sha256": "5aebea43cf41844a38c39b75116706646579848d3595482fc53b604a8e66fcf8",
+      "collection": "/tmp/zcharlie-p2-review-final.collection.txt",
+      "collection_sha256": "0b84128898370df87fd4659bb7c0ba1404973b4e3b44434d1ec44c1e2c4483e7"
+    }
+  ],
+  "browser": {
+    "command": "tests/browser/run.sh supplemental_rules.mjs account_fit.mjs",
+    "exit_code": 0,
+    "viewports": [
+      1440,
+      390
+    ],
+    "log": "/tmp/zcharlie-p2-review-browser.log",
+    "log_sha256": "41e05766a61ef2ff724f6cbd25348aa19c32901e634949fa088944bbbebc2cab"
+  },
+  "static": {
+    "ruff": "src tests alembic passed",
+    "mypy": "427 source files passed",
+    "js": [
+      "supplemental_rules.js",
+      "supplemental_items.js"
+    ],
+    "alembic_head": "051",
+    "git_diff_check": "passed"
+  },
+  "notes": [
+    "Focused and full suites overlap; counts are not summed.",
+    "Unit has two missing raw-source skips and six default network deselections.",
+    "Integration has 109 expression-index reflection warnings, covered separately by actual DDL and EXPLAIN checks.",
+    "No production migration, switches, P3/P4, commit or push.",
+    "Parallel mobile changes/commits retained; only test-generated P1 images restored to pre-run backup."
+  ]
+}

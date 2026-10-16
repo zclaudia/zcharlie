@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     event,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,15 +28,29 @@ class InvestmentAssessment(Base):
     __table_args__ = (
         CheckConstraint("revision = 1", name="ck_investment_assessment_revision_one"),
         CheckConstraint(
-            "kind IN ('account_fit', 'candidate_ranking')",
+            "kind IN ('account_fit', 'candidate_ranking', 'rule_application')",
             name="ck_investment_assessment_kind",
         ),
         CheckConstraint(
-            "(kind = 'account_fit' AND listing_id IS NOT NULL AND entry_count IS NULL "
+            "(kind = 'account_fit' AND account_id IS NOT NULL AND listing_id IS NOT NULL AND entry_count IS NULL "
             "AND manifest_hash IS NULL AND universe_hash IS NULL) "
-            "OR (kind = 'candidate_ranking' AND listing_id IS NULL AND entry_count IS NOT NULL "
-            "AND entry_count >= 0 AND manifest_hash IS NOT NULL AND universe_hash IS NOT NULL)",
+            "OR (kind = 'candidate_ranking' AND account_id IS NOT NULL AND listing_id IS NULL AND entry_count IS NOT NULL "
+            "AND entry_count >= 0 AND manifest_hash IS NOT NULL AND universe_hash IS NOT NULL) "
+            "OR (kind = 'rule_application' AND account_id IS NULL AND listing_id IS NOT NULL "
+            "AND entry_count IS NULL AND manifest_hash IS NULL AND universe_hash IS NULL "
+            "AND series_key IS NOT NULL AND application_sequence IS NOT NULL AND application_sequence >= 1 "
+            "AND application_mode IS NOT NULL AND application_mode IN ('live','historical_replay'))",
             name="ck_investment_assessment_shape",
+        ),
+        CheckConstraint(
+            "(kind = 'rule_application' AND series_key IS NOT NULL AND application_sequence IS NOT NULL "
+            "AND application_mode IS NOT NULL) OR (kind <> 'rule_application' AND series_key IS NULL "
+            "AND application_sequence IS NULL AND application_mode IS NULL)",
+            name="ck_investment_assessment_series_shape",
+        ),
+        UniqueConstraint(
+            "owner_id", "listing_id", "series_key", "application_sequence",
+            name="uq_investment_assessment_rule_application_sequence",
         ),
         CheckConstraint("json_valid(payload)", name="ck_investment_assessment_payload_json"),
         CheckConstraint("json_type(payload) = 'object'", name="ck_investment_assessment_payload_object"),
@@ -50,19 +65,32 @@ class InvestmentAssessment(Base):
             "ix_investment_assessment_owner_listing_kind_asof",
             "owner_id", "listing_id", "kind", "as_of",
         ),
+        Index(
+            "ix_investment_assessment_rule_application_live",
+            "owner_id", "listing_id", "series_key", "application_mode", "application_sequence",
+        ),
+        Index(
+            "ix_investment_assessment_rule_application_operation",
+            "owner_id",
+            text("json_extract(payload, '$.operation_id')"),
+            sqlite_where=text("kind = 'rule_application'"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     revision: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     owner_id: Mapped[str] = mapped_column(String(32), nullable=False)
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
-    account_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    account_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     listing_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     entry_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     manifest_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     universe_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    series_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    application_sequence: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    application_mode: Mapped[str | None] = mapped_column(String(24), nullable=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 

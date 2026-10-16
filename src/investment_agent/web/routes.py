@@ -240,6 +240,7 @@ def _financial_page(request: Request, view: FinancialContextView) -> HTMLRespons
         active_nav="watchlist",
         ticker=view.display_code,
         financial=view,
+        listing_id=view.listing_id,
         labels=FINANCIAL_LABELS,
     )
 
@@ -604,3 +605,12 @@ async def settings_page(request: Request) -> HTMLResponse:
 @router.get("/methods", response_class=HTMLResponse)
 async def methods_page(request: Request) -> HTMLResponse:
     return _render("methods.html", request, active_nav="methods")
+
+
+@router.get("/supplemental-rules", response_class=HTMLResponse)
+async def supplemental_rules_page(request: Request) -> HTMLResponse:
+    """Management UI for user-authored supplemental rules and event reports."""
+    return _render(
+        "supplemental_rules.html", request,
+        page_title="补充事项", active_nav="supplemental_rules",
+    )

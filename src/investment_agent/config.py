@@ -96,6 +96,7 @@ class Settings(BaseSettings):
     portfolio_ledger_enabled: bool = False
     account_fit_enabled: bool = False
     candidate_ranking_enabled: bool = False
+    supplemental_rules_enabled: bool = False
     portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
     disclosure_originals_enabled: bool = False
     investor_agent_enabled: bool = False

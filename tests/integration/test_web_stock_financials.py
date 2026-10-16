@@ -362,6 +362,7 @@ async def test_hk_page_has_no_inline_style_and_only_static_scripts(api_client) -
     _login(api_client)
     html = _page(api_client, "00005.HK")
 
+    assert 'id="supplemental-items-root"' not in html
     assert "<style" not in html
     assert " style=" not in html
     assert "onclick=" not in html

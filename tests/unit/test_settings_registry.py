@@ -39,8 +39,10 @@ def test_specs_are_unique_and_complete() -> None:
     assert unflatten(defaults()) == RuntimeSettings().model_dump(mode="json")
     assert RuntimeSettings().account_fit_enabled is False
     assert RuntimeSettings().candidate_ranking_enabled is False
+    assert RuntimeSettings().supplemental_rules_enabled is False
     assert SPECS_BY_KEY["account_fit_enabled"].apply == "next_job"
     assert SPECS_BY_KEY["candidate_ranking_enabled"].apply == "next_job"
+    assert SPECS_BY_KEY["supplemental_rules_enabled"].apply == "live"
 
 
 def test_env_keys_mirror_settings_fields() -> None:

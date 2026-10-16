@@ -1,12 +1,14 @@
 # 账户适配度与类别、个股追加规则设计
 
-日期：2026-10-16（Asia/Shanghai）。状态：经代码对照修订的分阶段设计；P0/P1已实施并通过主代理工程验收，P2及以后仍为设计。用户已认可分层方向，本文件细化数据模型、接口、生命周期与实施验收；原设计审查依据见第16节，实施差异与证据见P0/P1验收记录。
+日期：2026-10-16（Asia/Shanghai）。状态：经代码对照修订的分阶段设计；P0/P1已实施并通过主代理工程验收，P2本轮已实施并通过独立工程验收；P3及以后仍为设计。用户已认可分层方向，本文件细化数据模型、接口、生命周期与实施验收；原设计审查依据见第16节，实施差异与证据见P0/P1验收记录。
 
-本文保留设计阶段的决策与审查依据。P0/P1已按用户后续授权实施，实际模块、050迁移、修复和验证证据以[交付索引](plans/account-fit-p0-p1/README.md)及其验收记录为准；P2及以后仍是拟议契约，不能据其描述推断已有运行能力。实施和测试没有修改生产数据库或启用生产开关。
+本文保留设计阶段的决策与审查依据。P0/P1已按用户后续授权实施，实际模块、050迁移、修复和验证证据以[交付索引](plans/account-fit-p0-p1/README.md)及其验收记录为准；P2实际实现、来源能力限制与验收结果见[P2交付索引](plans/account-fit-p2/README.md)；P3及以后仍是拟议契约，不能据其描述推断已有运行能力。实施和测试没有修改生产数据库或启用生产开关。
 
 关联设计：[领域契约](investor-agent-contracts.md)、[漏斗设计](funnel-design.md)、[组合验收](ag24-portfolio-acceptance.md)、[资金用途](ag29-funding-purposes.md)、[方法版本](ag30-method-evolution.md)、[行业参照](industry-peer-technical-design.md)。
 
-P0/P1的任务顺序、文件边界、依赖及逐项验收见[实施计划](plans/account-fit-p0-p1-plan.md)。该计划对应已交付的P0/P1；类别、个股规则和政策事件等后续阶段尚未实施。
+P0/P1的任务顺序、文件边界、依赖及逐项验收见[实施计划](plans/account-fit-p0-p1-plan.md)。该计划对应已交付的P0/P1；后续P2另按用户授权实施，不改写既有P0/P1验收记录。
+
+P2类别及个股追加规则的具体任务、文件边界、依赖和验收见[P2实施计划](plans/account-fit-p2-plan.md)。P2已按用户后续授权完成独立工程实现与验收；实际交付见[P2索引](plans/account-fit-p2/README.md)，不表示已启用生产功能；P3正式发布闭环仍单独划分。
 
 ## 1. 目标与设计决策
 
@@ -86,6 +88,8 @@ flowchart TD
 
 新评估请求有mode=live/historical_replay。live由服务端在接收时冻结as_of与本地输入清单；historical_replay显式指定过去时点，仅使用当时已可用的事实、规则与匹配记录，标记回放，不进入当前正式排序。历史回放的推导产物可在今天构建，必须同时保留input_as_of和created_at；不能据此伪装成当时已存在的研究，或注入当时冻结的任务。历史可见性和当前失效检查分开，客户端旧as_of不能绕过发布时的当前风险限制。
 
+P2首版将历史回放限定为本功能旧run/manifest/input_as_of的精确授权绑定，不承诺从可变分类等当前表重建任意历史时点。source_manifest冻结事实与方法版本，live/replay执行模式及原run关系另由命令/收据绑定；不接受客户端整包自报历史原件。
+
 新增 UUID 命名空间拟为 `supplemental_rule / research_event / rule_application / rule_coverage / account_fit / candidate_ranking / research_rule_binding`。company_id使用已存在整数身份，选择器通过listing→company核实，不伪造尚不存在的company ObjectRef。IndustryClassification目前没有独立不可变版本，首期冻结实际行内容、取得时间和hash作为matching_manifest；不能把当前可变分类行或标量标签当历史知识版本。新导入业务名单才可使用经专用适配的research_dataset/evidence引用；资料不足时匹配unknown。
 
 引用只声明身份，不自动授予权限或可信性。所有新 kind 都要有 exact owner、subject、revision、as_of 和 current-limits 解析；不通过扩大通用白名单绕过单公司来源核验。
@@ -130,7 +134,7 @@ policy_stage为proposed/enacted/effective/modified/repealed/unknown/not_applicab
 
 ### 5.3 RuleApplication：逐规则评估结果
 
-字段：id/revision、owner_id、listing_ref、company_id、context、rule_ref、rules_generation、events_generation、matching_manifest_hash、event_ref、as_of、evaluated_at、valid_until、review_due_at、input_hash、matcher_version、evaluator_version、dependencies、series_key、application_sequence、previous_application_ref。每次评估新UUID/revision=1；series_key稳定标识(owner, listing, rule_id, context, issue_key)，同series的sequence单调递增，不把新计算当作旧行改写。
+字段：id/revision、owner_id、listing_ref、company_id、context、rule_ref、rules_generation、events_generation、matching_manifest_hash、event_ref、as_of、evaluated_at、valid_until、review_due_at、input_hash、matcher_version、evaluator_version、dependencies、series_key、application_sequence、application_mode、previous_application_ref。每次评估新UUID/revision=1；series_key稳定标识(owner, listing, rule_id, context)，同series的sequence单调递增，不把新计算当作旧行改写。issue_key是载荷内的问题/去重身份，修改定义的issue_key、revision或evaluation_purpose不能另起series而遗漏旧未决事项；旧问题保留原始身份。application_mode区分live与historical_replay，回放可占审计序号但不成为最新live前序。
 
 评估正文包含：
 
@@ -156,7 +160,7 @@ policy_stage为proposed/enacted/effective/modified/repealed/unknown/not_applicab
 
 主键身份：id/revision、owner_id、account_id、listing_ref、purpose_binding、action、as_of。action首期open/add/hold；减持/退出检查后续接入，不能从不适配反推卖出。purpose_binding为selected（exact purpose_ref+purpose_id）、confirmed_empty（exact空用途版本）、none_recorded（本次已核实不存在用途头）、unselected（非空用途版本未选条目）、unknown（读取不完整）；不能用同一个null代表全部情形。
 
-必须绑定：snapshot_ref、valuation_ref、mandate_ref、purpose_binding、method_version、input_hash、valid_until。open/add另需价格/费用/交易规则来源；来源缺失用typed missing binding，不伪造exact ref。hold的交易输入为not_applicable。company_view_ref可空。P1的supplemental_binding固定为not_integrated；P2起为bound（rules/events generation、主体集合hash、application refs）或unknown，不能因为字段缺失而当作“零条规则且已全覆盖”。
+必须绑定：snapshot_ref、valuation_ref、mandate_ref、purpose_binding、method_version、input_hash、valid_until。open/add另需价格/费用/交易规则来源；来源缺失用typed missing binding，不伪造exact ref。hold的交易输入为not_applicable。company_view_ref可空。P1的supplemental_binding固定为not_integrated；P2独立补充事项不改变该契约，P3接入正式研究与账户链路时再扩展为bound（rules/events generation、主体集合hash、application refs）或unknown，不能因为字段缺失而当作“零条规则且已全覆盖”。
 
 | 字段 | 语义 |
 | --- | --- |
@@ -203,13 +207,15 @@ valid_until取该方法最大有效期、必要来源有效期及下一规则/�
 | supplemental_rule_revision | PK(id, revision)，owner、definition JSON、hash；不可变 | P2 |
 | supplemental_rule_head | PK(owner, rule_id)，active_ref、latest_draft_ref、active_state、head_revision；CAS，新草案不挤掉active_ref | P2 |
 | supplemental_rule_event | append-only sequence、rule/revision、命令/旧新状态、操作者、诊断/hash；一命令可含多项状态变化，不将idempotency_key设为事件表单行唯一 | P2 |
-| supplemental_registry_head | 每owner的rules_generation、events_generation、语义hash及时间边界；写事务推进相应generation，时间边界在读时派生，不由GET更新 | P2 |
+| supplemental_registry_head | 每owner的registry_revision、rules_generation、events_generation、语义hash及时间边界；任意有效规则/事件命令推进registry_revision供列表分页，业务generation仅按生效集合/事件变化推进；时间边界读时派生，不由GET更新 | P2 |
 | research_event_revision | PK(id, revision)，事件结构和来源；不可变 | P2 |
 | investment_assessment | PK(id, revision)，kind=rule_application/rule_coverage/account_fit/candidate_ranking，owner/listing/account/as_of/input_hash/payload；kind专属严格DTO，不是任意JSON平台 | P1起分阶段，rule_coverage为P3 |
 | candidate_ranking_entry | 完整排序条目；FK(ranking_id,revision)及rank/listing唯一约束均包含revision，冻结来源与条目；不可变 | P1 |
 | research_rule_binding | task_id唯一，另有UUID id/revision供ObjectRef读取，精确入场定义绑定；不可变 | P3 |
 
 registry 生效历史可从 rule_event 重建，current head 只是加速索引。用途、账户、正式公司观点和实际交易事实不复制到新表。数值计算复用 SavedCalculation；适配状态等离散结果由 investment_assessment 保存。input_hash 覆盖方法版本、as_of、所有输入值/引用、缺失与排除状态；相同 owner/kind/方法及输入可复用结果，不更新时间冒充新研究。每阶段只增加所需表和索引，不提前建立通用政策平台或全量新闻库。
+
+rule_application的复用限于同一已授权操作/冻结pair的恢复；不同操作仍核对冻结的live前序并分配新应用，不能以相同input_hash跨操作复用来绕过序列CAS。P2扩展共享assessment时保留P1形状/不可变守卫；降级已有任何P2定义、事件、审计、应用或P2 run/收据均拒绝，包含零成员和failed run，不留下旧代码无法解释的队列项。
 
 共8张候选新表，并非P1一次创建：P1仅assessment和ranking_entry两张；P2加规则/事件5张；P3加task binding。删除独立assessment_dependency表：首期依赖以严格数组保存在payload，按owner/account/listing/series索引进行有界扫描，正式观点继续用PublicationDependency；规模指标证明必要后再设计专用反向投影。所有权+kind校验先于载荷解析；新评估UUID均revision=1，业务重评新建UUID/previous_ref，定义和事件才沿稳定id追加revision。
 
@@ -322,6 +328,8 @@ approve只能针对head.latest_draft_ref，且草案处于validated；旧validat
 变更请求含idempotency_key、完整body hash、expected_head_revision、expected_rule_ref；创建时expected_head_revision=0（不放宽既有Mutation）。幂等收据复用InvestorMutation，hash包含路由/命令类型和完整正文，使用owner/UUID全局键；同key同body先返回原结果，同key异命令/异body返回409。同一批准可同时替代旧版、激活新版和留下多个审计项，不能把命令键限制为只能有一行审计事件。
 
 批准、暂停、替代、退役在同一短事务更新head、registry generation、生命周期审计、InvestorMutation收据和幂等PipelineRun重评任务；复用SQLite writer reservation。校验结果必须绑定相同content_hash，批准时重新核对引用和时效，不能使用过期validation_hash。无需新建通用失效outbox；PublicationOutbox保留既有正式观点通知用途，不把私有规则job冒充外部通知。
+
+P2创建/修改草案、校验及reject不创建重评run；合法校验命令的业务fail同步200保存诊断和收据，不抛事务异常回滚诊断。收据采用P2判别式结果，run_ref可空，hash同时覆盖命令、path目标及正文，不复用P1单一AdmissionReceipt解析所有命令。完整触发/返回矩阵见[P2计划3.6节](plans/account-fit-p2-plan.md#36-命令收据与重评触发矩阵)。
 
 异步POST接收事务同时保存服务端冻结的source_manifest、带owner/命令前缀的PipelineRun幂等键和收据；work/retry不重选输入、不重复接收。请求丢回执后先重放原收据，再检查当前开关/CAS；关闭状态也不能阻止认证用户取回原收据。前端保留完整pending请求。
 
@@ -449,7 +457,7 @@ company_view 仍不携带账户 position_proposal。账户适配作为页面并�
 
 新命名空间和可选字段需要贯通 legacy 缺字段重放、input_hash、serialization、task admission、数值解析、publication/current-limits/renewal、前端 DTO 和迁移测试。旧结果不会因反序列化默认值出现就被宣称验证过。
 
-新写能力分别受 account_fit_enabled、supplemental_rules_enabled、candidate_ranking_enabled 拟议开关控制，默认关闭，并与现有组合/Agent开关取交集。关闭禁止新评估或批准，不删除历史、不停止已知关键限制的读取、不免除已有正式观点依赖检查；因此不能用关闭开关绕过新链路的发布要求。开启不推导实盘或真实研究质量门槛已通过。
+新写能力分别受 account_fit_enabled、supplemental_rules_enabled、candidate_ranking_enabled 拟议开关控制，默认关闭；实际进入组合/Agent流程时，另与对应流程开关和原授权取交集。P2独立本地规则管理与机械评估只受supplemental开关控制，不为此要求启用组合/Agent。关闭禁止新评估或批准，不删除历史、不停止已知关键限制的读取、不免除已有正式观点依赖检查；因此不能用关闭开关绕过新链路的发布要求。开启不推导实盘或真实研究质量门槛已通过。
 
 ## 12. 示例与验收样本
 
