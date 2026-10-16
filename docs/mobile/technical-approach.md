@@ -51,7 +51,7 @@ API 全量清单见 [api-audit.md](api-audit.md)，协议 handler 设计见
 | D2 | **永不直连后端**：手机只认识网关地址 + 设备凭证，后端 API key 永不下发 | 后端可不出公网；网关侧凭证可撤销/限定 scope/限期；手机失窃只泄 `zgd_`（设备范围、可吊销） |
 | D3 | 双源而非全原生或纯 Web | 对话/配对/设置是高频窄交互，原生面可控且快；研究台 12+ 页面是宽信息面，内嵌 Web UI 零重复实现（UI v2 已是移动优先设计） |
 | D4 | 任务事件双传输：SSE 优先、失败 3 次降级 2s 轮询，游标（`after_event_id`）贯穿 | 网关通道支持流式但手机网络不稳；轮询与 SSE 共享同一事件存储，降级零服务端改动；游标过期(410)读快照重建 |
-| D5 | 凭证存 Tauri Store（App 私有目录 JSON），Rust/JS 共享同一实例 | 不进 localStorage、不进日志；`pm clear` 即彻底清除；Rust 协议 handler 每请求现读现用，免凭证桥接 |
+| D5 | 凭证存 Tauri Store（App 私有目录 JSON），Rust/JS 共享同一实例 | 不进 localStorage、不进日志；`pm clear` 即彻底清除；Rust 协议 handler 每请求现读现用，免凭证桥接。**已知弱点：落盘明文**，失窃（离线提取）场景靠 `zgd_` 的 scope/TTL/可吊销兜底；加密升级见 §8-1、§9-1 |
 | D6 | Debug 构建允许明文 HTTP（仅 debug manifest 注入 `usesCleartextTraffic`），Release 强制 HTTPS 网关 | 本机/模拟器联调零证书成本；`validateGatewayUrl` 在非 debug 构建拒绝 `http:` 网关 |
 
 ## 3. 数据面一：原生 UI（tauri.localhost）
@@ -131,7 +131,7 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
 
 | 层 | 措施 |
 | --- | --- |
-| 凭证 | 设备凭证（`zgd_`，namespace+backend scope+TTL）存 App 私有 Store；后端 API key 不下发；网关 admin 可吊销/重签 |
+| 凭证 | 设备凭证（`zgd_`，namespace+backend scope+TTL）存 App 私有 Store；后端 API key 不下发；网关 admin 可吊销/重签。**现状为明文落盘**（Tauri Store 是未加密 KV），失窃威胁模型下应升级 `tauri-plugin-secure-keystore`（Android Keystore AES-256-GCM / iOS Keychain，现成插件） |
 | 传输 | Release 仅 HTTPS 网关；Debug 明文仅本机联调；网关侧请求/响应头白名单（cookie、set-cookie 双向隔离） |
 | 路径 | TS 与 Rust 双侧相同的前缀包含校验，URL 规范化后复查（防 `..`/编码逃逸）；跨 namespace 代理按 BACKEND_OFFLINE 应答（不存在性盲） |
 | WebView | App bundle CSP 仅 `ipc:`（原生面不能任意出网）；研究台页面 CSP 由后端下发（`default-src 'self'`），协议源同源自洽；`set-cookie` 在 handler 层剥离 |
@@ -158,19 +158,27 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
 
 ## 8. 已知限制与技术债
 
-1. **body 头桥大小上限**未压测（WebView/网关头大小限制），超长写入回原生对话。
-2. **tauri Kotlin back 监听器残留**是上游问题（`hasListener` 跨页面恒真），我们的 activity 层
+1. **凭证明文落盘**：`zgd_` 设备凭证以明文 JSON 存于 Tauri Store（App 私有目录）。当前兜底是
+   凭证本身 scope 限定 + TTL + 可吊销（失窃后吊销即失效），但不防离线提取。升级路径现成：
+   `tauri-plugin-secure-keystore`（Tauri 2 插件，Android Keystore AES-256-GCM、iOS 走 Keychain，
+   兼容 iOS 复刻）。注意边界：Keystore 加密（不挂用户认证要求时）防的是静态提取，不防已 root
+   设备上以 App 身份运行；迁移需一次性从旧 Store 读出→写入加密存储→清除明文键，Rust 侧
+   `gateway_proxy.rs` 的读路径同步切换。
+2. **body 头桥大小上限**未压测（WebView/网关头大小限制），超长写入回原生对话。
+3. **tauri Kotlin back 监听器残留**是上游问题（`hasListener` 跨页面恒真），我们的 activity 层
    接管绕开了它，但监听器表随进出研究台次数缓慢增长（每条一个 channel 对象，量级无害）。
-3. `target="_blank"` 链接在 WebView 内可能无效（如方法页产物链接）。
-4. Release/HTTPS 构建未验证过（无签名密钥与 HTTPS 网关环境）；`is_debug_build` 的 https 强制
+4. `target="_blank"` 链接在 WebView 内可能无效（如方法页产物链接）。
+5. Release/HTTPS 构建未验证过（无签名密钥与 HTTPS 网关环境）；`is_debug_build` 的 https 强制
    逻辑已就位但未实战。
-5. 任务卡重复渲染（P3，10-15 起）；「＋」预建会话不回填标题（P3，10-16 发现）。
-6. 会话标题、通知（notifications.md 提案：前台 Gateway Topic + ntfy 后台）未实现。
+6. 任务卡重复渲染（P3，10-15 起）；「＋」预建会话不回填标题（P3，10-16 发现）。
+7. 通知投递未实现（notifications.md 提案：前台 Gateway Topic + ntfy 后台）。
 
 ## 9. 演进方向（按优先级建议）
 
-1. **通知投递**：按 notifications.md 提案落地前台 Topic + 后台 ntfy（设计已评审待确认）。
-2. **Release 构建 + HTTPS 网关联调**：补签名、验证 D6 的强制逻辑与真机证书链。
-3. **iOS 复刻**：两条数据面的 Rust 层（协议 handler、insets/BACK 接管）需按 WKWebView
-   约束重做，transport.ts/协议协议设计可复用。
-4. **P3 修缮**：任务卡去重、会话标题回填、`M2E_SHOTS` 缺省告警进 harness。
+1. **凭证加密升级**：引入 `tauri-plugin-secure-keystore` 替换明文 Tauri Store 存 `zgd_`
+   （含一次性迁移与 Rust 读路径切换）；改动小、插件现成，且 iOS 侧 Keychain 路径顺带铺好。
+2. **通知投递**：按 notifications.md 提案落地前台 Topic + 后台 ntfy（设计已评审待确认）。
+3. **Release 构建 + HTTPS 网关联调**：补签名、验证 D6 的强制逻辑与真机证书链。
+4. **iOS 复刻**：两条数据面的 Rust 层（协议 handler、insets/BACK 接管）需按 WKWebView
+   约束重做，transport.ts 与 URL 映射设计可复用。
+5. **P3 修缮**：任务卡去重、会话标题回填、`M2E_SHOTS` 缺省告警进 harness。
