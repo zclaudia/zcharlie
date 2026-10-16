@@ -46,6 +46,34 @@ function encodeUtf8Base64(text) {
   return btoa(binary);
 }
 
+// IPC 桥：安卓内嵌页经 Tauri IPC 调 App 的 Rust 代理命令——请求体不再挤进请求头，
+// 也不受拦截层"响应整包缓冲 / ~30s 截止"约束。返回 null = 桥不可用（非 App 环境
+// 或桥故障），调用方回退到头桥 fetch 路径。
+async function bridgeRequest(path, { method, payload, idempotencyKey: idemKey }) {
+  const invoke = globalThis.__TAURI_INTERNALS__?.invoke;
+  if (!invoke) return null;
+  try {
+    const result = await invoke("proxy_request", {
+      method,
+      path,
+      body: payload === undefined ? null : payload,
+      idempotencyKey: idemKey || null,
+    });
+    const responseHeaders = new Headers();
+    if (result.content_type) responseHeaders.set("content-type", result.content_type);
+    if (result.retry_after) responseHeaders.set("retry-after", result.retry_after);
+    return new Response(result.status === 204 ? null : result.body, {
+      status: result.status,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    if (error === "pairing_required") {
+      throw new ApiError(0, "设备配对已清除，请回到 App 重新配对。");
+    }
+    return null;
+  }
+}
+
 async function request(path, { method = "GET", body, idempotency = false, signal } = {}) {
   const headers = { ...FETCH_MARKER_HEADERS };
   let payload;
@@ -57,43 +85,48 @@ async function request(path, { method = "GET", body, idempotency = false, signal
       payload = JSON.stringify(body);
     }
   }
-  // Android 的 WebView 请求拦截层拿不到请求体（wry 恒以空 body 重建），内嵌模式把
-  // JSON 载荷编码进请求头，由 App 的 zcharlie:// 协议处理器解码后还原为真实请求体。
-  if (typeof payload === "string" && document.body?.dataset.embedded === "android") {
-    const encoded = encodeUtf8Base64(payload);
-    // 请求头有大小上限（网关/WebView 双侧），超出会被整体拒掉；给显式报错而不是
-    // 让长文静默失败。阈值 12000 字符 base64 ≈ 9KB 载荷，约为 3000 个汉字。
-    if (encoded.length > 12000) {
-      throw new Error(`内容过长（约 ${payload.length} 字），超过内嵌模式的请求头承载上限，请在桌面端发送。`);
-    }
-    headers["X-Zcharlie-Body"] = encoded;
-    payload = undefined;
-  }
-  if (idempotency && method !== "GET") {
-    headers["Idempotency-Key"] = idempotencyKey();
-  }
+  const embedded = typeof payload === "string" && document.body?.dataset.embedded === "android";
+  const idemKey = idempotency && method !== "GET" ? idempotencyKey() : null;
+  if (idemKey) headers["Idempotency-Key"] = idemKey;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  if (signal) signal.addEventListener("abort", () => controller.abort());
   let response;
-  try {
-    response = await fetch(path, {
-      method,
-      headers,
-      body: payload,
-      credentials: "same-origin",
-      signal: controller.signal,
-    });
-  } catch (error) {
-    // aborted 标记超时/中断（controller.abort()），供调用方区分真实网络失败；
-    // message 与 status 对所有页面保持不变。
-    throw new ApiError(0, "网络请求失败或超时，请重试。", {
-      retryable: true,
-      aborted: controller.signal.aborted,
-    });
-  } finally {
-    clearTimeout(timer);
+  if (embedded) {
+    response = await bridgeRequest(path, { method, payload, idempotencyKey: idemKey });
+  }
+  if (!response) {
+    // 头桥兜底：Android 的 WebView 请求拦截层拿不到请求体（wry 恒以空 body 重建），
+    // 把 JSON 载荷编码进请求头，由 App 的 zcharlie:// 协议处理器解码还原为真实请求体。
+    // 请求头有大小上限（网关/WebView 双侧），超限显式报错不静默失败
+    // （阈值 12000 字符 base64 ≈ 9KB 载荷，约 3000 个汉字；IPC 桥路径无此上限）。
+    if (embedded) {
+      const encoded = encodeUtf8Base64(payload);
+      if (encoded.length > 12000) {
+        throw new ApiError(0, `内容过长（约 ${payload.length} 字），超过内嵌模式的请求头承载上限，请在桌面端发送。`);
+      }
+      headers["X-Zcharlie-Body"] = encoded;
+      payload = undefined;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    if (signal) signal.addEventListener("abort", () => controller.abort());
+    try {
+      response = await fetch(path, {
+        method,
+        headers,
+        body: payload,
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+    } catch (error) {
+      // aborted 标记超时/中断（controller.abort()），供调用方区分真实网络失败；
+      // message 与 status 对所有页面保持不变。
+      throw new ApiError(0, "网络请求失败或超时，请重试。", {
+        retryable: true,
+        aborted: controller.signal.aborted,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   if (response.status === 401) {

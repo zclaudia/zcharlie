@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "embedded-console",
+  "description": "内嵌研究台（zcharlie.localhost）的 IPC 上下文：页面经 IPC 桥调用 Rust 代理命令",
+  "windows": ["main"],
+  "context": {
+    "remote": {
+      "urls": ["http://zcharlie.localhost", "http://zcharlie.localhost/*"]
+    }
+  },
+  "permissions": ["core:default"]
+}

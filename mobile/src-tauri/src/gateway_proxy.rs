@@ -77,6 +77,24 @@ struct Pairing {
     device_token: String,
 }
 
+/// bridge.rs 复用的配对上下文：handler 每请求现读现用，桥同样。
+pub(crate) struct PairingContext {
+    pub gateway_origin: String,
+    pub backend_id: String,
+    pub device_token: String,
+}
+
+/// 读配对并分解；任何一步失败都是"未配对/配对损坏"。
+pub(crate) fn load_pairing_context(app: &tauri::AppHandle) -> Result<PairingContext, &'static str> {
+    let pairing = read_pairing(app).ok_or("pairing_required")?;
+    let (gateway_origin, backend_id, _) = decompose_pairing(&pairing)?;
+    Ok(PairingContext {
+        gateway_origin,
+        backend_id,
+        device_token: pairing.device_token,
+    })
+}
+
 fn read_pairing(app: &tauri::AppHandle) -> Option<Pairing> {
     let response = tauri_plugin_secure_keystore::SecureKeystoreExt::secure_keystore(app)
         .get_item(tauri_plugin_secure_keystore::ItemKey {
@@ -225,7 +243,7 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
 
 type PairingParts = (String, String, String);
 
-fn decompose_pairing(pairing: &Pairing) -> Result<PairingParts, &'static str> {
+pub(crate) fn decompose_pairing(pairing: &Pairing) -> Result<PairingParts, &'static str> {
     let gateway_origin = clean_gateway_url(&pairing.gateway_url)?;
     if pairing.backend_id.is_empty() {
         return Err("配对数据缺少服务 ID。");
@@ -255,7 +273,7 @@ fn clean_gateway_url(raw: &str) -> Result<String, &'static str> {
 /// Mirrors the path rules of `proxyUrl` in src/transport.ts, then composes the
 /// gateway proxy URL and re-checks containment after URL normalization (so a
 /// crafted `..` cannot climb out of `/api/proxy/<id>/`).
-fn proxy_target(
+pub(crate) fn proxy_target(
     gateway_origin: &str,
     backend_id: &str,
     path_and_query: &str,
@@ -339,6 +357,10 @@ async fn build_outbound(
 async fn map_response(response: reqwest::Response) -> tauri::http::Response<Vec<u8>> {
     let status = response.status();
     let headers = response.headers().clone();
+    let is_html = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("text/html"));
     let body = response.bytes().await.unwrap_or_default();
     let builder = tauri::http::Response::builder()
         .status(tauri::http::StatusCode::from_u16(status.as_u16()).unwrap_or(tauri::http::StatusCode::BAD_GATEWAY));
@@ -346,6 +368,17 @@ async fn map_response(response: reqwest::Response) -> tauri::http::Response<Vec<
     for (name, value) in headers.iter() {
         let name = name.as_str();
         if DROP_HEADERS.contains(&name) {
+            continue;
+        }
+        // 内嵌研究台要走 Tauri IPC 桥，而后端 CSP 没有 connect-src（回落
+        // default-src 'self'），会拦掉 http://ipc.localhost 的 IPC 请求；
+        // 文档响应把 connect-src 追加进既有策略，其余响应原样透传。
+        if name == "content-security-policy" && is_html {
+            let original = value.to_str().unwrap_or_default();
+            builder = builder.header(
+                name,
+                format!("{original}; connect-src 'self' ipc: http://ipc.localhost"),
+            );
             continue;
         }
         builder = builder.header(name, value);
