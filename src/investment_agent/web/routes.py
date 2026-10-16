@@ -483,6 +483,9 @@ async def agent_page(request: Request) -> HTMLResponse:
 async def stock_page(request: Request, ticker: str) -> HTMLResponse:
     normalized = ticker.upper()
     if parse_a_share_ticker(normalized) is not None:
+        async with session_scope() as session:
+            listing = await ListingRepository(session).get_a_share_listing(normalized)
+            listing_id = listing.id if listing is not None else None
         return _render(
             "stock.html",
             request,
@@ -490,6 +493,7 @@ async def stock_page(request: Request, ticker: str) -> HTMLResponse:
             active_nav="watchlist",
             ticker=normalized,
             financial=None,
+            listing_id=listing_id,
         )
     code = _hk_us_code(normalized)
     if code is None:

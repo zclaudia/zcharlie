@@ -623,6 +623,8 @@ export const SETTINGS_SECTIONS = Object.freeze([
           "investor_agent_background_enabled",
           "disclosure_originals_enabled",
           "portfolio_ledger_enabled",
+          "account_fit_enabled",
+          "candidate_ranking_enabled",
           "portfolio_valuation_max_staleness_days",
         ],
       },
@@ -832,7 +834,7 @@ export function topicSummary(topic, read) {
   const value = (key) => read(key);
   switch (topic.id) {
     case "switches": {
-      const toggles = ["investor_agent_enabled", "investor_agent_background_enabled", "disclosure_originals_enabled", "portfolio_ledger_enabled"];
+      const toggles = ["investor_agent_enabled", "investor_agent_background_enabled", "disclosure_originals_enabled", "portfolio_ledger_enabled", "account_fit_enabled", "candidate_ranking_enabled"];
       const on = toggles.filter((key) => value(key) === true).length;
       return on === 0 ? "全部关闭" : `${on} 项开启`;
     }

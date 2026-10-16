@@ -57,6 +57,14 @@ INVESTOR_ERROR_STATUS: dict[str, int] = {
     "not_found": 404,
     "invalid_reference": 422,
     "writes_disabled": 403,
+    "snapshot_required": 422,
+    "account_capacity_exceeded": 422,
+    "holding_presence_unknown": 422,
+    "action_holding_mismatch": 422,
+    "historical_manifest_unavailable": 422,
+    "invalid_cursor": 422,
+    "source_capacity_exceeded": 422,
+    "unsupported_assessment_view": 422,
 }
 """Canonical ``InvestorError.detail.code`` -> HTTP status mapping."""
 

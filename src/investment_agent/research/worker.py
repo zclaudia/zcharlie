@@ -226,12 +226,16 @@ def default_job_handlers(
     """Every job kind a worker serves unless restricted with ``kinds``."""
 
     from investment_agent.agent.job import agent_job_handlers
+    from investment_agent.candidates.ranking_jobs import CandidateRankingHandler
     from investment_agent.industry_peers.jobs import PeerCollectHandler
+    from investment_agent.portfolio.suitability_jobs import AccountFitHandler
     from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
     from investment_agent.rules.zone_jobs import ZoneDetectionHandler
 
     return [
         *agent_job_handlers(settings),
+        AccountFitHandler(settings=settings),
+        CandidateRankingHandler(settings=settings),
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
         MaterialCollectionHandler(settings=settings),

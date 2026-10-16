@@ -138,6 +138,8 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "rule_draft",
         "ifind_verify",
         "portfolio_valuation",
+        "account_fit_evaluate",
+        "candidate_rank",
         "zone_detection",
         "industry_peer_collect",
     }

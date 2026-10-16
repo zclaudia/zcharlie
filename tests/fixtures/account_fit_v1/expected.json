@@ -1,0 +1,80 @@
+{
+  "fixture_kind": "synthetic_only",
+  "method": "account_fit_checks",
+  "method_version": 1,
+  "samples": {
+    "F01": {
+      "execution_price": "1500",
+      "valuation_price": "1500",
+      "quantity": "100",
+      "fixed_fee": "10",
+      "fee_rate": "0",
+      "nav_200000": {
+        "position_value": "150000",
+        "nav_after_fee": "199990",
+        "weight": "150000/199990",
+        "financial_status": "blocked"
+      },
+      "nav_2000000": {
+        "position_value": "150000",
+        "nav_after_fee": "1999990",
+        "weight": "150000/1999990",
+        "financial_status": "pass"
+      },
+      "ranking_bucket_when_not_blocked": "incomplete"
+    },
+    "F02": {
+      "execution_price": "1600",
+      "valuation_price": "1500",
+      "quantity": "100",
+      "fee": "10",
+      "nav_before": "1000000",
+      "cash_before": "500000",
+      "cash_after": "339990",
+      "nav_after": "989990",
+      "open": {"target_value": "150000", "target_weight": "150000/989990"},
+      "add": {"existing_quantity": "50", "target_value": "225000", "target_weight": "225000/989990"}
+    },
+    "F03": {
+      "known_zero_fee_is_distinct_from_unknown": true,
+      "unknown_fee_cash_weight_and_nav_remain_unknown": true,
+      "partial_missing_target_holding_does_not_imply_zero": true,
+      "nonpositive_nav_ratio": "unknown"
+    },
+    "F04": {
+      "cash": "100000",
+      "purpose_required_cash": "20000",
+      "mandate_minimum_cash": "50000",
+      "cash_reserved_once": "50000",
+      "hold_has_no_trade_assumptions": true
+    },
+    "F05": {
+      "unique_members": 2001,
+      "processed_cap": 2000,
+      "coverage": "partial",
+      "truncated_members_are_not_dropped": true,
+      "automatic_candidate_writes": false
+    },
+    "F06": {
+      "same_key_same_body": "replay_original_run_and_manifest",
+      "same_key_different_body": 409,
+      "lost_lease": "no_final_artifact_commit",
+      "writes_disabled": "failed:writes_disabled"
+    },
+    "F07": {
+      "supplemental_binding": "not_integrated",
+      "research_status": "not_assessed",
+      "company_alignment": "not_assessed",
+      "ranking_bucket": "incomplete"
+    },
+    "F08": {
+      "all_unknown": "successful_finite_result",
+      "empty_universe": "successful_count_zero_snapshot",
+      "database_error": "failed_not_partial",
+      "weight_ratio": "0.125",
+      "weight_display_percent": "12.5",
+      "no_snapshot_post": 422,
+      "no_valuation": "limited_unknown_checks"
+    }
+  }
+}

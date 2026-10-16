@@ -502,7 +502,7 @@ def test_watchlist_metadata_autofill_ignores_superseded_requests():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js"],
+    ["api.js", "app.js", "dom.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")

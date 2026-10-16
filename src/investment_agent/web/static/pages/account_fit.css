@@ -1,0 +1,42 @@
+.account-fit-card,
+.ranking-card { margin: 1rem 0; overflow-wrap: anywhere; scroll-margin-top: 5rem; }
+
+#account-fit-root,
+#candidate-ranking-root,
+.fit-result,
+.ranking-view,
+.ranking-entry { min-width: 0; overflow-wrap: anywhere; scroll-margin-top: 5rem; }
+
+.fit-form,
+.ranking-form { display: grid; gap: .85rem; }
+
+.fit-field { display: grid; gap: .35rem; max-width: 36rem; }
+.fit-field > span { font-size: .9rem; font-weight: 600; }
+.fit-field input,
+.fit-field select,
+.ranking-form input[type="number"],
+.ranking-form select { width: 100%; min-height: 2.6rem; }
+
+.fit-context-note,
+.fit-unknown-note { margin: .25rem 0; color: var(--text-muted, #68727d); }
+.fit-saved-result,
+.ranking-saved { margin-top: 1rem; border-top: 1px solid var(--border, #d9dee5); padding-top: .8rem; }
+.fit-operation-result,
+.ranking-results { margin-top: 1rem; }
+.fit-result pre,
+.ranking-entries pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.ranking-confirm { display: flex; align-items: flex-start; gap: .55rem; max-width: 42rem; }
+.ranking-confirm input { margin-top: .2rem; }
+.ranking-entries { display: grid; gap: .75rem; padding-left: 1.5rem; }
+.ranking-entry { display: grid; gap: .35rem; padding: .75rem; border: 1px solid var(--border, #d9dee5); border-radius: .5rem; }
+.ranking-incomplete { border-inline-start: .25rem solid #b7791f; }
+.ranking-blocked { border-inline-start: .25rem solid #b83232; }
+.ranking-pager { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.ranking-pager p { margin: .4rem 0; }
+
+@media (max-width: 600px) {
+  .fit-form,
+  .ranking-form { gap: .7rem; }
+  .ranking-pager { align-items: flex-start; flex-direction: column; }
+}

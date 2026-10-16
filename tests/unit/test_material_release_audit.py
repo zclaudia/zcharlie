@@ -32,7 +32,7 @@ async def _valid_package(tmp_path: Path) -> tuple[Path, Path]:
             await connection.run_sync(Base.metadata.create_all)
         with sqlite3.connect(database) as connection:
             connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-            connection.execute("INSERT INTO alembic_version VALUES ('049')")
+            connection.execute("INSERT INTO alembic_version VALUES ('050')")
         async with session_scope() as session:
             setup = await initialize_pilot(session, identities)
             report = await import_reviewed_annual(

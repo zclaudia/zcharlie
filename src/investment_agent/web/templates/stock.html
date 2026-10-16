@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/stock.css">{% if not financial %}
+{% block page_css %}<link rel="stylesheet" href="/app/static/pages/stock.css"><link rel="stylesheet" href="/app/static/pages/account_fit.css">{% if not financial %}
 <link rel="stylesheet" href="/app/static/industry_peers.css">{% endif %}{% endblock %}
 {% block mobile_back %}<a href="/app/watchlist">观察池</a>{% endblock %}
 {% block content %}
@@ -375,5 +375,11 @@
   <button type="button" class="btn btn-lg btn-primary" data-overlay-open="stock-run-drawer">{{ icon("runs", "ico", 18) }}运行研究</button>
 </div>
 <script type="module" src="/app/static/industry_peers.js"></script>
+{% endif %}
+{% if not financial %}
+<section class="card account-fit-card" id="account-fit-root" data-listing-id="{{ listing_id or '' }}" data-listing-ticker="{{ ticker }}" data-listing-name="{{ financial.company_name if financial else ticker }}">
+  <div class="card-head"><h2>账户适配检查</h2><span class="faint">生成带证据版本的适配记录，状态为 incomplete 或 blocked 时不会标成 ready</span></div>
+  <div id="account-fit-content" aria-live="polite"><p class="notice notice-loading">正在加载账户适配上下文…</p></div>
+</section>
 {% endif %}
 {% endblock %}

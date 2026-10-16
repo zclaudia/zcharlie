@@ -49,6 +49,8 @@ import { bootFinancials } from "./financials.js";
 import { WATCHLIST_REGIONS, bootWatchlist, loadBars } from "./watchlist.js";
 import { PORTFOLIO_REGIONS, bootPortfolio } from "./portfolio.js";
 import { PRICE_RANGES, mountPriceChart } from "./pricechart.js";
+import { bootAccountFit } from "./account_fit.js";
+import { bootCandidateRanking } from "./candidate_ranking.js";
 
 // ---- 共用小件 ---------------------------------------------------------
 
@@ -1731,6 +1733,8 @@ function boot() {
   bootAgentPortfolio();
   bootAgent();
   bootCandidates();
+  bootAccountFit();
+  bootCandidateRanking();
   bootTemplates();
   bootHealth();
   bootSettings();

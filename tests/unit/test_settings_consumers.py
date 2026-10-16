@@ -82,6 +82,13 @@ def _import_state(url: str) -> tuple[object, int, int, int]:
 def test_app_startup_import_is_idempotent(tmp_path, monkeypatch) -> None:
     from investment_agent.api.app import create_app
 
+    async def offline_directory(**kwargs):
+        # This verifies settings import, not the provider bootstrap. A real
+        # directory thread can outlive TestClient and hang an offline suite.
+        return None
+
+    monkeypatch.setattr("investment_agent.api.app.initialize_directory", offline_directory)
+
     url = f"sqlite+aiosqlite:///{tmp_path / 'app.db'}"
     monkeypatch.setenv("API_KEY", "secret")
     monkeypatch.setenv("LLM_TIER3_API_KEY", "x")

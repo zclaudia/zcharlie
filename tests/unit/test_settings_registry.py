@@ -37,6 +37,10 @@ def test_specs_are_unique_and_complete() -> None:
     # Every leaf of RuntimeSettings is registered, and nothing else.
     assert set(flatten(RuntimeSettings())) == set(SPECS_BY_KEY)
     assert unflatten(defaults()) == RuntimeSettings().model_dump(mode="json")
+    assert RuntimeSettings().account_fit_enabled is False
+    assert RuntimeSettings().candidate_ranking_enabled is False
+    assert SPECS_BY_KEY["account_fit_enabled"].apply == "next_job"
+    assert SPECS_BY_KEY["candidate_ranking_enabled"].apply == "next_job"
 
 
 def test_env_keys_mirror_settings_fields() -> None:

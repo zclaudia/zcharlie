@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/candidates.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="/app/static/pages/candidates.css"><link rel="stylesheet" href="/app/static/pages/account_fit.css">{% endblock %}
 {% block appbar_actions %}<button type="button" class="icon-btn" data-overlay-open="candidate-nominate-drawer" aria-controls="candidate-nominate-drawer" aria-label="手动提名">{{ icon("plus", "ico", 21) }}</button>{% endblock %}
 {% block content %}
 {% include "_funnel_seg.html" %}
+<section class="card ranking-card" id="candidate-ranking-root">
+  <div class="card-head"><h2>账户候选排序</h2><span class="faint">按冻结来源与账户输入生成版本化结果</span></div>
+  <div id="candidate-ranking-content" aria-live="polite"><p class="notice notice-loading">正在加载排序上下文…</p></div>
+</section>
 <header class="page-head">
   <h1>候选池</h1>
   <p>模板命中或手动提名的标的：先看入选理由，再审阅规则草稿。候选只表示研究优先级，不是操作建议。</p>
