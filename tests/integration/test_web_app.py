@@ -153,3 +153,48 @@ def test_api_key_never_appears_in_web_pages(api_client):
     ):
         response = api_client.get(path)
         assert "secret" not in response.text, path
+
+
+# ---- Android embedded mode (X-API-Key) -------------------------------------
+
+
+def _embedded(client, path="/app", key="secret"):
+    return client.get(path, headers={"X-API-Key": key}, follow_redirects=False)
+
+
+def test_embedded_api_key_renders_without_logout(api_client):
+    response = _embedded(api_client)
+    assert response.status_code == 200
+    html = response.text
+    assert 'data-embedded="android"' in html
+    assert "/app/logout" not in html
+    assert "设备与配对" in html
+    assert "tauri.localhost/#pairing" in html
+
+
+def test_cookie_session_stays_unembedded(api_client):
+    _login(api_client)
+    html = api_client.get("/app").text
+    assert "data-embedded" not in html
+    assert "/app/logout" in html
+
+
+def test_embedded_login_page_redirects_to_app(api_client):
+    response = _embedded(api_client, "/app/login")
+    assert response.status_code == 302
+    assert response.headers["location"] == "/app"
+
+
+def test_embedded_wrong_key_is_401_not_login_redirect(api_client):
+    response = _embedded(api_client, key="wrong")
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "ApiKey"
+    assert response.text == "Missing or invalid X-API-Key"
+
+
+def test_embedded_key_failures_throttled(api_client):
+    for _ in range(5):
+        assert _embedded(api_client, key="wrong").status_code == 401
+    blocked = _embedded(api_client)
+    assert blocked.status_code == 429
+    assert int(blocked.headers["retry-after"]) > 0

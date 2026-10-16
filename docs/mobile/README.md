@@ -44,3 +44,13 @@ Python 全量套件本次为 `2390 passed, 6 deselected, 1 failed`；唯一失�
 [e2e-report-2026-10-15.md](e2e-report-2026-10-15.md)。31 例：29 通过 / 0 失败 / 1 环境跳过。
 首次由 CDP 自动化 harness（[tools/mobile-e2e.sh](../../tools/mobile-e2e.sh)）完成全程，
 新增生命周期、设置写拒绝分支覆盖；发现任务卡片在 user/assistant 消息上重复渲染（P3）。
+
+## Web UI 内嵌模式（2026-10-16）
+
+`WebSessionMiddleware` 在会话 cookie 之外接受 `X-API-Key`（手机网关剥离 cookie 后注入的凭证）：
+
+- 有效 key：请求标记 `state["web_auth"]`，模板经 `is_embedded(request)` 渲染内嵌形态——`<body data-embedded="android">`；隐藏「退出登录」（App 走设备凭证，无会话可退）；「更多」弹层提供「设备与配对」，链接指向 `tauri.localhost/#pairing` 由 App 壳接管。带有效 key 访问 `/app/login` 直接 302 回 `/app`。
+- 错误 key：401 纯文本（header 客户端用不了登录表单，不给重定向），复用登录失败节流，超限 429。
+- 前端配套（`shell.js` / `agent.js`）：内嵌模式 AI 页改用轮询（安卓自定义协议传输会缓冲整响应，SSE 不流）；系统返回键先关覆盖层（`wireEmbeddedBack`，覆盖层打开时压一条历史记录）。
+
+验证：`tests/integration/test_web_app.py` 的 embedded 测试组（渲染 / 302 / 401 / 429 / cookie 会话不受影响）+ 临时真实服务的 curl 验证。返回键与轮询行为属 WebView 内交互，待后续接入手机 E2E harness 覆盖。

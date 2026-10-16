@@ -272,6 +272,38 @@ function wireTopbar() {
   update();
 }
 
+// ---- 安卓 App 内：系统返回键先关覆盖层 -------------------------------------------
+// 覆盖层打开时压一条历史记录，返回键（popstate）就只关覆盖层；从界面关闭时再 history.back()
+// 把这条记录消费掉。切换覆盖层（先关后开，同步发生）不消费；点弹层里的链接跳转也不消费。
+
+function wireEmbeddedBack() {
+  if (!document.body.dataset.embedded || !window.zcOverlay) return;
+  let pushed = false;
+  let leaving = false;
+  document.addEventListener("overlay:open", () => {
+    if (pushed) return;
+    pushed = true;
+    window.history.pushState({ zcOverlay: true }, "");
+  });
+  document.addEventListener("overlay:close", () => {
+    queueMicrotask(() => {
+      if (!pushed || leaving || window.zcOverlay.isOpen()) return;
+      pushed = false;
+      window.history.back();
+    });
+  });
+  window.addEventListener("popstate", () => {
+    if (!pushed) return;
+    pushed = false;
+    window.zcOverlay.close();
+  });
+  document.addEventListener("click", (event) => {
+    if (window.zcOverlay.isOpen() && event.target.closest?.(".is-open a[href]")) leaving = true;
+  }, true);
+  window.addEventListener("pageshow", () => { leaving = false; });
+}
+
 wirePalette();
 wireTopbar();
+wireEmbeddedBack();
 loadCounts();

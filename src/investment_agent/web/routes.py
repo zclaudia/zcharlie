@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -71,6 +71,18 @@ def _financial_timestamp(value: date | datetime | None) -> str:
 
 
 templates.env.filters["financial_timestamp"] = _financial_timestamp
+
+WEB_AUTH_API_KEY: Final = "api_key"
+
+
+def _is_embedded(request: Request) -> bool:
+    """True when the page was authenticated by ``X-API-Key`` (the app gateway)."""
+
+    web_auth: object = request.scope.get("state", {}).get("web_auth")
+    return web_auth == WEB_AUTH_API_KEY
+
+
+templates.env.globals["is_embedded"] = _is_embedded
 
 router = APIRouter(prefix="/app", tags=["web"], include_in_schema=False)
 
@@ -264,10 +276,15 @@ _SESSION_EXEMPT_PATHS = frozenset({"/app/login", "/app/logout"})
 
 
 class WebSessionMiddleware:
-    """Guard /app pages with the signed session cookie.
+    """Guard /app pages with the signed session cookie or ``X-API-Key``.
 
     Middleware (instead of a route dependency) because a dependency listed in
     ``dependencies=[...]`` cannot short-circuit with its own redirect response.
+
+    The API key path serves the Android app, whose gateway strips cookies and
+    injects ``X-API-Key``; such requests are marked ``state["web_auth"]`` so the
+    templates render embedded mode. A wrong key gets 401 (429 once throttled)
+    rather than the login redirect, since a header client cannot use the form.
     """
 
     def __init__(self, app: Any) -> None:
@@ -284,18 +301,61 @@ class WebSessionMiddleware:
             and not path.startswith("/app/static/")
             and path not in _SESSION_EXEMPT_PATHS
         )
-        if needs_auth:
+        is_login_page = path == "/app/login" and request.method in {"GET", "HEAD"}
+        if needs_auth or is_login_page:
             settings = get_bootstrap_settings()
             token = request.cookies.get(SESSION_COOKIE_NAME, "")
-            if not session_is_valid(token, settings):
-                response = _redirect_to_login()
-                await response(scope, receive, send)
+            if needs_auth and session_is_valid(token, settings):
+                await self.app(scope, receive, send)
+                return
+            presented = request.headers.get("x-api-key")
+            if presented is not None:
+                rejection = _api_key_rejection(request, presented, settings)
+                if rejection is not None:
+                    await rejection(scope, receive, send)
+                    return
+                if is_login_page:
+                    await _redirect_to_app()(scope, receive, send)
+                    return
+                scope.setdefault("state", {})["web_auth"] = WEB_AUTH_API_KEY
+                await self.app(scope, receive, send)
+                return
+            if needs_auth:
+                await _redirect_to_login()(scope, receive, send)
                 return
         await self.app(scope, receive, send)
 
 
+def _api_key_rejection(
+    request: Request, presented: str, settings: Settings
+) -> PlainTextResponse | None:
+    """None when ``presented`` is the API key; else a 429/401, recording the failure."""
+
+    throttle = get_auth_throttle(request)
+    client = client_key(request)
+    retry_after = throttle.retry_after(client)
+    if retry_after is not None:
+        return PlainTextResponse(
+            "Too many failed authentication attempts; try again later",
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(retry_after)},
+        )
+    if api_key_matches(presented, settings.api_key):
+        return None
+    throttle.record_failure(client)
+    return PlainTextResponse(
+        "Missing or invalid X-API-Key",
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        headers={"WWW-Authenticate": "ApiKey"},
+    )
+
+
 def _redirect_to_login() -> RedirectResponse:
     return RedirectResponse(url="/app/login", status_code=status.HTTP_302_FOUND)
+
+
+def _redirect_to_app() -> RedirectResponse:
+    return RedirectResponse(url="/app", status_code=status.HTTP_302_FOUND)
 
 
 def _render(

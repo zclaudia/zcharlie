@@ -26,6 +26,7 @@
 {%- set _back %}{% block mobile_back %}{% endblock %}{% endset -%}
 {%- set _has_back = (_back | trim | length) > 0 -%}
 {%- set _nav = NAV.get(active_nav | default("")) -%}
+{%- set _embedded = is_embedded(request) -%}
 {%- set _title = (page_title if (_has_back and page_title) else (_nav.label if _nav else (page_title | default("研究台")))) -%}
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -42,7 +43,7 @@
   {% block page_css %}{% endblock %}
   <script src="/app/static/nav.js"></script>
 </head>
-<body class="{{ 'has-back' if _has_back else 'has-tabbar' }}{% block body_class %}{% endblock %}">
+<body class="{{ 'has-back' if _has_back else 'has-tabbar' }}{% block body_class %}{% endblock %}"{% if _embedded %} data-embedded="android"{% endif %}>
 {% block body %}
   <a class="skip-link" href="#main">跳到主要内容</a>
   <div class="app-shell" id="app-shell">
@@ -88,9 +89,11 @@
         <a class="sb-status" href="/app/health" data-shell-status hidden>{{ icon("alert") }}<span class="sb-status-text"><b data-shell-status-title></b><span data-shell-status-sub></span></span></a>
         <div class="sb-user">
           <span class="sb-disclaimer">{{ disclaimer }}</span>
+          {%- if not _embedded %}
           <form method="post" action="/app/logout" class="logout-form">
             <button type="submit" class="icon-btn" aria-label="退出登录">{{ icon("logout") }}</button>
           </form>
+          {%- endif %}
         </div>
       </div>
     </aside>
@@ -161,7 +164,12 @@
     </div>
     <div class="list-group more-foot">
       <a class="list-row" href="/app/health" data-shell-status-row hidden><span class="list-row-icon warn">{{ icon("alert") }}</span><span class="list-row-main"><b data-shell-status-title></b><small data-shell-status-sub></small></span>{{ icon("chev", "ico list-row-chev", 18) }}</a>
+      {%- if _embedded %}
+      {#- Android app (API-key auth via the gateway): no session to end; pairing lives in the app shell. #}
+      <a class="list-row" href="http://tauri.localhost/#pairing"><span class="list-row-icon">{{ icon("settings") }}</span><span class="list-row-main"><b>设备与配对</b></span>{{ icon("chev", "ico list-row-chev", 18) }}</a>
+      {%- else %}
       <form method="post" action="/app/logout" class="logout-form"><button type="submit" class="list-row list-row-button danger"><span class="list-row-icon">{{ icon("logout") }}</span><span class="list-row-main"><b>退出登录</b></span></button></form>
+      {%- endif %}
     </div>
     <p class="more-disclaimer">{{ disclaimer }}：研究观点基于所列来源与当时材料，包含假设与不确定性；交易决定由你作出。</p>
   </aside>

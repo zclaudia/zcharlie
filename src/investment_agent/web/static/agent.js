@@ -558,7 +558,9 @@ export function bootAgent() {
       try { const result = await post(`${endpoint}/cancel`, {idempotency_key:crypto.randomUUID()}); if (alive()) { paint(result); if (TERMINAL.has(result.status)) await finish(); } }
       catch (error) { if (alive()) { showError(error); cancel.disabled = false; } }
     });
-    snapshot().then(() => { if (alive()) { if (TERMINAL.has(task.status)) stop(); else connect(); } }).catch(error => { if (alive()) { showError(error); timer = setTimeout(poll,2000); } });
+    // The Android app's custom-protocol transport buffers whole responses, so SSE never streams there.
+    const live = document.body.dataset.embedded ? poll : connect;
+    snapshot().then(() => { if (alive()) { if (TERMINAL.has(task.status)) stop(); else live(); } }).catch(error => { if (alive()) { showError(error); timer = setTimeout(poll,2000); } });
   }
 
   // ---- 观点更新条 ---------------------------------------------------------------
