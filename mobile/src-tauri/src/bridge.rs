@@ -373,6 +373,29 @@ fn run_event_stream(app: tauri::AppHandle, task_id: String, mut cursor: i64, on_
     }
 }
 
+
+/// 根部 BACK 的原生最小化：AppPlugin 管线下 Kotlin 已消费 BACK，JS 无法自行退栈，
+/// 经桥在 WebView 线程调 activity.moveTaskToBack（jni_handle().exec 与 tauri 自家
+/// zoomBy 同一条通路）。desktop 下无操作。
+#[tauri::command]
+pub fn move_task_to_back(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        let window = app.get_webview_window("main").ok_or("no_webview")?;
+        window.with_webview(|platform| {
+            platform.jni_handle().exec(
+                |env: &mut jni::JNIEnv, activity: &jni::objects::JObject, _webview: &jni::objects::JObject| {
+                    let _ = env.call_method(activity, "moveTaskToBack", "(Z)Z", &[jni::objects::JValue::from(true)]);
+                },
+            );
+        });
+    }
+    #[cfg(not(target_os = "android"))]
+    let _ = &app;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn stream_task_events(
     app: tauri::AppHandle,

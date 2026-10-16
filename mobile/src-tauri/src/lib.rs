@@ -15,6 +15,7 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_secure_keystore::init())
         .invoke_handler(tauri::generate_handler![
+            bridge::move_task_to_back,
             bridge::proxy_request,
             bridge::stream_task_events,
             is_debug_build,

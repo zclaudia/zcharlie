@@ -310,7 +310,31 @@ document.addEventListener("overlay:back", () => {
   if (window.zcOverlay?.isOpen()) window.zcOverlay.close();
 });
 
+// ---- 安卓 App 内：系统返回键（AppPlugin 管线）---------------------------------
+// MainActivity 有两条 BACK 管线：activity 层直接分流（注入按键）与 dispatcher 上的
+// AppPlugin 回调（手势/导航条——有 JS 监听器时 trigger 给我们，消费掉）。这里注册
+// back-button 监听承接后者：关弹层 → 研究台内逐级返回 → 根部请原生最小化
+// （AppPlugin 已消费 BACK，JS 无法自行退栈）。与 wireEmbeddedBack 的历史条目语义一致。
+function wireAndroidBack() {
+  if (document.body.dataset.embedded !== "android") return;
+  const internals = window.__TAURI_INTERNALS__;
+  if (!internals?.invoke || !internals.transformCallback) return;
+  const branch = () => {
+    if (window.zcOverlay && window.zcOverlay.isOpen()) { window.zcOverlay.close(); return; }
+    if (location.pathname !== "/app" && history.length > 1) { history.back(); return; }
+    internals.invoke("move_task_to_back").catch(() => {});
+  };
+  try {
+    const callback = internals.transformCallback(branch);
+    internals.invoke("plugin:app|register_listener", {
+      event: "back-button",
+      handler: "__CHANNEL__:" + callback,
+    }).catch(() => {});
+  } catch { /* 桥不可用时 BACK 走 activity 层按键管线 */ }
+}
+
 wirePalette();
 wireTopbar();
 wireEmbeddedBack();
+wireAndroidBack();
 loadCounts();
