@@ -16,6 +16,7 @@ pub fn run() {
         .plugin(tauri_plugin_secure_keystore::init())
         .invoke_handler(tauri::generate_handler![
             bridge::proxy_request,
+            bridge::stream_task_events,
             is_debug_build,
         ])
         .register_asynchronous_uri_scheme_protocol("zcharlie", gateway_proxy::handle)

@@ -321,7 +321,7 @@ fn decode_base64(encoded: &str) -> Option<Vec<u8>> {
     base64::engine::general_purpose::STANDARD.decode(encoded.trim()).ok()
 }
 
-fn percent_encode_id(value: &str) -> String {
+pub(crate) fn percent_encode_id(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
         match byte {

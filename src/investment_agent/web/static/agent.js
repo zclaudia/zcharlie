@@ -540,6 +540,7 @@ export function bootAgent() {
     }
     async function poll() {
       if (!alive()) return;
+      root.dataset.transport = "poll";
       let wait = 2000;
       try {
         const data = await get(`${endpoint}/events?transport=poll&after_event_id=${cursor}`);
@@ -585,14 +586,53 @@ export function bootAgent() {
       failures++;
       if (alive()) { if (failures >= 3) { notice("实时连接未恢复，已切换为轮询刷新；后台任务继续，不会取消。"); poll(); } else timer = setTimeout(connect, 500 * failures); }
     }
+    // Android 内嵌：IPC 事件流（Rust 侧读 SSE 经 Channel 逐事件推送），返回值
+    // 决定后续——"expired" 重读快照；{rate} 限流退避后重连；"degrade" 落轮询兜底。
+    // 终态不走这里：task_state 事件由 event() 既有逻辑处理并 finish。
+    async function bridgeLive() {
+      const internals = window.__TAURI_INTERNALS__;
+      if (!internals?.invoke || !internals.transformCallback) return "degrade";
+      root.dataset.transport = "stream";
+      return new Promise((resolve) => {
+        let settled = false;
+        const done = (value) => { if (!settled) { settled = true; resolve(value); } };
+        const callback = internals.transformCallback((raw) => {
+          // Channel 回调拿到的是已反序列化的对象（Rust 侧 send 的是 JSON 文本）。
+          let message;
+          try { message = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { return; }
+          if (message.kind === "event") {
+            try { event(JSON.parse(message.data)); } catch { /* 单条坏事件不中断流 */ }
+          } else if (message.kind === "expired") done("expired");
+          else if (message.kind === "rate_limited") done({ rate: Number(message.retry_after) || 10 });
+          else done("degrade");
+        });
+        internals.invoke("stream_task_events", { taskId, cursor, onEvent: "__CHANNEL__:" + callback }).catch(() => done("degrade"));
+      });
+    }
+    async function live() {
+      while (alive()) {
+        const how = await bridgeLive();
+        if (!alive()) return;
+        if (how === "expired") { await snapshot(); continue; }
+        if (how && typeof how === "object") {
+          notice(`请求过于频繁，${how.rate} 秒后自动恢复实时刷新。后台任务仍保留。`);
+          await new Promise((resolve) => setTimeout(resolve, how.rate * 1000));
+          continue;
+        }
+        notice("实时连接未恢复，已切换为轮询刷新；后台任务继续，不会取消。");
+        root.dataset.transport = "poll";
+        poll();
+        return;
+      }
+    }
     cancel.addEventListener("click", async () => {
       if (cancel.disabled) return; cancel.disabled = true;
       try { const result = await post(`${endpoint}/cancel`, {idempotency_key:crypto.randomUUID()}); if (alive()) { paint(result); if (TERMINAL.has(result.status)) await finish(); } }
       catch (error) { if (alive()) { showError(error); cancel.disabled = false; } }
     });
-    // The Android app's custom-protocol transport buffers whole responses, so SSE never streams there.
-    const live = document.body.dataset.embedded ? poll : connect;
-    snapshot().then(() => { if (alive()) { if (TERMINAL.has(task.status)) stop(); else live(); } }).catch(error => { if (alive()) { showError(error); timer = setTimeout(poll,2000); } });
+    // 内嵌模式走 IPC 事件流（轮询兜底）；浏览器路径 SSE 照旧。
+    const startLive = document.body.dataset.embedded ? live : connect;
+    snapshot().then(() => { if (alive()) { if (TERMINAL.has(task.status)) stop(); else startLive(); } }).catch(error => { if (alive()) { showError(error); timer = setTimeout(poll,2000); } });
   }
 
   // ---- 观点更新条 ---------------------------------------------------------------
