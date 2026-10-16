@@ -9,7 +9,9 @@
 //! 20s), and wry drops 3xx responses entirely, so redirects from the backend
 //! are chased here and re-prefixed onto the gateway proxy path.
 
-use std::sync::OnceLock;
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
@@ -18,6 +20,24 @@ use serde::Deserialize;
 const STORE_KEY: &str = "gateway-pairing";
 const MAX_REDIRECTS: usize = 5;
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// 静态资源缓存策略：WebView 每次导航都会重新请求 `/app/static`，而安卓
+/// WebView 对拦截（shouldInterceptRequest）响应不走 HTTP 缓存，这些请求会
+/// 全部落到网关按 IP 的限流桶里。协议 handler 维护一个进程内小缓存：
+/// 仅缓存 `/app/static/` 下未跟随重定向的 GET 200，TTL 取后端 `Cache-Control`
+/// 的 `max-age`（缺省 10 分钟，上限 1 天，`no-store/no-cache/private` 不缓存）。
+const STATIC_PREFIX: &str = "/app/static/";
+const DEFAULT_STATIC_TTL: Duration = Duration::from_secs(600);
+const MAX_STATIC_TTL: Duration = Duration::from_secs(86_400);
+const MAX_STATIC_ENTRIES: usize = 64;
+const MAX_STATIC_BODY_BYTES: usize = 4 * 1024 * 1024;
+
+type StaticCache = HashMap<String, (Instant, tauri::http::Response<Vec<u8>>)>;
+
+fn static_cache() -> &'static Mutex<StaticCache> {
+    static CACHE: OnceLock<Mutex<StaticCache>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
 
 /// WebView request headers forwarded to the gateway. `authorization` and
 /// `cookie` are deliberately excluded: the device credential is injected per
@@ -121,6 +141,16 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
 
     let mut method = parts.method;
     let mut payload = body;
+
+    let cache_key = url.to_string();
+    let cacheable = method == tauri::http::Method::GET && is_cacheable_path(&path_and_query);
+    if cacheable {
+        let mut cache = static_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(cached) = cache_lookup(&mut cache, &cache_key) {
+            return cached;
+        }
+    }
+
     if method != tauri::http::Method::GET && method != tauri::http::Method::HEAD {
         // The Android WebView drops request bodies on intercepted requests; the
         // embedded web UI moves the JSON payload into this header (api.js).
@@ -137,6 +167,7 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
             }
         }
     }
+    let mut first_leg = true;
     for _ in 0..=MAX_REDIRECTS {
         let outbound =
             build_outbound(&method, &url, &parts.headers, &pairing.device_token, payload.clone()).await;
@@ -165,6 +196,7 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
                 );
             };
             url = next;
+            first_leg = false;
             // 301/302/303 downgrade to GET; 307/308 keep method and body.
             if matches!(
                 status,
@@ -177,7 +209,12 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
             }
             continue;
         }
-        return map_response(response).await;
+        let mapped = map_response(response).await;
+        if cacheable && first_leg {
+            let mut cache = static_cache().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            cache_store(&mut cache, &cache_key, &mapped, static_ttl(mapped.headers()));
+        }
+        return mapped;
     }
     text_response(
         tauri::http::StatusCode::BAD_GATEWAY,
@@ -322,6 +359,62 @@ async fn map_response(response: reqwest::Response) -> tauri::http::Response<Vec<
     })
 }
 
+fn is_cacheable_path(path_and_query: &str) -> bool {
+    let path = path_and_query.split('?').next().unwrap_or("");
+    path.starts_with(STATIC_PREFIX)
+}
+
+/// 响应头 → 缓存 TTL。`no-store`/`no-cache`/`private` 直接不缓存；否则取
+/// `max-age` 并夹到上限，缺省 `DEFAULT_STATIC_TTL`。
+fn static_ttl(headers: &tauri::http::HeaderMap) -> Duration {
+    let mut ttl = DEFAULT_STATIC_TTL;
+    for value in headers.get_all("cache-control") {
+        let Ok(value) = value.to_str() else { continue };
+        for directive in value.split(',') {
+            let directive = directive.trim().to_ascii_lowercase();
+            if directive == "no-store" || directive == "no-cache" || directive == "private" {
+                return Duration::ZERO;
+            }
+            if let Some(age) = directive.strip_prefix("max-age=") {
+                if let Ok(age) = age.trim().parse::<u64>() {
+                    ttl = Duration::from_secs(age).min(MAX_STATIC_TTL);
+                }
+            }
+        }
+    }
+    ttl
+}
+
+fn cache_lookup(cache: &mut StaticCache, key: &str) -> Option<tauri::http::Response<Vec<u8>>> {
+    let now = Instant::now();
+    if let Some((expires_at, response)) = cache.get(key) {
+        if now < *expires_at {
+            return Some(clone_response(response));
+        }
+    }
+    cache.remove(key);
+    None
+}
+
+fn cache_store(cache: &mut StaticCache, key: &str, response: &tauri::http::Response<Vec<u8>>, ttl: Duration) {
+    if ttl.is_zero() || response.body().len() > MAX_STATIC_BODY_BYTES {
+        return;
+    }
+    if !cache.contains_key(key) && cache.len() >= MAX_STATIC_ENTRIES {
+        cache.clear();
+    }
+    cache.insert(key.to_string(), (Instant::now() + ttl, clone_response(response)));
+}
+
+fn clone_response(response: &tauri::http::Response<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    let mut clone = tauri::http::Response::builder()
+        .status(response.status())
+        .body(response.body().clone())
+        .expect("cloned response keeps valid status");
+    *clone.headers_mut() = response.headers().clone();
+    clone
+}
+
 fn text_response(
     status: tauri::http::StatusCode,
     content_type: &str,
@@ -428,5 +521,75 @@ mod tests {
         assert_eq!(queried, format!("{GW}/api/proxy/{ID}/app?next=%2Fapp%2Fruns"));
         let fragment = rewrite_location(&current, &base, "/app#main").unwrap().to_string();
         assert_eq!(fragment, format!("{GW}/api/proxy/{ID}/app"));
+    }
+
+    fn cache_control_headers(value: &str) -> tauri::http::HeaderMap {
+        tauri::http::Response::builder()
+            .header("cache-control", value)
+            .body(Vec::<u8>::new())
+            .unwrap()
+            .headers()
+            .clone()
+    }
+
+    #[test]
+    fn static_ttl_honors_cache_control() {
+        assert_eq!(static_ttl(&tauri::http::HeaderMap::new()), DEFAULT_STATIC_TTL);
+        assert_eq!(static_ttl(&cache_control_headers("public, max-age=3600")), Duration::from_secs(3600));
+        assert_eq!(static_ttl(&cache_control_headers("MAX-AGE=999999")), MAX_STATIC_TTL);
+        assert_eq!(static_ttl(&cache_control_headers("no-store")), Duration::ZERO);
+        assert_eq!(static_ttl(&cache_control_headers("private, max-age=60")), Duration::ZERO);
+        assert_eq!(static_ttl(&cache_control_headers("no-cache")), Duration::ZERO);
+    }
+
+    #[test]
+    fn cacheable_path_requires_static_prefix() {
+        assert!(is_cacheable_path("/app/static/app.css"));
+        assert!(is_cacheable_path("/app/static/app.css?v=2"));
+        assert!(is_cacheable_path("/app/static/brand/icon-64.png"));
+        assert!(!is_cacheable_path("/app"));
+        assert!(!is_cacheable_path("/app/staticx/app.css"));
+        assert!(!is_cacheable_path("/agent/tasks/abc/events"));
+    }
+
+    #[test]
+    fn static_cache_roundtrips_and_expires() {
+        let mut cache = StaticCache::new();
+        let response = tauri::http::Response::builder()
+            .status(200)
+            .header("content-type", "text/css")
+            .body(b"body{color:red}".to_vec())
+            .unwrap();
+
+        assert!(cache_lookup(&mut cache, "app.css").is_none());
+        cache_store(&mut cache, "app.css", &response, DEFAULT_STATIC_TTL);
+        let cached = cache_lookup(&mut cache, "app.css").expect("fresh entry survives");
+        assert_eq!(cached.status(), 200);
+        assert_eq!(cached.headers().get("content-type").unwrap(), "text/css");
+        assert_eq!(cached.body(), b"body{color:red}");
+        // 命中不消费条目：二次命中仍然可用。
+        assert!(cache_lookup(&mut cache, "app.css").is_some());
+
+        // TTL 为 0（no-store 等）不落缓存；过期条目在查找时清除。
+        cache_store(&mut cache, "volatile", &response, Duration::ZERO);
+        assert!(cache_lookup(&mut cache, "volatile").is_none());
+        cache.insert("stale".to_string(), (Instant::now() - Duration::from_secs(1), response));
+        assert!(cache_lookup(&mut cache, "stale").is_none());
+        assert!(!cache.contains_key("stale"));
+    }
+
+    #[test]
+    fn static_cache_is_bounded() {
+        let mut cache = StaticCache::new();
+        let response: tauri::http::Response<Vec<u8>> =
+            tauri::http::Response::builder().body(Vec::new()).unwrap();
+        for i in 0..(MAX_STATIC_ENTRIES * 2) {
+            cache_store(&mut cache, &format!("asset-{i}"), &response, DEFAULT_STATIC_TTL);
+        }
+        assert!(cache.len() <= MAX_STATIC_ENTRIES);
+        // 超大响应不进缓存。
+        let huge = tauri::http::Response::builder().body(vec![0u8; MAX_STATIC_BODY_BYTES + 1]).unwrap();
+        cache_store(&mut cache, "huge", &huge, DEFAULT_STATIC_TTL);
+        assert!(!cache.contains_key("huge"));
     }
 }

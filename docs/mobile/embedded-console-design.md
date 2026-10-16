@@ -39,6 +39,7 @@
 | 拦截协议响应**整包缓冲** | 内嵌 AI 页已按设计用 `transport=poll` 轮询（agent.js），实测 24 次轮询推进任务至终态 |
 | Android scheme 请求 **~30s 硬截止** | handler 客户端总超时 20s；网关不可达返回 502 文本 |
 | JS 侧导航**只能用 workaround 形式** `http://zcharlie.localhost/...`（`zcharlie://` 不会被拦截） | 入口按钮硬编码该形式并注释原因 |
+| 拦截响应**不走 WebView HTTP 缓存**（shouldInterceptRequest 每次都问 handler） | handler 维护进程内静态资源缓存：仅 `/app/static/` 下未跟随重定向的 GET 200，TTL 取后端 `Cache-Control` 的 `max-age`（缺省 600s，上限 1 天，`no-store/no-cache/private` 不缓存），上限 64 条 / 单条 4MB。否则每次导航 ~10 笔静态请求全部计入网关按 IP 的限流桶（2026-10-16 实测触顶 200/min） |
 
 ## 已知限制（v1）
 
@@ -51,7 +52,8 @@
 
 ## 验证
 
-- Rust 单测 6 个（路径映射/逃逸拒绝/Location 改写/凭证清理/base64 往返），`cargo test` 绿。
+- Rust 单测 10 个（路径映射/逃逸拒绝/Location 改写/凭证清理/base64 往返 + 静态缓存
+  TTL/路径判定/命中过期/容量上限），`cargo test` 绿。
 - 第五轮真机 E2E（2026-10-16，`docs/mobile/e2e-report-2026-10-16.md` §第五轮）：G6 内嵌页渲染、
   G7 概览真实数据、G8 配对行回程 + `#pairing` 落设置页、G9 返回键关覆盖层/回 App、
   G10 内嵌 AI 页发消息 → 轮询 → 已完成，全部通过；F1 凭证零泄漏、F2 出厂态收尾。

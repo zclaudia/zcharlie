@@ -131,6 +131,17 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
 `/app/login` 302 回 `/app`。前端联动：`agent.js` 内嵌强制 `transport=poll`；CSP（`default-src
 'self'`）在协议源上同源自洽，无改动。
 
+### 4.5 网关限流预算（2026-10-16 实测收口）
+
+网关对已认证代理请求按客户端 IP 限流（固定窗口 60s，默认 600，`GATEWAY_PROXY_RATE_LIMIT`
+可配；429 带 `Retry-After`，见 zclaudia-gateway 05b6986）。内嵌研究台的常规开销很容易触顶：
+一次页面导航 ~15 笔（HTML + ~10 静态资源 + 页面 API），AI 任务轮询 30 笔/分钟，App 探活
+常驻。App 侧三项对策：handler 进程内缓存 `/app/static/` GET 200（TTL 取后端
+`Cache-Control`，缺省 600s——Android WebView 对拦截响应不走 HTTP 缓存，这是唯一保准生效的
+缓存层）；探活 8s → 30s；轮询/探活识别 429（`rate_limited`）退避 10s。组合后活跃使用
+峰值 ~30–60 笔/分钟，余量充足。**注意**：将来网关置于 Caddy 之后必须开 `trustProxy`，否则
+`req.ip` 是反代地址，所有设备共用一个桶。
+
 ## 5. 安全模型汇总
 
 | 层 | 措施 |
@@ -148,8 +159,8 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
   manifest 注入明文许可；`gen/android` 不入库。
 - 工具链三件套必须显式 export：`ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`、
   `NDK_HOME=$ANDROID_HOME/ndk/28.0.13004108`、`JAVA_HOME=$(/usr/libexec/java_home -v 17)`。
-- 门禁：`pnpm typecheck`（0 错）+ `pnpm test`（vitest 6：传输层单测）+ `cargo test`
-  （gateway_proxy 纯函数 6 测）+ 仓库 Python 全量（api.js 改动经浏览器契约测试覆盖）。
+- 门禁：`pnpm typecheck`（0 错）+ `pnpm test`（vitest 11：传输层单测）+ `cargo test`
+  （gateway_proxy 纯函数 10 测）+ 仓库 Python 全量（api.js 改动经浏览器契约测试覆盖）。
 - 运行依赖：手机 ↔ 网关 ↔ 后端；后端 research worker 必须与 API 同库成套运行（否则任务停排队）。
 
 ## 7. 测试与验收体系
@@ -171,8 +182,9 @@ BACK 被吞）；拦截协议文档的 pushState 条目被折叠出原生后退�
 3. **tauri Kotlin back 监听器残留**是上游问题（`hasListener` 跨页面恒真），我们的 activity 层
    接管绕开了它，但监听器表随进出研究台次数缓慢增长（每条一个 channel 对象，量级无害）。
 4. `target="_blank"` 链接在 WebView 内可能无效（如方法页产物链接）。
-5. Release/HTTPS 构建未验证过（无签名密钥与 HTTPS 网关环境）；`is_debug_build` 的 https 强制
-   逻辑已就位但未实战。
+5. Release 构建与签名已就绪（2026-10-16：keystore 在 `~/.android/`、R8 keep 规则、
+   `validateGatewayUrl` 的 HTTPS 强制已实战——Release 拒 HTTP 网关）；剩余 HTTPS 网关侧
+   （Caddy + DNS-01）待搭，搭好后真机配对验证证书链。
 6. 任务卡重复渲染（P3，10-15 起）；「＋」预建会话不回填标题（P3，10-16 发现）。
 7. 通知投递未实现（notifications.md 提案：前台 Gateway Topic + ntfy 后台）。
 
