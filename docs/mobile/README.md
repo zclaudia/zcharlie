@@ -1,5 +1,7 @@
 # Android 客户端本地验收
 
+> 技术路线综述（架构/决策/安全/约束）见 [technical-approach.md](technical-approach.md)；本目录其余文档为验收记录与专项设计。
+
 2026-10-12 在 `hermes_api34`（Android 14 / API 34，arm64）模拟器上完成端到端联调。联调只使用 `/Users/zhvala/SourceCode/zclaudia-gateway/dist` 启动的本地临时网关、临时 API 数据库和临时签发的设备凭证；没有连接生产网关或使用真实凭证。模拟器通过 `10.0.2.2` 访问宿主机网关。
 
 ## 场景记录
