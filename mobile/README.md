@@ -62,11 +62,11 @@ pnpm build && ./scripts/tauri.sh android build --apk --target aarch64
 # 产物: src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 ```
 
-签名配置在 `gen/android/app/build.gradle.kts`（生成工程，不入库），从
-`gen/android/keystore.properties` 读取；keystore 本体在仓库外 `~/keystores/zcharlie-release.keystore`。
-两者丢失即无法再对同一 applicationId 发升级包（Android 要求同签名），所以
-keystore、密码（keystore.properties）务必在密码管理器留一份备份。
-`gen/android` 被删后重建时：重新生成 keystore.properties + 把签名块和
+签名配置在 `gen/android/app/build.gradle.kts`（生成工程，不入库），keystore 与
+密码属性文件都在用户目录 `~/.android/`（`zcharlie-release.keystore` +
+`zcharlie-release.properties`，权限 600，仓库与生成工程内均无秘密）。
+两者丢失即无法再对同一 applicationId 发升级包（Android 要求同签名），务必在
+密码管理器留一份备份。`gen/android` 被删后重建时：把签名块和
 `-keep class io.github.abdullah5603.securekeystore.**`（R8 反射注册的插件类）
 加回 `app/build.gradle.kts` / `app/proguard-rules.pro`。
 
