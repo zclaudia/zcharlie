@@ -141,16 +141,77 @@ export async function request<T = unknown>(
   return responseData<T>(response);
 }
 
+export type ReachableBackend = {
+  backendId: string;
+  name: string;
+  online: boolean;
+  lastSeenAt: number;
+};
+
+/**
+ * Gateway-level request (not proxied to a backend): used while pairing, when
+ * no backend has been picked yet.
+ */
+async function gatewayRootRequest(
+  gatewayUrl: string,
+  deviceToken: string,
+  path: string,
+  fetchImpl?: FetchLike,
+): Promise<unknown> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const fetcher = fetchImpl ?? nativeFetch;
+  try {
+    const response = await fetcher(`${gatewayUrl}${path}`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${deviceToken}` },
+      credentials: "omit",
+      signal: controller.signal,
+      connectTimeout: REQUEST_TIMEOUT_MS,
+    });
+    if (!response.ok) classifyStatus(response.status);
+    return await response.json();
+  } catch (error) {
+    if (error instanceof GatewayError) throw error;
+    throw new GatewayError(0, "网关不可达或请求超时，请检查地址与网络。", "gateway_unreachable");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Backends the device credential can reach, per the gateway's registry. */
+export async function discoverBackends(
+  input: { gatewayUrl: string; deviceToken: string },
+  fetchImpl?: FetchLike,
+): Promise<ReachableBackend[]> {
+  const gatewayUrl = await validateGatewayUrl(input.gatewayUrl);
+  const body = await gatewayRootRequest(gatewayUrl, input.deviceToken, "/api/discovery/backends", fetchImpl) as {
+    success?: boolean;
+    data?: { items?: ReachableBackend[] };
+  };
+  return body.data?.items ?? [];
+}
+
 export async function pairDevice(
   input: { gatewayUrl: string; backendId: string; deviceToken: string },
   fetchImpl?: FetchLike,
 ): Promise<Pairing> {
   const gatewayUrl = await validateGatewayUrl(input.gatewayUrl);
-  const backendId = input.backendId.trim();
+  let backendId = input.backendId.trim();
   const deviceToken = input.deviceToken.trim();
-  if (!backendId) throw new GatewayError(0, "请输入服务 ID。", "invalid_backend_id");
   if (!deviceToken.startsWith("zgd_") || deviceToken.length < 8 || /\s/.test(deviceToken)) {
     throw new GatewayError(0, "设备凭证格式无效，应以 zgd_ 开头。", "invalid_device_token");
+  }
+  if (!backendId) {
+    // 网关接入架构里 backend id 是可选的：凭证未绑后端时由客户端发现并选定。
+    const reachable = (await discoverBackends({ gatewayUrl, deviceToken }, fetchImpl)).filter((b) => b.online);
+    if (reachable.length === 0) {
+      throw new GatewayError(0, "网关可达，但该凭证范围内没有在线后端。", "no_backend_online");
+    }
+    if (reachable.length > 1) {
+      const ids = reachable.map((b) => b.backendId).join("、");
+      throw new GatewayError(0, `该凭证可达多个在线后端，请在服务 ID 里填一个：${ids}`, "ambiguous_backend");
+    }
+    backendId = reachable[0].backendId;
   }
   const pairing = { gatewayUrl, backendId, deviceToken };
   const response = await nativeRequest(pairing, "/healthz", { fetchImpl });

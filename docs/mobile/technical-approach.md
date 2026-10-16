@@ -58,9 +58,13 @@ API 全量清单见 [api-audit.md](api-audit.md)，协议 handler 设计见
 
 ### 3.1 配对（PairForm → `pairDevice`）
 
-输入三元组：网关地址（仅裸 origin，http/https、无 userinfo、无路径）、服务 ID（网关注册表里的
-backend UUID）、设备凭证（`zgd_` 前缀校验）。验证 = 经代理链打一次 `GET /healthz`（401/403/502
-分类报错），通过后 `savePairing` 落 Store。**Release 构建在此拒绝 http 网关**。
+输入三元组：网关地址（仅裸 origin，http/https、无 userinfo、无路径）、服务 ID（**可选**）、
+设备凭证（`zgd_` 前缀校验）。服务 ID 留空时调网关 `GET /api/discovery/backends`（设备凭证
+Bearer，返回可达后端精简列表）自动发现：恰一个在线后端自动选定；零个报「范围内没有在线后端」；
+多个报错并列出让用户填。验证 = 经代理链打一次 `GET /healthz`（401/403/502 分类报错），通过后
+`savePairing` 落 Store（落盘的必是已解析的具体 backendId，Rust 侧协议 handler 因此不变）。
+**Release 构建在此拒绝 http 网关**。依赖网关 ≥ db24f82（discovery 端点）；生产网关升级部署后
+手机侧即可用空服务 ID 配对。
 
 ### 3.2 传输（transport.ts，全部请求的唯一出口）
 

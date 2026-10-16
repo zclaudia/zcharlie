@@ -22,6 +22,76 @@ describe("mobile gateway transport", () => {
       .toBe("https://gateway.example/api/proxy/svc-1/agent/conversations?limit=10");
   });
 
+  it("pairs with an empty service ID by discovering the single online backend", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/discovery/backends")) {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { items: [
+            { backendId: "svc-offline", name: "旧栈", online: false, lastSeenAt: 1 },
+            { backendId: "svc-9", name: "研究台", online: true, lastSeenAt: 2 },
+          ] },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("ok", { status: 200 });
+    });
+
+    const pairing = await pairDevice({
+      gatewayUrl: "https://gateway.example",
+      backendId: "",
+      deviceToken: "zgd_local-test-token",
+    }, fetcher as never);
+
+    expect(pairing.backendId).toBe("svc-9");
+    const [discoveryUrl, discoveryInit] = fetcher.mock.calls[0] as unknown as [string, RequestInit];
+    expect(discoveryUrl).toBe("https://gateway.example/api/discovery/backends");
+    expect(new Headers(discoveryInit.headers).get("authorization")).toBe("Bearer zgd_local-test-token");
+    // 健康检查仍走代理路径（对选定后端）
+    const [healthUrl] = fetcher.mock.calls[1] as unknown as [string, RequestInit];
+    expect(healthUrl).toBe("https://gateway.example/api/proxy/svc-9/healthz");
+    expect(savePairing).toHaveBeenCalledWith(pairing);
+  });
+
+  it("refuses empty-ID pairing when no reachable backend is online", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/discovery/backends")) {
+        return new Response(JSON.stringify({ success: true, data: { items: [] } }),
+          { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("ok", { status: 200 });
+    });
+    await expect(pairDevice({
+      gatewayUrl: "https://gateway.example",
+      backendId: "",
+      deviceToken: "zgd_local-test-token",
+    }, fetcher as never)).rejects.toMatchObject({ code: "no_backend_online" });
+    expect(savePairing).not.toHaveBeenCalled();
+  });
+
+  it("reports ambiguity when several reachable backends are online", async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/discovery/backends")) {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { items: [
+            { backendId: "svc-a", name: "a", online: true, lastSeenAt: 1 },
+            { backendId: "svc-b", name: "b", online: true, lastSeenAt: 2 },
+          ] },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("ok", { status: 200 });
+    });
+    await expect(pairDevice({
+      gatewayUrl: "https://gateway.example",
+      backendId: "",
+      deviceToken: "zgd_local-test-token",
+    }, fetcher as never)).rejects.toMatchObject({ code: "ambiguous_backend", message: expect.stringContaining("svc-a、svc-b") });
+    expect(savePairing).not.toHaveBeenCalled();
+  });
+
   it("verifies a device credential with Bearer auth and saves only after success", async () => {
     const fetcher = vi.fn(async () => new Response("ok", { status: 200 }));
     const pairing = await pairDevice({

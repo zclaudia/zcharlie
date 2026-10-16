@@ -31,13 +31,13 @@ export function PairForm({ onPaired }: Props) {
       <div className="pair-mark">Z</div>
       <p className="eyebrow">ZCHARLIE · ANDROID</p>
       <h1>连接你的研究台</h1>
-      <p className="muted">输入网关地址、服务 ID 和设备凭证。凭证只保存在本机应用数据中。</p>
+      <p className="muted">输入网关地址和设备凭证即可；服务 ID 留空时自动发现凭证可达的后端。凭证只保存在本机应用数据中。</p>
       <form className="form-card" onSubmit={submit}>
         <label>网关地址
           <input autoCapitalize="none" autoCorrect="off" inputMode="url" placeholder="https://gateway.example.com" value={gatewayUrl} onChange={(e) => setGatewayUrl(e.target.value)} required />
         </label>
-        <label>服务 ID
-          <input autoCapitalize="none" autoCorrect="off" placeholder="设置页显示的服务 ID" value={backendId} onChange={(e) => setBackendId(e.target.value)} required />
+        <label>服务 ID（可选，留空自动发现）
+          <input autoCapitalize="none" autoCorrect="off" placeholder="留空自动发现可达的后端" value={backendId} onChange={(e) => setBackendId(e.target.value)} />
         </label>
         <label>设备凭证
           <input autoCapitalize="none" autoCorrect="off" autoComplete="off" type="password" placeholder="zgd_…" value={deviceToken} onChange={(e) => setDeviceToken(e.target.value)} required />
