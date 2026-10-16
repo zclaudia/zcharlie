@@ -13,7 +13,8 @@ use std::sync::OnceLock;
 
 use serde::Deserialize;
 
-const STORE_PATH: &str = "zcharlie-mobile.json";
+// 凭证由 JS 侧经 tauri-plugin-secure-keystore 加密写入（Android Keystore
+// AES-256-GCM / iOS Keychain），Rust 侧读同一键做每次代理请求的鉴权。
 const STORE_KEY: &str = "gateway-pairing";
 const MAX_REDIRECTS: usize = 5;
 const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
@@ -57,9 +58,12 @@ struct Pairing {
 }
 
 fn read_pairing(app: &tauri::AppHandle) -> Option<Pairing> {
-    let store = tauri_plugin_store::StoreExt::store(app, STORE_PATH).ok()?;
-    let value = store.get(STORE_KEY)?;
-    serde_json::from_value(value).ok()
+    let response = tauri_plugin_secure_keystore::SecureKeystoreExt::secure_keystore(app)
+        .get_item(tauri_plugin_secure_keystore::ItemKey {
+            key: STORE_KEY.to_string(),
+        })
+        .ok()?;
+    serde_json::from_str(&response.value?).ok()
 }
 
 fn client() -> &'static reqwest::Client {

@@ -29,6 +29,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.3.0(react@19.3.0)
+      tauri-plugin-secure-keystore:
+        specifier: 0.0.2
+        version: 0.0.2
     devDependencies:
       '@tauri-apps/cli':
         specifier: ^2.11.4
@@ -864,6 +867,9 @@ packages:
   strip-indent@3.0.0:
     resolution: {integrity: sha512-laJTa3Jb+VQpaC6DseHhF7dXVqHTfJPCRDaEbid/drOhgitgYku/letMUqOXFoWV0zIIUbjpdH2t+tYj4bQMRQ==}
     engines: {node: '>=8'}
+
+  tauri-plugin-secure-keystore@0.0.2:
+    resolution: {integrity: sha512-5Ch5ozwXNkpBBlLyyhIiFSKUmD7Z8MficnJRY61stFtdRuwZyMM5RPk/cJWRzE34KAUD8k06qQoYflfT4n9eYw==}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -1730,6 +1736,10 @@ snapshots:
   strip-indent@3.0.0:
     dependencies:
       min-indent: 1.0.1
+
+  tauri-plugin-secure-keystore@0.0.2:
+    dependencies:
+      '@tauri-apps/api': 2.12.3
 
   tinybench@2.9.0: {}
 

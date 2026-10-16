@@ -9,6 +9,7 @@
     "notification:default",
     "opener:allow-default-urls",
     "store:default",
+        "secure-keystore:default",
     {
       "identifier": "http:default",
       "allow": [

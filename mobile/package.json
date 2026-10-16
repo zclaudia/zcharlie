@@ -20,7 +20,8 @@
     "@tauri-apps/plugin-opener": "2.7.1",
     "@tauri-apps/plugin-store": "2.5.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "tauri-plugin-secure-keystore": "0.0.2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

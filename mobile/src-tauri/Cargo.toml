@@ -24,3 +24,4 @@ tauri-plugin-store = "2"
 url = "2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 base64 = "0.21"
+tauri-plugin-secure-keystore = "0.0.3-beta.1"
