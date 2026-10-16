@@ -111,14 +111,14 @@ pub fn handle(
 }
 
 async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    let (parts, body) = request.into_parts();
     let Some(pairing) = read_pairing(app) else {
-        return text_response(
+        return error_response(
             tauri::http::StatusCode::SERVICE_UNAVAILABLE,
-            "text/html; charset=utf-8",
-            "<!doctype html><meta charset=\"utf-8\"><p>尚未配对网关，请回到 zcharlie 完成配对。</p>",
+            &parts.headers,
+            "尚未配对网关，请回到 Charlie 完成配对。",
         );
     };
-    let (parts, body) = request.into_parts();
     let path_and_query = parts
         .uri
         .path_and_query()
@@ -128,14 +128,14 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
     let (gateway_origin, backend_id, proxy_base) = match decompose_pairing(&pairing) {
         Ok(parts) => parts,
         Err(message) => {
-            return text_response(tauri::http::StatusCode::BAD_GATEWAY, "text/plain; charset=utf-8", message)
+            return error_response(tauri::http::StatusCode::BAD_GATEWAY, &parts.headers, message)
         }
     };
 
     let mut url = match proxy_target(&gateway_origin, &backend_id, &path_and_query) {
         Ok(url) => url,
         Err(message) => {
-            return text_response(tauri::http::StatusCode::BAD_REQUEST, "text/plain; charset=utf-8", message)
+            return error_response(tauri::http::StatusCode::BAD_REQUEST, &parts.headers, message)
         }
     };
 
@@ -158,9 +158,9 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
             match decode_base64(encoded) {
                 Some(decoded) => payload = decoded,
                 None => {
-                    return text_response(
+                    return error_response(
                         tauri::http::StatusCode::BAD_REQUEST,
-                        "text/plain; charset=utf-8",
+                        &parts.headers,
                         "请求体编码无效。",
                     )
                 }
@@ -174,9 +174,9 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
         let response = match outbound {
             Ok(response) => response,
             Err(_) => {
-                return text_response(
+                return error_response(
                     tauri::http::StatusCode::BAD_GATEWAY,
-                    "text/plain; charset=utf-8",
+                    &parts.headers,
                     "网关不可达或请求超时。",
                 )
             }
@@ -189,9 +189,9 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
                 .and_then(|value| value.to_str().ok())
                 .and_then(|value| rewrite_location(&url, &proxy_base, value))
             else {
-                return text_response(
+                return error_response(
                     tauri::http::StatusCode::BAD_GATEWAY,
-                    "text/plain; charset=utf-8",
+                    &parts.headers,
                     "网关返回了无法跟随的重定向。",
                 );
             };
@@ -216,9 +216,9 @@ async fn proxy(app: &tauri::AppHandle, request: tauri::http::Request<Vec<u8>>) -
         }
         return mapped;
     }
-    text_response(
+    error_response(
         tauri::http::StatusCode::BAD_GATEWAY,
-        "text/plain; charset=utf-8",
+        &parts.headers,
         "重定向次数过多。",
     )
 }
@@ -415,6 +415,36 @@ fn clone_response(response: &tauri::http::Response<Vec<u8>>) -> tauri::http::Res
     clone
 }
 
+/// 文档型导航（Accept 含 text/html）给可点的 HTML 错误页——研究台是主界面后，
+/// 错误页必须留一条回原生设置的路；API/fetch 请求保持纯文本（错误信息会被
+/// JS 原样展示，不能塞标签）。
+fn wants_html(headers: &tauri::http::HeaderMap) -> bool {
+    headers
+        .get("accept")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.contains("text/html"))
+}
+
+fn error_response(
+    status: tauri::http::StatusCode,
+    headers: &tauri::http::HeaderMap,
+    message: &str,
+) -> tauri::http::Response<Vec<u8>> {
+    if !wants_html(headers) {
+        return text_response(status, "text/plain; charset=utf-8", message);
+    }
+    let page = format!(
+        "<!doctype html><meta charset=\"utf-8\"><title>Charlie</title>\
+         <p>{message}</p><p><a href=\"http://tauri.localhost/#pairing\">返回应用设置</a></p>"
+    );
+    tauri::http::Response::builder()
+        .status(status)
+        .header("content-type", "text/html; charset=utf-8")
+        .header("cache-control", "no-store")
+        .body(page.into_bytes())
+        .expect("static error page")
+}
+
 fn text_response(
     status: tauri::http::StatusCode,
     content_type: &str,
@@ -530,6 +560,28 @@ mod tests {
             .unwrap()
             .headers()
             .clone()
+    }
+
+    #[test]
+    fn error_pages_negotiate_html_for_document_navigation() {
+        let mut headers = tauri::http::HeaderMap::new();
+        assert!(!wants_html(&headers));
+        headers.insert("accept", "text/html,application/xhtml+xml,application/xml;q=0.9".parse().unwrap());
+        assert!(wants_html(&headers));
+
+        // 文档导航拿可点的错误页，带回原生设置的出口。
+        let page = error_response(tauri::http::StatusCode::BAD_GATEWAY, &headers, "网关不可达。");
+        assert_eq!(page.status(), 502);
+        assert_eq!(page.headers().get("content-type").unwrap(), "text/html; charset=utf-8");
+        let body = String::from_utf8(page.body().clone()).unwrap();
+        assert!(body.contains("网关不可达。"));
+        assert!(body.contains("http://tauri.localhost/#pairing"));
+        assert!(body.contains("返回应用设置"));
+
+        // fetch/API 请求拿纯文本，JS 会原样展示错误信息。
+        let plain = error_response(tauri::http::StatusCode::BAD_GATEWAY, &tauri::http::HeaderMap::new(), "网关不可达。");
+        assert_eq!(plain.headers().get("content-type").unwrap(), "text/plain; charset=utf-8");
+        assert_eq!(plain.body(), "网关不可达。".as_bytes());
     }
 
     #[test]

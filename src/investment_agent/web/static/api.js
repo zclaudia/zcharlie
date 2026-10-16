@@ -60,7 +60,13 @@ async function request(path, { method = "GET", body, idempotency = false, signal
   // Android 的 WebView 请求拦截层拿不到请求体（wry 恒以空 body 重建），内嵌模式把
   // JSON 载荷编码进请求头，由 App 的 zcharlie:// 协议处理器解码后还原为真实请求体。
   if (typeof payload === "string" && document.body?.dataset.embedded === "android") {
-    headers["X-Zcharlie-Body"] = encodeUtf8Base64(payload);
+    const encoded = encodeUtf8Base64(payload);
+    // 请求头有大小上限（网关/WebView 双侧），超出会被整体拒掉；给显式报错而不是
+    // 让长文静默失败。阈值 12000 字符 base64 ≈ 9KB 载荷，约为 3000 个汉字。
+    if (encoded.length > 12000) {
+      throw new Error(`内容过长（约 ${payload.length} 字），超过内嵌模式的请求头承载上限，请在桌面端发送。`);
+    }
+    headers["X-Zcharlie-Body"] = encoded;
     payload = undefined;
   }
   if (idempotency && method !== "GET") {
