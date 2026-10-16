@@ -3,45 +3,28 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { removePairing, readPairing, type Pairing } from "../storage";
 import { checkConnection, GatewayError } from "../transport";
-import { AgentScreen } from "./AgentScreen";
 import { PairForm } from "./PairForm";
 import { SettingsScreen } from "./SettingsScreen";
 
-type Page = "agent" | "settings";
+// 配对完成即进入研究台（内嵌完整 Web UI）；原生壳只承担配对表单、设置页
+//（研究台"设备与配对"行经 tauri.localhost/#pairing 进入）与启动跳转。
+const CONSOLE_URL = "http://zcharlie.localhost/app";
 
 export function App() {
   const [hasPairing, setHasPairing] = useState<boolean | null>(null);
-  const [page, setPage] = useState<Page>("agent");
+  const [settingsMode, setSettingsMode] = useState(() => window.location.hash === "#pairing");
   const [online, setOnline] = useState<boolean | null>(null);
   // 网关可达但后端离线（代理 502 BACKEND_OFFLINE）——与网关不可达分开呈现。
   const [backendDown, setBackendDown] = useState(false);
-  const [refresh, setRefresh] = useState(0);
-  const [sessionsOpen, setSessionsOpen] = useState(false);
-  const [hasConversation, setHasConversation] = useState(false);
-  const pageRef = useRef(page);
-  const sessionsRef = useRef(sessionsOpen);
-  const conversationRef = useRef(hasConversation);
-  pageRef.current = page;
-  sessionsRef.current = sessionsOpen;
-  conversationRef.current = hasConversation;
-
-  // The embedded web console links back with tauri.localhost/#pairing; land on
-  // the settings screen so "设备与配对" has a visible home.
-  useEffect(() => {
-    if (window.location.hash === "#pairing") setPage("settings");
-  }, []);
+  const settingsRef = useRef(settingsMode);
+  settingsRef.current = settingsMode;
 
   useEffect(() => {
     let active = true;
     let listener: { unregister: () => Promise<void> } | undefined;
     void onBackButtonPress(({ canGoBack }) => {
-      if (sessionsRef.current) {
-        setSessionsOpen(false);
-      } else if (pageRef.current === "settings") {
-        setPage("agent");
-      } else if (conversationRef.current) {
-        setSessionsOpen(true);
-      } else if (canGoBack) {
+      // 设置页 BACK 回研究台（前一历史条目）；启动页没有历史可退，退出应用。
+      if (settingsRef.current || canGoBack) {
         window.history.back();
       } else {
         void getCurrentWindow().close();
@@ -84,11 +67,7 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!hasPairing) {
-      setOnline(null);
-      setBackendDown(false);
-      return;
-    }
+    if (!hasPairing || !settingsMode) return;
     const controller = new AbortController();
     void probe(controller.signal);
     // 探活同样计入网关按 IP 的限流桶，30s 一次足够维持在线指示。
@@ -97,14 +76,20 @@ export function App() {
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [hasPairing, probe, refresh]);
+  }, [hasPairing, settingsMode, probe]);
+
+  // 配对完成（或冷启动）且不在设置页：直接进研究台。
+  useEffect(() => {
+    if (hasPairing && !settingsMode) {
+      window.location.href = CONSOLE_URL;
+    }
+  }, [hasPairing, settingsMode]);
 
   const paired = useCallback((_pairing: Pairing) => {
     setHasPairing(true);
     setOnline(true);
     setBackendDown(false);
-    setPage("agent");
-    setRefresh((value) => value + 1);
+    setSettingsMode(false);
   }, []);
 
   const unpair = async () => {
@@ -114,17 +99,16 @@ export function App() {
     setBackendDown(false);
   };
 
-  if (hasPairing === null) return <div className="boot">正在打开 zcharlie…</div>;
-  if (!hasPairing) {
-    return <PairForm onPaired={paired} />;
-  }
+  if (hasPairing === null) return <div className="boot">正在打开 Charlie…</div>;
+  if (!hasPairing) return <PairForm onPaired={paired} />;
+  if (!settingsMode) return <div className="boot">正在打开研究台…</div>;
 
   return (
     <div className="app-shell">
       <header className="app-header">
         <div>
           <div className="brand">ZCHARLIE</div>
-          <div className="header-title">{page === "agent" ? "AI 对话" : "设置"}</div>
+          <div className="header-title">设置</div>
         </div>
         <div className={`connection-pill ${online === false ? "is-offline" : ""}`} aria-live="polite">
           <span className="connection-dot" />
@@ -138,15 +122,9 @@ export function App() {
             : "网关暂时不可达，正在自动重试；已保存的对话仍可查看。"}
         </div>
       )}
-      <main className="app-main" key={page}>
-        {page === "agent" ? <AgentScreen online={online === true} sessionsOpen={sessionsOpen} onSessionsOpenChange={setSessionsOpen} onHasConversation={setHasConversation} /> : (
-          <SettingsScreen onPaired={paired} onUnpair={unpair} />
-        )}
+      <main className="app-main">
+        <SettingsScreen onPaired={paired} onUnpair={unpair} />
       </main>
-      <nav className="bottom-nav" aria-label="主导航">
-        <button className={page === "agent" ? "active" : ""} onClick={() => setPage("agent")}>AI 对话</button>
-        <button className={page === "settings" ? "active" : ""} onClick={() => setPage("settings")}>设置</button>
-      </nav>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GatewayError, pairDevice, parseSseFrame, proxyUrl, request } from "./transport";
+import { GatewayError, pairDevice, proxyUrl, request } from "./transport";
 
 const savePairing = vi.fn();
 const readPairing = vi.fn();
@@ -177,13 +177,6 @@ describe("mobile gateway transport", () => {
       code: "rate_limited",
       message: expect.stringContaining("请求太频繁"),
     });
-  });
-
-  it("parses event ids and the snapshot-expired event", () => {
-    expect(parseSseFrame('id: 4\nevent: progress\ndata: {"event_id":4,"task_id":"t1","type":"progress","payload":{"summary":"正在查证"}}'))
-      .toMatchObject({ kind: "event", id: 4, event: { event_id: 4, type: "progress" } });
-    expect(parseSseFrame('event: cursor_expired\ndata: {"code":"cursor_expired","reload_snapshot":true}'))
-      .toMatchObject({ kind: "cursor_expired" });
   });
 
   it("rejects traversal outside the selected backend route", () => {
