@@ -184,10 +184,19 @@ export async function discoverBackends(
   fetchImpl?: FetchLike,
 ): Promise<ReachableBackend[]> {
   const gatewayUrl = await validateGatewayUrl(input.gatewayUrl);
-  const body = await gatewayRootRequest(gatewayUrl, input.deviceToken, "/api/discovery/backends", fetchImpl) as {
-    success?: boolean;
-    data?: { items?: ReachableBackend[] };
-  };
+  let body: { success?: boolean; data?: { items?: ReachableBackend[] } };
+  try {
+    body = await gatewayRootRequest(gatewayUrl, input.deviceToken, "/api/discovery/backends", fetchImpl) as {
+      success?: boolean;
+      data?: { items?: ReachableBackend[] };
+    };
+  } catch (error) {
+    // 旧网关没有该端点：引导回退到手工填写服务 ID，而不是通用 404 报错。
+    if (error instanceof GatewayError && error.status === 404) {
+      throw new GatewayError(404, "该网关不支持自动发现，请手动填写服务 ID。", "discovery_unsupported");
+    }
+    throw error;
+  }
   return body.data?.items ?? [];
 }
 
@@ -203,15 +212,20 @@ export async function pairDevice(
   }
   if (!backendId) {
     // 网关接入架构里 backend id 是可选的：凭证未绑后端时由客户端发现并选定。
-    const reachable = (await discoverBackends({ gatewayUrl, deviceToken }, fetchImpl)).filter((b) => b.online);
-    if (reachable.length === 0) {
-      throw new GatewayError(0, "网关可达，但该凭证范围内没有在线后端。", "no_backend_online");
+    // 列表是"可寻址集合"（含离线后端），与"当前在线"是两回事，错误要分开说。
+    const addressable = await discoverBackends({ gatewayUrl, deviceToken }, fetchImpl);
+    if (addressable.length === 0) {
+      throw new GatewayError(0, "该凭证没有可寻址的后端，请重新签发设备凭证。", "empty_backend_scope");
     }
-    if (reachable.length > 1) {
-      const ids = reachable.map((b) => b.backendId).join("、");
+    const online = addressable.find((b) => b.online);
+    if (!online) {
+      throw new GatewayError(0, "凭证可达的后端当前都离线，请等后端上线后再配对。", "backends_offline");
+    }
+    if (addressable.filter((b) => b.online).length > 1) {
+      const ids = addressable.filter((b) => b.online).map((b) => b.backendId).join("、");
       throw new GatewayError(0, `该凭证可达多个在线后端，请在服务 ID 里填一个：${ids}`, "ambiguous_backend");
     }
-    backendId = reachable[0].backendId;
+    backendId = online.backendId;
   }
   const pairing = { gatewayUrl, backendId, deviceToken };
   const response = await nativeRequest(pairing, "/healthz", { fetchImpl });

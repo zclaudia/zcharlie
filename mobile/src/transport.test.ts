@@ -53,8 +53,9 @@ describe("mobile gateway transport", () => {
     expect(savePairing).toHaveBeenCalledWith(pairing);
   });
 
-  it("refuses empty-ID pairing when no reachable backend is online", async () => {
-    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+  it("distinguishes an empty addressable scope from backends being offline", async () => {
+    // 空列表 = 权限范围为空：提示重新签发凭证
+    const emptyFetcher = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/api/discovery/backends")) {
         return new Response(JSON.stringify({ success: true, data: { items: [] } }),
@@ -66,7 +67,38 @@ describe("mobile gateway transport", () => {
       gatewayUrl: "https://gateway.example",
       backendId: "",
       deviceToken: "zgd_local-test-token",
-    }, fetcher as never)).rejects.toMatchObject({ code: "no_backend_online" });
+    }, emptyFetcher as never)).rejects.toMatchObject({ code: "empty_backend_scope" });
+
+    // 有可寻址后端但全部离线：不同错误，提示稍后重试
+    const offlineFetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/discovery/backends")) {
+        return new Response(JSON.stringify({
+          success: true,
+          data: { items: [{ backendId: "svc-1", name: "研究台", online: false, lastSeenAt: null }] },
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("ok", { status: 200 });
+    });
+    await expect(pairDevice({
+      gatewayUrl: "https://gateway.example",
+      backendId: "",
+      deviceToken: "zgd_local-test-token",
+    }, offlineFetcher as never)).rejects.toMatchObject({ code: "backends_offline" });
+    expect(savePairing).not.toHaveBeenCalled();
+  });
+
+  it("falls back to manual service ID entry on gateways without discovery", async () => {
+    const fetcher = vi.fn(async () => new Response("not found", { status: 404 }));
+    await expect(pairDevice({
+      gatewayUrl: "https://gateway.example",
+      backendId: "",
+      deviceToken: "zgd_local-test-token",
+    }, fetcher as never)).rejects.toMatchObject({
+      code: "discovery_unsupported",
+      status: 404,
+      message: expect.stringContaining("手动填写服务 ID"),
+    });
     expect(savePairing).not.toHaveBeenCalled();
   });
 
