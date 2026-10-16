@@ -45,6 +45,13 @@ Python 全量套件本次为 `2390 passed, 6 deselected, 1 failed`；唯一失�
 首次由 CDP 自动化 harness（[tools/mobile-e2e.sh](../../tools/mobile-e2e.sh)）完成全程，
 新增生命周期、设置写拒绝分支覆盖；发现任务卡片在 user/assistant 消息上重复渲染（P3）。
 
+## 2026-10-16 第五轮（同日）：WebView 研究台落地
+
+第四轮 P1 缺口当日收口：自定义协议 handler + 工具栏「台」入口 + api.js 内嵌 body 头桥 +
+MainActivity BACK 接管。G6–G10 全过（内嵌页渲染、真实数据、配对行回程、返回键、内嵌 AI 页
+轮询发消息到已完成）。方案 [embedded-console-design.md](embedded-console-design.md)、
+报告 [e2e-report-2026-10-16.md](e2e-report-2026-10-16.md) 第五轮小节。
+
 ## 2026-10-16 第四轮（内嵌模式 + 最新 APK 回归）
 
 计划 [e2e-plan-2026-10-16.md](e2e-plan-2026-10-16.md)、执行报告
