@@ -45,6 +45,15 @@ Python 全量套件本次为 `2390 passed, 6 deselected, 1 failed`；唯一失�
 首次由 CDP 自动化 harness（[tools/mobile-e2e.sh](../../tools/mobile-e2e.sh)）完成全程，
 新增生命周期、设置写拒绝分支覆盖；发现任务卡片在 user/assistant 消息上重复渲染（P3）。
 
+## 2026-10-16 第四轮（内嵌模式 + 最新 APK 回归）
+
+计划 [e2e-plan-2026-10-16.md](e2e-plan-2026-10-16.md)、执行报告
+[e2e-report-2026-10-16.md](e2e-report-2026-10-16.md)。18 例：17 通过 / 0 失败 / 1 环境失效未计。
+验证内嵌模式（4edda31）经真实代理链路（WebView → 网关 → WS 通道 → 后端桥注入 X-API-Key）
+的 API 级行为（G1–G5）+ 原生链路 11 例回归。关键结论：**页面级内嵌体验不可达**——App 侧无
+web UI 入口、代理前缀下 HTML 绝对资源路径 404，需下一工作包（App 自定义协议/导航入口 +
+资源路径策略）。另记 P3×2（任务卡重复渲染仍开放；＋预建会话不回填标题）。
+
 ## Web UI 内嵌模式（2026-10-16）
 
 `WebSessionMiddleware` 在会话 cookie 之外接受 `X-API-Key`（手机网关剥离 cookie 后注入的凭证）：
