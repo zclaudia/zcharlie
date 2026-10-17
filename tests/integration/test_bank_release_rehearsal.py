@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import func, select
 
 from investment_agent.storage.database import engine_lifespan, session_scope
@@ -23,6 +24,8 @@ from tests.integration.test_bank_verified_import import (
     ORIGINALS_ROOT,
     REPO_ROOT,
 )
+
+CURRENT_HEAD = ScriptDirectory(str(REPO_ROOT / "alembic")).get_current_head()
 
 AUDITS = [
     REPO_ROOT / f"tests/fixtures/bank_fy2024/{name}.json"
@@ -55,7 +58,7 @@ def migrated_release_root(monkeypatch):
     command.upgrade(config, "048")
     command.upgrade(config, "head")
     with sqlite3.connect(database_path) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("052",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (CURRENT_HEAD,)
     yield root
 
 
@@ -275,4 +278,4 @@ async def test_real_two_year_offline_release_after_048_upgrade(release_world, mo
     from alembic.script import ScriptDirectory
 
     script = ScriptDirectory(str(REPO_ROOT / "alembic"))
-    assert script.get_current_head() == "052"
+    assert script.get_current_head() == CURRENT_HEAD
