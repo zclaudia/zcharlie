@@ -1,0 +1,632 @@
+........................................................................ [  7%]
+........................................................................ [ 14%]
+........................................................................ [ 22%]
+........................................................................ [ 29%]
+........................................................................ [ 37%]
+........................................................................ [ 44%]
+........................................................................ [ 51%]
+........................................................................ [ 59%]
+........................................................................ [ 66%]
+........................................................................ [ 74%]
+........................................................................ [ 81%]
+........................................................................ [ 88%]
+........................................................................ [ 96%]
+....................................                                     [100%]
+=============================== warnings summary ===============================
+tests/integration/test_migration_013.py::test_upgrade_empty_database_to_head
+tests/integration/test_migration_013.py::test_upgrade_from_012_preserves_memberships_and_downgrades
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_013.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_013.py::test_upgrade_empty_database_to_head
+tests/integration/test_migration_013.py::test_upgrade_from_012_preserves_memberships_and_downgrades
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_013.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_013.py::test_upgrade_empty_database_to_head
+tests/integration/test_migration_013.py::test_upgrade_from_012_preserves_memberships_and_downgrades
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_013.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_013.py: 2 warnings
+tests/integration/test_migration_014.py: 2 warnings
+tests/integration/test_migration_015.py: 2 warnings
+tests/integration/test_migration_016.py: 2 warnings
+tests/integration/test_migration_017.py: 2 warnings
+tests/integration/test_migration_018.py: 2 warnings
+tests/integration/test_migration_019.py: 2 warnings
+tests/integration/test_migration_020.py: 2 warnings
+tests/integration/test_migration_021.py: 2 warnings
+tests/integration/test_migration_022.py: 2 warnings
+tests/integration/test_migration_023.py: 2 warnings
+tests/integration/test_migration_024.py: 2 warnings
+tests/integration/test_migration_025.py: 1 warning
+tests/integration/test_migration_026.py: 1 warning
+tests/integration/test_migration_027.py: 1 warning
+tests/integration/test_migration_028.py: 1 warning
+tests/integration/test_migration_029.py: 1 warning
+tests/integration/test_migration_030.py: 1 warning
+tests/integration/test_migration_031.py: 1 warning
+tests/integration/test_migration_032.py: 1 warning
+tests/integration/test_migration_033.py: 1 warning
+tests/integration/test_migration_034.py: 1 warning
+tests/integration/test_migration_035.py: 1 warning
+tests/integration/test_migration_036.py: 1 warning
+tests/integration/test_migration_037.py: 1 warning
+tests/integration/test_migration_038.py: 1 warning
+tests/integration/test_migration_039.py: 1 warning
+tests/integration/test_migration_040.py: 1 warning
+tests/integration/test_migration_041.py: 2 warnings
+tests/integration/test_migration_042.py: 1 warning
+tests/integration/test_migration_043.py: 1 warning
+tests/integration/test_migration_044.py: 1 warning
+tests/integration/test_migration_045.py: 1 warning
+tests/integration/test_migration_046.py: 2 warnings
+tests/integration/test_migration_048.py: 2 warnings
+tests/integration/test_migration_049.py: 2 warnings
+tests/integration/test_migration_050.py: 2 warnings
+tests/integration/test_migration_051.py: 3 warnings
+tests/integration/test_migration_052.py: 4 warnings
+tests/integration/test_migration_053.py: 1 warning
+tests/integration/test_p2_review_model.py: 1 warning
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/alembic/ddl/impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ix_investment_assessment_rule_application_operation'; dialect 'sqlite' under SQLAlchemy 2.0.54 can't reflect these indexes so they can't be compared
+    util.warn(
+
+tests/integration/test_migration_013.py: 2 warnings
+tests/integration/test_migration_014.py: 2 warnings
+tests/integration/test_migration_015.py: 2 warnings
+tests/integration/test_migration_016.py: 2 warnings
+tests/integration/test_migration_017.py: 2 warnings
+tests/integration/test_migration_018.py: 2 warnings
+tests/integration/test_migration_019.py: 2 warnings
+tests/integration/test_migration_020.py: 2 warnings
+tests/integration/test_migration_021.py: 2 warnings
+tests/integration/test_migration_022.py: 2 warnings
+tests/integration/test_migration_023.py: 2 warnings
+tests/integration/test_migration_024.py: 2 warnings
+tests/integration/test_migration_025.py: 1 warning
+tests/integration/test_migration_026.py: 1 warning
+tests/integration/test_migration_027.py: 1 warning
+tests/integration/test_migration_028.py: 1 warning
+tests/integration/test_migration_029.py: 1 warning
+tests/integration/test_migration_030.py: 1 warning
+tests/integration/test_migration_031.py: 1 warning
+tests/integration/test_migration_032.py: 1 warning
+tests/integration/test_migration_033.py: 1 warning
+tests/integration/test_migration_034.py: 1 warning
+tests/integration/test_migration_035.py: 1 warning
+tests/integration/test_migration_036.py: 1 warning
+tests/integration/test_migration_037.py: 1 warning
+tests/integration/test_migration_038.py: 1 warning
+tests/integration/test_migration_039.py: 1 warning
+tests/integration/test_migration_040.py: 1 warning
+tests/integration/test_migration_041.py: 2 warnings
+tests/integration/test_migration_042.py: 1 warning
+tests/integration/test_migration_043.py: 1 warning
+tests/integration/test_migration_044.py: 1 warning
+tests/integration/test_migration_045.py: 1 warning
+tests/integration/test_migration_046.py: 2 warnings
+tests/integration/test_migration_048.py: 2 warnings
+tests/integration/test_migration_049.py: 2 warnings
+tests/integration/test_migration_050.py: 2 warnings
+tests/integration/test_migration_051.py: 3 warnings
+tests/integration/test_migration_052.py: 4 warnings
+tests/integration/test_migration_053.py: 1 warning
+tests/integration/test_p2_review_model.py: 1 warning
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/alembic/ddl/impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ix_investment_assessment_rule_coverage_task'; dialect 'sqlite' under SQLAlchemy 2.0.54 can't reflect these indexes so they can't be compared
+    util.warn(
+
+tests/integration/test_migration_013.py: 2 warnings
+tests/integration/test_migration_014.py: 2 warnings
+tests/integration/test_migration_015.py: 2 warnings
+tests/integration/test_migration_016.py: 2 warnings
+tests/integration/test_migration_017.py: 2 warnings
+tests/integration/test_migration_018.py: 2 warnings
+tests/integration/test_migration_019.py: 2 warnings
+tests/integration/test_migration_020.py: 2 warnings
+tests/integration/test_migration_021.py: 2 warnings
+tests/integration/test_migration_022.py: 2 warnings
+tests/integration/test_migration_023.py: 2 warnings
+tests/integration/test_migration_024.py: 2 warnings
+tests/integration/test_migration_025.py: 1 warning
+tests/integration/test_migration_026.py: 1 warning
+tests/integration/test_migration_027.py: 1 warning
+tests/integration/test_migration_028.py: 1 warning
+tests/integration/test_migration_029.py: 1 warning
+tests/integration/test_migration_030.py: 1 warning
+tests/integration/test_migration_031.py: 1 warning
+tests/integration/test_migration_032.py: 1 warning
+tests/integration/test_migration_033.py: 1 warning
+tests/integration/test_migration_034.py: 1 warning
+tests/integration/test_migration_035.py: 1 warning
+tests/integration/test_migration_036.py: 1 warning
+tests/integration/test_migration_037.py: 1 warning
+tests/integration/test_migration_038.py: 1 warning
+tests/integration/test_migration_039.py: 1 warning
+tests/integration/test_migration_040.py: 1 warning
+tests/integration/test_migration_041.py: 2 warnings
+tests/integration/test_migration_042.py: 1 warning
+tests/integration/test_migration_043.py: 1 warning
+tests/integration/test_migration_044.py: 1 warning
+tests/integration/test_migration_045.py: 1 warning
+tests/integration/test_migration_046.py: 2 warnings
+tests/integration/test_migration_048.py: 2 warnings
+tests/integration/test_migration_049.py: 2 warnings
+tests/integration/test_migration_050.py: 2 warnings
+tests/integration/test_migration_051.py: 3 warnings
+tests/integration/test_migration_052.py: 4 warnings
+tests/integration/test_migration_053.py: 1 warning
+tests/integration/test_p2_review_model.py: 1 warning
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/alembic/ddl/impl.py:850: UserWarning: autogenerate skipping metadata-specified expression-based index 'ix_supplemental_change_owner_member_outcome_latest'; dialect 'sqlite' under SQLAlchemy 2.0.54 can't reflect these indexes so they can't be compared
+    util.warn(
+
+tests/integration/test_migration_014.py::test_upgrade_from_013_keeps_rows_and_downgrades
+tests/integration/test_migration_014.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_014.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_014.py::test_upgrade_from_013_keeps_rows_and_downgrades
+tests/integration/test_migration_014.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_014.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_014.py::test_upgrade_from_013_keeps_rows_and_downgrades
+tests/integration/test_migration_014.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_014.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_015.py::test_upgrade_from_014_defaults_false_and_downgrades
+tests/integration/test_migration_015.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_015.py:35: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_015.py::test_upgrade_from_014_defaults_false_and_downgrades
+tests/integration/test_migration_015.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_015.py:35: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_015.py::test_upgrade_from_014_defaults_false_and_downgrades
+tests/integration/test_migration_015.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_015.py:35: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_016.py::test_upgrade_from_015_constraints_and_downgrade
+tests/integration/test_migration_016.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_016.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_016.py::test_upgrade_from_015_constraints_and_downgrade
+tests/integration/test_migration_016.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_016.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_016.py::test_upgrade_from_015_constraints_and_downgrade
+tests/integration/test_migration_016.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_016.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_017.py::test_upgrade_from_016_constraints_and_downgrade
+tests/integration/test_migration_017.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_017.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_017.py::test_upgrade_from_016_constraints_and_downgrade
+tests/integration/test_migration_017.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_017.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_017.py::test_upgrade_from_016_constraints_and_downgrade
+tests/integration/test_migration_017.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_017.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_018.py::test_upgrade_from_017_constraints_and_downgrade
+tests/integration/test_migration_018.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_018.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_018.py::test_upgrade_from_017_constraints_and_downgrade
+tests/integration/test_migration_018.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_018.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_018.py::test_upgrade_from_017_constraints_and_downgrade
+tests/integration/test_migration_018.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_018.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_019.py::test_upgrade_from_018_constraints_and_downgrade
+tests/integration/test_migration_019.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_019.py:37: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_019.py::test_upgrade_from_018_constraints_and_downgrade
+tests/integration/test_migration_019.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_019.py:37: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_019.py::test_upgrade_from_018_constraints_and_downgrade
+tests/integration/test_migration_019.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_019.py:37: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_020.py::test_upgrade_from_019_seeds_recorded_checks_and_downgrades
+tests/integration/test_migration_020.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_020.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_020.py::test_upgrade_from_019_seeds_recorded_checks_and_downgrades
+tests/integration/test_migration_020.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_020.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_020.py::test_upgrade_from_019_seeds_recorded_checks_and_downgrades
+tests/integration/test_migration_020.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_020.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_021.py::test_upgrade_from_020_seeds_meta_and_downgrade
+tests/integration/test_migration_021.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_021.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_021.py::test_upgrade_from_020_seeds_meta_and_downgrade
+tests/integration/test_migration_021.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_021.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_021.py::test_upgrade_from_020_seeds_meta_and_downgrade
+tests/integration/test_migration_021.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_021.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_022.py::test_upgrade_from_021_creates_the_ledger_and_downgrade
+tests/integration/test_migration_022.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_022.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_022.py::test_upgrade_from_021_creates_the_ledger_and_downgrade
+tests/integration/test_migration_022.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_022.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_022.py::test_upgrade_from_021_creates_the_ledger_and_downgrade
+tests/integration/test_migration_022.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_022.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_023.py::test_upgrade_from_022_creates_the_directory_and_downgrade
+tests/integration/test_migration_023.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_023.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_023.py::test_upgrade_from_022_creates_the_directory_and_downgrade
+tests/integration/test_migration_023.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_023.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_023.py::test_upgrade_from_022_creates_the_directory_and_downgrade
+tests/integration/test_migration_023.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_023.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_024.py::test_upgrade_from_023_creates_the_tables_and_downgrade
+tests/integration/test_migration_024.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_024.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_024.py::test_upgrade_from_023_creates_the_tables_and_downgrade
+tests/integration/test_migration_024.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_024.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_024.py::test_upgrade_from_023_creates_the_tables_and_downgrade
+tests/integration/test_migration_024.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_024.py:36: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_025.py::test_upgrade_downgrade_and_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_025.py:37: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_025.py::test_upgrade_downgrade_and_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_025.py:37: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_025.py::test_upgrade_downgrade_and_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_025.py:37: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_027.py::test_agent_upgrade_downgrade
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_027.py:34: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    for d in compare_metadata(MigrationContext.configure(conn), Base.metadata)
+
+tests/integration/test_migration_027.py::test_agent_upgrade_downgrade
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_027.py:34: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    for d in compare_metadata(MigrationContext.configure(conn), Base.metadata)
+
+tests/integration/test_migration_027.py::test_agent_upgrade_downgrade
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_027.py:34: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    for d in compare_metadata(MigrationContext.configure(conn), Base.metadata)
+
+tests/integration/test_migration_028.py::test_agent_model_audit_migration
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_028.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [d for d in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(d)]
+
+tests/integration/test_migration_028.py::test_agent_model_audit_migration
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_028.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [d for d in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(d)]
+
+tests/integration/test_migration_028.py::test_agent_model_audit_migration
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_028.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [d for d in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(d)]
+
+tests/integration/test_migration_029.py::test_agent_execution_migration
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_029.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [d for d in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(d)]
+
+tests/integration/test_migration_029.py::test_agent_execution_migration
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_029.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [d for d in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(d)]
+
+tests/integration/test_migration_029.py::test_agent_execution_migration
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_029.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [d for d in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(d)]
+
+tests/integration/test_migration_030.py::test_conversation_migration_retains_events_and_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_030.py:35: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(diff)]
+
+tests/integration/test_migration_030.py::test_conversation_migration_retains_events_and_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_030.py:35: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(diff)]
+
+tests/integration/test_migration_030.py::test_conversation_migration_retains_events_and_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_030.py:35: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(conn), Base.metadata) if "agent_" in repr(diff)]
+
+tests/integration/test_migration_031.py::test_publication_migration_metadata_and_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_031.py:30: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [difference for difference in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "investor_publication" in repr(difference)]
+
+tests/integration/test_migration_031.py::test_publication_migration_metadata_and_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_031.py:30: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [difference for difference in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "investor_publication" in repr(difference)]
+
+tests/integration/test_migration_031.py::test_publication_migration_metadata_and_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_031.py:30: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [difference for difference in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "investor_publication" in repr(difference)]
+
+tests/integration/test_migration_034.py::test_discovery_migration_metadata_roundtrip_and_legacy_review
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_034.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection),Base.metadata) if any(table in repr(diff) for table in relevant)]
+
+tests/integration/test_migration_034.py::test_discovery_migration_metadata_roundtrip_and_legacy_review
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_034.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection),Base.metadata) if any(table in repr(diff) for table in relevant)]
+
+tests/integration/test_migration_034.py::test_discovery_migration_metadata_roundtrip_and_legacy_review
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_034.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection),Base.metadata) if any(table in repr(diff) for table in relevant)]
+
+tests/integration/test_migration_035.py::test_portfolio_migration_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_035.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(table in repr(diff) for table in relevant)]
+
+tests/integration/test_migration_035.py::test_portfolio_migration_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_035.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(table in repr(diff) for table in relevant)]
+
+tests/integration/test_migration_035.py::test_portfolio_migration_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_035.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(table in repr(diff) for table in relevant)]
+
+tests/integration/test_migration_036.py::test_portfolio_plans_migration_fresh_and_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_036.py:27: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [d for d in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "portfolio_plan_" in repr(d)]
+
+tests/integration/test_migration_036.py::test_portfolio_plans_migration_fresh_and_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_036.py:27: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [d for d in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "portfolio_plan_" in repr(d)]
+
+tests/integration/test_migration_036.py::test_portfolio_plans_migration_fresh_and_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_036.py:27: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [d for d in compare_metadata(MigrationContext.configure(connection), Base.metadata) if "portfolio_plan_" in repr(d)]
+
+tests/integration/test_migration_037.py::test_disclosures_migration_fresh_roundtrip_and_original_restart
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_037.py:30: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    for d in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_037.py::test_disclosures_migration_fresh_roundtrip_and_original_restart
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_037.py:30: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    for d in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_037.py::test_disclosures_migration_fresh_roundtrip_and_original_restart
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_037.py:30: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    for d in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_041.py::test_backfill_mixed_offsets_order_and_subject_projection
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_041.py:64: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_041.py::test_backfill_mixed_offsets_order_and_subject_projection
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_041.py:64: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_041.py::test_backfill_mixed_offsets_order_and_subject_projection
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_041.py:64: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_041.py::test_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_041.py:120: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_041.py::test_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_041.py:120: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_041.py::test_fresh_head
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_041.py:120: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    assert not [diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_042.py::test_backfill_draft_state_and_schema
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_042.py:87: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_042.py::test_backfill_draft_state_and_schema
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_042.py:87: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_042.py::test_backfill_draft_state_and_schema
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_042.py:87: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_043.py::test_valuation_schema_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_043.py:41: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_043.py::test_valuation_schema_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_043.py:41: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_043.py::test_valuation_schema_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_043.py:41: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_045.py::test_zone_event_schema_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_045.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_045.py::test_zone_event_schema_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_045.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_045.py::test_zone_event_schema_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_045.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_046.py::test_upgrade_from_024_creates_the_tables_and_downgrade
+tests/integration/test_migration_046.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_046.py:91: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_046.py::test_upgrade_from_024_creates_the_tables_and_downgrade
+tests/integration/test_migration_046.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_046.py:91: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_046.py::test_upgrade_from_024_creates_the_tables_and_downgrade
+tests/integration/test_migration_046.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_046.py:91: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_048.py::test_upgrade_from_047_creates_the_tables_and_downgrade
+tests/integration/test_migration_048.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_048.py:94: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_048.py::test_upgrade_from_047_creates_the_tables_and_downgrade
+tests/integration/test_migration_048.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_048.py:94: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_048.py::test_upgrade_from_047_creates_the_tables_and_downgrade
+tests/integration/test_migration_048.py::test_fresh_head_matches_models
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_048.py:94: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_049.py::test_upgrade_preserves_datasets_and_guards_acquisitions
+tests/integration/test_migration_049.py::test_fresh_head_matches_model_table
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_049.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_049.py::test_upgrade_preserves_datasets_and_guards_acquisitions
+tests/integration/test_migration_049.py::test_fresh_head_matches_model_table
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_049.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_049.py::test_upgrade_preserves_datasets_and_guards_acquisitions
+tests/integration/test_migration_049.py::test_fresh_head_matches_model_table
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_049.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_050.py::test_sqlite_off_guards_assessment_and_ranking_entries
+tests/integration/test_migration_050.py::test_fresh_head_matches_registered_metadata
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_050.py:84: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_050.py::test_sqlite_off_guards_assessment_and_ranking_entries
+tests/integration/test_migration_050.py::test_fresh_head_matches_registered_metadata
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_050.py:84: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_050.py::test_sqlite_off_guards_assessment_and_ranking_entries
+tests/integration/test_migration_050.py::test_fresh_head_matches_registered_metadata
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_050.py:84: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_051.py::test_revision_chain_and_fresh_head_metadata
+tests/integration/test_migration_051.py::test_direct_sql_guards_for_p2_rows[0]
+tests/integration/test_migration_051.py::test_direct_sql_guards_for_p2_rows[1]
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_051.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_051.py::test_revision_chain_and_fresh_head_metadata
+tests/integration/test_migration_051.py::test_direct_sql_guards_for_p2_rows[0]
+tests/integration/test_migration_051.py::test_direct_sql_guards_for_p2_rows[1]
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_051.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_051.py::test_revision_chain_and_fresh_head_metadata
+tests/integration/test_migration_051.py::test_direct_sql_guards_for_p2_rows[0]
+tests/integration/test_migration_051.py::test_direct_sql_guards_for_p2_rows[1]
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_051.py:31: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_052.py::test_revision_chain_and_fresh_head_metadata
+tests/integration/test_migration_052.py::test_fresh_head_accepts_rule_coverage_shape_and_rejects_bypasses
+tests/integration/test_migration_052.py::test_direct_sql_guards_for_binding_rows[0]
+tests/integration/test_migration_052.py::test_direct_sql_guards_for_binding_rows[1]
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_052.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_052.py::test_revision_chain_and_fresh_head_metadata
+tests/integration/test_migration_052.py::test_fresh_head_accepts_rule_coverage_shape_and_rejects_bypasses
+tests/integration/test_migration_052.py::test_direct_sql_guards_for_binding_rows[0]
+tests/integration/test_migration_052.py::test_direct_sql_guards_for_binding_rows[1]
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_052.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_052.py::test_revision_chain_and_fresh_head_metadata
+tests/integration/test_migration_052.py::test_fresh_head_accepts_rule_coverage_shape_and_rejects_bypasses
+tests/integration/test_migration_052.py::test_direct_sql_guards_for_binding_rows[0]
+tests/integration/test_migration_052.py::test_direct_sql_guards_for_binding_rows[1]
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_052.py:38: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diff for diff in compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_053.py::test_053_fresh_upgrade_metadata_and_empty_downgrade_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_053.py:28: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_053.py::test_053_fresh_upgrade_metadata_and_empty_downgrade_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_053.py:28: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_migration_053.py::test_053_fresh_upgrade_metadata_and_empty_downgrade_roundtrip
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_migration_053.py:28: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    diffs = compare_metadata(MigrationContext.configure(connection), Base.metadata)
+
+tests/integration/test_p2_review_model.py::test_operation_partial_json_index_matches_orm_migration_and_recovery_query
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_p2_review_model.py:46: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_coverage_task
+    return list(compare_metadata(MigrationContext.configure(connection), Base.metadata))
+
+tests/integration/test_p2_review_model.py::test_operation_partial_json_index_matches_orm_migration_and_recovery_query
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_p2_review_model.py:46: SAWarning: Skipped unsupported reflection of expression-based index ix_investment_assessment_rule_application_operation
+    return list(compare_metadata(MigrationContext.configure(connection), Base.metadata))
+
+tests/integration/test_p2_review_model.py::test_operation_partial_json_index_matches_orm_migration_and_recovery_query
+  /Users/zhvala/SourceCode/zcharlie/tests/integration/test_p2_review_model.py:46: SAWarning: Skipped unsupported reflection of expression-based index ix_supplemental_change_owner_member_outcome_latest
+    return list(compare_metadata(MigrationContext.configure(connection), Base.metadata))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+972 passed, 357 warnings in 908.90s (0:15:08)

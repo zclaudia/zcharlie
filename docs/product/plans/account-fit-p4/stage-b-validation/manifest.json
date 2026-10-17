@@ -1,0 +1,43 @@
+{
+  "scope": "AF-P4-07 only; AF-P4-08 not executed",
+  "commands": {
+    "unit": "API_KEY=test-key .venv/bin/pytest -q tests/unit",
+    "integration": "API_KEY=test-key ZCLAUDIA_GATEWAY_DIR=/Users/zhvala/SourceCode/zclaudia-gateway .venv/bin/pytest -q tests/integration",
+    "migration_retest": "API_KEY=test-key .venv/bin/pytest -q tests/integration/test_migration_050.py tests/integration/test_migration_051.py tests/integration/test_migration_052.py tests/integration/test_migration_053.py tests/integration/test_migration_054.py",
+    "roots": "API_KEY=test-key .venv/bin/pytest -q tests/test_*.py",
+    "browser": "API_KEY=test-key tests/browser/run.sh research_closure.mjs supplemental_rules.mjs account_fit.mjs supplemental_updates.mjs; after JS progress label fix: API_KEY=test-key tests/browser/run.sh disclosure_updates.mjs",
+    "ruff": ".venv/bin/ruff check src tests alembic",
+    "mypy": ".venv/bin/mypy src/investment_agent"
+  },
+  "results": {
+    "unit": "2563 passed, 2 skipped, 6 deselected, 5 warnings in 328.27s",
+    "integration_full_run": "3 failed, 906 passed, 345 warnings in 867.79s",
+    "migration_retest": "37 passed, 60 warnings in 23.96s",
+    "roots": "717 passed in 170.59s",
+    "browser": "five scripts passed at 1440/390; final B 5 controlled HTTP calls, 1 candidate, 0 AgentTask",
+    "ruff": "passed",
+    "mypy": "448 source files, no issues"
+  },
+  "resolved_full_run_failures": [
+    "test_migration_050.py current_head expected 053, actual 054; renamed to test_revision_050_follows_049_and_current_head",
+    "test_migration_051.py::test_revision_chain_and_fresh_head_metadata expected 053, actual 054",
+    "test_migration_052.py::test_revision_chain_and_fresh_head_metadata expected 053, actual 054"
+  ],
+  "retest_basis": "Only three test head assertions and one test name changed after the full integration run exposed these failures, while its remaining cases continued. No business or migration source changed. All 37 migration tests passed afterward, including the three corrected checks. Do not represent the full run as a single 909-passed command or add 906+37; unique integration coverage is 909 cases.",
+  "late_adjustments": [
+    "The first integration attempt was stopped for the nullable-history-frontier loader fix; the archived full integration run was restarted afterward.",
+    "The V3 frontier branch fix was checked by real-worker coverage tests and the restarted full integration run; unit/root legacy contracts do not exercise that branch.",
+    "B browser was rerun after the JS stage label fix; four existing scripts remained passed and historical probes were restored."
+  ],
+  "log_sha256": {
+    "unit.log": "4b26cb8fbc1d35ee77eeb4edc74806723b98580c6f40d1bd942ebb6919d205b6",
+    "integration.log": "2aac5dc4510c5331f1966c0d51478879403f3a55e7c406d1c9868b53caf65f1b",
+    "migrations-050-054.log": "49a9352df6a4125c38a1f3e7b53b44f8cb29d413cf5dc4a02e60598f7ea0911b",
+    "roots.log": "0c154e565a46046441db973ce7d00abb35631a464e80fab4db368d686d0e47fe",
+    "browser.log": "fd74b653b19c5212a00d0225922c155afcd83cd361b65a1ab785d92a03d458e9",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "mypy.log": "77665b0b3ae4012a2fef6b2d2155a2faeeeb52708decf4de7b32bcc0cd3ff19d",
+    "checks.log": "b97d1d911611c186c0cc657b18ecd4edc50213f73566bdb28cb59e1cfcf5c270"
+  },
+  "source_snapshot": "../stage-b-source-snapshot.json"
+}

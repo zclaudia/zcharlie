@@ -1,0 +1,140 @@
+{
+  "recorded_at_utc": "2026-10-17T03:41:51.952495+00:00",
+  "baseline_head": "7df697aeeb951f9bf1b76de7b2194ca6a62c6e7a",
+  "scope": "AF-P4-07 engineering only; AF-P4-08 not executed; no production activation, commit or push",
+  "implementation_start_inventory_sha256": "2b9a2031121b672f1e10a94abf9264b5baa3543e52837122df5ffb29f45adaf0",
+  "full_source_file_count": 1261,
+  "full_source_tree_sha256": "7be6287cf9d77d60f5cf8920e2c8573cd42780eafdf38bceb9c03514c18db6dd",
+  "p4b_changed_source_file_count": 43,
+  "p4b_changed_source_files": {
+    "alembic/versions/054_p4_poll_coverage_guard.py": "16a5f3bfd9f012703eeab808c16dfb1b11783e0dfde0fb9948389ad525c5b4e1",
+    "src/investment_agent/agent/operations.py": "dd24193c27224123f2fcd366156e35882337bec7bfbad78445d63d109829044e",
+    "src/investment_agent/agent/research_publication.py": "750103f662da1f385c4e20f98b8eb76b5443d54a50960e94906ecb25356607df",
+    "src/investment_agent/api/deps.py": "52d3d5cf0ee7ced1db99701a0eade64acb7eabcf2d8ec720a210a17e0a6e7f74",
+    "src/investment_agent/api/routes/supplemental_updates.py": "88f03f4d8ba88099678205ba4f6776ef5e513c76f4e96a11a865db142c64fdd9",
+    "src/investment_agent/evidence/disclosure_http.py": "9d79b99feea759d1e85730e285512689428b4607b514e55fb8742e9bc469c285",
+    "src/investment_agent/evidence/disclosure_pages.py": "05a94f131a5f6b2fd3fd6e8298fc77b8698946daff3e44a52cc489ee4931a4e7",
+    "src/investment_agent/research/worker.py": "b305f8683d38ae9b604f8576d2034fd62715eedb65dc97957b45b2d66cba2f4b",
+    "src/investment_agent/storage/models/supplemental_updates.py": "540916a404948ba92b3852edb4e25db480501b34d506d8e259c8ea0e89d6bfde",
+    "src/investment_agent/storage/repositories/supplemental_updates.py": "fe918d557da944aaef8fde1fbb774b2eb8b4248f0fab898e9af69f1e90feb2e4",
+    "src/investment_agent/supplemental_rules/contracts.py": "10cdd76b7d134ff0eee498d6ec942b5e653200be546003de84ddc8305c0e3c2e",
+    "src/investment_agent/supplemental_rules/coverage.py": "235038d11c89a9d8ca640498f40f25029cdb07c2ad52f4da70400b0fcac7eb5d",
+    "src/investment_agent/supplemental_rules/disclosure_authorization.py": "ff2d4459a6ac6d74e5698fd31968f43ed67163ce56090a9bfe39aaad1c27e1a2",
+    "src/investment_agent/supplemental_rules/disclosure_candidate_ingest.py": "04546937053e49441814515ebb14e675c9d9baca79993e9ea32312cbfa87f777",
+    "src/investment_agent/supplemental_rules/disclosure_contracts.py": "7dcbcbceb18c8baf0cb12c252a5de2f0d565f1eb60879ddcf3e8157389d95530",
+    "src/investment_agent/supplemental_rules/disclosure_schedule.py": "2228ef767b86ca6128b88bb249dd3ee45557e282c43ec29c674e28feab10a428",
+    "src/investment_agent/supplemental_rules/disclosure_updates.py": "021d98e35da78e5f611fa2d2b43431a2dabf50d0b7d879834c77f768b5437d3f",
+    "src/investment_agent/supplemental_rules/disclosure_views.py": "9d4435606386cc708b8df7633810d27f5f3f239bb8e18b3e27dd3cd2c5ae274f",
+    "src/investment_agent/supplemental_rules/publication_limits.py": "16e917d3247dccb20d61590ff88fcd2ec56101008d46f493216645025b942cb8",
+    "src/investment_agent/supplemental_rules/update_jobs.py": "fc4b53b5575de3c51e6b6899ca2f18287359ad228c5fac981fc34fa49bcf794f",
+    "src/investment_agent/web/static/supplemental_items.js": "55a243a730f9a2c4530c7f7a6ee5223885e52b2593b2e8cce9a3b4f3b76dd640",
+    "tests/browser/disclosure_updates.mjs": "7df212321f8d970a8b8a7b9b4f463d60c9638f69fbe3a92d5aba7a6af2d92600",
+    "tests/browser/disclosure_updates_fixture_server.py": "b71150bb94a2970de6359673896aad186a1f7c0eac4f722ff256b2330e8dab70",
+    "tests/integration/test_api_disclosure_updates.py": "7c0a5b99eb63e6ec4fc28e0659200ba8d693488201272c17d1ce450fd6e14ca5",
+    "tests/integration/test_migration_050.py": "fb66b78deb7d41c7a45f8f4e52ddffbc7619cb5009d0c1fc9c06f586cf9a892f",
+    "tests/integration/test_migration_051.py": "9d31296a0a656ebe750fe83373c2546421892c39cccd67acaceadf3a941d862e",
+    "tests/integration/test_migration_052.py": "fe4e769feac8107f54f7634ecfdfb442f0ff784e05351c11258747bf21e87fed",
+    "tests/integration/test_migration_053.py": "88968de3ef1137108a1a3cfdbb918e0411470fa3352a38c260e8fa6113206c5e",
+    "tests/integration/test_migration_054.py": "2baf5551cbd317c1f30d46509b96f13f3196fb947d199ca4d3849f2405df873c",
+    "tests/integration/test_p4_disclosure_authorization.py": "9f838a1476bc495664853d7e74cf10dabe54cae88588a8e48e6d03b0d9ff5892",
+    "tests/integration/test_p4_disclosure_candidate_ingest.py": "b6c389d2171126296bcdf5579a238b5e2e79901f76cc1a7d88daee3385ed2448",
+    "tests/integration/test_p4_disclosure_coverage.py": "702c9078b779feb3796cce4e8c6b91cf05e5e58d1fadd6cead0fa7c66deea9f8",
+    "tests/integration/test_p4_disclosure_polling.py": "156dd9e497fae216ca64170e611b1c625a6a20aa884bb796493ed0a2c1fc8b2f",
+    "tests/integration/test_p4_disclosure_recovery.py": "ca0f2c467d7da0c7d0f005392422908fda6fb1c79e33bf7f37d9335495b40b5f",
+    "tests/integration/test_p4_disclosure_schedule.py": "9ad4aff005c62a09c64a88e8cee54bed9d91e855cdb88fb50dde4722ae784bf8",
+    "tests/integration/test_p4_shared_queue_capacity.py": "ad7ffe67953f9af8b3ac586e1e96e6da33107443c17598e0a065a0cd069f38ac",
+    "tests/support/p4_disclosures.py": "b3633649c9f3dac7679b4822550701bfc0ada8e33d2817213f714fdda7f95546",
+    "tests/unit/test_job_dispatch.py": "245b14b646d9cc676be4eb5d2271858a40edca4c03e37e40cd99164c42af8864",
+    "tests/unit/test_material_release_audit.py": "58ef27bf71f2e4ae1b4a1a4997de5c288710ceb1d457149ba9299eedc77f3c61",
+    "tests/unit/test_p4_disclosure_contracts.py": "55c7f7779b89e6f453e9382829734d4e61956b491be3c07742df949a0ee1c213",
+    "tests/unit/test_p4_disclosure_pages.py": "3d380e73453e38c7147323a774a8b93e9025f110dfd91ce500e78092655236fe",
+    "tests/unit/test_p4_disclosure_schedule.py": "bb05936109f2b143d92b59ae7b027d6407df2050d854805dec7c48603a4d0493",
+    "tests/unit/test_p4_source_coverage.py": "622bdb5316439878809d7f63f0f6543d5e9b581ef87b64f2e46fd9e4bb31d09d"
+  },
+  "observed_parallel_source_file_count": 16,
+  "observed_parallel_source_files_not_part_of_p4b": {
+    "src/investment_agent/cli/commands/peer_cohort.py": "d104fe2faa9ceb72aebe321928506a8cfd8e0eb736c806a059e561fe1622a16a",
+    "src/investment_agent/industry_peers/bank_online_reconciliation.py": "3dba5a119b6ba83bc61542ca8e19e90da22677eec90270df1bd94f7df6a27584",
+    "src/investment_agent/industry_peers/evidence.py": "762506a52832fdad09e8b08c5699e3d247d8d2a346a93d8f7f2d49405d4f83ca",
+    "src/investment_agent/industry_peers/jobs.py": "207f5be7883e7df8b5c89f5f767532d4dbf59a2db129b7ff22a4f04d54d80e91",
+    "src/investment_agent/industry_peers/metric_packs.py": "8fc66a16870a34102791e38424ba407b58b95d75773735c8a11719d519e020e0",
+    "src/investment_agent/industry_peers/overview.py": "7427672b5e61aa4df47196ec32489a78403053f0b4c9a4383b0fb48c6cb17a14",
+    "src/investment_agent/industry_peers/service.py": "77a78020471d0139d17fe497412f9503c7a22f8dc8437df2fc376493746ea736",
+    "src/investment_agent/providers/eastmoney_annual.py": "9852088c14cbe35ee80b2d637b1a1f2f93d5a9d779f9b0e8aeda7796966c757b",
+    "src/investment_agent/providers/eastmoney_bank_annual.py": "ea1bb51f9ca17e1a719c77f497a25d903156884ee914c9cf4ec2b913c59ba8dc",
+    "tests/integration/test_bank_online_acceptance.py": "ea993f7b75a56719ebb5faa85ebe04ef700ca5aa5a271a8329b83e585febd810",
+    "tests/integration/test_bank_online_originals.py": "a5be6a72adfc69bbb1ea8e52236788f5e0d2407f16064046044205faa9bf9282",
+    "tests/unit/test_bank_online_jobs.py": "33a7b0137038c4f75663c4186755663fea3c8bf5e215d507cb47a9c3ec5d746c",
+    "tests/unit/test_bank_online_reconciliation.py": "717456dd168e72a9dfcad5d3496dfa97386896eda7aa95cdc6064935dc8c53b7",
+    "tests/unit/test_bank_online_scope.py": "652389a89a1d71c2c6287f94503ed90e3bfde983e9958cda9d88a93f0d732e87",
+    "tests/unit/test_bank_online_update_links.py": "85858f3798e16a7e3e7c0b52f924698147635995796975fa87b23dd30ebbbb6e",
+    "tests/unit/test_eastmoney_bank_annual.py": "16171537fda90e894579486c628b3adc0faa044428737aa89a0d80abc0684a4d"
+  },
+  "preservation": {
+    "mobile/src-tauri/Cargo.lock": {
+      "sha256": "9663fabad369a20a7de44a21343ee98fb25f8d838fd1445fc39aea07211a1ff8",
+      "matches_implementation_start": true
+    },
+    "pyproject.toml": {
+      "sha256": "710ffc83b05d6303dedca86c30bd28debd099ff1f25a870fbfe6976cee2e7e1b",
+      "matches_implementation_start": true
+    },
+    "uv.lock": {
+      "sha256": "a28fdaa892c38830fe83ad328b207f3109c0d49712df0d302abc24d172585947",
+      "matches_implementation_start": true
+    },
+    "src/investment_agent/agent/observation.py": {
+      "sha256": "f99ad8f589b80b2af453407bd14f393af47d969386aec4e6b3305642a90505a1",
+      "matches_implementation_start": true
+    },
+    "alembic/versions/050_investment_assessment.py": {
+      "sha256": "1700c155cda7ae98ab380df1b6e52f95a1cc1c5e3cba3e90147f982a75f09842",
+      "matches_implementation_start": true
+    },
+    "alembic/versions/051_supplemental_rules.py": {
+      "sha256": "6f8c69ac364d0b0a409601f743579eda70cbad8b35b250500f0ac94633e12a58",
+      "matches_implementation_start": true
+    },
+    "alembic/versions/052_research_rule_binding.py": {
+      "sha256": "cac347ce3262708e13747ef23b5f2395e416914996d7f48a65b21205eb3f182f",
+      "matches_implementation_start": true
+    },
+    "alembic/versions/053_supplemental_updates.py": {
+      "sha256": "48df1757bb01ed5c11ea9c36803c32c67e018cbaabf0de81b3c220e52f39b21d",
+      "matches_implementation_start": true
+    }
+  },
+  "historical_probe_preservation": {
+    "docs/product/probes/account-fit-p2/README.md": "2a4fcf9d8ff84e5c70ed2f67813e0ac66bf6ad746992764c4ab5262df5e06608",
+    "docs/product/probes/account-fit-p2/synthetic-management-1440.png": "66a5ce8289a03a4a632ae6453d56536ab86fda3421b9fada7dcdce48367e8d58",
+    "docs/product/probes/account-fit-p2/synthetic-management-390.png": "4e3f5d455a4cbb2f8df23859c50889ea3b4e6f35a38e0446c8ba875a0d8712fb",
+    "docs/product/probes/account-fit-p2/synthetic-stock-1440.png": "c31ee1aa95c168c966872313bcbac39835d6ca6cb57a983b240dcb765a48fcc2",
+    "docs/product/probes/account-fit-p2/synthetic-stock-390.png": "8102f118f0c87e9c32bf0277a30b116b180981d1f5bec63f8d40a21659fb0703",
+    "docs/product/probes/account-fit-p3/synthetic-closure-bound-1440.png": "31ebf554f2f541d5fdd8f7d4556df1c32adcef3929b218ad8dff267e5f07d459",
+    "docs/product/probes/account-fit-p3/synthetic-closure-legacy-1440.png": "cf70627fabbf0ffaaca5f8b399049ecf89cee2ec1eb2052a36ea6d67f5af34af",
+    "docs/product/probes/account-fit-p3/synthetic-closure-legacy-390.png": "4f4888809d244a65a26d60bfce70a17217969434c2db693da6c792dcbcf7e2f0",
+    "docs/product/probes/account-fit-p3/synthetic-closure-revisit-bound-1440.png": "a93ca58e3b35d2e778dfb766826c0ccee34cf2a5ce7926dabcdf86a755be9d84",
+    "docs/product/probes/account-fit-p3/synthetic-closure-revisit-bound-390.png": "b793484c1e09eefeb1eacee953f12e37f30042858fa7d611ea8a1ab9789798df",
+    "docs/product/probes/account-fit-p4/README.md": "eb8be218cda4efb5f69cca6c4a205a2895212c1143650649a149d31b192fe134",
+    "docs/product/probes/account-fit-p4/closed-390.png": "1a1dc5cc52bc4437fc51812f8bf81e7f1f6bebfa9390ad1f338127ef0294327f",
+    "docs/product/probes/account-fit-p4/local-1440.png": "b65ab3bebab9a2eefc7c4ae3534098b169d576bf625a514f151697ebde87e66f",
+    "docs/product/probes/account-fit-p4/local-390.png": "535eff62391f7078a8bf24cf779cbaf1777a2baef061b249c92f2442b01bb0d6",
+    "docs/product/probes/account-fit-p4/source-failed-1440.png": "e52154d1fff8e9aad89b099ccaeed05df5f2e3357c00d39d29e3fa65a9250c88",
+    "docs/product/probes/account-fit-p4/source-failed-390.png": "798dc15ec6822543fdd5800124b9b9fdfefab7978faf438f7004e7fc1aae9c4a",
+    "docs/product/probes/account-fit-p4/uncovered-1440.png": "d148c6e44aff98e51121702339fc3ba7c3ceee7cc80a8bbc4cab0ad0b9a20d99",
+    "docs/product/probes/account-fit-p4/uncovered-390.png": "3a452f65e2709947d3716fa5d4a4dc4e6a1b0803185231f5baf5c0abf8c4c2f6"
+  },
+  "b_browser_probes": {
+    "docs/product/probes/account-fit-p4-b/closed-390.png": "ff128a41ea8ef1d41bcea97dca38e262736c5543b4793d244d0b4e9252dd853f",
+    "docs/product/probes/account-fit-p4-b/completed-fixture-1440.png": "5d1d390cdc825a916a0a71b7a32b740452bde151e6d4a61124b511fd02e1504f",
+    "docs/product/probes/account-fit-p4-b/completed-fixture-390.png": "d88fc7bfe13d6efa9c9451b464bd386775b75a17bc39f485effe35d6ec76d39d",
+    "docs/product/probes/account-fit-p4-b/rate-limited-1440.png": "fa66fca9e001864d6156cbc6a77a668c5757f2b62373a9f685401e495d9a6b22",
+    "docs/product/probes/account-fit-p4-b/rate-limited-390.png": "cf4c5c40906171be09e7a5f8f427d036dcf948d2b8181f87a9ec1e4ce95e5edc"
+  },
+  "tree_hash_format": "SHA256 of sorted git ls-files --cached --others --exclude-standard src tests alembic entries: UTF-8 path + NUL + lowercase file SHA256 + newline",
+  "notes": [
+    "A source snapshot remains an immutable historical baseline. Shared A files modified by B are listed in B changes.",
+    "Full-tree digest includes observed parallel bank work; that work is preserved and explicitly excluded from B delivery attribution.",
+    "Source migration graph 054 only; deployed database and runtime overlay not opened or migrated."
+  ]
+}

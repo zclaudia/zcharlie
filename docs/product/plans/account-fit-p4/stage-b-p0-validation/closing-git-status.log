@@ -1,0 +1,127 @@
+ M docs/product/account-fit-and-supplemental-rules-design.md
+ M docs/product/plans/account-fit-p4-plan.md
+ M docs/product/probes/account-fit-p1/synthetic-desktop-1440.png
+ M docs/product/probes/account-fit-p1/synthetic-mobile-390.png
+ M docs/product/probes/account-fit-p1/synthetic-ranking-desktop-1440.png
+ M mobile/src-tauri/Cargo.lock
+ M src/investment_agent/agent/execution.py
+ M src/investment_agent/agent/operations.py
+ M src/investment_agent/agent/research_publication.py
+ M src/investment_agent/api/app.py
+ M src/investment_agent/api/deps.py
+ M src/investment_agent/api/routes/investor.py
+ M src/investment_agent/api/routes/research.py
+ M src/investment_agent/api/routes/supplemental_rules.py
+ M src/investment_agent/cli/commands/bank_rollover.py
+ M src/investment_agent/config.py
+ M src/investment_agent/evidence/disclosure_http.py
+ M src/investment_agent/evidence/store.py
+ M src/investment_agent/industry_peers/bank_annual_sources.py
+ M src/investment_agent/industry_peers/bank_annual_v2.py
+ M src/investment_agent/investor/monitoring.py
+ M src/investment_agent/investor/notifications.py
+ M src/investment_agent/investor/publication.py
+ M src/investment_agent/materials/store.py
+ M src/investment_agent/research/worker.py
+ M src/investment_agent/scheduler/runner.py
+ M src/investment_agent/settings/registry.py
+ M src/investment_agent/storage/models/__init__.py
+ M src/investment_agent/storage/repositories/investment_assessment.py
+ M src/investment_agent/supplemental_rules/admission.py
+ M src/investment_agent/supplemental_rules/contracts.py
+ M src/investment_agent/supplemental_rules/coverage.py
+ M src/investment_agent/supplemental_rules/events.py
+ M src/investment_agent/supplemental_rules/jobs.py
+ M src/investment_agent/supplemental_rules/lifecycle.py
+ M src/investment_agent/supplemental_rules/publication_limits.py
+ M src/investment_agent/supplemental_rules/views.py
+ M src/investment_agent/web/static/settings.js
+ M src/investment_agent/web/static/supplemental_items.js
+ M src/investment_agent/web/templates/stock.html
+ M tests/browser/research_closure.mjs
+ M tests/integration/test_migration_050.py
+ M tests/integration/test_migration_051.py
+ M tests/integration/test_migration_052.py
+ M tests/integration/test_web_supplemental_rules.py
+ M tests/support/bank_annual_v2.py
+ M tests/unit/test_bank_annual_review.py
+ M tests/unit/test_bank_annual_sources.py
+ M tests/unit/test_job_dispatch.py
+ M tests/unit/test_material_release_audit.py
+?? .playwright-mcp/
+?? .zcode/
+?? alembic/versions/053_supplemental_updates.py
+?? alembic/versions/054_p4_poll_coverage_guard.py
+?? docs/product/plans/account-fit-p4/
+?? docs/product/plans/industry-expansion/bank-fy2024-large.md
+?? docs/product/plans/industry-expansion/bank-fy2024-plan.md
+?? docs/product/plans/industry-expansion/bank-fy2024-regional.md
+?? docs/product/plans/industry-expansion/bank-fy2024-scope.md
+?? docs/product/probes/account-fit-p4-b/
+?? docs/product/probes/account-fit-p4-p0/
+?? docs/product/probes/account-fit-p4/
+?? src/investment_agent/api/routes/supplemental_updates.py
+?? src/investment_agent/evidence/disclosure_pages.py
+?? src/investment_agent/evidence/disclosure_profiles.py
+?? src/investment_agent/industry_peers/bank_annual_identity.py
+?? src/investment_agent/industry_peers/bank_annual_matrix.py
+?? src/investment_agent/industry_peers/bank_fy2024_profiles.py
+?? src/investment_agent/research/disclosure_campaign_runner.py
+?? src/investment_agent/storage/models/supplemental_updates.py
+?? src/investment_agent/storage/repositories/supplemental_updates.py
+?? src/investment_agent/supplemental_rules/disclosure_authorization.py
+?? src/investment_agent/supplemental_rules/disclosure_campaign.py
+?? src/investment_agent/supplemental_rules/disclosure_campaign_anchor.py
+?? src/investment_agent/supplemental_rules/disclosure_campaign_contracts.py
+?? src/investment_agent/supplemental_rules/disclosure_candidate_ingest.py
+?? src/investment_agent/supplemental_rules/disclosure_contracts.py
+?? src/investment_agent/supplemental_rules/disclosure_probe.py
+?? src/investment_agent/supplemental_rules/disclosure_probe_quota.py
+?? src/investment_agent/supplemental_rules/disclosure_schedule.py
+?? src/investment_agent/supplemental_rules/disclosure_updates.py
+?? src/investment_agent/supplemental_rules/disclosure_views.py
+?? src/investment_agent/supplemental_rules/update_bootstrap.py
+?? src/investment_agent/supplemental_rules/update_contracts.py
+?? src/investment_agent/supplemental_rules/update_intake.py
+?? src/investment_agent/supplemental_rules/update_jobs.py
+?? src/investment_agent/supplemental_rules/update_targets.py
+?? src/investment_agent/supplemental_rules/updates.py
+?? tests/browser/disclosure_updates.mjs
+?? tests/browser/disclosure_updates_fixture_server.py
+?? tests/browser/supplemental_updates.mjs
+?? tests/browser/supplemental_updates_fixture_server.py
+?? tests/fixtures/bank_fy2024/
+?? tests/fixtures/supplemental_updates_v1/
+?? tests/integration/test_api_disclosure_updates.py
+?? tests/integration/test_api_supplemental_updates.py
+?? tests/integration/test_bank_two_year_matrix.py
+?? tests/integration/test_migration_053.py
+?? tests/integration/test_migration_054.py
+?? tests/integration/test_p4_campaign_authorization.py
+?? tests/integration/test_p4_disclosure_authorization.py
+?? tests/integration/test_p4_disclosure_campaign.py
+?? tests/integration/test_p4_disclosure_candidate_ingest.py
+?? tests/integration/test_p4_disclosure_coverage.py
+?? tests/integration/test_p4_disclosure_polling.py
+?? tests/integration/test_p4_disclosure_probe.py
+?? tests/integration/test_p4_disclosure_recovery.py
+?? tests/integration/test_p4_disclosure_runner.py
+?? tests/integration/test_p4_disclosure_schedule.py
+?? tests/integration/test_p4_notifications.py
+?? tests/integration/test_p4_shared_queue_capacity.py
+?? tests/integration/test_p4_source_publication.py
+?? tests/integration/test_p4_update_bootstrap.py
+?? tests/integration/test_p4_update_engine.py
+?? tests/integration/test_p4_update_recovery.py
+?? tests/integration/test_p4_update_review_dispatch.py
+?? tests/integration/test_p4_update_targets.py
+?? tests/integration/test_supplemental_updates_storage.py
+?? tests/support/p4_disclosures.py
+?? tests/unit/test_bank_annual_identity.py
+?? tests/unit/test_bank_annual_matrix.py
+?? tests/unit/test_p4_disclosure_campaign_contracts.py
+?? tests/unit/test_p4_disclosure_contracts.py
+?? tests/unit/test_p4_disclosure_pages.py
+?? tests/unit/test_p4_disclosure_profiles.py
+?? tests/unit/test_p4_disclosure_schedule.py
+?? tests/unit/test_p4_source_coverage.py

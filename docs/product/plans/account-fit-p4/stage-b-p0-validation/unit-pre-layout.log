@@ -1,0 +1,181 @@
+........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 13%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+........................................................................ [ 24%]
+......................................s................................. [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 40%]
+...............s.....................................................F.. [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+........................................................................ [ 75%]
+........................................................................ [ 78%]
+........................................................................ [ 80%]
+........................................................................ [ 83%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+..
+snapshot vs iFinD deviation - 601398.SH (as of 2026-10-05)
+| ticker | scope | field | iFinD | snapshot | rel. diff |
+|---|---|---|---|---|---|
+| 601398.SH | market | latest_price | 8.28 | 8.28 | +0.0% |
+| 601398.SH | market | pe | 8.28 | 7.888 | -4.7% |
+| 601398.SH | market | pb | 0.7645 | 0.7448 | -2.6% |
+| 601398.SH | market | ps | 3.52 | 3.365 | -4.4% |
+| 601398.SH | market | dividend_yield | - | - | - |
+| 601398.SH | market | return_1y | 0.1795 | 0.1798 | +0.2% |
+| 601398.SH | market | volatility_1y | 0.1871 | 0.1865 | -0.3% |
+| 601398.SH | market | max_drawdown_1y | 0.1529 | 0.1524 | -0.3% |
+| 601398.SH | market | market_cap | 2.9510e+12 | 2.9510e+12 | +0.0% |
+| 601398.SH | financial | revenue | 8.3827e+11 | - | - |
+| 601398.SH | financial | net_profit | 3.6856e+11 | - | - |
+| 601398.SH | financial | gross_margin | - | - | - |
+| 601398.SH | financial | net_margin | 0.4423 | 0.4423 | +0.0% |
+| 601398.SH | financial | roe | 0.08974 | 0.08974 | +0.0% |
+| 601398.SH | financial | roe_stability | 0.9351 | 0.9351 | -0.0% |
+| 601398.SH | financial | debt_ratio | 0.9201 | - | - |
+| 601398.SH | financial | operating_cash_flow | 1.8905e+12 | 1.8905e+12 | -0.0% |
+| 601398.SH | financial | free_cash_flow | 1.8523e+12 | - | - |
+| 601398.SH | financial | revenue_growth_3y | -0.02983 | -0.02983 | +0.0% |
+| 601398.SH | financial | net_profit_growth_3y | 0.007415 | 0.008902 | +20.1% |
+| 601398.SH | score | strategy_type | dividend_blue_chip | dividend_blue_chip | - |
+| 601398.SH | score | selected_model | banking | banking | - |
+| 601398.SH | score | business_score | 58 | 58.17 | +0.3% |
+| 601398.SH | score | research_confidence_score | 80.5 | 59.5 | -26.1% |
+| 601398.SH | score | suggestion | low_priority | needs_review | - |
+| 601398.SH | score | valuation_level | cheap | cheap | - |
+| 601398.SH | score | risk_level | medium | medium_low | - |
+| 601398.SH | score | needs_agent_review | False | True | - |
+
+.
+snapshot vs iFinD deviation - 600519.SH (as of 2026-10-05)
+| ticker | scope | field | iFinD | snapshot | rel. diff |
+|---|---|---|---|---|---|
+| 600519.SH | market | latest_price | 1259 | 1259 | +0.0% |
+| 600519.SH | market | pe | 19.17 | 19.32 | +0.8% |
+| 600519.SH | market | pb | 6.443 | 6.262 | -2.8% |
+| 600519.SH | market | ps | 9.161 | 9.082 | -0.9% |
+| 600519.SH | market | dividend_yield | - | - | - |
+| 600519.SH | market | return_1y | -0.088 | -0.088 | +0.0% |
+| 600519.SH | market | volatility_1y | 0.2239 | 0.2239 | +0.0% |
+| 600519.SH | market | max_drawdown_1y | 0.2307 | 0.2307 | +0.0% |
+| 600519.SH | market | market_cap | 1.5734e+12 | 1.5734e+12 | +0.0% |
+| 600519.SH | financial | revenue | 1.7205e+11 | - | - |
+| 600519.SH | financial | net_profit | 8.2320e+10 | - | - |
+| 600519.SH | financial | gross_margin | 0.9118 | 0.9118 | +0.0% |
+| 600519.SH | financial | net_margin | 0.5053 | 0.5053 | +0.0% |
+| 600519.SH | financial | roe | 0.3446 | 0.3446 | -0.0% |
+| 600519.SH | financial | roe_stability | 0.9374 | 0.9374 | +0.0% |
+| 600519.SH | financial | debt_ratio | 0.1642 | 0.1642 | -0.0% |
+| 600519.SH | financial | operating_cash_flow | 6.1522e+10 | 6.1522e+10 | +0.0% |
+| 600519.SH | financial | free_cash_flow | 5.8395e+10 | - | - |
+| 600519.SH | financial | revenue_growth_3y | 0.1049 | 0.116 | +10.6% |
+| 600519.SH | financial | net_profit_growth_3y | 0.0949 | 0.09277 | -2.2% |
+| 600519.SH | score | strategy_type | steady_quality_growth | steady_quality_growth | - |
+| 600519.SH | score | selected_model | steady_quality_growth | steady_quality_growth | - |
+| 600519.SH | score | business_score | 76.88 | 77.38 | +0.7% |
+| 600519.SH | score | research_confidence_score | 87.4 | 59.5 | -31.9% |
+| 600519.SH | score | suggestion | defer | needs_review | - |
+| 600519.SH | score | valuation_level | expensive | expensive | - |
+| 600519.SH | score | risk_level | medium_low | medium_low | - |
+| 600519.SH | score | needs_agent_review | False | True | - |
+
+..................................................................... [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+........................................................................ [ 99%]
+.........                                                                [100%]
+=================================== FAILURES ===================================
+__________________ test_no_new_package_edges_beyond_baseline ___________________
+
+    def test_no_new_package_edges_beyond_baseline() -> None:
+        """The ratchet: every current package-pair edge must be in the frozen baseline.
+    
+        Reductions are allowed and never fail: the baseline is a superset check, not equality,
+        so refactors can only improve the graph without a baseline edit.
+        """
+        baseline = _load_baseline_edges()
+        new_edges = sorted(EDGE_NAMES - baseline)
+        if new_edges:
+            blocks = []
+            for edge in new_edges:
+                source, target = edge.split(EDGE_ARROW)
+                blocks.append(
+                    f"  {edge}\n" + _format_sites(GRAPH.edge_sites[(source, target)], limit=1)
+                )
+>           raise AssertionError(
+                f"{len(new_edges)} new intra-project package edge(s) not in the baseline:\n"
+                + "\n".join(blocks)
+                + "\n\nWhat this means: the import created a coupling between two packages that "
+                "did not exist before, so the dependency graph got worse.\n"
+                "Note that function-level (lazy) imports count too: moving an import inside a "
+                "function does not hide it from this guard.\n"
+                "If the edge is genuinely intended (and a reviewer agrees it is not a layering "
+                "reversal), regenerate the baseline with:\n"
+                f"    {REGEN_COMMAND}\n"
+                f"and make sure the new edge is visible in the diff of {BASELINE_PATH.name}."
+            )
+E           AssertionError: 2 new intra-project package edge(s) not in the baseline:
+E             evidence -> supplemental_rules
+E               - investment_agent.evidence.disclosure_probe:425 (function-level import of investment_agent.supplemental_rules.disclosure_campaign)
+E               - ... and 6 more site(s) for this edge
+E             supplemental_rules -> research
+E               - investment_agent.supplemental_rules.disclosure_runner:19 (module-level import of investment_agent.research.worker)
+E           
+E           What this means: the import created a coupling between two packages that did not exist before, so the dependency graph got worse.
+E           Note that function-level (lazy) imports count too: moving an import inside a function does not hide it from this guard.
+E           If the edge is genuinely intended (and a reviewer agrees it is not a layering reversal), regenerate the baseline with:
+E               .venv/bin/python tests/unit/test_import_graph.py
+E           and make sure the new edge is visible in the diff of import_graph_baseline.json.
+
+tests/unit/test_import_graph.py:398: AssertionError
+=============================== warnings summary ===============================
+tests/unit/test_supplemental_binding_contracts.py::test_mechanical_authorization_is_the_default_and_keeps_p2_bans
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/pydantic/main.py:475: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `ObjectRef` - serialized value may not be as expected [field_name='semantic_review_ref', input_value={'kind': 'review', 'id': ...e4513b1', 'revision': 1}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+tests/unit/test_supplemental_binding_contracts.py::test_mechanical_authorization_is_the_default_and_keeps_p2_bans
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/pydantic/main.py:475: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `ObjectRef` - serialized value may not be as expected [field_name='closure_refs', input_value={'kind': 'rule_applicatio...4c9b72f', 'revision': 1}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+tests/unit/test_supplemental_binding_contracts.py::test_formal_review_application_requires_review_closure_live_and_purpose
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/pydantic/main.py:475: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `ObjectRef` - serialized value may not be as expected [field_name='closure_refs', input_value={'kind': 'rule_applicatio...3bdbdee', 'revision': 1}, input_type=dict])
+    PydanticSerializationUnexpectedValue(Expected `ObjectRef` - serialized value may not be as expected [field_name='semantic_review_ref', input_value={'kind': 'review', 'id': ...56ce6e0', 'revision': 1}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+tests/unit/test_supplemental_binding_contracts.py::test_formal_review_application_requires_review_closure_live_and_purpose
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/pydantic/main.py:475: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `ObjectRef` - serialized value may not be as expected [field_name='closure_refs', input_value={'kind': 'rule_applicatio...3bdbdee', 'revision': 1}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+tests/unit/test_supplemental_binding_contracts.py::test_formal_review_application_requires_review_closure_live_and_purpose
+  /Users/zhvala/SourceCode/zcharlie/.venv/lib/python3.13/site-packages/pydantic/main.py:475: UserWarning: Pydantic serializer warnings:
+    PydanticSerializationUnexpectedValue(Expected `ObjectRef` - serialized value may not be as expected [field_name='semantic_review_ref', input_value={'kind': 'review', 'id': ...56ce6e0', 'revision': 1}, input_type=dict])
+    return self.__pydantic_serializer__.to_python(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/unit/test_costco_parent_equity_review.py:163: full captured SEC filing is an ignored artifact
+SKIPPED [1] tests/unit/test_hsbc_restatement_review.py:73: raw source captures are not included in a clean checkout
+FAILED tests/unit/test_import_graph.py::test_no_new_package_edges_beyond_baseline
+1 failed, 2670 passed, 2 skipped, 6 deselected, 5 warnings in 397.09s (0:06:37)

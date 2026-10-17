@@ -1,0 +1,15 @@
+source tree: 1261 7be6287cf9d77d60f5cf8920e2c8573cd42780eafdf38bceb9c03514c18db6dd
+HEAD unchanged: 7df697aeeb951f9bf1b76de7b2194ca6a62c6e7a
+source migration head: 054 (head)
+bootstrap only: {"account_fit_enabled": false, "candidate_ranking_enabled": false, "disclosure_originals_enabled": false, "investor_agent_background_enabled": false, "investor_agent_enabled": false, "notification_external_enabled": false, "supplemental_disclosure_polling_enabled": false, "supplemental_rules_enabled": false, "supplemental_updates_enabled": false}
+production source protocol default: None/unvalidated
+deployed database/runtime overlay: not opened
+shared renderer and A/B JS syntax: passed
+git diff --check: passed
+p4b_changed_source_files: 43 hashes matched
+observed_parallel_source_files_not_part_of_p4b: 16 hashes matched
+historical_probe_preservation: 18 hashes matched
+b_browser_probes: 5 hashes matched
+mobile/dependencies/collector/050-053 preservation: 8 matched start
+local Markdown links: 139 all exist
+AF-P4-08 real source collection / paid provider / production operations / switch activation / commit / push: NOT EXECUTED

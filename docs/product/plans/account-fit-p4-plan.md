@@ -1,19 +1,19 @@
 # P4 持续更新与受控启用：实施计划
 
-日期：2026-10-17（Asia/Shanghai）。状态：**实施计划经审查通过**（仅文档）；**未开始 P4 业务实现，未新增迁移，未操作生产、启用开关、提交或推送。** 本计划由主代理设计并交叉核对，三个 GPT‑6 Luna 子代理分别审查来源可信性、调度恢复、通知与启用门禁；审查裁决见第 12 节。后续实施须另获授权，生产启用再单独授权。
+日期：2026-10-17（Asia/Shanghai）。状态：**阶段 A（AF-P4-00—06）已通过工程验收；AF-P4-07 已获单独授权并通过工程验收；08-P0离线工程已获后续授权并实施，最终结果见[08-P0验收](account-fit-p4/stage-b-p0-acceptance.md)；AF-P4-08 S0和真实来源采集未执行。** B 工程实际契约、交叉审查、结果见[交付索引](account-fit-p4/README.md)和[B工程验收](account-fit-p4/stage-b-acceptance.md)；后续 S0/真实样本、研究质量、生产启用分别守门。本轮没有生产操作、生产开关、提交或推送。第 12 节及第 14 节的“仅计划”是原审查历史，不能覆盖后续授权与实施事实。B 具体计划仍见[阶段B计划](account-fit-p4/stage-b-plan.md)，08后续执行细化见[第16节](#16-af-p4-08-计划接续)。
 
 ## 1. 基线与本轮范围
 
-优先级：实际代码及最终验收 > 早期任务书中的拟议落点和待确认项。基线是当前工作区的 P3 最终源码，不是只含 P2 的 Git HEAD。
+优先级：实际代码及最终验收 > 早期任务书中的拟议落点和待确认项。计划初审时基线是 P3 最终工作区；用户随后提交 P3 与移动端改动，阶段 A 实施以 `7df697aeeb951f9bf1b76de7b2194ca6a62c6e7a` 为基线。下表已按阶段 A 实施基线更新；计划初审的历史裁决保留在第 12 节，当前结果以 A 交付记录及第 15 节 B 工程交付为准。
 
 | 核对项 | 2026-10-17 的事实与证据 |
 | --- | --- |
-| 提交 | `de77ec5 feat(research): implement P2 supplemental rules with recovery safeguards` 为当前 HEAD；后续 P3 文件和修改尚未提交，不存在可指称的“P3 发布提交” |
+| 提交 | 用户已提交 P3；阶段 A 基线 HEAD 为 `7df697aeeb951f9bf1b76de7b2194ca6a62c6e7a feat(research): close formal research on bound supplemental rules`，本轮不提交或推送 |
 | P3 最终版本 | [执行记录](account-fit-p3/execution.md)、[整合复审](account-fit-p3/review.md)、[主代理最终验收](account-fit-p3/acceptance.md)与[契约冻结](account-fit-p3/p3-freeze.md)共同定义；十项任务工程验收通过，不重复实施 |
-| 工程验收证据 | P3 最终记录：unit 2485 passed / 2 skipped（缺原始材料），6 network 默认排除；integration 789 passed；根目录 717 passed；专项与全量重叠不累加。浏览器 1440/390 三脚本通过；ready/limited 部分为同渲染器合成投影。以上为历史验收，本轮没有重新执行或冒称实测 |
-| 迁移 | 本轮只执行无数据库连接的 `alembic heads`，源码迁移图为 **052 单 head**；052 为工作区文件。未执行 `upgrade/current`，未据此推断部署数据库已经迁移至 052 |
+| 工程验收证据 | P3 最终记录：unit 2485 passed / 2 skipped（缺原始材料），6 network 默认排除；integration 789 passed；根目录 717 passed；专项与全量重叠不累加。浏览器 1440/390 三脚本通过；ready/limited 部分为同渲染器合成投影。以上为 P3 历史验收；本轮 P4 最终回归另记于 [A 验收](account-fit-p4/acceptance.md)，不累加历史数字 |
+| 迁移 | 阶段 A 新增 053，仅在临时 SQLite 验证 fresh/052 升级与降级守卫；阶段 A 当时源码迁移图为 **053 单 head**，050/051/052 归档字节不变。没有对部署数据库执行 upgrade/current，部署版本仍待独立只读核验 |
 | 配置 | 本轮只读解析 bootstrap Settings：supplemental/account_fit/candidate_ranking、investor_agent/background、disclosure_originals、external notification/idempotent 均 false。配置指向的本地 `data/app.db` 不存在；没有数据库 runtime overlay 可核。`settings/loader.py` 表明导入后 DB 设置优先于 env；Compose override 又可覆盖数据库路径，因此**部署库版本、导入状态和实际运行设置未核实**，须后续启用前独立只读核验 |
-| 并行改动 | 开始时已有 P3 源码/测试/文档、`mobile/src-tauri/Cargo.lock`、`.playwright-mcp/`、`.zcode/` 等修改或未跟踪项。保留原状，不整理、回退、提交或混入 P4。本轮仅新增本文并给主设计补链接 |
+| 并行改动 | 阶段 A 开始时 P3 已提交；已有 `mobile/src-tauri/Cargo.lock`、`.playwright-mcp/`、`.zcode/` 等并行内容保留，不回退、不提交或混入 P4。P1/P2/P3 浏览器探针从开始时备份恢复，只归档 P4 新截图 |
 | 继承基线 | [P2 冻结](account-fit-p2/p2-freeze.md)、[P2 追加复审](account-fit-p2/followup-review-2026-10-16.md)、[P3 计划](account-fit-p3-plan.md)。P3 早期“待确认”已由其冻结/最终代码裁决，不转抄成 P4 待实现 |
 
 工程通过不代表真实来源、公司暴露、研究质量、生产交易规则或生产启用通过。当前没有这些门禁已通过的记录；首期仍保留 `UnavailableTradingRules`，没有通用可信政策事件流，不承诺全网新闻覆盖。
@@ -42,7 +42,7 @@
 
 按依赖分三阶段：**A 本地变化与复核恢复 → B 单一有限披露源 → C 真实样本与启用准备**。通知与观测从 A 起随事务交付，不能拖到最后补救。
 
-拟新增两个默认 false 的 runtime 开关：`supplemental_updates_enabled`（自动本地复核和 P4 研究调度）与 `supplemental_disclosure_polling_enabled`（有限披露源定时联网）。它们不是授权凭证，也不修改 P2 三开关默认值。手动 P2 管理/评估仍沿 P2；官方原件链继续要求 `disclosure_originals_enabled` 和精确来源权限。P4 自动本地评估取 updates∧supplemental；自动研究再取 agent∧background∧当前 Mandate 范围/预算；定时联网再取 polling∧originals∧源/scope 明确许可与限额。fit/ranking 只沿原有各自开关，不由 P4 自动重排或建立账户交易情景。
+A 已新增两个默认 false 的 runtime 开关：`supplemental_updates_enabled`（自动本地复核和 P4 研究调度）与 `supplemental_disclosure_polling_enabled`（有限披露源定时联网，A仅保留默认值）。它们不是授权凭证，也不修改 P2 三开关默认值。手动 P2 管理/评估仍沿 P2；官方原件链继续要求 `disclosure_originals_enabled` 和精确来源权限。P4 自动本地评估取 updates∧supplemental；自动研究再取 agent∧background∧当前 Mandate 范围/预算；B定时联网取 supplemental∧updates∧polling∧originals∧源/scope 明确后台许可与逐HTTP限额。fit/ranking 只沿原有各自开关，不由 P4 自动重排或建立账户交易情景。
 
 已有领域写入成功后，追加轻量变化收据不受这两个调度开关影响，避免关闭期漏记；调度关闭只阻止新评估/联网/研究的推进。启用新版本先建表后运行新 writer；旧版本仍在线写入的窗口用第 8 节补偿扫描弥补。不增加模型可写批准、核验、授权或启用工具。
 
@@ -56,7 +56,7 @@
 
 现有机制不足的具体原因：MonitorReceipt/ReviewCycle 强制 case FK，无法代表没有 case 的公司规则评估、源分页和覆盖；P2/P3 的 generation 只表示“有变化”，没有每条变化与持久消费确认；PipelineRun 已有 lease/尝试/请求清单，但缺源覆盖水位与跨批次 scope 合并槽位。故新增三张窄表；**不再新增工作队列、租约表、预算账本、原件表、通知 outbox、Issue 表或通用事件总线**。原件复用 DisclosureBlob/Original，资料复用 ResearchDataset/DocumentProvenance/EvidenceRecord；不同来源原件不硬塞 CNInfo 的固定身份结构。
 
-后续只新增一条独立迁移（若仍以 052 为 head 则候选 053；实际编号实施时核查），不改 050/051/052。新表 owner/subject/ref/hash/CAS/唯一约束、必要索引与不可变触发器纳入 ORM/DDL 对照；存在 P4 receipt/state/关联任务时拒绝有损 downgrade。不在本轮建立文件。
+后续只新增一条独立迁移（若仍以 052 为 head 则候选 053；实际编号实施时核查），不改 050/051/052。新表 owner/subject/ref/hash/CAS/唯一约束、必要索引与不可变触发器纳入 ORM/DDL 对照；存在 P4 receipt/state/关联任务时拒绝有损 downgrade。阶段 A 已建立该独立迁移；生产未执行。
 
 ### 4.2 三种身份不能互相替代
 
@@ -74,7 +74,7 @@ P4新本地批次优先经现有 `SupplementalRuleAdmission.accept_evaluation` �
 
 fanout 请求冻结实际 subject 集合及 hash，每页有持久 ordinal/最后处理成员，结果更新与 checkpoint 同事务、同 lease；全范围无法证明时 explicit unknown/partial，并保留继续位置。`affected_listings()` 当前是有界提示，不可直接视为全覆盖名单。类别规则遍历声明的本地上市主体集合并用 P2 matcher 判断；无暴露名单的广泛政策不能自动认为全市场适用。
 
-精确成员采用同一 journal 的 `scope_member` 行，不加第四张映射表：fanout 对每个 `(parent_change_sequence,listing_id,context)` 产生唯一成员，`id=UUIDv5(parent_receipt_id, listing_id/context)`，有 unique(parent_sequence,listing_id,context) 与 `(owner,listing_id,context,sequence)` 索引。成员行不递归生成 fanout；它引用冻结目标 manifest/hash 与 origin run。每个本地批次在 PipelineRun.request 中冻结有界成员 ID/序号列表和 pair/input hash，checkpoint 保存各成员的 result/交接/待人工证明。refresh_state 的确认水位只越过该 scope 已有持久交接证明的连续成员，不用一个全局 high watermark 代替成员集合；dirty 按该索引读取未确认成员。ReviewCycle 冻结本轮消费成员的 scope+序号范围/清单 hash/批次 refs，运行中新成员留独立未消费范围；成功后逐项确认，失败保留原集合。超出有界批次/评审窗口就 blocked/继续分页，不能截掉成员或把多次变化只留最后一条。真实 SQLite/EXPLAIN 验证不靠无索引 JSON 全扫还原成员。
+精确成员采用同一 journal 的 `scope_member` 行，不加第四张映射表：fanout 对每个 `(parent_change_sequence,listing_id,context)` 产生唯一成员，`id` 首次持久化生成并随唯一成员身份稳定重放，有 unique(parent_sequence,listing_id,context) 与 `(owner,listing_id,context,sequence)` 索引。成员行不递归生成 fanout；它引用冻结目标 manifest/hash 与 origin run。每个本地批次在 PipelineRun.request 中冻结有界成员 ID/序号列表和 pair/input hash，checkpoint 保存各成员的 result/交接/待人工证明。refresh_state 的确认水位只越过该 scope 已有持久交接证明的连续成员，不用一个全局 high watermark 代替成员集合；dirty 按该索引读取未确认成员。ReviewCycle 冻结本轮消费成员的 scope+序号范围/清单 hash/批次 refs，运行中新成员留独立未消费范围；成功后逐项确认，失败保留原集合。超出有界批次/评审窗口就 blocked/继续分页，不能截掉成员或把多次变化只留最后一条。真实 SQLite/EXPLAIN 验证不靠无索引 JSON 全扫还原成员。
 
 HTTP cursor 绑定 owner/source/scope/config hash/query hash、snapshot high watermark、after ordinal，严格形状/长度和有界读取；与已冻结批次不符 409，非法 cursor 422，错 owner/不存在 404。不得从一个新集合继续旧 cursor。初始扫描/可变本地来源不是可靠单调 feed：需固定 sweep 成员和分段 hash、before/after generation 对账，写钩子补 sweep 期间的新变化；无法确认一致就继续补偿并显示覆盖不完整，不靠 max UUID 或 max captured_at 跳过迟到写入。
 
@@ -107,14 +107,14 @@ B 默认仍产 candidate 的未解析原件及待核事件，复用 `EvidenceRec
 
 现有 `DiscoveryRequest` 无 page 字段，`discover()` 固定pageNum=1并以hasMore标truncated；`DisclosureService.execute` 的operation收据会缓存成功和error。B必须显式扩展受限 page/窗口协议（保留旧请求与收据形状），不可假设现有cursor已经支持续页。logical page key稳定，**每次实际外部attempt有独立operation UUID**；已提交成功页直接复用原receipt，不再请求；已缓存error不得以同operation重试，应由持久attempt序号派生新UUID，受原poll次数/字节限额约束。页响应保存原bytes或耐久归档ref、SHA256、status/content-type/final URL、取得时间、issuer目录hash、count/hasMore和前页链hash。相同logical page再次响应内容不同保留漂移收据，标partial并重新对账窗口，不能覆盖原成功页或直接当成功。`complete_watermark` 分开记录索引发现完成与所需原件下载完成；下载不全更不能声称正文已核实。
 
-原件变化本身不会自动成为P3事件限制。B需新增**候选事件桥接器**：以 `(cninfo.v1,issuer_id,disclosure_id)` 派生稳定ResearchEvent UUID，保持来源文档映射；同native文档新hash追加candidate事件revision/previous_ref/精确原件refs，新公告号默认另一事件，核实后才追加更正关系。不能用当前DisclosureItem.identity_hash替代自然键（它还含URL/发布时间等可变元数据）。原件/采集成功receipt/候选事件revision+events_generation/P2原run/P4变化收据/checkpoint在同页接收事务提交，保证HTTP页完成后即使P4 worker未跑，P3也能同步发现新事件。只为许可listing/issuer范围建立事件，不从标题推断产品暴露或影响；映射不明隔离并source_coverage_unknown。单页超P2容量就按文档原子子批持久checkpoint，未全部交接前页不确认完成。
+原件变化本身不会自动成为P3事件限制。B需新增**候选事件桥接器**：以 owner 与 `(cninfo.v1,issuer_id,disclosure_id)` 派生稳定ResearchEvent UUID，保持来源文档映射；同native文档新hash追加candidate事件revision/previous_ref/精确原件refs，新公告号默认另一事件，核实后才追加更正关系。不能用当前DisclosureItem.identity_hash替代自然键（它还含URL/发布时间等可变元数据）。索引页先原子持久化原响应/条目清单及游标；每份原件则与其candidate事件、events_generation、允许时的P2原run、P4收据及文档checkpoint同事务，全部原件/桥接完成才确认窗口完整。P4 worker尚未运行时P3仍可同步发现已提交事件。不同公告同hash也保留独立provenance，不直接复用旧fetch跨文档返回的Original。细节以[B计划第4—6节](account-fit-p4/stage-b-plan.md)为准。
 
 ### 5.4 cutoff、迟到、更正与失败
 
 - `published_at/effective_from/to` 保存原精度，未知留空；`acquired_at/available_from/committed_at` 来自可信接收链。人工填写的旧发布时间不允许倒填知识可见性。日期级公告沿现有严格日期规则，不伪造午夜已知。
 - P4 不修改 `observation.py` 的 collector 白名单。全局源成功水位、当前时间、定时 slot、排队/失败回执均不能推进任务 effective_cutoff。晚到资料限制旧结论并排下次授权研究；运行中任务仍使用原窗口，不能偷换 binding/prepared 清单。需要新研究时创建新周期要先通过授权与预算门；失败旧任务不能据此自动重付费。
 - 本地 commit 重复/乱序/回填一律按精确版本保存；接收到旧版本不覆盖较新头部。来源修订写新原件/关系/事件 revision；P3 能发现新的 event UUID/修订，旧 event_ref 不遮住新问题。冲突不按“最新抓到的就对”静默解决。
-- 采集每页落已验证原件/receipt/页 checkpoint 同事务；业务 DB 外文件沿既有 atomic rename+hash 机制先耐久化，DB 失败可遗留不可见孤儿，不能出现已提交 ref 指向不耐久文件。孤儿清理不得删已引用原件。
+- 首源实际使用 SQLite `DisclosureBlob`，原件与证据/事件/收据/checkpoint同事务；索引页与逐文档原件接收分开，不持长事务等PDF。B不引入文件归档链。已有材料文件仍沿其原有耐久化/备份/完整性边界，不能只备份DB导致文件引用悬空。
 - `page_cursor` 只确认已持久化页；只有整个声明窗口完成并校验页链、计数/响应结构后才推进 `complete_watermark`。失败/partial/truncated 不推进完整水位，已存页可恢复；成功空结果也仅表示该源该窗口该范围查无新增。远端无稳定分页快照时用重叠窗口+文档键去重，并把覆盖标成 bounded，不能宣称站点无遗漏。
 - transient 网络错误按现有 retry policy 限次退避；权限/身份/结构漂移/损坏为 blocked/quarantined 并显示原因。429 尊重可验证的 retry-after 及本地限额。来源恢复不能自动清旧风险；重复抓取失败不制造无限事件/告警。
 
@@ -194,7 +194,7 @@ P4 发起的 grant 增可空、服务端填充的 update batch 溯源字段，�
 | `GET /investor/operations` 扩展 | 现有是认证API，没有operations网页；首期运行告警以此API为本地读面，单股页另展示本scope状态。添加P4有界统计与明细链接，保持旧字段兼容 |
 | 单股页/现有运行面 | 来源与覆盖、上次尝试/成功、到期、blocked 中文原因、处理/待处理数及恢复状态；1440/390 无溢出，无跨主体残留；显著区分“未检查/覆盖不完整/查无新增/有待核问题” |
 
-403/404/409/422 沿 P2 错误语义；队列/采集容量达到上限用 422 带界限与可恢复位置，已有 durable receipt 的调度容量阻塞显示 `capacity_blocked`，不伪 accepted/完成；操作重放先核原请求再返回既有收据。所有 GET 零 DML、同一快照、不开模型。
+403/404/409/422 沿 P2 错误语义；队列/采集容量达到上限用 422 带界限与可恢复位置，已有 durable receipt 的调度容量阻塞显示 `capacity_blocked`，不伪 accepted/完成；操作重放先核原请求再返回既有收据。所有 GET 零 DML、同一快照、不开模型。B另有独立poll resume（只承接原授权内采集，不是付费恢复），接口及逐HTTP许可以[B计划](account-fit-p4/stage-b-plan.md)为准。
 
 每个 source 至少显示声明范围 hash、历史覆盖起点、完整窗口/水位、最后尝试/成功、当前 stale 计算、失败分类/次数/重试时间、partial/unknown 原因、源/adapter 版本。每个 scope 至少显示 requested/processed generation 与 receipt 上界、next_due/overdue、queued/running/retry/blocked/failed、active run/task、完成/失败/待处理数、最老积压时长、最后 checkpoint/heartbeat、接管次数和恢复去向。计数未知给 null+下界，不伪 0；状态 success 也要并列显示 source coverage/研究可用性。
 
@@ -223,8 +223,8 @@ A0 先冻结保守资源上限（实施实测只可降低或另行审查）：�
 | AF-P4-04 / A4 研究授权交接 | 02/03；`investor/monitoring.py`、`agent/execution.py`，必要的grant/check_boundary接缝、现有budget测试 | 无授权/价格/预算/范围零provider调用；task与cycle原子关联；dirty逐成员交接；已尝试失败/取消/unknown不再自动付费；关闭/恢复与跨日不换预算，旧grant兼容 |
 | AF-P4-05 / A5 通知与运行读面 | 02–04；`investor/{monitoring,notifications}.py`、`agent/operations.py`、`api/routes/{supplemental_rules,investor}.py`、views；web模板/JS/settings | 正式通知单key，容量恢复固定body/id；未知ACK不盲重发；本地运行告警隔离；真实HTTP GET零DML/权限/cursor；1440/390覆盖缺口/恢复/无残留 |
 | AF-P4-06 / A6 同步来源门槛 | 01/05；`supplemental_rules/{coverage,publication_limits}.py`、assessment仓储、`investor/publication.py`经仓储接缝、settings registry/config/UI | V1/V2显式解析，source binding服务端冻结进入评审hash；用归档V1 prepared/published原payload/hash逐项读回；计时器不运行仍stale；新规则/event限制继续生效；关闭/续期/发布竞争失败不闭合；reduce/exit不增阻断；import graph不放宽 |
-| AF-P4-07 / B1 单源周期适配 | A退出；`evidence/disclosures.py`复用，拟 `supplemental_rules/disclosure_updates.py`、update jobs/source state；现有HTTP安全传输 | 只SZSE/CNInfo显式listing；独立后台source授权/用量预留、逻辑page与attempt身份、页协议扩展/原件→candidate事件桥接、429/漂移、索引/原件完整水位分离；不扩effective_cutoff；官方原件仍candidate，不放开通用verified |
-| AF-P4-08 / B2 核验接缝与来源样本 | 07；专用事件事实adapter仅在定义明确时新增；证据精确读回，真实来源报告 | 最少一种明确文档类型的真实原件留存/身份/修订复核；若要verified，必须专用核验范围与反例。无法完成则保留candidate并将门禁标未通过，不阻挡A工程退出 |
+| AF-P4-07 / B1 单源周期适配 | A退出已满足；详见[B计划07.0—07.6](account-fit-p4/stage-b-plan.md) | 推荐CNInfo指定SZSE发行人年度报告全文及明确关联更正/补充；独立后台grant、owner-source/day配额、逐HTTP/redirect许可；分页两遍封口、blob/provenance/candidate原子链、V3 poll proof、关闭/租约/积压恢复及旧V1/V2兼容；不扩cutoff，不新增收费/外发授权 |
+| AF-P4-08 / B2 核验接缝与来源样本 | 07工程+另获有限live许可；详见[B计划08.1—08.2及S门禁](account-fit-p4/stage-b-plan.md) | 真实正常/重复/更正或同号修订/类型主体反例/窗口分别记录；无样本子门禁待验，人工导入不代替live分页许可/持续可靠性；首版仍candidate，verified专用核验另审。不阻挡A工程退出，不代替C质量或生产授权 |
 | AF-P4-09 / C1 真实闭环与预算实测 | B、P3；拟 source-acceptance/research-quality/gates 文档与probes | 真实来源、暴露、影响/解除由人工分别签核；真实形状token/finish_only预算、失联/恢复、已核定交易规则另门禁；不足项逐项列出，不以fixture/skip代替 |
 | AF-P4-10 / C2 整合验收与启用包 | 00–09；最终 execution/review/acceptance、分能力enablement-runbook | 第10节专项/必要全量通过；cap/退化/暂停/恢复演练；每项门禁证据、剩余缺口、允许范围、回退和用户待决清楚；仍不启用生产 |
 
@@ -255,14 +255,14 @@ A0 先冻结保守资源上限（实施实测只可降低或另行审查）：�
 
 每任务先跑针对性真实链与接缝测试。最终门禁：P2全部专项及复审反例，P3 binding/coverage/publication/plan readiness/API/browser，P1 fit/ranking，已有monitoring/notifications/agent budget/recovery/settings/import graph/material/disclosure、三迁移专项。触及共享publish/admit/budget/queue/HTTP/settings后必须完整复测两侧；最终unit/integration/根目录三个完整分区（network默认排除须明示；真实源另验），Ruff `src tests alembic`、mypy全部源文件、新JS语法、`git diff --check`、迁移单head、浏览器三旧脚本+新脚本串行。网关契约按P3惯例配置本机网关目录，惰性API_KEY不可省略；缺材料skip按事实列出不伪造。记录唯一case、环境、源码快照、日志与失败迭代，专项/全量不累加。截图只保留P4自己的归档，旧P1/P2/P3探针不得顺手覆盖。
 
-本轮是文档计划，不为可逆文本修改跑全量业务测试；只核对引用、路径、迁移图和diff/工作区保全。工程矩阵全部是后续验收要求。
+计划初审只进行文档级核对；用户随后授权阶段 A。阶段 A 按本节工程矩阵实测，结果独立记录于 [acceptance.md](account-fit-p4/acceptance.md)，不沿用历史数字。
 
 ## 11. 真实门禁、暂停与生产审批包
 
 | 独立能力/门禁 | 通过所需证据 | 当前缺口与允许范围 | 暂停/回退 |
 | --- | --- | --- | --- |
-| E 工程 | 第10节、源码快照、主代理交叉审查、临时SQLite迁移/备份恢复 | P3已过；P4尚未实现。只批准计划 | 保持P4默认关闭，保留同步读限制 |
-| S 真实来源 | 固定source contract/使用条件与限速；真实URL/native id/issuer/原件SHA256/页段/时间精度/取得回执；重复、修订、失败与恢复复核；明确历史起点/漏项范围 | 无P4报告；即使原件能下载也只可称candidate，不开放连续生产源 | 停polling、保留水位/原件；source状态降unknown，不能以暂停清风险 |
+| E 工程 | 第10节、源码快照、主代理交叉审查、临时SQLite迁移/备份恢复 | P3已过；P4阶段 A 实施/验收状态见独立记录。07 工程状态见独立 B 验收；08/C 未执行 | 保持P4默认关闭，保留同步读限制 |
+| S 真实来源 | 固定source contract/使用条件与限速；真实URL/native id/issuer/原件SHA256/页段/时间精度/取得回执；重复、修订、失败与恢复复核；明确历史起点/漏项范围 | 无P4真实报告；B计划细分S0、S1—5与更正/同号修订子门禁；即使原件能下载仍candidate，不开放连续生产源 | 停polling、保留声明/水位/原件与限制，source显示paused/unknown，不能以暂停清风险 |
 | X 公司暴露 | 产品/地区/实体/订单范围与有来源名单、company/listing映射、版本与完整性、受影响/不受影响/未知反例人工复核 | 未验；只显示待核，不能因行业标签自动归因 | 停相关scope研究调度，保留未决项 |
 | Q 研究质量 | 真实事实/暴露/推断分离；正式review hash、反证与解除范围；人工评审至少覆盖触发、未知、修订/解除；真实预算/finish_only可用 | P3只证明工程闭环；没有真实质量签核。需后续明确样本和研究费用授权 | 停背景research；保留已有正式结论及current-limits，不自动续期 |
 | T 生产交易规则与账户 | 逐市场/板块规则及有效区间/版本/可信供应，价格/费用来源、交易单位/例外与真实组合验收 | 仍UnavailableTradingRules，不能用“100股”常量。S/Q通过不开放账户ready或交易 | 停相应fit/ranking自动任务，buy/add仍守门；reduce/exit边界不扩大 |
@@ -277,7 +277,7 @@ A0 先冻结保守资源上限（实施实测只可降低或另行审查）：�
 
 需要用户在后续决定（本轮不阻塞计划）：首个联网源是否按推荐的现有CNInfo/SZSE范围、具体listing/文档类别与历史起点；真实样本与独立人工评审人；背景研究每次/每日费用和已授权范围；是否开外部正式通知及目的地。默认按最窄范围设计，未决定部分保持blocked/关闭。SSE/BSE/监管联网源、独立外部运行告警、交易规则供应实施如需纳入，应先补范围与门禁，不能混入P4隐式建设。
 
-## 12. 计划审查与主代理裁决
+## 12. 计划初审与主代理裁决（历史记录）
 
 三名 GPT‑6 Luna 子代理已分别完成来源可信性、调度/授权/恢复、通知/观测/启用门禁的只读审查；主代理亲自核对共享接缝后形成以下裁决。首轮草稿均获条件通过；主代理将条件落实成下表具体方案后，原三名子代理再次逐章复核，均结论“计划可通过、未发现剩余阻塞”。未把审查意见冒称已实现能力。
 
@@ -305,3 +305,48 @@ A0 先冻结保守资源上限（实施实测只可降低或另行审查）：�
 最终审查结论（2026-10-17）：来源子代理确认支持类型/人工核验边界、后台许可、页重试与candidate事件桥接相容；调度子代理确认原run防双排、精确dirty集合、全写入fencing、撤权与容量恢复边界闭合；通知/门禁子代理确认V1/V2 hash兼容策略、旧表载荷降级守卫和通知终态策略闭合。主代理接受三份复核结论，**P4实施计划通过；P4工程、真实来源、研究质量及生产启用均未通过或启动。**
 
 本轮文档验收：本计划及主设计的本地Markdown引用全部存在；`alembic heads`仍052单head；`git diff --check`通过。对本轮开始时1647个已跟踪/非忽略未跟踪文件的SHA256逐项比对，仅主设计文档变化，新增文件仅本P4计划，无文件移除；P3源码/测试/052迁移、移动端和其他并行文件内容均未改变。无业务测试重跑、无新迁移文件、无生产命令、无开关写入、无提交/推送。
+
+
+## 13. 阶段 A 实施接续
+
+用户已在计划审查后授权 AF-P4-00—06。新增与实施时收敛的具体契约见 [p4-freeze.md](account-fit-p4/p4-freeze.md)，原 P2 接缝的精确 pair 恢复、来源知识窗、健康续查与真实 P2 研究交接等裁决见 [review.md](account-fit-p4/review.md)。实际任务、最终源码快照与验证结果分别见 [execution.md](account-fit-p4/execution.md)、[source-snapshot.json](account-fit-p4/source-snapshot.json) 和 [acceptance.md](account-fit-p4/acceptance.md)。本节及文首状态优先于第 12 节计划初审时“仅文档/未实现”的历史措辞。B/C、真实来源及生产启用仍单独守门。
+
+## 14. 阶段 B 计划接续（历史，后续实施以第15节为准）
+
+用户本轮只要求讨论并修订AF-P4-07—08。主代理复核A最终源码摘要/053单head，与三名GPT‑6 Luna分别检查来源/样本、授权/恢复、覆盖兼容/独立门禁，形成[阶段B具体计划](account-fit-p4/stage-b-plan.md)与[交叉审查记录](account-fit-p4/stage-b-review.md)。关键增量是独立后台来源grant和逐HTTP用量、稳定native文档身份/原件候选事件原子链，以及能表达空窗口/页链/双水位的V3来源证明；A的V2仅适合精确保存引用，不冒充联网覆盖。
+
+B实施顺序为契约冻结→授权配额→受限page/HTTP→candidate桥接→durable poll/补偿→V3与同步读/发布/浏览器→工程回归→另获许可的真实样本和独立签核。第4—11节未细化或与B具体裁决不同之处以新B计划为准；A冻结和验收保持历史原文。本轮不实现、不新增迁移、不联网采集、不操作生产或开关、不提交/推送；实现、有限live和生产启用仍分别另行授权。
+
+## 15. AF-P4-07 工程实施接续
+
+用户在阶段 B 计划审查后单独授权 AF-P4-07；主代理与三名 GPT‑6 Luna 在临时环境和可控 HTTP 中完成实施、整合与交叉审查。最终签收和完整回归以[工程验收](account-fit-p4/stage-b-acceptance.md)为准，实际落点见[执行](account-fit-p4/stage-b-execution.md)及[工程复审](account-fit-p4/stage-b-engineering-review.md)。当前源码迁移图为 054 单 head，只增加 poll-final partial index 与降级守卫；050—053 归档文件保持原字节，未连接或迁移部署数据库。
+
+新增边界是独立后台来源许可/额度与逐 hop 审计、受限 CNInfo/SZSE page 协议、原子 candidate 事实链、durable poll 与有界历史/近期调度、V3 来源证明及读面。原件接收不升级 verified，不自动核实更正关系或公司暴露；旧任务 effective_cutoff、P2/P3 发布闭环、账户/财务基础算法和正式通知权限保持原边界。来源证明只沿不可变收据与原件，失败/暂停/关闭不清旧问题。
+
+AF-P4-08 未执行。S0 的真实协议、使用条件与限速，S1—5 的真实原件/修订/更正/反例/空窗仍未验；公司暴露、研究质量/费用、生产交易规则、正式外发和生产运行仍分别守门。生产协议默认 unvalidated，所有相关生产开关仍默认关闭；工程通过不会开启它们。移动端及并行银行行业改动保留，未提交或推送。
+
+## 16. AF-P4-08 计划接续
+
+依据07最终源码和验收，主代理与三名GPT‑6 Luna完成[S0与首批真实样本执行方案](account-fit-p4/stage-b-source-plan.md)和[交叉复审](account-fit-p4/stage-b-source-plan-review.md)。推荐首主体000858.SZ/FY2025，上海W0为2026-04-27至2026-05-04半开窗；这只是待批准提案，不是实时来源事实或投资判断。
+
+先补并验收08-P0离线工程（窄raw probe、批准profile注册、campaign累计帽、manual-only与exact recovery-only），再按明确授权执行S0-T/P、独立来源签核、精确profile装载和normal/repeat两次样本。提案campaign总32 HTTP/192MiB包含S0最高8/40，样本子帽24/152；第三poll保留但未授权。分类、时间、页序或末页合同不能核实则停，不用测试入口取得live认可；缺真实更正、同号修订、反例、空窗或恢复证据不宣布08整体通过。
+
+本次只修订计划，未实施08-P0、联网采集、操作生产或启用开关，未提交/推送。执行绝对时段、具名责任人、用途/保存权限及精确许可仍待后续明确；公司暴露、研究质量、交易、外发和生产运行各自守门。
+
+## 17. 08-P0离线工程接续
+
+用户随后独立授权08-P0离线工程，主代理整合、交叉复审，三名GPT‑6 Luna分别承担campaign/授权契约、exact runner/恢复、profile/raw probe。实际工程冻结、验证结果和源码归属见[08-P0验收](account-fit-p4/stage-b-p0-acceptance.md)及[交叉复审](account-fit-p4/stage-b-p0-review.md)。第16节末“只修订计划”仅指当时计划轮次。
+
+实现严格V2与累计总帽、默认空服务端批准registry、隔离raw捕获、单次精确worker派发、独立机械恢复与显式采集resume、外部sent锚和同步当前批准限制；复用现有三窄表、journal/CAS、worker/HTTP账，无新迁移。仅临时文件SQLite、合成或loopback HTTP及浏览器验证；未执行S0、实际profile装载、真实采集、生产操作或启用，未提交或推送。真实来源与X/Q/T/N/P门禁继续独立，不能由工程测试替代。
+
+## 18. 08-P0后S0实际清单接续
+
+基于08-P0最终16源码/6测试与验收，主代理及三名GPT‑6 Luna细化[S0-T/S0-P实际清单](account-fit-p4/stage-b-s0-execution-plan.md)及[交叉复审](account-fit-p4/stage-b-s0-plan-review.md)。固定000858.SZ/FY2025/W0、精确URL/POST原字节/hash、T与P共同8/40/128上限、条件性八slot与单/双页互斥分包、具名职责及绝对期限/保存用途均明确待批准；没有真实请求或操作。
+
+本轮发现实际后续接缝限制：raw不受普通poll开关直接约束、暂停后无采集resume；S0后未知profile不能通过现有amend接入原campaign的P1/P2。推荐先独立补离线工程再批准连续采集；另选S0-only必须明示样本cap0及后续blocked，不能换campaign逃原账。P0历史验收不改写，本轮不实现补丁、不初始化运行环境、不启用/生产/提交/推送，银行和移动端改动保留。
+
+## 19. 同campaign连续性离线修复计划
+
+用户要求先细化真实profile后绑定及raw暂停后的受控恢复，已形成[08-RP-00—08计划](account-fit-p4/stage-b-continuity-repair-plan.md)与[交叉复审](account-fit-p4/stage-b-continuity-repair-review.md)。原位严格CampaignV3显式提升保留V2 authority前链、原UUID/绝对期/累计账及sent锚；独立control锚保护权限/额度回滚；profile-ready、样本范围/一次额度、lane、V2 grant和poll逐层核权；raw只原hash原包连续成功前驱后的未消费步骤续行，epoch/单次票阻旧执行器。未消费额度不构成请求权限，P3不随修复放行。
+
+本轮仅修订方案，不实现业务代码，不初始化临时/生产库，不进行HTTP、启用、提交或推送，银行域和移动端并行改动保留。修复计划通过不表示代码或S0限制已解除；未来工程验收后再修S0清单并独立确认实际人名/许可/时段/保留与范围，真实来源/X/Q/T/N/P仍分门。

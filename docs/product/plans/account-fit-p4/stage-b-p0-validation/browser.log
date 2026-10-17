@@ -1,0 +1,17 @@
+run.sh: NODE_BIN=/Users/zhvala/.local/state/fnm_multishells/19979_1792226948901/bin/node
+run.sh: AG17_NODE_MODULES=/Users/zhvala/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules
+run.sh: AG17_CHROMIUM_EXECUTABLE=/Users/zhvala/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell
+run.sh: /Users/zhvala/.local/state/fnm_multishells/19979_1792226948901/bin/node /tmp/zcharlie-p0-browser/research_closure.mjs
+P3 research-closure stock flow passed (1440px/390px).
+run.sh: /Users/zhvala/.local/state/fnm_multishells/19979_1792226948901/bin/node /tmp/zcharlie-p0-browser/supplemental_rules.mjs
+P2 supplemental management and read-only stock flow passed (1440px/390px).
+run.sh: /Users/zhvala/.local/state/fnm_multishells/19979_1792226948901/bin/node /tmp/zcharlie-p0-browser/account_fit.mjs
+synthetic 1440px: 105-member ranking page/filter race, F01 blocked/pass, hold, explicit unknown, accepted reload, lost-receipt retry, double-click, storage failure and late-context epoch passed
+synthetic 390px: 105-member ranking page/filter race, F01 blocked/pass, hold, explicit unknown, accepted reload, lost-receipt retry, double-click, storage failure and late-context epoch passed
+All browser evidence uses synthetic prices, accounts, constraints and exchange rules in temporary SQLite.
+run.sh: /Users/zhvala/.local/state/fnm_multishells/19979_1792226948901/bin/node /tmp/zcharlie-p0-browser/supplemental_updates.mjs
+P4 real intake/worker/browser 1440/390 passed
+run.sh: /Users/zhvala/.local/state/fnm_multishells/19979_1792226948901/bin/node /tmp/zcharlie-p0-browser/disclosure_updates.mjs
+B local worker drain {"completed":32,"http_calls":5}
+B fixture stats {"agent_tasks":0,"events":1,"http_calls":5} poll f7227308-198d-434a-a029-c17ee0a81920
+AF-P4-07 real loopback HTTP/worker browser 1440/390 passed; AF-P4-08 not executed

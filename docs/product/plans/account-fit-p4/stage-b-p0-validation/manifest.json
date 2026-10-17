@@ -1,0 +1,259 @@
+{
+  "recorded_at_utc": "2026-10-17T10:36:10.395734+00:00",
+  "scope": "AF-P4-08 / 08-P0 offline engineering only",
+  "conclusion": "P0-specific engineering passed; full workspace is not all green (parallel bank unit and Ruff failures). S0/live samples/production not executed.",
+  "reproducibility": {
+    "pytest_guard": "Copy archived offline_guard.py to /tmp/zcharlie_p0_offline.py and use PYTHONPATH=/tmp with -p zcharlie_p0_offline; guard is temporary and never installed in application. Network markers default excluded.",
+    "browser_scripts": "Copy browser-scripts/*.mjs to /tmp/zcharlie-p0-browser; their only change from original scripts was screenshot prefix docs/product/probes/account-fit-pN -> docs/product/probes/account-fit-p4-p0/account-fit-pN; temporary DB/loopback fixture, no production."
+  },
+  "runs": {
+    "p4_final": {
+      "command": "API_KEY=test-key PYTHONPATH=/tmp:${PYTHONPATH:-} .venv/bin/pytest -p zcharlie_p0_offline -q tests/unit/test_p4*.py tests/integration/test_p4*.py tests/integration/test_api_disclosure_updates.py tests/integration/test_api_supplemental_updates.py tests/integration/test_supplemental_updates_storage.py tests/unit/test_import_graph.py",
+      "exit_code": 0,
+      "log": "p4-final.log",
+      "result": "177 passed in 56.49s",
+      "source_basis": "after final narrow resume/recovery changes; all 22 owned source/test hashes match snapshot"
+    },
+    "unit_full": {
+      "command": "API_KEY=test-key PYTHONPATH=/tmp:${PYTHONPATH:-} .venv/bin/pytest -p zcharlie_p0_offline -q tests/unit",
+      "exit_code": 1,
+      "log": "unit.log",
+      "result": "1 failed, 2670 passed, 2 skipped, 6 deselected, 5 warnings in 331.76s",
+      "source_basis": "full run started before last narrow V2 resume/raw recovery extension; final P4 target and static rechecks cover last extension",
+      "external_failure": "test_bank_annual_review.py::test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot; parallel bank annual_front_matter parses old truncated PDF fixture"
+    },
+    "integration_full": {
+      "command": "API_KEY=test-key ZCLAUDIA_GATEWAY_DIR=/Users/zhvala/SourceCode/zclaudia-gateway PYTHONPATH=/tmp:${PYTHONPATH:-} .venv/bin/pytest -p zcharlie_p0_offline -q tests/integration",
+      "exit_code": 0,
+      "log": "integration.log",
+      "result": "972 passed, 357 warnings in 908.90s",
+      "source_basis": "full run started before last narrow V2 resume/raw recovery extension; final P4 target rechecks all P4 paths"
+    },
+    "roots_full": {
+      "command": "API_KEY=test-key PYTHONPATH=/tmp:${PYTHONPATH:-} .venv/bin/pytest -p zcharlie_p0_offline -q tests/test_*.py",
+      "exit_code": 0,
+      "log": "roots.log",
+      "result": "717 passed in 222.68s"
+    },
+    "browser": {
+      "command": "API_KEY=test-key tests/browser/run.sh /tmp/zcharlie-p0-browser/research_closure.mjs /tmp/zcharlie-p0-browser/supplemental_rules.mjs /tmp/zcharlie-p0-browser/account_fit.mjs /tmp/zcharlie-p0-browser/supplemental_updates.mjs /tmp/zcharlie-p0-browser/disclosure_updates.mjs",
+      "exit_code": 0,
+      "log": "browser.log",
+      "result": "5 scripts passed, 1440px/390px; 25 screenshots",
+      "source_basis": "legacy P2/P3/A/07 fixture compatibility, not AF08 S0/live proof"
+    },
+    "ruff_full": {
+      "command": ".venv/bin/ruff check src tests alembic",
+      "exit_code": 1,
+      "log": "ruff.log",
+      "result": "one I001 in parallel tests/integration/test_bank_two_year_matrix.py; not modified by P0"
+    },
+    "ruff_p0": {
+      "command": ".venv/bin/ruff check src/investment_agent/evidence/disclosure_http.py src/investment_agent/evidence/disclosure_pages.py src/investment_agent/evidence/disclosure_profiles.py src/investment_agent/research/disclosure_campaign_runner.py src/investment_agent/supplemental_rules/disclosure_authorization.py src/investment_agent/supplemental_rules/disclosure_campaign.py src/investment_agent/supplemental_rules/disclosure_campaign_contracts.py src/investment_agent/supplemental_rules/disclosure_campaign_anchor.py src/investment_agent/supplemental_rules/disclosure_probe_quota.py src/investment_agent/supplemental_rules/disclosure_probe.py src/investment_agent/supplemental_rules/disclosure_updates.py src/investment_agent/supplemental_rules/disclosure_schedule.py src/investment_agent/supplemental_rules/coverage.py src/investment_agent/supplemental_rules/publication_limits.py src/investment_agent/supplemental_rules/disclosure_views.py src/investment_agent/api/routes/supplemental_updates.py tests/integration/test_p4_campaign_authorization.py tests/integration/test_p4_disclosure_campaign.py tests/integration/test_p4_disclosure_probe.py tests/integration/test_p4_disclosure_runner.py tests/unit/test_p4_disclosure_campaign_contracts.py tests/unit/test_p4_disclosure_profiles.py",
+      "exit_code": 0,
+      "log": "ruff-p0.log",
+      "result": "All checks passed!"
+    },
+    "mypy": {
+      "command": ".venv/bin/mypy src/investment_agent",
+      "exit_code": 0,
+      "log": "mypy.log",
+      "result": "Success: no issues found in 466 source files"
+    },
+    "import_graph": {
+      "command": "API_KEY=test-key PYTHONPATH=/tmp:${PYTHONPATH:-} .venv/bin/pytest -p zcharlie_p0_offline -q tests/unit/test_import_graph.py",
+      "exit_code": 0,
+      "log": "import-graph.log",
+      "result": "8 passed in 2.38s"
+    },
+    "bank_parallel_repro": {
+      "command": "API_KEY=test-key PYTHONPATH=/tmp:${PYTHONPATH:-} .venv/bin/pytest -p zcharlie_p0_offline -q tests/unit/test_bank_annual_review.py::test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot",
+      "exit_code": 1,
+      "log": "bank-parallel-repro.log",
+      "result": "1 failed in 1.60s; same bank PDF EOF, no P0 stack/import seam"
+    },
+    "checks": {
+      "command": "alembic heads; read-only Settings(_env_file=None, api_key=test-key); JS syntax x2; git diff --check; local Markdown links; source hash and preservation checks",
+      "exit_code": 0,
+      "log": "checks.log",
+      "result": "054 single head; 7 bootstrap flags false; no broken links; 22 P0 hash matches, 52 preserved evidence checks; no P0 import edges"
+    }
+  },
+  "earlier_iterations_not_final_pass_counts": {
+    "unit-pre-layout.log": {
+      "exit_code": 1,
+      "result": "1 import graph failure, 2670 passed, 2 skipped, 6 deselected; 397.09s",
+      "disposition": "moved probe to supplemental_rules and runner to research; no P0 new baseline edge; bank fixture did not fail in this earlier observation"
+    },
+    "integration-pre-layout.log": {
+      "exit_code": 2,
+      "result": "246 passed before KeyboardInterrupt; 547.49s",
+      "disposition": "intentionally interrupted for layout repair; not a full pass"
+    },
+    "p4-pre-resume.log": {
+      "exit_code": 0,
+      "result": "194 passed, 60 warnings in 80.87s",
+      "disposition": "earlier differently scoped target included migrations; not final bytes and not added to final 177"
+    },
+    "p0-targeted.log": {
+      "exit_code": 0,
+      "result": "35 passed in 11.98s",
+      "disposition": "early iteration only; final acceptance uses p4-final.log"
+    },
+    "ruff-parallel-observation.log": {
+      "exit_code": 1,
+      "result": "parallel bank test I001, repeated in final full Ruff",
+      "disposition": "preserved, not autofixed or attributed to P0"
+    }
+  },
+  "no_double_counting": "unit/integration/roots/P4 subsets are reported separately and overlap; do not sum. Full partitions began before final narrow V2 extension; final 177 and final Ruff/mypy cover final owned source bytes.",
+  "source_snapshot": {
+    "path": "../stage-b-p0-source-snapshot.json",
+    "sha256": "19e4494167e4d900859da1ccec4c451af70d096980f3f70ca3f10f998ac11dd1",
+    "observed_full_source_file_count": 1312,
+    "observed_full_source_tree_sha256": "c91cb8ad99e489106907fbbf76c4aaae6ec18a9c6598348560ee1c211ef89979",
+    "p0_source_files": 16,
+    "p0_test_files": 6,
+    "parallel_source_changes": 56,
+    "preserved_checks": 52
+  },
+  "files": {
+    "bank-parallel-repro.log": {
+      "sha256": "054d72067f994072ca932981d74f3092b7a18fb2df469fc6074429ebe2852b1b",
+      "bytes": 7696,
+      "mtime_utc": "2026-10-17T10:22:58.281540+00:00"
+    },
+    "browser-scripts/account_fit.mjs": {
+      "sha256": "72013acdf62e69ae45af5b35fd6d5f00b51baf3d5ca2f097a46f1454ab4aa239",
+      "bytes": 58624,
+      "mtime_utc": "2026-10-17T10:23:17.922048+00:00"
+    },
+    "browser-scripts/disclosure_updates.mjs": {
+      "sha256": "b894a49a137e154cb418791f25bdf45c9321149cdef0fe28d542c30fc1b95083",
+      "bytes": 5601,
+      "mtime_utc": "2026-10-17T10:23:17.921548+00:00"
+    },
+    "browser-scripts/research_closure.mjs": {
+      "sha256": "8bc0702cc9ed288b812709c961cff4d88c961790830ec77a235057d895285368",
+      "bytes": 14994,
+      "mtime_utc": "2026-10-17T10:23:17.922508+00:00"
+    },
+    "browser-scripts/supplemental_rules.mjs": {
+      "sha256": "a88992626aea8e2905ff102b7380e9209f169fe89eb10039db8733311b7e2800",
+      "bytes": 28417,
+      "mtime_utc": "2026-10-17T10:23:17.921215+00:00"
+    },
+    "browser-scripts/supplemental_updates.mjs": {
+      "sha256": "2d32e07175f8826f2662b6f26cc5b3d5e28809b12500ad847a289bce011dbddc",
+      "bytes": 5333,
+      "mtime_utc": "2026-10-17T10:23:17.922777+00:00"
+    },
+    "browser.log": {
+      "sha256": "b7499c1a4794d77ac8e5e45b6bc1da0dbdb2e662e9763318fe74f77072437c8e",
+      "bytes": 1901,
+      "mtime_utc": "2026-10-17T10:07:41.930155+00:00"
+    },
+    "checks.log": {
+      "sha256": "6e5a59061993f9e2ec2add8b645e052b1d36d0407b59e6c4c3f7beaca274cf10",
+      "bytes": 830,
+      "mtime_utc": "2026-10-17T10:35:31.242468+00:00"
+    },
+    "closing-git-status.log": {
+      "sha256": "2a01d7b498654112eafe6f9109c8620b22250ad64fb745245f4688c03c1ecdd3",
+      "bytes": 6543,
+      "mtime_utc": "2026-10-17T10:35:31.265857+00:00"
+    },
+    "import-graph.log": {
+      "sha256": "9abfe95fdbfe8581630d4ea182405d7b43f245626e0b8a54a25e9d2178d71538",
+      "bytes": 98,
+      "mtime_utc": "2026-10-17T10:30:54.462387+00:00"
+    },
+    "integration-pre-layout.log": {
+      "sha256": "21d90aca46458b8c4df33b87822ae7ee69162d2c77b62b15cee30bf5f71f1a74",
+      "bytes": 588,
+      "mtime_utc": "2026-10-17T10:14:11.863988+00:00"
+    },
+    "integration.log": {
+      "sha256": "f2f3cdbf25f057726d555d2057a95fd0ea5693088fa9a21516b709f6363e2105",
+      "bytes": 53858,
+      "mtime_utc": "2026-10-17T10:29:31.531695+00:00"
+    },
+    "mypy.log": {
+      "sha256": "fed0adde59c803a45d7203f2abe42aaa578b42a4ded7f805170171d853a8c78a",
+      "bytes": 45,
+      "mtime_utc": "2026-10-17T10:32:39.385860+00:00"
+    },
+    "offline_guard.py": {
+      "sha256": "40ea63c3ba41279e15e5369a3c35b7789bc3302fea98df10f080e8e0b46e8c9f",
+      "bytes": 849,
+      "mtime_utc": "2026-10-17T10:23:17.920654+00:00"
+    },
+    "p0-targeted.log": {
+      "sha256": "d3f63f471ebc5c14dde58285f23dca30cc0ebba3b428322d236192a819a8dc05",
+      "bytes": 100,
+      "mtime_utc": "2026-10-17T10:05:15.224434+00:00"
+    },
+    "p4-final.log": {
+      "sha256": "90b656aae422e4ac7a750619899b2d8dc24c927f412cee5c3bae5af08121899a",
+      "bytes": 261,
+      "mtime_utc": "2026-10-17T10:33:17.250943+00:00"
+    },
+    "p4-pre-resume.log": {
+      "sha256": "0438479cc922bb9450a289f33b778bea90cb7a65d442f46e998337311b573170",
+      "bytes": 8159,
+      "mtime_utc": "2026-10-17T10:17:14.008932+00:00"
+    },
+    "roots.log": {
+      "sha256": "f05d28f61657c2679f90b4ffa51b7d8df2e713bbbeab482f0de7277c9cb4f208",
+      "bytes": 832,
+      "mtime_utc": "2026-10-17T10:07:17.823761+00:00"
+    },
+    "ruff-p0.log": {
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "bytes": 19,
+      "mtime_utc": "2026-10-17T10:32:43.838246+00:00"
+    },
+    "ruff-parallel-observation.log": {
+      "sha256": "0324f9f3b985beaaf927566e741d3562f2d6f3b15d636e3b99e2b04740fa4719",
+      "bytes": 3157,
+      "mtime_utc": "2026-10-17T10:32:19.735451+00:00"
+    },
+    "ruff.log": {
+      "sha256": "0324f9f3b985beaaf927566e741d3562f2d6f3b15d636e3b99e2b04740fa4719",
+      "bytes": 3157,
+      "mtime_utc": "2026-10-17T10:33:30.393335+00:00"
+    },
+    "starting-file-hashes.json": {
+      "sha256": "f9e30b4e9e0f8f7048f17bd5986014808f8cf0b4d18a30d140e45851014ba5e8",
+      "bytes": 208827,
+      "mtime_utc": "2026-10-17T10:33:17.210253+00:00"
+    },
+    "unit-pre-layout.log": {
+      "sha256": "0f6e7a85c9da8d8bfc40d769e2f782738218f55c38db39506ccc644f9b3948d0",
+      "bytes": 13245,
+      "mtime_utc": "2026-10-17T10:10:11.391914+00:00"
+    },
+    "unit.log": {
+      "sha256": "c0b10eab8671b6d538dfc046d175c50c6580492a9092b06998b562800d0c6120",
+      "bytes": 17866,
+      "mtime_utc": "2026-10-17T10:19:53.042150+00:00"
+    }
+  },
+  "not_executed": [
+    "S0 or real HTTP collection",
+    "real source profile installation",
+    "paid research",
+    "production DB or runtime overlay reads/writes",
+    "production operations or flag enablement",
+    "git commit or push"
+  ],
+  "known_independent_gates": [
+    "S0 terms/permission/schema/type/time/order/paging",
+    "normal/repeat/correction/in-place revision/negative/empty/recovery real samples",
+    "company exposure X",
+    "real research quality/cost Q",
+    "trading rules T",
+    "external notifications N",
+    "production P"
+  ]
+}

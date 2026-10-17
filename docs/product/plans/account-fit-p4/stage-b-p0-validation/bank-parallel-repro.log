@@ -1,0 +1,168 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______ test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot ______
+
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x10669f770>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10b767820>
+
+    @pytest.mark.asyncio
+    async def test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot(
+        db_session, monkeypatch
+    ):
+        captured = datetime(2025, 5, 1, tzinfo=UTC)
+        await db_session.merge(
+            Market(code="SSE", name="上海证券交易所", timezone="Asia/Shanghai", currency="CNY")
+        )
+        company = Company(canonical_name="工商银行")
+        db_session.add(company)
+        await db_session.flush()
+        listing = Listing(company_id=company.id, market_code="SSE", ticker="601398", is_primary=True)
+        db_session.add(listing)
+        await db_session.flush()
+        body = b"%PDF-1.4 synthetic annual report"
+        pdf_hash = hashlib.sha256(body).hexdigest()
+        source_url = "https://static.cninfo.com.cn/finalpage/2025-03-27/filing2024.PDF"
+        page = (
+            "主要财务指标\n2024 2023 2022\n本集团\n加权平均净资产收益率 12.50% 10.00% 9.50%\n年度指标"
+        )
+    
+        def text(_body, page_no, layout=False):
+            if page_no == 1:
+                return "601398 工商银行 2024年度报告" + ("\n" + page if layout else "")
+            return page
+    
+        monkeypatch.setattr(v2, "bank_page_text", text)
+        item_id, original_id = str(uuid4()), str(uuid4())
+        db_session.add(DisclosureBlob(content_hash=pdf_hash, body=body))
+        db_session.add(
+            DisclosureItem(
+                id=item_id,
+                owner_id="local_owner",
+                listing_id=listing.id,
+                identity_hash="a" * 64,
+                payload={
+                    "ticker": "601398.SH",
+                    "source_url": source_url,
+                    "disclosure_id": "filing-2024",
+                },
+            )
+        )
+        db_session.add(
+            DisclosureOriginal(
+                id=original_id,
+                owner_id="local_owner",
+                item_id=item_id,
+                content_hash=pdf_hash,
+                payload={
+                    "listing_id": listing.id,
+                    "ticker": "601398.SH",
+                    "disclosure_id": "filing-2024",
+                    "title": "工商银行2024年度报告",
+                    "source_url": source_url,
+                    "resolved_url": source_url,
+                    "first_published_at": "2025-03-27T00:00:00+00:00",
+                    "acquired_at": "2025-04-01T00:00:00+00:00",
+                    "scope_context": None,
+                    "available_from": "2025-04-01T00:00:00+00:00",
+                },
+            )
+        )
+        await db_session.flush()
+        excerpt = page
+        audit = {
+            "schema": "bank-annual-review-audit/2",
+            "fields": {
+                "roe_weighted_annual": {
+                    "check_rule_version": v2.BANK_ANNUAL_V2_RULE,
+                    "status": "verified",
+                    "metric": "roe_weighted_annual",
+                    "period": "2024-12-31",
+                    "report_identity": {
+                        "code": "601398.SH",
+                        "period": "2024-12-31",
+                        "disclosure_id": "filing-2024",
+                    },
+                    "original_ref": {"kind": "disclosure_original", "id": original_id, "revision": 1},
+                    "pdf_hash": pdf_hash,
+                    "pdf_page": 8,
+                    "table_title": "主要财务指标",
+                    "period_header": "2024 2023 2022",
+                    "current_column": "2024",
+                    "header": "加权平均净资产收益率",
+                    "raw_value": "12.50",
+                    "raw_unit": "percent",
+                    "parsed_value": "0.125",
+                    "accounting_scope": "group_consolidated",
+                    "source_url": source_url,
+                    "locator_excerpt": excerpt,
+                    "locator_excerpt_sha256": hashlib.sha256(excerpt.encode()).hexdigest(),
+                    "definition_or_footnote": "年度指标",
+                    "checked_at": captured.isoformat(),
+                    "acquired_at": "2025-04-01T00:00:00+00:00",
+                }
+            },
+        }
+>       snapshot, proofs = await build_rollover_snapshot(
+            db_session,
+            listing_id=listing.id,
+            company_id=company.id,
+            report_period=date(2024, 12, 31),
+            audit=audit,
+            captured_at=captured,
+        )
+
+tests/unit/test_bank_annual_review.py:227: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/investment_agent/industry_peers/bank_annual_review.py:232: in build_rollover_snapshot
+    field, proof = await build_bank_annual_v2_field(
+src/investment_agent/industry_peers/bank_annual_v2.py:511: in build_bank_annual_v2_field
+    body, _, _ = await _load_original(session, snapshot_stub, metric, proof, None)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/investment_agent/industry_peers/bank_annual_v2.py:334: in _load_original
+    cover = normalized(annual_front_matter(blob.body, snapshot.report_period.year))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src/investment_agent/industry_peers/bank_annual_identity.py:24: in annual_front_matter
+    count = min(3, len(PdfReader(BytesIO(body)).pages))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^
+.venv/lib/python3.13/site-packages/pypdf/_reader.py:154: in __init__
+    self._initialize_stream(stream)
+.venv/lib/python3.13/site-packages/pypdf/_reader.py:179: in _initialize_stream
+    self.read(stream)
+.venv/lib/python3.13/site-packages/pypdf/_reader.py:712: in read
+    self._find_eof_marker(stream)
+.venv/lib/python3.13/site-packages/pypdf/_reader.py:857: in _find_eof_marker
+    line = read_previous_line(stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+stream = <_io.BytesIO object at 0x10e3a06d0>
+
+    def read_previous_line(stream: StreamType) -> bytes:
+        """
+        Given a byte stream with current position X, return the previous line.
+    
+        All characters between the first CR/LF byte found before X
+        (or, the start of the file, if no such byte is found) and position X
+        After this call, the stream will be positioned one byte after the
+        first non-CRLF character found beyond the first CR/LF byte before X,
+        or, if no such byte is found, at the beginning of the stream.
+    
+        Args:
+            stream: StreamType:
+    
+        Returns:
+            The data which was read.
+    
+        """
+        line_content = []
+        found_crlf = False
+        if stream.tell() == 0:
+>           raise PdfStreamError(STREAM_TRUNCATED_PREMATURELY)
+E           pypdf.errors.PdfStreamError: Stream has ended unexpectedly
+
+.venv/lib/python3.13/site-packages/pypdf/_utils.py:380: PdfStreamError
+------------------------------ Captured log call -------------------------------
+WARNING  pypdf._reader:_utils.py:509 EOF marker not found
+=========================== short test summary info ============================
+FAILED tests/unit/test_bank_annual_review.py::test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot
+1 failed in 1.60s

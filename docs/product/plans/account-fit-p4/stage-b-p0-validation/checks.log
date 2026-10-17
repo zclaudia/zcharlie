@@ -1,0 +1,17 @@
+$ .venv/bin/alembic heads
+exit=0
+054 (head)
+$ git diff --check
+exit=0
+$ node --check src/investment_agent/web/static/supplemental_items.js
+exit=0
+$ node --check src/investment_agent/web/static/settings.js
+exit=0
+Bootstrap only: Settings(_env_file=None, api_key=test-key); no deployed/runtime overlay
+{"supplemental_rules_enabled": false, "supplemental_updates_enabled": false, "supplemental_disclosure_polling_enabled": false, "disclosure_originals_enabled": false, "investor_agent_enabled": false, "investor_agent_background_enabled": false, "notification_external_enabled": false}
+local documentation broken links: []
+P0 frozen source/test mismatches: []
+preserved evidence checks: 52
+preserved failures: 0
+historical 07 source matches at P0 start: 43/43
+new P0 import edges: none; external baseline edge: materials -> settings
