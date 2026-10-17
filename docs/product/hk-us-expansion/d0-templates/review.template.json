@@ -1,0 +1,75 @@
+{
+  "_comment": "HK2-06 人工 review 声明模板（配合 ledger-<source>.json 的 reviews 数组使用，按 report_sha256 绑定到一份 observation report）。下划线开头的 _comment 字段仅为模板注释：正式 review 文件必须删除全部 _comment 字段。除注释外不得新增、删除或改名字段；字段语义与 src/investment_agent/materials/source_observations.py 的校验及 35 号计划『离线汇总工具和输入契约』一致。所有 citation 的 path 相对共同 evidence-root 解析（非绝对路径、不含 ..、不含反斜杠、不穿越符号链接），sha256 必须与该文件实际内容的 SHA-256 一致。",
+  "report_sha256": "[待人工填写：所审 report.json 文件的 64 位小写十六进制 SHA-256；必须与账本 observation_reports 中该报告路径的实际文件哈希一致，重复绑定或绑定不到账本报告均为无效]",
+  "reviewer": "[待人工填写：复核人身份，非空字符串]",
+  "reviewed_at": "[待人工填写：带时区的 ISO 8601 时间戳，如 2026-01-01T00:00:00+08:00 形态；必须晚于所审报告的 observed_at 且不得晚于填写时刻（不得为未来时间）]",
+  "annual_comparison": {
+    "_comment": "status 二选一：matched（年报对照一致）或 revision_reviewed（存在修订且已人工复核）；unreviewed 是合法枚举值但永远不满足 ready，模板不使用。expected_periods 必须与报告 periods 完全一致（规范化 JSON 相等）：SEC 报告 periods 恒为 []（SEC 年度窗口由适配器当期选择，probe 对 SEC 拒绝 --period），此处保持 []，适用年报窗口由 citation 引用的对照证据说明；HK 则从报告 periods 数组逐字复制四个连续完整年度对象（对象键为 start/end/basis/label/days，label/days 无披露时为 null），不得手写省略字段，年度值须来自人工年报核实、不得按日历推定。",
+    "status": "[matched 或 revision_reviewed，二选一]",
+    "expected_periods": [],
+    "citation": {
+      "_comment": "年度对照证据（如 <evidence-root>/reviews/ 下的人工对照记录）：path 相对 evidence-root，sha256 为该文件实际 SHA-256。",
+      "path": null,
+      "sha256": null
+    }
+  },
+  "source_scope_review": {
+    "_comment": "status 固定为 approved。citation 指向来源使用范围人工复核证据：SEC 应覆盖真实联系 UA 与聚合限速证明，东财应覆盖端点特定书面授权（35 号计划要求）。",
+    "status": "approved",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "drills": {
+    "_comment": "六类演练逐项声明；status 在演练通过时为 passed，citation 指向 drills/<source>/<drill>-<时间戳>/evidence.json（相对 evidence-root）及其 SHA-256。可先用 drill-citations.template.json 填好再整体复制进来。",
+    "shutdown": {
+      "_comment": "HK2-05 隔离 fake：日常 worker 关闭总开关/来源开关后不再开始请求；不证明特批 probe 受日常开关控制。",
+      "status": "passed",
+      "citation": {
+        "path": null,
+        "sha256": null
+      }
+    },
+    "inflight_stop": {
+      "_comment": "HK2-05 隔离 fake：日常 worker 在限速等待或多阶段请求中关闭后停止后续发起；特批 probe 的 STOP/撤回证据另见 probe_stop_withdrawal。",
+      "status": "passed",
+      "citation": {
+        "path": null,
+        "sha256": null
+      }
+    },
+    "restart_resume": {
+      "_comment": "独立隔离演练的检查点/恢复语义证据；一次性 probe 无断点续跑能力，不得以 probe 冒充。",
+      "status": "passed",
+      "citation": {
+        "path": null,
+        "sha256": null
+      }
+    },
+    "old_versions_readable": {
+      "_comment": "旧 adapter/source version 的归档原件仍可验证读取且版本差异可见。",
+      "status": "passed",
+      "citation": {
+        "path": null,
+        "sha256": null
+      }
+    },
+    "offline_replay": {
+      "_comment": "断网重放归档输入，结果可重复且不发请求。",
+      "status": "passed",
+      "citation": {
+        "path": null,
+        "sha256": null
+      }
+    },
+    "probe_stop_withdrawal": {
+      "_comment": "特批 probe 的真实 STOP 文件与许可撤回停止证据；不得以普通 ops 开关演练代替。",
+      "status": "passed",
+      "citation": {
+        "path": null,
+        "sha256": null
+      }
+    }
+  }
+}
