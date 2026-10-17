@@ -370,11 +370,20 @@ class AccountFitAssessment(Contract):
     financial_status: Literal["pass", "warning", "blocked", "unknown"]
     checks: Annotated[tuple[FitCheck, ...], Field(max_length=MAX_FIT_CHECKS)]
     calculation_refs: Annotated[tuple[ObjectRef, ...], Field(max_length=20)] = ()
-    supplemental_binding: Literal["not_integrated"] = "not_integrated"
-    research_status: Literal["not_assessed"] = "not_assessed"
-    company_alignment: Literal["not_assessed"] = "not_assessed"
-    ranking_bucket: Literal["incomplete", "blocked"]
+    # P3 supplemental composition; defaults keep every earlier row readable
+    # byte-for-byte. not_integrated rows carry no rule detail at all.
+    supplemental_binding: Literal["not_integrated", "bound", "unknown"] = "not_integrated"
+    research_status: Literal["not_assessed", "current", "review_required", "unavailable"] = "not_assessed"
+    company_alignment: Literal["not_assessed", "supportive", "restrictive", "undetermined"] = "not_assessed"
+    ranking_bucket: Literal["incomplete", "blocked", "ready", "limited"]
     coverage: Literal["complete", "partial"]
+    coverage_ref: ObjectRef | None = None
+    binding_ref: ObjectRef | None = None
+    rules_generation: Annotated[int, Field(strict=True, ge=0)] | None = None
+    events_generation: Annotated[int, Field(strict=True, ge=0)] | None = None
+    subject_set_hash: Sha256 | None = None
+    application_refs: Annotated[tuple[ObjectRef, ...], Field(max_length=64)] = ()
+    unknown_reason: Text | None = None
 
     @model_validator(mode="after")
     def identities(self) -> AccountFitAssessment:
@@ -418,6 +427,49 @@ class AccountFitAssessment(Contract):
             raise ValueError("blocked financial result must be in the blocked bucket")
         if self.ranking_bucket == "blocked" and self.financial_status != "blocked":
             raise ValueError("blocked bucket requires a proven financial block")
+        if self.supplemental_binding == "bound":
+            if (
+                self.coverage_ref is None
+                or self.coverage_ref.kind != "rule_coverage"
+                or self.coverage_ref.field_path is not None
+                or self.binding_ref is None
+                or self.binding_ref.kind != "research_rule_binding"
+                or self.binding_ref.field_path is not None
+                or self.rules_generation is None
+                or self.events_generation is None
+            ):
+                raise ValueError(
+                    "bound supplemental binding requires its exact coverage and binding "
+                    "references and generations"
+                )
+            if self.unknown_reason is not None:
+                raise ValueError("a bound supplemental binding cannot carry an unknown reason")
+        elif self.supplemental_binding == "unknown":
+            if not self.unknown_reason:
+                raise ValueError("an unknown supplemental binding requires its reason")
+            if any(
+                value is not None
+                for value in (self.coverage_ref, self.binding_ref, self.rules_generation, self.events_generation, self.subject_set_hash)
+            ) or self.application_refs:
+                raise ValueError(
+                    "an unknown supplemental binding cannot carry bound detail"
+                )
+        else:
+            if any(
+                value is not None
+                for value in (self.coverage_ref, self.binding_ref, self.rules_generation, self.events_generation, self.subject_set_hash, self.unknown_reason)
+            ) or self.application_refs:
+                raise ValueError("not_integrated rows carry no supplemental detail")
+            if self.research_status != "not_assessed" or self.company_alignment != "not_assessed":
+                raise ValueError("not_integrated rows keep the pre-integration view states")
+        if self.ranking_bucket in {"ready", "limited"} and self.financial_status not in {"pass", "warning"}:
+            raise ValueError("ready and limited buckets require a passing or warning financial result")
+        if self.ranking_bucket == "ready" and (
+            self.research_status != "current"
+            or self.company_alignment != "supportive"
+            or self.coverage != "complete"
+        ):
+            raise ValueError("ready requires current research, supportive alignment and complete coverage")
         return self
 
 

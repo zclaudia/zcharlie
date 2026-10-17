@@ -522,6 +522,7 @@ class RuleApplication(Contract):
     series_key: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     application_sequence: Annotated[int, Field(strict=True, ge=1)]
     application_mode: ApplicationMode
+    authorization: Literal["mechanical", "formal_review"] = "mechanical"
     origin_ref: ObjectRef | None = None
     created_at: datetime
     actor: Text
@@ -666,12 +667,26 @@ class RuleApplication(Contract):
                 lineage_ref.field_path is not None or lineage_ref.revision is None
             ):
                 raise ValueError("application lineage references must identify exact revisions")
-        if self.result.semantic_status == "reviewed":
-            raise ValueError("P2 mechanical applications cannot claim a completed semantic review")
-        if self.assessment_status in {"supported", "mitigated", "resolved"}:
-            raise ValueError("P2 applications cannot claim semantic conclusions")
-        if self.closure_refs:
-            raise ValueError("P2 applications cannot close issues without a bound review workflow")
+        if self.authorization == "mechanical":
+            # P2 mechanical discipline is frozen: no reviewed result, no claimed
+            # semantic conclusion, and no issue closure without a bound review.
+            if self.result.semantic_status == "reviewed":
+                raise ValueError("P2 mechanical applications cannot claim a completed semantic review")
+            if self.assessment_status in {"supported", "mitigated", "resolved"}:
+                raise ValueError("P2 applications cannot claim semantic conclusions")
+            if self.closure_refs:
+                raise ValueError("P2 applications cannot close issues without a bound review workflow")
+        else:
+            if self.semantic_status != "reviewed" or self.semantic_review_ref is None:
+                raise ValueError(
+                    "formal_review applications require a reviewed result bound to an exact semantic review"
+                )
+            if not self.closure_refs:
+                raise ValueError("formal_review applications require exact closure references")
+            if self.application_mode != "live":
+                raise ValueError("formal_review closure requires a live application")
+            if self.evaluation_purpose != "issue_review":
+                raise ValueError("formal_review closure requires the issue_review purpose")
         return self
 
     @property
@@ -782,6 +797,273 @@ class EvaluationAdmission(Contract):
             raise ValueError("evaluation admission requires a pipeline run reference")
         object.__setattr__(self, "accepted_at", utc_timestamp(self.accepted_at))
         return self
+
+
+class BindingRuleEntry(Contract):
+    """One frozen rule revision inside an admission-time binding."""
+
+    rule_ref: ObjectRef
+    semantic_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    selector_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+    @model_validator(mode="after")
+    def entry_identity(self) -> BindingRuleEntry:
+        if self.rule_ref.kind != "supplemental_rule" or self.rule_ref.field_path is not None:
+            raise ValueError("binding entries must cite exact supplemental rule revisions")
+        return self
+
+
+class ResearchRuleBinding(Contract):
+    """Immutable admission-time rule binding for one research task.
+
+    An empty rule set is a legal binding ("no effective rules at admission")
+    and stays distinguishable from a legacy task that was never bound.
+    """
+
+    schema_version: Literal[1] = 1
+    id: UUID
+    revision: Literal[1] = 1
+    owner_id: OwnerId
+    task_ref: ObjectRef
+    listing_ref: ObjectRef
+    research_kind: Literal["company_research", "review"]
+    method_ref: ObjectRef
+    admission_as_of: datetime
+    rules_generation: Annotated[int, Field(strict=True, ge=0)]
+    events_generation: Annotated[int, Field(strict=True, ge=0)]
+    rule_set: Annotated[tuple[BindingRuleEntry, ...], Field(max_length=MAX_PAIRS_PER_MANIFEST)]
+    rule_set_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    matching_manifest_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+    # Event visibility summary: the admission-time upper bound plus an explicit
+    # flag when the visibility scan itself was truncated.
+    events_visible_until: datetime | None = None
+    events_visible_unknown: bool = False
+    input_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    content_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def validate_binding(self) -> ResearchRuleBinding:
+        if self.task_ref.kind != "task" or self.task_ref.field_path is not None:
+            raise ValueError("binding requires an exact task reference")
+        if self.listing_ref.kind != "listing" or self.listing_ref.field_path is not None:
+            raise ValueError("binding requires an exact listing reference")
+        if self.method_ref.kind != "method" or self.method_ref.field_path is not None:
+            raise ValueError("binding requires a method reference")
+        if len({entry.rule_ref for entry in self.rule_set}) != len(self.rule_set):
+            raise ValueError("binding rule set must cite each rule revision at most once")
+        object.__setattr__(self, "admission_as_of", utc_timestamp(self.admission_as_of))
+        object.__setattr__(self, "created_at", utc_timestamp(self.created_at))
+        if self.events_visible_until is not None:
+            object.__setattr__(
+                self, "events_visible_until", utc_timestamp(self.events_visible_until)
+            )
+            if self.events_visible_until > self.admission_as_of:
+                raise ValueError("event visibility bound cannot exceed the admission as_of")
+        if self.admission_as_of > self.created_at:
+            raise ValueError("binding admission cannot follow its creation")
+        from investment_agent.supplemental_rules.canonical import canonical_hash
+
+        if self.rule_set_hash != canonical_hash(self.rule_set):
+            raise ValueError("rule_set_hash must bind the frozen rule entries")
+        body = self.model_dump(mode="python")
+        body.pop("content_hash")
+        if self.content_hash != canonical_hash(body):
+            raise ValueError("content_hash must bind the full binding content")
+        return self
+
+    @property
+    def reference(self) -> ObjectRef:
+        return ObjectRef(kind="research_rule_binding", id=self.id, revision=self.revision)
+
+
+class CoverageRuleEntry(Contract):
+    """Per-rule coverage outcome; unknown and unbound-new are first-class."""
+
+    rule_ref: ObjectRef
+    semantic_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    status: Literal["application", "not_applicable", "unknown", "unbound_new"]
+    application_ref: ObjectRef | None = None
+    basis: Text | None = None
+    unknown_reason: Text | None = None
+
+    @model_validator(mode="after")
+    def status_fields_correspond(self) -> CoverageRuleEntry:
+        if self.rule_ref.kind != "supplemental_rule" or self.rule_ref.field_path is not None:
+            raise ValueError("coverage entries must cite exact supplemental rule revisions")
+        if self.status == "application":
+            if (
+                self.application_ref is None
+                or self.application_ref.kind != "rule_application"
+                or self.application_ref.field_path is not None
+            ):
+                raise ValueError("application coverage requires an exact rule application reference")
+            if self.basis is not None or self.unknown_reason is not None:
+                raise ValueError("application coverage cannot carry basis or unknown reason")
+        elif self.status == "not_applicable":
+            if self.basis is None:
+                raise ValueError("not-applicable coverage requires its recorded basis")
+            if self.application_ref is not None or self.unknown_reason is not None:
+                raise ValueError("not-applicable coverage cannot carry an application or reason")
+        elif self.status == "unknown":
+            if self.unknown_reason is None:
+                raise ValueError("unknown coverage requires its explicit reason")
+            if self.application_ref is not None or self.basis is not None:
+                raise ValueError("unknown coverage cannot carry an application or basis")
+        else:
+            if self.application_ref is not None or self.basis is not None or self.unknown_reason is not None:
+                raise ValueError("unbound_new coverage cannot carry application, basis, or reason")
+        return self
+
+
+class PreparedClosureProposal(Contract):
+    """A reviewed-but-not-yet-committed proposal to close exact open issues."""
+
+    target_application_refs: Annotated[
+        tuple[ObjectRef, ...], Field(min_length=1, max_length=MAX_PAIRS_PER_MANIFEST)
+    ]
+    evidence_refs: tuple[ObjectRef, ...] = Field(default=(), max_length=MAX_PAIRS_PER_MANIFEST)
+    claim_key: Text | None = None
+    rationale: Text
+    proposal_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+    @model_validator(mode="after")
+    def validate_proposal(self) -> PreparedClosureProposal:
+        for ref in self.target_application_refs:
+            if ref.kind != "rule_application" or ref.field_path is not None:
+                raise ValueError("closure proposals must target exact rule applications")
+        for ref in self.evidence_refs:
+            if ref.field_path is not None or ref.revision is None:
+                raise ValueError("closure evidence must cite exact revisions")
+        from investment_agent.supplemental_rules.canonical import canonical_hash
+
+        expected = canonical_hash({
+            "target_application_refs": self.target_application_refs,
+            "evidence_refs": self.evidence_refs,
+            "claim_key": self.claim_key,
+            "rationale": self.rationale,
+        })
+        if self.proposal_hash != expected:
+            raise ValueError("proposal_hash must bind targets, evidence, claim, and rationale")
+        return self
+
+
+class RuleCoverageManifest(Contract):
+    """Immutable prepared or published rule-coverage manifest for one task."""
+
+    schema_version: Literal[1] = 1
+    id: UUID
+    revision: Literal[1] = 1
+    stage: Literal["prepared", "published"]
+    owner_id: OwnerId
+    task_ref: ObjectRef
+    task_id: UUID
+    binding_ref: ObjectRef
+    listing_ref: ObjectRef
+    case_ref: ObjectRef | None = None
+    admission_as_of: datetime
+    effective_cutoff: datetime
+    rule_entries: Annotated[
+        tuple[CoverageRuleEntry, ...], Field(max_length=MAX_PAIRS_PER_MANIFEST)
+    ]
+    open_issue_refs: Annotated[
+        tuple[ObjectRef, ...], Field(default=(), max_length=MAX_PAIRS_PER_MANIFEST)
+    ]
+    closure_proposals: Annotated[
+        tuple[PreparedClosureProposal, ...], Field(default=(), max_length=MAX_PAIRS_PER_MANIFEST)
+    ]
+    # Bounded scan diagnostics: capped means the enumeration stop-line was hit;
+    # the manifest then reports a known lower bound, never complete coverage.
+    scan_capped: bool = False
+    scan_known_total: Annotated[int, Field(strict=True, ge=0)] | None = None
+    scan_uncovered_note: Text | None = None
+    material_set_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+    input_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    manifest_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    created_at: datetime
+    # Published-stage only; a prepared manifest must leave all of these empty.
+    prepared_ref: ObjectRef | None = None
+    prepared_manifest_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None = None
+    semantic_review_ref: ObjectRef | None = None
+    closure_application_refs: Annotated[
+        tuple[ObjectRef, ...], Field(default=(), max_length=MAX_PAIRS_PER_MANIFEST)
+    ]
+    thesis_ref: ObjectRef | None = None
+    recommendation_ref: ObjectRef | None = None
+    limits_recheck: tuple[Text, ...] = ()
+    committed_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def validate_manifest(self) -> RuleCoverageManifest:
+        if self.task_ref.kind != "task" or self.task_ref.field_path is not None:
+            raise ValueError("coverage manifest requires an exact task reference")
+        if self.task_id != self.task_ref.id:
+            raise ValueError("coverage task_id must match its task reference")
+        if (
+            self.binding_ref.kind != "research_rule_binding"
+            or self.binding_ref.field_path is not None
+        ):
+            raise ValueError("coverage manifest requires an exact research rule binding reference")
+        if self.listing_ref.kind != "listing" or self.listing_ref.field_path is not None:
+            raise ValueError("coverage manifest requires an exact listing reference")
+        if self.case_ref is not None and (
+            self.case_ref.kind != "case" or self.case_ref.field_path is not None
+        ):
+            raise ValueError("coverage case_ref must identify an exact case")
+        for name in ("admission_as_of", "effective_cutoff", "created_at"):
+            object.__setattr__(self, name, utc_timestamp(getattr(self, name)))
+        if self.committed_at is not None:
+            object.__setattr__(self, "committed_at", utc_timestamp(self.committed_at))
+        if not self.admission_as_of <= self.effective_cutoff <= self.created_at:
+            raise ValueError("coverage times must follow admission and precede creation")
+        if len({entry.rule_ref for entry in self.rule_entries}) != len(self.rule_entries):
+            raise ValueError("coverage rule entries must cite each rule revision at most once")
+        issue_refs = (*self.open_issue_refs, *self.closure_application_refs)
+        if any(ref.kind != "rule_application" or ref.field_path is not None for ref in issue_refs):
+            raise ValueError("coverage issue references must identify exact rule applications")
+        if not self.scan_capped and self.scan_uncovered_note is not None:
+            raise ValueError("an uncapped scan cannot report uncovered scope")
+        if self.stage == "prepared":
+            if any(
+                getattr(self, name) is not None
+                for name in (
+                    "prepared_ref",
+                    "prepared_manifest_hash",
+                    "semantic_review_ref",
+                    "committed_at",
+                )
+            ) or self.closure_application_refs or self.limits_recheck or (
+                self.thesis_ref is not None or self.recommendation_ref is not None
+            ):
+                raise ValueError("prepared coverage cannot carry published-stage fields")
+        else:
+            prepared_ref, review_ref = self.prepared_ref, self.semantic_review_ref
+            if (
+                prepared_ref is None
+                or self.prepared_manifest_hash is None
+                or review_ref is None
+                or self.committed_at is None
+            ):
+                raise ValueError(
+                    "published coverage requires its prepared reference, hash, review, and commit time"
+                )
+            if prepared_ref.kind != "rule_coverage" or prepared_ref.field_path is not None:
+                raise ValueError("prepared_ref must identify an exact rule coverage")
+            if review_ref.kind != "review" or review_ref.field_path is not None:
+                raise ValueError("semantic_review_ref must identify an exact review")
+        from investment_agent.supplemental_rules.canonical import canonical_hash, canonical_json
+
+        body = self.model_dump(mode="python")
+        body.pop("manifest_hash")
+        if self.manifest_hash != canonical_hash(body):
+            raise ValueError("manifest_hash must bind the full coverage manifest content")
+        if len(canonical_json(self).encode("utf-8")) > MAX_MANIFEST_BYTES:
+            raise ValueError("coverage manifest exceeds 4 MiB")
+        return self
+
+    @property
+    def reference(self) -> ObjectRef:
+        return ObjectRef(kind="rule_coverage", id=self.id, revision=self.revision)
 
 
 MetricCondition.model_rebuild()

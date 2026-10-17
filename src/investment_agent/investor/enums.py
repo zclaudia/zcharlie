@@ -170,3 +170,26 @@ LABELS: dict[str, dict[str, str]] = {
         method_default="方法默认", user_scenario="你的情景", agent_scenario="Agent 情景"
     ),
 }
+
+# P3 limitation reason codes (fit current-limits, ranking research urgency
+# and recommendation limitation reasons). Codes may carry a ":<identity>"
+# suffix; display layers match on the head before the first colon and fall
+# back to the raw code for anything unregistered.
+REASON_LABELS: dict[str, str] = {
+    "rule_binding_missing": "无研究规则绑定（结论早于规则体系）",
+    "rule_coverage_unpublished": "规则覆盖尚未随结论发布",
+    "rule_coverage_binding_missing": "覆盖清单缺少原始规则绑定",
+    "rule_coverage_pending": "存在新增重要规则未覆盖此结论",
+    "rule_coverage_scan_incomplete": "规则扫描超出有界上限，覆盖不完整",
+    "supplemental_rules_disabled_with_rule_binding": "规则链任务在开关关闭期间被拒",
+    "rule_expired": "规则已过期",
+    "rule_review_due": "规则复核期限已到",
+    "research_check_due": "规则研究要求已到检查时点",
+    "event_publication_boundary": "规则事件在结论之后发布",
+    "event_effective_started": "规则事件在结论之后生效",
+    "event_effective_ended": "规则事件有效期已结束",
+    "unbound_event": "出现结论未覆盖的新事件",
+    "critical_pending": "存在重要未决规则事项",
+    "coverage_pending": "规则覆盖待复核",
+    "review_due": "规则复核到期",
+}

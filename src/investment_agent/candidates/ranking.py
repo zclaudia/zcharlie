@@ -19,10 +19,14 @@ from investment_agent.candidates.ranking_contracts import (
 from investment_agent.investor.common import ObjectRef
 from investment_agent.portfolio.suitability_contracts import AccountFitAssessment, FitCheck
 
-Bucket = Literal["incomplete", "blocked"]
+Bucket = Literal["incomplete", "blocked", "ready", "limited"]
 FinancialStatus = Literal["pass", "warning", "blocked", "unknown"]
-FILTERS = {
-    "bucket": {"incomplete", "blocked"},
+ResearchUrgency = Literal["critical_pending", "coverage_pending", "review_due"]
+# ready/limited are new buckets; existing snapshots only ever hold the two
+# legacy values, so sweeping them first never reorders earlier snapshots.
+BUCKET_ORDER: tuple[Bucket, ...] = ("ready", "limited", "incomplete", "blocked")
+FILTERS: dict[str, set[str]] = {
+    "bucket": set(BUCKET_ORDER),
     "financial_status": {"pass", "warning", "blocked", "unknown"},
 }
 
@@ -81,6 +85,35 @@ def _manual_source(member: object) -> tuple[bool, bool, object | None]:
     return True, manual, opened_at
 
 
+def research_urgency_level(
+    *, open_critical_issues: bool, coverage_limits: Sequence[str]
+) -> ResearchUrgency | None:
+    """Bounded display projection of one subject's research urgency.
+
+    Source is the subject's own rule state (AF-P3-07 recheck limits plus its
+    critical open issues). It is display/filter information only and never
+    enters the ordering key or any score.
+    """
+
+    if open_critical_issues:
+        return "critical_pending"
+    for limit in coverage_limits:
+        head = limit.split(":", 1)[0]
+        if head in {
+            "rule_coverage_pending",
+            "rule_coverage_scan_incomplete",
+            "rule_coverage_binding_missing",
+            "unbound_event",
+            "event_publication_boundary",
+            "event_effective_started",
+            "event_effective_ended",
+        }:
+            return "coverage_pending"
+        if head in {"rule_review_due", "rule_expired", "research_check_due"}:
+            return "review_due"
+    return None
+
+
 def build_ranking_entries(
     manifest: SourceManifest,
     *,
@@ -90,12 +123,15 @@ def build_ranking_entries(
     listing_labels: Mapping[int, tuple[str, str]] | None = None,
     action_unknown_reasons: Mapping[int, str] | None = None,
     failed_items: Mapping[int, str] | None = None,
+    rule_projections: Mapping[int, tuple[tuple[ObjectRef, ...], ResearchUrgency | None]] | None = None,
 ) -> tuple[RankingEntry, ...]:
     """Create one finite account-ranking entry for each processed member.
 
     ``resolved_actions`` is supplied by the account snapshot resolver.  A
     ``None`` action represents unknown holding presence and intentionally does
-    not create a fit assessment or execution failure.
+    not create a fit assessment or execution failure. ``rule_projections``
+    carries the optional P3 supplemental projection per listing; with the
+    switches off it stays empty and rows keep their legacy shape.
     """
 
     if ranking_ref.kind != "candidate_ranking" or ranking_ref.revision != 1:
@@ -103,6 +139,7 @@ def build_ranking_entries(
     reasons = action_unknown_reasons or {}
     failures = failed_items or {}
     labels = listing_labels or {}
+    projections = rule_projections or {}
     entries: list[RankingEntry] = []
     for member in manifest.members:
         listing_id = int(member.listing_ref.id)
@@ -126,6 +163,9 @@ def build_ranking_entries(
             fit_ref = assessment.reference
             checks = assessment.checks
         bucket: Bucket = "blocked" if financial_status == "blocked" else "incomplete"
+        if assessment is not None and assessment.ranking_bucket in {"ready", "limited"}:
+            bucket = assessment.ranking_bucket
+        projection = projections.get(listing_id, ((), None))
         label = labels.get(listing_id)
         entries.append(
             RankingEntry(
@@ -142,6 +182,8 @@ def build_ranking_entries(
                 source_refs=tuple(source.source_ref for source in member.sources),
                 checks=checks,
                 execution_error=execution_error,
+                rule_application_refs=projection[0],
+                research_urgency=projection[1],
             )
         )
     return order_ranking_entries(manifest, tuple(entries))
@@ -175,7 +217,7 @@ def order_ranking_entries(
     }
     template_keys = list(dict.fromkeys(selected_run_by_template))
     result: list[RankingEntry] = []
-    for bucket in ("incomplete", "blocked"):
+    for bucket in BUCKET_ORDER:
         bucket_ids = {
             listing_id
             for listing_id, entry in entry_by_listing.items()
@@ -335,6 +377,7 @@ def page_ranking_entries(
 
 
 __all__ = [
+    "BUCKET_ORDER",
     "RankingCursorError",
     "RankingOrderError",
     "RankingPage",
@@ -343,4 +386,5 @@ __all__ = [
     "order_ranking_entries",
     "page_ranking_entries",
     "parse_ranking_cursor",
+    "research_urgency_level",
 ]

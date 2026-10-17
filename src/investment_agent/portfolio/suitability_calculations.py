@@ -28,6 +28,36 @@ KNOWN_TTL_SECONDS = 300
 UNKNOWN_TTL_SECONDS = 30
 
 
+def supplemental_bucket(
+    *,
+    financial_status: str,
+    coverage: str,
+    research_status: str,
+    company_alignment: str,
+) -> Literal["incomplete", "blocked", "ready", "limited"]:
+    """The P3 composition truth table (frozen; construction side only).
+
+    blocked stays proven-block only. Any necessary unknown (financial,
+    research, alignment, coverage) is incomplete. A known non-blocking
+    caveat (warning financial or restrictive alignment) is limited. Only a
+    passing financial result with current research, supportive alignment and
+    complete coverage is ready.
+    """
+
+    if financial_status == "blocked":
+        return "blocked"
+    if (
+        financial_status == "unknown"
+        or coverage != "complete"
+        or research_status != "current"
+        or company_alignment not in {"supportive", "restrictive"}
+    ):
+        return "incomplete"
+    if company_alignment == "restrictive" or financial_status == "warning":
+        return "limited"
+    return "ready"
+
+
 class FitItemEvaluationError(Exception):
     """An explicitly classified local item failure; system errors propagate."""
 

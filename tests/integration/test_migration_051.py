@@ -68,7 +68,7 @@ def _seed_p1(database: Path, *, head: str = "050") -> tuple[str, str]:
 def test_revision_chain_and_fresh_head_metadata(tmp_path, monkeypatch) -> None:
     script = ScriptDirectory(str(ROOT / "alembic"))
     assert script.get_revision("051").down_revision == "050"
-    assert script.get_current_head() == "051"
+    assert script.get_current_head() == "052"
     database = tmp_path / "fresh-051.db"
     config = _config(database, monkeypatch)
     command.upgrade(config, "head")

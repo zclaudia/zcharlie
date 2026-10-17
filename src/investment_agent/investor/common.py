@@ -86,6 +86,8 @@ class ObjectRef(Contract):
         "supplemental_rule",
         "research_event",
         "rule_application",
+        "rule_coverage",
+        "research_rule_binding",
     ]
     id: UUID | Annotated[int, Field(strict=True, ge=1)]
     revision: Revision

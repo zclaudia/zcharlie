@@ -301,7 +301,7 @@ class SupplementalRuleService:
             as_of=manifest.as_of, evaluated_at=at, valid_until=pair.rule.valid_until, review_due_at=pair.rule.review_due_at,
             input_hash=fingerprint, matcher_version=manifest.matcher_version, evaluator_version=manifest.evaluator_version,
             dependencies=tuple(dict.fromkeys((pair.rule_ref, *pair.rule.source_refs))), series_key=series,
-            application_sequence=(maximum or 0)+1, application_mode=mode, origin_ref=origin_ref, created_at=at,
+            application_sequence=(maximum or 0)+1, application_mode=mode, authorization="mechanical", origin_ref=origin_ref, created_at=at,
             actor="supplemental_mechanical_worker", previous_application_ref=pair.prior_live_application_ref,
             frozen_pair=pair, source_manifest_hash=manifest.manifest_hash, evaluation_purpose=evaluation_purpose,
             applicability=result.applicability, condition_result=result.condition_result, evidence_status=result.evidence_status,

@@ -259,7 +259,7 @@ async def admit(
     """
     from investment_agent.investor.controls import memory_deadline, memory_revision
     grant = grant.model_copy(update={"purpose": budget_purpose(grant), "memory_revision": await memory_revision(session, grant.owner), "memory_valid_until": await memory_deadline(session, grant.owner)})
-    await live_policy(session, grant, base)
+    effective = await live_policy(session, grant, base)
     from investment_agent.agent.operations import admission
     existing_input = await session.scalar(select(AgentTask.id).where(AgentTask.owner_id == grant.owner, AgentTask.input_key == input_key))
     if existing_input is None and not await admission(session, "interactive" if grant.mode == "interactive" else "exploration" if budget_purpose(grant) == "exploration" else "review"):
@@ -286,11 +286,48 @@ async def admit(
     else:
         from investment_agent.investor.methods import MethodService
         await MethodService(session, grant.owner).freeze_task(task.id, grant.scope_refs, grant.research_kind)
+        await session.flush()
+        await bind_research_rules(session, grant=grant, task=task, settings=effective)
         from investment_agent.agent.peer_tools import inherit_peer_context
         grant = await inherit_peer_context(session, grant, task=task, parent_task_id=parent_task_id, data_dir=base.data_dir)
         session.add(ExecutionGrantRow(task_id=str(task.id), payload=grant.model_dump(mode="json")))
         await session.flush()
     return task
+
+
+async def bind_research_rules(
+    session: AsyncSession, *, grant: ExecutionGrant, task: Task, settings: Settings
+) -> None:
+    """AF-P3-04 admission hook: freeze the task's rule binding once.
+
+    Runs only for publishable full research while the runtime switch is on.
+    A binder failure denies admission; it never silently degrades to an
+    unbound task. Re-admissions keep the original immutable binding.
+    """
+
+    if grant.research_kind not in {"company_research", "review"} or not settings.supplemental_rules_enabled:
+        return
+    from pydantic import ValidationError
+
+    from investment_agent.investor.foundations import InvestorError
+    from investment_agent.investor.methods import task_method
+    from investment_agent.supplemental_rules.binding import (
+        create_task_binding,
+    )
+    listings = [ref for ref in grant.scope_refs if ref.kind == "listing"]
+    if len(listings) != 1:
+        # Same single-subject boundary as method freezing: multi-listing
+        # contexts have a documented baseline, never a mixed rule policy.
+        raise ExecutionDeniedError("research_rule_binding_subject_unavailable")
+    method = await task_method(session, task.id)
+    try:
+        await create_task_binding(
+            session, owner=grant.owner, task_id=task.id, listing_ref=listings[0],
+            research_kind=grant.research_kind, method_ref=method.method_ref,
+            as_of=task.binding.as_of,
+        )
+    except (InvestorError, LookupError, ValueError, ValidationError) as exc:
+        raise ExecutionDeniedError(f"research_rule_binding_failed: {exc}") from exc
 
 
 async def check_boundary(

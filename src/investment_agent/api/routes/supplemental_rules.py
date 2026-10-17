@@ -39,6 +39,9 @@ from investment_agent.storage.models.supplemental_rules import (
     SupplementalRuleEvent,
     SupplementalRuleHead,
 )
+from investment_agent.storage.repositories.investment_assessment import (
+    InvestmentAssessmentRepository,
+)
 from investment_agent.storage.repositories.supplemental_rules import SupplementalRulesRepository
 from investment_agent.supplemental_rules.admission import SupplementalRuleAdmission
 from investment_agent.supplemental_rules.contracts import (
@@ -46,6 +49,7 @@ from investment_agent.supplemental_rules.contracts import (
     EvaluationRequest,
     MutationReceipt,
     ResearchEvent,
+    RuleCoverageManifest,
 )
 from investment_agent.supplemental_rules.events import SupplementalEventService
 from investment_agent.supplemental_rules.lifecycle import SupplementalRuleLifecycle
@@ -54,12 +58,16 @@ from investment_agent.supplemental_rules.run_views import SupplementalRunView, s
 from investment_agent.supplemental_rules.service import SupplementalRuleService
 from investment_agent.supplemental_rules.views import (
     ApplicationView,
+    CoverageLimitSummary,
     CurrentApplicationsView,
+    CurrentRuleCoverageView,
     ResearchEventListView,
+    RuleCoverageView,
     RuleHeadView,
     RuleHistoryView,
     RuleListView,
     SupplementalRuleContextView,
+    TaskRuleBindingView,
 )
 
 router = APIRouter(
@@ -498,3 +506,183 @@ async def list_research_events(
             "next_cursor": next_cursor,
         }
     )
+
+
+# --- P3 research-closure read models (authenticated, read-only) ---
+# The static "current" route is defined before the dynamic /{coverage_id}
+# route so FastAPI can never swallow "current" as a coverage UUID.
+
+
+@router.get("/supplemental-rule-coverages/current")
+async def current_rule_coverage(
+    listing: Annotated[int, Query(ge=1)],
+    session: Session,
+    settings: EffectiveSettings,
+) -> CurrentRuleCoverageView:
+    """Newest published coverage of one subject plus honest binding state.
+
+    No binding row is the explicit ``rule_binding_missing`` unknown, never an
+    empty rule set. Read-only at all times: the switch state is reported, not
+    enforced, so published conclusions stay readable while the feature is off.
+    """
+
+    await ensure_read_snapshot(session)
+    if await session.get(Listing, listing) is None:
+        raise InvestorError("not_found", "证券标的不存在")
+    reference = ObjectRef(kind="listing", id=listing, revision=1)
+    repo = InvestmentAssessmentRepository(session)
+    state = await repo.rule_binding_state("local_owner", reference)
+    limits = None
+    if state.manifest is not None:
+        limits = CoverageLimitSummary(
+            reasons=await repo.published_rule_coverage_limits("local_owner", state.manifest)
+        )
+    return CurrentRuleCoverageView(
+        listing_ref=reference,
+        enabled=settings.supplemental_rules_enabled,
+        state=state.state,
+        reasons=state.reasons,
+        manifest=state.manifest,
+        binding=state.binding,
+        current_limits=limits,
+        observed_at=datetime.now(UTC),
+    )
+
+
+def _coverage_cursor(manifest: RuleCoverageManifest, after_ordinal: int) -> str:
+    """Encode one entry page bound to the manifest's immutable identity."""
+
+    encoded = json.dumps(
+        {
+            "v": 1,
+            "coverage_id": str(manifest.id),
+            "manifest_hash": manifest.manifest_hash,
+            "after_ordinal": after_ordinal,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return base64.urlsafe_b64encode(encoded.encode()).decode().rstrip("=")
+
+
+def _coverage_cursor_offset(cursor: str | None, manifest: RuleCoverageManifest) -> int:
+    """Decode a page cursor or reject one that names another coverage/ordinal."""
+
+    if not cursor:
+        return 0
+    try:
+        raw = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode())
+        if (
+            raw.get("v") != 1
+            or UUID(raw["coverage_id"]) != manifest.id
+            or raw.get("manifest_hash") != manifest.manifest_hash
+        ):
+            raise InvestorError("invalid_cursor", "覆盖清单分页标识无效")
+        after = int(raw["after_ordinal"])
+        if not 0 <= after < len(manifest.rule_entries):
+            raise InvestorError("invalid_cursor", "覆盖清单分页标识无效")
+    except InvestorError:
+        raise
+    except (ValueError, TypeError, KeyError) as exc:
+        raise InvestorError("invalid_cursor", "覆盖清单分页标识无效") from exc
+    return after
+
+
+@router.get("/supplemental-rule-coverages/{coverage_id}")
+async def exact_rule_coverage(
+    coverage_id: UUID,
+    session: Session,
+    revision: Annotated[int, Query(ge=1)] = 1,
+    cursor: str | None = None,
+    limit: PageLimit = 100,
+) -> RuleCoverageView:
+    """Exact prepared or published coverage manifest with one entry page.
+
+    Wrong owner and missing manifest share the P2 ``not_found`` semantics and
+    nothing here re-evaluates rules; limits are computed only when the exact
+    manifest is in the published stage.
+    """
+
+    await ensure_read_snapshot(session)
+    if revision != 1:
+        raise InvestorError("not_found", "规则覆盖清单版本不存在")
+    reference = ObjectRef(kind="rule_coverage", id=coverage_id, revision=1)
+    repo = InvestmentAssessmentRepository(session)
+    manifest = await repo.get_rule_coverage("local_owner", reference)
+    if manifest is None:
+        raise InvestorError("not_found", "规则覆盖清单不存在")
+    after_ordinal = _coverage_cursor_offset(cursor, manifest)
+    entries = manifest.rule_entries[after_ordinal : after_ordinal + limit]
+    next_cursor = (
+        _coverage_cursor(manifest, after_ordinal + limit)
+        if after_ordinal + limit < len(manifest.rule_entries)
+        else None
+    )
+    binding = await SupplementalRulesRepository(session).get_research_rule_binding(
+        "local_owner", manifest.binding_ref
+    )
+    closures = [
+        application
+        for ref in manifest.closure_application_refs
+        if (application := await repo.get_rule_application("local_owner", ref)) is not None
+    ]
+    limits = (
+        CoverageLimitSummary(
+            reasons=await repo.published_rule_coverage_limits("local_owner", manifest)
+        )
+        if manifest.stage == "published"
+        else None
+    )
+    return RuleCoverageView(
+        stage=manifest.stage,
+        coverage_ref=manifest.reference,
+        task_ref=manifest.task_ref,
+        binding_ref=manifest.binding_ref,
+        binding=binding,
+        listing_ref=manifest.listing_ref,
+        case_ref=manifest.case_ref,
+        admission_as_of=manifest.admission_as_of,
+        effective_cutoff=manifest.effective_cutoff,
+        created_at=manifest.created_at,
+        committed_at=manifest.committed_at,
+        manifest_hash=manifest.manifest_hash,
+        entry_total=len(manifest.rule_entries),
+        entries=tuple(entries),
+        next_cursor=next_cursor,
+        open_issue_refs=manifest.open_issue_refs,
+        closure_proposals=manifest.closure_proposals,
+        closure_application_refs=manifest.closure_application_refs,
+        closure_applications=tuple(closures),
+        scan_capped=manifest.scan_capped,
+        scan_known_total=manifest.scan_known_total,
+        scan_uncovered_note=manifest.scan_uncovered_note,
+        prepared_ref=manifest.prepared_ref,
+        semantic_review_ref=manifest.semantic_review_ref,
+        thesis_ref=manifest.thesis_ref,
+        recommendation_ref=manifest.recommendation_ref,
+        limits_recheck=manifest.limits_recheck,
+        current_limits=limits,
+    )
+
+
+@router.get("/research-rule-bindings/{task_id}")
+async def task_rule_binding(task_id: UUID, session: Session) -> TaskRuleBindingView:
+    """One task's admission binding, or the explicit ``legacy_unbound`` marker.
+
+    Deliberately a standalone P3 read instead of a new field on
+    ``/agent/tasks/{task_id}``: the agent Task payload is a frozen contract
+    shared with the model and the agent UI, while this view belongs to the
+    supplemental read surface with its owner checks and error mapping.
+    """
+
+    await ensure_read_snapshot(session)
+    binding = await SupplementalRulesRepository(session).get_research_rule_binding_for_task(
+        "local_owner", task_id
+    )
+    if binding is None:
+        return TaskRuleBindingView(
+            task_ref=ObjectRef(kind="task", id=task_id, revision=1),
+            state="legacy_unbound",
+            reasons=("rule_binding_missing",),
+        )
+    return TaskRuleBindingView(task_ref=binding.task_ref, state="bound", binding=binding)

@@ -169,3 +169,82 @@ async def test_rule_application_storage_branch_is_exact_and_preserves_p1_shape(d
     assert row is not None
     assert row.account_id is None and row.series_key == application.series_key
     assert row.application_sequence == 1 and row.application_mode == "live"
+
+
+@pytest.mark.asyncio
+async def test_rule_coverage_storage_roundtrip_and_header_shape(db_session) -> None:
+    from investment_agent.investor.common import ObjectRef
+    from investment_agent.supplemental_rules.contracts import CoverageRuleEntry
+    from tests.support.supplemental_rules import synthetic_coverage_manifest, synthetic_rule
+
+    entry = CoverageRuleEntry(
+        rule_ref=synthetic_rule().reference, semantic_hash="a" * 64,
+        status="unknown", unknown_reason="no evaluation completed",
+    )
+    manifest = synthetic_coverage_manifest(rule_entries=(entry,))
+    repo = InvestmentAssessmentRepository(db_session)
+    saved = await repo.save_rule_coverage("local_owner", manifest)
+    exact = await repo.get_exact("local_owner", manifest.reference, expected_kind="rule_coverage")
+    assert exact == saved and exact is not None
+    assert exact.stage == "prepared" and exact.task_id == manifest.task_ref.id  # type: ignore[union-attr]
+    row = await db_session.get(InvestmentAssessment, (str(manifest.id), 1))
+    assert row is not None
+    assert row.account_id is None and row.universe_hash is None
+    assert row.entry_count == 1 and row.manifest_hash == manifest.manifest_hash
+    assert row.series_key is None and row.application_mode is None
+    # Immutable replay returns the stored manifest.
+    assert await repo.save_rule_coverage("local_owner", manifest) == saved
+    # Kind mismatch on the exact reference is refused before any read.
+    with pytest.raises(ValueError, match="does not match"):
+        await repo.get_exact("local_owner", manifest.reference, expected_kind="rule_application")
+    with pytest.raises(ValueError, match="unsupported investment assessment reference kind"):
+        await repo.get_exact(
+            "local_owner", ObjectRef(kind="task", id=manifest.task_ref.id, revision=1)
+        )
+    # A tampered payload cannot come back as a valid manifest.
+    await db_session.execute(text("DROP TRIGGER trg_investment_assessment_immutable_update"))
+    await db_session.execute(text(
+        "UPDATE investment_assessment SET payload=json_set(payload, '$.stage', 'published') "
+        "WHERE id=:id"
+    ), {"id": str(manifest.id)})
+    db_session.expunge_all()
+    with pytest.raises(ValueError, match="published coverage requires"):
+        await repo.get_exact("local_owner", manifest.reference, expected_kind="rule_coverage")
+
+
+@pytest.mark.asyncio
+async def test_research_rule_binding_store_is_task_unique_and_hash_checked(db_session) -> None:
+    from sqlalchemy import select
+
+    from investment_agent.storage.models.supplemental_rules import ResearchRuleBindingRow
+    from tests.support.supplemental_rules import BINDING_TASK_ID, synthetic_binding
+
+    repo = SupplementalRulesRepository(db_session)
+    binding = synthetic_binding()
+    saved = await repo.save_research_rule_binding("local_owner", binding)
+    exact = await repo.get_research_rule_binding("local_owner", saved.reference)
+    assert exact == saved
+    by_task = await repo.get_research_rule_binding_for_task("local_owner", BINDING_TASK_ID)
+    assert by_task == saved
+    assert await repo.get_research_rule_binding_for_task("local_owner", uuid4()) is None
+    # Cross-owner reads never leak the row.
+    row = (await db_session.execute(
+        select(ResearchRuleBindingRow).where(ResearchRuleBindingRow.id == str(saved.id))
+    )).scalar_one()
+    assert row.task_id == str(BINDING_TASK_ID) and row.listing_id == 7
+    # An empty rule set is a legal, persisted binding (distinct from legacy).
+    other_task = uuid4()
+    empty = synthetic_binding(task_id=other_task)
+    saved_empty = await repo.save_research_rule_binding("local_owner", empty)
+    assert saved_empty.rule_set == ()
+    assert await repo.get_research_rule_binding_for_task("local_owner", other_task) == saved_empty
+    # Tampered header hashes are refused on read.
+    await db_session.execute(text("DROP TRIGGER trg_research_rule_binding_immutable_update"))
+    await db_session.execute(text(
+        "UPDATE research_rule_binding SET rule_set_hash=:bad WHERE id=:id"
+    ), {"bad": "f" * 64, "id": str(saved.id)})
+    db_session.expunge_all()
+    with pytest.raises(ValueError, match="column does not match payload"):
+        await repo.get_research_rule_binding("local_owner", saved.reference)
+    with pytest.raises(ValueError, match="column does not match payload"):
+        await repo.get_research_rule_binding_for_task("local_owner", BINDING_TASK_ID)

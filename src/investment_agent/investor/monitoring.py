@@ -399,6 +399,13 @@ async def verify_unchanged_review(session: AsyncSession, task_id: UUID, review: 
             and await peer_method_payload(session, "local_owner", dependency.ref) is not None
         ):
             raise await publication.peer_renewal_block(view.recommendation, dependency.ref)
+    # Same recheck for bound rule chains: a current rule limitation refuses
+    # the mechanical "unchanged" attestation and demands new research.
+    for dependency in view.recommendation.dependency_refs:
+        if dependency.materiality == "critical" and dependency.ref.kind == "rule_coverage":
+            limits = await publication.rule_renewal_limits(dependency.ref)
+            if limits:
+                raise publication.rule_renewal_block(dependency.ref, limits)
     if view.status != "published":
         raise InvestorError("invalid_reference", "Restricted or expired opinions require a new recommendation")
     actions = (await session.scalars(select(ToolAction).where(ToolAction.task_id == str(task_id), ToolAction.state == "committed"))).all()

@@ -1,5 +1,6 @@
 import { get, post } from "./api.js";
 import { el } from "./dom.js";
+import { supplementalReasonLabel } from "./supplemental_items.js";
 
 const SLOT = "zc-investment-assessment-pending-fit-v1";
 const SAVED = "zc-investment-assessment-last-fit-v1";
@@ -106,7 +107,8 @@ function actionKnown(context, listingRef) {
   return holding ? holding.confirmed_quantity !== null && holding.confirmed_quantity !== undefined : snapshot.coverage === "complete";
 }
 
-function renderFitView(region, view, basis, staleScenario = false) {
+// Exported for read-only browser probes: the same renderer the panel uses.
+export function renderFitView(region, view, basis, staleScenario = false) {
   const box = el("div", { class: "fit-result" });
   if (staleScenario) {
     box.dataset.staleScenario = "true";
@@ -115,11 +117,50 @@ function renderFitView(region, view, basis, staleScenario = false) {
   const payload = view?.payload;
   const limits = view?.current_limits;
   const statusLabels = { pass: "财务约束检查：pass（已知条件通过）", warning: "财务约束检查：warning（有需注意条件）", blocked: "财务约束检查：blocked（存在已知约束冲突）", unknown: "财务约束检查：unknown（必要输入不足）" };
-  const bucketLabels = { incomplete: "整体状态：incomplete（仍有未集成检查）", blocked: "整体状态：blocked（存在已知约束阻断）" };
+  const bucketLabels = {
+    incomplete: "整体状态：incomplete（仍有未集成检查）",
+    blocked: "整体状态：blocked（存在已知约束阻断）",
+    ready: "整体状态：ready（满足本次已检查条件；不构成买卖建议）",
+    limited: "整体状态：limited（存在非阻断限制）",
+  };
   const financialStatus = el("p", { class: "fit-financial-status" }, statusLabels[payload?.financial_status] || `财务约束检查：${payload?.financial_status || "unknown"}`);
   if (staleScenario) financialStatus.textContent = `上次情景：${financialStatus.textContent}`;
   box.appendChild(financialStatus);
   box.appendChild(el("p", { class: "fit-status" }, bucketLabels[payload?.ranking_bucket] || `整体状态：${payload?.ranking_bucket || "incomplete"}`));
+  // P3 supplemental composition: only integrated rows carry these fields, so
+  // pre-P3 records (not_integrated) keep their previous display untouched.
+  const bindingLabels = {
+    bound: "规则绑定：bound（已绑定研究规则覆盖）",
+    unknown: "规则绑定：unknown（绑定状态未知）",
+  };
+  const researchLabels = {
+    current: "研究结论状态：current（当前有效）",
+    review_required: "研究结论状态：REVIEW_REQUIRED（需要人工复核）",
+    unavailable: "研究结论状态：unavailable（当前不可读取）",
+  };
+  const alignmentLabels = {
+    supportive: "公司论据对齐：supportive（支持性，不构成买卖建议）",
+    restrictive: "公司论据对齐：restrictive（限制性）",
+    undetermined: "公司论据对齐：undetermined（未定）",
+  };
+  const supplementalBinding = payload?.supplemental_binding;
+  if (supplementalBinding && supplementalBinding !== "not_integrated") {
+    box.appendChild(el("p", { class: "fit-supplemental-binding" }, bindingLabels[supplementalBinding] || `规则绑定：${supplementalBinding}`));
+    if (supplementalBinding === "unknown" && payload?.unknown_reason) {
+      box.appendChild(el("p", { class: "fit-supplemental-unknown unknown-copy" }, `未知原因：${supplementalReasonLabel(payload.unknown_reason)}`));
+    }
+    if (supplementalBinding === "bound") {
+      const generations = payload?.rules_generation != null && payload?.events_generation != null
+        ? ` · 规则世代 R${payload.rules_generation} · 事件世代 E${payload.events_generation}` : "";
+      box.appendChild(el("p", { class: "faint" }, `规则覆盖：${payload?.coverage_ref?.id || "未提供"}${generations}`));
+    }
+  }
+  if (payload?.research_status && payload.research_status !== "not_assessed") {
+    box.appendChild(el("p", { class: "fit-research-status" }, researchLabels[payload.research_status] || `研究结论状态：${payload.research_status}`));
+  }
+  if (payload?.company_alignment && payload.company_alignment !== "not_assessed") {
+    box.appendChild(el("p", { class: "faint" }, alignmentLabels[payload.company_alignment] || `公司论据对齐：${payload.company_alignment}`));
+  }
   const checks = payload?.checks || [];
   if (checks.length) {
     const list = el("ul", { class: "fit-checks" });
@@ -166,7 +207,7 @@ function renderFitView(region, view, basis, staleScenario = false) {
   const limitReasons = (limits?.reasons || []).map((code) => limitReasonLabels[code] || String(code).replaceAll("_", " "));
   if (limits) box.appendChild(el("p", { class: "faint" }, `当前证据：${limits.current_status || "unknown"}${limitReasons.length ? `；${limitReasons.join("、")}` : ""}${limits.refresh_required ? "；需要刷新" : ""}`));
   box.appendChild(el("p", { class: "faint" }, "生成时使用当时冻结的账户快照、约束和估值版本。"));
-  box.appendChild(el("p", {}, "此结果只说明冻结输入下的适配状态；incomplete 或 blocked 不会显示为 ready。"));
+  box.appendChild(el("p", {}, "此结果只说明冻结输入下的适配状态；ready 只表示满足本次已检查条件，不构成买卖建议（工程功能，不代表生产启用）。"));
   const details = el("details");
   details.appendChild(el("summary", {}, "查看完整版本化记录"));
   if (basis) details.appendChild(el("p", { class: "faint" }, `冻结版本标识：${basis}`));

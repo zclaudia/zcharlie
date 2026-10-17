@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "synthetic_only": true,
+  "cases": [
+    {"id":"P3-F02","name":"empty_binding_vs_legacy","expected":{"empty_rule_set_binding":"legal_immutable_row","legacy_unbound":"no_binding_row","machine_distinguishable":true,"empty_set_never_claimed_as_full_coverage":true}},
+    {"id":"P3-F03","name":"prepared_multi_version","expected":{"one_prepared_per_prepare":"new_uuid","prepared_never_overwritten":true,"publish_binds_exact_reviewed_prepared":"by_ref_and_hash","binding_not_rewritten_by_coverage":true}},
+    {"id":"P3-F04","name":"review_window_and_rule_reviews","expected":{"missing_required_rule_review":"check_fail_draft","proposal_hash_mismatch":"check_fail_draft","summaries_over_32_or_64k":"review_blocked","partial_pass_on_overflow":"never","coverage_manifest_hash":"independent_of_evidence_set_hash"}},
+    {"id":"P3-F05","name":"publish_success_and_failure","expected":{"success":"closure_plus_published_manifest_plus_dependency_same_transaction","failure":"all_rolled_back_open_issues_intact","half_state_risk_cleared_without_publish":"impossible"}},
+    {"id":"P3-F06","name":"new_rule_limits_old_conclusion","expected":{"new_critical_rule":"rule_coverage_pending","irrelevant_rule_after_deterministic_match":"limit_removed","legacy_conclusion_gets_no_retroactive_rules":"true"}},
+    {"id":"P3-F07","name":"new_event_limits_old_conclusion","expected":{"new_event_uuid":"limiting","new_revision_of_known_event":"limiting","old_event_ref_anchor":"does_not_shadow_new_revision","scan_overflow":"rule_coverage_scan_incomplete"}},
+    {"id":"P3-F11","name":"reduce_exit_not_blocked","expected":{"reduce_exit_without_buy_fit":"not_blocked","constraint_exception_and_company_argument_paths":"preserved","wait_further_research_no_action":"unchanged"}},
+    {"id":"P3-F14","name":"migration_052","expected":{"upgrade_051_to_052":"p1_p2_payload_hash_entries_unchanged","downgrade_without_p3_data":"byte_identical_roundtrip","rule_coverage_row_or_binding_row_or_coverage_dependency":"downgrade_blocked","fresh_create_all_matches_052_ddl":true}}
+  ],
+  "digest_spec": {
+    "fingerprint": "canonical_json_plus_sha256",
+    "hash_never_covers_itself": true,
+    "binding_rule_set_hash_domain": "the frozen rule-set entries only",
+    "binding_content_hash_domain": "full binding DTO minus content_hash",
+    "coverage_manifest_hash_domain": "full manifest DTO minus manifest_hash",
+    "closure_proposal_hash_domain": "target_application_refs_plus_evidence_refs_plus_claim_key_plus_rationale",
+    "input_hash": "caller-supplied 64-hex digest; its content domain is frozen by the admission and prepare tasks, not by this fixture",
+    "application_input_hash_domain": "unchanged P2 domain (frozen pair, manifest hash, mode, purpose); authorization is excluded"
+  },
+  "review_window": {
+    "shared_budget": "32 materials and 64000 bytes",
+    "rules_events_and_reviews_enter_via": "fixed server adapters",
+    "overflow_behavior": "review_blocked_with_empty_summaries",
+    "partial_pass_on_overflow": false
+  },
+  "rule_review_coverage_rule": "every manifest entry with an open issue, a closure proposal, a critical effect, or unbound_new status must have one rule_reviews item keyed by its application_ref; resolved_with_closure must carry the exact proposal_hash; other dispositions must not carry one",
+  "capacity_profile": {
+    "coverage_rule_entries_max": 2000,
+    "coverage_manifest_bytes_max": 4194304,
+    "caps_are_independent": true,
+    "overflow": "explicit scan_capped plus note or admission-time rejection; never silent truncation and never treated as no change",
+    "binding_rule_set_max": 2000
+  },
+  "switch_matrix": {
+    "all_off": "every P3 write path disabled; reads and legacy behavior byte-identical to current",
+    "supplemental_only_on": "new company_research/review admissions bind; admission-time switch state decides binding forever; old tasks stay legacy_unbound",
+    "fit_combinations": "account_fit and candidate_ranking paths take the intersection with their own switches",
+    "published_reads": "limit checks on already published conclusions ignore the switches",
+    "no_new_switches": true
+  },
+  "storage_shapes": {
+    "rule_coverage_row": "account NULL, listing NOT NULL, entry_count >= 0, manifest_hash NOT NULL, universe NULL, series columns NULL",
+    "research_rule_binding_row": "PK(id,revision), task_id UNIQUE, immutable via SQL triggers, revision=1"
+  }
+}

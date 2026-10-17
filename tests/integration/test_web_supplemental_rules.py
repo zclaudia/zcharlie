@@ -48,6 +48,18 @@ async def test_stock_page_uses_read_only_supplemental_panel_without_p1_changes(a
     assert 'data-context="company_research"' in response.text
     assert "不改变评分、账户适配或研究结论" in response.text
     assert "/app/static/app.js" in response.text
+    # P3 binding/coverage provenance container beside the applications panel.
+    assert 'id="supplemental-coverage-content"' in response.text
+
+
+def test_stock_page_fit_panel_carries_p3_boundaries(api_client) -> None:
+    _login(api_client)
+    response = api_client.get("/app/stocks/600406.SH")
+    assert response.status_code == 200
+    # ready is a checked-conditions statement, never a buy recommendation, and
+    # the panel is engineering work, not a production enablement claim.
+    assert "ready 只表示满足本次已检查条件，不构成买卖建议" in response.text
+    assert "工程功能，不代表生产启用" in response.text
 
 
 def test_management_module_import_and_request_recovery_contract() -> None:
@@ -139,3 +151,38 @@ def test_ui_does_not_use_shared_api_client_or_full_json_editor() -> None:
     assert 'from "./api.js"' not in source
     assert 'name="definition_json"' not in template
     assert 'type="checkbox" name="effect"' in template
+
+
+def test_stock_modules_reason_labels_and_import_graph() -> None:
+    """Node unit behavior for the P3 display layer (REASON_LABELS mirror)."""
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not available")
+    items = (STATIC / "supplemental_items.js").resolve().as_uri()
+    fit = (STATIC / "account_fit.js").resolve().as_uri()
+    script = f"""
+import assert from 'node:assert/strict';
+const items = await import({json.dumps(items)});
+// The mirror matches investor/enums.py heads, including ":<identity>" codes.
+assert.equal(items.supplementalReasonLabel('rule_coverage_pending:6f0e'), '存在新增重要规则未覆盖此结论');
+assert.equal(items.supplementalReasonLabel('rule_binding_missing'), '无研究规则绑定（结论早于规则体系）');
+assert.equal(items.supplementalReasonLabel('rule_coverage_unpublished'), '规则覆盖尚未随结论发布');
+assert.equal(items.supplementalReasonLabel('unbound_event:evt-9'), '出现结论未覆盖的新事件');
+assert.equal(items.supplementalReasonLabel('never_registered_code'), 'never_registered_code');
+assert.equal(items.supplementalReasonLabel(''), '');
+// The fit panel imports the shared mirror and still exposes its own contract.
+const fit = await import({json.dumps(fit)});
+assert.equal(typeof fit.bootAccountFit, 'function');
+assert.equal(typeof fit.operationRecord, 'function');
+"""
+    result = subprocess.run([node, "--input-type=module", "-e", script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_fit_panel_source_keeps_p3_copy() -> None:
+    source = (STATIC / "account_fit.js").read_text(encoding="utf-8")
+    assert "supplementalReasonLabel" in source
+    assert "满足本次已检查条件" in source
+    assert "不代表生产启用" in source
+    assert "research_status" in source and "company_alignment" in source

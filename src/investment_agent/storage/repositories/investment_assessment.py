@@ -2,23 +2,48 @@
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Literal, NamedTuple
-from uuid import UUID
+from typing import Any, Literal, NamedTuple
+from uuid import UUID, uuid5
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from investment_agent.candidates.ranking_contracts import RankingEntry, RankingSnapshot
 from investment_agent.investor.common import ObjectRef, OwnerId
+from investment_agent.investor.foundations import InvestorError
 from investment_agent.portfolio.suitability_contracts import AccountFitAssessment
 from investment_agent.storage.models.investment_assessment import (
     CandidateRankingEntry as CandidateRankingEntryRow,
 )
 from investment_agent.storage.models.investment_assessment import InvestmentAssessment
-from investment_agent.supplemental_rules.canonical import stable_series_key
-from investment_agent.supplemental_rules.contracts import RuleApplication
+from investment_agent.supplemental_rules.canonical import (
+    canonical_hash,
+    stable_series_key,
+)
+from investment_agent.supplemental_rules.contracts import (
+    EvaluationResult,
+    FrozenPair,
+    ResearchRuleBinding,
+    RuleApplication,
+    RuleCoverageManifest,
+)
 
-Assessment = AccountFitAssessment | RankingSnapshot | RuleApplication
+Assessment = AccountFitAssessment | RankingSnapshot | RuleApplication | RuleCoverageManifest
+
+
+class RuleBindingState(NamedTuple):
+    """Consumer-side binding honesty marker for one subject.
+
+    ``bound`` carries the exact published manifest (and its binding when
+    readable); ``unknown`` always carries a precise reason and never treats
+    a missing binding as "no rules apply".
+    """
+
+    state: Literal["bound", "unknown"]
+    reasons: tuple[str, ...]
+    manifest: RuleCoverageManifest | None
+    binding: ResearchRuleBinding | None
 
 
 class StoredRanking(NamedTuple):
@@ -138,12 +163,351 @@ class InvestmentAssessmentRepository:
             await self.session.flush()
         return application
 
+    async def save_rule_coverage(
+        self, owner_id: OwnerId, manifest: RuleCoverageManifest
+    ) -> RuleCoverageManifest:
+        """Persist a strict P3 coverage manifest; the caller owns the commit."""
+
+        _check_owner(owner_id)
+        manifest = RuleCoverageManifest.model_validate(manifest.model_dump(mode="json"))
+        if manifest.owner_id != owner_id or manifest.reference.revision != 1:
+            raise ValueError("rule coverage owner/revision is invalid")
+        if manifest.reference.kind != "rule_coverage":
+            raise ValueError("rule coverage reference required")
+        existing = await self.session.get(
+            InvestmentAssessment, (str(manifest.id), manifest.reference.revision)
+        )
+        if existing is not None:
+            if existing.owner_id != owner_id or existing.kind != "rule_coverage":
+                raise ValueError("coverage UUID is already used by another owner or kind")
+            saved = _parse_assessment(existing)
+            _check_header_columns(existing, saved)
+            if (
+                not isinstance(saved, RuleCoverageManifest)
+                or _json_payload(saved) != _json_payload(manifest)
+            ):
+                raise ValueError("coverage UUID conflicts with immutable input or payload")
+            return saved
+
+        new_row = InvestmentAssessment(
+            id=str(manifest.id),
+            revision=manifest.reference.revision,
+            owner_id=owner_id,
+            kind="rule_coverage",
+            account_id=None,
+            listing_id=_listing_id(manifest.listing_ref),
+            as_of=manifest.effective_cutoff,
+            input_hash=manifest.input_hash,
+            entry_count=len(manifest.rule_entries),
+            manifest_hash=manifest.manifest_hash,
+            universe_hash=None,
+            series_key=None,
+            application_sequence=None,
+            application_mode=None,
+            payload=_json_payload(manifest),
+        )
+        async with self.session.begin_nested():
+            self.session.add(new_row)
+            await self.session.flush()
+        return manifest
+
+    async def list_latest_live_rule_application_payloads(
+        self,
+        owner_id: OwnerId,
+        listing_id: int,
+        context: str,
+        *,
+        limit: int = 2000,
+    ) -> tuple[tuple[dict[str, Any], ...], bool]:
+        """Bounded latest-live application payloads of one listing and context.
+
+        Publication-side rechecks consume raw payloads so the investor layer
+        can read rule state without importing the supplemental package. The
+        boolean reports a truncated scan: a known lower bound, never absence.
+        """
+
+        _check_owner(owner_id)
+        if not 1 <= limit <= 5000:
+            raise ValueError("rule application scan limit must be in 1..5000")
+        row = InvestmentAssessment
+        # A distinct alias is required: unaliased self-reference collapses the
+        # correlation and lets superseded series members read as latest.
+        newer = aliased(InvestmentAssessment)
+        superseded = select(newer.id).where(
+            newer.owner_id == row.owner_id,
+            newer.kind == row.kind,
+            newer.listing_id == row.listing_id,
+            newer.series_key == row.series_key,
+            newer.application_mode == "live",
+            newer.application_sequence > row.application_sequence,
+        ).exists()
+        statement = (
+            select(row)
+            .where(
+                row.owner_id == owner_id,
+                row.kind == "rule_application",
+                row.listing_id == listing_id,
+                row.application_mode == "live",
+                row.payload["context"].as_string() == context,
+                ~superseded,
+            )
+            .order_by(row.series_key)
+            .limit(limit + 1)
+        )
+        rows = list((await self.session.scalars(statement)).all())
+        truncated = len(rows) > limit
+        return tuple(row.payload for row in rows[:limit]), truncated
+
+    async def save_publication_closure(
+        self,
+        owner_id: OwnerId,
+        *,
+        target: RuleApplication,
+        semantic_review_ref: ObjectRef,
+        operation_id: UUID,
+        as_of: datetime,
+        source_manifest_hash: str,
+    ) -> RuleApplication:
+        """Build and persist one formal_review closure for one open issue.
+
+        The prepared coverage manifest is the frozen source; the target must
+        still be its series' latest live head or the closure is rejected. The
+        caller owns the transaction and the commit.
+        """
+
+        _check_owner(owner_id)
+        if target.owner_id != owner_id or not target.open_issue_refs:
+            raise InvestorError("rule_coverage_closure_conflict", "闭合目标不是本主体的未决事项")
+        head = await self.session.execute(
+            select(InvestmentAssessment)
+            .where(
+                InvestmentAssessment.owner_id == owner_id,
+                InvestmentAssessment.kind == "rule_application",
+                InvestmentAssessment.series_key == target.series_key,
+                InvestmentAssessment.application_mode == "live",
+            )
+            .order_by(InvestmentAssessment.application_sequence.desc())
+            .limit(1)
+        )
+        head_row = head.scalars().first()
+        if head_row is None or head_row.id != str(target.id):
+            raise InvestorError("rule_coverage_closure_conflict", "目标规则序列已推进，闭合被拒绝")
+        maximum = await self.session.scalar(
+            select(func.max(InvestmentAssessment.application_sequence)).where(
+                InvestmentAssessment.owner_id == owner_id,
+                InvestmentAssessment.kind == "rule_application",
+                InvestmentAssessment.listing_id == target.listing_ref.id,
+                InvestmentAssessment.series_key == target.series_key,
+            )
+        )
+        pair = _closure_pair(target, as_of=as_of)
+        fingerprint = canonical_hash({
+            "pair": pair,
+            "manifest_hash": source_manifest_hash,
+            "mode": "live",
+            "purpose": "issue_review",
+        })
+        result = EvaluationResult.model_validate({
+            **target.result.model_dump(mode="python"),
+            "assessment_status": "resolved",
+            "semantic_status": "reviewed",
+            "semantic_review_ref": semantic_review_ref.model_dump(mode="python"),
+            "closure_refs": (target.reference.model_dump(mode="python"),),
+            "open_issue_refs": (),
+            "diagnostics": (*target.result.diagnostics, "resolved_by_publication_review"),
+        })
+        now = datetime.now(UTC)
+        application = RuleApplication(
+            id=uuid5(operation_id, f"publication-closure:{target.series_key}:{target.id}"),
+            operation_id=operation_id,
+            owner_id=owner_id,
+            listing_ref=target.listing_ref,
+            company_id=target.company_id,
+            context=target.context,
+            rule_ref=target.rule_ref,
+            rules_generation=target.rules_generation,
+            events_generation=target.events_generation,
+            matching_manifest_hash=target.matching_manifest_hash,
+            event_ref=target.event_ref,
+            as_of=as_of,
+            evaluated_at=now,
+            valid_until=target.valid_until,
+            review_due_at=target.review_due_at,
+            input_hash=fingerprint,
+            matcher_version=target.matcher_version,
+            evaluator_version=target.evaluator_version,
+            dependencies=target.dependencies,
+            series_key=target.series_key,
+            application_sequence=(maximum or 0) + 1,
+            application_mode="live",
+            authorization="formal_review",
+            origin_ref=None,
+            created_at=now,
+            actor="publication_formal_review",
+            previous_application_ref=target.reference,
+            frozen_pair=pair,
+            source_manifest_hash=source_manifest_hash,
+            evaluation_purpose="issue_review",
+            applicability=target.applicability,
+            condition_result=target.condition_result,
+            evidence_status=target.evidence_status,
+            assessment_status="resolved",
+            semantic_status="reviewed",
+            semantic_review_ref=semantic_review_ref,
+            effective_effects=tuple(e.model_dump(mode="json") for e in result.effective_effects),
+            open_issue_refs=(),
+            closure_refs=(target.reference,),
+            result=result,
+            payload={
+                "scope_semantic_hash": target.payload.get("scope_semantic_hash"),
+                "prepared_manifest_hash": source_manifest_hash,
+            },
+        )
+        return await self.save_rule_application(owner_id, application)
+
+    async def save_published_rule_coverage(
+        self,
+        owner_id: OwnerId,
+        *,
+        prepared: RuleCoverageManifest,
+        manifest_id: UUID,
+        semantic_review_ref: ObjectRef,
+        closure_application_refs: tuple[ObjectRef, ...],
+        thesis_ref: ObjectRef,
+        recommendation_ref: ObjectRef,
+        limits_recheck: tuple[str, ...],
+        committed_at: datetime,
+    ) -> RuleCoverageManifest:
+        """Derive and persist the published manifest from its prepared source.
+
+        The prepared content is carried verbatim; only the publication-stage
+        identity fields are added. The caller owns the transaction.
+        """
+
+        _check_owner(owner_id)
+        if prepared.stage != "prepared":
+            raise ValueError("published coverage must derive from a prepared manifest")
+        if committed_at < prepared.created_at:
+            raise ValueError("published coverage cannot precede its prepared source")
+        data = prepared.model_dump(mode="python")
+        data.update({
+            "id": manifest_id,
+            "stage": "published",
+            "prepared_ref": prepared.reference.model_dump(mode="python"),
+            "prepared_manifest_hash": prepared.manifest_hash,
+            "semantic_review_ref": semantic_review_ref.model_dump(mode="python"),
+            "closure_application_refs": tuple(ref.model_dump(mode="python") for ref in closure_application_refs),
+            "thesis_ref": thesis_ref.model_dump(mode="python"),
+            "recommendation_ref": recommendation_ref.model_dump(mode="python"),
+            "limits_recheck": tuple(limits_recheck),
+            "committed_at": committed_at,
+            "created_at": committed_at,
+            "manifest_hash": "pending",
+        })
+        data["manifest_hash"] = canonical_hash(
+            {key: value for key, value in data.items() if key != "manifest_hash"}
+        )
+        published = RuleCoverageManifest.model_validate(data)
+        return await self.save_rule_coverage(owner_id, published)
+
+    async def get_rule_application(
+        self, owner_id: OwnerId, reference: ObjectRef
+    ) -> RuleApplication | None:
+        """Exact rule application or None; narrows the shared assessment union."""
+
+        value = await self.get_exact(owner_id, reference, expected_kind="rule_application")
+        return value if isinstance(value, RuleApplication) else None
+
+    async def get_rule_coverage(
+        self, owner_id: OwnerId, reference: ObjectRef
+    ) -> RuleCoverageManifest | None:
+        """Exact coverage manifest or None; narrows the shared assessment union."""
+
+        value = await self.get_exact(owner_id, reference, expected_kind="rule_coverage")
+        return value if isinstance(value, RuleCoverageManifest) else None
+
+    async def published_rule_coverage_limits(
+        self,
+        owner_id: OwnerId,
+        manifest: RuleCoverageManifest,
+        *,
+        now: datetime | None = None,
+    ) -> tuple[str, ...]:
+        """Bounded current-limitation recheck of one published coverage manifest.
+
+        The shared supplemental predicate runs here so publication and
+        consumer reads never import the supplemental package; storage is the
+        single allowed edge. Queries stay inside the caller's transaction.
+        """
+
+        _check_owner(owner_id)
+        from investment_agent.supplemental_rules.publication_limits import (
+            published_manifest_limits,
+        )
+
+        return await published_manifest_limits(self.session, owner=owner_id, manifest=manifest, at=now)
+
+    async def latest_published_rule_coverage(
+        self, owner_id: OwnerId, listing_id: int
+    ) -> RuleCoverageManifest | None:
+        """Newest published coverage manifest of one listing, or None."""
+
+        _check_owner(owner_id)
+        row = await self.session.scalar(
+            select(InvestmentAssessment)
+            .where(
+                InvestmentAssessment.owner_id == owner_id,
+                InvestmentAssessment.kind == "rule_coverage",
+                InvestmentAssessment.listing_id == listing_id,
+                InvestmentAssessment.payload["stage"].as_string() == "published",
+            )
+            .order_by(InvestmentAssessment.as_of.desc(), InvestmentAssessment.id.desc())
+            .limit(1)
+        )
+        if row is None:
+            return None
+        value = RuleCoverageManifest.model_validate(row.payload)
+        _check_header_columns(row, value)
+        return value
+
+    async def rule_binding_state(
+        self, owner_id: OwnerId, listing_ref: ObjectRef
+    ) -> RuleBindingState:
+        """Binding/coverage honesty marker of one subject for consumers.
+
+        A published manifest makes the subject ``bound``; a binding without a
+        published manifest is ``rule_coverage_unpublished``; no rows at all is
+        ``rule_binding_missing`` (legacy conclusions are never retroactively
+        bound). Pure reads; no backfill of any historical payload.
+        """
+
+        _check_owner(owner_id)
+        from investment_agent.storage.repositories.supplemental_rules import (
+            SupplementalRulesRepository,
+        )
+
+        manifest = await self.latest_published_rule_coverage(owner_id, int(listing_ref.id))
+        if manifest is not None:
+            binding = await SupplementalRulesRepository(self.session).get_research_rule_binding(
+                owner_id, manifest.binding_ref
+            )
+            return RuleBindingState("bound", (), manifest, binding)
+        binding = await SupplementalRulesRepository(
+            self.session
+        ).latest_research_rule_binding_for_listing(owner_id, int(listing_ref.id))
+        if binding is not None:
+            return RuleBindingState("unknown", ("rule_coverage_unpublished",), None, binding)
+        return RuleBindingState("unknown", ("rule_binding_missing",), None, None)
+
+
     async def get_exact(
         self,
         owner_id: OwnerId,
         reference: ObjectRef,
         *,
-        expected_kind: Literal["account_fit", "candidate_ranking", "rule_application"] | None = None,
+        expected_kind: Literal[
+            "account_fit", "candidate_ranking", "rule_application", "rule_coverage"
+        ] | None = None,
     ) -> Assessment | None:
         """Read an exact UUID/revision only after checking owner and kind."""
 
@@ -292,13 +656,38 @@ class InvestmentAssessmentRepository:
         return StoredRanking(snapshot, entries)
 
 
+def _closure_pair(target: RuleApplication, *, as_of: datetime) -> FrozenPair:
+    """The closure application's frozen pair: the target's series advanced by one.
+
+    The subject is re-frozen at the coverage cutoff, and the target becomes the
+    exact live predecessor; every other identity field stays with the rule.
+    """
+
+    data = target.frozen_pair.model_dump(mode="python")
+    data["subject"]["as_of"] = as_of
+    data["prior_live_application_ref"] = target.reference.model_dump(mode="python")
+    data["prior_open_issue_refs"] = tuple(
+        ref.model_dump(mode="python") for ref in target.open_issue_refs
+    )
+    issue_key = target.frozen_pair.rule.issue_key or str(target.rule_ref.id)
+    data["prior_issue_keys"] = (issue_key,) if target.open_issue_refs else ()
+    data["prior_input_hash"] = target.input_hash
+    data["input_hash"] = "0" * 64
+    pair = FrozenPair.model_validate(data)
+    return pair.model_copy(update={
+        "input_hash": canonical_hash(pair.model_dump(mode="python", exclude={"input_hash"})),
+    })
+
+
 def _check_owner(owner_id: OwnerId) -> None:
     if owner_id != "local_owner":
         raise ValueError("unsupported owner")
 
 
-def _kind_for_ref(reference: ObjectRef) -> Literal["account_fit", "candidate_ranking", "rule_application"]:
-    if reference.kind not in {"account_fit", "candidate_ranking", "rule_application"}:
+def _kind_for_ref(reference: ObjectRef) -> (
+    Literal["account_fit", "candidate_ranking", "rule_application", "rule_coverage"]
+):
+    if reference.kind not in {"account_fit", "candidate_ranking", "rule_application", "rule_coverage"}:
         raise ValueError("unsupported investment assessment reference kind")
     return reference.kind
 
@@ -309,7 +698,9 @@ def _listing_id(reference: ObjectRef) -> int:
     return reference.id
 
 
-def _json_payload(value: AccountFitAssessment | RankingSnapshot | RankingEntry | RuleApplication) -> dict[str, object]:
+def _json_payload(
+    value: AccountFitAssessment | RankingSnapshot | RankingEntry | RuleApplication | RuleCoverageManifest,
+) -> dict[str, object]:
     return value.model_dump(mode="json")
 
 
@@ -320,6 +711,8 @@ def _parse_assessment(row: InvestmentAssessment) -> Assessment:
         return RankingSnapshot.model_validate(row.payload)
     if row.kind == "rule_application":
         return RuleApplication.model_validate(row.payload)
+    if row.kind == "rule_coverage":
+        return RuleCoverageManifest.model_validate(row.payload)
     raise ValueError(f"unsupported investment assessment kind {row.kind!r}")
 
 
@@ -350,6 +743,20 @@ def _check_header_columns(row: InvestmentAssessment, artifact: Assessment) -> No
             or any(value is not None for value in (row.entry_count, row.manifest_hash, row.universe_hash))
         ):
             raise ValueError("rule-application header columns do not match payload")
+        return
+    if row.kind == "rule_coverage":
+        if not isinstance(artifact, RuleCoverageManifest):
+            raise ValueError("assessment kind and payload disagree")
+        if (
+            row.account_id is not None
+            or row.listing_id != _listing_id(artifact.listing_ref)
+            or not _same_timestamp(row.as_of, artifact.effective_cutoff)
+            or row.entry_count != len(artifact.rule_entries)
+            or row.manifest_hash != artifact.manifest_hash
+            or row.universe_hash is not None
+            or any(value is not None for value in (row.series_key, row.application_sequence, row.application_mode))
+        ):
+            raise ValueError("rule-coverage header columns do not match payload")
         return
     if row.kind == "account_fit":
         if not isinstance(artifact, AccountFitAssessment):

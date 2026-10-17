@@ -36,6 +36,7 @@ from investment_agent.portfolio.plan_contracts import (
 )
 from investment_agent.portfolio.service import PortfolioService
 from investment_agent.portfolio.valuation import ValuationService
+from investment_agent.storage.models.investment_assessment import InvestmentAssessment
 from investment_agent.storage.models.portfolio_plan import (
     PortfolioPlanArtifact,
     PortfolioPlanEvent,
@@ -183,6 +184,64 @@ class PortfolioPlanService:
             if case.status.value == "archived" or case.listing_ref != action.listing_ref or case.current_recommendation_ref != ref or view.status != RecommendationStatus.PUBLISHED or view.limitation_reasons:
                 raise InvestorError("invalid_reference", "Company view is expired, restricted, replaced or for another listing")
 
+    async def _buy_fit_limits(self, candidate: PlanInput, action: PortfolioAction, *, effective: Settings) -> list[str]:
+        """buy/add only (AF-P3-09): the fit must be current and rule-clean.
+
+        account_fit_enabled gates the fit half, supplemental_rules_enabled
+        the coverage half; with both off the AG23 behaviour is unchanged. A
+        missing fit is an explicit unknown and refuses - nothing fabricates a
+        pass. All reads run through the storage repositories inside the
+        caller's publication transaction.
+        """
+
+        limits: list[str] = []
+        listing_id = int(action.listing_ref.id)
+        if effective.account_fit_enabled:
+            from investment_agent.portfolio.suitability import AccountFitService
+            from investment_agent.portfolio.suitability_contracts import (
+                AccountFitAssessment,
+            )
+
+            wanted = "open" if action.stance == "buy" else "add"
+            row = await self.session.scalar(
+                select(InvestmentAssessment)
+                .where(
+                    InvestmentAssessment.owner_id == self.owner,
+                    InvestmentAssessment.kind == "account_fit",
+                    InvestmentAssessment.account_id == str(candidate.account_id),
+                    InvestmentAssessment.listing_id == listing_id,
+                    InvestmentAssessment.payload["frozen_inputs"]["mode"].as_string() == "live",
+                    InvestmentAssessment.payload["action"].as_string() == wanted,
+                )
+                .order_by(InvestmentAssessment.as_of.desc(), InvestmentAssessment.id.desc())
+                .limit(1)
+            )
+            if row is None:
+                limits.append(f"account_fit_missing:{listing_id}")
+            else:
+                assessment = AccountFitAssessment.model_validate(row.payload)
+                if assessment.financial_status == "blocked":
+                    limits.append(f"account_fit_blocked:{listing_id}")
+                else:
+                    current = await AccountFitService(self.session, self.owner).limits(assessment)
+                    if current.current_status != "valid":
+                        limits.append(f"account_fit_stale:{listing_id}:" + ";".join(current.reasons))
+        if effective.supplemental_rules_enabled:
+            from investment_agent.storage.repositories.investment_assessment import (
+                InvestmentAssessmentRepository,
+            )
+
+            repository = InvestmentAssessmentRepository(self.session)
+            state = await repository.rule_binding_state("local_owner", action.listing_ref)
+            if state.state != "bound" or state.manifest is None:
+                reason = state.reasons[0] if state.reasons else "rule_binding_missing"
+                limits.append(f"{reason}:{listing_id}")
+            else:
+                rule_limits = await repository.published_rule_coverage_limits("local_owner", state.manifest)
+                if rule_limits:
+                    limits.append(f"rule_limits:{listing_id}:" + ";".join(rule_limits))
+        return limits
+
     async def check(self, candidate: PlanInput, semantic: PlanSemanticReview, *, as_of: datetime, task_id: UUID) -> tuple[PublicationCheck, PortfolioPlan | None]:
         errors: dict[str, str] = {}
         now = datetime.now(UTC)
@@ -237,6 +296,13 @@ class PortfolioPlanService:
         scenarios = record.details["scenarios"]
         baseline = scenarios[0]
         formal = mandate.portfolio_constraints
+        # AF-P3-09: the buy/add fit/coverage gate needs the runtime switches;
+        # with both off (the default) the AG23 behaviour is byte-identical.
+        fit_gate_settings = None
+        if any(a.stance in {"buy", "add"} for o in candidate.options for a in o.actions):
+            from investment_agent.settings.loader import load_settings
+
+            fit_gate_settings = await load_settings(self.session)
         options = []
         for option in candidate.options:
             prefix = f"options.{option.id}"
@@ -253,6 +319,7 @@ class PortfolioPlanService:
             covered: set[ObjectRef] = set()
             improvements: list[str] = []
             rendered: dict[str, tuple[str, ...]] = {}
+            fit_limits: list[str] = []
             constraint_only = bool(option.actions) and all(a.basis == "portfolio_constraint" for a in option.actions)
             for action in option.actions:
                 path = prefix + f".actions.{action.id}"
@@ -309,6 +376,16 @@ class PortfolioPlanService:
                         if improved:
                             improvements.append(constraint_name)
                     rendered[str(action.id)] = await resolver.render(action, option.scenario_index, self.session)
+                    # AF-P3-09: buy/add additionally requires a current,
+                    # unblocked account fit and clean rule coverage. reduce/
+                    # exit/wait and the constraint exception path never run
+                    # this gate, so risk reduction is never blocked by a
+                    # missing buy fit.
+                    if fit_gate_settings is not None and action.stance in {"buy", "add"}:
+                        action_limits = await self._buy_fit_limits(candidate, action, effective=fit_gate_settings)
+                        if action_limits:
+                            errors[path + ".fit_current"] = "; ".join(action_limits)
+                            fit_limits.extend(action_limits)
                 except (InvestorError, ValueError, KeyError, StopIteration) as exc:
                     errors[path] = str(exc)
             if set(movements) != covered:
@@ -333,7 +410,7 @@ class PortfolioPlanService:
                 errors[prefix + ".price_basis"] = "Frozen price basis is stale at publication cutoff"
             if directional and not (scenario["publication_ready"] or safe_exception):
                 errors[prefix + ".sizing"] = "Execution requires known cash, fees, coverage, trusted rules and safe constraints"
-            saved_option = self._option(record, option.id, option.scenario_index, option.actions, bool(scenario["publication_ready"] or safe_exception) and directional, tuple(improvements), rendered)
+            saved_option = self._option(record, option.id, option.scenario_index, option.actions, bool(scenario["publication_ready"] or safe_exception) and directional and not fit_limits, tuple(improvements), rendered)
             if stale:
                 saved_option = saved_option.model_copy(update={"unknowns": tuple(dict.fromkeys((*saved_option.unknowns, *stale)))})
             options.append(saved_option)

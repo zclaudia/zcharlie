@@ -4,9 +4,10 @@ Rule checks are deterministic. A saved structured semantic review records the
 argument's relevance and open problems; it is not a proof of investment quality.
 """
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
+from pydantic import model_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +27,7 @@ from investment_agent.investor.contracts import (
     Case,
     Claim,
     CompanyRecommendation,
+    Dependency,
     MonitorSpec,
     NumericNode,
     PublicationCheck,
@@ -52,7 +54,13 @@ from investment_agent.storage.models.publication import (
     PublicationEvent,
     PublicationOutbox,
 )
+from investment_agent.storage.repositories.investment_assessment import (
+    InvestmentAssessmentRepository,
+)
 from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
+from investment_agent.storage.repositories.supplemental_rules import (
+    SupplementalRulesRepository,
+)
 
 FIXED_METHOD = ObjectRef(kind="method", id=uuid5(NAMESPACE_URL, "investment-agent/company-research.v1"), revision=1)
 
@@ -65,6 +73,31 @@ class SemanticAssessment(Contract):
     issues: tuple[str, ...] = ()
 
 
+class RuleReviewItem(Contract):
+    """One per-rule disposition inside the semantic review window."""
+
+    application_ref: ObjectRef
+    disposition: Literal["no_action_required", "resolved_with_closure", "limitation_acknowledged"]
+    basis_refs: tuple[ObjectRef, ...] = ()
+    proposal_hash: str | None = None
+
+    @model_validator(mode="after")
+    def review_item_identity(self) -> "RuleReviewItem":
+        if (
+            self.application_ref.kind != "rule_application"
+            or self.application_ref.field_path is not None
+        ):
+            raise ValueError("rule review items must cite exact rule applications")
+        if self.disposition == "resolved_with_closure" and self.proposal_hash is None:
+            raise ValueError("resolved_with_closure requires its exact proposal hash")
+        if self.disposition != "resolved_with_closure" and self.proposal_hash is not None:
+            raise ValueError("proposal hash applies only to resolved_with_closure dispositions")
+        for ref in self.basis_refs:
+            if ref.field_path is not None or ref.revision is None:
+                raise ValueError("rule review basis must cite exact revisions")
+        return self
+
+
 class SemanticReview(Record):
     candidate_hash: str
     material_set_hash: str
@@ -74,7 +107,22 @@ class SemanticReview(Record):
     unresolved_questions: tuple[str, ...]
     conclusion: Literal["pass", "revise"]
     reviewer: str
+    # P3 rule-closure fields; defaults keep every earlier artifact readable.
+    rule_reviews: tuple[RuleReviewItem, ...] = ()
+    coverage_manifest_ref: ObjectRef | None = None
+    coverage_manifest_hash: str | None = None
     # This is a research-step record, not AG20's human evaluation signature.
+
+    @model_validator(mode="after")
+    def coverage_binding(self) -> "SemanticReview":
+        if (self.coverage_manifest_ref is None) != (self.coverage_manifest_hash is None):
+            raise ValueError("coverage manifest reference and hash must be provided together")
+        if self.coverage_manifest_ref is not None and (
+            self.coverage_manifest_ref.kind != "rule_coverage"
+            or self.coverage_manifest_ref.field_path is not None
+        ):
+            raise ValueError("coverage manifest reference must identify an exact rule coverage")
+        return self
 
 
 class PublicationCandidate(Contract):
@@ -82,6 +130,22 @@ class PublicationCandidate(Contract):
     recommendation: CompanyRecommendation
     monitors: tuple[MonitorSpec, ...] = ()
     research_kind: Literal["company_research", "local_check"] = "company_research"
+
+
+RULE_COVERAGE_FIELDS = ("rules", "open_issues", "materials")
+
+
+class RuleReviewContext(NamedTuple):
+    """Server-frozen binding and prepared coverage for one publication check.
+
+    Both payloads are loaded through the storage repositories, so this module
+    never imports the supplemental package (its DTO instances are used as
+    parsed data). ``manifest`` is None when the bound task has no receipt yet.
+    """
+
+    binding_ref: ObjectRef | None
+    admission_as_of: datetime | None
+    manifest: Any
 
 
 class PublicationResult(Contract):
@@ -157,6 +221,10 @@ class PublicationService:
         elif ref.kind == "listing":
             if ref != resolver.subject:
                 raise InvestorError("invalid_reference", "Listing identity differs")
+        elif ref.kind == "rule_coverage":
+            manifest = await InvestmentAssessmentRepository(self.session).get_rule_coverage("local_owner", ref)
+            if manifest is None or manifest.stage != "published":
+                raise InvestorError("invalid_reference", "Rule coverage dependency must be a published manifest")
         elif ref.kind == "method":
             if ref not in self.policy.methods:
                 raise InvestorError("invalid_reference", "Unknown method version")
@@ -175,7 +243,7 @@ class PublicationService:
         else:
             raise InvestorError("invalid_reference", "Reference kind is not usable research evidence")
 
-    async def check(self, candidate: PublicationCandidate, semantic: SemanticReview, *, peer_context: PeerContextBinding | None = None) -> tuple[PublicationCheck, dict[str, ResolvedNode]]:
+    async def check(self, candidate: PublicationCandidate, semantic: SemanticReview, *, peer_context: PeerContextBinding | None = None, rule_context: RuleReviewContext | None = None) -> tuple[PublicationCheck, dict[str, ResolvedNode]]:
         thesis, recommendation = candidate.thesis, candidate.recommendation
         errors: dict[str, str] = {}
         resolved: dict[str, ResolvedNode] = {}
@@ -262,6 +330,8 @@ class PublicationService:
         for i, dependency in enumerate(recommendation.dependency_refs):
             if dependency.ref.kind == "mandate" and not set(dependency.fields) <= {"goals", "scope_refs", "hard_constraints", "portfolio_constraints"}:
                 errors[f"dependency_refs.{i}.fields"] = "Only relevant mandate fields are publication dependencies"
+            if dependency.ref.kind == "rule_coverage" and (not dependency.fields or not set(dependency.fields) <= set(RULE_COVERAGE_FIELDS)):
+                errors[f"dependency_refs.{i}.fields"] = "Rule coverage dependencies bind rules, open issues, and materials"
             if not dependency.fields:
                 errors[f"dependency_refs.{i}"] = "Dependency needs relevant fields"
             refs.append((f"dependency_refs.{i}", dependency.ref))
@@ -290,6 +360,11 @@ class PublicationService:
                 await self._reference(resolver, ref, candidate, peer=peer)
             except (InvestorError, LookupError) as exc:
                 errors[path] = str(exc)
+        if rule_context is None:
+            if semantic.coverage_manifest_ref is not None or semantic.coverage_manifest_hash is not None:
+                errors["semantic_review.coverage_manifest_ref"] = "Review self-reported rule coverage without a bound rule manifest"
+        else:
+            await self._check_rule_coverage(candidate, semantic, rule_context, case, directional, errors)
         monitor_ids = {ObjectRef(kind="monitor", id=m.id, revision=m.revision) for m in candidate.monitors}
         if set(recommendation.monitor_refs) != monitor_ids:
             errors["monitor_refs"] = "Monitor references differ from supplied specifications"
@@ -336,6 +411,175 @@ class PublicationService:
                             errors[f"{path}.{i}"] = str(exc)
         return PublicationCheck(rule_version="company-publication.v1", passed=() if errors else ("identity_scope", "references_time", "claims_numbers", "research_semantic_record", "company_scope"), failures=tuple(errors), field_errors=errors, semantic_review_ref=None), resolved
 
+    async def _check_rule_coverage(self, candidate: PublicationCandidate, semantic: SemanticReview, rule_context: RuleReviewContext, case: Case, directional: bool, errors: dict[str, str]) -> None:
+        """P3 coverage binding: the prepared manifest and per-rule review window.
+
+        Every manifest entry with an open issue, a closure-proposal target, a
+        critical rule, or unbound-new status needs a keyed review item;
+        closures must match the frozen proposal hash. A directional view
+        refuses unknown/unbound-new coverage and any open issue.
+        """
+
+        manifest = rule_context.manifest
+        if semantic.coverage_manifest_ref is None or semantic.coverage_manifest_hash is None:
+            errors["semantic_review.coverage_manifest_ref"] = "Bound task requires the server coverage manifest binding"
+            return
+        if manifest is None:
+            errors["semantic_review.coverage_manifest_ref"] = "Prepared rule coverage manifest unavailable"
+            return
+        if manifest.stage != "prepared":
+            errors["semantic_review.coverage_manifest_ref"] = "Coverage manifest must be the prepared stage"
+        if manifest.manifest_hash != semantic.coverage_manifest_hash:
+            errors["semantic_review.coverage_manifest_hash"] = "Review does not bind the prepared coverage manifest"
+        if rule_context.binding_ref is None or manifest.binding_ref != rule_context.binding_ref:
+            errors["rule_coverage.binding_ref"] = "Coverage manifest does not bind this task's rule binding"
+        if manifest.listing_ref != case.listing_ref:
+            errors["rule_coverage.listing_ref"] = "Coverage manifest subject differs"
+        if manifest.case_ref != candidate.thesis.case_ref:
+            errors["rule_coverage.case_ref"] = "Coverage manifest case differs"
+        if manifest.effective_cutoff != candidate.recommendation.as_of:
+            errors["rule_coverage.as_of"] = "Coverage cutoff must equal the recommendation as_of"
+        if manifest.material_set_hash is not None and manifest.material_set_hash != candidate.thesis.evidence_set_hash:
+            errors["rule_coverage.material_set_hash"] = "Coverage manifest does not bind this candidate's material set"
+        items: dict[Any, Any] = {}
+        for item in semantic.rule_reviews:
+            if item.application_ref in items:
+                errors["semantic_review.rule_reviews"] = "Duplicate rule review item for one application"
+            items[item.application_ref] = item
+        repo = InvestmentAssessmentRepository(self.session)
+        payloads, _ = await repo.list_latest_live_rule_application_payloads(
+            "local_owner", int(case.listing_ref.id), "company_research"
+        )
+        latest_by_rule = {str(payload["rule_ref"]["id"]): payload for payload in payloads}
+        required: list[Any] = []
+        loaded: dict[Any, Any] = {}
+
+        async def application_of(ref: ObjectRef) -> Any | None:
+            if ref not in loaded:
+                loaded[ref] = await repo.get_rule_application("local_owner", ref)
+            return loaded[ref]
+
+        def issue_identity(application: Any) -> str:
+            rule = application.frozen_pair.rule
+            return rule.issue_key or str(rule.id) or str(application.rule_ref.id)
+
+        for entry in manifest.rule_entries:
+            if entry.status == "unbound_new":
+                payload = latest_by_rule.get(str(entry.rule_ref.id))
+                if payload is None:
+                    errors[f"rule_coverage.unbound_new:{entry.rule_ref.id}"] = "Unbound new rule has no current live application to review"
+                else:
+                    required.append(ObjectRef(kind="rule_application", id=UUID(str(payload["id"])), revision=1))
+                continue
+            if entry.status != "application" or entry.application_ref is None:
+                continue
+            application = await application_of(entry.application_ref)
+            if application is None:
+                errors[f"rule_coverage.{entry.rule_ref.id}"] = "Covered rule application is unavailable"
+                continue
+            targeted = any(entry.application_ref in proposal.target_application_refs for proposal in manifest.closure_proposals)
+            if application.open_issue_refs or targeted or application.frozen_pair.rule.severity == "critical":
+                required.append(entry.application_ref)
+        for ref in required:
+            if ref not in items:
+                errors[f"semantic_review.rule_reviews:{ref.id}"] = "Review item missing for a coverage entry that requires a disposition"
+        def matching_proposal(item: Any) -> Any:
+            return next((p for p in manifest.closure_proposals if p.proposal_hash == item.proposal_hash), None)
+        for item in semantic.rule_reviews:
+            key = f"semantic_review.rule_reviews:{item.application_ref.id}"
+            if item.disposition == "resolved_with_closure":
+                proposal = matching_proposal(item)
+                if proposal is None or item.application_ref not in proposal.target_application_refs:
+                    errors[key] = "Closure does not match a prepared proposal for this application"
+            elif item.disposition == "limitation_acknowledged":
+                application = await application_of(item.application_ref)
+                identity = issue_identity(application) if application is not None else str(item.application_ref.id)
+                if not any(
+                    identity in question or str(item.application_ref.id) in question
+                    for question in semantic.unresolved_questions
+                ):
+                    errors[key] = "Acknowledged limitation must name its rule issue in the unresolved questions"
+        if directional:
+            if any(entry.status in {"unknown", "unbound_new"} for entry in manifest.rule_entries):
+                errors["rule_coverage.directional"] = "Directional view cannot carry unknown or unbound-new rule coverage"
+            for ref in manifest.open_issue_refs:
+                closed = any(
+                    item.disposition == "resolved_with_closure"
+                    and (proposal := matching_proposal(item)) is not None
+                    and ref in proposal.target_application_refs
+                    for item in semantic.rule_reviews
+                )
+                if not closed:
+                    errors["rule_coverage.open_issues"] = "Directional view requires every open rule issue closed by review"
+                    break
+
+    async def _rule_review_context(self, task_id: UUID, semantic: SemanticReview) -> RuleReviewContext | None:
+        """Load the server-side binding and prepared manifest for one task."""
+
+        binding = await SupplementalRulesRepository(self.session).get_research_rule_binding_for_task(
+            "local_owner", task_id
+        )
+        if binding is None:
+            if semantic.coverage_manifest_ref is not None or semantic.coverage_manifest_hash is not None:
+                return RuleReviewContext(binding_ref=None, admission_as_of=None, manifest=None)
+            return None
+        manifest = None
+        if semantic.coverage_manifest_ref is not None:
+            manifest = await InvestmentAssessmentRepository(self.session).get_rule_coverage(
+                "local_owner", semantic.coverage_manifest_ref
+            )
+        return RuleReviewContext(binding_ref=binding.reference, admission_as_of=binding.admission_as_of, manifest=manifest)
+
+    async def _rule_coverage_limits(self, manifest: Any, at: datetime | None = None) -> list[str]:
+        """Current rule restrictions of one coverage manifest (bounded re-scan).
+
+        The shared predicate runs through the storage repository (the single
+        allowed edge), so reads of published opinions never import the
+        supplemental package. Reads stay inside the caller's transaction.
+        """
+
+        return list(await InvestmentAssessmentRepository(self.session).published_rule_coverage_limits(
+            "local_owner", manifest, now=at
+        ))
+
+    async def _commit_rule_closures(self, session: AsyncSession, rule_context: RuleReviewContext, semantic: SemanticReview, review_ref: ObjectRef, operation: UUID, now: datetime) -> tuple[ObjectRef, ...]:
+        """Commit one formal_review closure application per reviewed target.
+
+        Runs inside the caller's savepoint: any rejection rolls the whole
+        closure set back and surfaces as a check field error (draft), so an
+        open issue never disappears without its published resolution.
+        """
+
+        from investment_agent.storage.repositories.investment_assessment import (
+            InvestmentAssessmentRepository,
+        )
+
+        manifest = rule_context.manifest
+        assert manifest is not None
+        repo = InvestmentAssessmentRepository(session)
+        proposals = {proposal.proposal_hash: proposal for proposal in manifest.closure_proposals}
+        refs: list[ObjectRef] = []
+        for item in semantic.rule_reviews:
+            if item.disposition != "resolved_with_closure":
+                continue
+            proposal = proposals.get(item.proposal_hash)
+            if proposal is None or item.application_ref not in proposal.target_application_refs:
+                raise InvestorError("rule_coverage_closure_conflict", "评审项与冻结闭合提案不匹配")
+            target = await repo.get_rule_application("local_owner", item.application_ref)
+            if target is None:
+                raise InvestorError("rule_coverage_closure_conflict", "闭合目标应用不存在")
+            application = await repo.save_publication_closure(
+                "local_owner",
+                target=target,
+                semantic_review_ref=review_ref,
+                operation_id=operation,
+                as_of=manifest.effective_cutoff,
+                source_manifest_hash=manifest.manifest_hash,
+            )
+            refs.append(application.reference)
+        await session.flush()
+        return tuple(refs)
+
     @staticmethod
     def _claim_gate(claim: Claim, path: str, errors: dict[str, str], directional: bool) -> None:
         if not claim.text or not claim.impact_if_wrong.strip():
@@ -373,7 +617,8 @@ class PublicationService:
             if candidate.recommendation.as_of > await effective_cutoff(session, claim.task_id):
                 raise InvestorError("invalid_reference", "Publication exceeds trusted research observation cutoff")
             peer_context = await self._task_peer_context(claim.task_id)
-            check, resolved = await self.check(candidate, semantic, peer_context=peer_context)
+            rule_context = await self._rule_review_context(claim.task_id, semantic)
+            check, resolved = await self.check(candidate, semantic, peer_context=peer_context, rule_context=rule_context)
             from investment_agent.investor.methods import MethodConfig
             if method.config != MethodConfig():
                 # Native completion commits this exact final progress before
@@ -390,7 +635,19 @@ class PublicationService:
                 except (ExecutionDeniedError, InvestorError, ValueError, LookupError) as exc:
                     fields = {**check.field_errors, "method_steps": str(exc)}
                     check = check.model_copy(update={"field_errors": fields, "failures": tuple(fields), "passed": ()})
+            rule_limits: list[str] = []
             current_limits = await self._dependency_limits(candidate.recommendation, datetime.now(UTC))
+            if rule_context is not None:
+                # A bound task completes its new chain even if the switch was
+                # turned off after admission; disabling never bypasses it.
+                from investment_agent.settings.loader import load_settings
+
+                effective = await load_settings(session, base=base)
+                if not effective.supplemental_rules_enabled:
+                    rule_limits.append("supplemental_rules_disabled_with_rule_binding")
+                if rule_context.manifest is not None:
+                    rule_limits.extend(await self._rule_coverage_limits(rule_context.manifest))
+            current_limits.extend(rule_limits)
             if current_limits:
                 field_errors = {**check.field_errors, "dependency_refs.current": "; ".join(current_limits)}
                 check = check.model_copy(update={"field_errors": field_errors, "failures": tuple(field_errors), "passed": ()})
@@ -400,6 +657,19 @@ class PublicationService:
             review = semantic.model_copy(update={"id": uuid4(), "revision": 1, "actor": "research_service", "created_at": now, "origin_ref": ObjectRef(kind="task", id=claim.task_id, revision=1)})
             review_ref = self._save(case.id, "review", review)
             check = check.model_copy(update={"semantic_review_ref": review_ref})
+            closure_refs: tuple[ObjectRef, ...] = ()
+            if rule_context is not None and rule_context.manifest is not None and any(
+                item.disposition == "resolved_with_closure" for item in semantic.rule_reviews
+            ):
+                try:
+                    async with session.begin_nested():
+                        closure_refs = await self._commit_rule_closures(
+                            session, rule_context, semantic, review_ref, operation, now
+                        )
+                except Exception as exc:  # noqa: BLE001 - converted to a check field error
+                    # The savepoint rollback leaves every open issue untouched.
+                    fields = {**check.field_errors, "rule_coverage_closure": f"closure rejected: {exc}"}
+                    check = check.model_copy(update={"field_errors": fields, "failures": tuple(fields), "passed": ()})
             check_ref = self._save(case.id, "publication_check", check)
             if check.failures:
                 draft_id = uuid4()
@@ -425,7 +695,33 @@ class PublicationService:
                 monitor_refs.append(self._save(case.id, "monitor", saved))
             recommendation_ref = mappings[ObjectRef(kind="recommendation", id=candidate.recommendation.id, revision=candidate.recommendation.revision)]
             recommendation = CompanyRecommendation.model_validate(remap_references(candidate.recommendation.model_dump(mode="json"), mappings)).model_copy(update={"id": recommendation_ref.id, "revision": 1, "actor": "research_service", "created_at": now, "origin_ref": ObjectRef(kind="task", id=claim.task_id, revision=1), "thesis_revision_refs": (thesis_ref,), "monitor_refs": tuple(monitor_refs)})
+            if rule_context is not None and rule_context.manifest is not None:
+                # The formal rule dependency is server-generated: the published
+                # manifest UUID only exists inside this transaction.
+                rule_dependency = Dependency(
+                    ref=ObjectRef(kind="rule_coverage", id=uuid5(operation, "rule-coverage-published"), revision=1),
+                    materiality="critical", fields=RULE_COVERAGE_FIELDS,
+                )
+                recommendation = recommendation.model_copy(update={
+                    "dependency_refs": (*recommendation.dependency_refs, rule_dependency),
+                })
             recommendation_ref = self._save(case.id, "recommendation", recommendation)
+            if rule_context is not None and rule_context.manifest is not None:
+                from investment_agent.storage.repositories.investment_assessment import (
+                    InvestmentAssessmentRepository,
+                )
+
+                await InvestmentAssessmentRepository(session).save_published_rule_coverage(
+                    "local_owner",
+                    prepared=rule_context.manifest,
+                    manifest_id=uuid5(operation, "rule-coverage-published"),
+                    semantic_review_ref=review_ref,
+                    closure_application_refs=closure_refs,
+                    thesis_ref=thesis_ref,
+                    recommendation_ref=recommendation_ref,
+                    limits_recheck=tuple(rule_limits),
+                    committed_at=now,
+                )
             for index, dependency in enumerate(recommendation.dependency_refs):
                 self.session.add(PublicationDependency(recommendation_id=str(recommendation.id), ordinal=index, payload=dependency.model_dump(mode="json")))
             if case.current_recommendation_ref:
@@ -562,6 +858,31 @@ class PublicationService:
             "known limitations",
         )
 
+    async def rule_renewal_limits(self, ref: ObjectRef, *, at: datetime | None = None) -> list[str]:
+        """Bounded recheck of one critical rule-coverage dependency."""
+
+        manifest = await InvestmentAssessmentRepository(self.session).get_rule_coverage("local_owner", ref)
+        if manifest is None or manifest.stage != "published":
+            return [f"dependency_unavailable:rule_coverage:{ref.id}"]
+        return await self._rule_coverage_limits(manifest, at=at)
+
+    def rule_renewal_block(self, ref: ObjectRef, limits: list[str]) -> InvestorError:
+        """The structured renewal refusal for one critical rule-coverage dependency.
+
+        Mirrors the WP13 peer refusal: a published opinion resting on rule
+        coverage is never attested "unchanged" while current rule, event, or
+        time-boundary restrictions exist; only new research bound to current
+        rules and a newly published opinion renews one.
+        """
+
+        return InvestorError(
+            "invalid_reference",
+            "critical rule-coverage dependencies cannot support an unchanged review or an "
+            f"extension ({'; '.join(limits)}); run new research bound to current rules and "
+            "publish a new recommendation - the original opinion keeps its validity dates "
+            "and known limitations",
+        )
+
     async def _dependency_limits(self, recommendation: CompanyRecommendation, at: datetime) -> list[str]:
         case = await self.foundation.get_case("local_owner", recommendation.case_ids[0])
         resolver = NumericResolver(EvidenceService(self.session), case.listing_ref, at)
@@ -601,6 +922,11 @@ class PublicationService:
                     # Monitor specs are saved by this same publication; their
                     # conditions are evaluated by _monitor_limits on reads.
                     pass
+                elif ref.kind == "rule_coverage":
+                    manifest = await InvestmentAssessmentRepository(self.session).get_rule_coverage("local_owner", ref)
+                    if manifest is None or manifest.stage != "published":
+                        raise InvestorError("invalid_reference", "Rule coverage dependency is not a published manifest")
+                    limitations.extend(await self._rule_coverage_limits(manifest, at=at))
                 else:
                     raise InvestorError("invalid_reference", "Unsupported critical dependency kind")
             except (InvestorError, LookupError) as exc:
@@ -813,6 +1139,14 @@ class PublicationService:
                     and await peer_method_payload(self.session, "local_owner", dependency.ref) is not None
                 ):
                     raise await self.peer_renewal_block(view.recommendation, dependency.ref)
+            # A bound rule chain refuses mechanical extension exactly like a
+            # critical peer dependency: current rule restrictions require new
+            # research, never a renewed attestation of the old opinion.
+            for dependency in view.recommendation.dependency_refs:
+                if dependency.materiality == "critical" and dependency.ref.kind == "rule_coverage":
+                    limits = await self.rule_renewal_limits(dependency.ref, at=now)
+                    if limits:
+                        raise self.rule_renewal_block(dependency.ref, limits)
             await self._check_method_renewal(claim.task_id, view.recommendation)
             from investment_agent.investor.monitoring import verify_unchanged_review
             await verify_unchanged_review(session, claim.task_id, review, self)

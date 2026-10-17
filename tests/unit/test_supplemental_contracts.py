@@ -21,6 +21,7 @@ from investment_agent.supplemental_rules.contracts import (
     FrozenManifest,
     MetricCondition,
     MetricLeaf,
+    RuleApplication,
     RuleDefinition,
 )
 from tests.support.supplemental_rules import (
@@ -138,3 +139,18 @@ def test_internal_manifest_accepts_zero_targets_but_public_request_does_not() ->
         )
     with pytest.raises(ValidationError):
         FrozenManifest.model_validate({**manifest.model_dump(mode="python"), "listing_refs": (), "pairs": ({"bad": True},)})
+
+
+def test_rule_application_authorization_defaults_to_mechanical() -> None:
+    """P3 adds `authorization`; absent fields keep every P2 payload readable."""
+
+    from tests.support.supplemental_rules import synthetic_application
+
+    application = synthetic_application()
+    # The support builder never mentions authorization: the default must come
+    # from the contract itself, and JSON without the key reads back unchanged.
+    dump = application.model_dump(mode="json")
+    assert dump["authorization"] == "mechanical"
+    without_field = {key: value for key, value in dump.items() if key != "authorization"}
+    reread = RuleApplication.model_validate(without_field)
+    assert reread == application and reread.authorization == "mechanical"

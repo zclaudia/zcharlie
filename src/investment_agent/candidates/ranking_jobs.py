@@ -15,8 +15,10 @@ from investment_agent.candidates.ranking import (
     FinancialStatus,
     RankingCursorError,
     RankingPage,
+    ResearchUrgency,
     build_ranking_entries,
     page_ranking_entries,
+    research_urgency_level,
 )
 from investment_agent.candidates.ranking_contracts import (
     RANKING_POLICY_VERSION,
@@ -82,6 +84,53 @@ def _supported_ranking_policy_version(
     if version != RANKING_POLICY_VERSION:
         raise ValueError(f"unsupported candidate ranking policy version: {version!r}")
     return RANKING_POLICY_VERSION
+
+
+MAX_PROJECTION_REFS = 8
+
+
+async def _rule_projections(
+    settings: Settings,
+    listing_refs: Sequence[ObjectRef],
+) -> dict[int, tuple[tuple[ObjectRef, ...], ResearchUrgency | None]]:
+    """Bounded per-listing supplemental projection for display only.
+
+    Gated by supplemental_rules_enabled AND account_fit_enabled: with either
+    switch off every entry stays empty and rows keep their legacy shape. All
+    reads run through the storage repositories inside the caller's session;
+    nothing here enqueues research.
+    """
+
+    projections: dict[int, tuple[tuple[ObjectRef, ...], ResearchUrgency | None]] = {}
+    async with session_scope() as session:
+        effective = await load_settings(session, base=settings)
+        if not (effective.supplemental_rules_enabled and effective.account_fit_enabled):
+            return projections
+        repository = InvestmentAssessmentRepository(session)
+        for listing_ref in listing_refs:
+            listing_id = int(listing_ref.id)
+            payloads, _ = await repository.list_latest_live_rule_application_payloads(
+                "local_owner", listing_id, "company_research"
+            )
+            refs: tuple[ObjectRef, ...] = ()
+            open_critical = False
+            for payload in payloads:
+                if not payload.get("open_issue_refs"):
+                    continue
+                refs = (*refs, ObjectRef(kind="rule_application", id=UUID(str(payload["id"])), revision=1))
+                if payload.get("frozen_pair", {}).get("rule", {}).get("severity") == "critical":
+                    open_critical = True
+                if len(refs) >= MAX_PROJECTION_REFS:
+                    break
+            limits: tuple[str, ...] = ()
+            state = await repository.rule_binding_state("local_owner", listing_ref)
+            if state.state == "bound" and state.manifest is not None:
+                limits = await repository.published_rule_coverage_limits("local_owner", state.manifest)
+            projections[listing_id] = (
+                refs[:MAX_PROJECTION_REFS],
+                research_urgency_level(open_critical_issues=open_critical, coverage_limits=limits),
+            )
+    return projections
 
 
 def _validated_source_manifest(payload: dict[str, Any]) -> SourceManifest:
@@ -446,6 +495,10 @@ class CandidateRankingHandler(BaseJobHandler):
 
             ranking_id = uuid5(request.operation_id, "candidate_ranking")
             ranking_ref = ObjectRef(kind="candidate_ranking", id=ranking_id, revision=1)
+            rule_projections = await _rule_projections(
+                self.settings,
+                tuple(member.listing_ref for member in manifest.members),
+            )
             entries = build_ranking_entries(
                 manifest,
                 ranking_ref=ranking_ref,
@@ -456,6 +509,7 @@ class CandidateRankingHandler(BaseJobHandler):
                     for source in frozen.listing_sources
                 },
                 failed_items=failed_items,
+                rule_projections=rule_projections,
             )
             now = datetime.now(UTC)
             current_status, current_reasons = await _ranking_current_state(
@@ -626,7 +680,7 @@ async def read_ranking_view(
     account_id: UUID,
     ranking_ref: ObjectRef,
     limit: int = 50,
-    bucket: Literal["incomplete", "blocked"] | None = None,
+    bucket: Literal["incomplete", "blocked", "ready", "limited"] | None = None,
     financial_status: FinancialStatus | None = None,
     cursor: str | None = None,
     settings: Settings | None = None,

@@ -453,7 +453,7 @@ class RankingEntry(Contract):
     listing_ticker: Text | None = None
     listing_name: Text | None = None
     ordinal: Annotated[int, Field(strict=True, ge=0)]
-    ranking_bucket: Literal["incomplete", "blocked"]
+    ranking_bucket: Literal["incomplete", "blocked", "ready", "limited"]
     financial_status: Literal["pass", "warning", "blocked", "unknown"]
     resolved_action: Literal["open", "add", "hold"] | None
     action_unknown_reason: Text | None = None
@@ -461,6 +461,9 @@ class RankingEntry(Contract):
     source_refs: Annotated[tuple[ObjectRef, ...], Field(min_length=1, max_length=101)]
     checks: Annotated[tuple[FitCheck, ...], Field(max_length=MAX_FIT_CHECKS)] = ()
     execution_error: Text | None = None
+    # P3 supplemental projection: display-only, never a sort key or score.
+    rule_application_refs: Annotated[tuple[ObjectRef, ...], Field(max_length=64)] = ()
+    research_urgency: Literal["critical_pending", "coverage_pending", "review_due"] | None = None
 
     @model_validator(mode="after")
     def entry_identity(self) -> RankingEntry:
@@ -549,7 +552,7 @@ class RankingSnapshot(Contract):
 class RankingCursorClaims(Contract):
     ranking_ref: ObjectRef
     ordinal: Annotated[int, Field(strict=True, ge=0)]
-    bucket_filter: Literal["incomplete", "blocked"] | None = None
+    bucket_filter: Literal["incomplete", "blocked", "ready", "limited"] | None = None
     financial_status_filter: Literal["pass", "warning", "blocked", "unknown"] | None = None
     filter_hash: Hash
 

@@ -28,7 +28,7 @@ class InvestmentAssessment(Base):
     __table_args__ = (
         CheckConstraint("revision = 1", name="ck_investment_assessment_revision_one"),
         CheckConstraint(
-            "kind IN ('account_fit', 'candidate_ranking', 'rule_application')",
+            "kind IN ('account_fit', 'candidate_ranking', 'rule_application', 'rule_coverage')",
             name="ck_investment_assessment_kind",
         ),
         CheckConstraint(
@@ -39,12 +39,18 @@ class InvestmentAssessment(Base):
             "OR (kind = 'rule_application' AND account_id IS NULL AND listing_id IS NOT NULL "
             "AND entry_count IS NULL AND manifest_hash IS NULL AND universe_hash IS NULL "
             "AND series_key IS NOT NULL AND application_sequence IS NOT NULL AND application_sequence >= 1 "
-            "AND application_mode IS NOT NULL AND application_mode IN ('live','historical_replay'))",
+            "AND application_mode IS NOT NULL AND application_mode IN ('live','historical_replay')) "
+            "OR (kind = 'rule_coverage' AND account_id IS NULL AND listing_id IS NOT NULL "
+            "AND entry_count IS NOT NULL AND entry_count >= 0 AND manifest_hash IS NOT NULL AND universe_hash IS NULL "
+            "AND series_key IS NULL AND application_sequence IS NULL AND application_mode IS NULL)",
             name="ck_investment_assessment_shape",
         ),
         CheckConstraint(
             "(kind = 'rule_application' AND series_key IS NOT NULL AND application_sequence IS NOT NULL "
-            "AND application_mode IS NOT NULL) OR (kind <> 'rule_application' AND series_key IS NULL "
+            "AND application_mode IS NOT NULL) "
+            "OR (kind = 'rule_coverage' AND series_key IS NULL AND application_sequence IS NULL "
+            "AND application_mode IS NULL) "
+            "OR (kind NOT IN ('rule_application', 'rule_coverage') AND series_key IS NULL "
             "AND application_sequence IS NULL AND application_mode IS NULL)",
             name="ck_investment_assessment_series_shape",
         ),
@@ -74,6 +80,12 @@ class InvestmentAssessment(Base):
             "owner_id",
             text("json_extract(payload, '$.operation_id')"),
             sqlite_where=text("kind = 'rule_application'"),
+        ),
+        Index(
+            "ix_investment_assessment_rule_coverage_task",
+            "owner_id",
+            text("json_extract(payload, '$.task_id')"),
+            sqlite_where=text("kind = 'rule_coverage'"),
         ),
     )
 

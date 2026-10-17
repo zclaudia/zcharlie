@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid5
 
+from pydantic import Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +31,7 @@ from investment_agent.investor.methods import task_method
 from investment_agent.investor.publication import (
     PublicationCandidate,
     PublicationService,
+    RuleReviewItem,
     SemanticAssessment,
     SemanticReview,
     candidate_hash,
@@ -56,6 +58,25 @@ class MonitorInput(Contract):
     required: bool = True
 
 
+class ClosureProposalInput(Contract):
+    """Model-side closure proposal; the server freezes it into prepared coverage."""
+
+    target_application_refs: tuple[ObjectRef, ...] = Field(min_length=1)
+    evidence_refs: tuple[ObjectRef, ...] = ()
+    claim_key: Text | None = None
+    rationale: Text
+
+    @model_validator(mode="after")
+    def proposal_targets(self) -> "ClosureProposalInput":
+        for ref in self.target_application_refs:
+            if ref.kind != "rule_application" or ref.field_path is not None:
+                raise ValueError("closure proposals must target exact rule applications")
+        for ref in self.evidence_refs:
+            if ref.field_path is not None or ref.revision is None:
+                raise ValueError("closure evidence must cite exact revisions")
+        return self
+
+
 class CompanyViewInput(Contract):
     case_ref: ObjectRef
     question_scope: Text
@@ -73,6 +94,7 @@ class CompanyViewInput(Contract):
     condition_hypothesis_keys: tuple[Text, ...] = ()
     condition_refs: tuple[ObjectRef, ...] = ()
     monitors: tuple[MonitorInput, ...] = ()
+    closure_proposals: tuple[ClosureProposalInput, ...] = ()
 
 
 class SemanticInput(Contract):
@@ -81,6 +103,9 @@ class SemanticInput(Contract):
     checked_sources: tuple[ObjectRef, ...]
     unresolved_questions: tuple[Text, ...]
     conclusion: Literal["pass", "revise"]
+    rule_reviews: tuple[RuleReviewItem, ...] = ()
+    coverage_manifest_ref: ObjectRef | None = None
+    coverage_manifest_hash: str | None = None
 
 
 async def scope(session: AsyncSession, business: CompanyViewInput) -> tuple[ObjectRef, ...]:
@@ -181,6 +206,39 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
             summaries.append({key: material_record[key] for key in ("id", "revision", "method_version", "as_of", "results", "quality", "assumptions", "errors", "input_hash") if key in material_record})
         else:
             summaries.append({key: material_record[key] for key in ("id", "revision", "subject_ref", "period", "source_ref", "content_hash", "verification", "conflict", "value", "text", "published_at", "acquired_at", "available_from") if key in material_record})
+    # AF-P3-05: a bound task appends its rule-coverage digest to the same
+    # bounded review window and persists one prepared manifest per prepare.
+    # Coverage semantics stay independent of the material evidence hash.
+    coverage: dict[str, Any] = {}
+    from investment_agent.supplemental_rules.binding import get_task_binding
+
+    binding = await get_task_binding(session, owner=grant.owner, task_id=task_id)
+    if binding is not None:
+        from investment_agent.storage.repositories.investment_assessment import (
+            InvestmentAssessmentRepository,
+        )
+        from investment_agent.supplemental_rules.coverage import (
+            build_prepared_manifest,
+            coverage_complete,
+            coverage_limitations,
+            ensure_binding_evaluation,
+            rule_summary_entries,
+        )
+
+        await ensure_binding_evaluation(session, binding=binding, listing_ref=case.listing_ref)
+        manifest = await build_prepared_manifest(
+            session, binding=binding, case_ref=business.case_ref, listing_ref=case.listing_ref,
+            cutoff=cutoff, closure_proposals=business.closure_proposals,
+            material_set_hash=material_hash,
+        )
+        saved = await InvestmentAssessmentRepository(session).save_rule_coverage(grant.owner, manifest)
+        summaries.extend(rule_summary_entries(saved))
+        coverage = {
+            "coverage_manifest_ref": saved.reference.model_dump(mode="json"),
+            "coverage_manifest_hash": saved.manifest_hash,
+            "coverage_complete": coverage_complete(saved),
+            "coverage_limitations": list(coverage_limitations(saved)),
+        }
     review_blocked = len(summaries) > 32 or len(json.dumps(summaries, ensure_ascii=False)) > 64000
     if review_blocked:
         summaries = []  # Explicitly blocked, never an incomplete passing review.
@@ -206,9 +264,14 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
         business_view=business.business_view, price_view=business.price_view, conditional_actions=business.conditional_actions)
     candidate = PublicationCandidate(thesis=thesis, recommendation=recommendation, monitors=monitors)
     ref = ObjectRef(kind="publication_preparation", id=operation, revision=1)
-    return ActionResult({"preparation_ref": ref.model_dump(mode="json"), "candidate": candidate.model_dump(mode="json"),
+    output = {"preparation_ref": ref.model_dump(mode="json"), "candidate": candidate.model_dump(mode="json"),
         "candidate_hash": candidate_hash(candidate), "material_set_hash": material_hash,
-        "materials": summaries, "material_count": len(materials), "material_review_blocked": review_blocked, "material_limit": "At most thirty-two exact sources and bounded summaries; narrow scope or save a material gap when exceeded", "review_required": "Assess every exact claim ID and relevant opposing material before final output"}, artifact_refs=(ref,))
+        "materials": summaries, "material_count": len(materials), "material_review_blocked": review_blocked, "material_limit": "At most thirty-two exact sources and bounded summaries; narrow scope or save a material gap when exceeded", "review_required": "Assess every exact claim ID and relevant opposing material before final output"}
+    if coverage:
+        # Only bound tasks carry coverage fields; the legacy receipt stays
+        # byte-identical to the pre-P3 shape.
+        output.update(coverage)
+    return ActionResult(output, artifact_refs=(ref,))
 
 
 async def preparation_ready(session: AsyncSession, task_id: UUID) -> bool:
@@ -241,9 +304,17 @@ async def reviewed_candidate(session: AsyncSession, task_id: UUID, review: Seman
     candidate = PublicationCandidate.model_validate(action.result["candidate"])
     if candidate.thesis.method_ref != method.method_ref or candidate.recommendation.method_revision_id != method.method_ref:
         raise ExecutionDeniedError("task_bound_research_method_required")
+    # The prepare receipt is the only trusted coverage source: the model can
+    # supply per-rule dispositions, never the manifest binding itself.
+    coverage_ref_data = action.result.get("coverage_manifest_ref")
+    coverage_ref = ObjectRef.model_validate(coverage_ref_data) if coverage_ref_data else None
     semantic = SemanticReview(id=uuid5(UUID(action.operation_id), "semantic"), revision=1,
         actor="research_service", created_at=datetime.now(UTC), origin_ref=ObjectRef(kind="task", id=task_id, revision=1),
         candidate_hash=action.result["candidate_hash"], material_set_hash=action.result["material_set_hash"],
         method_ref=method.method_ref, assessments=review.assessments, checked_sources=review.checked_sources,
-        unresolved_questions=review.unresolved_questions, conclusion=review.conclusion, reviewer="single_agent_explicit_review")
+        unresolved_questions=review.unresolved_questions, conclusion=review.conclusion,
+        rule_reviews=review.rule_reviews,
+        coverage_manifest_ref=coverage_ref,
+        coverage_manifest_hash=action.result.get("coverage_manifest_hash") if coverage_ref else None,
+        reviewer="single_agent_explicit_review")
     return candidate, semantic

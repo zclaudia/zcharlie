@@ -15,6 +15,38 @@ const labels = {
 const label = (value) => labels[value] || value || "未知";
 const refText = (ref) => ref ? String(ref.kind) + ":" + String(ref.id) + (ref.revision == null ? "" : "@" + ref.revision) : "未提供";
 
+// Mirror of investor/enums.py REASON_LABELS; codes may carry ":<identity>"
+// suffixes, so display matches the head before the first colon.
+const reasonLabels = {
+  rule_binding_missing: "无研究规则绑定（结论早于规则体系）",
+  rule_coverage_unpublished: "规则覆盖尚未随结论发布",
+  rule_coverage_binding_missing: "覆盖清单缺少原始规则绑定",
+  rule_coverage_pending: "存在新增重要规则未覆盖此结论",
+  rule_coverage_scan_incomplete: "规则扫描超出有界上限，覆盖不完整",
+  supplemental_rules_disabled_with_rule_binding: "规则链任务在开关关闭期间被拒",
+  rule_expired: "规则已过期",
+  rule_review_due: "规则复核期限已到",
+  research_check_due: "规则研究要求已到检查时点",
+  event_publication_boundary: "规则事件在结论之后发布",
+  event_effective_started: "规则事件在结论之后生效",
+  event_effective_ended: "规则事件有效期已结束",
+  unbound_event: "出现结论未覆盖的新事件",
+  critical_pending: "存在重要未决规则事项",
+  coverage_pending: "规则覆盖待复核",
+  review_due: "规则复核到期",
+};
+const reasonLabel = (code) => {
+  if (code == null || code === "") return "";
+  const text = String(code);
+  return reasonLabels[text.split(":")[0]] || reasonLabels[text] || text;
+};
+const coverageStageLabels = { prepared: "准备中（未发布）", published: "已发布" };
+const coverageEntryLabels = {
+  application: "已有逐规则评估", not_applicable: "不适用（有依据）",
+  unknown: "未知", unbound_new: "绑定后新增规则",
+};
+const COVERAGE_ENTRY_PREVIEW = 50;
+
 async function get(path) {
   const response = await fetch(path, {credentials: "same-origin", headers: {"X-Requested-With": "fetch"}});
   let data = null;
@@ -209,15 +241,98 @@ export function renderCurrentApplications(target, view, page = {}) {
   }
 }
 
+function renderRuleCoverage(target, view) {
+  target.replaceChildren();
+  target.append(node("h3", "研究规则绑定与覆盖（工程展示）"));
+  target.append(node(
+    "p",
+    "绑定、覆盖与限制只描述本次已检查的规则范围；不构成买卖建议，也不代表生产启用。",
+    "supplemental-muted",
+  ));
+  if (view.enabled === false) {
+    target.append(node("p", "补充规则链功能当前关闭；以下为既有只读数据，不代表生产启用。", "unknown-copy"));
+  }
+  const binding = view.binding;
+  if (view.state === "bound" && binding) {
+    const meta = node("div", null, "supplemental-item-meta");
+    for (const value of [
+      "绑定：bound",
+      "规则世代 R" + binding.rules_generation + " · 事件世代 E" + binding.events_generation,
+      "绑定规则 " + binding.rule_set.length + " 条",
+      "受理时点 " + (binding.admission_as_of || "未知"),
+    ]) meta.append(node("span", value, "badge"));
+    target.append(meta);
+    if (!binding.rule_set.length) {
+      target.append(node("p", "绑定时无生效规则：这是合法的空规则集绑定，不是遗留未绑定。", "supplemental-muted"));
+    }
+    const hashes = node("details");
+    hashes.append(node("summary", "绑定溯源哈希"));
+    hashes.append(node("p", "绑定引用 " + refText({kind: "research_rule_binding", id: binding.id, revision: binding.revision}), "supplemental-muted"));
+    hashes.append(node("p", "规则集合哈希 " + binding.rule_set_hash, "supplemental-muted"));
+    if (binding.content_hash) hashes.append(node("p", "绑定内容哈希 " + binding.content_hash, "supplemental-muted"));
+    target.append(hashes);
+  } else {
+    for (const code of view.reasons || []) {
+      if (code.split(":")[0] === "rule_binding_missing") {
+        target.append(node("p", "legacy 标记：未覆盖新增规则。该主体没有研究规则绑定（结论早于规则体系）；不回填、不追认。", "unknown-copy"));
+      } else if (code.split(":")[0] === "rule_coverage_unpublished") {
+        target.append(node("p", "已有任务级规则绑定，但规则覆盖尚未随结论发布；当前结论未覆盖新增规则。", "unknown-copy"));
+      } else {
+        target.append(node("p", "绑定状态未知：" + reasonLabel(code), "unknown-copy"));
+      }
+    }
+  }
+  const manifest = view.manifest;
+  if (manifest) {
+    const stage = node("p", null, "supplemental-muted");
+    stage.append(node("span", "覆盖清单 · " + (coverageStageLabels[manifest.stage] || manifest.stage) + " · 生效截点 " + manifest.effective_cutoff, "badge"));
+    target.append(stage);
+    const entries = manifest.rule_entries || [];
+    const list = document.createElement("ul");
+    for (const entry of entries.slice(0, COVERAGE_ENTRY_PREVIEW)) {
+      const line = "逐规则：" + refText(entry.rule_ref) + " · " + (coverageEntryLabels[entry.status] || entry.status);
+      const item = node("li", line);
+      if (entry.unknown_reason) item.append(node("span", " · 原因：" + reasonLabel(entry.unknown_reason), "unknown-copy"));
+      list.append(item);
+    }
+    target.append(list);
+    if (entries.length > COVERAGE_ENTRY_PREVIEW) {
+      target.append(node("p", "其余 " + (entries.length - COVERAGE_ENTRY_PREVIEW) + " 条逐规则状态请经精确覆盖清单接口分页读取。", "supplemental-muted"));
+    }
+    const limits = view.current_limits;
+    if (limits) {
+      if (limits.reasons?.length) {
+        target.append(node("p", "当前限制（REVIEW_REQUIRED 依据）：" + limits.reasons.map(reasonLabel).join("；"), "unknown-copy"));
+      } else {
+        target.append(node("p", "当前限制检查：未发现新增未覆盖事项；这不构成买卖建议。", "supplemental-muted"));
+      }
+    }
+  } else if (view.state === "bound") {
+    target.append(node("p", "已绑定但暂无可展示的已发布覆盖清单。", "supplemental-muted"));
+  }
+}
+
+async function loadRuleCoverage(target, listingId) {
+  try {
+    const view = await get("/supplemental-rule-coverages/current?listing=" + encodeURIComponent(listingId));
+    renderRuleCoverage(target, view);
+  } catch (error) {
+    target.replaceChildren(node("p", "研究规则绑定与覆盖读取失败：" + error.message, "unknown-copy"));
+  }
+}
+
 export async function bootSupplementalItems(root = document.querySelector("#supplemental-items-root")) {
   if (!root) return;
   const target = root.querySelector("#supplemental-items-content");
+  const coverageTarget = root.querySelector("#supplemental-coverage-content");
   const listingId = Number(root.dataset.listingId);
   const context = root.dataset.context || "company_research";
   if (!Number.isInteger(listingId) || listingId < 1) {
+    if (coverageTarget) coverageTarget.replaceChildren(node("p", "未能读取已登记的证券标识。", "unknown-copy"));
     target.replaceChildren(node("p", "未能读取已登记的证券标识。", "unknown-copy"));
     return;
   }
+  if (coverageTarget) loadRuleCoverage(coverageTarget, listingId);
   const cursors = [null];
   let pageIndex = 0;
   const limit = 100;
@@ -238,4 +353,4 @@ export async function bootSupplementalItems(root = document.querySelector("#supp
   catch (error) { target.replaceChildren(node("p", error.message, "unknown-copy")); }
 }
 
-export {get as supplementalItemsGet};
+export {get as supplementalItemsGet, reasonLabel as supplementalReasonLabel, renderRuleCoverage};

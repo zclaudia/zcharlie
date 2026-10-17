@@ -112,6 +112,8 @@ def test_downgrade_detects_actual_p2_receipt_envelope(tmp_path, monkeypatch) -> 
     with pytest.raises(RuntimeError, match="cannot downgrade 051"):
         command.downgrade(config, "050")
 
+    # 052 itself carries no P3 data here and steps down; the frozen P2 receipt
+    # guard stops the chain at 051.
     with sqlite3.connect(database) as connection:
         assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("051",)
 

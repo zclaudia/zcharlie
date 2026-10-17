@@ -143,6 +143,38 @@ class ResearchEventRevision(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
+class ResearchRuleBindingRow(Base):
+    """Immutable P3 admission-time rule binding for one research task."""
+
+    __tablename__ = "research_rule_binding"
+    __table_args__ = (
+        CheckConstraint("revision = 1", name="ck_research_rule_binding_revision_one"),
+        CheckConstraint("length(rule_set_hash) = 64", name="ck_research_rule_binding_rule_set_hash"),
+        CheckConstraint("length(input_hash) = 64", name="ck_research_rule_binding_input_hash"),
+        CheckConstraint("length(content_hash) = 64", name="ck_research_rule_binding_content_hash"),
+        CheckConstraint("json_valid(payload)", name="ck_research_rule_binding_payload_json"),
+        CheckConstraint("json_type(payload) = 'object'", name="ck_research_rule_binding_payload_object"),
+        UniqueConstraint("owner_id", "id", "revision", name="uq_research_rule_binding_owner_revision"),
+        UniqueConstraint("task_id", name="uq_research_rule_binding_task"),
+        Index("ix_research_rule_binding_owner_listing", "owner_id", "listing_id"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    owner_id: Mapped[str] = mapped_column(String(32), nullable=False)
+    task_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    listing_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    research_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    admission_as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    rules_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    events_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    rule_set_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    input_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
 def _immutable(*args: object) -> None:
     raise ValueError("supplemental rule/event revisions are immutable")
 
@@ -171,6 +203,30 @@ for _model in (SupplementalRuleRevision, ResearchEventRevision):
             "BEGIN SELECT RAISE(ABORT, 'supplemental revision is immutable'); END"
         ).execute_if(dialect="sqlite"),
     )
+
+
+event.listen(ResearchRuleBindingRow, "before_update", _immutable)
+event.listen(ResearchRuleBindingRow, "before_delete", _immutable)
+for _operation in ("UPDATE", "DELETE"):
+    event.listen(
+        ResearchRuleBindingRow.__table__,
+        "after_create",
+        DDL(  # type: ignore[no-untyped-call]
+            f"CREATE TRIGGER IF NOT EXISTS trg_research_rule_binding_immutable_{_operation.lower()} "
+            f"BEFORE {_operation} ON research_rule_binding "
+            "BEGIN SELECT RAISE(ABORT, 'research rule binding is immutable'); END"
+        ).execute_if(dialect="sqlite"),
+    )
+event.listen(
+    ResearchRuleBindingRow.__table__,
+    "after_create",
+    DDL(  # type: ignore[no-untyped-call]
+        "CREATE TRIGGER IF NOT EXISTS trg_research_rule_binding_immutable_insert "
+        "BEFORE INSERT ON research_rule_binding "
+        "WHEN EXISTS (SELECT 1 FROM research_rule_binding WHERE id = NEW.id) "
+        "BEGIN SELECT RAISE(ABORT, 'research rule binding is immutable'); END"
+    ).execute_if(dialect="sqlite"),
+)
 
 
 event.listen(

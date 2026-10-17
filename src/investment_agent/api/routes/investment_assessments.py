@@ -89,7 +89,7 @@ async def create_ranking(body: RankingRequest, svc: Service, settings: Effective
 
 
 @router.get("/candidates/rankings/{ranking_id}")
-async def exact_ranking(ranking_id: UUID, account_id: UUID, svc: Service, settings: EffectiveSettings, revision: ExactRevision = 1, cursor: str | None = None, limit: PageLimit = 100, bucket: Literal["incomplete", "blocked"] | None = None, financial_status: Literal["pass", "warning", "blocked", "unknown"] | None = None) -> RankingView:
+async def exact_ranking(ranking_id: UUID, account_id: UUID, svc: Service, settings: EffectiveSettings, revision: ExactRevision = 1, cursor: str | None = None, limit: PageLimit = 100, bucket: Literal["incomplete", "blocked", "ready", "limited"] | None = None, financial_status: Literal["pass", "warning", "blocked", "unknown"] | None = None) -> RankingView:
     return await read_ranking_view(svc.session, account_id=account_id, ranking_ref=_reference("candidate_ranking", ranking_id, revision), limit=limit, bucket=bucket, financial_status=financial_status, cursor=cursor, settings=settings, rules=svc.rules)
 
 

@@ -14,13 +14,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.storage.models.supplemental_rules import (
     ResearchEventRevision,
+    ResearchRuleBindingRow,
     SupplementalRegistryHead,
     SupplementalRuleEvent,
     SupplementalRuleHead,
     SupplementalRuleRevision,
 )
-from investment_agent.supplemental_rules.canonical import rule_content_hash, rule_semantic_hash
-from investment_agent.supplemental_rules.contracts import ResearchEvent, RuleDefinition
+from investment_agent.supplemental_rules.canonical import (
+    canonical_hash,
+    rule_content_hash,
+    rule_semantic_hash,
+)
+from investment_agent.supplemental_rules.contracts import (
+    ResearchEvent,
+    ResearchRuleBinding,
+    RuleDefinition,
+)
 
 
 @dataclass(frozen=True)
@@ -393,6 +402,127 @@ class SupplementalRulesRepository:
         events = tuple(self._parse_event(row, owner_id) for row in rows[:limit])
         return events, truncated
 
+    async def save_research_rule_binding(
+        self, owner_id: OwnerId, binding: ResearchRuleBinding
+    ) -> ResearchRuleBinding:
+        """Persist one immutable P3 admission binding; the caller owns the commit."""
+
+        _check_owner(owner_id)
+        checked = ResearchRuleBinding.model_validate(binding.model_dump(mode="json"))
+        if checked.owner_id != owner_id:
+            raise ValueError("research rule binding owner mismatch")
+        row = await self.session.get(ResearchRuleBindingRow, (str(checked.id), checked.revision))
+        payload = checked.model_dump(mode="json")
+        if row is not None:
+            if row.owner_id != owner_id or row.payload != payload:
+                raise ValueError("research rule binding is immutable and already has different content")
+            return self._parse_binding(row, owner_id)
+        self.session.add(ResearchRuleBindingRow(
+            id=str(checked.id),
+            revision=checked.revision,
+            owner_id=owner_id,
+            task_id=str(checked.task_ref.id),
+            listing_id=_binding_listing_id(checked.listing_ref),
+            research_kind=checked.research_kind,
+            admission_as_of=checked.admission_as_of,
+            rules_generation=checked.rules_generation,
+            events_generation=checked.events_generation,
+            rule_set_hash=checked.rule_set_hash,
+            input_hash=checked.input_hash,
+            content_hash=checked.content_hash,
+            created_at=checked.created_at,
+            payload=payload,
+        ))
+        await self.session.flush()
+        return checked
+
+    async def get_research_rule_binding(
+        self, owner_id: OwnerId, reference: ObjectRef
+    ) -> ResearchRuleBinding | None:
+        """Read an exact binding UUID only after checking owner and kind."""
+
+        _check_ref(owner_id, reference, "research_rule_binding")
+        row = await self.session.get(ResearchRuleBindingRow, (str(reference.id), reference.revision))
+        if row is None or row.owner_id != owner_id:
+            return None
+        return self._parse_binding(row, owner_id)
+
+    async def get_research_rule_binding_for_task(
+        self, owner_id: OwnerId, task_id: UUID | str
+    ) -> ResearchRuleBinding | None:
+        """Read the unique binding of one task; tasks bind at most once."""
+
+        _check_owner(owner_id)
+        row = (await self.session.execute(
+            select(ResearchRuleBindingRow)
+            .where(ResearchRuleBindingRow.task_id == str(task_id))
+            .execution_options(populate_existing=True)
+        )).scalar_one_or_none()
+        if row is None:
+            return None
+        if row.owner_id != owner_id:
+            return None
+        return self._parse_binding(row, owner_id)
+
+    async def latest_research_rule_binding_for_listing(
+        self, owner_id: OwnerId, listing_id: int
+    ) -> ResearchRuleBinding | None:
+        """Newest admission binding of one listing, or None (consumer marker)."""
+
+        _check_owner(owner_id)
+        row = (await self.session.execute(
+            select(ResearchRuleBindingRow)
+            .where(
+                ResearchRuleBindingRow.owner_id == owner_id,
+                ResearchRuleBindingRow.listing_id == listing_id,
+            )
+            .order_by(ResearchRuleBindingRow.admission_as_of.desc(), ResearchRuleBindingRow.id.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        if row is None:
+            return None
+        return self._parse_binding(row, owner_id)
+
+    def _parse_binding(self, row: ResearchRuleBindingRow, owner_id: OwnerId) -> ResearchRuleBinding:
+        if row.owner_id != owner_id:
+            raise ValueError("cross-owner rule binding row")
+        binding = ResearchRuleBinding.model_validate(row.payload)
+        if (
+            binding.id != UUID(row.id)
+            or binding.revision != row.revision
+            or binding.owner_id != owner_id
+            or binding.task_ref.id != UUID(row.task_id)
+            or binding.listing_ref.id != row.listing_id
+        ):
+            raise ValueError("binding identity columns do not match payload")
+        payload = binding.model_dump(mode="json")
+        duplicated_headers = {
+            "research_kind": row.research_kind,
+            "admission_as_of": row.admission_as_of,
+            "rules_generation": row.rules_generation,
+            "events_generation": row.events_generation,
+            "rule_set_hash": row.rule_set_hash,
+            "input_hash": row.input_hash,
+            "content_hash": row.content_hash,
+            "created_at": row.created_at,
+        }
+        for field, stored in duplicated_headers.items():
+            payload_value = payload[field]
+            if isinstance(stored, datetime):
+                stored = _utc_datetime(stored).isoformat().replace("+00:00", "Z")
+            if payload_value != stored:
+                raise ValueError(f"binding {field} column does not match payload")
+        # The content hash domain is the contract's python-mode dump; a JSON
+        # round trip restores the same objects, so this stays stable on reread.
+        expected_hash = canonical_hash({
+            key: value
+            for key, value in binding.model_dump(mode="python").items()
+            if key != "content_hash"
+        })
+        if expected_hash != row.content_hash:
+            raise ValueError("binding payload hash does not match recomputed content")
+        return binding
+
     def _parse_rule(self, row: SupplementalRuleRevision, owner_id: OwnerId) -> RuleDefinition:
         if row.owner_id != owner_id:
             raise ValueError("cross-owner rule row")
@@ -457,6 +587,12 @@ def _check_ref(owner_id: OwnerId, reference: ObjectRef, kind: str) -> None:
     _check_owner(owner_id)
     if reference.kind != kind or not isinstance(reference.id, UUID) or reference.field_path is not None:
         raise ValueError(f"exact {kind} UUID reference required")
+
+
+def _binding_listing_id(reference: ObjectRef) -> int:
+    if reference.kind != "listing" or not isinstance(reference.id, int) or reference.field_path is not None:
+        raise ValueError("exact integer listing reference required")
+    return reference.id
 
 
 def _utc_datetime(value: datetime) -> datetime:

@@ -379,7 +379,7 @@
 {% endif %}
 {% if not financial %}
 <section class="card account-fit-card" id="account-fit-root" data-listing-id="{{ listing_id or '' }}" data-listing-ticker="{{ ticker }}" data-listing-name="{{ financial.company_name if financial else ticker }}">
-  <div class="card-head"><h2>账户适配检查</h2><span class="faint">生成带证据版本的适配记录，状态为 incomplete 或 blocked 时不会标成 ready</span></div>
+  <div class="card-head"><h2>账户适配检查</h2><span class="faint">生成带证据版本的适配记录；ready 只表示满足本次已检查条件，不构成买卖建议（工程功能，不代表生产启用）</span></div>
   <div id="account-fit-content" aria-live="polite"><p class="notice notice-loading">正在加载账户适配上下文…</p></div>
 </section>
 {% endif %}
@@ -392,6 +392,7 @@
     <div><h2 id="supplemental-items-title">补充事项</h2><p class="faint">逐条显示规则评估、来源和未决项；不改变评分、账户适配或研究结论。</p></div>
     <a class="btn btn-sm" href="/app/supplemental-rules">管理规则与事件</a>
   </div>
+  <div id="supplemental-coverage-content" class="supplemental-items-content" aria-live="polite"></div>
   <div id="supplemental-items-content" class="supplemental-items-content" aria-live="polite">
     <p class="notice notice-loading">正在读取当前补充事项…</p>
   </div>
