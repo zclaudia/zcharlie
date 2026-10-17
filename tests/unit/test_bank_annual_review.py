@@ -129,7 +129,7 @@ async def test_review_event_is_persisted_and_idempotent(db_session):
 
 @pytest.mark.asyncio
 async def test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot(
-    db_session, monkeypatch
+    db_session,
 ):
     captured = datetime(2025, 5, 1, tzinfo=UTC)
     await db_session.merge(
@@ -141,19 +141,12 @@ async def test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot(
     listing = Listing(company_id=company.id, market_code="SSE", ticker="601398", is_primary=True)
     db_session.add(listing)
     await db_session.flush()
-    body = b"%PDF-1.4 synthetic annual report"
+    body = bank_annual_pdf(2024, "12.50", "10.00")
     pdf_hash = hashlib.sha256(body).hexdigest()
     source_url = "https://static.cninfo.com.cn/finalpage/2025-03-27/filing2024.PDF"
-    page = (
-        "主要财务指标\n2024 2023 2022\n本集团\n加权平均净资产收益率 12.50% 10.00% 9.50%\n年度指标"
-    )
+    from investment_agent.industry_peers.bank_pdf_text import bank_page_text
 
-    def text(_body, page_no, layout=False):
-        if page_no == 1:
-            return "601398 工商银行 2024年度报告" + ("\n" + page if layout else "")
-        return page
-
-    monkeypatch.setattr(v2, "bank_page_text", text)
+    page = bank_page_text(body, 1)
     item_id, original_id = str(uuid4()), str(uuid4())
     db_session.add(DisclosureBlob(content_hash=pdf_hash, body=body))
     db_session.add(
@@ -206,9 +199,9 @@ async def test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot(
                 },
                 "original_ref": {"kind": "disclosure_original", "id": original_id, "revision": 1},
                 "pdf_hash": pdf_hash,
-                "pdf_page": 8,
-                "table_title": "主要财务指标",
-                "period_header": "2024 2023 2022",
+                "pdf_page": 1,
+                "table_title": "财务指标",
+                "period_header": "2024 2023",
                 "current_column": "2024",
                 "header": "加权平均净资产收益率",
                 "raw_value": "12.50",
@@ -218,7 +211,7 @@ async def test_v2_rollover_rechecks_pdf_bytes_and_persists_complete_snapshot(
                 "source_url": source_url,
                 "locator_excerpt": excerpt,
                 "locator_excerpt_sha256": hashlib.sha256(excerpt.encode()).hexdigest(),
-                "definition_or_footnote": "年度指标",
+                "definition_or_footnote": "本集团",
                 "checked_at": captured.isoformat(),
                 "acquired_at": "2025-04-01T00:00:00+00:00",
             }

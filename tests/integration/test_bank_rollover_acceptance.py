@@ -215,7 +215,7 @@ async def test_actual_cross_year_verify_review_resolution_and_history(bank_world
             http=official,
         )
         assert acquired["status"] == "ok", acquired
-        assert len(official.calls) == 3
+        assert len(official.calls) == 4
         original24 = await session.get(DisclosureOriginal, acquired["originals"][0]["id"])
         assert original24.payload["ticker"] == "601398.SH"
         cached = await acquire_bank_annual_originals(
@@ -226,7 +226,7 @@ async def test_actual_cross_year_verify_review_resolution_and_history(bank_world
             data_dir=bank_world,
             http=official,
         )
-        assert cached["status"] == "ok" and len(official.calls) == 3
+        assert cached["status"] == "ok" and len(official.calls) == 4
         missing = await acquire_bank_annual_originals(
             session,
             listing_id=listing_id,
@@ -235,7 +235,7 @@ async def test_actual_cross_year_verify_review_resolution_and_history(bank_world
             data_dir=bank_world,
             http=official,
         )
-        assert missing["status"] == "missing" and len(official.calls) == 3
+        assert missing["status"] == "missing" and len(official.calls) == 4
         original25 = await store_annual_original(
             session,
             load_annual_original(BANK_EVIDENCE, "601398.SH", date(2025, 12, 31)),

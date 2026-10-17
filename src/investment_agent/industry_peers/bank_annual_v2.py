@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.evidence.contracts import Period
+from investment_agent.industry_peers.bank_annual_identity import checked_bank_front_identity
 from investment_agent.industry_peers.bank_pdf_text import bank_page_text
 from investment_agent.industry_peers.contracts import PeerAnnualField, PeerFieldVerification
 from investment_agent.industry_peers.originals import normalized
@@ -133,6 +134,11 @@ def _validate_scope(page: str, proof: dict[str, Any], metric: str) -> None:
 
 
 def _check_locator(body: bytes, period: date, metric: str, proof: dict[str, Any]) -> None:
+    if proof.get("layout_profile") is not None:
+        from investment_agent.industry_peers.bank_fy2024_profiles import checked_fy2024_layout
+
+        checked_fy2024_layout(body, period, metric, proof)
+        return
     if metric not in HEADERS:
         raise ValueError("unsupported bank annual metric")
     if proof.get("accounting_scope") != "group_consolidated":
@@ -325,23 +331,7 @@ async def _load_original(
         or proof.get("pdf_hash") != row.content_hash
     ):
         raise ValueError("stored PDF bytes/hash mismatch")
-    cover = "".join(normalized(bank_page_text(blob.body, n)) for n in range(1, 9))
-    front = bank_page_text(blob.body, 1)
-    if (
-        re.search(
-            rf"(?<!\d){snapshot.report_period.year}\s*(?:年\s*|/\s*)?年\s*度\s*报\s*告", front
-        )
-        is None
-    ):
-        raise ValueError("the PDF cover year differs from the target annual period")
-    if ticker[:6] not in cover and BANKS[ticker] not in cover:
-        raise ValueError("annual-report PDF does not identify the listed bank")
-    if (
-        str(snapshot.report_period.year) not in cover
-        or not any(term in cover for term in ("年度报告", "ANNUALREPORT"))
-        or any(term in cover for term in ("摘要", "SUMMARY", "取消"))
-    ):
-        raise ValueError("PDF cover does not identify the full target-year annual report")
+    checked_bank_front_identity(blob.body, snapshot.report_period.year, ticker[:6], BANKS[ticker])
     if row.payload.get("source_url") != row.payload.get("resolved_url"):
         raise ValueError("stored source URL differs from the resolved original URL")
     source_url = row.payload["source_url"]
@@ -406,6 +396,10 @@ async def _load_original(
             raise ValueError("audit time is future or inconsistent")
     if audit.get("acquired_at") != row.payload.get("acquired_at"):
         raise ValueError("audit acquisition time differs from stored original")
+    if proof.get("layout_profile") is not None:
+        from investment_agent.industry_peers.bank_fy2024_profiles import validate_reviewed_support
+
+        await validate_reviewed_support(session, snapshot, proof, boundary)
     if (
         proof.get("check_rule_version") != BANK_ANNUAL_V2_RULE
         or audit.get("report_identity") != identity

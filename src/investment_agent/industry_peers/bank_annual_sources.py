@@ -28,7 +28,7 @@ from investment_agent.evidence.disclosure_http import (
     OfficialHTTPS,
     SourceResponse,
 )
-from investment_agent.industry_peers.bank_pdf_text import bank_page_text
+from investment_agent.industry_peers.bank_annual_identity import checked_bank_front_identity
 from investment_agent.industry_peers.originals import AnnualOriginal, store_annual_original
 from investment_agent.storage.models.disclosure import (
     DisclosureBlob,
@@ -81,31 +81,12 @@ def _verify_pdf(body: bytes, code: str, year: int, company_name: str) -> None:
     if len(body) > MAX_PDF_BYTES or not body.startswith(b"%PDF-") or b"%%EOF" not in body[-4096:]:
         raise DisclosureError("invalid_original_mime_or_signature")
     try:
-        front = bank_page_text(body, 1)
-        first = re.sub(r"\s+", "", front)
-        annual_year = rf"(?<!\d){year}\s*(?:(?:年\s*|/\s*)?年\s*度\s*报\s*告|ANNUAL\s*REPORT)"
-        if re.search(annual_year, front, re.I) is None:
-            raise DisclosureError("annual_pdf_issuer_or_year_mismatch")
-        # Cover may name the issuer or explicitly identify its exact stock code.
-        if company_name and company_name in first and str(year) in first and "年度报告" in first:
-            return
-        if (
-            code in first
-            and str(year) in first
-            and ("年度报告" in first or "ANNUALREPORT" in first.upper())
-        ):
-            return
-        # Covers sometimes omit the exchange code; permit the exact full issuer
-        # name on an early identity page while still requiring the target year.
-        for page in range(2, 6):
-            try:
-                text = re.sub(r"\s+", "", bank_page_text(body, page))
-            except ValueError:
-                break
-            if company_name and company_name in text and str(year) in text and "年度报告" in text:
-                return
+        checked_bank_front_identity(body, year, code, company_name)
+        return
     except DisclosureError:
         raise
+    except ValueError as exc:
+        raise DisclosureError("annual_pdf_issuer_or_year_mismatch") from exc
     except Exception as exc:
         raise DisclosureError("annual_pdf_text_unreadable") from exc
     raise DisclosureError("annual_pdf_issuer_or_year_mismatch")
@@ -312,59 +293,75 @@ async def acquire_bank_annual_originals(
         end = acquired_at.astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
         all_items: list[dict[str, Any]] = []
         pages = 0
-        has_more = True
-        for page in range(1, MAX_PAGES + 1):
-            payload = urlencode(
-                {
-                    "pageNum": page,
-                    "pageSize": PAGE_SIZE,
-                    "column": "szse" if exchange == "SZSE" else "sse",
-                    "tabName": "fulltext",
-                    "stock": f"{listing.ticker},{issuer}",
-                    "seDate": f"{start}~{end}",
-                    "sortName": "time",
-                    "sortType": "desc",
-                    "plate": "",
-                    "searchkey": f"{report_period.year}年度报告",
-                    "secid": "",
-                    "category": "",
-                    "trade": "",
-                    "isHLtitle": "false",
-                }
-            ).encode()
-            if len(request_log["requests"]) >= 1 + MAX_PAGES + PAGE_SIZE:
-                raise DisclosureError("request_limit_exceeded")
-            response = await client.request(QUERY, "query", body=payload, max_bytes=MAX_QUERY_BYTES)
-            request_log["requests"].append(
-                {
-                    "url": QUERY,
-                    "page": page,
-                    "body": payload.decode(),
-                    "body_base64": base64.b64encode(payload).decode("ascii"),
-                    "status": response.status,
-                    "sha256": hashlib.sha256(response.body).hexdigest(),
-                }
-            )
-            if len(response.body) > MAX_QUERY_BYTES:
-                raise DisclosureError("response_too_large")
-            discovery_bytes += len(response.body)
-            if discovery_bytes > MAX_TOTAL_QUERY_BYTES:
-                raise DisclosureError("discovery_total_bytes_exceeded")
-            request_log["requests"][-1]["response_body_base64"] = base64.b64encode(
-                response.body
-            ).decode("ascii")
-            material = _json(response)
-            items = material.get("announcements")
-            if not isinstance(items, list) or len(items) > PAGE_SIZE:
-                raise DisclosureError("invalid_discovery_schema_or_count")
-            all_items.extend(items)
-            pages = page
-            has_more = bool(material.get("hasMore"))
-            if not has_more:
-                break
-        if has_more:
-            raise DisclosureError("pagination_incomplete")
+        for search_key in (f"{report_period.year}年度报告", f"{report_period.year}年年度报告"):
+            has_more = True
+            for page in range(1, MAX_PAGES + 1):
+                if pages >= MAX_PAGES:
+                    raise DisclosureError("pagination_incomplete")
+                payload = urlencode(
+                    {
+                        "pageNum": page,
+                        "pageSize": PAGE_SIZE,
+                        "column": "szse" if exchange == "SZSE" else "sse",
+                        "tabName": "fulltext",
+                        "stock": f"{listing.ticker},{issuer}",
+                        "seDate": f"{start}~{end}",
+                        "sortName": "time",
+                        "sortType": "desc",
+                        "plate": "",
+                        "searchkey": search_key,
+                        "secid": "",
+                        "category": "",
+                        "trade": "",
+                        "isHLtitle": "false",
+                    }
+                ).encode()
+                if len(request_log["requests"]) >= 1 + MAX_PAGES + PAGE_SIZE:
+                    raise DisclosureError("request_limit_exceeded")
+                response = await client.request(
+                    QUERY, "query", body=payload, max_bytes=MAX_QUERY_BYTES
+                )
+                request_log["requests"].append(
+                    {
+                        "url": QUERY,
+                        "page": page,
+                        "body": payload.decode(),
+                        "body_base64": base64.b64encode(payload).decode("ascii"),
+                        "status": response.status,
+                        "sha256": hashlib.sha256(response.body).hexdigest(),
+                    }
+                )
+                if len(response.body) > MAX_QUERY_BYTES:
+                    raise DisclosureError("response_too_large")
+                discovery_bytes += len(response.body)
+                if discovery_bytes > MAX_TOTAL_QUERY_BYTES:
+                    raise DisclosureError("discovery_total_bytes_exceeded")
+                request_log["requests"][-1]["response_body_base64"] = base64.b64encode(
+                    response.body
+                ).decode("ascii")
+                material = _json(response)
+                items = material.get("announcements")
+                if (
+                    items is None
+                    and not material.get("hasMore")
+                    and any(
+                        material.get(key) == 0 for key in ("totalRecordNum", "totalAnnouncement")
+                    )
+                ):
+                    items = []
+                if not isinstance(items, list) or len(items) > PAGE_SIZE:
+                    raise DisclosureError("invalid_discovery_schema_or_count")
+                all_items.extend(items)
+                pages += 1
+                has_more = bool(material.get("hasMore"))
+                if not has_more:
+                    break
+            if has_more:
+                raise DisclosureError("pagination_incomplete")
+            # Both official title spellings must be searched: a revision may
+            # use the other spelling even when the first query found a report.
         candidates: list[dict[str, Any]] = []
+        seen_annual: dict[str, dict[str, Any]] = {}
         for item in all_items:
             if (
                 not isinstance(item, dict)
@@ -391,6 +388,22 @@ async def acquire_bank_annual_originals(
             if published > acquired_at.astimezone(UTC):
                 raise DisclosureError("publication_after_acquisition")
             if _full_annual(title, report_period.year):
+                previous = seen_annual.get(ann_id)
+                if previous is not None:
+                    if any(
+                        previous.get(key) != item.get(key)
+                        for key in (
+                            "secCode",
+                            "orgId",
+                            "announcementId",
+                            "announcementTitle",
+                            "announcementTime",
+                            "adjunctUrl",
+                        )
+                    ):
+                        raise DisclosureError("conflicting_duplicate_disclosure_identity")
+                    continue
+                seen_annual[ann_id] = item
                 candidates.append(item)
         if not candidates:
             persist()

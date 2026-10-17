@@ -105,6 +105,79 @@ class FakeHTTP:
         return SourceResponse(200, {"content-type": "application/pdf"}, self.pdf_body, url)
 
 
+async def test_empty_exact_title_search_tries_official_extra_year_character(bank_session, tmp_path):
+    class VariantHTTP(FakeHTTP):
+        async def request(self, url, purpose, **kwargs):
+            if purpose == "query" and parse_qs(kwargs["body"].decode())["searchkey"] == [
+                "2025年度报告"
+            ]:
+                self.calls.append((url, kwargs["body"]))
+                return SourceResponse(
+                    200,
+                    {"content-type": "application/json"},
+                    b'{"announcements":null,"totalAnnouncement":0,"hasMore":false}',
+                    url,
+                )
+            return await super().request(url, purpose, **kwargs)
+
+    session, listing_id, _ = bank_session
+    client = VariantHTTP(
+        ticker="601398",
+        org="jjxt0000019",
+        items=[announcement("601398", "jjxt0000019", title="工商银行2025年年度报告")],
+    )
+    result = await acquire_bank_annual_originals(
+        session,
+        listing_id=listing_id,
+        report_period=date(2025, 12, 31),
+        acquired_at=ACQUIRED,
+        data_dir=tmp_path,
+        http=client,
+    )
+    assert result["status"] == "ok", result
+    queries = [
+        parse_qs(body.decode())["searchkey"][0] for url, body in client.calls if url == QUERY
+    ]
+    assert queries == ["2025年度报告", "2025年年度报告"]
+
+
+async def test_other_title_spelling_revision_is_retained_even_when_first_query_succeeds(
+    bank_session, tmp_path
+):
+    class RevisedHTTP(FakeHTTP):
+        async def request(self, url, purpose, **kwargs):
+            if purpose == "query":
+                self.calls.append((url, kwargs["body"]))
+                variant = parse_qs(kwargs["body"].decode())["searchkey"][0]
+                item = announcement(
+                    "601398",
+                    "jjxt0000019",
+                    title=variant + ("（修订稿）" if "年年度" in variant else ""),
+                    ann_id="23456" if "年年度" in variant else "12345",
+                )
+                return SourceResponse(
+                    200,
+                    {"content-type": "application/json"},
+                    json.dumps({"announcements": [item], "hasMore": False}).encode(),
+                    url,
+                )
+            return await super().request(url, purpose, **kwargs)
+
+    session, listing_id, _ = bank_session
+    client = RevisedHTTP(ticker="601398", org="jjxt0000019", items=[])
+    result = await acquire_bank_annual_originals(
+        session,
+        listing_id=listing_id,
+        report_period=date(2025, 12, 31),
+        acquired_at=ACQUIRED,
+        data_dir=tmp_path,
+        http=client,
+    )
+    assert result["status"] == "ambiguous", result
+    assert len(result["originals"]) == 2
+    assert {row["announcement_id"] for row in result["originals"]} == {"12345", "23456"}
+
+
 def announcement(
     ticker: str,
     org: str,

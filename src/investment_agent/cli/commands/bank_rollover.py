@@ -36,6 +36,30 @@ reviews_app = typer.Typer(help="Persisted bank field reviews")
 app.add_typer(reviews_app, name="reviews")
 
 
+@app.command("import-reviewed")
+def import_reviewed(
+    cohort: str = typer.Option(..., "--cohort"),
+    bundle: list[Path] = typer.Option(..., "--bundle", exists=True, dir_okay=False),
+    evidence_root: Path = typer.Option(..., "--evidence-root", exists=True, file_okay=False),
+    output: Path | None = typer.Option(None, "--output"),
+) -> None:
+    """Import all fifty reviewed FY2024 slots from existing official files."""
+    from investment_agent.industry_peers.bank_annual_matrix import import_reviewed_bank_year
+
+    async def main() -> dict[str, Any]:
+        async with session_scope() as session:
+            return await import_reviewed_bank_year(
+                session, cohort_key=cohort, paths=bundle, evidence_root=evidence_root
+            )
+
+    result = run_with_engine(bootstrap_settings().database_url, main)
+    encoded = json.dumps(result, ensure_ascii=False, indent=2)
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(encoded + "\n")
+    typer.echo(encoded)
+
+
 def _json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 

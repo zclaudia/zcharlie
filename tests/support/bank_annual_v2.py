@@ -15,9 +15,11 @@ from pypdf.generic import (
 )
 
 
-def bank_annual_pdf(year: int, current: str, comparative: str) -> bytes:
+def bank_annual_pdf(
+    year: int, current: str, comparative: str, *, cover_title: str | None = None
+) -> bytes:
     lines = [
-        f"中国工商银行股份有限公司 601398 {year}年度报告",
+        cover_title or f"中国工商银行股份有限公司 601398 {year}年度报告",
         "财务指标",
         f"{year} {year - 1}",
         f"本集团 {year}年度",
