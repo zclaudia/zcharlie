@@ -108,11 +108,15 @@
       {% if financial.freshness.sources %}
       <div class="financial-source-controls" aria-label="资料来源状态">
         {% for source, control in financial.freshness.sources.items() %}
-        <p class="financial-source-control" data-source-enabled="{{ 'true' if control.enabled else 'false' }}">
-          <span>{{ labels.sources.get(source, "受控资料来源") }}</span>
-          <span class="badge {{ 'warn' if not control.enabled else '' }}">{{ "来源已开启" if control.enabled else "来源已关闭" }}</span>
-          {% if control.licensing %}<span class="faint">使用许可：{{ labels.licensing.get(control.licensing, "未确认") }}</span>{% endif %}
-        </p>
+        {% if source not in ("hk_annual_reports", "us_issuer_facts") %}
+        <div class="financial-source-control" data-source-enabled="{{ 'true' if control.enabled else 'false' }}">
+          <p><strong>{{ labels.sources.get(source, "受控资料来源") }}</strong>
+            <span class="badge {{ '' if control.enabled else 'warn' }}">{% if control.enabled %}可在线采集{% elif control.state == 'disabled' %}运行已关闭{% else %}尚未核验{% endif %}</span>
+          </p>
+          <p class="faint">身份绑定：{{ "已绑定" if control.bound else "未绑定" }}；使用许可：{{ labels.licensing.get(control.licensing, "未确认") }}；技术验收：{{ labels.technical_acceptance.get(control.technical_acceptance, "未核验") }}；运行开关：{{ "开启" if control.operational_enabled else "关闭" }}</p>
+          {% if control.reason_codes %}<p class="faint">未通过：{% for reason in control.reason_codes %}{{ labels.source_reason.get(reason, reason) }}{% if not loop.last %}；{% endif %}{% endfor %}</p>{% endif %}
+        </div>
+        {% endif %}
         {% endfor %}
       </div>
       {% endif %}
@@ -265,9 +269,9 @@
               data-context-url="/research/listings/{{ financial.listing_id }}/financial-context">刷新资料</button>
       <p class="faint" id="financial-refresh-hint">
         {% if financial.capabilities.online_refresh %}
-        在线刷新已开启：登记后由采集流程执行，完成后页面数据才会更新。
+        至少一个来源已通过在线采集条件；登记仅创建任务，采集与资料更新仍以任务结果为准。
         {% else %}
-        在线刷新未开启：点按只会登记一次采集任务，不会联网采集，也不会立即更新本页数据。登记成功只代表任务已排队，不代表采集已执行或资料已更新。
+        当前没有来源通过全部在线采集条件。点按只登记审计任务，不会绕过来源拒绝条件，也不会立即更新本页数据。
         {% endif %}
       </p>
       <div id="financial-refresh-result" class="financial-refresh-result" aria-live="polite"></div>

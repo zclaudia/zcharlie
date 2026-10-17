@@ -79,12 +79,14 @@ from investment_agent.materials.contracts import (
 )
 from investment_agent.materials.equity_reconciliation import evaluate_equity_reconciliation
 from investment_agent.materials.evidence import dataset_facts
-from investment_agent.materials.jobs import MATERIAL_COLLECTION
+from investment_agent.materials.jobs import MATERIAL_COLLECTION, MATERIAL_SOURCES
 from investment_agent.materials.metrics import (
     MetricResult,
     compute_metrics,
     profile_from_identity,
 )
+from investment_agent.materials.source_policy import SourceDecision, evaluate_source_policy
+from investment_agent.settings.loader import load_settings
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.material_acquisition import ResearchMaterialAcquisition
 from investment_agent.storage.models.reference import Company, Listing
@@ -207,7 +209,7 @@ STATUS_COPY: Final[dict[str, _StatusCopy]] = {
     ),
     "online_refresh_disabled": _StatusCopy(
         affected=("刷新入口",),
-        next_step="确认来源使用许可后开启在线刷新；当前登记的任务不会联网采集。",
+        next_step="核对证券身份绑定、来源许可和技术验收，再检查来源运行开关；登记本身不会授予采集权限。",
     ),
     "partial_coverage": _StatusCopy(
         affected=("财务展示", "指标计算"),
@@ -366,7 +368,7 @@ class FreshnessView:
     latest_period_end: date | None = None
     latestness: str = "unknown"
     latestness_checked_on: date | None = None
-    sources: dict[str, dict[str, str | bool]] = field(default_factory=dict)
+    sources: dict[str, dict[str, object]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -422,7 +424,7 @@ class ListingNotFoundError(LookupError):
 
 
 def online_refresh_enabled() -> bool:
-    """Whether a refresh run may call upstream at all.
+    """Whether the global safety gate allows any refresh to call upstream.
 
     The flag is read from its owner (the collection handler) through a
     function-local import: importing the handler module at module level would
@@ -433,6 +435,17 @@ def online_refresh_enabled() -> bool:
     from investment_agent.materials.handlers import ONLINE_REFRESH_ENABLED
 
     return ONLINE_REFRESH_ENABLED
+
+
+def _adapter_versions_for_read_model() -> dict[str, str]:
+    """Read adapter versions lazily so the read-model import graph stays local."""
+
+    from investment_agent.materials import hk_native, us_sec
+
+    return {
+        hk_native.SOURCE: hk_native.ADAPTER_VERSION,
+        us_sec.SOURCE_FACTS: us_sec.ADAPTER_VERSION,
+    }
 
 
 async def financial_context(session: AsyncSession, listing_id: int) -> FinancialContextView:
@@ -454,8 +467,24 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
         ticker=listing.ticker,
         path=DEFAULT_PILOT_LIST_PATH,
     )
-    if identity is None or company is None:
+    if identity is None or company is None or company.canonical_name != identity.company_name:
         return _uncovered_view(listing, company)
+
+    from investment_agent.materials.handlers import ONLINE_REFRESH_ENABLED
+
+    settings = await load_settings(session)
+    adapter_versions = _adapter_versions_for_read_model()
+    source_decisions = {
+        source: evaluate_source_policy(
+            source,
+            identity,
+            settings=settings,
+            adapter_version=adapter_versions.get(source),
+            global_enabled=ONLINE_REFRESH_ENABLED,
+        )
+        for source in MATERIAL_SOURCES
+        if any(binding.source == source and binding.symbol.strip() for binding in identity.sources)
+    }
 
     datasets = await ResearchDatasetRepository(session).history(
         kind=ANNUAL_FACTS,
@@ -501,6 +530,7 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
             fact.value.raw_value is not None and fact.conflict != "unresolved"
             for fact in material_facts
         ),
+        online_refresh=any(decision.enabled for decision in source_decisions.values()),
     )
     coverage = _coverage(facts=facts, fiscal_years=fiscal_views)
     freshest_review = max(
@@ -528,6 +558,7 @@ async def financial_context(session: AsyncSession, listing_id: int) -> Financial
         latest_period_end=latest_review_period,
         latestness=latestness,
         latestness_checked_on=None if freshest_review is None else freshest_review.checked_on,
+        source_decisions=source_decisions,
     )
     metric_coverage = _metric_coverage(facts, metrics)
     statuses = _statuses(
@@ -958,6 +989,7 @@ async def _freshness(
     latest_period_end: date | None,
     latestness: str,
     latestness_checked_on: date | None,
+    source_decisions: dict[str, SourceDecision],
 ) -> tuple[FreshnessView, RefreshLifecycleView]:
     """Read request, worker attempt, provider success, import and review times."""
 
@@ -1009,10 +1041,7 @@ async def _freshness(
             started_at=None if latest is None else _as_utc(latest.claimed_at),
             completed_at=None if latest is None else _as_utc(latest.finished_at),
     )
-    source_states = _source_states()
-    for source in source_states:
-        source_states[source]["enabled"] = online_refresh_enabled()
-        source_states[source]["state"] = "enabled" if online_refresh_enabled() else "disabled"
+    source_states = _source_states(source_decisions)
     return (
         FreshnessView(
             last_requested_at=None if latest is None else _as_utc(latest.created_at),
@@ -1048,11 +1077,34 @@ def _as_utc(value: datetime | None) -> datetime | None:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def _source_states() -> dict[str, dict[str, str | bool]]:
-    return {
-        "hk_annual_reports": {"enabled": False, "licensing": "unknown", "state": "disabled"},
-        "us_issuer_facts": {"enabled": False, "licensing": "unknown", "state": "disabled"},
+def _source_states(
+    decisions: dict[str, SourceDecision] | None = None,
+) -> dict[str, dict[str, object]]:
+    """Source policy by real source id, plus stable legacy aliases."""
+
+    values: dict[str, dict[str, object]] = {}
+    labels = {
+        "eastmoney.hk.native.v1": "hk_annual_reports",
+        "sec.companyfacts.v1": "us_issuer_facts",
     }
+    for source, decision in (decisions or {}).items():
+        row = decision.as_dict()
+        row["accepted_for_fetch"] = decision.enabled
+        row["state"] = (
+            "enabled" if decision.enabled
+            else "disabled" if decision.operational_enabled is False
+            else "unverified"
+        )
+        values[source] = row
+        alias = labels.get(source)
+        if alias:
+            values[alias] = row
+    if not values:
+        values = {
+            "hk_annual_reports": {"enabled": False, "licensing": "unknown", "state": "unverified"},
+            "us_issuer_facts": {"enabled": False, "licensing": "unknown", "state": "unverified"},
+        }
+    return values
 
 
 async def _missing_archive_sources(
@@ -1243,19 +1295,22 @@ def _period_label(period: FactPeriod) -> str:
     return period.label or period.end.isoformat()
 
 
-def _capabilities(*, covered: bool, has_material: bool) -> dict[str, bool]:
+def _capabilities(
+    *, covered: bool, has_material: bool, online_refresh: bool | None = None
+) -> dict[str, bool]:
     """The capability bits; not-delivered capabilities stay ``False``.
 
     ``financials`` is true exactly when the security is covered *and* at least
     one usable financial fact exists. The conditional capabilities (price, annual PE,
     dividends, PB) are not shipped by the first delivery and are therefore
-    false; ``online_refresh`` mirrors the handler's licence flag, which decides
-    whether a collection run may call upstream at all.
+    false; ``online_refresh`` is supplied from the effective source decisions,
+    which also require identity binding, licensing, technical acceptance and
+    operational enablement.
     """
 
     bits = dict.fromkeys(CAPABILITY_ORDER, False)
     bits["financials"] = covered and has_material
-    bits["online_refresh"] = online_refresh_enabled()
+    bits["online_refresh"] = bool(online_refresh) if online_refresh is not None else False
     return bits
 
 

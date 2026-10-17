@@ -61,9 +61,24 @@ async def test_review_times_metric_evidence_and_source_state_match_read_model(
     assert freshness["latestness_checked_on"] is None
     assert freshness["last_verified_on"] is None
     assert freshness["last_imported_at"] is None
-    assert set(freshness["sources"]) == {"hk_annual_reports", "us_issuer_facts"}
-    assert all(source["enabled"] is False for source in freshness["sources"].values())
-    assert all(source["state"] == "disabled" for source in freshness["sources"].values())
+    source_states = freshness["sources"]
+    assert set(source_states) == {
+        "eastmoney.hk.native.v1", "sec.companyfacts.v1",
+        "hk_annual_reports", "us_issuer_facts",
+    }
+    assert source_states["hk_annual_reports"] == source_states["eastmoney.hk.native.v1"]
+    assert source_states["us_issuer_facts"] == source_states["sec.companyfacts.v1"]
+    assert source_states["eastmoney.hk.native.v1"]["bound"] is True
+    # HSBC is explicitly bound to both the HK annual-report and SEC source
+    # identities; binding alone still does not authorize collection.
+    assert source_states["sec.companyfacts.v1"]["bound"] is True
+    for source in ("eastmoney.hk.native.v1", "sec.companyfacts.v1"):
+        state = source_states[source]
+        assert state["enabled"] is False and state["accepted_for_fetch"] is False
+        assert state["licensing"] == "unknown"
+        assert state["technical_acceptance"] == "not_accepted"
+        assert state["operational_enabled"] is False and state["state"] == "disabled"
+        assert "operationally_disabled" in state["reason_codes"]
     assert view["capabilities"]["online_refresh"] is False
 
     # Per-metric coverage is part of this same real view and distinguishes a
@@ -81,8 +96,10 @@ async def test_review_times_metric_evidence_and_source_state_match_read_model(
     assert '<dd id="financial-last-verified-on">未知</dd>' in html
     assert '<dd id="financial-latestness-checked-on">未知</dd>' in html
     assert '<dd id="financial-last-imported-at">未知</dd>' in html
-    assert "来源已关闭" in html
+    assert "运行已关闭" in html
     assert "使用许可：未确认" in html
+    assert "技术验收：未核验" in html
+    assert "运行开关：关闭" in html
     assert "最近核对原件日期" in html and "资料实际更新" in html
     assert "最新披露核对至" in html
     assert "资料更新时间表示导入时间，两者不会互相替代" in html
@@ -158,7 +175,8 @@ async def test_empty_listing_shows_unknown_dates_and_does_not_claim_a_refresh(ap
     assert '<dd id="financial-last-requested-at">未知</dd>' in html
     assert "尚无资料刷新任务记录" in html
     assert "在线刷新未开启" in html
-    assert "不会联网采集" in html
+    assert "当前没有来源通过全部在线采集条件" in html
+    assert "不会绕过来源拒绝条件" in html
     assert "资料待采集" in html
 
 
@@ -197,8 +215,10 @@ async def test_refresh_post_then_read_only_poll_keeps_queued_state_honest(api_cl
     assert 'id="financial-current-run-id"' in html
     assert 'id="financial-current-run-status">排队中</dd>' in html
     assert 'id="financial-current-run-reason">用户点击刷新</dd>' in html
-    assert "来源已关闭" in html
+    assert "运行已关闭" in html
     assert "在线刷新未开启" in html
+    assert "登记审计任务" in html
+    assert "不会绕过来源拒绝条件" in html
     assert "成功采集" not in html
 
     # A completed partial run has its own copy; it is not shown as a success

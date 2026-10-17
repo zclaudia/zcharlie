@@ -285,7 +285,7 @@ async def test_listed_without_material_asks_for_collection(api_client) -> None:
     # The refresh entry is visible; the copy says it only registers the task.
     assert 'id="financial-refresh-button"' in html
     assert "在线刷新未开启" in html
-    assert "不会联网采集" in html
+    assert "不会绕过来源拒绝条件" in html
     assert _amounts(html) == []  # nothing is invented for a company without material
 
 
@@ -467,12 +467,12 @@ def test_refresh_client_posts_and_never_claims_an_update() -> None:
         assert call["marker"] == "fetch"
     dedup, created, failed = out["snapshots"]
     assert dedup["state"] == "ready" and "未重复登记" in dedup["text"]
-    assert "在线刷新未开启" in dedup["text"]
+    assert "当前没有来源通过全部在线采集条件" in dedup["text"]
     assert created["state"] == "ready" and "已登记采集任务（新建）" in created["text"]
-    assert "在线刷新已开启" in created["text"]
+    assert "至少一个来源当前通过在线采集条件" in created["text"]
     # A queued batch is never presented as fetched data.
     for snapshot in out["snapshots"]:
-        assert "已更新" not in snapshot["text"]
+        assert "资料已更新" not in snapshot["text"].replace("也不代表采集已完成或资料已更新", "")
         for forbidden in (
             "42",
             "43",

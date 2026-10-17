@@ -737,6 +737,19 @@ export const SETTINGS_SECTIONS = Object.freeze([
     ],
   },
   {
+    id: "materials",
+    navGroup: "数据",
+    groups: ["materials"],
+    title: "研究材料来源",
+    blurb: "运维开关只控制是否允许尝试；来源许可、技术验收、证券绑定和全局安全开关仍分别生效。",
+    topics: [{
+      id: "materials",
+      title: "在线来源运行开关",
+      note: "默认关闭。打开开关不会替代来源许可或技术验收，也不表示已采集或资料已更新。",
+      keys: ["materials_sec_refresh_enabled", "materials_hk_refresh_enabled"],
+    }],
+  },
+  {
     id: "schedule",
     navGroup: "运行",
     groups: ["schedule"],
@@ -896,6 +909,8 @@ export function sectionHome(section, read, lookup) {
       return { value: value("notification_external_enabled") ? "外部推送" : "仅站内", detail: "只发新变化的状态和引用" };
     case "data":
       return { value: value("industry_peer_context_enabled") ? "同行已开" : "同行关闭", detail: "连接、采集、核验、同行" };
+    case "materials":
+      return { value: "来源运行开关", detail: "许可、技术验收与安全开关独立生效" };
     case "candidates":
       return { value: `${value("candidate_expiry_days")} 天过期`, detail: `忽略冷却 ${value("candidate_dismiss_cooldown_days")} 天` };
     case "schedule": {

@@ -1,35 +1,32 @@
-"""The licensed refresh entry of one listing's material (plan 09).
+"""The audit-registration entry for one listing's material (plan 09).
 
-``POST /research/listings/{listing_id}/refresh`` adds exactly one thing to the
-queue machinery: a *licensed request*. This module turns an HTTP-shaped request
-into the frozen payload of task 06, refusing every structural problem before
-anything is written, and binding to the payload what the caller licensed:
+``POST /research/listings/{listing_id}/refresh`` registers a deduplicated audit
+task. This module turns the request into the frozen payload of task 06, refusing
+structural problems before writing and recording requested scope plus current
+source decisions:
 
-* the sources (only the checked source ids of :data:`MATERIAL_SOURCES`);
-* the requested period ends (canonical ISO dates only, validated here rather
-  than silently dropped); empty stays empty — "the adapter's own default
-  window". An explicit HK period end currently reaches the adapter as an
-  end-only period and is answered with its ``unsupported_period`` problem,
-  which the run metadata reports; the request is not quietly rewritten;
-* the adapter version of each requested source
-  (:data:`ADAPTER_VERSIONS`), so a later adapter move cannot re-collect under an
-  unlicensed version (the handler compares them);
-* the refresh batch, ``<sources>|<real today>``: repeated clicks of the same
-  sources on the same day reuse one batch and one run, a new day is a new batch.
+* requested sources (only checked source ids of :data:`MATERIAL_SOURCES`);
+* requested period ends (canonical ISO dates); an explicit HK period is refused
+  before enqueue because that adapter only supports its default period window;
+* the adapter version and policy decision for each requested source, so the
+  worker can re-evaluate every fetch gate;
+* a batch derived from the real date and effective source decisions, so
+  identical same-day requests deduplicate while a gate change creates a new run.
 
 Idempotency is task 06's: the payload (and therefore the idempotency key) is
 built here, and :func:`~investment_agent.materials.jobs.enqueue_material_job`
 returns the existing run with ``created=False`` instead of queueing a second
 one, so two identical requests never collect the material twice.
 
-No licence setting is invented: whether the run may actually call upstream is
-:data:`~investment_agent.materials.handlers.ONLINE_REFRESH_ENABLED`, read by the
-read model and reported in the refresh response — a queued run is not a promise
-that data was fetched.
+The queue is not a grant to fetch. The worker must re-evaluate identity
+binding, licensing, technical acceptance, runtime source settings and the global
+safety gate before making any request.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import date
 from typing import Final
@@ -44,7 +41,7 @@ from investment_agent.materials.jobs import (
     enqueue_material_job,
     material_idempotency_key,
 )
-from investment_agent.storage.models.reference import Listing
+from investment_agent.storage.models.reference import Company, Listing
 
 DEFAULT_REASON: Final[str] = "user_refresh"
 """Reason recorded when the caller states none (task 06's payload default)."""
@@ -60,23 +57,24 @@ ERROR_LISTING_NOT_COVERED: Final[str] = "listing_not_covered"
 ERROR_UNKNOWN_SOURCE: Final[str] = "unknown_source"
 ERROR_INVALID_PERIOD: Final[str] = "invalid_period"
 ERROR_INVALID_REASON: Final[str] = "invalid_reason"
+ERROR_UNSUPPORTED_PERIOD: Final[str] = "unsupported_period"
 """Refusal codes; the endpoint maps them to 404/422 and never to a silent default."""
 
 ADAPTER_VERSIONS: Final[dict[str, str]] = {
     hk_native.SOURCE: hk_native.ADAPTER_VERSION,
     us_sec.SOURCE_FACTS: us_sec.ADAPTER_VERSION,
 }
-"""Source id -> adapter version bound into the payload (traceable licensing).
+"""Source id -> adapter version recorded with the requested audit scope.
 
 Read from the adapters themselves, never hard-coded here: when an adapter
-version moves, the next request binds the new version and the handler refuses a
-run whose licensed version no longer matches instead of collecting under it.
+version moves, the next request records the new version and the handler refuses
+a run whose version no longer matches.
 """
 
 
 @dataclass(frozen=True)
 class RefreshRequest:
-    """One licensed refresh request; ``sources``/``periods`` empty mean defaults."""
+    """One audit registration; empty ``sources``/``periods`` mean defaults."""
 
     listing_id: int
     sources: tuple[str, ...] = ()
@@ -86,12 +84,14 @@ class RefreshRequest:
 
 @dataclass(frozen=True)
 class RefreshOutcome:
-    """What one refresh request did: the run (new or existing) and its binding."""
+    """What one refresh registration did and the decisions it recorded."""
 
     run_id: int
     created: bool
     idempotency_key: str
     adapter_versions: dict[str, str]
+    source_decisions: dict[str, dict[str, object]]
+    online_refresh_enabled: bool
 
 
 class RefreshError(ValueError):
@@ -107,7 +107,7 @@ class RefreshError(ValueError):
 
 
 async def request_refresh(session: AsyncSession, request: RefreshRequest) -> RefreshOutcome:
-    """Validate, bind and enqueue one refresh run (deduplicated by task 06).
+    """Validate and enqueue one audit run (deduplicated by task 06).
 
     Raises :class:`RefreshError` for an unknown listing, a listing outside the
     checked identity list, an unknown source, a malformed period end or a
@@ -125,22 +125,47 @@ async def request_refresh(session: AsyncSession, request: RefreshRequest) -> Ref
         ticker=listing.ticker,
         path=DEFAULT_PILOT_LIST_PATH,
     )
-    if identity is None:
+    company = await session.get(Company, listing.company_id)
+    if identity is None or company is None or company.canonical_name != identity.company_name:
         raise RefreshError(
             ERROR_LISTING_NOT_COVERED,
             f"listing {request.listing_id} is not in the checked HK/US identity list; "
             "material is not collected for an unchecked security",
         )
+    if periods and hk_native.SOURCE in sources:
+        raise RefreshError(
+            ERROR_UNSUPPORTED_PERIOD,
+            "香港年报来源只支持其默认期间范围；显式期间请求未入队。",
+        )
+
+    from investment_agent.materials.handlers import ONLINE_REFRESH_ENABLED
+    from investment_agent.materials.source_policy import evaluate_source_policy
+    from investment_agent.settings.loader import load_settings
+
+    settings = await load_settings(session)
+    decisions = {
+        source: evaluate_source_policy(
+            source,
+            identity,
+            settings=settings,
+            adapter_version=ADAPTER_VERSIONS.get(source),
+            global_enabled=ONLINE_REFRESH_ENABLED,
+        )
+        for source in sources
+    }
+    decision_records = {
+        source: {**decision.as_dict(), "accepted_for_fetch": decision.enabled}
+        for source, decision in decisions.items()
+    }
+    adapter_versions = {
+        source: ADAPTER_VERSIONS[source] for source in sources if source in ADAPTER_VERSIONS
+    }
     payload = MaterialCollectionPayload(
         listing_id=listing.id,
         sources=sources,
         periods=periods,
-        refresh_batch=_refresh_batch(sources),
-        adapter_versions={
-            source: ADAPTER_VERSIONS[source]
-            for source in sources
-            if source in ADAPTER_VERSIONS
-        },
+        refresh_batch=_refresh_batch(sources, adapter_versions, decision_records),
+        adapter_versions=adapter_versions,
         reason=reason,
     )
     run, created = await enqueue_material_job(session, payload, triggered_by=REFRESH_TRIGGER)
@@ -149,11 +174,13 @@ async def request_refresh(session: AsyncSession, request: RefreshRequest) -> Ref
         created=created,
         idempotency_key=material_idempotency_key(payload),
         adapter_versions=payload.adapter_versions,
+        source_decisions=decision_records,
+        online_refresh_enabled=any(decision.enabled for decision in decisions.values()),
     )
 
 
 def _canonical_sources(sources: tuple[str, ...]) -> tuple[str, ...]:
-    """The licensed sources: default set when empty, canonical order, no repeats."""
+    """The requested sources: default set when empty, canonical order, no repeats."""
 
     wanted = tuple(sources) or MATERIAL_SOURCES
     unknown = sorted(set(wanted) - set(MATERIAL_SOURCES))
@@ -169,9 +196,9 @@ def _canonical_periods(periods: tuple[str, ...]) -> tuple[str, ...]:
     """Canonical ISO period ends, deduplicated; never silently dropped.
 
     A caller that states a period gets that period in the payload — the adapter
-    then answers honestly (an HK period end without a start is reported as
-    ``unsupported_period`` in the run metadata). Dropping it here would hide a
-    request the caller made.
+    then answers honestly. Explicit HK periods are refused before enqueue
+    because that source only supports its default period window. Dropping a
+    caller's stated period would hide a request they made.
     """
 
     canonical: list[str] = []
@@ -202,12 +229,25 @@ def _checked_reason(reason: str) -> str:
     return reason
 
 
-def _refresh_batch(sources: tuple[str, ...]) -> str:
-    """The refresh batch: the licensed sources and the real current date.
+def _refresh_batch(
+    sources: tuple[str, ...],
+    adapter_versions: dict[str, str],
+    decisions: dict[str, dict[str, object]],
+) -> str:
+    """The refresh batch: the real current date and effective decision digest.
 
-    Same sources + same day = same batch = same idempotency key = the run that
-    already exists; another day is another batch. The date is today's real date
-    (never derived from a period or a caller field).
+    Same sources + same day + same effective gates = same batch and idempotency
+    key. A gate change makes a new audit run even on the same day. The date is
+    today's real date (never derived from a period or a caller field).
     """
 
-    return f"{'+'.join(sources)}|{date.today().isoformat()}"
+    decision_digest = hashlib.sha256(
+        json.dumps(
+            {"adapter_versions": adapter_versions, "source_decisions": decisions},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    # Sources are already included in the idempotency payload. Keep the batch
+    # below its 64-character contract while changing it when a gate changes.
+    return f"{date.today().isoformat()}|{decision_digest}"

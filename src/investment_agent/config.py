@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     supplemental_rules_enabled: bool = False
     portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
     disclosure_originals_enabled: bool = False
+    materials_sec_refresh_enabled: bool = False
+    materials_hk_refresh_enabled: bool = False
     investor_agent_enabled: bool = False
     investor_agent_background_enabled: bool = False
     agent_queue_max_running: int = Field(default=4, ge=1, le=4)

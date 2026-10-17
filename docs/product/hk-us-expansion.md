@@ -40,11 +40,11 @@ A 股取数、评分、证据与任务流程的语义不变，港美走独立路
 | `annual_pe` | 关 | 恒为 false；存在显式注入价格、年度 EPS 与可选 FX 的纯函数，但没有接入当前财务上下文/API/股票页 |
 | `dividends` | 关 | 恒为 false；存在事件契约和纯函数，但没有接入当前财务上下文、生产存储/API/股票页 |
 | `pb` | 关 | 恒为 false；港美财务产品路径没有 PB 计算或展示 |
-| `online_refresh` | 关 | `ONLINE_REFRESH_ENABLED = False`；刷新可登记任务，handler 在上游调用前停止 |
+| `online_refresh` | 关 | 来源许可、技术验收、证券范围、运维开关和全局保险共同判定；默认全部关闭 |
 
 `price` / `annual_pe` / `dividends` / `pb` 为假是当前产品决定；纯计算函数或样例
 不表示产品能力已接通。`online_refresh` 为假时，采集任务在上游调用前停止并记录
-`online_refresh_disabled`，刷新接口与页面不会把"已入队"显示成"已取到数据"。
+逐源 `source_policy_disabled` 与拒绝原因；页面仍保留 `online_refresh_disabled` 总体提示。刷新接口与页面不会把"已入队"显示成"已取到数据"。
 
 指标：六个确定性指标见 §1。**毛利/净利率不计算**——收入与成本字段本轮未逐家补验，
 以 `gaps` 里的固定条目明示，不猜补。腾讯的资本开支口径、汇丰的净买卖口径
@@ -69,14 +69,25 @@ A 股取数、评分、证据与任务流程的语义不变，港美走独立路
 
 来源特有的字段全部进版本化 `payload`，不进跨来源契约；每个来源按自己的
 证券代码单独保存（港股五位含前导零、Yahoo 四位、CIK 十进制），**不互相换算**。
-刷新接口把适配器版本绑进请求，**当前许可范围只含两个适配器**
+刷新接口把适配器版本绑进请求，**当前支持的财报适配器只有两个**
 （`eastmoney.hk.native.v1`、`sec.companyfacts.v1`，见 `materials/refresh.py` 的 `ADAPTER_VERSIONS`）：
 适配器版本移动后，旧版本的运行会被拒绝而不是按新版本重采。
 
-**在线刷新默认关闭**（`handlers.py` 的 `ONLINE_REFRESH_ENABLED = False`）：
-东财与 Yahoo 的使用许可未确认，首期一律不访问上游。这是一个评审决定，不是偏好——
-因此**没有**加运行时设置项，设置页无法把它翻成开。打开需先确认展示/缓存/商业授权，
-并补联网验收（见 §6）。
+**在线刷新默认关闭**（`handlers.py` 的 `ONLINE_REFRESH_ENABLED = False`）。
+HK2-05 新增 `materials_sec_refresh_enabled` 和 `materials_hk_refresh_enabled`，均默认 false，
+接入已有 settings 校验、历史和重置机制；它们只表示运维意愿。
+版本化 `config/research_material/source_policy.yaml` 单独保存许可依据、证券范围、
+技术报告日期/引用和适配器版本，默认未知/未验收；普通设置不能修改这些审批记录或绕过全局保险。
+每次实际发送前（含限流等待后、后续分片）都会重新检查当前策略；排队快照不授予权限。
+POST 返回逐源 `accepted_for_fetch` 与拒绝原因；同日策略/运行状态/适配器版本变化产生新批次，
+同请求并发仍去重。HK 显式期间当前在入队前返回 422，SEC 合法显式期间保持精确。
+真实来源启用仍依赖使用范围核对及 HK2-06 至少三个不同日期的实际观测，见 §6。
+HK2-06 的准备阶段已提供[来源与请求要求审查](plans/hk-us-expansion/34-hk2-06-source-review.md)、
+[分来源三日观测计划](plans/hk-us-expansion/35-hk2-06-observation-plan.md)及
+[隔离验收工具报告](plans/hk-us-expansion/36-hk2-06-preparation-acceptance.md)。
+默认预检零请求；离线汇总只产生人工复核候选。SEC 和东财均未开始真实观测（0/3），许可和技术审批未改变。
+HK2-05 与 HK2-06 准备代码合入最新本地 main 的联合门禁及 P4 工作保留记录见
+[37 集成验收](plans/hk-us-expansion/37-hk2-05-06-main-integration.md)；合并不启用来源或操作生产库。
 
 ## 4. 离线导入用法
 
@@ -208,3 +219,7 @@ HK2-07 离线实际导入、状态时间契约及八家桌面/移动浏览器验
 合入本地 main 时与银行研究改动的联合验收见
 [`30-main-integration-acceptance.md`](plans/hk-us-expansion/30-main-integration-acceptance.md)。
 来源启用和后续产品能力仍须分别验收。
+
+HK2-05 的来源策略、关闭竞态、失败恢复与临时应用浏览器回归见
+[`32-hk2-05-offline-acceptance.md`](plans/hk-us-expansion/32-hk2-05-offline-acceptance.md)。
+本轮仅离线/模拟验收，生产环境与日常在线刷新均未启用。

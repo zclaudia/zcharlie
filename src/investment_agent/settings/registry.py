@@ -62,6 +62,7 @@ GROUPS: dict[str, str] = {
     "verification": "iFinD 核验",
     "candidates": "候选池",
     "peers": "行业与同行参照",
+    "materials": "研究材料来源",
     "gateway": "手机网关",
     "schedule": "调度",
 }
@@ -213,6 +214,8 @@ class RuntimeSettings(BaseModel):
     investor_agent_price_version: str = ""
     investor_agent_price_model: str = ""
     disclosure_originals_enabled: bool = False
+    materials_sec_refresh_enabled: bool = False
+    materials_hk_refresh_enabled: bool = False
     portfolio_ledger_enabled: bool = False
     account_fit_enabled: bool = False
     candidate_ranking_enabled: bool = False
@@ -446,6 +449,8 @@ SPECS: tuple[SettingSpec, ...] = (
         "上次核查后该窗口内的重复缺口只返回原缺口不再入队；确认新年报、已知更正或显式重试不受限，0–2592000。",
         "next_job",
     ),
+    _env("materials_sec_refresh_enabled", "materials", "启用 SEC 材料刷新", "运维开关；来源仍须分别通过许可与技术验收，并受全局保险约束。", "live"),
+    _env("materials_hk_refresh_enabled", "materials", "启用港股材料刷新", "运维开关；来源仍须分别通过许可与技术验收，并受全局保险约束。", "live"),
     _env(
         "gateway_enabled", "gateway", "启用手机网关",
         "让本服务作为 Backend 接入 zclaudia-gateway，手机经网关访问；保存后约 10 秒内自动连接 / 断开。",

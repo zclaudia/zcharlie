@@ -101,6 +101,7 @@
     "materials -> investor",
     "materials -> jobs",
     "materials -> providers",
+    "materials -> settings",
     "materials -> snapshots",
     "materials -> storage",
     "mcp_server -> api",

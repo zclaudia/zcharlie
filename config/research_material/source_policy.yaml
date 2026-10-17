@@ -1,0 +1,26 @@
+schema_version: 1
+revision: hkus-source-policy-1
+# This file is a versioned, controlled approval record. Runtime settings cannot
+# modify licensing or technical acceptance. Empty evidence intentionally means
+# no approval has been recorded.
+sources:
+  sec.companyfacts.v1:
+    licensing:
+      status: unknown
+      company_keys: []
+      citation: ""
+    technical_acceptance:
+      status: not_accepted
+      company_keys: []
+      adapter_version: ""
+      reports: []
+  eastmoney.hk.native.v1:
+    licensing:
+      status: unknown
+      company_keys: []
+      citation: ""
+    technical_acceptance:
+      status: not_accepted
+      company_keys: []
+      adapter_version: ""
+      reports: []

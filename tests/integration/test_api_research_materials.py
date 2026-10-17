@@ -434,7 +434,7 @@ async def test_calendar_age_cannot_establish_latestness_without_original_review(
     assert stale.json()["freshness"]["latestness"] == "unknown"
 
 
-async def test_capability_bits_follow_the_online_refresh_flag(api_client, monkeypatch) -> None:
+async def test_global_flag_alone_cannot_bypass_source_approval_and_ops(api_client, monkeypatch) -> None:
     from investment_agent.materials import handlers
 
     seeded = await seed_listings()
@@ -443,8 +443,12 @@ async def test_capability_bits_follow_the_online_refresh_flag(api_client, monkey
         response = api_client.get(url_context(seeded["NASDAQ/AAPL"]), headers=H)
     assert response.status_code == 200
     body = response.json()
-    assert body["capabilities"]["online_refresh"] is True
-    assert "online_refresh_disabled" not in codes(body)
+    assert body["capabilities"]["online_refresh"] is False
+    assert "online_refresh_disabled" in codes(body)
+    source = body["freshness"]["sources"]["sec.companyfacts.v1"]
+    assert source["licensing"] == "unknown"
+    assert source["technical_acceptance"] == "not_accepted"
+    assert source["operational_enabled"] is False
     assert body["capabilities"]["pb"] is False  # still not delivered
 
 
@@ -506,14 +510,14 @@ async def test_get_financial_context_is_read_only_and_never_calls_upstream(
     assert await pipeline_runs() == before == []
 
 
-async def test_get_response_carries_no_upstream_identifiers(api_client, tmp_path) -> None:
+async def test_get_response_exposes_policy_source_ids_without_upstream_locators(api_client, tmp_path) -> None:
     seeded = await seed_listings()
     await store_hsbc_material(tmp_path, seeded["HKEX/00005"])
     with freeze_time(TODAY):
         response = api_client.get(url_context(seeded["HKEX/00005"]), headers=H)
     assert response.status_code == 200
     text = response.text
-    for forbidden in ("CIK", "eastmoney", "sec.gov", "accession"):
+    for forbidden in ("CIK", "datacenter.eastmoney.com", "sec.gov", "accession"):
         assert forbidden.lower() not in text.lower()
     assert "HSBC" in text  # the real company name is shown
 
@@ -559,7 +563,9 @@ async def test_refresh_deduplicates_an_identical_request(api_client) -> None:
     assert run["status"] == "queued"
     assert run["triggered_by"] == "api:refresh"
     assert run["listing_id"] == seeded["NASDAQ/AAPL"]
-    assert run["request_json"]["refresh_batch"] == "sec.companyfacts.v1|2026-10-12"
+    batch = run["request_json"]["refresh_batch"]
+    assert batch.startswith("2026-10-12|")
+    assert len(batch.removeprefix("2026-10-12|")) == 16
     assert run["request_json"]["adapter_versions"] == {"sec.companyfacts.v1": "1"}
     assert run["request_json"]["periods"] == []
 
@@ -587,9 +593,9 @@ async def test_refresh_binds_explicit_periods_without_dropping_them(api_client) 
     rows = await pipeline_runs()
     assert len(rows) == 2
     assert [row["request_json"]["periods"] for row in rows] == [["2024-09-28"], ["2023-09-30"]]
-    assert {row["request_json"]["refresh_batch"] for row in rows} == {
-        "sec.companyfacts.v1|2026-10-12"
-    }
+    batches = {row["request_json"]["refresh_batch"] for row in rows}
+    assert len(batches) == 1
+    assert next(iter(batches)).startswith("2026-10-12|")
 
 
 async def test_refresh_refuses_bad_requests_without_writing_a_run(api_client) -> None:
