@@ -48,3 +48,7 @@ docs/superpowers/
 
 # Deploy state (tools/deploy.sh)
 .deploy/
+
+# Local AI-tool artifacts (browser automation logs, session plans)
+.playwright-mcp/
+.zcode/
