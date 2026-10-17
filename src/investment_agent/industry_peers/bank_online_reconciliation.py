@@ -374,7 +374,32 @@ async def reconcile_bank_online_fields(
             continue
 
         old_value = old_field_data.get("value")
-        if _same_value(online.value, old_value):
+        reviewed_rejection = False
+        if not _same_value(online.value, old_value):
+            from investment_agent.industry_peers.bank_review_states import bank_review_relations
+
+            entries = [
+                (
+                    candidate,
+                    PeerAnnualField.model_validate(candidate.fields[metric]),
+                    candidate.verification.get(metric, {}),
+                )
+                for candidate in rows
+                if metric in candidate.fields
+            ]
+            relations = await bank_review_relations(session, entries, metric, captured_at)
+            current_supplier = _supplier_metadata(online, result_proofs[metric])
+            reviewed_rejection = (
+                baseline.id in relations.corrections
+                and baseline.id not in relations.pending_ids
+                and any(
+                    candidate.id in relations.resolved_ids
+                    and candidate.id in relations.corrections[baseline.id]
+                    and current_supplier == _supplier_metadata(candidate_field, candidate_proof)
+                    for candidate, candidate_field, candidate_proof in entries
+                )
+            )
+        if _same_value(online.value, old_value) or reviewed_rejection:
             checked = _timestamp(captured_at)
             proof = copy.deepcopy(old_proof)
             proof["checked_at"] = checked
@@ -383,9 +408,11 @@ async def reconcile_bank_online_fields(
                 audit["checked_at"] = checked
             proof["supplier_comparison"] = {
                 **_supplier_metadata(online, result_proofs[metric]),
-                "matched": True,
+                "matched": not reviewed_rejection,
                 "checked_at": checked,
             }
+            if reviewed_rejection:
+                proof["supplier_comparison"]["reviewed_supplier_rejection"] = True
             result_fields[metric] = PeerAnnualField.model_validate(old_field_data).model_copy(
                 update={
                     "acquired_at": captured_at,
@@ -394,7 +421,9 @@ async def reconcile_bank_online_fields(
             )
             result_proofs[metric] = proof
             summary["metrics"][metric] = {
-                "status": "matched_original",
+                "status": "reviewed_supplier_rejection_revalidated"
+                if reviewed_rejection
+                else "matched_original",
                 "original_ref": proof.get("original_ref"),
                 "response_hash": proof["supplier_comparison"]["source_response_sha256"],
             }

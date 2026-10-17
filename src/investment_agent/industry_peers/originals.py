@@ -355,6 +355,10 @@ async def validate_field_original(
     proof = snapshot.verification.get(metric, {})
     # Versioned dispatch keeps the baijiu annual-original rule and its proof
     # semantics intact. Bank proofs use their own bounded statement checks.
+    if isinstance(proof, dict) and proof.get("check_rule_version") == "bank-annual-original/2":
+        from investment_agent.industry_peers.bank_annual_v2 import validate_bank_annual_v2
+
+        return await validate_bank_annual_v2(session, snapshot, metric, proof, cutoff=cutoff)
     if isinstance(proof, dict) and proof.get("check_rule_version") == "bank-annual-original/1":
         return await _validate_bank_field_original(session, snapshot, metric, proof, cutoff=cutoff)
     try:

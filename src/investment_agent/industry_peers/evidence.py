@@ -324,7 +324,7 @@ async def _bank_original_update_links(
                 or old.provider != row.provider
                 or _aware(old.captured_at) > _aware(row.captured_at)
                 or old_field.verification is not PeerFieldVerification.VERIFIED
-                or old_proof.get("check_rule_version") != "bank-annual-original/1"
+                or old_proof.get("check_rule_version") not in {"bank-annual-original/1", "bank-annual-original/2"}
                 or old_proof.get("original_ref") != comparison.get("original_ref")
                 or old_proof.get("pdf_hash") != comparison.get("pdf_hash")
                 or old_proof.get("accounting_scope") != comparison.get("accounting_scope")
@@ -396,6 +396,10 @@ async def peer_field_states(
         entries.append((row, field, proof))
 
     linked_scopes, linked_pending = await _bank_original_update_links(session, entries, metric, cutoff)
+    from investment_agent.industry_peers.bank_review_states import bank_review_relations
+
+    reviews = await bank_review_relations(session, entries, metric, cutoff)
+    linked_scopes.update(reviews.linked_scopes)
 
     def _in_scope(_row: PeerAnnualSnapshot, field: PeerAnnualField, proof: dict[str, object]) -> bool:
         return (
@@ -412,8 +416,15 @@ async def peer_field_states(
     entries = [entry for entry in entries if _in_scope(*entry)]
     by_id = {row.id: (row, field, proof) for row, field, proof in entries}
 
-    corrections: dict[str, list[str]] = {}
+    corrections: dict[str, list[str]] = {
+        source: [target for target in targets if target in by_id]
+        for source, targets in reviews.corrections.items()
+        if source in by_id
+    }
     corrected_by: dict[str, list[str]] = {}
+    for source, targets in corrections.items():
+        for corrected_target in targets:
+            corrected_by.setdefault(corrected_target, []).append(source)
     for row, _field, proof in entries:
         target = proof.get(_CORRECTION_KEY)
         if not isinstance(target, str):
@@ -452,7 +463,7 @@ async def peer_field_states(
     for entry in entries:
         groups.setdefault(_group_key(entry[1], entry[2]), []).append(entry)
 
-    pending: set[str] = linked_pending.intersection(by_id)
+    pending: set[str] = (linked_pending - reviews.resolved_ids).union(reviews.pending_ids).intersection(by_id)
     conflicted: set[str] = set()
     for group in groups.values():
         # Values are compared as decimals: 1.0 and 1.00 are one value; a
@@ -487,10 +498,12 @@ async def peer_field_states(
 
     versions = []
     for row, field, proof in entries:
-        if row.id in corrections:
+        if row.id in pending:
             state: Literal["consistent", "pending_recheck", "conflict", "corrected", "correction"] = (
-                "correction"
+                "conflict" if row.id in conflicted else "pending_recheck"
             )
+        elif row.id in corrections:
+            state = "correction"
         elif row.id in corrected_by:
             state = "corrected"
         elif row.id in conflicted:

@@ -4,6 +4,7 @@ import typer
 
 from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import api as api_cmd
+from investment_agent.cli.commands import bank_rollover as bank_rollover_cmd
 from investment_agent.cli.commands import materials as materials_cmd
 from investment_agent.cli.commands import mcp as mcp_cmd
 from investment_agent.cli.commands import migrate as migrate_cmd
@@ -40,6 +41,7 @@ app.add_typer(
     peer_annual_cmd.app, name="peer-annual", help="Peer annual fact snapshot import (offline)"
 )
 
+app.add_typer(bank_rollover_cmd.app, name="bank-annual", help="Bank annual originals and revision review")
 
 @app.callback()
 def _bootstrap() -> None:

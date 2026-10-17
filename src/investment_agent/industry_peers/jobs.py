@@ -1111,6 +1111,15 @@ class PeerCollectHandler(BaseJobHandler):
                     )
                 )
                 snapshot_id, saved = row.id, True
+            if metric_pack == BANK_PACK and review_summary is not None:
+                from investment_agent.industry_peers.bank_review_states import (
+                    record_bank_online_reviews,
+                )
+
+                stored_snapshot = existing if existing is not None else row
+                review_summary["review_ids"] = await record_bank_online_reviews(
+                    session, stored_snapshot, review_summary.get("baseline_snapshot_by_metric", {})
+                )
             state = index["companies"][ticker]
             state["snapshot_id"] = snapshot_id
             state["semantic_hash"] = semantic_hash
