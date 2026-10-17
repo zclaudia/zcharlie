@@ -1,0 +1,51 @@
+{
+  "_comment": "HK2-06 六类演练名到 citation 占位的映射，供拼装 review.template.json 的 drills 字段使用（键名与 src/investment_agent/materials/source_observations.py 的 _DRILLS 常量一致，不得改名或增删）。填写规则：citation.path 填 drills/<source>/<drill>-<时间戳>/evidence.json 相对共同 evidence-root 的路径（非绝对、不含 ..、不含反斜杠、不穿越符号链接），citation.sha256 填该文件实际 SHA-256；演练通过时 status 为 passed，未通过不得标 passed。下划线开头的 _comment 字段仅为模板注释，复制进正式 review 时删除。",
+  "shutdown": {
+    "_comment": "HK2-05 隔离 fake：日常 worker 关闭总开关/来源开关后不再开始请求；不证明特批 probe 受日常开关控制。",
+    "status": "passed",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "inflight_stop": {
+    "_comment": "HK2-05 隔离 fake：日常 worker 在限速等待或多阶段请求中关闭后停止后续发起；特批 probe 的 STOP/撤回证据另见 probe_stop_withdrawal。",
+    "status": "passed",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "restart_resume": {
+    "_comment": "独立隔离演练的检查点/恢复语义证据；一次性 probe 无断点续跑能力，不得以 probe 冒充。",
+    "status": "passed",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "old_versions_readable": {
+    "_comment": "旧 adapter/source version 的归档原件仍可验证读取且版本差异可见。",
+    "status": "passed",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "offline_replay": {
+    "_comment": "断网重放归档输入，结果可重复且不发请求。",
+    "status": "passed",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  },
+  "probe_stop_withdrawal": {
+    "_comment": "特批 probe 的真实 STOP 文件与许可撤回停止证据；不得以普通 ops 开关演练代替。",
+    "status": "passed",
+    "citation": {
+      "path": null,
+      "sha256": null
+    }
+  }
+}
