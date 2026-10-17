@@ -83,6 +83,9 @@ async def freeze(session: AsyncSession, base: Settings, notification: InvestorNo
     config = await configuration(session, base)
     if config is None:
         return
+    # Reserve before inspecting global capacity; independent producers cannot
+    # both consume the final slot. No network operation occurs in this lock.
+    await session.execute(update(NotificationDelivery).where(NotificationDelivery.id == "").values(state="pending"))
     case = await UserControlService(session).get_case("local_owner", UUID(notification.case_id))
     data = notification.payload
     ident = fingerprint(
@@ -152,6 +155,45 @@ async def freeze(session: AsyncSession, base: Settings, notification: InvestorNo
     )
 
 
+async def recover_capacity(
+    session: AsyncSession, base: Settings, *, limit: int = 100
+) -> int:
+    """Resume only never-sent frozen deliveries, without regenerating their ID.
+
+    The same writer reservation protects recovery and delivery. Failed/unknown
+    receipts are terminal here and are never selected for recovery.
+    """
+    await session.execute(update(NotificationDelivery).where(NotificationDelivery.id == "").values(state="pending"))
+    config = await configuration(session, base)
+    outstanding = await session.scalar(select(func.count()).select_from(NotificationDelivery).where(
+        NotificationDelivery.state.in_(("pending", "retry", "sending")))) or 0
+    candidates = list(await session.scalars(select(NotificationDelivery).where(
+        NotificationDelivery.state == "capacity_blocked").order_by(
+        NotificationDelivery.payload["created_at"].as_string(), NotificationDelivery.id
+    ).limit(min(max(limit, 1), 100))))
+    resumed = 0
+    control = UserControlService(session)
+    for row in candidates:
+        current = await session.scalar(select(InvestorNotification).where(
+            InvestorNotification.key == row.notification_key))
+        if current is None or current.revision != row.payload["body"]["revision"]:
+            row.state = "superseded"
+            continue
+        case = await control.get_case("local_owner", UUID(row.case_id))
+        if (config is None or config["fingerprint"] != row.payload["configuration"]
+            or case.revision != row.payload["case_revision"]
+            or case.background_paused or case.status == "archived"
+            or not await control.notifications_allowed(UUID(row.case_id))):
+            row.state = "suppressed"
+            continue
+        if outstanding >= 256:
+            continue
+        row.state = "pending"
+        outstanding += 1
+        resumed += 1
+    return resumed
+
+
 async def deliver_one(
     base: Settings, *, transport: Transport | None = None, now: datetime | None = None
 ) -> str | None:
@@ -164,6 +206,7 @@ async def deliver_one(
             .where(NotificationDelivery.id == "")
             .values(state="pending")
         )
+        await recover_capacity(session, base)
         config = await configuration(session, base)
         rows = list(
             await session.scalars(

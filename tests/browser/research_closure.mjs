@@ -217,7 +217,12 @@ try {
     await page.goto(`${base}/app/stocks/${chain.bound_listing}.SH`);
     await page.locator('#supplemental-coverage-content').getByText(/绑定：bound/).waitFor({timeout: 30000});
     const historySummary = page.locator('#account-fit-content details.fit-saved-result > summary');
-    if (await historySummary.count()) await historySummary.first().click();
+    // These panels load independently. Coverage being ready does not imply
+    // the saved account-fit history has arrived yet.
+    await historySummary.first().waitFor({timeout: 30000});
+    if (!await historySummary.first().evaluate(node => node.parentElement.open)) {
+      await historySummary.first().click();
+    }
     await page.getByText(/财务约束检查：/).waitFor({timeout: 30000});
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth), false, `bound stock page must not overflow at ${width}px`);
     await page.locator('#account-fit-root').scrollIntoViewIfNeeded();

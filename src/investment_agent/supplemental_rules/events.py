@@ -198,7 +198,7 @@ class SupplementalEventService:
     ) -> tuple[ObjectRef, str]:
         from investment_agent.supplemental_rules.admission import enqueue_manifest
 
-        return await enqueue_manifest(
+        run_ref, source_manifest_hash = await enqueue_manifest(
             self.session,
             owner_id=self.owner_id,
             operation_id=operation_id,
@@ -211,6 +211,45 @@ class SupplementalEventService:
             trigger="supplemental_rules_event",
             origin_ref=ObjectRef(kind="research_event", id=event.id, revision=event.revision),
         )
+        # Keep the user's committed event revision and its already-admitted P2
+        # run linked to one durable P4 journal entry in this transaction.
+        from investment_agent.storage.repositories.supplemental_updates import (
+            SupplementalUpdatesRepository,
+            supplemental_updates_journal_available,
+        )
+
+        if not await supplemental_updates_journal_available(self.session):
+            return run_ref, source_manifest_hash
+        registry = await self.repo.get_registry_head(self.owner_id)
+        await SupplementalUpdatesRepository(self.session).append_change(
+            self.owner_id,
+            change_key=f"p2:event:{event.id}:revision:{event.revision}:operation:{operation_id}",
+            kind="research_event",
+            operation_id=operation_id,
+            request_hash=request_hash,
+            origin_run_id=int(run_ref.id),
+            source_manifest_hash=source_manifest_hash,
+            acquired_at=event.acquired_at,
+            available_from=event.available_from,
+            committed_at=accepted_at,
+            payload={
+                "schema_version": 1,
+                "source_ref": {
+                    "kind": "research_event",
+                    "id": str(event.id),
+                    "revision": event.revision,
+                },
+                "change_type": "revision",
+                "event_key": event.event_key,
+                "previous_ref": event.previous_ref.model_dump(mode="json")
+                if event.previous_ref
+                else None,
+                "content_hash": event.content_hash,
+                "events_generation": registry.events_generation,
+                "request_hash": request_hash,
+            },
+        )
+        return run_ref, source_manifest_hash
 
 
 def _saved_event_response(envelope: dict[str, object]) -> EventMutationResponse:

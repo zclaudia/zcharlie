@@ -393,9 +393,10 @@
          data-listing-id="{{ supplemental_listing_id }}" data-context="company_research"
          aria-labelledby="supplemental-items-title">
   <div class="card-head">
-    <div><h2 id="supplemental-items-title">补充事项</h2><p class="faint">逐条显示规则评估、来源和未决项；不改变评分、账户适配或研究结论。</p></div>
+    <div><h2 id="supplemental-items-title">补充事项</h2><p class="faint">逐条显示规则评估、来源、复核进度与未决项；不改变财务基础评分，研究可用状态会随来源和规则限制更新。</p></div>
     <a class="btn btn-sm" href="/app/supplemental-rules">管理规则与事件</a>
   </div>
+  <div id="supplemental-update-content" class="supplemental-items-content" aria-live="polite"></div>
   <div id="supplemental-coverage-content" class="supplemental-items-content" aria-live="polite"></div>
   <div id="supplemental-items-content" class="supplemental-items-content" aria-live="polite">
     <p class="notice notice-loading">正在读取当前补充事项…</p>

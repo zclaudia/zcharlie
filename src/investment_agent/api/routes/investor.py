@@ -562,6 +562,8 @@ async def operations(settings: Annotated[Settings, Depends(get_bootstrap_setting
     from investment_agent.storage.models.monitoring import NotificationDelivery, ReviewCycle
     async with session_scope() as session:
         result = await metrics(session)
+        from investment_agent.agent.operations import supplemental_update_metrics
+        result["supplemental_updates"] = await supplemental_update_metrics(session)
         result["external_notifications_ready"] = await configuration(session, settings) is not None
         result["delivery_states"] = dict((await session.execute(select(NotificationDelivery.state, func.count()).group_by(NotificationDelivery.state))).tuples().all())
         result["budget_blocked"] = await session.scalar(select(func.count()).select_from(ReviewCycle).where(ReviewCycle.state == "blocked", ReviewCycle.payload["pending_reason"].as_string().like("%budget%")))

@@ -69,6 +69,10 @@ INVESTOR_ERROR_STATUS: dict[str, int] = {
     "idempotency_conflict": 409,
     "unsupported_assessment_view": 422,
     "unsupported_subject": 422,
+    "disclosure_authorization_required": 403,
+    "disclosure_authorization_expired": 403,
+    "disclosure_scope_forbidden": 403,
+    "disclosure_polling_disabled": 403,
 }
 """Canonical ``InvestorError.detail.code`` -> HTTP status mapping."""
 

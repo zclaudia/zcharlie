@@ -46,6 +46,7 @@ ALL_RUN_KINDS = "all"
 # have their own owner- and receipt-checked run view, so the generic research
 # API must never expose them (especially when ``kind=all``).
 SUPPLEMENTAL_RULE_RUN_KIND = "supplemental_rule_evaluate"
+PRIVATE_SUPPLEMENTAL_RUN_KINDS = (SUPPLEMENTAL_RULE_RUN_KIND, "supplemental_update_process")
 
 router = APIRouter(
     prefix="/research",
@@ -77,7 +78,7 @@ async def list_research_runs(
                 ResearchChangeSet.current_snapshot_id == ResearchSnapshot.id,
             )
             .order_by(PipelineRun.id.desc())
-            .where(PipelineRun.kind != SUPPLEMENTAL_RULE_RUN_KIND)
+            .where(PipelineRun.kind.not_in(PRIVATE_SUPPLEMENTAL_RUN_KINDS))
             .offset(offset)
             .limit(limit)
         )
@@ -150,7 +151,7 @@ async def stock_snapshot_history(
 async def get_research_run(run_id: int) -> ResearchRunDetail:
     async with session_scope() as session:
         run = await session.get(PipelineRun, run_id)
-        if run is None or run.kind == SUPPLEMENTAL_RULE_RUN_KIND:
+        if run is None or run.kind in PRIVATE_SUPPLEMENTAL_RUN_KINDS:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Research run {run_id} not found",

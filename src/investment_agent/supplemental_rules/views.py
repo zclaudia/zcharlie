@@ -14,9 +14,10 @@ from investment_agent.supplemental_rules.contracts import (
     ResearchEvent,
     ResearchRuleBinding,
     RuleApplication,
-    RuleCoverageManifest,
+    RuleCoverage,
     RuleDefinition,
     Severity,
+    UpdateSourceBinding,
 )
 
 
@@ -152,9 +153,10 @@ class CurrentRuleCoverageView(Contract):
     enabled: bool
     state: Literal["bound", "unknown"]
     reasons: tuple[str, ...] = ()
-    manifest: RuleCoverageManifest | None = None
+    manifest: RuleCoverage | None = None
     binding: ResearchRuleBinding | None = None
     current_limits: CoverageLimitSummary | None = None
+    update_source_binding: UpdateSourceBinding | None = None
     observed_at: datetime
 
 
@@ -194,6 +196,7 @@ class RuleCoverageView(Contract):
     recommendation_ref: ObjectRef | None = None
     limits_recheck: tuple[str, ...] = ()
     current_limits: CoverageLimitSummary | None = None
+    update_source_binding: UpdateSourceBinding | None = None
 
 
 class TaskRuleBindingView(Contract):

@@ -74,6 +74,16 @@ IFIND_RESEARCH_KIND = "ifind_research"
 MAX_LOOP_BACKOFF_SECONDS = 60.0
 
 
+async def wake_supplemental_updates(session: AsyncSession, *, settings: Settings) -> bool:
+    """Route scheduler wakeups through the existing research-worker seam."""
+    from investment_agent.supplemental_rules.disclosure_updates import maintain_disclosure_polls
+    from investment_agent.supplemental_rules.update_jobs import request_update_maintenance
+
+    local = await request_update_maintenance(session, settings=settings)
+    source = await maintain_disclosure_polls(session, settings=settings)
+    return bool(local or source)
+
+
 class ResearchJobPayload(BaseModel):
     """Credential-free input persisted for a queued research run.
 
@@ -231,13 +241,17 @@ def default_job_handlers(
     from investment_agent.portfolio.suitability_jobs import AccountFitHandler
     from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
     from investment_agent.rules.zone_jobs import ZoneDetectionHandler
+    from investment_agent.supplemental_rules.disclosure_updates import DisclosurePollingHandler
     from investment_agent.supplemental_rules.jobs import SupplementalRuleHandler
+    from investment_agent.supplemental_rules.update_jobs import SupplementalUpdateHandler
 
     return [
         *agent_job_handlers(settings),
         AccountFitHandler(settings=settings),
         CandidateRankingHandler(settings=settings),
         SupplementalRuleHandler(settings=settings),
+        SupplementalUpdateHandler(settings=settings),
+        DisclosurePollingHandler(settings=settings),
         IfindResearchHandler(settings=settings, runner=runner),
         *snapshot_job_handlers(settings),
         MaterialCollectionHandler(settings=settings),
@@ -412,6 +426,7 @@ class ResearchWorker:
                 await MonitoringService(session, self.settings).maintain(limit=50)
                 from investment_agent.investor.discovery import DiscoveryService
                 await DiscoveryService(session, self.settings).maintain()
+                await wake_supplemental_updates(session, settings=self.settings)
             run = await PipelineRunRepository(session).claim_next(
                 worker_id=self.worker_id,
                 kinds=self.kinds,

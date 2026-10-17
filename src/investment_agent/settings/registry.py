@@ -220,6 +220,8 @@ class RuntimeSettings(BaseModel):
     account_fit_enabled: bool = False
     candidate_ranking_enabled: bool = False
     supplemental_rules_enabled: bool = False
+    supplemental_updates_enabled: bool = False
+    supplemental_disclosure_polling_enabled: bool = False
     portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
     investor_agent_enabled: bool = False
     investor_agent_background_enabled: bool = False
@@ -342,6 +344,8 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("account_fit_enabled", "agent", "启用账户适配检查", "默认关闭；需同时启用真实账本入口，关闭时仍可读取历史结果。", "next_job"),
     _env("candidate_ranking_enabled", "agent", "启用本账户候选排序", "默认关闭；还需账户适配和真实账本入口，关闭时仍可读取历史快照。", "next_job"),
     _env("supplemental_rules_enabled", "agent", "启用补充事项评估", "默认关闭；控制类别、公司及个股追加规则的独立管理与评估，关闭后运行中的评估停止新增应用。", "live"),
+    _env("supplemental_updates_enabled", "agent", "启用补充事项本地更新", "默认关闭；允许持久本地来源变化触发复核调度，不开启联网采集。", "live"),
+    _env("supplemental_disclosure_polling_enabled", "agent", "启用补充公告定时采集", "默认关闭；仅在显式来源授权和公告原件开关均满足时允许受限轮询。", "live"),
     _env(
         "portfolio_valuation_max_staleness_days", "agent", "估值价格时效（交易日）",
         "收盘价超过该交易日数视为过期，不参与市值与 NAV；未知年份按受限原因处理。",

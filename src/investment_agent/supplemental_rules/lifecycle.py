@@ -91,6 +91,14 @@ class SupplementalRuleLifecycle:
         )
         await self.repo.advance_registry(self.owner_id, updated_at=now)
         target = ObjectRef(kind="supplemental_rule", id=rule_id, revision=1)
+        await self._record_change(
+            definition,
+            operation_id=operation_id,
+            request_hash=request_hash,
+            command=command,
+            change_type="revision",
+            accepted_at=now,
+        )
         receipt = MutationReceipt(
             owner_id=self.owner_id,
             operation_id=operation_id,
@@ -175,6 +183,14 @@ class SupplementalRuleLifecycle:
         )
         await self.repo.advance_registry(self.owner_id, updated_at=now)
         ref = ObjectRef(kind="supplemental_rule", id=rule_id, revision=revision)
+        await self._record_change(
+            definition,
+            operation_id=operation_id,
+            request_hash=request_hash,
+            command=command,
+            change_type="revision",
+            accepted_at=now,
+        )
         receipt = MutationReceipt(
             owner_id=self.owner_id,
             operation_id=operation_id,
@@ -449,6 +465,16 @@ class SupplementalRuleLifecycle:
             if rules_delta
             else (None, None)
         )
+        await self._record_change(
+            definition,
+            operation_id=operation_id,
+            request_hash=request_hash,
+            command=command,
+            change_type="lifecycle",
+            accepted_at=now,
+            run_id=int(run_ref.id) if run_ref is not None else None,
+            manifest_hash=source_manifest_hash,
+        )
         receipt = MutationReceipt(
             owner_id=self.owner_id,
             operation_id=operation_id,
@@ -493,7 +519,7 @@ class SupplementalRuleLifecycle:
         # no rules are evaluated in this lifecycle transaction.
         from investment_agent.supplemental_rules.admission import enqueue_manifest
 
-        return await enqueue_manifest(
+        run_ref, source_manifest_hash = await enqueue_manifest(
             self.session,
             owner_id=self.owner_id,
             operation_id=operation_id,
@@ -505,6 +531,56 @@ class SupplementalRuleLifecycle:
             accepted_at=accepted_at,
             trigger="supplemental_rules_lifecycle",
             origin_ref=request.rule_ref,
+        )
+        return run_ref, source_manifest_hash
+
+    async def _record_change(
+        self,
+        definition: RuleDefinition,
+        *,
+        operation_id: UUID,
+        request_hash: str,
+        command: str,
+        change_type: str,
+        accepted_at: datetime,
+        run_id: int | None = None,
+        manifest_hash: str | None = None,
+    ) -> None:
+        """Append a domain-change receipt atomically with its P2 mutation."""
+        from investment_agent.storage.repositories.supplemental_updates import (
+            SupplementalUpdatesRepository,
+            supplemental_updates_journal_available,
+        )
+
+        if not await supplemental_updates_journal_available(self.session):
+            return
+        await SupplementalUpdatesRepository(self.session).append_change(
+            self.owner_id,
+            change_key=f"p2:rule:{definition.id}:revision:{definition.revision}:operation:{operation_id}",
+            kind="rule_lifecycle" if change_type == "lifecycle" else "rule_revision",
+            operation_id=operation_id,
+            request_hash=request_hash,
+            origin_run_id=run_id,
+            source_manifest_hash=manifest_hash,
+            acquired_at=accepted_at,
+            available_from=accepted_at,
+            committed_at=accepted_at,
+            payload={
+                "schema_version": 1,
+                "source_ref": {
+                    "kind": "supplemental_rule",
+                    "id": str(definition.id),
+                    "revision": definition.revision,
+                },
+                "change_type": change_type,
+                "command": command,
+                "content_hash": definition.content_hash,
+                "semantic_hash": definition.semantic_hash,
+                "rules_generation": (
+                    await self.repo.get_registry_head(self.owner_id)
+                ).rules_generation,
+                "request_hash": request_hash,
+            },
         )
 
 

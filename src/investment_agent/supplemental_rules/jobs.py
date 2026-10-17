@@ -19,6 +19,7 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.investment_assessment import InvestmentAssessment
 from investment_agent.storage.models.investor import InvestorMutation
+from investment_agent.storage.models.supplemental_updates import SupplementalChangeReceiptRow
 from investment_agent.storage.repositories.investment_assessment import (
     _check_header_columns,
     _parse_assessment,
@@ -32,6 +33,9 @@ from investment_agent.storage.repositories.supplemental_rules import (
 from investment_agent.supplemental_rules.admission import (
     P2_RESULT_SCHEMA_VERSION,
     SUPPLEMENTAL_RULE_EVALUATE,
+    _authorize_recovery_source,
+    _recovery_manifest,
+    _recovery_pairs,
 )
 from investment_agent.supplemental_rules.canonical import (
     canonical_hash,
@@ -52,6 +56,7 @@ from investment_agent.supplemental_rules.contracts import (
     FrozenManifest,
     MutationReceipt,
     RuleApplication,
+    UpdateRecoveryCommand,
 )
 from investment_agent.supplemental_rules.service import (
     SupplementalRuleService,
@@ -103,12 +108,14 @@ class AuthorizedSupplementalRun(Contract):
     mode: Literal["live", "historical_replay"] = "live"
     evaluation_purpose: Literal["coverage", "issue_review"]
     origin_ref: ObjectRef | None = None
+    supplemental_update_sequence: int | None = Field(default=None, ge=1)
     accepted_at: datetime
 
 
 def _command_model(command: str) -> type[Contract] | None:
     models: dict[str, type[Contract]] = {
         "supplemental_rule.evaluate.v1": EvaluationRequest,
+        "supplemental_rule.update_recovery.v1": UpdateRecoveryCommand,
         "supplemental_rule.create.v1": RuleCreateRequest,
         "supplemental_rule.revision.v1": RuleRevisionRequest,
         "supplemental_rule.validate.v1": RuleValidationRequest,
@@ -167,6 +174,9 @@ async def authorize_supplemental_run(
             raise ValueError("invalid evaluation purpose")
         origin_raw = envelope.get("origin_ref")
         origin = ObjectRef.model_validate(origin_raw) if origin_raw is not None else None
+        # P4 authorization is an immutable server sidecar. Do not trust a
+        # mutable execution-envelope flag on the P2 run as the source of truth.
+        update_sequence = None
         accepted_at = datetime.fromisoformat(str(payload.get("accepted_at")))
         if accepted_at.tzinfo is None or accepted_at.utcoffset() is None:
             raise ValueError("accepted_at must be timezone aware")
@@ -174,7 +184,7 @@ async def authorize_supplemental_run(
             raise ValueError("manifest owner mismatch")
         # Unhashed observation time is still constrained by the admitted
         # instant. Historical runs retain the original manifest and admission.
-        if mode == "live" and (
+        if mode == "live" and command != "supplemental_rule.update_recovery.v1" and (
             manifest.as_of != accepted_at or manifest.evaluated_at != accepted_at
         ):
             raise ValueError("live manifest timestamps must match the accepted instant")
@@ -227,9 +237,11 @@ async def authorize_supplemental_run(
                 or admission.run_ref != receipt.run_ref
                 or admission.operation_id != operation_id
                 or admission.accepted_at != accepted_at
-                or command != "supplemental_rule.evaluate.v1"
-                or command_body.mode != mode
-                or command_body.evaluation_purpose != purpose
+                or (command == "supplemental_rule.evaluate.v1" and (
+                    command_body.mode != mode
+                    or command_body.evaluation_purpose != purpose
+                ))
+                or (command == "supplemental_rule.update_recovery.v1" and purpose != "coverage")
             ):
                 raise ValueError("evaluation admission mismatch")
         elif receipt.result_kind in {"rule_mutation", "event_mutation"}:
@@ -274,6 +286,93 @@ async def authorize_supplemental_run(
             or manifest.evaluated_at != original.accepted_at
         ):
             raise InvestorError("historical_manifest_unavailable", "重放运行与原始冻结清单不匹配")
+    elif command == "supplemental_rule.update_recovery.v1":
+        assert isinstance(command_body, UpdateRecoveryCommand)
+        try:
+            original_run, original, original_member = await _authorize_recovery_source(
+                session, command_body, owner_id=owner_id,
+            )
+            checkpoint = _read_checkpoint(original_run.metadata_json, original.manifest)
+            await _verify_checkpoint(session, checkpoint, original)
+            pairs = _recovery_pairs(
+                command_body, original.manifest, checkpoint,
+                listing_id=original_member.listing_id, context=original_member.context,
+            )
+            expected_manifest = validate_manifest(_recovery_manifest(original.manifest, pairs))
+            if manifest != expected_manifest:
+                raise ValueError("recovery manifest is not the exact original pending subset")
+            sidecar = (await session.execute(select(SupplementalChangeReceiptRow).where(
+                SupplementalChangeReceiptRow.owner_id == owner_id,
+                SupplementalChangeReceiptRow.kind == "evaluation_admission",
+                SupplementalChangeReceiptRow.origin_run_id == run_id,
+                SupplementalChangeReceiptRow.source_manifest_hash == manifest.manifest_hash,
+            ))).scalar_one_or_none()
+            if (
+                sidecar is None
+                or sidecar.payload.get("recovery_of_run_id") != command_body.original_run_id
+                or sidecar.payload.get("recovery_of_manifest_hash") != command_body.original_manifest_hash
+                or sidecar.payload.get("recovered_member_sequence") != command_body.member_sequence
+                or sidecar.payload.get("pending_ordinals") != list(command_body.pending_ordinals)
+                or sidecar.payload.get("recovery_generation") != command_body.recovery_generation
+                or sidecar.payload.get("has_manual_pair") is not command_body.has_manual_pair
+            ):
+                raise ValueError("recovery P4 sidecar mismatch")
+        except (AttributeError, TypeError, ValueError, InvestorError) as exc:
+            raise InvestorError("not_found", "恢复运行未通过原始检查点授权") from exc
+    p4_admission = (await session.execute(select(SupplementalChangeReceiptRow).where(
+        SupplementalChangeReceiptRow.owner_id == owner_id,
+        SupplementalChangeReceiptRow.kind == "evaluation_admission",
+        SupplementalChangeReceiptRow.origin_run_id == run.id,
+    ))).scalar_one_or_none()
+    if p4_admission is not None:
+        member_sequences = p4_admission.payload.get("scope_member_sequences")
+        source_sequence = p4_admission.parent_sequence
+        if (
+            p4_admission.payload.get("run_id") != run.id
+            or p4_admission.payload.get("receipt_sequence") != source_sequence
+            or p4_admission.source_manifest_hash != manifest.manifest_hash
+            or p4_admission.payload.get("source_manifest_hash") != manifest.manifest_hash
+            or not isinstance(source_sequence, int)
+            or not isinstance(member_sequences, list)
+            or not member_sequences
+        ):
+            raise InvestorError("not_found", "P4评估授权收据与P2运行不匹配")
+        from investment_agent.storage.repositories.supplemental_updates import (
+            SupplementalUpdatesRepository,
+        )
+
+        updates_repo = SupplementalUpdatesRepository(session)
+        source_receipt = await updates_repo.get_change(owner_id, source_sequence)
+        if source_receipt is None or source_receipt.kind not in {
+            "rule_revision", "rule_lifecycle", "research_event", "evidence_revision",
+            "material_revision", "due_boundary", "bootstrap", "source_attempt",
+        }:
+            raise InvestorError("not_found", "P4评估来源收据不可用")
+        expected_scopes = {
+            (int(listing_ref.id), context)
+            for listing_ref in manifest.listing_refs
+            for context in manifest.contexts
+        }
+        actual_scopes: set[tuple[int, str]] = set()
+        for sequence in member_sequences:
+            if not isinstance(sequence, int):
+                raise InvestorError("not_found", "P4评估成员收据无效")
+            member = await updates_repo.get_change(owner_id, sequence)
+            if member is None or member.kind != "scope_member":
+                raise InvestorError("not_found", "P4评估成员收据不存在")
+            if member.listing_id is None or member.context is None:
+                raise InvestorError("not_found", "P4评估成员scope不完整")
+            if (
+                member.payload.get("source_sequence") != source_sequence
+                or member.payload.get("source_id") != str(source_receipt.id)
+                or member.payload.get("source_hash") != source_receipt.payload_hash
+            ):
+                raise InvestorError("not_found", "P4评估成员来源不匹配")
+            actual_scopes.add((member.listing_id, member.context))
+        if actual_scopes != expected_scopes:
+            raise InvestorError("not_found", "P4评估成员不属于冻结清单")
+        update_sequence = source_sequence
+
     return run, AuthorizedSupplementalRun(
         run_ref=receipt.run_ref,
         operation_id=operation_id,
@@ -284,6 +383,7 @@ async def authorize_supplemental_run(
         mode=mode,
         evaluation_purpose=purpose,
         origin_ref=origin,
+        supplemental_update_sequence=update_sequence,
         accepted_at=accepted_at,
     )
 
@@ -304,8 +404,9 @@ class SupplementalRuleHandler(BaseJobHandler):
                 checkpoint = _read_checkpoint(run.metadata_json, authorized.manifest)
                 await _verify_checkpoint(session, checkpoint, authorized)
                 effective = await _enabled_settings(session, self.settings)
-                if not effective.supplemental_rules_enabled:
-                    await repo.mark_failed(job.run_id, "writes_disabled", lease=job.lease)
+                if not _run_enabled(effective, authorized):
+                    reason = "supplemental_updates_disabled" if authorized.supplemental_update_sequence is not None and effective.supplemental_rules_enabled else "writes_disabled"
+                    await repo.mark_failed(job.run_id, reason, lease=job.lease)
                     return "partial"
                 await repo.record_metadata(
                     job.run_id,
@@ -324,10 +425,10 @@ class SupplementalRuleHandler(BaseJobHandler):
                     run, fresh = await authorize_supplemental_run(session, job.run_id)
                     checkpoint = _read_checkpoint(run.metadata_json, fresh.manifest)
                     effective = await _enabled_settings(session, self.settings)
-                    if not effective.supplemental_rules_enabled:
+                    if not _run_enabled(effective, fresh):
+                        reason = "supplemental_updates_disabled" if fresh.supplemental_update_sequence is not None and effective.supplemental_rules_enabled else "writes_disabled"
                         await repo.mark_failed(
-                            job.run_id,
-                            "writes_disabled",
+                            job.run_id, reason,
                             lease=job.lease,
                         )
                         return "partial"
@@ -389,8 +490,9 @@ class SupplementalRuleHandler(BaseJobHandler):
                 checkpoint = _read_checkpoint(run.metadata_json, authorized.manifest)
                 await _verify_checkpoint(session, checkpoint, authorized)
                 effective = await _enabled_settings(session, self.settings)
-                if not effective.supplemental_rules_enabled:
-                    await repo.mark_failed(job.run_id, "writes_disabled", lease=job.lease)
+                if not _run_enabled(effective, authorized):
+                    reason = "supplemental_updates_disabled" if authorized.supplemental_update_sequence is not None and effective.supplemental_rules_enabled else "writes_disabled"
+                    await repo.mark_failed(job.run_id, reason, lease=job.lease)
                     return "partial"
                 failed = failed or any(
                     member.state == "item_failed" for member in checkpoint.members
@@ -421,6 +523,17 @@ async def _enabled_settings(session: AsyncSession, base: Settings) -> Settings:
     from investment_agent.settings.loader import load_settings
 
     return await load_settings(session, base=base)
+
+
+def _run_enabled(settings: Settings, authorized: AuthorizedSupplementalRun) -> bool:
+    """P4-linked runs stop at checkpoints when updates are disabled.
+
+    Native P2 runs retain their original single supplemental_rules gate.
+    """
+    return settings.supplemental_rules_enabled and (
+        authorized.supplemental_update_sequence is None
+        or getattr(settings, "supplemental_updates_enabled", False)
+    )
 
 
 def _read_checkpoint(metadata: Any, manifest: FrozenManifest) -> RunCheckpoint:

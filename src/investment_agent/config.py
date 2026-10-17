@@ -97,6 +97,8 @@ class Settings(BaseSettings):
     account_fit_enabled: bool = False
     candidate_ranking_enabled: bool = False
     supplemental_rules_enabled: bool = False
+    supplemental_updates_enabled: bool = False
+    supplemental_disclosure_polling_enabled: bool = False
     portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
     disclosure_originals_enabled: bool = False
     materials_sec_refresh_enabled: bool = False

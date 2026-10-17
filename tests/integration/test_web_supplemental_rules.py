@@ -46,7 +46,8 @@ async def test_stock_page_uses_read_only_supplemental_panel_without_p1_changes(a
     assert 'id="supplemental-items-root"' in response.text
     assert '/app/static/pages/supplemental_rules.css' in response.text
     assert 'data-context="company_research"' in response.text
-    assert "不改变评分、账户适配或研究结论" in response.text
+    assert "不改变财务基础评分" in response.text
+    assert "研究可用状态会随来源和规则限制更新" in response.text
     assert "/app/static/app.js" in response.text
     # P3 binding/coverage provenance container beside the applications panel.
     assert 'id="supplemental-coverage-content"' in response.text

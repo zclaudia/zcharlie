@@ -459,6 +459,21 @@ async def run_verification_dispatch() -> int | None:
     return outcome.run_id if outcome.created else None
 
 
+async def run_supplemental_update_dispatch() -> int | None:
+    """Wake locally journaled P4 changes when both runtime gates are open."""
+    from investment_agent.research.worker import wake_supplemental_updates
+
+    try:
+        settings = await load_settings()
+        async with session_scope() as session:
+            created = await wake_supplemental_updates(session, settings=settings)
+    except Exception:
+        log.exception("scheduler.supplemental_updates.dispatch_failed")
+        return None
+    log.info("scheduler.supplemental_updates.dispatched", created_runs=created)
+    return created
+
+
 async def run_verification_calibration(
     cfg: VerificationScheduleConfig, *, today: date | None = None
 ) -> list[str] | None:
@@ -606,7 +621,6 @@ def build_scheduler(
 
 def add_jobs(sched: AsyncIOScheduler, app_config: AppYamlConfig) -> list[str]:
     """Register every job whose cron is configured; returns their ids."""
-
     scheduler_cfg = app_config.scheduler
     watchlist_cron = scheduler_cfg.watchlist_refresh_cron
     if watchlist_cron is not None:
@@ -749,6 +763,11 @@ async def watch_settings(
     while True:
         await asyncio.sleep(poll_seconds)
         try:
+            # Keep the durable P4 wakeup independent of the startup snapshot:
+            # the dispatcher loads live settings each time and enqueues only
+            # when both gates are currently enabled. No cron job changes the
+            # default scheduler inventory.
+            await run_supplemental_update_dispatch()
             from investment_agent.investor.monitoring import MonitoringService
             if settings.investor_agent_enabled:
                 async with session_scope() as session:
@@ -858,6 +877,7 @@ async def _run_scheduler(
     await _startup_portfolio_valuation_check(cfg, started_at)
     await _startup_zone_detection_check(cfg, started_at)
     await _startup_screen_check(cfg, started_at)
+    await run_supplemental_update_dispatch()
     if _candidate_trigger(cfg.candidates) is not None:
         await run_candidate_expiry_job()
     await _startup_verification_check(cfg, started_at)

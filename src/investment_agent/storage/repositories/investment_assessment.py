@@ -26,10 +26,12 @@ from investment_agent.supplemental_rules.contracts import (
     FrozenPair,
     ResearchRuleBinding,
     RuleApplication,
+    RuleCoverage,
     RuleCoverageManifest,
+    parse_rule_coverage_manifest,
 )
 
-Assessment = AccountFitAssessment | RankingSnapshot | RuleApplication | RuleCoverageManifest
+Assessment = AccountFitAssessment | RankingSnapshot | RuleApplication | RuleCoverage
 
 
 class RuleBindingState(NamedTuple):
@@ -42,7 +44,7 @@ class RuleBindingState(NamedTuple):
 
     state: Literal["bound", "unknown"]
     reasons: tuple[str, ...]
-    manifest: RuleCoverageManifest | None
+    manifest: RuleCoverage | None
     binding: ResearchRuleBinding | None
 
 
@@ -164,12 +166,12 @@ class InvestmentAssessmentRepository:
         return application
 
     async def save_rule_coverage(
-        self, owner_id: OwnerId, manifest: RuleCoverageManifest
-    ) -> RuleCoverageManifest:
+        self, owner_id: OwnerId, manifest: RuleCoverage
+    ) -> RuleCoverage:
         """Persist a strict P3 coverage manifest; the caller owns the commit."""
 
         _check_owner(owner_id)
-        manifest = RuleCoverageManifest.model_validate(manifest.model_dump(mode="json"))
+        manifest = parse_rule_coverage_manifest(manifest.model_dump(mode="json"))
         if manifest.owner_id != owner_id or manifest.reference.revision != 1:
             raise ValueError("rule coverage owner/revision is invalid")
         if manifest.reference.kind != "rule_coverage":
@@ -369,7 +371,7 @@ class InvestmentAssessmentRepository:
         self,
         owner_id: OwnerId,
         *,
-        prepared: RuleCoverageManifest,
+        prepared: RuleCoverage,
         manifest_id: UUID,
         semantic_review_ref: ObjectRef,
         closure_application_refs: tuple[ObjectRef, ...],
@@ -377,7 +379,7 @@ class InvestmentAssessmentRepository:
         recommendation_ref: ObjectRef,
         limits_recheck: tuple[str, ...],
         committed_at: datetime,
-    ) -> RuleCoverageManifest:
+    ) -> RuleCoverage:
         """Derive and persist the published manifest from its prepared source.
 
         The prepared content is carried verbatim; only the publication-stage
@@ -407,7 +409,7 @@ class InvestmentAssessmentRepository:
         data["manifest_hash"] = canonical_hash(
             {key: value for key, value in data.items() if key != "manifest_hash"}
         )
-        published = RuleCoverageManifest.model_validate(data)
+        published = parse_rule_coverage_manifest(data)
         return await self.save_rule_coverage(owner_id, published)
 
     async def get_rule_application(
@@ -420,7 +422,7 @@ class InvestmentAssessmentRepository:
 
     async def get_rule_coverage(
         self, owner_id: OwnerId, reference: ObjectRef
-    ) -> RuleCoverageManifest | None:
+    ) -> RuleCoverage | None:
         """Exact coverage manifest or None; narrows the shared assessment union."""
 
         value = await self.get_exact(owner_id, reference, expected_kind="rule_coverage")
@@ -429,9 +431,11 @@ class InvestmentAssessmentRepository:
     async def published_rule_coverage_limits(
         self,
         owner_id: OwnerId,
-        manifest: RuleCoverageManifest,
+        manifest: RuleCoverage,
         *,
         now: datetime | None = None,
+        lock_source_state: bool = False,
+        check_source_state: bool = True,
     ) -> tuple[str, ...]:
         """Bounded current-limitation recheck of one published coverage manifest.
 
@@ -445,11 +449,32 @@ class InvestmentAssessmentRepository:
             published_manifest_limits,
         )
 
-        return await published_manifest_limits(self.session, owner=owner_id, manifest=manifest, at=now)
+        return await published_manifest_limits(
+            self.session, owner=owner_id, manifest=manifest, at=now,
+            lock_source_state=lock_source_state, check_source_state=check_source_state,
+        )
+
+    async def declared_source_coverage_limits(
+        self, owner_id: OwnerId, listing_id: int, context: str,
+        *, lock_source_state: bool = False,
+    ) -> tuple[str, ...]:
+        """Unknown marker when a declared source has no manifest binding yet."""
+
+        _check_owner(owner_id)
+        from investment_agent.storage.repositories.supplemental_updates import (
+            SupplementalUpdatesRepository,
+        )
+
+        states = await SupplementalUpdatesRepository(self.session).list_sources(
+            owner_id, listing_id, context, for_update=lock_source_state,
+        )
+        if not states:
+            return ()
+        return ("source_coverage_unknown:binding_missing",)
 
     async def latest_published_rule_coverage(
         self, owner_id: OwnerId, listing_id: int
-    ) -> RuleCoverageManifest | None:
+    ) -> RuleCoverage | None:
         """Newest published coverage manifest of one listing, or None."""
 
         _check_owner(owner_id)
@@ -466,7 +491,7 @@ class InvestmentAssessmentRepository:
         )
         if row is None:
             return None
-        value = RuleCoverageManifest.model_validate(row.payload)
+        value = parse_rule_coverage_manifest(row.payload)
         _check_header_columns(row, value)
         return value
 
@@ -699,7 +724,7 @@ def _listing_id(reference: ObjectRef) -> int:
 
 
 def _json_payload(
-    value: AccountFitAssessment | RankingSnapshot | RankingEntry | RuleApplication | RuleCoverageManifest,
+    value: AccountFitAssessment | RankingSnapshot | RankingEntry | RuleApplication | RuleCoverage,
 ) -> dict[str, object]:
     return value.model_dump(mode="json")
 
@@ -712,7 +737,7 @@ def _parse_assessment(row: InvestmentAssessment) -> Assessment:
     if row.kind == "rule_application":
         return RuleApplication.model_validate(row.payload)
     if row.kind == "rule_coverage":
-        return RuleCoverageManifest.model_validate(row.payload)
+        return parse_rule_coverage_manifest(row.payload)
     raise ValueError(f"unsupported investment assessment kind {row.kind!r}")
 
 

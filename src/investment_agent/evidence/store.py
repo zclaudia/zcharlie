@@ -204,6 +204,31 @@ class EvidenceService:
                 )
             )
             result = ObjectRef(kind="evidence", id=saved.id, revision=1)
+            from investment_agent.storage.repositories.supplemental_updates import (
+                SupplementalUpdatesRepository,
+                supplemental_updates_journal_available,
+                update_digest,
+            )
+
+            if await supplemental_updates_journal_available(self.session):
+                await SupplementalUpdatesRepository(self.session).append_change(
+                user_id,
+                change_key=f"evidence:{saved.id}:revision:{saved.revision}",
+                kind="evidence_revision",
+                operation_id=operation_id,
+                request_hash=update_digest(request),
+                acquired_at=saved.acquired_at,
+                available_from=saved.available_from,
+                committed_at=saved.created_at,
+                payload={
+                    "schema_version": 1,
+                    "source_ref": result.model_dump(mode="json"),
+                    "subject_ref": saved.subject_ref.model_dump(mode="json"),
+                    "source_kind": saved.source_kind,
+                    "content_hash": saved.content_hash,
+                    "verification": saved.verification,
+                },
+                )
             self.receipts._receipt(user_id, operation_id, request, result)
             await self.session.flush()
         return result

@@ -35,7 +35,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from sqlalchemy import ColumnElement, select
@@ -127,6 +127,35 @@ class MaterialStore:
             payload=draft.payload,
         )
         stored = await self._datasets.insert_version(row)
+        from investment_agent.storage.repositories.supplemental_updates import (
+            SupplementalUpdatesRepository,
+            supplemental_updates_journal_available,
+        )
+
+        committed_at = datetime.now(UTC)
+        if await supplemental_updates_journal_available(self._session):
+            await SupplementalUpdatesRepository(self._session).append_change(
+            "local_owner",
+            change_key=f"material:{stored.id}:revision:{stored.revision}",
+            kind="material_revision",
+            acquired_at=stored.source_fetched_at or stored.captured_at,
+            available_from=stored.source_fetched_at or stored.captured_at,
+            committed_at=committed_at,
+            payload={
+                "schema_version": 1,
+                "source_ref": {
+                    "kind": "research_dataset",
+                    "id": stored.id,
+                    "revision": stored.revision,
+                },
+                "subject_kind": stored.subject_kind,
+                "subject_id": stored.subject_id,
+                "dataset_kind": stored.kind,
+                "source": stored.source,
+                "content_hash": stored.content_hash,
+                "raw_ref": stored.raw_ref,
+            },
+            )
         return SavedDataset(
             id=stored.id,
             revision=stored.revision,
@@ -280,12 +309,14 @@ def coalesce_annual_tables(drafts: tuple[DatasetDraft, ...]) -> tuple[DatasetDra
         tables = {draft.payload["report"]: draft.payload for draft in group}
         if len(tables) != len(group):
             raise ValueError("duplicate HK statement table for one subject/year")
-        result.append(replace(
-            group[0],
-            payload={
-                "facts": [fact for draft in group for fact in draft.payload["facts"]],
-                "tables": tables,
-            },
-            raw_bytes=group[0].raw_bytes if len(group) == 1 else None,
-        ))
+        result.append(
+            replace(
+                group[0],
+                payload={
+                    "facts": [fact for draft in group for fact in draft.payload["facts"]],
+                    "tables": tables,
+                },
+                raw_bytes=group[0].raw_bytes if len(group) == 1 else None,
+            )
+        )
     return tuple(result)

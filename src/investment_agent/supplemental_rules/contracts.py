@@ -753,6 +753,28 @@ class EvaluationRequest(Contract):
         return self
 
 
+class UpdateRecoveryCommand(Contract):
+    """Server-only proof binding a P4 continuation to an original P2 checkpoint."""
+
+    idempotency_key: UUID
+    original_run_id: Annotated[int, Field(strict=True, ge=1)]
+    original_manifest_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    source_sequence: Annotated[int, Field(strict=True, ge=1)]
+    member_sequence: Annotated[int, Field(strict=True, ge=1)]
+    recovery_generation: Annotated[int, Field(strict=True, ge=1, le=16)]
+    pending_ordinals: Annotated[tuple[int, ...], Field(min_length=1, max_length=MAX_PAIRS_PER_MANIFEST)]
+    saved_application_refs: tuple[ObjectRef, ...] = Field(default=(), max_length=MAX_PAIRS_PER_MANIFEST)
+    has_manual_pair: bool = False
+
+    @model_validator(mode="after")
+    def recovery_shape(self) -> UpdateRecoveryCommand:
+        if tuple(sorted(set(self.pending_ordinals))) != self.pending_ordinals:
+            raise ValueError("pending ordinals must be unique and ordered")
+        if any(ref.kind != "rule_application" for ref in self.saved_application_refs):
+            raise ValueError("saved refs must identify rule applications")
+        return self
+
+
 class MutationReceipt(Contract):
     """Common typed discriminator for P2 idempotency receipts."""
 
@@ -1064,6 +1086,306 @@ class RuleCoverageManifest(Contract):
     @property
     def reference(self) -> ObjectRef:
         return ObjectRef(kind="rule_coverage", id=self.id, revision=self.revision)
+
+
+class UpdateSourceEntry(Contract):
+    """Server-frozen evidence that one declared source covered one window."""
+
+    source_id: Annotated[Text, Field(pattern=r"^[a-z0-9_.-]{1,80}$")]
+    contract_version: Annotated[Text, Field(min_length=1, max_length=80)]
+    contract_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    scope_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    success_sequence: Annotated[int, Field(strict=True, ge=1)]
+    success_receipt_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    source_refs: Annotated[tuple[ObjectRef, ...], Field(min_length=1, max_length=2000)]
+    window_start: datetime
+    window_end: datetime
+    complete_watermark: datetime
+    completeness: Literal["complete", "partial", "unknown"]
+    last_success_at: datetime
+    health_limit_seconds: Annotated[int, Field(strict=True, gt=0, le=31_536_000)]
+
+    @model_validator(mode="after")
+    def validate_update_entry(self) -> UpdateSourceEntry:
+        if self.window_start > self.window_end:
+            raise ValueError("update source window and watermark are inconsistent")
+        if self.completeness == "complete" and self.complete_watermark < self.window_end:
+            raise ValueError("complete source coverage must reach the window end")
+        if any(ref.field_path is not None or ref.revision is None for ref in self.source_refs):
+            raise ValueError("update source refs must identify exact revisions")
+        for name in ("window_start", "window_end", "complete_watermark", "last_success_at"):
+            object.__setattr__(self, name, utc_timestamp(getattr(self, name)))
+        return self
+
+
+class UpdateSourceBinding(Contract):
+    """Server-frozen evidence that declared sources covered one scope/window.
+
+    This is deliberately separate from the P3 manifest DTO: adding even an
+    optional field to that DTO changes its canonical hash domain.
+    """
+
+    listing_ref: ObjectRef
+    context: Context
+    scope_key: Annotated[Text, Field(min_length=1, max_length=200)]
+    sources: Annotated[tuple[UpdateSourceEntry, ...], Field(min_length=1, max_length=16)]
+    source_policy_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def validate_update_binding(self) -> UpdateSourceBinding:
+        if self.listing_ref.kind != "listing" or self.listing_ref.field_path is not None:
+            raise ValueError("update source binding requires an exact listing scope")
+        expected_scope_key = f"listing:{self.listing_ref.id}:{self.context}"
+        if self.scope_key != expected_scope_key:
+            raise ValueError("update source binding scope key must match listing and context")
+        if len({source.source_id for source in self.sources}) != len(self.sources):
+            raise ValueError("update source ids must be unique")
+        from investment_agent.supplemental_rules.canonical import canonical_hash
+
+        for source in self.sources:
+            expected_scope_hash = canonical_hash({
+                "source_id": source.source_id,
+                "contract_version": source.contract_version,
+                "contract_hash": source.contract_hash,
+                "scope_key": self.scope_key,
+                "listing_ref": self.listing_ref,
+            })
+            if source.scope_hash != expected_scope_hash:
+                raise ValueError("source scope hash must bind source contract and exact listing context")
+            if (
+                source.last_success_at > self.observed_at
+                or source.window_end > self.observed_at
+                or source.complete_watermark > self.observed_at
+            ):
+                raise ValueError("source coverage proof cannot extend beyond its observation time")
+
+        expected = canonical_hash(tuple(sorted(
+            (source.source_id, source.contract_hash, source.scope_hash)
+            for source in self.sources
+        )))
+        if self.source_policy_hash != expected:
+            raise ValueError("source policy hash must bind the declared source scopes")
+        object.__setattr__(self, "observed_at", utc_timestamp(self.observed_at))
+        return self
+
+
+class RuleCoverageManifestV2(RuleCoverageManifest):
+    """P4 coverage DTO; V1 remains byte-for-byte/hash-domain compatible."""
+
+    schema_version: Literal[2] = 2  # type: ignore[assignment]
+    update_source_binding: UpdateSourceBinding
+
+    @model_validator(mode="after")
+    def validate_v2_binding(self) -> RuleCoverageManifestV2:
+        if self.update_source_binding.listing_ref != self.listing_ref:
+            raise ValueError("update source binding scope must match coverage listing")
+        return self
+
+
+class CoverageReceiptRef(Contract):
+    """Exact bounded reference to an immutable P4 source receipt."""
+
+    sequence: Annotated[int, Field(strict=True, ge=1)]
+    id: UUID
+    payload_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class SavedRefsSourceProof(Contract):
+    """V2 saved-reference proof, explicitly tagged when embedded in V3."""
+
+    proof_type: Literal["saved_refs_v2"] = "saved_refs_v2"
+    entry: UpdateSourceEntry
+
+
+class PollWindowSourceProof(Contract):
+    """Bounded proof of a completed CNInfo poll window; never a verified fact."""
+
+    proof_type: Literal["poll_window_v1"] = "poll_window_v1"
+    source_id: Annotated[Text, Field(pattern=r"^[a-z0-9_.-]{1,80}$")]
+    protocol_profile: Literal["fixture", "live"]
+    protocol_status: Literal["fixture_validated", "live_validated", "unvalidated"]
+    contract_version: Annotated[Text, Field(min_length=1, max_length=80)]
+    contract_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    scope_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    grant_ref: UUID
+    grant_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    poll_id: UUID
+    poll_ref: UUID
+    final_ref: CoverageReceiptRef
+    child_receipts: Annotated[tuple[CoverageReceiptRef, ...], Field(max_length=20)]
+    publication_window_start: datetime
+    publication_window_end: datetime
+    history_start: datetime
+    issuer_id: Annotated[Text, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
+    history_basis_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    index_watermark: datetime
+    original_watermark: datetime
+    complete_watermark: datetime
+    continuous_index_watermark: datetime | None
+    continuous_original_watermark: datetime | None
+    continuous_complete_watermark: datetime | None
+    previous_final_ref: CoverageReceiptRef | None = None
+    page_count: Annotated[int, Field(strict=True, ge=1)]
+    document_count: Annotated[int, Field(strict=True, ge=0, le=200)]
+    eligible_count: Annotated[int, Field(strict=True, ge=0, le=200)]
+    filtered_count: Annotated[int, Field(strict=True, ge=0, le=200)]
+    page_chain_root: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    document_manifest_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    observation_at: datetime
+    acquired_at: datetime
+    available_from: datetime
+    committed_at: datetime
+    last_success_at: datetime
+    health_limit_seconds: Annotated[int, Field(strict=True, gt=0, le=31_536_000)]
+    history_epoch: UUID
+    epoch_ordinal: Annotated[int, Field(strict=True, ge=1)]
+    semantic_generation: Annotated[int, Field(strict=True, ge=0)]
+    coverage_anchor: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    predecessor_snapshot_ref: CoverageReceiptRef | None
+    predecessor_snapshot_refs: Annotated[tuple[CoverageReceiptRef, ...], Field(max_length=20)]
+    predecessor_resolution: Literal["none", "resolved", "pending"]
+    predecessor_pending_ids_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+    @model_validator(mode="after")
+    def validate_poll_proof(self) -> PollWindowSourceProof:
+        for name in ("publication_window_start", "publication_window_end", "history_start",
+                     "index_watermark", "original_watermark", "complete_watermark",
+                     "continuous_index_watermark", "continuous_original_watermark",
+                     "continuous_complete_watermark",
+                     "observation_at", "acquired_at", "available_from", "committed_at",
+                     "last_success_at"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, utc_timestamp(value))
+        if self.source_id != "cninfo_szse_v1":
+            raise ValueError("poll proof source is outside the first-source contract")
+        if self.protocol_profile == "fixture" and self.protocol_status != "fixture_validated":
+            raise ValueError("fixture protocol proofs require fixture validation status")
+        if self.protocol_profile == "live" and self.protocol_status not in {"live_validated", "unvalidated"}:
+            raise ValueError("live protocol status is invalid")
+        if self.publication_window_start > self.publication_window_end:
+            raise ValueError("poll proof window is reversed")
+        if self.history_start > self.publication_window_start:
+            raise ValueError("poll proof begins before its declared history start")
+        if self.index_watermark < self.publication_window_end:
+            raise ValueError("index watermark does not cover the declared window")
+        if self.original_watermark < self.publication_window_end:
+            raise ValueError("original watermark does not cover the declared window")
+        if self.complete_watermark < self.publication_window_end:
+            raise ValueError("complete watermark does not cover the declared window")
+        if self.complete_watermark > min(self.index_watermark, self.original_watermark):
+            raise ValueError("complete watermark cannot outrun index or original watermarks")
+        if self.continuous_complete_watermark is not None and (
+            self.continuous_index_watermark is None
+            or self.continuous_original_watermark is None
+            or self.continuous_complete_watermark > min(
+                self.continuous_index_watermark, self.continuous_original_watermark,
+            )
+        ):
+            raise ValueError("continuous completion cannot outrun index or original coverage")
+        if self.eligible_count + self.filtered_count != self.document_count:
+            raise ValueError("poll proof counts are inconsistent")
+        if self.acquired_at > self.available_from or self.available_from > self.committed_at:
+            raise ValueError("poll proof visibility times are inconsistent")
+        if self.last_success_at != self.committed_at:
+            raise ValueError("poll proof last_success_at must bind its commit time")
+        for name in ("publication_window_end", "index_watermark", "original_watermark",
+                     "complete_watermark", "acquired_at", "available_from", "committed_at",
+                     "complete_watermark", "acquired_at", "available_from", "committed_at",
+                     "last_success_at"):
+            if getattr(self, name) > self.observation_at:
+                raise ValueError("poll proof cannot claim a future time")
+        if self.observation_at < self.committed_at:
+            raise ValueError("poll proof observation precedes its commit")
+        if not self.child_receipts:
+            raise ValueError("poll proof requires bounded page/document receipt references")
+        if len({(item.sequence, item.id) for item in self.child_receipts}) != len(self.child_receipts):
+            raise ValueError("poll proof child receipt references must be unique")
+        if self.final_ref in self.child_receipts:
+            raise ValueError("poll final cannot be its own child receipt")
+        return self
+
+
+CoverageSourceProof = Annotated[
+    SavedRefsSourceProof | PollWindowSourceProof,
+    Field(discriminator="proof_type"),
+]
+
+
+class SourceCoverageBindingV3(Contract):
+    listing_ref: ObjectRef
+    context: Context
+    scope_key: Annotated[Text, Field(min_length=1, max_length=200)]
+    sources: Annotated[tuple[CoverageSourceProof, ...], Field(min_length=1, max_length=16)]
+    source_policy_hash: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    observed_at: datetime
+
+    @model_validator(mode="after")
+    def validate_v3_binding(self) -> SourceCoverageBindingV3:
+        object.__setattr__(self, "observed_at", utc_timestamp(self.observed_at))
+        from investment_agent.supplemental_rules.canonical import canonical_hash
+
+        if self.listing_ref.kind != "listing" or self.listing_ref.field_path is not None:
+            raise ValueError("source binding requires an exact listing")
+        if self.scope_key != f"listing:{self.listing_ref.id}:{self.context}":
+            raise ValueError("source binding scope does not match listing/context")
+        ids = [item.entry.source_id if isinstance(item, SavedRefsSourceProof) else item.source_id
+               for item in self.sources]
+        if len(set(ids)) != len(ids):
+            raise ValueError("source ids must be unique")
+        for item in self.sources:
+            if isinstance(item, SavedRefsSourceProof):
+                entry = item.entry
+                expected = canonical_hash({"source_id": entry.source_id,
+                    "contract_version": entry.contract_version, "contract_hash": entry.contract_hash,
+                    "scope_key": self.scope_key, "listing_ref": self.listing_ref})
+                if entry.scope_hash != expected or entry.last_success_at > self.observed_at:
+                    raise ValueError("saved source proof scope/time is invalid")
+            else:
+                expected = canonical_hash({"source_id": item.source_id,
+                    "contract_version": item.contract_version, "contract_hash": item.contract_hash,
+                    "scope_key": self.scope_key, "listing_ref": self.listing_ref})
+                if item.scope_hash != expected or item.observation_at > self.observed_at:
+                    raise ValueError("poll source proof scope/time is invalid")
+        expected_hash = canonical_hash(tuple(sorted(
+            (item.entry.source_id, item.entry.contract_hash, item.entry.scope_hash)
+            if isinstance(item, SavedRefsSourceProof)
+            else (item.source_id, item.contract_hash, item.scope_hash)
+            for item in self.sources
+        )))
+        if self.source_policy_hash != expected_hash:
+            raise ValueError("source policy hash does not bind V3 source entries")
+        return self
+
+
+class RuleCoverageManifestV3(RuleCoverageManifest):
+    """V3 source proof manifest; V1/V2 persisted hash domains remain unchanged."""
+
+    schema_version: Literal[3] = 3  # type: ignore[assignment]
+    source_coverage_binding: SourceCoverageBindingV3
+
+    @model_validator(mode="after")
+    def validate_v3_binding(self) -> RuleCoverageManifestV3:
+        if self.source_coverage_binding.listing_ref != self.listing_ref:
+            raise ValueError("source binding scope must match coverage listing")
+        return self
+
+
+RuleCoverage = RuleCoverageManifest | RuleCoverageManifestV2 | RuleCoverageManifestV3
+
+
+def parse_rule_coverage_manifest(payload: dict[str, Any]) -> RuleCoverage:
+    """Parse coverage by the persisted schema discriminator, never by defaults."""
+
+    version = payload.get("schema_version")
+    if type(version) is int and version == 1:
+        return RuleCoverageManifest.model_validate(payload)
+    if type(version) is int and version == 2:
+        return RuleCoverageManifestV2.model_validate(payload)
+    if type(version) is int and version == 3:
+        return RuleCoverageManifestV3.model_validate(payload)
+    raise ValueError(f"unsupported rule coverage schema_version {version!r}")
 
 
 MetricCondition.model_rebuild()

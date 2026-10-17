@@ -281,3 +281,54 @@ async def metrics(session: AsyncSession, *, now: datetime | None = None) -> dict
             "oldest_wait_seconds": max(0, (at - min(times)).total_seconds()) if times else 0,
         }
     return result
+
+
+async def supplemental_update_metrics(session: AsyncSession) -> dict[str, Any]:
+    """Local P4 operating state; source health is separate from task success."""
+    from sqlalchemy import func
+
+    from investment_agent.storage.models.supplemental_updates import (
+        SupplementalChangeReceiptRow,
+        SupplementalRefreshStateRow,
+        SupplementalSourceStateRow,
+    )
+    from investment_agent.supplemental_rules.disclosure_views import disclosure_metrics
+    now = datetime.now(UTC)
+    refresh = SupplementalRefreshStateRow
+    source = SupplementalSourceStateRow
+    root = SupplementalChangeReceiptRow
+    queue = dict((await session.execute(select(PipelineRun.status, func.count()).where(
+        PipelineRun.kind == "supplemental_update_process").group_by(PipelineRun.status))).tuples().all())
+    coverage = dict((await session.execute(select(source.coverage_state, func.count()).where(
+        source.owner_id == "local_owner", source.listing_id.is_not(None),
+        source.context.is_not(None)).group_by(source.coverage_state))).tuples().all())
+    oldest = await session.scalar(select(func.min(PipelineRun.started_at)).where(
+        PipelineRun.kind == "supplemental_update_process", PipelineRun.status.in_(("queued", "running"))))
+    maintenance = list(await session.scalars(select(source).where(
+        source.owner_id == "local_owner", source.listing_id.is_(None),
+    ).order_by(source.feed_id, source.scope_key).limit(101)))
+    return {"queue_states": queue, "source_coverages": coverage,
+            "source_stale_count": await session.scalar(select(func.count()).select_from(source).where(
+                source.owner_id == "local_owner", source.listing_id.is_not(None), source.context.is_not(None),
+                or_(source.last_success_at.is_(None), source.health_limit_seconds <= 0,
+                    (func.julianday(now) - func.julianday(source.last_success_at)) * 86400 >= source.health_limit_seconds))),
+            "declared_source_count": sum(coverage.values()),
+            "overdue_scopes": await session.scalar(select(func.count()).select_from(refresh).where(
+                refresh.owner_id == "local_owner", refresh.next_due_at <= now)),
+            "blocked_scopes": await session.scalar(select(func.count()).select_from(refresh).where(
+                refresh.owner_id == "local_owner", refresh.blocked_reason.is_not(None))),
+            "receipt_high_watermark": await session.scalar(select(func.max(root.sequence)).where(root.owner_id == "local_owner")),
+            "maintenance_feeds": [{"feed_id": row.feed_id, "scope_key": row.scope_key,
+                "state": row.coverage_state, "last_attempt_at": row.last_attempt_at,
+                "failure_code": row.failure_code,
+                "next_due_at": row.payload.get("next_due_at"),
+                "scan_truncated": row.payload.get("source_scan_truncated", row.payload.get("scan_truncated")),
+                "blocked_reason": row.payload.get("blocked_reason"),
+                "capacity_blocked": row.payload.get("capacity_blocked", False),
+                "initial_complete": row.payload.get("initial_complete")}
+                for row in maintenance[:100]],
+            "maintenance_feeds_truncated": len(maintenance) > 100,
+            "oldest_pending_at": oldest, "observed_at": now,
+            "source_coverage_notice": "仅统计声明范围；未采集到不表示没有风险。",
+            "online_polling": "bounded_cninfo_protocol_unvalidated",
+            "disclosure_polling": await disclosure_metrics(session)}

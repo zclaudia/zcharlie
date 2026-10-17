@@ -32,7 +32,7 @@ async def _valid_package(tmp_path: Path) -> tuple[Path, Path]:
             await connection.run_sync(Base.metadata.create_all)
         with sqlite3.connect(database) as connection:
             connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-            connection.execute("INSERT INTO alembic_version VALUES ('052')")
+            connection.execute("INSERT INTO alembic_version VALUES ('054')")
         async with session_scope() as session:
             setup = await initialize_pilot(session, identities)
             report = await import_reviewed_annual(
@@ -62,7 +62,13 @@ def _copy_package(tmp_path: Path, source: tuple[Path, Path]) -> tuple[Path, Path
     target_db = tmp_path / "copy.db"
     target_data = tmp_path / "copy-data"
     tmp_path.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(database, target_db)
+    # SQLite's authoritative committed rows may still reside in WAL while a
+    # read connection is alive. Copy a consistent database snapshot, not only
+    # the main file (adding P4 tables changed the page/checkpoint threshold).
+    from contextlib import closing
+    with (closing(sqlite3.connect(database)) as source_connection,
+          closing(sqlite3.connect(target_db)) as target_connection):
+        source_connection.backup(target_connection)
     shutil.copytree(data_dir, target_data)
     with sqlite3.connect(target_db) as connection:
         triggers = connection.execute(

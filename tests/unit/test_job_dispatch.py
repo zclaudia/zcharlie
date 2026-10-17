@@ -140,6 +140,8 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "portfolio_valuation",
         "account_fit_evaluate",
         "supplemental_rule_evaluate",
+        "supplemental_update_process",
+        "supplemental_disclosure_poll",
         "candidate_rank",
         "zone_detection",
         "industry_peer_collect",

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "scope_identity": ["owner_id", "listing_id", "context"],
+  "limits": {"maintenance_page": 50, "maintenance_page_max": 100, "pair_count": 2000, "manifest_bytes": 4194304, "source_bindings": 16},
+  "flags_default": {"supplemental_updates_enabled": false, "supplemental_disclosure_polling_enabled": false},
+  "controlled_import": {"source_id": "controlled_local_v1", "coverage": "explicit_saved_refs", "health_limit_seconds": 86400, "verification_promotion": false},
+  "unknown_effects": {"paid_request": "manual_reconciliation", "notification_ack": "stop_without_receiver_idempotency", "source_failure": "retain_prior_issues"},
+  "out_of_scope": ["online_polling", "automatic_trade", "task_cutoff_extension", "production_enablement"]
+}

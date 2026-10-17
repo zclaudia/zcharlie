@@ -18,6 +18,28 @@ const refText = (ref) => ref ? String(ref.kind) + ":" + String(ref.id) + (ref.re
 // Mirror of investor/enums.py REASON_LABELS; codes may carry ":<identity>"
 // suffixes, so display matches the head before the first colon.
 const reasonLabels = {
+  completed: "已完成",
+  running: "处理中",
+  blocked: "等待授权或补充条件",
+  stopped: "已停止",
+  no_material_change_or_irrelevant_context: "本次未发现需要新增研究的变化",
+  p2_run_verified_success: "本地规则复核已完成",
+  no_active_investor_case: "尚无有效跟踪案例",
+  research_required_no_case: "缺少正式研究案例，等待人工处理",
+  needs_manual: "需要人工核对未完成成员",
+  scope_unknown: "受影响主体范围尚未核实",
+  background_disabled: "后台研究未获启用授权",
+  feature_disabled: "研究功能当前关闭",
+  background_budget_unavailable: "后台研究预算尚未明确",
+  background_price_unavailable: "研究计费价格尚未核实",
+  budget_exhausted: "研究预算已用尽",
+  usage_unknown_reconciliation_required: "存在费用未知请求，等待对账",
+  scope_revoked: "研究范围授权已撤销",
+  saved_source_incomplete: "已保存来源不完整或存在冲突",
+  supplemental_updates_disabled: "自动本地更新当前关闭",
+  source_coverage_unknown: "来源覆盖尚未核实",
+  source_coverage_stale: "来源复核已过期",
+  source_coverage_incomplete: "来源覆盖不完整",
   rule_binding_missing: "无研究规则绑定（结论早于规则体系）",
   rule_coverage_unpublished: "规则覆盖尚未随结论发布",
   rule_coverage_binding_missing: "覆盖清单缺少原始规则绑定",
@@ -321,10 +343,109 @@ async function loadRuleCoverage(target, listingId) {
   }
 }
 
+export function renderUpdateScope(target, view) {
+  target.replaceChildren();
+  target.append(node("h3", "持续更新与复核"));
+  target.append(node("p", view.enabled ? "自动本地复核已允许；研究仍须独立授权。" : "持续更新当前关闭；以下为既有只读状态。", "supplemental-muted"));
+  const statuses = {not_assessed: "尚未检查", checked: "已检查本地输入", blocked: "等待处理", running: "处理中", queued: "已排队", failed: "处理失败", partial: "部分完成", success: "批次完成", stale: "已过期", complete: "声明输入已检查", unknown: "未知"};
+  target.append(node("p", "处理状态：" + (statuses[view.state] || view.state || "未知") + " · 待处理成员：" + (view.pending_count == null ? "未知" : view.pending_count)));
+  if (view.research_state && view.research_state !== "not_assessed") target.append(node("p", "研究交接：" + reasonLabel(view.research_state) + (view.research_pending_reason ? " · " + reasonLabel(view.research_pending_reason) : ""), "supplemental-muted"));
+  if (view.blocked_reason) target.append(node("p", "待处理原因：" + reasonLabel(view.blocked_reason), "unknown-copy"));
+  target.append(node("p", "最后成功：" + (view.last_success_at || "尚无成功记录") + " · 下次复核：" + (view.next_due_at || "尚未确定") + (view.overdue ? "（已到期）" : ""), "supplemental-muted"));
+  if (view.active_run_id) target.append(node("p", "批次 " + view.active_run_id + " · 尝试 " + (view.attempt_count ?? "未知")));
+  if (view.oldest_pending_at) target.append(node("p", "最早积压：" + view.oldest_pending_at, "unknown-copy"));
+  if (!view.sources?.length) target.append(node("p", "来源覆盖：尚未声明或尚未检查；不能据此判断没有风险。", "unknown-copy"));
+  for (const source of view.sources || []) {
+    const item = node("article", null, "supplemental-item");
+    item.append(node("h4", "来源 " + source.source_id));
+    const isPoll = source.source_id === "cninfo_szse_v1";
+    item.append(node("p", "覆盖：" + (statuses[source.current_status] || source.current_status || "未知")
+      + " · 范围：" + (isPoll ? "指定发行人和有限公告窗口；不代表站点无遗漏" : "仅本次声明的已保存资料")));
+    item.append(node("p", "最后尝试：" + (source.last_attempt_at || "尚无") + " · 最后成功：" + (source.last_success_at || "尚无"), "supplemental-muted"));
+    item.append(node("p", "完整水位：" + (source.complete_watermark || "未知"), "supplemental-muted"));
+    if (isPoll) {
+      item.append(node("p", "索引水位：" + (source.index_watermark || "未知")
+        + " · 原件水位：" + (source.original_watermark || "未知")
+        + " · 待桥接：" + (source.bridge_pending == null ? "未知" : source.bridge_pending), "supplemental-muted"));
+      item.append(node("p", "窗口：" + (source.window_start || "未知") + " 至 " + (source.window_end || "未知")
+        + " · 历史起点：" + (source.history_start || "未知"), "supplemental-muted"));
+      const scheduleStatuses = {
+        not_scheduled: "尚未排期", scheduled: "已排期", disabled: "已停用",
+        blocked: "受阻", unknown: "未知",
+      };
+      const lanes = {
+        recent: "近期复查", backfill: "历史补查", deep_sweep: "深度复查", unknown: "未知",
+      };
+      item.append(node("p", "调度状态：" + (scheduleStatuses[source.schedule_status] || "未知")
+        + " · 当前通道：" + (lanes[source.schedule_active_lane] || "未知")
+        + " · 下个通道：" + (lanes[source.schedule_next_lane] || "未知"), "supplemental-muted"));
+      item.append(node("p", "下次轮询：" + (source.next_poll_at || "未知")
+        + " · 历史补查起点：" + (source.backfill_after || "未知")
+        + " · 近期已查至：" + (source.recent_checked_end || "未知"), "supplemental-muted"));
+      const historyGap = source.history_gap === true
+        ? "存在历史缺口"
+        : source.history_gap === false ? "未报告历史缺口" : "未知";
+      item.append(node("p", "授权历史终点：" + (source.authorized_history_end || "未知")
+        + " · 连续历史前沿：" + (source.history_frontier || "未知")
+        + " · 历史状态：" + historyGap, source.history_gap === true ? "unknown-copy" : "supplemental-muted"));
+      const predecessor = source.pending_predecessor === true
+        ? "存在待处理前序"
+        : source.pending_predecessor === false ? "无待处理前序" : "未知";
+      item.append(node("p", "前序采集状态：" + predecessor,
+        source.pending_predecessor === true ? "unknown-copy" : "supplemental-muted"));
+      const progress = source.poll_progress;
+      if (progress && typeof progress === "object") {
+        const stages = {
+          queued: "已排队", preparing: "准备中", directory: "检查发行人目录",
+          indexing: "读取公告索引", fetching: "获取公告原件", verifying: "复核公告索引",
+          sealing: "封存采集证明", completed: "本轮完成", partial: "部分完成",
+          retry_wait: "等待重试", blocked: "受阻", unknown: "未知",
+          query: "读取公告索引", fetch: "获取公告原件", verify_query: "复核公告索引",
+          bridge: "封存原件引用", finalize: "封存采集证明",
+        };
+        const progressStage = source.poll_state === "completed" ? "completed" : progress.stage;
+        const count = (value) => value == null ? "未知" : String(value);
+        item.append(node("p", "本轮进度：" + (stages[progressStage] || "未知")
+          + " · 已读索引页 " + count(progress.indexed_pages)
+          + " · 已封存页 " + count(progress.sealed_pages)
+          + " · 已完成文档 " + count(progress.documents_completed)
+          + " · 待补原件 " + count(progress.pending_originals), "supplemental-muted"));
+      }
+      item.append(node("p", "深度回看下次时点：" + (source.deep_sweep_next_at || "未知"), "supplemental-muted"));
+      if (source.schedule_blocked_reason) {
+        item.append(node("p", "调度受阻原因：" + reasonLabel(source.schedule_blocked_reason), "unknown-copy"));
+      }
+      if (source.protocol_status && source.protocol_status !== "live_validated") {
+        item.append(node("p", "来源协议门禁：尚未通过真实来源验证（" + source.protocol_status + "）", "unknown-copy"));
+      }
+      if (source.grant_status) item.append(node("p", "后台来源授权：" + source.grant_status, "supplemental-muted"));
+      if (source.remaining_http != null || source.remaining_bytes != null) {
+        item.append(node("p", "剩余额度：HTTP " + (source.remaining_http == null ? "未知" : source.remaining_http)
+          + " · 字节 " + (source.remaining_bytes == null ? "未知" : source.remaining_bytes), "supplemental-muted"));
+      }
+      if (source.retry_at) item.append(node("p", "下次可重试：" + source.retry_at, "supplemental-muted"));
+    }
+    if (source.failure_code) item.append(node("p", "来源失败原因：" + reasonLabel(source.failure_code), "unknown-copy"));
+    target.append(item);
+  }
+  target.append(node("p", "没有采集到不表示没有风险；本地输入覆盖不代表全网覆盖。", "unknown-copy"));
+}
+
+async function loadUpdateScope(target, listingId, context) {
+  try {
+    const view = await get("/supplemental-updates/scopes/" + encodeURIComponent(listingId) + "?context=" + encodeURIComponent(context));
+    if (Number(target.closest("#supplemental-items-root")?.dataset.listingId) !== view.listing_id) return;
+    renderUpdateScope(target, view);
+  } catch (error) {
+    target.replaceChildren(node("p", "持续更新状态读取失败；当前来源覆盖未知。", "unknown-copy"));
+  }
+}
+
 export async function bootSupplementalItems(root = document.querySelector("#supplemental-items-root")) {
   if (!root) return;
   const target = root.querySelector("#supplemental-items-content");
   const coverageTarget = root.querySelector("#supplemental-coverage-content");
+  const updateTarget = root.querySelector("#supplemental-update-content");
   const listingId = Number(root.dataset.listingId);
   const context = root.dataset.context || "company_research";
   if (!Number.isInteger(listingId) || listingId < 1) {
@@ -333,6 +454,7 @@ export async function bootSupplementalItems(root = document.querySelector("#supp
     return;
   }
   if (coverageTarget) loadRuleCoverage(coverageTarget, listingId);
+  if (updateTarget) loadUpdateScope(updateTarget, listingId, context);
   const cursors = [null];
   let pageIndex = 0;
   const limit = 100;

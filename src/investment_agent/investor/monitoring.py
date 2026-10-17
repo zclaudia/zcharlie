@@ -19,15 +19,17 @@ from investment_agent.agent.execution import (
     admit,
     cost_limits,
     live_policy,
+    purpose_limit,
 )
 from investment_agent.agent.research import registrations
 from investment_agent.agent.tasks import TERMINAL, TaskService
 from investment_agent.config import Settings
-from investment_agent.investor.common import ObjectRef, utc_timestamp
+from investment_agent.investor.common import ObjectRef, OwnerId, utc_timestamp
 from investment_agent.investor.contracts import Case, MonitorSpec, ReviewEvent
 from investment_agent.investor.controls import UserControlService
 from investment_agent.investor.foundations import InvestorError, InvestorService
 from investment_agent.investor.publication import PublicationService
+from investment_agent.settings.loader import load_settings
 from investment_agent.storage.models.agent import AgentTask
 from investment_agent.storage.models.investor import InvestorCase
 from investment_agent.storage.models.monitoring import (
@@ -37,6 +39,11 @@ from investment_agent.storage.models.monitoring import (
 )
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot
 from investment_agent.storage.models.publication import PublicationOutbox
+from investment_agent.storage.models.supplemental_updates import SupplementalChangeReceiptRow
+from investment_agent.storage.repositories.supplemental_updates import (
+    SupplementalUpdatesRepository,
+    update_digest,
+)
 
 ACTIVE = ("pending", "running", "blocked")
 
@@ -159,14 +166,22 @@ class MonitoringService:
             return None
         mandate = await InvestorService(self.session).get_mandate("local_owner")
         refs = (case.listing_ref, ObjectRef(kind="case", id=case.id, revision=case.revision))
+        if interactive and cycle.payload.get("supplemental_update_batch_id"):
+            raise ExecutionDeniedError("supplemental_update_review_requires_background")
         grant = ExecutionGrant(mode="interactive" if interactive else "background",
             source="authenticated_message" if interactive else "authorized_background",
             prompt="复核观点。旧观点、触发原因与确切来源收据：" + repr(cycle.payload),
             tool_names=tuple(r.name for r in registrations()) + ("publish_recommendation", "extend_recommendation"),
-            scope_refs=refs, mandate_id=mandate.id, current_research=True, research_kind="review", purpose="review")
+            scope_refs=refs, mandate_id=mandate.id, current_research=True, research_kind="review", purpose="review",
+            supplemental_update_batch_id=(UUID(cycle.payload["supplemental_update_batch_id"])
+                if cycle.payload.get("supplemental_update_batch_id") else None),
+            supplemental_update_batch_hash=cycle.payload.get("supplemental_update_batch_hash"))
         try:
             settings = await live_policy(self.session, grant, self.base)
-            await cost_limits(self.session, grant)
+            task_cap, daily_cap = await cost_limits(self.session, grant)
+            purpose_cap = await purpose_limit(self.session, grant)
+            if not interactive and any(cap == 0 for cap in (task_cap, daily_cap, purpose_cap)):
+                raise ExecutionDeniedError("review_budget_exhausted")
             if not interactive and BudgetService.prices(settings) == (None, None):
                 raise ExecutionDeniedError("background_price_unavailable")
             now = datetime.now(UTC)
@@ -181,6 +196,136 @@ class MonitoringService:
         cycle.payload = {**cycle.payload, "attempted": True, "started_at": now.isoformat(), "consumed_events": list(cycle.payload["events"]), "pending_reason": None}
         await self.session.flush()
         return task
+
+    async def dispatch_update_scope(
+        self, *, listing_id: int, context: str, member_sequences: list[int],
+        source_manifest_hash: str,
+    ) -> dict[str, Any] | None:
+        """Bind successful local update members to one authorized review cycle."""
+        if not member_sequences:
+            return None
+        effective = await load_settings(self.session, base=self.base)
+        if not effective.supplemental_rules_enabled or not getattr(
+            effective, "supplemental_updates_enabled", False
+        ):
+            return {"state": "paused", "reason": "supplemental_updates_disabled"}
+        case_row = await self.session.scalar(select(InvestorCase).where(
+            InvestorCase.owner_id == "local_owner",
+            InvestorCase.listing_id == listing_id,
+            InvestorCase.payload["status"].as_string() != "archived",
+        ).order_by(InvestorCase.id).limit(1))
+        if case_row is None:
+            return {"state": "research_required_no_case"}
+        await self.publication._reserve(UUID(case_row.id))
+        case = Case.model_validate(case_row.payload)
+        now = datetime.now(UTC)
+        members = []
+        for sequence in sorted(set(member_sequences)):
+            member = await SupplementalUpdatesRepository(self.session).get_change(
+                "local_owner", sequence
+            )
+            if member is None or member.kind != "scope_member" or member.listing_id != listing_id or member.context != context:
+                raise InvestorError("invalid_reference", "P4 scope member unavailable")
+            members.append(member)
+        if any(member.sequence == 0 for member in members):
+            raise InvestorError("invalid_reference", "P4 scope member sequence unavailable")
+        member_manifest_hashes: dict[str, str] = {}
+        for member in members:
+            outcome = await SupplementalUpdatesRepository(self.session).get_latest_member_outcome(
+                "local_owner", member.sequence,
+            )
+            manifest_hash = outcome.source_manifest_hash if outcome is not None else None
+            if (
+                outcome is None or outcome.payload.get("state") not in {
+                    "completed", "research_required_no_case",
+                } or not isinstance(manifest_hash, str)
+            ):
+                raise InvestorError("invalid_reference", "P4 member has no verified P2 result")
+            member_manifest_hashes[str(member.sequence)] = manifest_hash
+        active_cycle = await self.session.scalar(select(ReviewCycle).where(
+            ReviewCycle.case_id == str(case.id), ReviewCycle.state.in_(ACTIVE),
+        ).order_by(ReviewCycle.id).limit(1))
+        if active_cycle is not None and active_cycle.task_id:
+            known_sequences = set(active_cycle.payload.get(
+                "supplemental_update_member_sequences", []
+            )) | set(active_cycle.payload.get("dirty_update_member_sequences", []))
+            members = [member for member in members if member.sequence not in known_sequences]
+            if not members:
+                return {"state": active_cycle.state, "cycle_id": active_cycle.id,
+                        "task_id": active_cycle.task_id,
+                        "batch_id": active_cycle.payload.get("supplemental_update_batch_id")}
+        batch_key = "p4:review:" + update_digest({
+            "case_id": str(case.id), "listing_id": listing_id, "context": context,
+            "members": [member.sequence for member in members],
+            "source_manifest_hashes": member_manifest_hashes,
+        })
+        existing_row = await self.session.scalar(select(SupplementalChangeReceiptRow).where(
+            SupplementalChangeReceiptRow.owner_id == "local_owner",
+            SupplementalChangeReceiptRow.kind == "scope_handoff",
+            SupplementalChangeReceiptRow.change_key == batch_key,
+        ))
+        if existing_row is not None:
+            batch = await SupplementalUpdatesRepository(self.session).get_change(
+                "local_owner", existing_row.id,
+            )
+            prior_cycle_id = batch.payload.get("cycle_id") if batch else None
+            prior_cycle = await self.session.get(ReviewCycle, prior_cycle_id) if isinstance(
+                prior_cycle_id, str
+            ) else None
+            if prior_cycle is None:
+                raise InvestorError("invalid_reference", "supplemental_update_batch_cycle_unavailable")
+            if (
+                prior_cycle.state == "blocked"
+                and prior_cycle.task_id is None
+                and prior_cycle.payload.get("attempted") is not True
+            ):
+                # Authorization/price/budget denial happened before task admission.
+                # Recheck the same immutable batch under current live policy; no
+                # task or paid attempt is revived because none was created.
+                prior_cycle.state = "pending"
+                await self.session.flush()
+                task = await self.dispatch(prior_cycle)
+                return {"state": prior_cycle.state, "cycle_id": prior_cycle.id,
+                        "task_id": str(task.id) if task else None,
+                        "batch_id": str(existing_row.id)}
+            return {"state": prior_cycle.state, "cycle_id": prior_cycle.id,
+                    "task_id": prior_cycle.task_id, "batch_id": str(existing_row.id)}
+        event_key = batch_key
+        cycle = await self._merge(case, event_key, ["supplemental_update"], [
+            {"kind": "supplemental_update", "member_sequence": member.sequence,
+             "source_sequence": member.parent_sequence, "payload_hash": member.payload_hash}
+            for member in members
+        ], now)
+        if cycle.task_id:
+            existing = list(cycle.payload.get("dirty_update_member_sequences", []))
+            dirty_keys = list(cycle.payload.get("dirty_update_event_keys", []))
+            cycle.payload = {**cycle.payload, "dirty_update_member_sequences": sorted(
+                set(existing) | {member.sequence for member in members
+                                 if member.sequence not in set(cycle.payload.get(
+                                     "supplemental_update_member_sequences", []
+                                 ))}
+            ), "dirty_update_event_keys": sorted(set(dirty_keys) | {event_key})}
+            await self.session.flush()
+            return {"state": "running", "cycle_id": cycle.id, "task_id": cycle.task_id}
+        batch = await SupplementalUpdatesRepository(self.session).append_change(
+            "local_owner", change_key=batch_key, kind="scope_handoff",
+            parent_sequence=members[0].parent_sequence,
+            listing_id=listing_id, context=context,
+            source_manifest_hash=source_manifest_hash,
+            payload={"purpose": "investor_review", "cycle_id": cycle.id,
+                     "listing_id": listing_id, "context": context,
+                     "member_sequences": [member.sequence for member in members],
+                     "source_manifest_hash": source_manifest_hash,
+                     "member_source_manifest_hashes": member_manifest_hashes},
+        )
+        cycle.payload = {**cycle.payload,
+                         "supplemental_update_member_sequences": [member.sequence for member in members],
+                         "supplemental_update_batch_id": str(batch.id),
+                         "supplemental_update_batch_hash": batch.payload_hash}
+        task = await self.dispatch(cycle)
+        return {"state": cycle.state, "cycle_id": cycle.id,
+                "task_id": str(task.id) if task else None,
+                "batch_id": str(batch.id)}
 
     async def manual(self, case_id: UUID, key: UUID, *, expected_revision: int, reason: str = "手动复核") -> dict[str, Any]:
         await self.publication._reserve(case_id)
@@ -246,16 +391,53 @@ class MonitoringService:
             elif recommendations or any(r.result != "maintain" or r.reasoning_revision for r in reviews):
                 await self._notification(cycle, category="major_change", stage="reviewed", now=now)
             dirty = cycle.payload["dirty"]
+            dirty_update_sequences = cycle.payload.get("dirty_update_member_sequences", [])
+            if usable and isinstance(dirty_update_sequences, list) and dirty_update_sequences:
+                from investment_agent.storage.repositories.supplemental_updates import (
+                    SupplementalUpdatesRepository,
+                )
+
+                update_repo = SupplementalUpdatesRepository(self.session)
+                local_owner: OwnerId = "local_owner"
+                groups: dict[tuple[int, str], list[int]] = {}
+                for sequence in sorted(set(
+                    int(value) for value in dirty_update_sequences if isinstance(value, int)
+                )):
+                    member = await update_repo.get_change(local_owner, sequence)
+                    if member is None or member.kind != "scope_member" or member.listing_id is None or member.context is None:
+                        continue
+                    latest = await update_repo.get_latest_member_outcome(local_owner, sequence)
+                    if latest is None or latest.payload.get("state") not in {
+                        "completed", "research_required_no_case",
+                    }:
+                        continue
+                    groups.setdefault((member.listing_id, member.context), []).append(sequence)
+                for (listing_id, context), sequences in groups.items():
+                    proven_hashes = {
+                        str(sequence): outcome.source_manifest_hash
+                        for sequence in sequences
+                        if (outcome := await update_repo.get_latest_member_outcome(
+                            local_owner, sequence
+                        )) is not None
+                        and outcome.payload.get("state") == "completed"
+                        and outcome.source_manifest_hash is not None
+                    }
+                    await self.dispatch_update_scope(
+                        listing_id=listing_id, context=context,
+                        member_sequences=sequences,
+                        source_manifest_hash=update_digest(proven_hashes),
+                    )
             if usable and dirty:
                 case = await InvestorService(self.session).get_case("local_owner", UUID(cycle.case_id))
-                # Latest unresolved changes only; consumed original batch stays
-                # in history. Failure/cancellation never auto-starts more costs.
+                p4_event_keys = set(cycle.payload.get("dirty_update_event_keys", []))
+                generic_dirty = [item for item in dirty if item not in p4_event_keys]
                 if case.current_recommendation_ref:
                     current = await self.publication.get_recommendation(case.current_recommendation_ref, at=now)
                     reasons = [r for r in current.limitation_reasons if r not in {"review_required", "expired"} and not r.startswith("monitor_change:")]
                     if reasons:
-                        await self._merge(case, dirty[-1], reasons, cycle.payload["source_refs"], now)
-                pending_questions = {event: question for event, question in cycle.payload.get("questions", {}).items() if event in dirty}
+                        for dirty_event in generic_dirty:
+                            await self._merge(case, dirty_event, reasons, cycle.payload["source_refs"], now)
+                pending_questions = {event: question for event, question in cycle.payload.get("questions", {}).items() if event in generic_dirty}
                 if pending_questions and case.status != "archived":
                     followup = await self._merge(case, next(iter(pending_questions)), [], [], now)
                     followup.payload = {**followup.payload, "questions": pending_questions, "interactive_requested": True}

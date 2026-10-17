@@ -530,7 +530,10 @@ class PublicationService:
             )
         return RuleReviewContext(binding_ref=binding.reference, admission_as_of=binding.admission_as_of, manifest=manifest)
 
-    async def _rule_coverage_limits(self, manifest: Any, at: datetime | None = None) -> list[str]:
+    async def _rule_coverage_limits(
+        self, manifest: Any, at: datetime | None = None, *, lock_source_state: bool = False,
+        check_source_state: bool = True,
+    ) -> list[str]:
         """Current rule restrictions of one coverage manifest (bounded re-scan).
 
         The shared predicate runs through the storage repository (the single
@@ -539,7 +542,8 @@ class PublicationService:
         """
 
         return list(await InvestmentAssessmentRepository(self.session).published_rule_coverage_limits(
-            "local_owner", manifest, now=at
+            "local_owner", manifest, now=at, lock_source_state=lock_source_state,
+            check_source_state=check_source_state,
         ))
 
     async def _commit_rule_closures(self, session: AsyncSession, rule_context: RuleReviewContext, semantic: SemanticReview, review_ref: ObjectRef, operation: UUID, now: datetime) -> tuple[ObjectRef, ...]:
@@ -635,6 +639,7 @@ class PublicationService:
                 except (ExecutionDeniedError, InvestorError, ValueError, LookupError) as exc:
                     fields = {**check.field_errors, "method_steps": str(exc)}
                     check = check.model_copy(update={"field_errors": fields, "failures": tuple(fields), "passed": ()})
+            case = await self.foundation.get_case("local_owner", candidate.thesis.case_ref.id)  # type: ignore[arg-type]
             rule_limits: list[str] = []
             current_limits = await self._dependency_limits(candidate.recommendation, datetime.now(UTC))
             if rule_context is not None:
@@ -646,20 +651,34 @@ class PublicationService:
                 if not effective.supplemental_rules_enabled:
                     rule_limits.append("supplemental_rules_disabled_with_rule_binding")
                 if rule_context.manifest is not None:
-                    rule_limits.extend(await self._rule_coverage_limits(rule_context.manifest))
+                    rule_limits.extend(await self._rule_coverage_limits(
+                        rule_context.manifest, lock_source_state=True,
+                        check_source_state=self._directional(candidate.recommendation),
+                    ))
+                elif self._directional(candidate.recommendation):
+                    rule_limits.extend(await InvestmentAssessmentRepository(session).declared_source_coverage_limits(
+                        "local_owner", int(case.listing_ref.id), "company_research",
+                        lock_source_state=True,
+                    ))
+            elif self._directional(candidate.recommendation):
+                rule_limits.extend(await InvestmentAssessmentRepository(session).declared_source_coverage_limits(
+                    "local_owner", int(case.listing_ref.id), "company_research",
+                    lock_source_state=True,
+                ))
             current_limits.extend(rule_limits)
             if current_limits:
                 field_errors = {**check.field_errors, "dependency_refs.current": "; ".join(current_limits)}
                 check = check.model_copy(update={"field_errors": field_errors, "failures": tuple(field_errors), "passed": ()})
-            case = await self.foundation.get_case("local_owner", candidate.thesis.case_ref.id)  # type: ignore[arg-type]
-
             now = datetime.now(UTC)
             review = semantic.model_copy(update={"id": uuid4(), "revision": 1, "actor": "research_service", "created_at": now, "origin_ref": ObjectRef(kind="task", id=claim.task_id, revision=1)})
             review_ref = self._save(case.id, "review", review)
             check = check.model_copy(update={"semantic_review_ref": review_ref})
             closure_refs: tuple[ObjectRef, ...] = ()
-            if rule_context is not None and rule_context.manifest is not None and any(
-                item.disposition == "resolved_with_closure" for item in semantic.rule_reviews
+            if (
+                not check.failures
+                and rule_context is not None
+                and rule_context.manifest is not None
+                and any(item.disposition == "resolved_with_closure" for item in semantic.rule_reviews)
             ):
                 try:
                     async with session.begin_nested():
@@ -707,10 +726,6 @@ class PublicationService:
                 })
             recommendation_ref = self._save(case.id, "recommendation", recommendation)
             if rule_context is not None and rule_context.manifest is not None:
-                from investment_agent.storage.repositories.investment_assessment import (
-                    InvestmentAssessmentRepository,
-                )
-
                 await InvestmentAssessmentRepository(session).save_published_rule_coverage(
                     "local_owner",
                     prepared=rule_context.manifest,

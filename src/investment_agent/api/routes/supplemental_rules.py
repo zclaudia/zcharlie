@@ -49,7 +49,7 @@ from investment_agent.supplemental_rules.contracts import (
     EvaluationRequest,
     MutationReceipt,
     ResearchEvent,
-    RuleCoverageManifest,
+    RuleCoverage,
 )
 from investment_agent.supplemental_rules.events import SupplementalEventService
 from investment_agent.supplemental_rules.lifecycle import SupplementalRuleLifecycle
@@ -543,13 +543,14 @@ async def current_rule_coverage(
         state=state.state,
         reasons=state.reasons,
         manifest=state.manifest,
+        update_source_binding=getattr(state.manifest, "update_source_binding", None),
         binding=state.binding,
         current_limits=limits,
         observed_at=datetime.now(UTC),
     )
 
 
-def _coverage_cursor(manifest: RuleCoverageManifest, after_ordinal: int) -> str:
+def _coverage_cursor(manifest: RuleCoverage, after_ordinal: int) -> str:
     """Encode one entry page bound to the manifest's immutable identity."""
 
     encoded = json.dumps(
@@ -565,7 +566,7 @@ def _coverage_cursor(manifest: RuleCoverageManifest, after_ordinal: int) -> str:
     return base64.urlsafe_b64encode(encoded.encode()).decode().rstrip("=")
 
 
-def _coverage_cursor_offset(cursor: str | None, manifest: RuleCoverageManifest) -> int:
+def _coverage_cursor_offset(cursor: str | None, manifest: RuleCoverage) -> int:
     """Decode a page cursor or reject one that names another coverage/ordinal."""
 
     if not cursor:
@@ -662,6 +663,7 @@ async def exact_rule_coverage(
         recommendation_ref=manifest.recommendation_ref,
         limits_recheck=manifest.limits_recheck,
         current_limits=limits,
+        update_source_binding=getattr(manifest, "update_source_binding", None),
     )
 
 

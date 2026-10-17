@@ -217,8 +217,12 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
         from investment_agent.storage.repositories.investment_assessment import (
             InvestmentAssessmentRepository,
         )
+        from investment_agent.storage.repositories.supplemental_updates import (
+            SupplementalUpdatesRepository,
+        )
         from investment_agent.supplemental_rules.coverage import (
             build_prepared_manifest,
+            build_update_source_binding,
             coverage_complete,
             coverage_limitations,
             ensure_binding_evaluation,
@@ -226,19 +230,68 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
         )
 
         await ensure_binding_evaluation(session, binding=binding, listing_ref=case.listing_ref)
+        source_repo = SupplementalUpdatesRepository(session)
+        source_states = await source_repo.list_sources(
+            grant.owner, int(case.listing_ref.id), "company_research"
+        )
+        source_binding = await build_update_source_binding(
+            session, owner=grant.owner, listing_ref=case.listing_ref,
+            context="company_research", observed_at=now, knowledge_cutoff=cutoff,
+        )
         manifest = await build_prepared_manifest(
             session, binding=binding, case_ref=business.case_ref, listing_ref=case.listing_ref,
             cutoff=cutoff, closure_proposals=business.closure_proposals,
             material_set_hash=material_hash,
+            update_source_binding=source_binding,
         )
         saved = await InvestmentAssessmentRepository(session).save_rule_coverage(grant.owner, manifest)
         summaries.extend(rule_summary_entries(saved))
+        source_summary = None
+        if source_states and source_binding is None:
+            source_summary = {
+                "summary_kind": "update_source_coverage",
+                "state": "unknown",
+                "listing_ref": case.listing_ref.model_dump(mode="json"),
+                "context": "company_research",
+                "scope_key": f"listing:{case.listing_ref.id}:company_research",
+                "sources": [{
+                    "source_id": state.feed_id,
+                    "contract_version": state.contract_version,
+                    "contract_hash": state.config_hash,
+                    "scope_hash": state.scope_hash,
+                    "coverage_state": state.coverage_state,
+                    "success_sequence": state.success_sequence,
+                    "success_receipt_hash": state.success_receipt_hash,
+                    "last_attempt_at": state.last_attempt_at.isoformat() if state.last_attempt_at else None,
+                    "last_success_at": state.last_success_at.isoformat() if state.last_success_at else None,
+                    "health_limit_seconds": state.health_limit_seconds,
+                    "failure_code": state.failure_code,
+                    "retry_at": state.retry_at.isoformat() if state.retry_at else None,
+                } for state in source_states[:16]],
+            }
+            summaries.append(source_summary)
         coverage = {
             "coverage_manifest_ref": saved.reference.model_dump(mode="json"),
             "coverage_manifest_hash": saved.manifest_hash,
             "coverage_complete": coverage_complete(saved),
             "coverage_limitations": list(coverage_limitations(saved)),
         }
+        if source_summary is not None:
+            coverage["source_coverage"] = source_summary
+        elif source_binding is not None:
+            from investment_agent.supplemental_rules.contracts import SavedRefsSourceProof
+
+            coverage["source_coverage"] = {
+                "summary_kind": "update_source_coverage",
+                "state": "complete",
+                "source_policy_hash": source_binding.source_policy_hash,
+                "scope_key": source_binding.scope_key,
+                "sources": [
+                    source.entry.source_id if isinstance(source, SavedRefsSourceProof)
+                    else source.source_id
+                    for source in source_binding.sources
+                ],
+            }
     review_blocked = len(summaries) > 32 or len(json.dumps(summaries, ensure_ascii=False)) > 64000
     if review_blocked:
         summaries = []  # Explicitly blocked, never an incomplete passing review.

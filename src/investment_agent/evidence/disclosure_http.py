@@ -27,7 +27,9 @@ class DisclosureError(ValueError):
     pass
 
 
-def validate_url(url: str, purpose: str) -> tuple[str, str]:
+def validate_url(
+    url: str, purpose: str, *, exact_urls: tuple[str, ...] = ()
+) -> tuple[str, str]:
     if len(url) > 2048 or any(ord(c) < 33 or ord(c) > 126 for c in url):
         raise DisclosureError("invalid_url")
     try:
@@ -56,8 +58,11 @@ def validate_url(url: str, purpose: str) -> tuple[str, str]:
             )
             is not None
         )
+        or (purpose == "terms" and bool(exact_urls) and url in exact_urls)
     )
     if not allowed:
+        raise DisclosureError("unsupported_source_url")
+    if purpose == "terms" and host not in {"www.cninfo.com.cn", "webapi.cninfo.com.cn"}:
         raise DisclosureError("unsupported_source_url")
     assert host is not None
     return host, path
@@ -137,6 +142,43 @@ class SourceResponse:
 
 
 class OfficialHTTPS:
+    async def request_one_hop(
+        self,
+        url: str,
+        purpose: str,
+        *,
+        body: bytes | None = None,
+        max_bytes: int = MAX_BYTES,
+        timeout_seconds: float = 15,
+        exact_urls: tuple[str, ...] = (),
+    ) -> SourceResponse:
+        """Perform exactly one pinned HTTPS hop, returning redirects to the caller.
+
+        P4 background polling persists and authorizes every redirect hop
+        separately. The legacy ``request`` method below retains its original
+        behavior for existing task-bound disclosure calls.
+        """
+        if not 1 <= max_bytes <= MAX_BYTES or not 0 < timeout_seconds <= 30:
+            raise DisclosureError("invalid_http_bound")
+        deadline = time.monotonic() + timeout_seconds
+        host, path = validate_url(url, purpose, exact_urls=exact_urls)
+        try:
+            targets = await asyncio.wait_for(
+                asyncio.to_thread(public_targets, host), deadline - time.monotonic()
+            )
+            return await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._read, host, path, targets[0], url, body, max_bytes, deadline
+                ),
+                deadline - time.monotonic(),
+            )
+        except TimeoutError as exc:
+            raise DisclosureError("http_timeout") from exc
+        except (OSError, http.client.HTTPException, ssl.SSLError) as exc:
+            raise DisclosureError(
+                "http_timeout" if time.monotonic() >= deadline else "http_connection_failure"
+            ) from exc
+
     async def request(
         self,
         url: str,

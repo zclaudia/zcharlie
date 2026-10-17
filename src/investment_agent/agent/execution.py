@@ -4,12 +4,21 @@ AG09 calls admit() after authenticating the message. AG13 provides a trusted
 run specification/completion policy. Neither is inferred from model text.
 """
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,7 +89,7 @@ class ExecutionGrant(BaseModel):
     purpose: Literal["interactive", "review", "exploration"] | None = None
     current_research: bool = False
     research_kind: Literal["explanation", "local_check", "company_research", "comparison", "review", "portfolio_action"] = "local_check"
-    disclosure_permissions: tuple["DisclosurePermission", ...] = ()
+    disclosure_permissions: tuple[DisclosurePermission, ...] = ()
     portfolio_account_id: UUID | None = None
     portfolio_snapshot_ref: ObjectRef | None = None
     portfolio_valuation_ref: ObjectRef | None = None
@@ -94,6 +103,30 @@ class ExecutionGrant(BaseModel):
     snapshot stores - one strongly typed shape for snapshot column, API DTO and
     grant, never a second drifting dict form. It is the only peer-read
     authorization source and never a model tool schema."""
+    supplemental_update_batch_id: UUID | None = None
+    """Server-only link to the durable P4 update batch that authorized this review."""
+    supplemental_update_batch_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def validate_supplemental_update_binding(self) -> ExecutionGrant:
+        if (self.supplemental_update_batch_id is None) != (
+            self.supplemental_update_batch_hash is None
+        ):
+            raise ValueError("supplemental update batch id and hash must be paired")
+        if self.supplemental_update_batch_id is not None and (
+            self.mode != "background" or self.research_kind != "review"
+        ):
+            raise ValueError("supplemental update batches authorize background review only")
+        return self
+
+    @model_serializer(mode="wrap")
+    def preserve_legacy_dump(self, handler: Any) -> dict[str, Any]:
+        """Keep the pre-P4 serialized grant byte-shape unless P4 is bound."""
+        result = cast(dict[str, Any], handler(self))
+        if self.supplemental_update_batch_id is None:
+            result.pop("supplemental_update_batch_id", None)
+            result.pop("supplemental_update_batch_hash", None)
+        return result
 
     @field_validator("expires_at", "memory_valid_until")
     @classmethod
@@ -278,7 +311,12 @@ async def admit(
         if grant.peer_context != previous.peer_context:
             grant = grant.model_copy(update={"peer_context": previous.peer_context})
         previous = previous.model_copy(update={"purpose": budget_purpose(previous)})
-        if previous.model_dump(mode="json") != grant.model_dump(mode="json"):
+        # The custom serializer omits unbound P4 fields, preserving the exact
+        # legacy shape while keeping newly bound provenance inside the equality
+        # check. An old task may not be rebound to gain a P4 authorization.
+        previous_dump = previous.model_dump(mode="json")
+        grant_dump = grant.model_dump(mode="json")
+        if previous_dump != grant_dump:
             from investment_agent.storage.repositories.pipeline_run import (
                 IdempotencyPayloadMismatchError,
             )
@@ -358,6 +396,32 @@ async def check_boundary(
     if task.message_ref is not None and await UserControlService(session)._blocked_source(task.message_ref):
         raise ExecutionDeniedError("memory_source_revoked")
     settings = await live_policy(session, grant, base)
+    if grant.supplemental_update_batch_id is not None:
+        # P4-originated background research is fenced at every execution
+        # boundary. A legacy grant with no server provenance follows the
+        # existing policy unchanged.
+        from investment_agent.investor.foundations import InvestorError
+
+        if not settings.supplemental_rules_enabled or not getattr(
+            settings, "supplemental_updates_enabled", False
+        ):
+            raise ExecutionDeniedError("supplemental_updates_disabled")
+        try:
+            from investment_agent.supplemental_rules.updates import validate_review_batch
+
+            await validate_review_batch(
+                session,
+                owner_id=grant.owner,
+                batch_id=grant.supplemental_update_batch_id,
+                batch_hash=grant.supplemental_update_batch_hash,
+                task_id=claim.task_id,
+            )
+        except ImportError:
+            # During a partial upgrade, fail closed for a P4 grant rather than
+            # silently executing it without the source-boundary check.
+            raise ExecutionDeniedError("supplemental_update_batch_unavailable") from None
+        except InvestorError as exc:
+            raise ExecutionDeniedError("supplemental_update_batch_unavailable") from exc
     if tool is not None and tool not in grant.tool_names:
         raise ExecutionDeniedError("tool_not_authorized")
     identities = await scope_identities(session, grant.scope_refs, grant.owner)
