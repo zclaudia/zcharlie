@@ -21,6 +21,7 @@ from investment_agent.industry_peers.metric_packs import (
     BAIJIU_PACK,
     BANK_PACK,
     cohort_metric_pack,
+    cohort_read_scope,
     metric_keys_for_pack,
 )
 from investment_agent.industry_peers.service import (
@@ -57,14 +58,15 @@ def _pack(cohort: PeerCohortSnapshot) -> str:
 def _committed_for_cohort(
     mappings: tuple[PeerBatchMapping, ...], cohort: PeerCohortSnapshot
 ) -> list[PeerBatchMapping]:
+    provider, adapter_version = cohort_read_scope(cohort.payload)
     return [
         mapping
         for mapping in mappings
         if str(mapping.cohort_ref.id) == cohort.id
         and mapping.cohort_ref.revision == cohort.revision
         and mapping.cohort_content_hash == cohort.content_hash
-        and mapping.provider == DEFAULT_PROVIDER
-        and mapping.adapter_version == DEFAULT_ADAPTER_VERSION
+        and mapping.provider == provider
+        and mapping.adapter_version == adapter_version
     ]
 
 
@@ -129,11 +131,18 @@ async def industry_overview(
     selected: PeerBatchMapping | None = None
     if batch_run_id is not None:
         selected = next((m for m in scan.valid if m.batch_run_id == batch_run_id), None)
-        if selected is None or selected.provider != DEFAULT_PROVIDER or selected.adapter_version != DEFAULT_ADAPTER_VERSION:
+        if selected is None or selected.provider != DEFAULT_PROVIDER:
             raise PeerTargetLookupError("batch is not a committed batch for this saved industry roster")
         old_cohort = await session.get(PeerCohortSnapshot, str(selected.cohort_ref.id))
         if old_cohort is None or old_cohort.cohort_key != cohort_key:
             raise PeerTargetLookupError("batch is not a committed batch for this saved industry roster")
+        from investment_agent.providers.eastmoney_bank_annual import BANK_ADAPTER_VERSION
+
+        allowed_adapters = {DEFAULT_ADAPTER_VERSION}
+        if _pack(old_cohort) == BANK_PACK:
+            allowed_adapters.add(BANK_ADAPTER_VERSION)
+        if selected.adapter_version not in allowed_adapters:
+            raise PeerTargetLookupError("batch source adapter is unsupported for this saved industry roster")
         cohort = old_cohort
         if report_period is not None and selected.report_period != report_period:
             raise ValueError("batch_run_id and report_period do not match")

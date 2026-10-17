@@ -62,7 +62,6 @@ from investment_agent.industry_peers.jobs import (
     admit_peer_collect,
     enqueue_peer_collect,
 )
-from investment_agent.providers.eastmoney_annual import ADAPTER_VERSION as ONLINE_ADAPTER_VERSION
 from investment_agent.providers.eastmoney_annual import PROVIDER as ONLINE_PROVIDER
 from investment_agent.providers.shenwan_directory import SW2021_SYSTEM
 from investment_agent.storage.database import run_with_engine, session_scope
@@ -384,6 +383,7 @@ async def import_sample_roster(
     sample_path: Path,
     cohort_key: str | None = None,
     industry: str = "baijiu",
+    bank_online: bool = False,
     acquired_at: datetime | None = None,
 ) -> CohortImportResult:
     """Import one roster version from a run-02 style sample file.
@@ -398,11 +398,16 @@ async def import_sample_roster(
 
     if industry == "bank":
         return await import_bank_roster(
-            session, sample_path=sample_path, cohort_key=cohort_key or BANK_COHORT_KEY,
+            session,
+            sample_path=sample_path,
+            cohort_key=cohort_key or BANK_COHORT_KEY,
             acquired_at=acquired_at,
+            online=bank_online,
         )
     if industry != "baijiu":
         raise ValueError("industry must be baijiu or bank")
+    if bank_online:
+        raise ValueError("--bank-online is only valid with --industry bank")
     cohort_key = cohort_key or COHORT_KEY
     sample, source_sha256 = load_sample(sample_path)
     observed_at = _parse_captured_at(sample.captured_at, sample_path)
@@ -446,6 +451,7 @@ async def import_bank_roster(
     sample_path: Path,
     cohort_key: str = BANK_COHORT_KEY,
     acquired_at: datetime | None = None,
+    online: bool = False,
 ) -> CohortImportResult:
     """Import the purposive run-02 bank research sample, never a full sector."""
     raw = sample_path.read_bytes()  # noqa: ASYNC240
@@ -456,7 +462,10 @@ async def import_bank_roster(
     if not isinstance(classes, dict) or set(classes) != set(tickers):
         raise ValueError(f"{sample_path}: bank_classifications must cover exactly the bank roster")
     captured_at = data.get("captured_at")
-    if not isinstance(captured_at, str) or _parse_captured_at(captured_at, sample_path).tzinfo is None:
+    if (
+        not isinstance(captured_at, str)
+        or _parse_captured_at(captured_at, sample_path).tzinfo is None
+    ):
         raise ValueError(f"{sample_path}: captured_at must be timezone-aware")
     identities = await resolve_roster_identities(session, tickers)
     entries = []
@@ -465,46 +474,80 @@ async def import_bank_roster(
         classification = classes[ticker]
         if not isinstance(classification, dict) or classification.get("symbol") != ticker[:6]:
             raise ValueError(f"{sample_path}: invalid bank classification for {ticker}")
-        entries.append({
-            "ticker": ticker, "company_id": listing.company_id, "listing_id": listing.id,
-            "market_code": listing.market_code, "name": name,
-            "name_source": "local_directory.company.canonical_name",
-            "classification": classification,
-            "classification_source": "sample.json.bank_classifications",
-            "listing_status": None, "listing_status_evidence": NOT_PROVIDED,
-            "comparability_flags": None, "comparability_flags_evidence": NOT_PROVIDED,
-        })
+        entries.append(
+            {
+                "ticker": ticker,
+                "company_id": listing.company_id,
+                "listing_id": listing.id,
+                "market_code": listing.market_code,
+                "name": name,
+                "name_source": "local_directory.company.canonical_name",
+                "classification": classification,
+                "classification_source": "sample.json.bank_classifications",
+                "listing_status": None,
+                "listing_status_evidence": NOT_PROVIDED,
+                "comparability_flags": None,
+                "comparability_flags_evidence": NOT_PROVIDED,
+            }
+        )
     payload = {
-        "schema": PAYLOAD_SCHEMA, "cohort_key": cohort_key,
+        "schema": PAYLOAD_SCHEMA,
+        "cohort_key": cohort_key,
         "metric_pack": BANK_METRIC_PACK,
-        "classification": {"system": SW2021_SYSTEM, "version": CLASSIFICATION_VERSION,
-                            "per_company_source": BANK_CLASSIFICATION_FIELD},
+        "classification": {
+            "system": SW2021_SYSTEM,
+            "version": CLASSIFICATION_VERSION,
+            "per_company_source": BANK_CLASSIFICATION_FIELD,
+        },
         "index_code": None,
-        "source": {"kind": "offline_evidence_file", "path": _locator(sample_path),
-                   "sha256": source_hash, "captured_at": captured_at,
-                   "membership_semantics": data.get("membership_semantics"),
-                   "selection": data.get("selection"), "roster_field": BANK_ROSTER_FIELD},
+        "source": {
+            "kind": "offline_evidence_file",
+            "path": _locator(sample_path),
+            "sha256": source_hash,
+            "captured_at": captured_at,
+            "membership_semantics": data.get("membership_semantics"),
+            "selection": data.get("selection"),
+            "roster_field": BANK_ROSTER_FIELD,
+        },
         "entries": entries,
-        "included": [{"ticker": ticker, "company_id": identities[ticker][0].company_id,
-                      "reason": "member of the explicit run-02 purposive bank research sample"}
-                     for ticker in tickers],
+        "included": [
+            {
+                "ticker": ticker,
+                "company_id": identities[ticker][0].company_id,
+                "reason": "member of the explicit run-02 purposive bank research sample",
+            }
+            for ticker in tickers
+        ],
         "excluded": [],
         "source_differences": {"classification_only": [], "not_a_complete_sector_list": True},
-        "notes": ["purposive 10-bank research sample; not a bank index constituent list",
-                  "no official complete-sector membership verification was performed",
-                  "source classification is retained as captured; no index is inferred"],
+        "notes": [
+            "purposive 10-bank research sample; not a bank index constituent list",
+            "no official complete-sector membership verification was performed",
+            "source classification is retained as captured; no index is inferred",
+        ],
     }
+    if online:
+        from investment_agent.providers.eastmoney_bank_annual import BANK_ADAPTER_VERSION
+
+        payload["read_scope"] = {
+            "provider": ONLINE_PROVIDER,
+            "adapter_version": BANK_ADAPTER_VERSION,
+        }
     content_hash = payload_sha256(payload)
     repo = PeerCohortSnapshotRepository(session)
     existing = await repo.by_content_hash(cohort_key=cohort_key, content_hash=content_hash)
     if existing is not None:
         return CohortImportResult(snapshot=existing, created=False)
     row = PeerCohortSnapshot(
-        id=str(uuid.uuid4()), cohort_key=cohort_key,
+        id=str(uuid.uuid4()),
+        cohort_key=cohort_key,
         revision=await repo.next_revision(cohort_key),
         observed_on=_parse_captured_at(captured_at, sample_path).date(),
-        acquired_at=acquired_at or datetime.now(UTC), verification=IMPORTER_VERIFICATION,
-        inclusion_rule_version="run-02-bank-purposeful/1", content_hash=content_hash, payload=payload,
+        acquired_at=acquired_at or datetime.now(UTC),
+        verification=IMPORTER_VERIFICATION,
+        inclusion_rule_version="run-02-bank-purposeful/1",
+        content_hash=content_hash,
+        payload=payload,
     )
     return CohortImportResult(snapshot=await repo.add(row), created=True)
 
@@ -519,9 +562,16 @@ def import_roster(
         help="run-02 style sample file (default: the committed run-02 evidence)",
     ),
     cohort_key: str = typer.Option(
-        "", "--cohort-key", help="Stable roster name the snapshot is filed under (default depends on industry)"
+        "",
+        "--cohort-key",
+        help="Stable roster name the snapshot is filed under (default depends on industry)",
     ),
-    industry: str = typer.Option("baijiu", "--industry", help="Roster source selector: baijiu or bank"),
+    industry: str = typer.Option(
+        "baijiu", "--industry", help="Roster source selector: baijiu or bank"
+    ),
+    bank_online: bool = typer.Option(
+        False, "--bank-online", help="Bind a bank roster revision to the bank annual online scope"
+    ),
 ) -> None:
     """Import the fixed sample roster as one immutable cohort snapshot (WP2).
 
@@ -537,9 +587,11 @@ def import_roster(
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
             result = await import_sample_roster(
-                session, sample_path=sample_path,
+                session,
+                sample_path=sample_path,
                 cohort_key=cohort_key or (BANK_COHORT_KEY if industry == "bank" else COHORT_KEY),
                 industry=industry,
+                bank_online=bank_online,
             )
             row = result.snapshot
             return {
@@ -710,7 +762,9 @@ def collect_command(
     ),
     provider: str = typer.Option(ONLINE_PROVIDER, "--provider", help="Collection source provider"),
     adapter_version: str = typer.Option(
-        ONLINE_ADAPTER_VERSION, "--adapter-version", help="Collection adapter version"
+        "",
+        "--adapter-version",
+        help="Collection adapter version (default follows the cohort metric pack)",
     ),
     run_now: bool = typer.Option(
         False, "--now", help="Also run the claimed task inline (reaches the real provider)"
@@ -736,6 +790,25 @@ def collect_command(
 
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
+            from investment_agent.industry_peers.jobs import _adapter_for_pack
+            from investment_agent.industry_peers.metric_packs import cohort_metric_pack
+            from investment_agent.storage.repositories.peer import PeerCohortSnapshotRepository
+
+            cohort = await PeerCohortSnapshotRepository(session).latest(cohort_key=cohort_key)
+            if cohort is None:
+                raise ValueError(
+                    f"no cohort roster saved under cohort_key={cohort_key!r}; "
+                    "run `ia peers import-roster` first"
+                )
+            expected_provider, expected_version = _adapter_for_pack(
+                cohort_metric_pack(cohort.payload)
+            )
+            selected_version = adapter_version or expected_version
+            if provider != expected_provider or selected_version != expected_version:
+                raise ValueError(
+                    f"cohort metric pack requires provider={expected_provider!r} "
+                    f"adapter_version={expected_version!r}"
+                )
             result = await enqueue_peer_collect(
                 session,
                 report_period=period,
@@ -744,7 +817,7 @@ def collect_command(
                 data_dir=Path(settings.data_dir),
                 cohort_key=cohort_key,
                 provider=provider,
-                adapter_version=adapter_version,
+                adapter_version=selected_version,
             )
             return {
                 "kind": PEER_COLLECT_KIND,
@@ -789,9 +862,15 @@ def collect_command(
         async with session_scope() as session:
             finished = await PipelineRunRepository(session).get(summary["run_id"])
             assert finished is not None
-            return {"run_id": finished.id, "status": finished.status, "error": finished.error_summary}
+            return {
+                "run_id": finished.id,
+                "status": finished.status,
+                "error": finished.error_summary,
+            }
 
-    typer.echo(json.dumps(run_with_engine(settings.database_url, run_inline), ensure_ascii=False, indent=2))
+    typer.echo(
+        json.dumps(run_with_engine(settings.database_url, run_inline), ensure_ascii=False, indent=2)
+    )
 
 
 @app.command("admit")
@@ -799,7 +878,9 @@ def admit_command(
     ticker: str = typer.Argument(help="Target A-share ticker, e.g. 600519.SH"),
     provider: str = typer.Option(ONLINE_PROVIDER, "--provider", help="Collect scope provider"),
     adapter_version: str = typer.Option(
-        ONLINE_ADAPTER_VERSION, "--adapter-version", help="Collect scope adapter version"
+        "",
+        "--adapter-version",
+        help="Collect scope adapter version (default follows the cohort metric pack)",
     ),
     cooldown_seconds: float = typer.Option(
         -1.0,
@@ -820,7 +901,9 @@ def admit_command(
         raise typer.Exit(1)
     settings = bootstrap_settings()
     cooldown = (
-        settings.peer_collect_admission_cooldown_seconds if cooldown_seconds < 0 else cooldown_seconds
+        settings.peer_collect_admission_cooldown_seconds
+        if cooldown_seconds < 0
+        else cooldown_seconds
     )
 
     async def run() -> dict[str, Any]:

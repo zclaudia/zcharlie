@@ -397,6 +397,8 @@ class SourceRowMeta:
     """Last restatement date; a different value here is metadata, not a conflict."""
     currency: str
     response_hash: str
+    source_version: str | None = None
+    """Opaque upstream version, when supplied; never inferred from fetch time."""
 
 
 @dataclass(frozen=True)
@@ -686,7 +688,7 @@ class CompanyAnnualCollection:
     secucode: str
     report_period: date
     company_type: str
-    company_type_source: Literal["f10_metadata", "caller_provided"]
+    company_type_source: Literal["f10_metadata", "caller_provided", "bank_main_metadata"]
     captured_at: datetime
     provider: str = PROVIDER
     adapter_version: str = ADAPTER_VERSION

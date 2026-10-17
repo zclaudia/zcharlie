@@ -103,7 +103,12 @@ from investment_agent.industry_peers.calculations import (
 )
 from investment_agent.industry_peers.contracts import PeerAnnualField, PeerFieldVerification
 from investment_agent.industry_peers.hashing import SEMANTIC_HASH_SCHEMA, canonical_json
-from investment_agent.industry_peers.metric_packs import BAIJIU_PACK, cohort_metric_pack
+from investment_agent.industry_peers.metric_packs import (
+    BAIJIU_PACK,
+    BANK_PACK,
+    cohort_metric_pack,
+    cohort_read_scope,
+)
 from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.providers.eastmoney_annual import (
@@ -158,6 +163,9 @@ _PERIOD_KINDS: dict[str, Literal["flow", "stock", "ratio"]] = {
     "equity_parent": "stock",
     "contract_liabilities": "stock",
     "roe_weighted_annual": "ratio",
+    "net_interest_margin": "ratio",
+    "npl_ratio": "ratio",
+    "provision_coverage": "ratio",
 }
 
 _URL_OPERATIONS: dict[str, str] = {
@@ -242,6 +250,26 @@ def payload_of(run: PipelineRun) -> PeerCollectPayload | None:
         return PeerCollectPayload.model_validate(run.request_json)
     except ValueError:
         return None
+
+
+def _adapter_for_pack(metric_pack: str) -> tuple[str, str]:
+    """Return the only allowed online provider/version scope for a pack."""
+    if metric_pack == BAIJIU_PACK:
+        return PROVIDER, ADAPTER_VERSION
+    if metric_pack == BANK_PACK:
+        from investment_agent.providers.eastmoney_bank_annual import BANK_ADAPTER_VERSION
+
+        return PROVIDER, BANK_ADAPTER_VERSION
+    raise ValueError(f"online collection does not support metric pack {metric_pack!r}")
+
+
+def _validate_online_scope(metric_pack: str, provider: str, adapter_version: str) -> None:
+    expected_provider, expected_version = _adapter_for_pack(metric_pack)
+    if (provider, adapter_version) != (expected_provider, expected_version):
+        raise ValueError(
+            f"metric pack {metric_pack!r} requires provider={expected_provider!r} "
+            f"adapter_version={expected_version!r}"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -346,7 +374,7 @@ async def enqueue_peer_collect(
     cohort_key: str | None = None,
     cohort_row: PeerCohortSnapshot | None = None,
     provider: str = PROVIDER,
-    adapter_version: str = ADAPTER_VERSION,
+    adapter_version: str | None = None,
     generation: int | None = None,
     max_attempts: int = 3,
 ) -> PeerCollectEnqueueResult:
@@ -375,11 +403,9 @@ async def enqueue_peer_collect(
         )
 
     pack = cohort_metric_pack(cohort_row.payload)
-    if pack != BAIJIU_PACK:
-        raise ValueError(
-            f"online peer collection does not support metric pack {pack}; "
-            "bank annual fields remain offline/candidate until the adapter is extended"
-        )
+    expected_provider, expected_adapter = _adapter_for_pack(pack)
+    adapter_version = adapter_version or expected_adapter
+    _validate_online_scope(pack, provider, adapter_version)
 
     active = await find_active_scope_run(
         session,
@@ -586,13 +612,22 @@ class ArtifactSavingSource:
     checkpoint's request records always reference a stored body.
     """
 
-    def __init__(self, inner: EastmoneyAnnualSource, store: CollectArtifactStore) -> None:
+    def __init__(
+        self,
+        inner: EastmoneyAnnualSource,
+        store: CollectArtifactStore,
+        *,
+        metric_pack: str = BAIJIU_PACK,
+    ) -> None:
         self._inner = inner
         self._store = store
+        self._metric_pack = metric_pack
 
     async def fetch(self, url: str, params: Mapping[str, str]) -> RawAnnualResponse:
         response = await self._inner.fetch(url, params)
         operation = _operation_of_url(url)
+        if self._metric_pack == BANK_PACK and urlsplit(url).path == MAIN_FINADATA_PATH:
+            operation = "bank_main_fina"
         if response.status == 200 and operation is not None:
             self._store.save_response(operation, params, response.body)
         return response
@@ -624,7 +659,9 @@ def _period_for(kind: str, period_end: date) -> Period:
     disclosed full-year ratio - identical to the WP3 importer's rule."""
 
     if kind == "flow":
-        return Period(start=date(period_end.year, 1, 1), end=period_end, basis="period_to_date/annual")
+        return Period(
+            start=date(period_end.year, 1, 1), end=period_end, basis="period_to_date/annual"
+        )
     if kind == "stock":
         return Period(start=period_end, end=period_end, basis="point_in_time")
     return Period(start=date(period_end.year, 1, 1), end=period_end, basis="annual_ratio")
@@ -632,6 +669,8 @@ def _period_for(kind: str, period_end: date) -> Period:
 
 def build_snapshot_fields(
     collection: CompanyAnnualCollection,
+    *,
+    metric_pack: str = BAIJIU_PACK,
 ) -> tuple[dict[str, PeerAnnualField], dict[str, dict[str, Any]]]:
     """The WP3-shaped field entries and per-field proofs of one collection.
 
@@ -646,20 +685,26 @@ def build_snapshot_fields(
 
     fields: dict[str, PeerAnnualField] = {}
     proofs: dict[str, dict[str, Any]] = {}
-    for spec in ANNUAL_METRICS:
-        annual_field = collection.fields[spec.metric]
-        row = collection.source_rows.get(spec.source_table)
-        kind = _PERIOD_KINDS.get(spec.metric)
+    if metric_pack == BAIJIU_PACK:
+        specs = [(spec.metric, spec.source_table) for spec in ANNUAL_METRICS]
+    elif metric_pack == BANK_PACK:
+        from investment_agent.providers.eastmoney_bank_annual import BANK_ANNUAL_METRICS
+
+        specs = [(metric, "main") for metric in BANK_ANNUAL_METRICS]
+    else:
+        raise ValueError(f"online collection does not support metric pack {metric_pack!r}")
+    for metric, source_table in specs:
+        annual_field = collection.fields[metric]
+        row = collection.source_rows.get(source_table)
+        kind = _PERIOD_KINDS.get(metric)
         if kind is None:
-            raise ValueError(
-                f"the adapter reports metric {spec.metric!r} without a WP8 period kind"
-            )
+            raise ValueError(f"the adapter reports metric {metric!r} without a WP8 period kind")
         if annual_field.value is None and annual_field.missing_reason is None:
             raise ValueError(
-                f"adapter returned {spec.metric!r} without value and without missing_reason"
+                f"adapter returned {metric!r} without value and without missing_reason"
             )
-        fields[spec.metric] = PeerAnnualField(
-            metric=spec.metric,
+        field_data: dict[str, Any] = dict(
+            metric=metric,
             value=annual_field.value,
             unit=annual_field.unit,
             currency=annual_field.currency,
@@ -673,8 +718,11 @@ def build_snapshot_fields(
             verification=PeerFieldVerification.CANDIDATE,
             missing_reason=annual_field.missing_reason,
         )
-        proofs[spec.metric] = {
-            "metric": spec.metric,
+        if metric_pack == BANK_PACK and row is not None:
+            field_data["source_version"] = row.source_version
+        fields[metric] = PeerAnnualField(**field_data)
+        proofs[metric] = {
+            "metric": metric,
             "status": "candidate",
             "original_ref": None,
             "pdf_hash": None,
@@ -683,9 +731,7 @@ def build_snapshot_fields(
             "header": None,
             "raw_value": annual_field.raw_value,
             "raw_unit": annual_field.raw_unit,
-            "parsed_value": (
-                str(annual_field.value) if annual_field.value is not None else None
-            ),
+            "parsed_value": (str(annual_field.value) if annual_field.value is not None else None),
             "period": collection.report_period.isoformat(),
             "accounting_scope": None,
             "locator_excerpt": None,
@@ -707,6 +753,10 @@ def build_snapshot_fields(
                 "original-document check exists in the first phase"
             ),
         }
+        if metric_pack == BANK_PACK and row is not None:
+            proofs[metric]["source_version"] = row.source_version
+            proofs[metric]["provider"] = collection.provider
+            proofs[metric]["source_field"] = annual_field.source_field
     return fields, proofs
 
 
@@ -736,6 +786,46 @@ def snapshot_hashes(
     }
     canonical = canonical_json(payload)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return digest, digest
+
+
+def _bank_snapshot_hashes(
+    fields: Mapping[str, PeerAnnualField], proofs: Mapping[str, dict[str, Any]]
+) -> tuple[str, str]:
+    """Bank collection identity ignores observation timestamps only."""
+    ignored = {
+        "checked_at",
+        "acquired_at",
+        "observed_at",
+        "captured_at",
+        "created_at",
+        "baseline_snapshot_id",
+        # Reconciliation findings are attached to the current run metadata;
+        # including a changing baseline lookup reason would make identical
+        # supplier bytes append versions on every refresh.
+        "reconciliation",
+    }
+
+    def clean_value(value: Any) -> Any:
+        if isinstance(value, Mapping):
+            return {k: clean_value(v) for k, v in value.items() if k not in ignored}
+        if isinstance(value, list):
+            return [clean_value(v) for v in value]
+        return value
+
+    clean_proofs: dict[str, Any] = {}
+    for metric, proof in proofs.items():
+        clean_proofs[metric] = clean_value(proof)
+    payload = {
+        "schema": SEMANTIC_HASH_SCHEMA,
+        "metric_pack": BANK_PACK,
+        "fields": {
+            metric: {k: v for k, v in field.model_dump(mode="json").items() if k != "acquired_at"}
+            for metric, field in fields.items()
+        },
+        "verification": clean_proofs,
+    }
+    digest = hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
     return digest, digest
 
 
@@ -775,11 +865,10 @@ class PeerCollectHandler(BaseJobHandler):
             if cohort_row is None or cohort_row.revision != payload.cohort_revision:
                 raise _HandlerError("the online collection roster version is unavailable")
             pack = cohort_metric_pack(cohort_row.payload)
-            if pack != BAIJIU_PACK:
-                raise _HandlerError(
-                    f"online peer collection does not support metric pack {pack}; "
-                    "no collection was started"
-                )
+            try:
+                _validate_online_scope(pack, payload.provider, payload.adapter_version)
+            except ValueError as exc:
+                raise _HandlerError(str(exc)) from exc
         store = CollectArtifactStore(self.settings.data_dir, job.run_id)
         index = store.load_index()
         if not index:
@@ -798,8 +887,15 @@ class PeerCollectHandler(BaseJobHandler):
                 f"run {job.run_id} collect artifacts do not match the claimed payload"
             )
 
-        collector = EastmoneyAnnualCollector(
-            self._build_source(store),
+        collector_cls: type[EastmoneyAnnualCollector] = EastmoneyAnnualCollector
+        if pack == BANK_PACK:
+            from investment_agent.providers.eastmoney_bank_annual import (
+                EastmoneyBankAnnualCollector,
+            )
+
+            collector_cls = EastmoneyBankAnnualCollector
+        collector = collector_cls(
+            self._build_source(store, metric_pack=pack),
             cache=SavedResponseCache(store),
             max_retries=self.settings.peer_collect_retries,
             retry_backoff_seconds=self._retry_backoff_seconds,
@@ -838,14 +934,24 @@ class PeerCollectHandler(BaseJobHandler):
                 store.save_index(index)
                 raise
             await self._save_collection(
-                job, index, store, payload=payload, ticker=ticker, entry=entry,
-                collection=collection, collector=collector, log_start=log_start,
+                job,
+                index,
+                store,
+                payload=payload,
+                ticker=ticker,
+                entry=entry,
+                collection=collection,
+                collector=collector,
+                log_start=log_start,
+                metric_pack=pack,
             )
         return await self._finalize(job, payload, index)
 
     # -- steps -------------------------------------------------------------- #
 
-    def _build_source(self, store: CollectArtifactStore) -> EastmoneyAnnualSource:
+    def _build_source(
+        self, store: CollectArtifactStore, *, metric_pack: str
+    ) -> EastmoneyAnnualSource:
         inner = self._injected_source  # tests inject a fake; production goes HTTP
         if inner is None:
             from investment_agent.providers.eastmoney_annual import HttpEastmoneyAnnualSource
@@ -853,11 +959,9 @@ class PeerCollectHandler(BaseJobHandler):
             inner = HttpEastmoneyAnnualSource(
                 timeout_seconds=30.0,
             )
-        return ArtifactSavingSource(inner, store)
+        return ArtifactSavingSource(inner, store, metric_pack=metric_pack)
 
-    async def _load_roster(
-        self, payload: PeerCollectPayload
-    ) -> list[dict[str, Any]]:
+    async def _load_roster(self, payload: PeerCollectPayload) -> list[dict[str, Any]]:
         """The payload-bound roster entries (tickers never come from callers)."""
 
         async with session_scope() as session:
@@ -936,6 +1040,7 @@ class PeerCollectHandler(BaseJobHandler):
         collection: CompanyAnnualCollection,
         collector: EastmoneyAnnualCollector,
         log_start: int,
+        metric_pack: str,
     ) -> None:
         """One company's fact write + checkpoint commit (one fenced transaction)."""
 
@@ -948,18 +1053,37 @@ class PeerCollectHandler(BaseJobHandler):
                 f"adapter={collection.adapter_version}, but the task is bound to "
                 f"provider={payload.provider} adapter={payload.adapter_version}"
             )
-        fields, proofs = build_snapshot_fields(collection)
-        semantic_hash, content_hash = snapshot_hashes(fields, proofs)
+        fields, proofs = build_snapshot_fields(collection, metric_pack=metric_pack)
         requests = [_dump_request(record) for record in collector.request_log[log_start:]]
         index["companies"][ticker] = {
             "status": "collected",
             "finished_at": datetime.now(UTC).isoformat(),
             "snapshot_id": None,
-            "semantic_hash": semantic_hash,
+            "semantic_hash": None,
             "snapshot_saved": False,
             "requests": requests,
         }
         async with session_scope() as session:
+            if metric_pack == BANK_PACK:
+                from investment_agent.industry_peers.bank_online_reconciliation import (
+                    reconcile_bank_online_fields,
+                )
+
+                reconciliation_fields: dict[str, PeerAnnualField | dict[str, Any]] = {}
+                reconciliation_fields.update(fields)
+                fields, proofs, review_summary = await reconcile_bank_online_fields(
+                    session,
+                    listing_id=int(entry["listing_id"]),
+                    company_id=int(entry["company_id"]),
+                    report_period=collection.report_period,
+                    fields=reconciliation_fields,
+                    proofs=proofs,
+                    captured_at=collection.captured_at,
+                )
+                semantic_hash, content_hash = _bank_snapshot_hashes(fields, proofs)
+            else:
+                review_summary = None
+                semantic_hash, content_hash = snapshot_hashes(fields, proofs)
             repo = PeerAnnualSnapshotRepository(session)
             existing = await repo.by_unique_key(
                 company_id=int(entry["company_id"]),
@@ -989,6 +1113,8 @@ class PeerCollectHandler(BaseJobHandler):
                 snapshot_id, saved = row.id, True
             state = index["companies"][ticker]
             state["snapshot_id"] = snapshot_id
+            state["semantic_hash"] = semantic_hash
+            state["review_summary"] = review_summary
             state["snapshot_saved"] = saved
             await PipelineRunRepository(session).record_metadata(
                 job.run_id, {"peer_collect": self._metadata_view(index, store)}, lease=job.lease
@@ -1043,9 +1169,7 @@ class PeerCollectHandler(BaseJobHandler):
             ticker, {"status": status, "finished_at": datetime.now(UTC).isoformat()}
         )
         state["status"] = status
-        state["requests"] = [
-            _dump_request(record) for record in collector.request_log[log_start:]
-        ]
+        state["requests"] = [_dump_request(record) for record in collector.request_log[log_start:]]
         if reason is not None:
             state["reason"] = f"{type(reason).__name__}: {reason}"
 
@@ -1060,6 +1184,7 @@ class PeerCollectHandler(BaseJobHandler):
                     "status": state.get("status"),
                     "snapshot_id": state.get("snapshot_id"),
                     "reason": state.get("reason"),
+                    "review_summary": state.get("review_summary"),
                 }
                 for ticker, state in sorted(companies.items())
                 if isinstance(state, dict)
@@ -1093,8 +1218,11 @@ class PeerCollectHandler(BaseJobHandler):
                     f"cohort snapshot {payload.cohort_snapshot_id} revision "
                     f"{payload.cohort_revision} does not exist"
                 )
-            if cohort_metric_pack(cohort_row.payload) != BAIJIU_PACK:
-                raise _HandlerError("online collection cannot finalize a non-baijiu metric pack")
+            pack = cohort_metric_pack(cohort_row.payload)
+            try:
+                _validate_online_scope(pack, payload.provider, payload.adapter_version)
+            except ValueError as exc:
+                raise _HandlerError(str(exc)) from exc
             await reserve_batch_transaction(session)
             # The functions below are the WP6 offline submission pipeline,
             # reused function-for-function: freeze -> materialize -> build+save.
@@ -1107,7 +1235,9 @@ class PeerCollectHandler(BaseJobHandler):
                 snapshot_ids={
                     int(entry["company_id"]): (
                         index["companies"].get(str(entry["ticker"]), {}).get("snapshot_id")
-                        or index.get("frozen_inputs", {}).get(str(entry["ticker"]), {}).get("existing_snapshot_id")
+                        or index.get("frozen_inputs", {})
+                        .get(str(entry["ticker"]), {})
+                        .get("existing_snapshot_id")
                     )
                     for entry in cohort_row.payload["entries"]
                 },
@@ -1198,7 +1328,9 @@ class PeerCollectHandler(BaseJobHandler):
                         "status": mapping.status,
                         "created": created,
                         "content_hash": mapping.content_hash,
-                        "artifact": str(mapping_artifact_path(self.settings.data_dir, mapping.batch_run_id)),
+                        "artifact": str(
+                            mapping_artifact_path(self.settings.data_dir, mapping.batch_run_id)
+                        ),
                         "targets": len(mapping.targets),
                         "missing_companies": [
                             item.ticker for item in mapping.manifest.missing_companies
@@ -1255,7 +1387,16 @@ class PeerCollectHandler(BaseJobHandler):
 class PeerCollectAdmission:
     """One admission decision; ``gaps`` always carries the original gaps."""
 
-    outcome: Literal["not_needed", "no_roster", "no_period", "enqueued", "reused", "pending", "cooldown"]
+    outcome: Literal[
+        "not_needed",
+        "no_roster",
+        "no_period",
+        "offline_only",
+        "enqueued",
+        "reused",
+        "pending",
+        "cooldown",
+    ]
     ticker: str
     report_period: date | None
     gaps: tuple[str, ...] = ()
@@ -1272,7 +1413,7 @@ async def admit_peer_collect(
     data_dir: Path,
     cooldown_seconds: float,
     provider: str = PROVIDER,
-    adapter_version: str = ADAPTER_VERSION,
+    adapter_version: str | None = None,
     now: datetime | None = None,
     triggered_by: str = "admission",
 ) -> PeerCollectAdmission:
@@ -1294,6 +1435,33 @@ async def admit_peer_collect(
     at = now or datetime.now(UTC)
     if at.tzinfo is None:
         raise ValueError("now must be timezone-aware")
+    from investment_agent.industry_peers.service import resolve_cohort, resolve_peer_target
+
+    identity = await resolve_peer_target(session, ticker=ticker)
+    scoped_cohort = await resolve_cohort(session, company_id=identity.company_id)
+    if scoped_cohort is not None:
+        metric_pack = cohort_metric_pack(scoped_cohort.payload)
+        expected_provider, expected_adapter = _adapter_for_pack(metric_pack)
+        trusted_provider, trusted_adapter = cohort_read_scope(scoped_cohort.payload)
+        if metric_pack == BANK_PACK and (trusted_provider, trusted_adapter) != (
+            expected_provider,
+            expected_adapter,
+        ):
+            return PeerCollectAdmission(
+                outcome="offline_only",
+                ticker=identity.ticker,
+                report_period=None,
+                detail=(
+                    "this bank roster is bound to offline evidence; import a new online-bound "
+                    "revision with `ia peers import-roster --industry bank --bank-online` "
+                    "before admission can collect it"
+                ),
+            )
+        provider = provider or expected_provider
+        adapter_version = adapter_version or expected_adapter
+        _validate_online_scope(metric_pack, provider, adapter_version)
+    else:
+        adapter_version = adapter_version or ADAPTER_VERSION
     result = await get_industry_peer_context(
         session,
         ticker=ticker,
@@ -1304,29 +1472,40 @@ async def admit_peer_collect(
     ticker_label = result.target.ticker
     if result.status is PeerContextStatus.NOT_SUPPORTED:
         return PeerCollectAdmission(
-            outcome="no_roster", ticker=ticker_label, report_period=None,
-            gaps=result.gaps, detail=result.gaps[0] if result.gaps else "",
+            outcome="no_roster",
+            ticker=ticker_label,
+            report_period=None,
+            gaps=result.gaps,
+            detail=result.gaps[0] if result.gaps else "",
         )
     period = result.current_report_period
     if period is None:
         return PeerCollectAdmission(
-            outcome="no_period", ticker=ticker_label, report_period=None,
+            outcome="no_period",
+            ticker=ticker_label,
+            report_period=None,
             gaps=result.gaps,
             detail="cannot determine the target year from local disclosure records",
         )
 
     if result.cohort_ref is None:
         return PeerCollectAdmission(
-            outcome="no_roster", ticker=ticker_label, report_period=period,
-            gaps=result.gaps, detail="no cohort roster resolved for the target",
+            outcome="no_roster",
+            ticker=ticker_label,
+            report_period=period,
+            gaps=result.gaps,
+            detail="no cohort roster resolved for the target",
         )
     from investment_agent.storage.repositories.peer import PeerCohortSnapshotRepository
 
     cohort_row = await PeerCohortSnapshotRepository(session).get(str(result.cohort_ref.id))
     if cohort_row is None:
         return PeerCollectAdmission(
-            outcome="no_roster", ticker=ticker_label, report_period=period,
-            gaps=result.gaps, detail="the resolved cohort roster no longer exists",
+            outcome="no_roster",
+            ticker=ticker_label,
+            report_period=period,
+            gaps=result.gaps,
+            detail="the resolved cohort roster no longer exists",
         )
 
     active = await find_active_scope_run(
@@ -1338,8 +1517,11 @@ async def admit_peer_collect(
     )
     if active is not None:
         return PeerCollectAdmission(
-            outcome="pending", ticker=ticker_label, report_period=period,
-            run_id=active.id, gaps=result.gaps,
+            outcome="pending",
+            ticker=ticker_label,
+            report_period=period,
+            run_id=active.id,
+            gaps=result.gaps,
             detail=f"collect run {active.id} is {active.status}",
         )
 
@@ -1353,8 +1535,11 @@ async def admit_peer_collect(
         covered = True  # conflicts need a correction basis, not a re-collection
     if covered and not stale:
         return PeerCollectAdmission(
-            outcome="not_needed", ticker=ticker_label, report_period=period,
-            batch_run_id=result.batch_run_id, gaps=result.gaps,
+            outcome="not_needed",
+            ticker=ticker_label,
+            report_period=period,
+            batch_run_id=result.batch_run_id,
+            gaps=result.gaps,
             detail=f"batch {result.batch_run_id} covers the target",
         )
 
@@ -1397,8 +1582,11 @@ async def admit_peer_collect(
         )
         if last_check is not None and (at - last_check).total_seconds() < cooldown_seconds:
             return PeerCollectAdmission(
-                outcome="cooldown", ticker=ticker_label, report_period=period,
-                gaps=tuple(gaps), batch_run_id=result.batch_run_id,
+                outcome="cooldown",
+                ticker=ticker_label,
+                report_period=period,
+                gaps=tuple(gaps),
+                batch_run_id=result.batch_run_id,
                 detail=(
                     f"last scope check {last_check.isoformat()} is inside the "
                     f"{cooldown_seconds:.0f}s cooldown; returning the original gaps"
@@ -1422,11 +1610,7 @@ async def admit_peer_collect(
         gaps=tuple(gaps),
         run_id=enqueued.run.id,
         generation=enqueued.generation,
-        detail=(
-            "stale results bypass the cooldown"
-            if stale
-            else "gap admitted for collection"
-        ),
+        detail=("stale results bypass the cooldown" if stale else "gap admitted for collection"),
     )
 
 

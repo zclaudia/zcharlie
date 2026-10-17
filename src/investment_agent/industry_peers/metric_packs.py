@@ -30,3 +30,25 @@ def cohort_metric_pack(payload: Any) -> str:
         raise ValueError("cohort metric_pack must be a string")
     metric_keys_for_pack(pack)
     return pack
+
+
+def cohort_read_scope(payload: Any) -> tuple[str, str]:
+    """Use a trusted roster's explicit source binding; preserve old rosters.
+
+    Source versions are separate generation domains. Switching a bank roster
+    to online collection therefore requires an immutable roster revision with
+    a read_scope, rather than choosing the largest generation across adapters.
+    """
+    pack = cohort_metric_pack(payload)
+    scope = payload.get("read_scope") if isinstance(payload, dict) else None
+    if scope is None:
+        return "eastmoney", "offline-run02-v1"
+    if not isinstance(scope, dict) or set(scope) != {"provider", "adapter_version"}:
+        raise ValueError("cohort read_scope must contain provider and adapter_version")
+    from investment_agent.providers.eastmoney_bank_annual import BANK_ADAPTER_VERSION
+
+    if pack != BANK_PACK or scope != {
+        "provider": "eastmoney", "adapter_version": BANK_ADAPTER_VERSION,
+    }:
+        raise ValueError("cohort read_scope is unsupported for its metric pack")
+    return scope["provider"], scope["adapter_version"]

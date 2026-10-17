@@ -37,7 +37,7 @@ Discipline fixed by the technical design (§年度事实快照):
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -286,6 +286,71 @@ class PeerFieldConflictReport:
     warnings: tuple[str, ...] = ()
 
 
+async def _bank_original_update_links(
+    session: AsyncSession,
+    entries: list[tuple[PeerAnnualSnapshot, PeerAnnualField, dict[str, object]]],
+    metric: str,
+    cutoff: datetime | None,
+) -> tuple[dict[str, str], set[str]]:
+    """Link an unresolved supplier revision to its checked original.
+
+    This is a recheck dependency, not a scope assertion for the new fact.
+    Ordinary different-scope values remain separate. A bank update must name
+    an actual same-listing/year original, reproduce both values, and pass a
+    stored-byte readback before it can make the old comparison stale.
+    """
+    from investment_agent.industry_peers.originals import validate_field_original
+    from investment_agent.providers.eastmoney_bank_annual import BANK_ADAPTER_VERSION
+
+    scopes: dict[str, str] = {}
+    pending: set[str] = set()
+    for row, field, proof in entries:
+        comparison = proof.get("original_comparison")
+        if (
+            row.adapter_version != BANK_ADAPTER_VERSION
+            or row.provider != "eastmoney"
+            or not isinstance(comparison, dict)
+            or comparison.get("status") not in {"mismatch", "missing"}
+            or comparison.get("metric") != metric
+            or comparison.get("period") != row.report_period.isoformat()
+            or comparison.get("accounting_scope") != "group_consolidated"
+        ):
+            continue
+        for old, old_field, old_proof in entries:
+            if (
+                old.id == row.id
+                or old.listing_id != row.listing_id
+                or old.report_period != row.report_period
+                or old.provider != row.provider
+                or _aware(old.captured_at) > _aware(row.captured_at)
+                or old_field.verification is not PeerFieldVerification.VERIFIED
+                or old_proof.get("check_rule_version") != "bank-annual-original/1"
+                or old_proof.get("original_ref") != comparison.get("original_ref")
+                or old_proof.get("pdf_hash") != comparison.get("pdf_hash")
+                or old_proof.get("accounting_scope") != comparison.get("accounting_scope")
+                or (old_field.unit, old_field.currency, old_field.period)
+                != (field.unit, field.currency, field.period)
+            ):
+                continue
+            try:
+                if Decimal(str(old_field.value)) != Decimal(str(comparison.get("old_value"))):
+                    continue
+                if field.value is None:
+                    valid_change = comparison.get("status") == "missing" and comparison.get("new_value") is None
+                else:
+                    valid_change = (
+                        comparison.get("status") == "mismatch"
+                        and Decimal(field.value) == Decimal(str(comparison.get("new_value")))
+                        and Decimal(field.value) != Decimal(str(old_field.value))
+                    )
+            except (InvalidOperation, ValueError, TypeError):
+                continue
+            if valid_change and await validate_field_original(session, old, metric, cutoff=cutoff):
+                scopes[row.id] = "group_consolidated"
+                pending.update((old.id, row.id))
+    return scopes, pending
+
+
 async def peer_field_states(
     session: AsyncSession,
     *,
@@ -330,12 +395,18 @@ async def peer_field_states(
         proof = proof if isinstance(proof, dict) else {}
         entries.append((row, field, proof))
 
+    linked_scopes, linked_pending = await _bank_original_update_links(session, entries, metric, cutoff)
+
     def _in_scope(_row: PeerAnnualSnapshot, field: PeerAnnualField, proof: dict[str, object]) -> bool:
         return (
             (unit is None or field.unit == unit)
             and (currency is None or field.currency == currency)
             and (period_basis is None or field.period.basis == period_basis)
-            and (accounting_scope is None or proof.get("accounting_scope") == accounting_scope)
+            and (
+                accounting_scope is None
+                or proof.get("accounting_scope") == accounting_scope
+                or linked_scopes.get(_row.id) == accounting_scope
+            )
         )
 
     entries = [entry for entry in entries if _in_scope(*entry)]
@@ -381,7 +452,7 @@ async def peer_field_states(
     for entry in entries:
         groups.setdefault(_group_key(entry[1], entry[2]), []).append(entry)
 
-    pending: set[str] = set()
+    pending: set[str] = linked_pending.intersection(by_id)
     conflicted: set[str] = set()
     for group in groups.values():
         # Values are compared as decimals: 1.0 and 1.00 are one value; a

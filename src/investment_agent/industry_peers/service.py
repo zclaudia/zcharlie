@@ -90,7 +90,11 @@ from investment_agent.industry_peers.contracts import (
     PeerQuantity,
 )
 from investment_agent.industry_peers.evidence import peer_field_states
-from investment_agent.industry_peers.metric_packs import BAIJIU_PACK, cohort_metric_pack
+from investment_agent.industry_peers.metric_packs import (
+    BAIJIU_PACK,
+    cohort_metric_pack,
+    cohort_read_scope,
+)
 from investment_agent.investor.common import Contract, ObjectRef, OwnerId
 from investment_agent.storage.models.earnings_events import DisclosureScheduleRecord
 from investment_agent.storage.models.evidence import SavedEvidence
@@ -870,7 +874,7 @@ async def get_industry_peer_context(
     owner_id: OwnerId = "local_owner",
     data_dir: Path | None = None,
     provider: str = DEFAULT_PROVIDER,
-    adapter_version: str = DEFAULT_ADAPTER_VERSION,
+    adapter_version: str | None = None,
 ) -> PeerContextResult:
     """Read the peer context of one target (read-only; never an upstream call).
 
@@ -911,6 +915,11 @@ async def get_industry_peer_context(
     cohort_ref = ObjectRef(
         kind="peer_cohort_snapshot", id=UUID(cohort.id), revision=cohort.revision
     )
+
+    if adapter_version is None:
+        bound_provider, adapter_version = cohort_read_scope(cohort.payload)
+        if provider == DEFAULT_PROVIDER:
+            provider = bound_provider
 
     scan = await scan_committed_batch_mappings(session, root, owner=owner_id)
     warnings = list(scan.warnings)

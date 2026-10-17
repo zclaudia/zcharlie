@@ -44,3 +44,5 @@ I0–I7 已完成本轮实现与主代理验收；银行按“候选事实、三
 九项候选的后续补证按[独立子任务计划](bank-candidates-plan.md)继续实施：该阶段新增 7 项通过核验，达到 46 verified、2 candidate、2 scope_mismatch。10 家 ROE 和净息差均已完成字段证明；该阶段宁波不良率、拨备覆盖率保留候选，并有字段级缺口和处理方案。具体证据、受限跨表范围证明及本轮验证结果见[候选补证验收](../../../review/bank-candidates-acceptance-2026-10-15.md)。
 
 宁波两项最终范围补证见[独立验收记录](../../../review/ningbo-final-scope-acceptance-2026-10-16.md)：年报原值与中诚信国际正式评级报告同表明确的合并口径双原件绑定，当前覆盖为 48 verified、0 candidate、2 scope_mismatch。评级机构是补充原件作者；初步快报仅作旁证。此前阶段的验收记录保留原状。
+
+银行在线年度采集与显式更新按[O1–O6计划](bank-online-plan.md)继续实现：独立银行适配器、任务恢复、同年原件重新核验、修订值待复核，以及新名单版本的显式在线来源绑定。有限真实探针覆盖10家FY2025，开发整链与生产启用条件分别记录于[在线采集验收](../../../review/bank-online-acceptance-2026-10-17.md)。新年度原件不足时仍保持candidate/missing，不自动沿用既往年度核验状态。
