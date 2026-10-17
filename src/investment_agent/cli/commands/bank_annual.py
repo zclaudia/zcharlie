@@ -1012,16 +1012,96 @@ async def import_bank_annual_snapshots(
     }
 
 
+async def import_bank_annual_source_snapshots(
+    session: AsyncSession,
+    *,
+    cohort_key: str,
+    evidence_root: Path,
+    report_period: date,
+    acquired_at: datetime,
+    audit_path: Path | None,
+    originals_root: Path | None,
+) -> dict[str, Any]:
+    """Import an audited bank year into the cohort's fixed bank-annual source scope."""
+    if audit_path is None or originals_root is None:
+        raise ValueError(
+            "--bank-annual-source requires both --audit-path and --originals-root"
+        )
+
+    from sqlalchemy import select
+
+    from investment_agent.industry_peers.metric_packs import (
+        BANK_PACK,
+        cohort_metric_pack,
+        cohort_read_scope,
+    )
+    from investment_agent.providers.eastmoney_bank_annual import BANK_ADAPTER_VERSION
+    from investment_agent.storage.models.peer import PeerCohortSnapshot
+    from investment_agent.storage.repositories.listing import ListingRepository
+
+    cohort = await session.scalar(
+        select(PeerCohortSnapshot)
+        .where(PeerCohortSnapshot.cohort_key == cohort_key)
+        .order_by(PeerCohortSnapshot.revision.desc(), PeerCohortSnapshot.id.desc())
+        .limit(1)
+    )
+    if cohort is None:
+        raise ValueError(f"bank cohort {cohort_key!r} has no saved roster")
+    if cohort_metric_pack(cohort.payload) != BANK_PACK:
+        raise ValueError("selected cohort must use the bank annual metric pack")
+    try:
+        read_scope = cohort_read_scope(cohort.payload)
+    except ValueError as exc:
+        raise ValueError("selected cohort must use the bank annual read scope") from exc
+    if read_scope != ("eastmoney", BANK_ADAPTER_VERSION):
+        raise ValueError("selected cohort must use the bank annual read scope")
+
+    entries = cohort.payload.get("entries")
+    if not isinstance(entries, list):
+        raise ValueError("selected bank cohort has no valid membership entries")
+    member_listing_ids = {
+        entry.get("listing_id") for entry in entries if isinstance(entry, dict)
+    }
+    listing_repo = ListingRepository(session)
+    for code in BANK_CODES:
+        listing = await listing_repo.get_a_share_listing(code)
+        if listing is None or listing.id not in member_listing_ids:
+            raise ValueError(f"{code}: not a saved member of the selected bank cohort")
+
+    return await import_bank_annual_snapshots(
+        session,
+        evidence_root=evidence_root,
+        report_period=report_period,
+        acquired_at=acquired_at,
+        provider=PROVIDER,
+        adapter_version=BANK_ADAPTER_VERSION,
+        audit_path=audit_path,
+        originals_root=originals_root,
+    )
+
+
 @app.command("import-bank")
 def import_bank(
     evidence_root: Path = typer.Option(..., "--evidence-root", exists=True, file_okay=False),  # noqa: B008
     report_period: str = typer.Option(..., "--report-period"),
+    bank_annual_source: bool = typer.Option(
+        False,
+        "--bank-annual-source",
+        help="Import into the selected cohort's bank-annual source scope (requires audited originals)",
+    ),
+    cohort_key: str = typer.Option("bank_run02_sample", "--cohort-key"),
     audit_path: Path | None = typer.Option(None, "--audit-path", exists=True, dir_okay=False),  # noqa: B008
     originals_root: Path | None = typer.Option(  # noqa: B008
         None, "--originals-root", exists=True, file_okay=False
     ),
 ) -> None:
     """Import the fixed 10-bank run-02 annual source snapshot without HTTP."""
+    if bank_annual_source and (audit_path is None or originals_root is None):
+        typer.echo(
+            "--bank-annual-source requires both --audit-path and --originals-root",
+            err=True,
+        )
+        raise typer.Exit(1)
     try:
         period = date.fromisoformat(report_period)
         if (period.month, period.day) != (12, 31):
@@ -1036,6 +1116,16 @@ def import_bank(
 
     async def run() -> dict[str, Any]:
         async with session_scope() as session:
+            if bank_annual_source:
+                return await import_bank_annual_source_snapshots(
+                    session,
+                    cohort_key=cohort_key,
+                    evidence_root=evidence_root,
+                    report_period=period,
+                    acquired_at=acquired,
+                    audit_path=audit_path,
+                    originals_root=originals_root,
+                )
             return await import_bank_annual_snapshots(
                 session,
                 evidence_root=evidence_root,

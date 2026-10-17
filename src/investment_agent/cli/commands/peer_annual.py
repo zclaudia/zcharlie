@@ -961,6 +961,12 @@ def import_annual(
 def import_bank_command(
     evidence_root: Path = typer.Option(..., "--evidence-root", exists=True, file_okay=False),  # noqa: B008
     report_period: str = typer.Option(..., "--report-period"),  # noqa: B008
+    bank_annual_source: bool = typer.Option(
+        False,
+        "--bank-annual-source",
+        help="Import into the selected cohort's bank-annual source scope (requires audited originals)",
+    ),
+    cohort_key: str = typer.Option("bank_run02_sample", "--cohort-key"),
     audit_path: Path | None = typer.Option(None, "--audit-path", exists=True, dir_okay=False),  # noqa: B008
     originals_root: Path | None = typer.Option(None, "--originals-root", exists=True, file_okay=False),  # noqa: B008
 ) -> None:
@@ -969,5 +975,11 @@ def import_bank_command(
     # module's exact directory identity resolver.
     from investment_agent.cli.commands.bank_annual import import_bank
 
-    import_bank(evidence_root=evidence_root, report_period=report_period,
-                audit_path=audit_path, originals_root=originals_root)
+    import_bank(
+        evidence_root=evidence_root,
+        report_period=report_period,
+        bank_annual_source=bank_annual_source,
+        cohort_key=cohort_key,
+        audit_path=audit_path,
+        originals_root=originals_root,
+    )
