@@ -1,0 +1,92 @@
+# HK2-06 observation planning only. This is deliberately not runtime config.
+# Empty observations and reviews mean no real observation or approval is recorded.
+schema_version: 1
+kind: plan_only
+default_enabled: false
+sources:
+  sec.companyfacts.v1:
+    adapter_version: "1"
+    planned_company_keys:
+      - apple
+      - costco
+      - jpmorgan-chase
+      - exxon-mobil
+      - tsmc
+      - hsbc-holdings
+    prerequisites:
+      - "SEC 人工范围确认：确认责任主体、项目实际缓存/私有展示/商业用法及再使用边界；受控许可与完整公司范围人工批准、请求身份和来源要求核准后，才允许未来显式 --allow-network 启动一次性隔离 probe。"
+      - "配置项目/组织名与可监控邮箱组成的真实 User-Agent，并保存请求头证据。"
+      - "SEC 所有机器/进程消费者纳入跨机器聚合限流；单进程 0.5 秒间隔不能证明合规。"
+      - "日常 global/source/ops 刷新保持关闭，技术验收保持 not_accepted；不要求先开启这些开关或先完成三日验收。"
+    observation_window:
+      day_0: "D0：完成依赖核对；人员满足条件后才选择未来的 D+0，不启动自动任务、不预填日期。"
+      day_1: "D+0 首个完整 SEC 六公司真实观测日。"
+      day_2: "D+0 合格后，选择不同的 Asia/Shanghai 日期执行 D+1 完整观测。"
+      day_3: "前两日合格后，选择不同的 Asia/Shanghai 日期执行 D+2 完整观测。"
+    request_matrix:
+      per_company:
+        - "CompanyFacts JSON：每一 CIK 请求一个受控发行人事实文档。"
+        - "Submissions JSON：每一 CIK 请求一份 filing index。"
+        - "历史 submissions shard：按该次 Submissions 的 filings.files 完整发现并取回所有列出分片；响应数随发行人列表变化。"
+      company_scope:
+        - "apple / CIK 320193"
+        - "costco / CIK 909832"
+        - "jpmorgan-chase / CIK 19617"
+        - "exxon-mobil / CIK 34088"
+        - "tsmc / CIK 1046179"
+        - "hsbc-holdings / CIK 1089113（仅发行人 SEC 交叉核对，不推导全部港股证券映射）"
+    daily_checks:
+      - "确认报告含六个且仅六个受控 company_key、各主体 CompanyFacts/Submissions 与所有当日列明历史分片；不以某一发行人成功代表整源成功。"
+      - "逐响应核验 HTTP 成功、请求计数/重试、manifest/body SHA、CIK 与公司绑定、fetched_at 与观测日期一致，并用当前适配器重解析检查结构。"
+      - "将当日年报与原件/发行人申报进行字段、期间和版本对照；保留本地引用与 SHA，差异须由人工解释。"
+      - "留存限速、真实 UA、请求日志。日常 worker 开关/inflight/replay 使用 HK2-05 隔离 fake 证据；特批 probe 的 STOP/许可撤回停止须另留真实证据；restart_resume 是独立待执行演练，probe 不支持断点续跑。"
+    failure_and_recovery:
+      - "403/拒绝访问立即停止 SEC 后续请求，按官方指引留存错误并联系 SEC；不得换 IP、伪装身份或绕过。"
+      - "任何请求失败、范围缺失、响应结构漂移、未解释版本变化、无效引用或检查/演练失败，中断本来源 streak；修复并重新满足先决条件后另开 D+0 窗口。"
+      - "重试最多依请求策略；不得用旧 archive 重贴新日期，也不得让同日重跑增加日期数。"
+    acceptance:
+      - "最新连续三次合格真实观测覆盖三个不同 Asia/Shanghai 日期，且每份均覆盖完整六公司范围。"
+      - "三份原件及请求记录可验证、响应当日取得且当前 adapter 可完整重解析；年度对照与独立演练/特批 probe STOP 证据均有可解析本地引用及匹配 SHA。"
+      - "满足后离线工具只给 technical_review_candidate；仍需 SEC 来源许可人工批准和真实真实性复核，不自动写 approved/accepted 或宣称 HK2-06 完成。"
+    observations: []
+    reviews: []
+  eastmoney.hk.native.v1:
+    adapter_version: "1"
+    planned_company_keys:
+      - clp-holdings
+      - hsbc-holdings
+      - tencent-holdings
+    prerequisites:
+      - "阻塞：先由东方财富正式渠道书面确认 securities API 路径及三公司年度三表调用授权、自动化/爬虫、速率/并发、缓存留存、私有展示、再分发、商业用途、429/403 规则及 Choice 协议适用关系。"
+      - "把原件采集、缓存及应用用途纳入人工审批；得到端点特定证据前保持来源不可请求。"
+      - "端点特定书面授权、公司范围/许可人工批准、请求身份与来源要求核准后，才可由人员显式执行一次性隔离 probe；日常 global/source/ops 保持关闭，技术验收保持 not_accepted。"
+    observation_window:
+      day_0: "D0：确认端点许可、公司范围与身份条件；满足后人员才选择未来 D+0，不预填日期。"
+      day_1: "D+0 执行首个完整三公司真实观测日。"
+      day_2: "D+0 合格后，于不同的 Asia/Shanghai 日期执行 D+1 完整观测。"
+      day_3: "前两日合格后，于第三个不同的 Asia/Shanghai 日期执行 D+2 完整观测。"
+    request_matrix:
+      per_company:
+        - "RPT_HKF10_FN_INCOME：原币年度收入表。"
+        - "RPT_HKF10_FN_BALANCE：原币年度资产负债表。"
+        - "RPT_CUSTOM_HKSK_APPFN_CASHFLOW：原币年度现金流量表。"
+      company_scope:
+        - "clp-holdings / 00002.HK"
+        - "hsbc-holdings / 00005.HK"
+        - "tencent-holdings / 00700.HK"
+      request_count: "每个完整日期至少 3 公司 × 3 表 = 9 个成功归档响应；请求必须由获书面授权的边界和速率约束。"
+    daily_checks:
+      - "核对所有九个请求、HTTP 成功、响应分页完整、年度日期、公司/证券码及原币与报告币种一致；收入 PC/展示币种端点不得用于金额。"
+      - "逐响应验证 manifest/body SHA、fetched_at 当日一致，当前适配器完整重解析，检查缺表、分页截断、字段/版本变化和显式缺失指标。"
+      - "逐公司对照发行人年度原件及年度字段，尤其保留 HSBC 信用损失后收入、净购售固定资产线及权益范围定义；对照差异需人工解释。"
+      - "留存限速/请求日志。日常 worker 开关/inflight/replay 使用 HK2-05 隔离 fake 证据；特批 probe 的 STOP/许可撤回停止另留真实证据；独立 restart_resume 待执行，probe 本身没有 checkpoint/restart 能力。"
+    failure_and_recovery:
+      - "目前 endpoint-specific 授权与允许速率未知，真实观测保持 blocked；不得以公共可访问、既有缓存或本地 1 秒限速代替授权。"
+      - "获授权后任一失败、缺公司/表、结构/币种/期间变化或未解释版本变化均清零本来源 streak；修复和重新审批后另开 D+0 窗口。"
+      - "429/403 等拒绝按书面规则停止；旧 archive 不可重新标注成新观测日，同日重复不增加日期数。"
+    acceptance:
+      - "最新连续三次合格真实观测覆盖三个不同 Asia/Shanghai 日期，每次完整九表响应覆盖三公司。"
+      - "三日原件、完整 HTTP/请求记录、当前 adapter 解析、年度对照引用及独立演练/特批 probe STOP 引用均本地可读且 SHA 匹配。"
+      - "符合仅为 technical_review_candidate；仍需东方财富端点授权及来源人工批准、真实性复核，不自动写 approved/accepted 或宣布 HK2-06 完成。"
+    observations: []
+    reviews: []

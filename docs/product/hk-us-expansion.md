@@ -82,6 +82,10 @@ HK2-05 新增 `materials_sec_refresh_enabled` 和 `materials_hk_refresh_enabled`
 POST 返回逐源 `accepted_for_fetch` 与拒绝原因；同日策略/运行状态/适配器版本变化产生新批次，
 同请求并发仍去重。HK 显式期间当前在入队前返回 422，SEC 合法显式期间保持精确。
 真实来源启用仍依赖使用范围核对及 HK2-06 至少三个不同日期的实际观测，见 §6。
+HK2-06 的准备阶段已提供[来源与请求要求审查](plans/hk-us-expansion/34-hk2-06-source-review.md)、
+[分来源三日观测计划](plans/hk-us-expansion/35-hk2-06-observation-plan.md)及
+[隔离验收工具报告](plans/hk-us-expansion/36-hk2-06-preparation-acceptance.md)。
+默认预检零请求；离线汇总只产生人工复核候选。SEC 和东财均未开始真实观测（0/3），许可和技术审批未改变。
 
 ## 4. 离线导入用法
 

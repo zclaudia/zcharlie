@@ -12,6 +12,8 @@
 
 ## 受控身份与来源绑定
 
+2026-10-17 HK2-06 准备更新：来源范围与请求差距见 [34](34-hk2-06-source-review.md)，隔离验收工具及三日计划见 [35](35-hk2-06-observation-plan.md)、[36](36-hk2-06-preparation-acceptance.md)。SEC 覆盖六个发行人绑定，东财覆盖三个港股公司；两源真实观测均 0/3，许可与技术状态未改变，`online_refresh` 继续 false。
+
 HK2-08 M1 本地发布与配套恢复的最新实测见 [29](29-hk2-08-m1-acceptance.md)；生产环境未操作，来源继续关闭。
 
 下表中的代码是名单中的实际 provider symbol。`sec.submissions.v1` 是 SEC 适配器从同一 CIK 获取的申报索引，不是名单中的独立绑定；Yahoo 是身份绑定，不代表 HK/US `materials` 有行情适配器。CIK 仅是发行人标识。
