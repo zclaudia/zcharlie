@@ -41,10 +41,18 @@ async def test_get_separates_request_attempt_import_and_original_review(api_clie
     assert body["freshness"]["last_verified_on"] is None
     assert body["freshness"]["latestness"] == "unknown"
     assert "latestness_unknown" in {item["code"] for item in body["statuses"]}
-    assert body["freshness"]["sources"] == {
-        "hk_annual_reports": {"enabled": False, "licensing": "unknown", "state": "disabled"},
-        "us_issuer_facts": {"enabled": False, "licensing": "unknown", "state": "disabled"},
-    }
+    sources = body["freshness"]["sources"]
+    for alias, source_id in (
+        ("hk_annual_reports", "eastmoney.hk.native.v1"),
+        ("us_issuer_facts", "sec.companyfacts.v1"),
+    ):
+        assert sources[alias] == sources[source_id]
+        assert sources[alias]["enabled"] is False
+        assert sources[alias]["licensing"] == "unknown"
+        assert sources[alias]["technical_acceptance"] == "not_accepted"
+        assert sources[alias]["operational_enabled"] is False
+        assert sources[alias]["state"] == "disabled"
+        assert "global_refresh_disabled" in sources[alias]["reason_codes"]
 
 
 async def test_failed_and_queued_runs_keep_last_successful_provider_collection(

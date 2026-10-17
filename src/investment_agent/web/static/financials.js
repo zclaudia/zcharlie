@@ -21,6 +21,21 @@ const REFRESH_REASON_COPY = Object.freeze({
   部分来源未完成: "部分来源未完成",
 });
 
+const SOURCE_REASON_COPY = Object.freeze({
+  identity_not_bound: "证券未绑定该来源",
+  licensing_unknown: "使用许可尚未确认",
+  licensing_scope_mismatch: "许可范围不含该发行人",
+  technical_acceptance_missing_or_mismatched: "技术验收尚未完成或版本不匹配",
+  operationally_disabled: "运行开关已关闭",
+  global_refresh_disabled: "全局在线刷新未开启",
+  unknown_source: "来源未列入受控策略",
+});
+
+const SOURCE_LABELS = Object.freeze({
+  "eastmoney.hk.native.v1": "港股年报来源",
+  "sec.companyfacts.v1": "美国发行人申报来源",
+});
+
 export function refreshLines(result) {
   const created = Boolean(result && result.created);
   const lines = [];
@@ -31,10 +46,15 @@ export function refreshLines(result) {
   }
   lines.push(
     result && result.online_refresh_enabled
-      ? "在线刷新已开启：请求已登记，采集结果尚未确认；页面资料会在新结果保存后更新。"
-      : "在线刷新未开启：登记的任务不会联网采集，也不会更新本页数据。"
+      ? "至少一个来源当前通过在线采集条件；请求仅已登记，采集结果尚未确认。"
+      : "当前没有来源通过全部在线采集条件；登记任务不会绕过拒绝条件。"
   );
-  lines.push("排队或去重结果都不代表采集已完成。");
+  for (const [source, decision] of Object.entries(result?.source_decisions || {})) {
+    if (decision.enabled) continue;
+    const reasons = (decision.reason_codes || []).map((code) => SOURCE_REASON_COPY[code] || code);
+    lines.push(`${SOURCE_LABELS[source] || "受控资料来源"}：${reasons.join("；") || "当前不可在线采集"}。`);
+  }
+  lines.push("任务登记或去重不授予采集权限，也不代表采集已完成或资料已更新。");
   return lines;
 }
 

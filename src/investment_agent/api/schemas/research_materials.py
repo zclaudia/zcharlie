@@ -10,6 +10,7 @@ currency travel separately and a missing amount travels as null with its reason.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -91,7 +92,7 @@ class FreshnessOut(BaseModel):
     latest_period_end: date | None = None
     latestness: str
     latestness_checked_on: date | None = None
-    sources: dict[str, dict[str, str | bool]] = Field(default_factory=dict)
+    sources: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class RefreshLifecycleOut(BaseModel):
@@ -147,8 +148,8 @@ class RefreshBody(BaseModel):
     """Optional knobs of one refresh request (all fields optional).
 
     ``sources``/``periods`` empty or absent mean the licensed default: the
-    checked source set and the adapter's own default period window (an explicit
-    unsupported period is reported by the run, never silently dropped).
+    checked source set and the adapter's own default period window. Explicit
+    unsupported HK periods are rejected before enqueue; SEC periods are retained.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -169,4 +170,6 @@ class RefreshResponse(BaseModel):
     idempotency_key: str
     adapter_versions: dict[str, str]
     online_refresh_enabled: bool
-    """Whether the run may call upstream at all; false means it will not."""
+    """Whether at least one requested source currently passes every fetch gate."""
+    source_decisions: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    """Per-source decision; queue registration never authorizes a worker fetch."""

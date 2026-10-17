@@ -33,11 +33,13 @@ bound, not covered or not licensed simply produces no material.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlparse
@@ -51,7 +53,6 @@ from investment_agent.domain.security import (
     DEFAULT_PILOT_LIST_PATH,
     ControlledIdentity,
     find_identity,
-    source_symbol,
 )
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
 from investment_agent.materials.archive import (
@@ -76,6 +77,10 @@ from investment_agent.materials.jobs import (
     MATERIAL_COLLECTION,
     MaterialCollectionPayload,
 )
+from investment_agent.materials.source_policy import (
+    SourceDecision,
+    evaluate_source_policy,
+)
 from investment_agent.materials.store import MaterialStore, SavedDataset, coalesce_annual_tables
 from investment_agent.providers.errors import ProviderDataError, ProviderTransientError
 from investment_agent.snapshots.throttle import AsyncRateLimiter
@@ -86,13 +91,11 @@ from investment_agent.storage.repositories.pipeline_run import PipelineRunReposi
 log = structlog.get_logger(__name__)
 
 ONLINE_REFRESH_ENABLED = False
-"""Whether a run may call upstream at all.
+"""Global safety gate, independent of per-source approval and ops settings.
 
-The first phase is deliberately offline: the Eastmoney / Yahoo usage licences
-are not confirmed (design §尚未验证能力), so every collection stops after
-recording ``online_refresh_disabled``. Turning this on is a review decision,
-not a preference — no runtime setting is added on purpose, so the offline
-promise cannot be flipped from the settings UI.
+Production remains offline. Source policy must additionally approve the issuer
+scope, adapter version, licensing and technical evidence at every request.
+Ordinary runtime settings cannot change this gate or grant approval.
 """
 
 USER_AGENT = "zcharlie-research/0.1 (personal research)"
@@ -109,6 +112,9 @@ DEFAULT_MIN_INTERVAL = 1.0
 
 REQUEST_TIMEOUT_SECONDS = 30.0
 """Per-request timeout of the default fetcher."""
+
+MAX_RETRY_AFTER_SECONDS = 5.0
+"""Maximum time spent honoring one server-provided 429 delay."""
 
 MAX_ADAPTER_PASSES = 2
 """How often an adapter may name further requests after a parse.
@@ -138,9 +144,11 @@ the source ``structural_failure`` (reported, never blindly retried).
 SOURCE_SAVED = "saved"
 SOURCE_STRUCTURAL_FAILURE = "structural_failure"
 SOURCE_DATA_ERROR = "data_error"
+SOURCE_TRANSIENT_ERROR = "transient_error"
 SOURCE_NOT_BOUND = "source_not_bound"
 SOURCE_ADAPTER_VERSION_MISMATCH = "adapter_version_mismatch"
 SOURCE_ONLINE_REFRESH_DISABLED = "online_refresh_disabled"
+SOURCE_POLICY_DISABLED = "source_policy_disabled"
 LISTING_NOT_COVERED = "listing_not_covered"
 """Run metadata vocabulary: per-source status, plus the uncovered listing."""
 
@@ -218,11 +226,13 @@ class HttpxMaterialFetcher:
         client: httpx.AsyncClient | None = None,
         user_agent: str = USER_AGENT,
         min_interval: Mapping[str, float] | None = None,
+        sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
     ) -> None:
         self.timeout = timeout
         self.user_agent = user_agent
         self._min_interval = dict(MIN_INTERVAL if min_interval is None else min_interval)
         self._client = client
+        self._sleep = sleep
         self._limiters: dict[str, AsyncRateLimiter] = {}
 
     async def fetch(
@@ -230,6 +240,11 @@ class HttpxMaterialFetcher:
     ) -> RawPayload:
         del identity  # the request already carries the source-specific code
         await self.limiter_for(request).acquire()
+        # The handler installs this guard for the active source/run. Keeping
+        # it after the limiter means a policy change during rate-limit waiting
+        # blocks the request before it leaves the process.
+        if self.before_send is not None:
+            await self.before_send(request)
         if self._client is None:
             async with httpx.AsyncClient(
                 timeout=self.timeout, headers=self._headers()
@@ -240,6 +255,10 @@ class HttpxMaterialFetcher:
         raw = self._payload(request, response)
         status = response.status_code
         if status in {408, 429} or status >= 500:
+            if status == 429:
+                delay = _retry_after_seconds(response.headers.get("Retry-After"))
+                if delay > 0:
+                    await self._sleep(min(delay, MAX_RETRY_AFTER_SECONDS))
             raise _MaterialTransientError(
                 f"{request.name}: upstream HTTP {status}",
                 provider=self._provider(request),
@@ -278,6 +297,8 @@ class HttpxMaterialFetcher:
             self._limiters[key] = limiter
         return limiter
 
+    before_send: Callable[[UpstreamRequest], Awaitable[object]] | None = None
+
     def min_interval_for(self, request: UpstreamRequest) -> float:
         """Seconds between two calls to ``request``'s source."""
 
@@ -294,7 +315,8 @@ class HttpxMaterialFetcher:
         provider = self._provider(request)
         try:
             response = await client.get(
-                request.url, params=list(request.params), headers=self._headers()
+                request.url, params=list(request.params), headers=self._headers(),
+                timeout=self.timeout,
             )
         except httpx.TransportError as exc:
             raise ProviderTransientError(
@@ -347,6 +369,14 @@ class _MaterialDataError(ProviderDataError):
         self.parse_eligible = parse_eligible
 
 
+class _SourcePolicyDeniedError(RuntimeError):
+    """A runtime policy change closed a source before its next request."""
+
+
+class _IdentityCompanyMismatchError(RuntimeError):
+    """The listing's DB company does not match its controlled identity."""
+
+
 def default_adapters() -> dict[str, MaterialSourceAdapter]:
     """The production adapter set, keyed by source id.
 
@@ -371,6 +401,24 @@ def is_informational_problem(problem: str) -> bool:
     return problem.startswith(INFORMATIONAL_PROBLEM_PREFIXES)
 
 
+def _retry_after_seconds(value: str | None, *, now: datetime | None = None) -> float:
+    """Parse either Retry-After form; malformed or past values mean no wait."""
+
+    if not value:
+        return 0.0
+    try:
+        return max(0.0, float(value.strip()))
+    except ValueError:
+        try:
+            target = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+        if target.tzinfo is None:
+            target = target.replace(tzinfo=UTC)
+        current = now or datetime.now(UTC)
+        return max(0.0, (target.astimezone(UTC) - current).total_seconds())
+
+
 @dataclass(frozen=True)
 class _Subject:
     """The listing this run collects, resolved to its checked identity."""
@@ -393,11 +441,15 @@ class MaterialCollectionHandler(BaseJobHandler):
         adapters: Mapping[str, MaterialSourceAdapter] | None = None,
         clock: Callable[[], datetime] | None = None,
         pilot_list_path: Path = DEFAULT_PILOT_LIST_PATH,
+        policy_evaluator: Callable[..., SourceDecision] = evaluate_source_policy,
+        approvals: Mapping[str, object] | None = None,
     ) -> None:
         self.settings = settings
         self.fetcher: MaterialFetcher = HttpxMaterialFetcher() if fetcher is None else fetcher
         self.pilot_list_path = Path(pilot_list_path)
         self.clock: Callable[[], datetime] = clock or (lambda: datetime.now(UTC))
+        self.policy_evaluator = policy_evaluator
+        self.approvals = approvals
         self._adapters: Mapping[str, MaterialSourceAdapter] | None = (
             None if adapters is None else dict(adapters)
         )
@@ -417,7 +469,16 @@ class MaterialCollectionHandler(BaseJobHandler):
                 checked_at=self.clock(),
                 previous=await self._previous_metadata(repository, job.run_id),
             )
-            subject = await self._resolve_subject(session, payload.listing_id)
+            try:
+                subject = await self._resolve_subject(session, payload.listing_id)
+            except _IdentityCompanyMismatchError as exc:
+                state.listing_status = "identity_company_mismatch"
+                state.note_problem(str(exc))
+                await self._finish_partial(
+                    session, repository, job, state,
+                    summary="identity_company_mismatch",
+                )
+                return "partial"
             if subject is None:
                 state.listing_status = LISTING_NOT_COVERED
                 state.note_problem(
@@ -430,15 +491,9 @@ class MaterialCollectionHandler(BaseJobHandler):
                 return "partial"
             state.listing_status = "covered"
             state.subject = _subject_metadata(subject)
-            if not ONLINE_REFRESH_ENABLED:
-                _note_refresh_disabled(state)
-                await self._finish_partial(
-                    session, repository, job, state, summary=SOURCE_ONLINE_REFRESH_DISABLED
-                )
-                return "partial"
-
             store = MaterialStore(session, data_dir=self.settings.data_dir)
             adapters = self._adapter_map()
+            transient: ProviderTransientError | None = None
             for source in payload.sources:
                 if state.is_final(source):
                     # A source that finished in an earlier attempt is not redone.
@@ -454,12 +509,20 @@ class MaterialCollectionHandler(BaseJobHandler):
                         adapters=adapters,
                         store=store,
                     )
-                except ProviderTransientError:
+                except _SourcePolicyDeniedError:
+                    await self._checkpoint(session, repository, job, state)
+                    continue
+                except ProviderTransientError as exc:
                     # A retry must not lose already received responses from a
                     # partially completed source attempt.
                     await self._checkpoint(session, repository, job, state)
-                    raise
+                    transient = transient or exc
+                    continue
                 await self._checkpoint(session, repository, job, state)
+            if transient is not None:
+                # Other permitted sources have had their turn and their state
+                # is durable. Let the existing worker spend its retry budget.
+                raise transient
             if self._outcome(state) == "completed":
                 await repository.mark_success(job.run_id, lease=job.lease)
                 return "completed"
@@ -481,38 +544,81 @@ class MaterialCollectionHandler(BaseJobHandler):
     ) -> None:
         """Fetch, parse and store one source; a bad answer never raises."""
 
-        if source_symbol(subject.identity, source) is None:
-            state.mark(source, SOURCE_NOT_BOUND)
-            state.skip(source, SOURCE_NOT_BOUND)
-            return
-        state.begin_source(source)
         adapter = adapters.get(source)
         if adapter is None:
             # A wiring defect, not a data problem: no adapter may silently
             # stand in for a requested source.
             raise ValueError(f"no material adapter is wired for source {source!r}")
         declared = payload.adapter_versions.get(source)
-        if declared is not None and declared != adapter.adapter_version:
+        if declared != adapter.adapter_version:
+            decision = await self._record_source_decision(
+                session=session, source=source, adapter=adapter, subject=subject,
+                state=state,
+            )
             state.mark(source, SOURCE_ADAPTER_VERSION_MISMATCH)
             state.note_problem(
-                f"{source}: adapter_version_mismatch: licensed {declared!r} != "
+                f"{source}: adapter_version_missing_or_mismatch: payload {declared!r} != "
                 f"adapter {adapter.adapter_version!r}"
             )
+            record = decision.as_dict()
+            record.update({
+                "enabled": False,
+                "reason": "payload_adapter_version_missing_or_mismatch",
+                "reason_codes": [
+                    *record["reason_codes"],
+                    "payload_adapter_version_missing_or_mismatch",
+                ],
+                "payload_adapter_version": declared,
+                "adapter_version": adapter.adapter_version,
+            })
+            state.source_decisions[source] = record
             return
+        state.begin_source(source)
+        try:
+            await self._require_source_enabled(
+                session=session, source=source, adapter=adapter, subject=subject,
+                state=state,
+            )
+        except _SourcePolicyDeniedError:
+            return
+        fetcher_before_send = getattr(self.fetcher, "before_send", None)
+        if hasattr(self.fetcher, "before_send"):
+            async def before_send(_request: UpstreamRequest) -> None:
+                if fetcher_before_send is not None:
+                    await fetcher_before_send(_request)
+                await self._require_source_enabled(
+                    session=session, source=source, adapter=adapter, subject=subject,
+                    state=state,
+                )
+            self.fetcher.before_send = before_send
         try:
             drafts, problems, raw = await self._fetch_and_parse(
                 source=source,
                 adapter=adapter,
                 subject=subject,
+                session=session,
                 periods=_requested_periods(payload),
                 state=state,
             )
+        except _SourcePolicyDeniedError as exc:
+            await self._archive_source(
+                session=session, state=state, source=source, subject=subject,
+                adapter=adapter, periods=_requested_periods(payload),
+                problems=(f"{source}: policy_changed_during_run: {exc}",),
+            )
+            return
         except ProviderTransientError as exc:
+            if hasattr(self.fetcher, "before_send"):
+                self.fetcher.before_send = fetcher_before_send
             carried = getattr(exc, "raw_payload", None)
             if isinstance(carried, RawPayload):
                 state.record_payload(source, carried)
                 state.mark_parse_ineligible(source, carried.name)
                 state.record_responses(source, state.payloads[source])
+            state.mark(source, SOURCE_TRANSIENT_ERROR)
+            state.note_problem(
+                f"{source}: transient_error: {exc.error_code or type(exc).__name__}"
+            )
             await self._archive_source(
                 session=session,
                 state=state,
@@ -526,6 +632,8 @@ class MaterialCollectionHandler(BaseJobHandler):
             # decides whether the retry budget allows another attempt.
             raise
         except ProviderDataError as exc:
+            if hasattr(self.fetcher, "before_send"):
+                self.fetcher.before_send = fetcher_before_send
             carried = getattr(exc, "raw_payload", None)
             if isinstance(carried, RawPayload):
                 state.record_payload(source, carried)
@@ -543,6 +651,9 @@ class MaterialCollectionHandler(BaseJobHandler):
             state.mark(source, SOURCE_DATA_ERROR)
             state.note_problem(f"{source}: data_error: {exc.error_code or type(exc).__name__}")
             return
+        finally:
+            if hasattr(self.fetcher, "before_send"):
+                self.fetcher.before_send = fetcher_before_send
 
         structural = [problem for problem in problems if not is_informational_problem(problem)]
         capture_problems = list(problems)
@@ -625,6 +736,7 @@ class MaterialCollectionHandler(BaseJobHandler):
         source: str,
         adapter: MaterialSourceAdapter,
         subject: _Subject,
+        session: AsyncSession,
         periods: Sequence[FactPeriod],
         state: _RunState,
     ) -> tuple[tuple[DatasetDraft, ...], tuple[str, ...], tuple[RawPayload, ...]]:
@@ -651,6 +763,10 @@ class MaterialCollectionHandler(BaseJobHandler):
             for request in pending:
                 state.record_expected_request(source, request.name)
             for request in pending:
+                await self._require_source_enabled(
+                    session=session, source=source, adapter=adapter, subject=subject,
+                    state=state,
+                )
                 fetched = await self.fetcher.fetch(request, identity=subject.identity)
                 seen.add(fetched.name)
                 raw.append(fetched)
@@ -688,6 +804,52 @@ class MaterialCollectionHandler(BaseJobHandler):
             )
         return result.drafts, result.problems, tuple(raw)
 
+    async def _require_source_enabled(
+        self,
+        *,
+        session: AsyncSession,
+        source: str,
+        adapter: MaterialSourceAdapter,
+        subject: _Subject,
+        state: _RunState,
+    ) -> None:
+        """Reload effective settings and evaluate every gate before a request."""
+
+        decision = await self._record_source_decision(
+            session=session, source=source, adapter=adapter, subject=subject,
+            state=state,
+        )
+        if decision.enabled:
+            return
+        reason = decision.reason or SOURCE_POLICY_DISABLED
+        state.mark(source, SOURCE_POLICY_DISABLED)
+        state.note_problem(f"{source}: {reason}")
+        state.skip(source, reason)
+        raise _SourcePolicyDeniedError(reason)
+
+    async def _record_source_decision(
+        self,
+        *,
+        session: AsyncSession,
+        source: str,
+        adapter: MaterialSourceAdapter,
+        subject: _Subject,
+        state: _RunState,
+    ) -> SourceDecision:
+        from investment_agent.settings.loader import load_settings
+
+        effective = await load_settings(session, base=self.settings)
+        decision = self.policy_evaluator(
+            source,
+            subject.identity,
+            settings=effective,
+            adapter_version=adapter.adapter_version,
+            global_enabled=ONLINE_REFRESH_ENABLED,
+            approvals=self.approvals,
+        )
+        state.source_decisions[source] = decision.as_dict()
+        return decision
+
     # --- resolution, checkpoints, terminal status -------------------------
 
     def _adapter_map(self) -> Mapping[str, MaterialSourceAdapter]:
@@ -717,6 +879,12 @@ class MaterialCollectionHandler(BaseJobHandler):
         )
         if identity is None:
             return None
+        if company.canonical_name != identity.company_name:
+            raise _IdentityCompanyMismatchError(
+                f"identity_company_mismatch: listing {listing.id} resolves to "
+                f"{company.canonical_name!r}, while controlled identity "
+                f"{identity.company_key!r} names {identity.company_name!r}"
+            )
         return _Subject(listing_id=listing.id, company_id=company.id, identity=identity)
 
     @staticmethod
@@ -796,6 +964,16 @@ class _RunState:
         self.parse_ineligible: dict[str, set[str]] = {}
         self.problems = _string_list(previous.get("problems"))
         self.informational = _string_list(previous.get("informational"))
+        source_decisions = previous.get("source_decisions")
+        self.source_decisions: dict[str, dict[str, object]] = (
+            {
+                key: dict(value)
+                for key, value in source_decisions.items()
+                if isinstance(key, str) and isinstance(value, Mapping)
+            }
+            if isinstance(source_decisions, Mapping)
+            else {}
+        )
 
     def is_final(self, source: str) -> bool:
         return self.status.get(source) in _FINAL_SOURCE_STATUSES
@@ -834,6 +1012,10 @@ class _RunState:
         self.responses[source] = [_response_record(item) for item in raw]
 
     def begin_source(self, source: str) -> None:
+        self.problems = [
+            problem for problem in self.problems
+            if not problem.startswith(f"{source}: transient_error:")
+        ]
         self.expected_requests[source] = []
         self.payloads[source] = []
         self.parse_ineligible[source] = set()
@@ -880,6 +1062,10 @@ class _RunState:
             "source_status": {
                 source: self.status[source] for source in self.requested if source in self.status
             },
+            "source_decisions": {
+                source: self.source_decisions[source]
+                for source in self.requested if source in self.source_decisions
+            },
             "saved": self.saved,
             "skipped": self.skipped,
             "responses": self.responses,
@@ -925,23 +1111,15 @@ def _requested_periods(payload: MaterialCollectionPayload) -> tuple[FactPeriod, 
     52/53-week year is not a calendar year) and no start date is invented here.
     Empty stays empty, which every adapter reads as "your default window".
 
-    The HK adapter (task 03) does ask for a stated span, so an explicit HK
-    period end is answered with its ``unsupported_period`` problem instead of a
-    fabricated January 1st start: the run reports the gap in its metadata,
-    which is the honest outcome while the payload carries ends only.
+    The refresh API rejects explicit HK ends before enqueue. An older or
+    internally enqueued payload still reaches the adapter's unsupported_period
+    fallback, never a fabricated January 1st start.
     """
 
     return tuple(
         FactPeriod(start=None, end=date.fromisoformat(item), basis=PeriodBasis.ANNUAL)
         for item in payload.periods
     )
-
-
-def _note_refresh_disabled(state: _RunState) -> None:
-    state.note_problem(SOURCE_ONLINE_REFRESH_DISABLED)
-    for source in state.requested:
-        state.mark(source, SOURCE_ONLINE_REFRESH_DISABLED)
-        state.skip(source, SOURCE_ONLINE_REFRESH_DISABLED)
 
 
 def _partial_summary(state: _RunState) -> str:

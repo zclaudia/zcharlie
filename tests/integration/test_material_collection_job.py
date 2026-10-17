@@ -38,7 +38,7 @@ from investment_agent.domain.security import (
     load_pilot_identities,
 )
 from investment_agent.jobs.base import ClaimedJob
-from investment_agent.materials import handlers
+from investment_agent.materials import handlers, source_policy
 from investment_agent.materials.contracts import (
     SCHEMA_VERSION,
     AccountingStandard,
@@ -79,6 +79,7 @@ from investment_agent.storage.repositories.pipeline_run import (
     PipelineRunRepository,
     RunLease,
 )
+from tests.support.material_source_policy import synthetic_approved_source_policy
 from tests.unit._hk_us_support import pilot_identities, seed_pilot_listings
 
 HK_SOURCE = "eastmoney.hk.native.v1"
@@ -114,6 +115,8 @@ def _settings(tmp_path: Path) -> Settings:
         api_key="test",
         llm_tier3_api_key="test",
         data_dir=tmp_path,
+        materials_hk_refresh_enabled=True,
+        materials_sec_refresh_enabled=True,
     )
 
 
@@ -335,8 +338,59 @@ def _handler(
     )
 
 
-def _open_the_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+def _open_the_gate(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    adapter_versions: Mapping[str, str] | None = None,
+) -> None:
     monkeypatch.setattr(handlers, "ONLINE_REFRESH_ENABLED", True)
+    records: dict[str, object] = {}
+    versions = {HK_SOURCE: "fake-1", SEC_SOURCE: "fake-1"}
+    if adapter_versions is not None:
+        versions.update(adapter_versions)
+    for source in (HK_SOURCE, SEC_SOURCE):
+        bound = [
+            identity for identity in pilot_identities()
+            if any(binding.source == source for binding in identity.sources)
+        ]
+        entries = [
+            synthetic_approved_source_policy(
+                source, identity, versions[source]
+            )[source]
+            for identity in bound
+        ]
+        record = dict(entries[0])
+        licensing = dict(record["licensing"])
+        technical = dict(record["technical_acceptance"])
+        keys = [identity.company_key for identity in bound]
+        licensing["company_keys"] = keys
+        technical["company_keys"] = keys
+        record["licensing"] = licensing
+        record["technical_acceptance"] = technical
+        records[source] = record
+    monkeypatch.setattr(
+        source_policy,
+        "load_source_policy",
+        lambda: {
+            "schema_version": 1,
+            "revision": "synthetic-test-policy-1",
+            "sources": records,
+        },
+    )
+
+
+def _licensed_payload(**values: object) -> MaterialCollectionPayload:
+    """A queued test request whose source adapters were synthetically approved."""
+
+    sources = values.get("sources", MATERIAL_SOURCES)
+    versions = values.pop("adapter_versions", None)
+    if versions is None:
+        values["adapter_versions"] = {
+            source: "fake-1" for source in sources  # type: ignore[union-attr]
+        }
+    else:
+        values["adapter_versions"] = versions
+    return MaterialCollectionPayload(**values)  # type: ignore[arg-type]
 
 
 # --- the default-offline branch --------------------------------------------
@@ -350,7 +404,7 @@ async def test_default_offline_branch_makes_no_upstream_call(
     fetcher = FakeFetcher()
     handler = _handler(tmp_path, fetcher, sources=MATERIAL_SOURCES)
     job, run_id = await _claim(
-        MaterialCollectionPayload(listing_id=listing_id, refresh_batch=BATCH)
+        _licensed_payload(listing_id=listing_id, refresh_batch=BATCH)
     )
 
     assert handlers.ONLINE_REFRESH_ENABLED is False
@@ -360,11 +414,16 @@ async def test_default_offline_branch_makes_no_upstream_call(
     assert run.status == "partial"
     assert fetcher.calls == []
     metadata = run.metadata_json
-    assert "online_refresh_disabled" in metadata["problems"]
+    assert metadata["problems"]
     assert metadata["source_status"] == {
-        HK_SOURCE: "online_refresh_disabled",
-        SEC_SOURCE: "online_refresh_disabled",
+        HK_SOURCE: "source_policy_disabled",
+        SEC_SOURCE: "source_policy_disabled",
     }
+    assert set(metadata["source_decisions"]) == {HK_SOURCE, SEC_SOURCE}
+    for decision in metadata["source_decisions"].values():
+        assert decision["enabled"] is False
+        assert decision["operational_enabled"] is True
+        assert "global_refresh_disabled" in decision["reason_codes"]
     assert metadata["checked"] == []
     assert metadata["listing_status"] == "covered"
     assert metadata["subject"] == {
@@ -392,7 +451,7 @@ async def test_enabled_branch_stores_the_dataset_and_its_raw_response(
         settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: adapter}
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH
         )
     )
@@ -457,7 +516,7 @@ async def test_a_single_response_source_writes_its_raw_artifact(
     )
     handler = _handler(tmp_path, fetcher)
     job, run_id = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH
         )
     )
@@ -487,7 +546,7 @@ async def test_structural_problems_stay_partial_and_are_not_retried(
         settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: adapter}
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH
         )
     )
@@ -515,7 +574,7 @@ async def test_informational_counters_leave_the_outcome_alone(
         settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: adapter}
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH
         )
     )
@@ -558,7 +617,7 @@ async def test_an_adapter_version_outside_the_licensed_scope_is_not_fetched(
     assert run.status == "partial"
     assert fetcher.calls == []
     assert run.metadata_json["source_status"] == {HK_SOURCE: "adapter_version_mismatch"}
-    assert "adapter_version_mismatch" in run.metadata_json["problems"][0]
+    assert "adapter_version_missing_or_mismatch" in run.metadata_json["problems"][0]
 
 
 # --- transient failures, retry and resume ----------------------------------
@@ -610,7 +669,7 @@ class TwoStageAdapter:
 async def test_an_adapter_may_ask_for_further_documents_after_a_parse(
     db_session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _open_the_gate(monkeypatch)
+    _open_the_gate(monkeypatch, adapter_versions={SEC_SOURCE: "two-stage"})
     await _seed(db_session)
     listing_id = await _listing_id(db_session, "HKEX", "00005")
     fetcher = FakeFetcher(
@@ -624,8 +683,9 @@ async def test_an_adapter_may_ask_for_further_documents_after_a_parse(
         settings=_settings(tmp_path), fetcher=fetcher, adapters={SEC_SOURCE: adapter}
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(
-            listing_id=listing_id, sources=(SEC_SOURCE,), refresh_batch=BATCH
+        _licensed_payload(
+            listing_id=listing_id, sources=(SEC_SOURCE,), refresh_batch=BATCH,
+            adapter_versions={SEC_SOURCE: "two-stage"},
         )
     )
 
@@ -678,7 +738,7 @@ async def test_a_transient_failure_is_retried_and_the_finished_source_is_kept(
     async with session_scope() as session:
         run, _ = await enqueue_material_job(
             session,
-            MaterialCollectionPayload(listing_id=listing_id, refresh_batch=BATCH),
+            _licensed_payload(listing_id=listing_id, refresh_batch=BATCH),
             triggered_by="test",
         )
         run_id = run.id
@@ -695,8 +755,11 @@ async def test_a_transient_failure_is_retried_and_the_finished_source_is_kept(
     assert [request.name for request in fetcher.calls] == ["income.json", "companyfacts.json"]
     metadata = run.metadata_json
     assert metadata["checked"] == [HK_SOURCE]
-    assert metadata["source_status"] == {HK_SOURCE: "saved"}
-    assert SEC_SOURCE not in metadata["source_status"]
+    assert metadata["source_status"] == {
+        HK_SOURCE: "saved",
+        SEC_SOURCE: "transient_error",
+    }
+    assert metadata["source_status"][SEC_SOURCE] == "transient_error"
     assert await _dataset_count() == 1
 
     # The retry resumes: the finished source is not fetched or stored again.
@@ -722,10 +785,10 @@ async def test_a_new_batch_rerun_writes_no_second_version(
     await _seed(db_session)
     listing_id = await _listing_id(db_session, "HKEX", "00005")
     fetcher = FakeFetcher(responses={"income.json": _replay_response("income.json")})
-    handler = _handler(tmp_path, fetcher)
+    handler = _handler(tmp_path, fetcher, sources=MATERIAL_SOURCES)
 
     first_job, first_run = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH
         )
     )
@@ -735,7 +798,7 @@ async def test_a_new_batch_rerun_writes_no_second_version(
     mtime = (tmp_path / first_row.raw_ref).stat().st_mtime_ns
 
     second_job, second_run = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch="2026-10-13"
         )
     )
@@ -771,7 +834,7 @@ async def test_a_lost_lease_is_not_swallowed_and_the_checkpoint_survives(
         },
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(listing_id=listing_id, refresh_batch=BATCH)
+        _licensed_payload(listing_id=listing_id, refresh_batch=BATCH)
     )
     # The second source discovers that the run was recovered by another worker.
     fetcher.error = LeaseLostError(run_id, "recovered by another worker")
@@ -839,9 +902,9 @@ async def test_a_source_the_pilot_list_does_not_bind_is_skipped(
     await _seed(db_session)
     listing_id = await _listing_id(db_session, "HKEX", "00002")  # CLP binds no SEC source
     fetcher = FakeFetcher(responses={"income.json": _replay_response("income.json")})
-    handler = _handler(tmp_path, fetcher)
+    handler = _handler(tmp_path, fetcher, sources=MATERIAL_SOURCES)
     job, run_id = await _claim(
-        MaterialCollectionPayload(listing_id=listing_id, refresh_batch=BATCH)
+        _licensed_payload(listing_id=listing_id, refresh_batch=BATCH)
     )
 
     assert await handler.execute(job, _Ctx()) == "partial"
@@ -851,9 +914,10 @@ async def test_a_source_the_pilot_list_does_not_bind_is_skipped(
     assert [request.name for request in fetcher.calls] == ["income.json"]
     assert run.metadata_json["source_status"] == {
         HK_SOURCE: "saved",
-        SEC_SOURCE: "source_not_bound",
+        SEC_SOURCE: "source_policy_disabled",
     }
-    assert {"source": SEC_SOURCE, "reason": "source_not_bound"} in run.metadata_json["skipped"]
+    assert "identity_not_bound" in run.metadata_json["source_decisions"][SEC_SOURCE]["reason_codes"]
+    assert {"source": SEC_SOURCE, "reason": "identity_not_bound"} in run.metadata_json["skipped"]
     assert await _dataset_count() == 1
 
 
@@ -1000,16 +1064,18 @@ class EvidenceReplayFetcher:
 async def test_the_handler_collects_the_saved_evidence_with_the_real_adapter(
     db_session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _open_the_gate(monkeypatch)
+    adapter = HkNativeAdapter()
+    _open_the_gate(monkeypatch, adapter_versions={HK_SOURCE: adapter.adapter_version})
     companies = await _seed(db_session)
     listing_id = await _listing_id(db_session, "HKEX", "00005")
     fetcher = EvidenceReplayFetcher(root=_hsbc_evidence_dir(tmp_path))
     handler = MaterialCollectionHandler(
-        settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: HkNativeAdapter()}
+        settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: adapter}
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(
-            listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH
+        _licensed_payload(
+            listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH,
+            adapter_versions={HK_SOURCE: adapter.adapter_version},
         )
     )
 

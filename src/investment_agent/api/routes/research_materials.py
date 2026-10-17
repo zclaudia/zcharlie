@@ -1,4 +1,4 @@
-"""/research endpoints for HK/US material: read context and licensed refresh (plan 09).
+"""/research endpoints for HK/US material: read context and refresh registration (plan 09).
 
 Two endpoints, both authenticated by :func:`verify_api_key_or_session` (API key
 or same-origin session cookie; a state-changing request additionally passes the
@@ -9,10 +9,10 @@ CSRF origin check of the auth dependency):
   read session, and never touches an upstream source (the read model it serves
   cannot even import a fetcher). 404 for an unknown listing; an existing listing
   outside the checked list is answered with an explicit not-covered view.
-* ``POST /research/listings/{listing_id}/refresh`` — validates the licensed scope
-  and enqueues exactly one (deduplicated) material collection run; 404 for an
-  unknown listing, 422 for a refused request. The response states whether online
-  refresh is enabled, so a queued run is never presented as fetched data.
+* ``POST /research/listings/{listing_id}/refresh`` — validates the requested
+  scope and registers one deduplicated audit run; 404 for an unknown listing,
+  422 for a refused request. Per-source policy decisions explain whether a
+  worker may fetch; registration never grants fetch permission.
 """
 
 from __future__ import annotations
@@ -38,7 +38,6 @@ from investment_agent.materials.context import (
     FinancialContextView,
     ListingNotFoundError,
     financial_context,
-    online_refresh_enabled,
 )
 from investment_agent.materials.refresh import (
     DEFAULT_REASON,
@@ -47,6 +46,7 @@ from investment_agent.materials.refresh import (
     ERROR_LISTING_NOT_COVERED,
     ERROR_NOT_FOUND,
     ERROR_UNKNOWN_SOURCE,
+    ERROR_UNSUPPORTED_PERIOD,
     RefreshError,
     RefreshRequest,
     request_refresh,
@@ -71,6 +71,7 @@ _REFRESH_ERROR_STATUS: dict[str, int] = {
     ERROR_UNKNOWN_SOURCE: 422,
     ERROR_INVALID_PERIOD: 422,
     ERROR_INVALID_REASON: 422,
+    ERROR_UNSUPPORTED_PERIOD: 422,
 }
 """Refusal code -> HTTP status; every other code falls back to 422."""
 
@@ -101,7 +102,7 @@ async def refresh_endpoint(
     listing_id: Annotated[int, Path(ge=1)],
     body: RefreshBody,
 ) -> RefreshResponse:
-    """Queue one deduplicated material collection run for the listing.
+    """Register one deduplicated audit run for the listing.
 
     Every structural problem is refused before a run is written: unknown listing
     (404), listing outside the checked identity list, unknown source, malformed
@@ -128,7 +129,8 @@ async def refresh_endpoint(
         created=outcome.created,
         idempotency_key=outcome.idempotency_key,
         adapter_versions=outcome.adapter_versions,
-        online_refresh_enabled=online_refresh_enabled(),
+        online_refresh_enabled=outcome.online_refresh_enabled,
+        source_decisions=outcome.source_decisions,
     )
 
 

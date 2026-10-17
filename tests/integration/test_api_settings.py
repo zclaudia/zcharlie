@@ -89,6 +89,12 @@ def test_get_settings_shape(client) -> None:
     assert "CSI300" in items["schedule.screen.universes"]["input"]["options"]
     assert items["llm_request_timeout_seconds"]["input"]["min_exclusive"] is True
 
+    # These switches only control operations. They do not imply licensing or
+    # technical acceptance, which are independently evaluated per source.
+    for key in ("materials_sec_refresh_enabled", "materials_hk_refresh_enabled"):
+        assert items[key]["value"] is False and items[key]["default"] is False
+        assert "许可" in items[key]["help"] and "技术验收" in items[key]["help"]
+
     secret = items["llm_tier3_api_key"]
     assert "value" not in secret and "default" not in secret
     assert secret["configured"] is False

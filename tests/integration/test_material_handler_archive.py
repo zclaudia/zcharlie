@@ -32,6 +32,7 @@ from tests.integration.test_material_collection_job import (
     _Ctx,
     _dataset_count,
     _draft,
+    _licensed_payload,
     _listing_id,
     _open_the_gate,
     _run_row,
@@ -141,7 +142,7 @@ async def test_multi_response_capture_records_periods_requests_and_dataset_link(
         settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: adapter}
     )
     job, run_id = await _claim(
-        MaterialCollectionPayload(
+        _licensed_payload(
             listing_id=listing_id,
             sources=(HK_SOURCE,),
             periods=("2024-12-31", "2023-12-31"),
@@ -186,7 +187,7 @@ async def test_no_drafts_and_partial_transient_attempts_still_archive_responses(
         settings=_settings(tmp_path), fetcher=fetcher, adapters={HK_SOURCE: adapter}
     )
     job, _ = await _claim(
-        MaterialCollectionPayload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH)
+        _licensed_payload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH)
     )
     assert await handler.execute(job, _Ctx()) == "partial"
     first, = await _acquisitions()
@@ -197,7 +198,7 @@ async def test_no_drafts_and_partial_transient_attempts_still_archive_responses(
     ]
 
     second_job, _ = await _claim(
-        MaterialCollectionPayload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch="2026-10-13")
+        _licensed_payload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch="2026-10-13")
     )
     partial_fetcher = ScriptedFetcher(
         responses={"table-a.json": _raw("table-a.json", b'{"ok":3}')},
@@ -237,7 +238,7 @@ async def test_default_http_fetcher_archives_failed_http_body_before_data_error(
             adapters={HK_SOURCE: ArchiveAdapter(names=("denied.json",))},
         )
         job, _ = await _claim(
-            MaterialCollectionPayload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH)
+            _licensed_payload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=BATCH)
         )
         assert await handler.execute(job, _Ctx()) == "partial"
 
@@ -262,7 +263,7 @@ async def test_identical_observation_deduplicates_but_changed_fetch_time_adds_ca
             adapters={HK_SOURCE: ArchiveAdapter(names=("income.json",))},
         )
         job, _ = await _claim(
-            MaterialCollectionPayload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=batch)
+            _licensed_payload(listing_id=listing_id, sources=(HK_SOURCE,), refresh_batch=batch)
         )
         assert await handler.execute(job, _Ctx()) == "completed"
 
