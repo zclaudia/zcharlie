@@ -202,6 +202,10 @@ and revision with ref.field_path="value" (never null). The bare refs returned in
 fact_refs/materials identify the record, not its numeric value field. Use
 display_format="percent" for fraction/percent values and "decimal" for other
 quantities; never invent a unit or rewrite a source value.
+For calculation_output use ref.kind="calculation", the saved calculation UUID
+and ref.field_path="results.<exact result key>" (plural results), for example
+"results.percentile". Copy keys from the saved results map; never use "result."
+or invent a calculation field.
 Only materials with eligibility.fact_reference_allowed=true may enter fact_refs,
 counter_refs, dimensions.refs or numeric_claim. Missing/conflicted materials explain
 gaps only; missing data is never counter evidence. Copy a returned numeric_claim
@@ -532,6 +536,11 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
                     and node.role.value == "historical_fact" and node.ref.field_path is None):
                 raise ResearchValidationError("research_numeric_reference_format", f"progress.content.{index}.ref.field_path",
                     'historical_fact 的 numeric_claim 必须使用 ref.field_path="value"；保留已保存证据的原 UUID 与 revision，不要改写数值。')
+            if isinstance(node, NumericNode) and node.ref.kind == "calculation" and node.role.value == "calculation_output":
+                allowed_paths = ["results." + key for key in row.payload.get("results", {})]
+                if node.ref.field_path not in allowed_paths:
+                    raise ResearchValidationError("research_numeric_reference_format", f"progress.content.{index}.ref.field_path",
+                        "calculation_output 必须使用已保存结果的精确路径：" + ", ".join(allowed_paths) + "；保留原计算 UUID 与 revision，不要改写结果。")
             try:
                 rendered.append((await NumericResolver(EvidenceService(session), subject, cutoff).resolve(node)).text)
             except InvestorError as exc:

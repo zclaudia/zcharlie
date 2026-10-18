@@ -120,12 +120,28 @@ async def test_numeric_text_and_foreign_refs_rejected(conversation_db):
 
 
 @pytest.mark.asyncio
-async def test_native_numeric_value_path_gets_bounded_repair(conversation_db):
+@pytest.mark.parametrize("reference_kind", ["evidence", "calculation"])
+async def test_native_numeric_value_path_gets_bounded_repair(conversation_db, reference_kind):
     from pydantic_ai.messages import RetryPromptPart
 
     from investment_agent.investor.contracts import NumericNode
 
     _, evidence, subject = await fixture()
+    source = evidence
+    field_path, role, display, rendered = "value", "historical_fact", "decimal", "1234500000"
+    if reference_kind == "calculation":
+        from investment_agent.evidence.contracts import CalculationRecord
+        from investment_agent.investor.common import Quantity
+        from investment_agent.storage.models.evidence import SavedCalculation
+
+        record = CalculationRecord(id=uuid4(), schema_version=1, revision=1, actor="fixture", origin_ref=None,
+            created_at=datetime.now(UTC), method="fixture_percentile", method_version="fixture",
+            fact_refs=(evidence,), assumption_refs=(), input_hash="fixture", as_of=datetime.now(UTC),
+            applicable=True, status="ok", results={"percentile": Quantity(value="0.25", unit="fraction")})
+        async with session_scope() as session:
+            session.add(SavedCalculation(id=str(record.id), revision=1, owner_id="local_owner", payload=record.model_dump(mode="json")))
+        source = ObjectRef(kind="calculation", id=record.id, revision=1)
+        field_path, role, display, rendered = "results.percentile", "calculation_output", "percent", "25.00%"
     conversation = await new_conversation()
     receipt = await submit(conversation, message(text="Check saved cash", context_refs=(subject,), research_kind="local_check"))
     rounds = 0
@@ -135,17 +151,17 @@ async def test_native_numeric_value_path_gets_bounded_repair(conversation_db):
         rounds += 1
         if rounds == 2:
             retries = [p for m in messages for p in m.parts if isinstance(p, RetryPromptPart)]
-            assert retries and 'field_path="value"' in str(retries[-1].content)
-        ref = evidence if rounds == 1 else evidence.model_copy(update={"field_path": "value"})
-        output = progress(kind="local_check", fact_refs=(evidence,), content=(
-            NumericNode(type="numeric_claim", ref=ref, role="historical_fact", display_format="decimal"),))
+            assert retries and field_path in str(retries[-1].content)
+        ref = (source.model_copy(update={"field_path": "result.percentile"}) if reference_kind == "calculation" else source) if rounds == 1 else source.model_copy(update={"field_path": field_path})
+        output = progress(kind="local_check", fact_refs=(source,), content=(
+            NumericNode(type="numeric_claim", ref=ref, role=role, display_format=display),))
         return response(ResearchOutput(progress=output))
 
     task = await run(receipt, FunctionModel(model), base(agent_retries=1))
     assert rounds == 2 and task.status == TaskStatus.SUCCEEDED
     async with session_scope() as session:
         answers = await ConversationService(session, base()).messages(conversation.id)
-        assert answers[-1].role == "assistant" and "1234500000" in answers[-1].text
+        assert answers[-1].role == "assistant" and rendered in answers[-1].text
 
 
 @pytest.mark.asyncio
