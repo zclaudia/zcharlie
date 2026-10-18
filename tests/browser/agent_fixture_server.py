@@ -164,7 +164,7 @@ async def main():
                 "reevaluate_when": "恢复后台并获得核验材料", "sources": [fact.model_dump(mode="json")]}]}))
         return {"recommendations": [first.recommendation_ref.model_dump(mode="json"), second.recommendation_ref.model_dump(mode="json")],
             "case_id": case_id, "fact": fact.model_dump(mode="json"), "calculation": {"kind":"calculation","id":str(calc_id),"revision":1},
-            "batch_id": str(batch_id), "progress_task_id": str(receipt.task.id)}
+            "conversation_id": str(conversation.id), "batch_id": str(batch_id), "progress_task_id": str(receipt.task.id)}
 
     claims = {}
 

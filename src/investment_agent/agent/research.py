@@ -762,7 +762,8 @@ async def research_artifacts(session: AsyncSession, task_id: UUID) -> tuple[dict
     task = await TaskService(session).get_task(task_id)
     refs = {str(r.id) for r in task.artifact_refs if r.kind == "research_progress"}
     rows = (await session.scalars(select(ToolAction).where(ToolAction.task_id == str(task.id), ToolAction.operation_id.in_(refs), ToolAction.state == "committed"))).all()
-    return tuple(row.result for row in rows if row.result is not None)
+    by_id = {row.operation_id: row.result for row in rows if row.result is not None}
+    return tuple(by_id[str(ref.id)] for ref in task.artifact_refs if ref.kind == "research_progress" and str(ref.id) in by_id)
 
 
 async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:

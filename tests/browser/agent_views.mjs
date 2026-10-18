@@ -19,8 +19,14 @@ try {
   for(const viewport of [{width:1440,height:1000},{width:390,height:844}]){
     const context=await browser.newContext({viewport}),page=await context.newPage(),errors=[];
     page.on('pageerror',e=>errors.push(e.stack || String(e)));page.on('dialog',()=>{throw Error('XSS dialog');});
-    await page.goto(base+'/app/agent?pane=drawer');await page.locator('[name=api_key]').fill('ag17-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/agent?pane=drawer');
+    await page.goto(base+'/app/agent?pane=drawer');await page.locator('[name=api_key]').fill('ag17-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/agent?pane=drawer&conversation='+fixture.conversation_id);
     if(!await page.getByRole('button',{name:'公司档案',exact:true}).count()){await page.waitForTimeout(1000);assert.ok(await page.getByRole('button',{name:'公司档案',exact:true}).count(),JSON.stringify(errors)+' '+await page.locator('body').innerText());}
+    if(!await page.getByRole('button',{name:'对话产物',exact:true}).isVisible()){if(await page.locator('#agent-drawer-toggle').isVisible())await page.locator('#agent-drawer-toggle').click();else await page.getByRole('button',{name:'研究档案',exact:true}).click();}
+    await page.getByRole('button',{name:'对话产物',exact:true}).click();
+    await page.locator('.agent-conversation-progress').first().waitFor();
+    await page.waitForFunction(()=>document.querySelector('.agent-conversation-progress')?.innerText.includes('读取保存的现金证据'));
+    assert.match(await page.locator('.agent-conversation-progress').first().innerText(),/仍需现金流附注/);
+    assert.ok(await page.locator('.agent-conversation-progress [data-ref-id]').count());
     await page.getByRole('button',{name:'公司档案',exact:true}).click();await page.locator(`[data-case-id="${fixture.case_id}"]`).click();
     await page.getByRole('heading',{name:'用户决定时间线'}).waitFor();assert.match(await page.locator('.agent-review-body').innerText(),/现金来源是否可靠/);assert.match(await page.locator('.agent-review-body').innerText(),/旧观点已被替代/);assert.match(await page.locator('.agent-review-body').innerText(),/1234500000.00 CNY/);assert.match(await page.locator('.agent-review-body').innerText(),/未知不等于未采纳/);
     await page.locator(`[data-ref-id="${fixture.recommendations[1].id}"]`).first().click();

@@ -30,14 +30,17 @@ async def fragments(
     offset: Annotated[int, Query(ge=0, le=500)] = 0,
     limit: Annotated[int, Query(ge=1, le=20)] = 10,
     historical_reconstruction: bool = False,
+    page_start: Annotated[int | None, Query(ge=1, le=2000)] = None,
+    page_count: Annotated[int, Query(ge=1, le=5)] = 5,
 ) -> dict[str, Any]:
     request = OriginalRequest(
-        listing_id=listing_id, original_id=original_id, as_of=as_of, offset=offset, limit=limit
+        listing_id=listing_id, original_id=original_id, as_of=as_of, offset=offset, limit=limit,
+        page_start=page_start, page_count=page_count
     )
     try:
         async with session_scope() as session:
             payload, body = await stage(session, request, historical=historical_reconstruction)
-        parsed = await parse_staged(body, payload["mime"])
+        parsed = await parse_staged(body, payload["mime"], page_start=request.page_start, page_count=request.page_count)
         result = readback(payload, parsed, request)
         result["historical_reconstruction"] = historical_reconstruction
         return result

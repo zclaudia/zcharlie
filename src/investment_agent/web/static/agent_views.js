@@ -31,7 +31,7 @@ export function bootAgentViews() {
   host.append(nav,body,drawer);
   let sourceGeneration=0;
   let bindingSignature=null, searchListings=[];
-  let epoch=0, conversation=null, selected='conversation', recommendations=[], taskRefs=new Map();
+  let epoch=0, conversation=null, selected='conversation', recommendations=[], taskRefs=new Map(), progressReads=new Map();
   const alive = token => token===epoch;
   const listingNames=new Map();async function identities(values){await Promise.all([...new Set(values.filter(Boolean).map(r=>r.id))].map(async id=>{if(listingNames.has(id))return;try{const item=await get(`/agent/listings/${id}`);listingNames.set(id,`${item.name} · ${item.ticker}`);}catch{listingNames.set(id,'证券身份暂不可读');}}));}
   const notificationCases=new Map();async function notificationIdentities(rows){await Promise.all([...new Set(rows.map(r=>r.case_id))].map(async id=>{try{const detail=await get(`/investor/cases/${id}`);notificationCases.set(id,detail.case.listing_ref);}catch{notificationCases.delete(id);}}));await identities([...notificationCases.values()]);}
@@ -72,7 +72,8 @@ export function bootAgentViews() {
         const originalButton=button('查看原文片段',async()=>{
           const excerpt=el('section',{'aria-label':'原文片段'}),asOf=cutoff || new Date().toISOString();let fragmentGeneration=0;
           const load=async offset=>{const generation=++fragmentGeneration;try{
-            const original=await get(`/investor/disclosures/originals/${record.source_ref.id}/fragments?listing_id=${record.subject_ref.id}&as_of=${encodeURIComponent(asOf)}&offset=${offset}&limit=10`);
+            let pageWindow=record.source_ref.field_path?.startsWith('page:')?`&page_start=${Number(record.source_ref.field_path.slice(5))}&page_count=1`:'';try{const w=JSON.parse(record.text || '{}').page_window;if(w)pageWindow=`&page_start=${w.start}&page_count=${w.end-w.start+1}`;}catch{}
+            const original=await get(`/investor/disclosures/originals/${record.source_ref.id}/fragments?listing_id=${record.subject_ref.id}&as_of=${encodeURIComponent(asOf)}&offset=${offset}&limit=10${pageWindow}`);
             if(!sourceAlive() || generation!==fragmentGeneration)return;
             excerpt.replaceChildren(el('p',{class:'notice'},'原文为待核材料；扫描与复杂表格可能无法解析。'));
             for(const fragment of original.fragments || [])excerpt.append(el('p',{},fragment.locator),el('pre',{},fragment.text));
@@ -165,7 +166,33 @@ export function bootAgentViews() {
     }catch(exc){if(alive(token))error(body,exc,()=>listPage(kind,after));}
   }
   async function batchPage(id) {selected="batch";const token=++epoch;loading();try{const batch=await get(`/investor/discovery/batches/${id}`);await identities((batch.leads || []).map(lead=>lead.listing_ref));if(!alive(token))return;body.replaceChildren(el('h2',{},'有限探索处理过程'),el('p',{},`批次 ${id} · ${label(batch.state)}。选择完成仅代表短名单处理完成。`));body.append(el('p',{},batch.summary || '摘要尚未保存'));for(const lead of batch.leads || []){const section=el('article');section.append(el('h3',{},name(lead.listing_ref)),el('p',{},lead.question || '待核查线索'),el('p',{},`${label(lead.status)} · ${label(lead.processing_reason || '处理原因未知')}`),el('p',{},'选择理由：'+(lead.reason || '未知')),el('p',{},'再评估条件：'+(lead.reevaluate_when || '未知')));refs(section,[lead.listing_ref].filter(Boolean));audit(section,lead);body.append(section);}audit(body,batch);for(const lead of batch.leads || []){const tid=lead.merged_task_id || lead.research_task_id;if(tid)body.append(button(`${lead.merged_task_id?'合并到现有研究':'查看研究任务'} ${tid}`,()=>taskPage(tid)));}}catch(exc){if(alive(token))error(body,exc,()=>batchPage(id));}}
-  function conversationPage() {selected='conversation';mark('conversation');++epoch;drawer.hidden=true;body.replaceChildren(el('h2',{},'当前对话研究产物'));if(!recommendations.length)body.append(el('p',{},'当前对话没有正式公司观点；局部回答不表示完整公司判断。'));for(const r of recommendations)body.append(art(refText(r),()=>opinionPage([r])));if(recommendations.length>1)body.append(art('并列查看引用的观点',()=>opinionPage(recommendations)));for(const t of taskRefs.values())body.append(art(`研究过程 ${t.id} · ${label(t.status)}`,()=>taskPage(t.id)));}
+  async function conversationPage() {
+    selected='conversation';mark('conversation');const token=++epoch;drawer.hidden=true;
+    body.replaceChildren(el('h2',{},'当前对话研究产物'));
+    if(!recommendations.length)body.append(el('p',{},'尚未发布正式公司观点。已保存的核查、依据和缺口见下方研究记录。'));
+    for(const r of recommendations)body.append(art('查看正式公司观点 · 版本 '+r.revision,()=>opinionPage([r])));
+    if(recommendations.length>1)body.append(art('并列查看引用的观点',()=>opinionPage(recommendations)));
+    if(!taskRefs.size)body.append(el('p',{},'发送问题后，这里会显示研究进展和保存的依据。'));
+    for(const t of [...taskRefs.values()].reverse()){
+      const section=el('section',{class:'agent-conversation-progress','data-task-id':t.id});
+      section.append(art(`查看研究过程 · ${label(t.status)}`,()=>taskPage(t.id)));body.append(section);
+      const key=t.id+':'+JSON.stringify(t.artifact_refs || []);
+      if(!progressReads.has(key))progressReads.set(key,get(`/agent/tasks/${t.id}/research`));
+      try{
+        const progress=await progressReads.get(key);if(!alive(token))return;
+        const item=progress.at(-1),p=item?.progress || item;
+        if(!p){section.append(el('p',{},'尚未保存核查记录；任务状态：'+label(t.status)));continue;}
+        section.append(el('h3',{},p.question || '本次问题研究'));
+        section.append(el('p',{},`已完成核查 ${(p.completed_steps || []).length} 项 · 保存依据 ${(p.fact_refs || []).length} 项 · 反证 ${(p.counter_refs || []).length} 项`));
+        for(const d of p.dimensions || [])section.append(el('p',{},`${label(d.dimension)}：${label(d.status)}${d.reason?' · '+d.reason:''}`));
+        lines(section,'已完成核查',p.completed_steps);
+        const gaps=[...(p.gaps || []),...(p.limitations || [])];
+        if(gaps.length)lines(section,'缺失材料与限制',gaps);
+        if(p.stopped_because)section.append(el('p',{},'停止原因：'+p.stopped_because));
+        refs(section,[...(p.fact_refs || []),...(p.counter_refs || [])]);
+      }catch(exc){progressReads.delete(key);if(alive(token))section.append(el('p',{class:'notice notice-error'},'研究记录读取失败：'+exc.message),button('重试读取研究记录',conversationPage));}
+    }
+  }
   function searchPage() {
     selected='search';mark('search');const token=++epoch;let searchGeneration=0;drawer.hidden=true;
     const input=el('input',{type:'search',maxlength:'120',placeholder:'例如：净利润、竞争、风险','aria-label':'已保存材料关键词'}),results=el('section',{'aria-live':'polite'});
@@ -183,7 +210,7 @@ export function bootAgentViews() {
   // The rail's segmented switch marks the active projection; drill-down pages keep the parent's mark.
   ['conversation','search','cases','notifications','discovery'].forEach((key,index)=>{nav.children[index].dataset.view=key;});
   function mark(key){for(const b of nav.children)b.setAttribute('aria-pressed',String(b.dataset.view===key));}
-  root.addEventListener('agent:messages',({detail})=>{if(conversation!==detail.conversationId){conversation=detail.conversationId;taskRefs.clear();selected='conversation';++epoch;drawer.hidden=true;}recommendations=[...new Map(detail.messages.flatMap(m=>[...m.context_refs,...m.artifact_refs]).filter(r=>r.kind==='recommendation').map(r=>[`${r.id}:${r.revision}`,r])).values()];if(selected==='conversation')conversationPage();});
+  root.addEventListener('agent:messages',({detail})=>{if(conversation!==detail.conversationId){conversation=detail.conversationId;taskRefs.clear();progressReads.clear();selected='conversation';++epoch;drawer.hidden=true;}recommendations=[...new Map(detail.messages.flatMap(m=>[...m.context_refs,...m.artifact_refs]).filter(r=>r.kind==='recommendation').map(r=>[`${r.id}:${r.revision}`,r])).values()];if(selected==='conversation')conversationPage();});
   root.addEventListener('agent:task',({detail})=>{taskRefs.set(detail.id,detail);if(selected==='conversation')conversationPage();});
   root.addEventListener('agent:binding',({detail})=>{searchListings=detail.refs.filter(r=>r.kind==='listing').slice(0,10);const signature=JSON.stringify(detail.refs);if(bindingSignature!==null && signature!==bindingSignature){selected='conversation';conversationPage();}bindingSignature=signature;});
   root.addEventListener('agent:ready',()=>{if(selected==='conversation')conversationPage();});

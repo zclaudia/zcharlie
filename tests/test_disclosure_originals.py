@@ -432,3 +432,36 @@ async def test_rebinding_and_redirect_budget_stop_before_next_socket(monkeypatch
     with pytest.raises(DisclosureError, match="redirect_limit"):
         await OfficialHTTPS().request(URL, "original")
     assert len(reads) == 3
+
+
+async def test_shanghai_discovery_fetch_and_parse_scope_keep_saved_exchange(db_session):
+    from urllib.parse import parse_qs
+
+    from investment_agent.evidence.documents import OriginalRequest, stage
+    from investment_agent.storage.models.reference import Listing, Market
+
+    listing_id = await seed(db_session)
+    db_session.add(Market(code="SSE", name="Shanghai", timezone="Asia/Shanghai", currency="CNY"))
+    listing = await db_session.get(Listing, listing_id)
+    listing.market_code, listing.ticker = "SSE", "600660"
+    await db_session.flush()
+    http = FixtureHTTP()
+    http.directory = [{"code": "600660", "orgId": "gssh0600660"}]
+    http.items[0].update(secCode="600660", orgId="gssh0600660")
+    service = DisclosureService.for_tests(db_session, http)
+    found = await service.execute(uuid4(), discovery(listing_id))
+    item = found["items"][0]
+    assert (item["ticker"], item["exchange"]) == ("600660.SH", "SSE")
+    query = next(call[2] for call in http.calls if call[1] == "query")
+    assert parse_qs(query.decode())["column"] == ["sse"]
+    from investment_agent.evidence.disclosures import FetchRequest
+
+    fetched = await service.execute(uuid4(), FetchRequest(
+        listing_id=listing_id, item_id=UUID(item["id"]), as_of=NOW
+    ))
+    original = fetched["original"]
+    assert original["exchange"] == "SSE"
+    payload, body = await stage(db_session, OriginalRequest(
+        listing_id=listing_id, original_id=UUID(original["id"]), as_of=datetime.now(UTC)
+    ))
+    assert payload["ticker"] == "600660.SH" and body == PDF

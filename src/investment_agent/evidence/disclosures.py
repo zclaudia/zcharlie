@@ -1,4 +1,4 @@
-"""Bounded CNInfo discovery and immutable originals, never verified financial facts."""
+"""Bounded Shanghai/Shenzhen CNInfo discovery and immutable originals, never verified financial facts."""
 
 import hashlib
 import json
@@ -162,11 +162,10 @@ class DisclosureService:
 
     async def _listing(self, listing_id: int) -> Listing:
         listing = await self.session.get(Listing, listing_id)
-        # Minimal actual supported adapter: Shenzhen A-shares on CNInfo only.
-        # Directory has Shanghai rows too; never infer its exchange from a code.
+        # Bind the exchange from the saved listing, never from a code prefix.
         if (
             listing is None
-            or listing.market_code != "SZSE"
+            or listing.market_code not in {"SZSE", "SSE"}
             or not re.fullmatch(r"\d{6}", listing.ticker)
         ):
             raise DisclosureError("unsupported_or_missing_listing")
@@ -264,7 +263,7 @@ class DisclosureService:
             {
                 "pageNum": 1,
                 "pageSize": request.limit,
-                "column": "szse",
+                "column": "szse" if listing.market_code == "SZSE" else "sse",
                 "tabName": "fulltext",
                 "stock": f"{listing.ticker},{issuer}",
                 "seDate": "~".join(dates),
@@ -322,8 +321,8 @@ class DisclosureService:
             identity = {
                 "source": SOURCE,
                 "listing_id": listing.id,
-                "ticker": f"{listing.ticker}.SZ",
-                "exchange": "SZSE",
+                "ticker": f"{listing.ticker}.{'SZ' if listing.market_code == 'SZSE' else 'SH'}",
+                "exchange": listing.market_code,
                 "issuer_id": issuer,
                 "disclosure_id": disclosure_id,
                 "first_published_at": published.isoformat(),
@@ -439,7 +438,7 @@ class DisclosureService:
             "disclosure_id": item.payload["disclosure_id"],
             "issuer_id": item.payload["issuer_id"],
             "ticker": item.payload["ticker"],
-            "exchange": "SZSE",
+            "exchange": item.payload["exchange"],
             "source_url": item.payload["source_url"],
             "resolved_url": response.url,
             "first_published_at": item.payload["first_published_at"],

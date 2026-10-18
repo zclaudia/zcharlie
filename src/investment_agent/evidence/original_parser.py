@@ -147,8 +147,10 @@ class SafeHTML(HTMLParser):
             self.parts.append(data)
 
 
-def extract(body: bytes, mime: str) -> dict[str, Any]:
+def extract(body: bytes, mime: str, *, page_start: int | None = None, page_count: int = 5) -> dict[str, Any]:
     warnings: list[str] = []
+    if page_start is not None and (not 1 <= page_start <= 2000 or not 1 <= page_count <= 5):
+        raise ValueError("invalid_pdf_page_window")
     if not body or len(body) > MAX_INPUT:
         raise ValueError("original_parser_size_limit")
     if mime == "text/html":
@@ -167,10 +169,15 @@ def extract(body: bytes, mime: str) -> dict[str, Any]:
         reader = PdfReader(io.BytesIO(body), strict=True)
         if reader.is_encrypted:
             raise ValueError("encrypted_pdf_unsupported")
-        if len(reader.pages) > MAX_PAGES:
+        if page_start is None and len(reader.pages) > MAX_PAGES:
             raise ValueError("pdf_page_limit")
         fragments = []
-        for number, page in enumerate(reader.pages, 1):
+        start = page_start or 1
+        end = min(len(reader.pages), start + page_count - 1) if page_start else len(reader.pages)
+        if start > len(reader.pages):
+            raise ValueError("pdf_page_out_of_range")
+        for number in range(start, end + 1):
+            page = reader.pages[number - 1]
             contents = page.get_contents()
             if contents is not None and len(contents.get_data()) > 2 * 1024 * 1024:
                 raise ValueError("pdf_stream_limit")
@@ -201,11 +208,12 @@ def extract(body: bytes, mime: str) -> dict[str, Any]:
         "fragments": fragments,
         "warnings": warnings,
         "ocr": "unsupported_not_configured",
+        **({"page_window": {"start": start, "end": end, "total_pages": len(reader.pages)}} if mime == "application/pdf" and page_start else {}),
         "untrusted_source_data": True,
     }
 
 
-def parse_original(body: bytes, mime: str) -> dict[str, Any]:
+def parse_original(body: bytes, mime: str, *, page_start: int | None = None, page_count: int = 5) -> dict[str, Any]:
     """No DB transaction is held by this function; caller must stage bytes first."""
     if not body or len(body) > MAX_INPUT:
         return {"status": "needs_data", "reason": "original_parser_size_limit", "fragments": []}
@@ -214,7 +222,7 @@ def parse_original(body: bytes, mime: str) -> dict[str, Any]:
             source.write(body)
             source.seek(0)
             child = subprocess.Popen(
-                [sys.executable, str(Path(__file__).resolve()), mime],
+                [sys.executable, str(Path(__file__).resolve()), mime, str(page_start or 0), str(page_count)],
                 stdin=source,
                 stdout=target,
                 stderr=subprocess.DEVNULL,
@@ -269,7 +277,9 @@ if __name__ == "__main__":
         resource.setrlimit(resource.RLIMIT_FSIZE, (1024 * 1024, 1024 * 1024))
         resource.setrlimit(resource.RLIMIT_NOFILE, (32, 32))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-        output = extract(sys.stdin.buffer.read(MAX_INPUT + 1), sys.argv[1])
+        output = extract(sys.stdin.buffer.read(MAX_INPUT + 1), sys.argv[1],
+                         page_start=(int(sys.argv[2]) or None) if len(sys.argv) > 2 else None,
+                         page_count=int(sys.argv[3]) if len(sys.argv) > 3 else 5)
     except Exception as exc:
         reason = (
             "html_encoding_unsupported"

@@ -51,6 +51,8 @@ class OriginalRequest(Contract):
     listing_id: int = Field(ge=1)
     original_id: UUID
     as_of: AwareDatetime
+    page_start: int | None = Field(default=None, ge=1, le=2000)
+    page_count: int = Field(default=5, ge=1, le=5)
     offset: int = Field(default=0, ge=0, le=500)
     limit: int = Field(default=10, ge=1, le=20)
 
@@ -270,17 +272,17 @@ async def stage(
     if (
         payload["listing_id"] != request.listing_id
         or payload["source"] != "cninfo.v1"
-        or payload["exchange"] != "SZSE"
+        or payload["exchange"] not in {"SZSE", "SSE"}
     ):
         raise DisclosureError("original_scope_mismatch")
     return payload, body
 
 
-async def parse_staged(body: bytes, mime: str) -> dict[str, Any]:
+async def parse_staged(body: bytes, mime: str, *, page_start: int | None = None, page_count: int = 5) -> dict[str, Any]:
     loop = asyncio.get_running_loop()
     gate = PARSER_SLOTS.setdefault(loop, asyncio.Semaphore(2))
     async with gate:
-        pending = asyncio.create_task(asyncio.to_thread(parse_original, body, mime))
+        pending = asyncio.create_task(asyncio.to_thread(parse_original, body, mime, page_start=page_start, page_count=page_count))
         try:
             return await asyncio.shield(pending)
         except asyncio.CancelledError:
@@ -297,7 +299,7 @@ async def parse_staged(body: bytes, mime: str) -> dict[str, Any]:
 def readback(
     payload: dict[str, Any], parsed: dict[str, Any], request: OriginalRequest
 ) -> dict[str, Any]:
-    rows, warnings = numeric_rows(parsed, payload["ticker"].removesuffix(".SZ"))
+    rows, warnings = numeric_rows(parsed, payload["ticker"].rsplit(".", 1)[0])
     return {
         **parsed,
         "fragments": parsed.get("fragments", [])[request.offset : request.offset + request.limit],
@@ -341,7 +343,7 @@ async def save_candidates(
     ):
         raise DisclosureError("original_integrity_failure")
     result = readback(payload, parsed, request)
-    rows, _ = numeric_rows(parsed, payload["ticker"].removesuffix(".SZ"))
+    rows, _ = numeric_rows(parsed, payload["ticker"].rsplit(".", 1)[0])
     result["fact_refs"] = []
     result["facts"] = []
     readable_after = datetime.fromisoformat(payload["available_from"])
@@ -401,6 +403,41 @@ async def save_candidates(
     result["parse_artifact_ref"] = ObjectRef(
         kind="evidence", id=manifest_id, revision=1
     ).model_dump(mode="json")
+    # Bounded PDF windows also expose exact page text as separately citable
+    # candidate material. A citation need not carry a whole report manifest
+    # into semantic review; extraction never upgrades issuer assertions.
+    result["text_refs"] = []
+    window = parsed.get("page_window")
+    if window:
+        pages: dict[int, list[str]] = {}
+        for fragment in parsed.get("fragments", []):
+            match = re.fullmatch(r"page:(\d+)/line:\d+", fragment["locator"])
+            if match:
+                pages.setdefault(int(match[1]), []).append(fragment["text"])
+        for page, lines in pages.items():
+            text = "\n".join(lines)
+            content_hash = hashlib.sha256(text.encode()).hexdigest()
+            evidence_id = uuid5(NAMESPACE_URL, digest({"original": payload["id"], "page": page,
+                                                      "hash": content_hash, "parser": VERSION}))
+            now = datetime.now(UTC)
+            record = EvidenceRecord(
+                id=evidence_id, revision=1, created_at=now, actor="original_parser", origin_ref=None,
+                source_ref=ObjectRef(kind="disclosure_original", id=request.original_id,
+                                     revision=1, field_path=f"page:{page}"),
+                source_kind="document", locator=f"page:{page}", content_hash=content_hash,
+                subject_ref=ObjectRef(kind="listing", id=request.listing_id, revision=1), period=None,
+                published_at=datetime.fromisoformat(payload["first_published_at"]),
+                acquired_at=datetime.fromisoformat(payload["acquired_at"]), available_from=now,
+                verification="candidate", conflict="none", text=text,
+            )
+            await session.execute(insert(SavedEvidence).values(
+                id=str(evidence_id), revision=1, owner_id="local_owner",
+                payload=record.model_dump(mode="json")
+            ).on_conflict_do_nothing())
+            saved = await session.get(SavedEvidence, (str(evidence_id), 1))
+            assert saved is not None
+            readable_after = max(readable_after, datetime.fromisoformat(saved.payload["available_from"]))
+            result["text_refs"].append(ObjectRef(kind="evidence", id=evidence_id, revision=1).model_dump(mode="json"))
     for row in rows:
         field = row["metric"]
         period = row["period"]

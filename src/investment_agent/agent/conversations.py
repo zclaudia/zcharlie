@@ -349,8 +349,8 @@ class ConversationService:
                     raise InvalidContextError("duplicate disclosure access")
                 for access in body.disclosure_access:
                     listing = await self.session.get(Listing, access.listing_id)
-                    if access.listing_id not in {ref.id for ref in securities} or listing is None or listing.market_code != "SZSE":
-                        raise InvalidContextError("disclosure access requires exact authorized Shenzhen listing")
+                    if access.listing_id not in {ref.id for ref in securities} or listing is None or listing.market_code not in {"SZSE", "SSE"}:
+                        raise InvalidContextError("disclosure access requires exact authorized Shanghai or Shenzhen listing")
                 disclosure_permissions = tuple(DisclosurePermission(**access.model_dump(), cutoff=cutoff) for access in body.disclosure_access)
             case_refs = tuple(ref for ref in scope if ref.kind == "case")
             if kind in {"company_research", "review"} and len(securities) == 1 and not case_refs:

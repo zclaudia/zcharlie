@@ -254,14 +254,14 @@ async def test_parser_concurrency_and_cancel_keep_slots_until_real_children_reap
     lock = threading.Lock()
     active = maximum = 0
 
-    def observed(body, mime):
+    def observed(body, mime, **window):
         nonlocal active, maximum
         with lock:
             active += 1
             maximum = max(maximum, active)
         try:
             time.sleep(0.1)
-            return real(body, mime)
+            return real(body, mime, **window)
         finally:
             with lock:
                 active -= 1
@@ -452,3 +452,36 @@ def test_ordinary_table_requires_preceding_bound_headers(placement):
         body = body.replace("<table>", "<h2>其他业务统计</h2><table>")
     rows, warnings = numeric_rows(parse_original(body.encode(), "text/html"), "000001")
     assert rows == [] and warnings
+
+
+def test_large_pdf_explicit_window_keeps_original_page_locators_and_limits():
+    body = pdf(("Official report section",), pages=142)
+    assert parse_original(body, "application/pdf")["status"] == "needs_data"
+    parsed = parse_original(body, "application/pdf", page_start=139, page_count=5)
+    assert parsed["status"] == "ok", parsed
+    assert parsed["page_window"] == {"start": 139, "end": 142, "total_pages": 142}
+    assert [f["locator"] for f in parsed["fragments"]] == [
+        f"page:{n}/line:1" for n in range(139, 143)
+    ]
+    assert parse_original(body, "application/pdf", page_start=143)["status"] == "needs_data"
+    assert parse_original(body, "application/pdf", page_start=1, page_count=6)["status"] == "needs_data"
+
+
+async def test_window_page_evidence_is_exact_candidate_visible_only_after_parse(db_session):
+    from investment_agent.evidence.documents import OriginalRequest
+
+    payload, body, request = await original(db_session, body=pdf(("Issuer risk disclosure",), pages=142), mime="application/pdf")
+    request = OriginalRequest(**{**request.model_dump(), "page_start": 139})
+    parsed = await parse_staged(body, "application/pdf", page_start=139)
+    saved = await save_candidates(db_session, payload, body, parsed, request)
+    assert saved["requires_new_message"] and len(saved["text_refs"]) == 4
+    ref = ObjectRef.model_validate(saved["text_refs"][0])
+    service = EvidenceService(db_session)
+    assert (await service.get_evidence("local_owner", ref, request.as_of)).status == "missing"
+    result = await service.get_evidence("local_owner", ref, datetime.now(UTC))
+    assert result.data.text == "Issuer risk disclosure"
+    assert result.data.locator == result.data.source_ref.field_path == "page:139"
+    assert result.data.verification == "candidate" and result.data.value is None
+    replay = await save_candidates(db_session, payload, body, parsed, request)
+    assert replay["text_refs"] == saved["text_refs"]
+    assert replay["readable_after"] == saved["readable_after"]
