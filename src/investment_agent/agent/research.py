@@ -788,7 +788,11 @@ class ResearchPolicy:
             await ConversationService(session, self.base).save_assistant(claim, text=text, content=output.progress.content, artifact_refs=tuple(refs))
         # Completion requires a deliverable, not merely a framework success.
         full = grant.research_kind in {"company_research", "review", "portfolio_action"}
-        complete = output.progress.answered and (published if full else bool(output.progress.content)) and not output.progress.stopped_because
+        # A published bounded company view can answer the question while
+        # explaining why further evidence gathering has reached its limit.
+        # That explanation does not negate a successfully checked deliverable.
+        company_delivered = grant.research_kind in {"company_research", "review"} and output.semantic_review is not None and published
+        complete = output.progress.answered and (published if full else bool(output.progress.content)) and (company_delivered or not output.progress.stopped_because)
         current_task = await service.get_task(claim.task_id)
         await service.checkpoint(claim, checkpoint=(await service.get_checkpoint(claim.task_id))[0].get("data", {}), artifact_refs=tuple(dict.fromkeys((*current_task.artifact_refs, *refs))))
         return TaskDisposition("succeeded" if complete else "partial", StopReason.ANSWERED if complete else StopReason.EVIDENCE_BLOCKED)

@@ -190,7 +190,7 @@ export function bootAgentViews() {
         lines(section,'已完成核查',p.completed_steps);
         const gaps=[...(p.gaps || []),...(p.limitations || [])];
         if(gaps.length)lines(section,'缺失材料与限制',gaps);
-        if(p.stopped_because)section.append(el('p',{},'停止原因：'+p.stopped_because));
+        if(p.stopped_because)section.append(el('p',{},(t.status==='succeeded'?'取证结束原因：':'停止原因：')+p.stopped_because));
         refs(section,[...(p.fact_refs || []),...(p.counter_refs || [])]);
       }catch(exc){progressReads.delete(key);if(alive(token))section.append(el('p',{class:'notice notice-error'},'研究记录读取失败：'+exc.message),button('重试读取研究记录',conversationPage));}
     }

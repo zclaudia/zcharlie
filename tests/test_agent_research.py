@@ -380,7 +380,8 @@ async def test_real_collector_deferred_resumption_preserves_pit_and_budget(conve
 @pytest.mark.parametrize("semantic_pass", [True, False])
 @pytest.mark.parametrize("finish_only", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
-async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass, finish_only, repair):
+@pytest.mark.parametrize("bounded_stop", [False, True])
+async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass, finish_only, repair, bounded_stop):
     from sqlalchemy import delete
 
     from investment_agent.agent.research_publication import (
@@ -404,7 +405,8 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
     selected = base(investor_agent_task_requests=4 if repair else 3) if finish_only else base()
     conversation = await new_conversation()
     receipt = await submit(conversation, message(text="深入研究它", context_refs=(subject,)), settings=selected)
-    plan = full_progress(candidate.thesis.assessed_dimensions, fact_refs=(evidence,))
+    plan = full_progress(candidate.thesis.assessed_dimensions, fact_refs=(evidence,),
+        stopped_because="Further gathering cannot establish durable economics; the bounded question has been answered" if bounded_stop else None)
     business = CompanyViewInput(case_ref=candidate.thesis.case_ref, question_scope="Bounded whole company research", change_reason="Initial research",
         assessed_dimensions=candidate.thesis.assessed_dimensions, claims=candidate.thesis.claims, counter_case=candidate.thesis.counter_case,
         gaps=candidate.recommendation.gaps, dependencies=candidate.recommendation.dependency_refs,
