@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 /* Exact saved body + UUID survives lost acknowledgements and reloads. */
 import {ApiError, get, post} from './api.js';
 import {formatDateTime} from './format.js';
@@ -129,14 +130,14 @@ import {formatDateTime} from './format.js';
         const outside = element('select'); outside.setAttribute('aria-label', '适用范围外成功反例复盘');
         for (const review of data.reviews.filter(r => r.status === 'succeeded' && !listing(r).some(ref => ref.id === p.request.listing_ref.id))) option(outside, review.id, `${review.progress.question} · ${review.id}`);
         card.append(element('p', '原失败样本必须被加强步骤拦截；同范围成功反例不能被误伤；范围外反例保留原方法。'), select, outside);
-        button(card, '评估真实失败与反例', () => { if (!select.value || !outside.value) return status('请先冻结同证券与范围外的成功任务作为反例。'); return mutate('/evaluations', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, cases: [{review_id: p.request.review_id, role: 'failure', expected: 'block'}, {review_id: select.value, role: 'counterexample', expected: 'pass'}, {review_id: outside.value, role: 'counterexample', expected: 'pass'}]}); }, 'btn-sm');
+        button(card, '评估真实失败与反例', () => { if (!select.value || !outside.value) return status('请先冻结同证券与范围外的成功任务作为反例。'); return mutate('/evaluations', {mutation_id: randomUUID(), proposal_id: p.id, expected_revision: p.revision, cases: [{review_id: p.request.review_id, role: 'failure', expected: 'block'}, {review_id: select.value, role: 'counterexample', expected: 'pass'}, {review_id: outside.value, role: 'counterexample', expected: 'pass'}]}); }, 'btn-sm');
       }
       if (p.status === 'shadow') {
         // evaluations/evaluation_ids 可能为空：判空后再启用按钮，避免 render 阶段 TypeError。
         const latestEvaluationId = p.evaluation_ids.at(-1) || null;
         const evaluation = item.evaluations.at(-1) || null;
         const noEvaluation = () => status('尚无已保存评估，请先完成真实失败与反例评估。');
-        const shadow = button(card, '运行冻结样本的离线影子检查', () => latestEvaluationId ? mutate('/offline-shadow', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId}) : noEvaluation(), 'btn-sm');
+        const shadow = button(card, '运行冻结样本的离线影子检查', () => latestEvaluationId ? mutate('/offline-shadow', {mutation_id: randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId}) : noEvaluation(), 'btn-sm');
         if (!latestEvaluationId) shadow.disabled = true;
         const newTasks = evaluation ? data.completed_tasks.filter(t => Date.parse(t.created_at) > Date.parse(evaluation.created_at) && t.base_refs.some(r => r.kind === 'listing' && r.id === p.request.listing_ref.id)) : [];
         const failure = element('select'), success = element('select');
@@ -144,12 +145,12 @@ import {formatDateTime} from './format.js';
         for (const task of newTasks.filter(t => ['failed', 'partial'].includes(t.status))) option(failure, task.id, `${task.status} · ${task.id}`);
         for (const task of newTasks.filter(t => t.status === 'succeeded')) option(success, task.id, `${task.status} · ${task.id}`);
         card.append(element('p', '前瞻步骤影子：请先在对话中明确发起新的同证券研究，完成后刷新选择。仅检查真实新输出中的步骤，不额外调用模型、不改正式观点或发提醒。离线重放不能替代此项。'), failure, success);
-        const prospective = button(card, '记录新任务的前瞻步骤影子', () => { if (!latestEvaluationId) return noEvaluation(); if (!failure.value || !success.value) return status('需要评估后新建的同证券成功和不完整研究任务。'); return mutate('/prospective-shadow', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId, task_ids: [failure.value, success.value]}); }, 'btn-sm');
+        const prospective = button(card, '记录新任务的前瞻步骤影子', () => { if (!latestEvaluationId) return noEvaluation(); if (!failure.value || !success.value) return status('需要评估后新建的同证券成功和不完整研究任务。'); return mutate('/prospective-shadow', {mutation_id: randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId, task_ids: [failure.value, success.value]}); }, 'btn-sm');
         if (!latestEvaluationId) prospective.disabled = true;
 
       }
       if (['evaluating', 'shadow'].includes(p.status)) {
-        const decision = action => mutate('/decisions', {mutation_id: crypto.randomUUID(), proposal_id: p.id, expected_revision: p.revision, expected_head_revision: item.head_revision, listing_ref: p.request.listing_ref, evidence_hash: item.evidence_hash, summary: item.approval_summary, decision: action});
+        const decision = action => mutate('/decisions', {mutation_id: randomUUID(), proposal_id: p.id, expected_revision: p.revision, expected_head_revision: item.head_revision, listing_ref: p.request.listing_ref, evidence_hash: item.evidence_hash, summary: item.approval_summary, decision: action});
         if (item.evaluations.at(-1)?.passed && item.prospective?.at(-1)?.passed) button(card, '明确批准并用于该证券的新任务', () => decision('approve'), 'btn-primary');
         button(card, '拒绝此提案', () => decision('reject'), 'btn-danger-ghost');
       }
@@ -167,7 +168,7 @@ import {formatDateTime} from './format.js';
       for (const version of data.versions.filter(v => v.binding.listing_ref?.id === head.binding.listing_ref.id && v.binding.method_ref.id !== head.binding.method_ref.id)) option(select, JSON.stringify(version.binding.method_ref), refText(version.binding.method_ref));
       const reason = element('input'); reason.placeholder = '说明回退原因'; reason.maxLength = 1000; reason.setAttribute('aria-label', '回退原因');
       card.append(select, reason);
-      button(card, '明确回退并追加版本', () => { if (!reason.value.trim()) return status('请说明回退原因。'); return mutate('/rollback', {mutation_id: crypto.randomUUID(), listing_ref: head.binding.listing_ref, expected_head_revision: head.revision, target_method: JSON.parse(select.value), reason: reason.value.trim()}); }, 'btn-sm');
+      button(card, '明确回退并追加版本', () => { if (!reason.value.trim()) return status('请说明回退原因。'); return mutate('/rollback', {mutation_id: randomUUID(), listing_ref: head.binding.listing_ref, expected_head_revision: head.revision, target_method: JSON.parse(select.value), reason: reason.value.trim()}); }, 'btn-sm');
       $('method-heads').append(card);
     }
   }
@@ -179,7 +180,7 @@ import {formatDateTime} from './format.js';
   $('method-create').onsubmit = event => {
     event.preventDefault(); const review = data.reviews.find(r => r.id === $('method-failure').value); if (!review) return status('请先保存一个真实失败或不完整复盘。');
     const refs = listing(review); if (refs.length !== 1) return status('只支持一个明确证券。');
-    mutate('/proposals', {mutation_id: crypto.randomUUID(), review_id: review.id, listing_ref: refs[0], old_method: review.old_method.method_ref, error_pattern: $('method-pattern').value, summary: $('method-summary').value, config: {schema_version: 1, require_two_counter_hypotheses: $('method-two').checked, require_verified_counter_evidence: $('method-verified').checked, require_explicit_stop_decision: $('method-stop').checked}});
+    mutate('/proposals', {mutation_id: randomUUID(), review_id: review.id, listing_ref: refs[0], old_method: review.old_method.method_ref, error_pattern: $('method-pattern').value, summary: $('method-summary').value, config: {schema_version: 1, require_two_counter_hypotheses: $('method-two').checked, require_verified_counter_evidence: $('method-verified').checked, require_explicit_stop_decision: $('method-stop').checked}});
   };
   if (sessionStorage.getItem(storageKey)) {
     const pending = JSON.parse(sessionStorage.getItem(storageKey));

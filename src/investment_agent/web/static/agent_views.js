@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 // AG18 read projections. All material uses textContent; numbers are resolved by the server.
 import {get, patch, post} from './api.js';
 import {el} from './dom.js';
@@ -155,7 +156,7 @@ export function bootAgentViews() {
       for(const row of rows){const section=el('article',{class:'agent-browse-record'});
         if(kind==='cases'){const open=button(`${name(row.listing_ref)} · ${label(row.status)}`,()=>casePage(row.id));open.dataset.caseId=row.id;section.append(open);refs(section,[row.listing_ref]);}
         else if(kind==='notifications'){const readStatus=el('p',{class:'agent-notification-read'},`提醒 #${row.sequence} · v${row.revision} · ${row.read?'已读':'未读'}`);section.append(el('h3',{},`${name(notificationCases.get(row.case_id))} · ${label(row.category)}`),el('p',{class:'agent-notification-content'},({published:'新公司观点已发布',review_required:'材料变化，需要复核',reviewed:'复核已完成',needs_input:'复核需要补充材料'}[row.stage] || '研究状态待确认')),readStatus);lines(section,'变化或待处理原因',(row.reasons || []).map(reason=>typeof reason==='string'?limitation(reason):reason.reason || reason.summary || '查看保存的复核依据'));refs(section,[row.recommendation_ref,row.original_recommendation_ref,...(row.result_refs || [])].filter(Boolean));audit(section,row);section.append(button('查看相关档案',()=>casePage(row.case_id)));
-          const b=button(row.read?'标为未读':'标为已读',async()=>{b.disabled=true;try{const result=await patch(`/investor/notifications/${row.sequence}/read`,{read:!row.read,mutation:{expected_revision:row.revision,idempotency_key:crypto.randomUUID()}});if(alive(token)){row.read=result.read;row.revision=result.revision;b.textContent=row.read?'标为未读':'标为已读';readStatus.textContent=`提醒 #${row.sequence} · 服务器已确认：${row.read?'已读':'未读'} · v${row.revision}`;}}catch(exc){if(alive(token))section.append(el('p',{class:'notice notice-error'},exc.message+'；请刷新后核对当前状态。'));}finally{b.disabled=false;}});section.append(b);}
+          const b=button(row.read?'标为未读':'标为已读',async()=>{b.disabled=true;try{const result=await patch(`/investor/notifications/${row.sequence}/read`,{read:!row.read,mutation:{expected_revision:row.revision,idempotency_key:randomUUID()}});if(alive(token)){row.read=result.read;row.revision=result.revision;b.textContent=row.read?'标为未读':'标为已读';readStatus.textContent=`提醒 #${row.sequence} · 服务器已确认：${row.read?'已读':'未读'} · v${row.revision}`;}}catch(exc){if(alive(token))section.append(el('p',{class:'notice notice-error'},exc.message+'；请刷新后核对当前状态。'));}finally{b.disabled=false;}});section.append(b);}
         else section.append(button(`探索批次 #${row.sequence} · ${label(row.state)}`,()=>batchPage(row.id)));
         body.append(section);
       }

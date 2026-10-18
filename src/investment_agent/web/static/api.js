@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 // 统一浏览器 API client：JSON/204/下载、401/403/409/422/503、超时、
 // loading/empty/error/retry 四态、提交锁定与幂等键。
 // 页面不解释 score 语义，只渲染版本化 API 返回的结构。
@@ -22,10 +23,7 @@ export class ApiError extends Error {
 }
 
 function idempotencyKey() {
-  if (globalThis.crypto && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return randomUUID();
 }
 
 async function parseBody(response) {

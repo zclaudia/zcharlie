@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 // Actual user facts are never inferred from decisions. Decimal values stay strings.
 import {get, post} from './api.js';
 import {el} from './dom.js';
@@ -149,7 +150,7 @@ export function bootAgentPortfolio() {
       return {occurred_at:timestamp(),source:source.value.trim(),currency:'CNY',user_confirmed:true};
     };
   }
-  function saveFact(fact) {const exact = requireAccount(); return write('/portfolio/events',{account_id:exact.id,expected_revision:exact.revision,idempotency_key:crypto.randomUUID(),fact});}
+  function saveFact(fact) {const exact = requireAccount(); return write('/portfolio/events',{account_id:exact.id,expected_revision:exact.revision,idempotency_key:randomUUID(),fact});}
   function purposeForm() {
     requireAccount(); if (!snapshot) throw Error('请先确认实际现金起点。');
     const token = start('确认资金用途'), rows = [], area = el('section');
@@ -157,7 +158,7 @@ export function bootAgentPortfolio() {
     const add = value => {
       if (rows.length >= 12) throw Error('最多十二项用途。');
       const row = el('fieldset'); area.append(row);
-      const entry = {id:value?.id || crypto.randomUUID(), row,
+      const entry = {id:value?.id || randomUUID(), row,
         name:field('用途名称',value?.name || '','text',row),
         amount:field('分配金额（元）',value?.amount || '','text',row),
         budget:field('可用于方案的预算（含费用，元）',value?.available_budget || '','text',row),
@@ -174,12 +175,12 @@ export function bootAgentPortfolio() {
     body.append(button('添加资金用途',()=>add()),button('确认保存用途规划',()=>{
       if (token !== epoch) throw Error('页面已变化，请刷新。');
       const values = rows.map(r=>({id:r.id,name:r.name.value.trim(),amount:decimal(r.amount),available_budget:decimal(r.budget),required_cash:decimal(r.reserve),horizon:r.horizon.value,required_on:r.date.value,source:r.source.value.trim(),source_version:r.version.value.trim(),unknowns:r.unknowns.value.trim() ? [r.unknowns.value.trim()] : []}));
-      return write('/portfolio/purposes',{account_id:account.id,idempotency_key:crypto.randomUUID(),expected_revision:purposes?.version.reference.revision || 0,snapshot_ref:structuredClone(snapshot.reference),purposes:values,confirmation:'user_confirmed'});
+      return write('/portfolio/purposes',{account_id:account.id,idempotency_key:randomUUID(),expected_revision:purposes?.version.reference.revision || 0,snapshot_ref:structuredClone(snapshot.reference),purposes:values,confirmation:'user_confirmed'});
     }));
   }
   function create() {
     const token = start('新建真实账户'), input = field('账户名称');
-    body.append(button('确认新建账户', () => {if (token !== epoch) throw Error('页面已变化。'); if (!input.value.trim()) throw Error('请输入账户名称。'); return write('/portfolio/accounts',{name:input.value.trim(),currency:'CNY',idempotency_key:crypto.randomUUID()});}));
+    body.append(button('确认新建账户', () => {if (token !== epoch) throw Error('页面已变化。'); if (!input.value.trim()) throw Error('请输入账户名称。'); return write('/portfolio/accounts',{name:input.value.trim(),currency:'CNY',idempotency_key:randomUUID()});}));
   }
   async function balance(kind) {
     requireAccount(); const token = start(kind === 'opening_balance' ? '记录组合起点' : '确认对账余额');
@@ -230,7 +231,7 @@ export function bootAgentPortfolio() {
       if (token !== epoch || !confirm.checked) throw Error('请核对账户并明确确认约束。');
       const limits = Object.fromEntries(Object.entries(fields).map(([key,node])=>[key,decimal(node,true)]));
       const candidate = {...structuredClone(old),revision:old.revision+1,portfolio_constraints:{account_id:exact.id,currency:'CNY',...limits}};
-      return write('/investor/actions',{idempotency_key:crypto.randomUUID(),parameters:{operation:'mandate_revision',candidate,expected_revision:old.revision}});
+      return write('/investor/actions',{idempotency_key:randomUUID(),parameters:{operation:'mandate_revision',candidate,expected_revision:old.revision}});
     }));
   }
   async function plans(ref = null) {
@@ -276,7 +277,7 @@ export function bootAgentPortfolio() {
         if (token !== epoch) throw Error('页面已变化，请重新查看当前方案。');
         if (decision.value === 'accept' && (view.status !== 'published' || (!option.executable && option.actions.some(a=>!['wait','hold','further_research'].includes(a.stance))))) throw Error('当前方案受限，不能接受；请刷新复核。');
         if (!text.value.trim()) throw Error('请填写本人原话。');
-        return write('/investor/decisions',{idempotency_key:crypto.randomUUID(),parameters:{operation:'decision',portfolio_plan_ref:{kind:'portfolio_plan',id:plan.id,revision:plan.revision},option_id:option.id,decision:decision.value,user_text:text.value.trim()}});
+        return write('/investor/decisions',{idempotency_key:randomUUID(),parameters:{operation:'decision',portfolio_plan_ref:{kind:'portfolio_plan',id:plan.id,revision:plan.revision},option_id:option.id,decision:decision.value,user_text:text.value.trim()}});
       }); row.append(submit); audit(row,option); body.append(row);
     }
     audit(body,view);

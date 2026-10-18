@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 /* Structured P2 rule and user-event management. Mutation bodies are persisted
  * before POST and replayed byte-for-byte only after an uncertain response. */
 
@@ -19,10 +20,7 @@ const DIMENSION_LABELS = Object.freeze({
 const one = (root, selector) => root.querySelector(selector);
 const all = (root, selector) => [...root.querySelectorAll(selector)];
 const text = (root, value) => { root.textContent = value == null ? "—" : String(value); };
-const uuid = () => {
-  if (!globalThis.crypto?.randomUUID) throw new Error("当前环境无法安全生成操作 ID，请刷新页面后重试。");
-  return crypto.randomUUID();
-};
+const uuid = randomUUID;
 const lines = (value) => value.split(/\r?\n/).map((part) => part.trim()).filter(Boolean);
 const localDatetime = (value) => value ? new Date(value).toISOString() : null;
 

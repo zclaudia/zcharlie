@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 import { get, post } from "./api.js";
 import { el } from "./dom.js";
 import { supplementalReasonLabel } from "./supplemental_items.js";
@@ -608,7 +609,7 @@ function mountForm({ root, region, accounts, listing, currentEpoch, bumpEpoch, l
     const item = { listing_ref: listing.listing_ref, action };
     if (action !== "hold") item.trade_assumptions = { ...values, assumption_source: "user_scenario", unknown_fields: unknowns(values) };
     const body = {
-      operation_id: crypto.randomUUID(), account_id: accountId,
+      operation_id: randomUUID(), account_id: accountId,
       snapshot_ref: context.snapshot.reference, mandate_ref: context.mandate_ref,
       valuation_binding: context.valuation_binding,
       purpose_binding: purposeBinding(context, purposeSelect.value || null), items: [item],

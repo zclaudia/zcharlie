@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 // 持仓池页面：账户、估值派生持仓、事实录入与时间线。
 // 契约见 docs/product/watch-holding-plan.md 2.3/2.4/2.10：
 // 只有用户确认的事实改变账本；行情只生成不可变估值；读取与录入共用服务端校验。
@@ -949,7 +950,7 @@ async function toFact(fact) {
 }
 
 function randomKey() {
-  return crypto.randomUUID();
+  return randomUUID();
 }
 
 const selectedEvents = new Map();

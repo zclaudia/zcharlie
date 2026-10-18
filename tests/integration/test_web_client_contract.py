@@ -172,6 +172,46 @@ def test_api_client_handles_states_idempotency_and_errors():
         assert marker in source, marker
 
 
+def test_uuid_supports_native_and_http_webview_crypto():
+    module_uri = (WEB_STATIC / "uuid.js").resolve().as_uri()
+    api_uri = (WEB_STATIC / "api.js").resolve().as_uri()
+    result = _run_node(f"""
+import assert from 'node:assert/strict';
+import {{webcrypto}} from 'node:crypto';
+const {{randomUUID}} = await import({json.dumps(module_uri)});
+const {{idempotencyKey}} = await import({json.dumps(api_uri)});
+const useCrypto = value => Object.defineProperty(globalThis, 'crypto', {{value, configurable:true}});
+const nativeId = '12345678-1234-4123-8123-123456789abc';
+const native = {{randomUUID() {{ assert.equal(this, native); return nativeId; }}}};
+useCrypto(native);
+assert.equal(randomUUID(), nativeId);
+assert.equal(idempotencyKey(), nativeId);
+// Fixed bytes pin the UUID version/variant and zero-padding at both extremes.
+for (const [byte, expected] of [[0, '00000000-0000-4000-8000-000000000000'],
+                              [255, 'ffffffff-ffff-4fff-bfff-ffffffffffff']]) {{
+  const fallback = {{getRandomValues(bytes) {{
+    assert.equal(this, fallback);
+    assert.equal(bytes.length, 16);
+    return bytes.fill(byte);
+  }}}};
+  useCrypto(fallback);
+  assert.equal(randomUUID(), expected);
+  assert.equal(idempotencyKey(), expected);
+}}
+// Exercise actual secure randomness with randomUUID unavailable.
+useCrypto({{getRandomValues: bytes => webcrypto.getRandomValues(bytes)}});
+const ids = Array.from({{length:1000}}, () => randomUUID());
+assert.equal(new Set(ids).size, ids.length);
+for (const id of ids) assert.match(id, /^[0-9a-f]{{8}}-[0-9a-f]{{4}}-4[0-9a-f]{{3}}-[89ab][0-9a-f]{{3}}-[0-9a-f]{{12}}$/);
+for (const unavailable of [undefined, {{}}]) {{
+  useCrypto(unavailable);
+  assert.throws(randomUUID, /无法安全生成操作 ID/);
+}}
+console.log(JSON.stringify({{ok:true}}));
+""")
+    assert result == {"ok": True}
+
+
 def test_renderer_consumes_only_versioned_read_models():
     app = (WEB_STATIC / "app.js").read_text(encoding="utf-8")
     watchlist = (WEB_STATIC / "watchlist.js").read_text(encoding="utf-8")

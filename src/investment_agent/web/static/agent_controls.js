@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 // AG19 authenticated, versioned controls. Credentials only use the encrypted settings page.
 import {get, post, patch} from './api.js';
 import {el} from './dom.js';
@@ -121,7 +122,7 @@ export function bootAgentControls() {
   abandon.hidden = !pending;
   host.append(retry, abandon);
   function execute(parameters, node, path = '/investor/actions') {
-    return send(path, {parameters, idempotency_key: crypto.randomUUID()}, node);
+    return send(path, {parameters, idempotency_key: randomUUID()}, node);
   }
   async function listingName(ref) {
     if (!names.has(ref.id)) {
@@ -247,7 +248,7 @@ export function bootAgentControls() {
         }
       }
       const candidate = {
-        ...(mandate || {id: crypto.randomUUID(), schema_version: 1,
+        ...(mandate || {id: randomUUID(), schema_version: 1,
           created_at: new Date().toISOString(), actor: 'user', origin_ref: null}),
         revision: mandate ? mandate.revision + 1 : 1,
         goals: lines(goals), unknowns: lines(unknowns), hard_constraints: lines(constraints),
@@ -275,7 +276,7 @@ export function bootAgentControls() {
       audit(preview, candidate);
       const save = button('确认保存已审阅约定', () => mandate
         ? execute({operation: 'mandate_revision', candidate, expected_revision: mandate.revision}, save)
-        : send('/investor/mandate', {candidate, idempotency_key: crypto.randomUUID()}, save));
+        : send('/investor/mandate', {candidate, idempotency_key: randomUUID()}, save));
       preview.append(save);
       reviewButton.disabled = true;
       for (const node of fields) {
@@ -316,7 +317,7 @@ export function bootAgentControls() {
         section.append(node);
       }
       const pin = button(c.pinned ? '取消固定关注' : '固定关注', () => send(`/investor/cases/${c.id}/pinned`, {
-        pinned: !c.pinned, mutation: {expected_revision: c.revision, idempotency_key: crypto.randomUUID()},
+        pinned: !c.pinned, mutation: {expected_revision: c.revision, idempotency_key: randomUUID()},
       }, pin, 'PATCH'));
       section.append(pin);
       audit(section, reference('case', c));
@@ -444,7 +445,7 @@ export function bootAgentControls() {
         const node = button(approve ? '批准上述确切变更' : '拒绝此提案', () => {
           if (!why.value.trim()) {status.textContent = '请填写本次决定理由。'; return;}
           send(`/investor/proposals/${proposal.id}/resolve`, {
-            parameters: proposal.parameters, mutation: {expected_revision: proposal.revision, idempotency_key: crypto.randomUUID()},
+            parameters: proposal.parameters, mutation: {expected_revision: proposal.revision, idempotency_key: randomUUID()},
             approve, reason: why.value.trim(),
           }, node);
         });

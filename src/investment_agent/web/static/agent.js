@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 // Only public AG09 contracts. Drafts and immutable unacknowledged bodies survive reload.
 // AI page shell: conversation list / thread / research drawer, plus portfolio and controls tabs.
 import { get, post, FETCH_MARKER_HEADERS } from "./api.js";
@@ -441,7 +442,7 @@ export function bootAgent() {
     if (!id || locks.has(id)) return;
     saveDraft(); const d = draft(id);
     if (!retry && (d.pending || !d.text.trim())) return;
-    if (!d.pending) d.pending = {client_message_id:crypto.randomUUID(),text:d.text,context_refs:structuredClone(d.refs),research_kind:d.kind};
+    if (!d.pending) d.pending = {client_message_id:randomUUID(),text:d.text,context_refs:structuredClone(d.refs),research_kind:d.kind};
     if (!persist()) return;
     const body = structuredClone(d.pending), token = generation;
     locks.add(id); binding();
@@ -627,7 +628,7 @@ export function bootAgent() {
     }
     cancel.addEventListener("click", async () => {
       if (cancel.disabled) return; cancel.disabled = true;
-      try { const result = await post(`${endpoint}/cancel`, {idempotency_key:crypto.randomUUID()}); if (alive()) { paint(result); if (TERMINAL.has(result.status)) await finish(); } }
+      try { const result = await post(`${endpoint}/cancel`, {idempotency_key:randomUUID()}); if (alive()) { paint(result); if (TERMINAL.has(result.status)) await finish(); } }
       catch (error) { if (alive()) { showError(error); cancel.disabled = false; } }
     });
     // 内嵌模式走 IPC 事件流（轮询兜底）；浏览器路径 SSE 照旧。

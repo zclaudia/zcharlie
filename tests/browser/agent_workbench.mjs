@@ -39,6 +39,11 @@ try {
   await ready(); browser = await chromium.launch({headless:true, executablePath:process.env.AG17_CHROMIUM_EXECUTABLE});
   for (const viewport of [{width:1440,height:1000},{width:390,height:844}]) {
     const context = await browser.newContext({viewport});
+    // Mobile HTTP/WebViews may expose getRandomValues without randomUUID.
+    // Exercise sending, cancellation and exact retries through that fallback.
+    if (viewport.width === 390) await context.addInitScript(() => {
+      Object.defineProperty(globalThis.crypto, 'randomUUID', {value: undefined, configurable: true});
+    });
     const page = await context.newPage(); page.setDefaultTimeout(+(process.env.AG_TIMEOUT||30000)); const errors=[];
     page.on('pageerror', error => errors.push(String(error))); page.on('dialog', () => {throw new Error('XSS dialog');});
     await page.goto(base+'/app/agent'); assert.match(page.url(), /login/);
@@ -59,6 +64,7 @@ try {
     await page.locator('#agent-send').click();
     await page.waitForFunction(() => !document.querySelector('#agent-retry').hidden && !document.querySelector('#agent-retry').disabled);
     assert.equal(lostBody.context_refs[0].id,78); assert.equal(lostBody.research_kind,'auto');
+    assert.match(lostBody.client_message_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     let retryBody;
     await page.unroute('**/agent/conversations/*/messages');
     await page.route('**/agent/conversations/*/messages', async route => {

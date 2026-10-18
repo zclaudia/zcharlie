@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid.js";
 import { get, post } from "./api.js";
 import { el } from "./dom.js";
 import { operationRecord, readOperation, saveOperation } from "./account_fit.js";
@@ -474,7 +475,7 @@ function mount({ root, region, accounts, initialContext, currentEpoch, bumpEpoch
     if (readSaved(pendingKey(id))) { contextNote.textContent = "存在尚未确认的操作；页面不会自动创建新操作。"; return; }
     const values = { fixed_fee: amount(fixedFee.value), fee_rate: amount(feeRate.value) };
     const body = {
-      operation_id: crypto.randomUUID(), account_id: id,
+      operation_id: randomUUID(), account_id: id,
       snapshot_ref: context.snapshot.reference, mandate_ref: context.mandate_ref,
       valuation_binding: context.valuation_binding,
       purpose_binding: buildPurposeBinding(context, purposeState.value, purposeSelect.value, purposeReason.value.trim()),
