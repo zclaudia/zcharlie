@@ -774,9 +774,19 @@ async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:
     task = await service.get_task(claim.task_id)
     actions = (await session.scalars(select(ToolAction).where(ToolAction.task_id == str(claim.task_id), ToolAction.state == "committed"))).all()
     material: set[str] = set()
+    discoveries: set[str] = set()
     resolved = []
     for action in actions:
         result = action.result or {}
+        if action.parameters.get("tool") == "search_saved_sources":
+            # Discovery is a real step before readback, not verified support.
+            # Distinct queries/timestamps/copy refs cannot manufacture progress
+            # when they point to the same immutable original fragment.
+            for hit in result.get("matches", []):
+                if hit.get("effective_status") == "ok" and hit.get("fragment_hash") and hit.get("evidence_ref"):
+                    discoveries.add(fingerprint({"subject": hit.get("subject_ref"),
+                        "original": hit.get("original_hash") or hit.get("source_ref"),
+                        "fragment": hit["fragment_hash"]}))
         if result.get("status") == "ok" and action.parameters.get("tool") not in {"save_research_progress"}:
             def collect(value: Any, tool_name: str = action.parameters.get("tool", "")) -> None:
                 if isinstance(value, dict):
@@ -797,7 +807,7 @@ async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:
             resolved.extend(result.get("progress", {}).get("completed_steps", []))
     data = dict(row.checkpoint.get("data", {}))
     dependencies = sorted(data.get("deferred_results", {}))
-    signature = fingerprint({"dependencies": dependencies, "material": sorted(material), "resolved": sorted(set(resolved)), "refs": [r.model_dump(mode="json") for r in task.artifact_refs if r.kind in {"evidence", "calculation"}]})
+    signature = fingerprint({"dependencies": dependencies, "material": sorted(material), "discoveries": sorted(discoveries), "resolved": sorted(set(resolved)), "refs": [r.model_dump(mode="json") for r in task.artifact_refs if r.kind in {"evidence", "calculation"}]})
     last = data.get("progress_guard")
     stagnant = last["stagnant"] + 1 if last and last["signature"] == signature else 0
     if stagnant >= 2:

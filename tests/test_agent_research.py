@@ -829,3 +829,46 @@ def test_native_search_projection_preserves_risks_and_exact_refs_without_mutatin
     assert projection["window_exhausted"] and shown["source_audit_count"] == 2
     with pytest.raises(ValidationError):
         AgentSearchRequest(listing_ids=(178,), query="玻璃", as_of=datetime.now(UTC), limit=6)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("repeat", [False, True])
+async def test_native_discovery_then_readback_progress_and_repeated_search_stop(conversation_db, repeat):
+    import hashlib
+
+    from investment_agent.evidence.contracts import EvidenceRecord
+    from investment_agent.storage.models.evidence import SavedEvidence
+
+    _, _, subject = await fixture()
+    now = datetime.now(UTC)
+    async with session_scope() as session:
+        for text in ("alpha disclosure", "beta disclosure"):
+            record = EvidenceRecord(id=uuid4(), revision=1, actor="fixture", created_at=now, origin_ref=None,
+                source_ref=ObjectRef(kind="evidence", id=uuid4(), revision=1), source_kind="document",
+                locator="fixture", content_hash=hashlib.sha256(text.encode()).hexdigest(), subject_ref=subject,
+                period=None, published_at=now, acquired_at=now, available_from=now,
+                verification="candidate", conflict="none", text=text)
+            session.add(SavedEvidence(id=str(record.id), revision=1, owner_id="local_owner", payload=record.model_dump(mode="json")))
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="Inspect saved disclosures", context_refs=(subject,), research_kind="local_check"))
+    turns = 0
+    def respond(messages, info):
+        nonlocal turns
+        turns += 1
+        if turns <= (3 if repeat else 2):
+            query = "alpha" if turns == 1 or repeat else "beta"
+            return ModelResponse([ToolCallPart("search_saved_sources", {"business": {
+                "listing_ids": [subject.id], "query": query, "as_of": receipt.task.binding.as_of.isoformat(), "limit": 1
+            }}, tool_call_id=f"search-{turns}")], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        hits = [p.content["matches"][0] for m in messages for p in m.parts if isinstance(p, ToolReturnPart) and p.tool_name == "search_saved_sources"]
+        ref = ObjectRef.model_validate(hits[0]["evidence_ref"])
+        if turns == 3:
+            assert hits[0]["read_required"]
+            return ModelResponse([ToolCallPart("get_evidence", {"business": {
+                "ref": ref.model_dump(mode="json"), "subject_ref": subject.model_dump(mode="json"),
+                "as_of": receipt.task.binding.as_of.isoformat()
+            }}, tool_call_id="read")], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        return response(ResearchOutput(progress=progress(kind="local_check", fact_refs=(ref,))))
+    task = await run(receipt, FunctionModel(respond))
+    assert task.stop_reason == (StopReason.NO_PROGRESS if repeat else StopReason.ANSWERED)
+    assert task.usage.requests == (2 if repeat else 4)
