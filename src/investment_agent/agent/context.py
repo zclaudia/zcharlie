@@ -105,9 +105,16 @@ def reuse_preparation_materials(result: dict[str, Any], sources: tuple[dict[str,
     materials = []
     for material in result.get("materials", []):
         record = known.get((material.get("id"), material.get("revision")))
-        if record and all(key in record and record[key] == value for key, value in material.items()):
+        def equal_field(key: str, value: Any, record=record) -> bool:
+            if key == "text" and "_text_window" in record:
+                window = record["_text_window"]
+                excerpt = value[window["start"]:window["end"]] if isinstance(value, str) else None
+                return (excerpt == window["text"] and len(value) == window["full_length"]
+                        and hashlib.sha256(excerpt.encode()).hexdigest() == window["sha256"])
+            return key in record and record[key] == value
+        if record and all(equal_field(key, value) for key, value in material.items()):
             materials.append({k: material[k] for k in ("id", "revision", "source_ref", "content_hash", "verification", "conflict") if k in material} | {
-                "exact_record": "All material fields equal the same id/revision record in company_context.reusable_sources; use that already-read full source, not another independent corroboration."})
+                "exact_record": "Same immutable id/revision/hash and metadata as company_context.reusable_sources. Use only its shown text window/values; full text is not additional reviewed evidence or independent corroboration."})
         else:
             materials.append(material)
     return {**result, "materials": materials}
@@ -120,10 +127,18 @@ def reusable_context_sources(instructions: str) -> tuple[dict[str, Any], ...]:
         return ()
     try:
         context = json.loads(instructions.split(marker, 1)[1])
-        return tuple(item["record"] for company in context.get("company_context", [])
+        return tuple({**item["record"], **({"_text_window": item["text_window"]} if item.get("text_window") else {})} for company in context.get("company_context", [])
                      for item in company.get("reusable_sources", {}).get("records", []))
     except (ValueError, TypeError, KeyError, AttributeError):
         return ()
+
+
+def reusable_context_plan(instructions: str) -> bool:
+    marker = "\nTrusted current context:\n"
+    try:
+        return bool(json.loads(instructions.split(marker, 1)[1]).get("reused_research_plan"))
+    except (IndexError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def _retry_feedback(part: RetryPromptPart) -> RetryPromptPart:

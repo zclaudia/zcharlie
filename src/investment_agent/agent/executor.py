@@ -202,8 +202,12 @@ class AgentExecutor:
                 await TaskService(session).append_event(claim.task_id, claim.attempt_id, "step_started",
                     {"step_id": str(uuid4()), "summary": "Executing authorized agent phase"})
             # Read/reconcile durable effects before constructing the native run.
-            from investment_agent.agent.context import reusable_context_sources
-            execution = replace(execution, reuse_sources=bool(reusable_context_sources(instructions)))
+            from investment_agent.agent.context import (
+                reusable_context_plan,
+                reusable_context_sources,
+            )
+            execution = replace(execution, reuse_sources=bool(reusable_context_sources(instructions)),
+                                reuse_plan=reusable_context_plan(instructions))
             tools = TrustedTools(execution, self.registrations)
             await tools.recover()
             if checkpoint.get("history") and checkpoint.get("memory_revision", 0) != grant.memory_revision:

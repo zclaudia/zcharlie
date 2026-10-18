@@ -430,6 +430,11 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
                 item["case"] = {"listing_ref": case.payload["listing_ref"], "historical_context_unavailable": True}
         views.append(item)
     data["company_context"] = views
+    if source and grant.research_kind == "company_research" and any(v.get("reusable_sources", {}).get("records") for v in views):
+        from investment_agent.agent.company_plan import reuse_question_plan
+        reused_plan = await reuse_question_plan(session, claim, grant, source, method.method_ref)
+        if reused_plan:
+            data["reused_research_plan"] = reused_plan
     recovered = await recovered_evidence(session, claim, grant)
     if recovered is not None:
         data["recovered_evidence"] = recovered

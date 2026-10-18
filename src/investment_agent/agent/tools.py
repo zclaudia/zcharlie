@@ -78,6 +78,7 @@ class ExecutionContext:
     base: Settings
     phase: str = "run:v1"  # AG13 may supply a trusted stable phase/version.
     reuse_sources: bool = False
+    reuse_plan: bool = False
 
 
 class TrustedTools:
@@ -242,6 +243,8 @@ class TrustedTools:
                     if ctx.deps is not self.context:
                         raise ExecutionDeniedError("invalid_trusted_context")
                     if self.context.phase == "research:v1":
+                        if self.context.reuse_plan and spec.name != "prepare_company_view":
+                            return None
                         async with self.context.sessions() as session:
                             if self.context.reuse_sources and spec.name != "save_research_progress":
                                 from investment_agent.agent.research_publication import (
@@ -250,7 +253,7 @@ class TrustedTools:
                                 if not await preparation_ready(session, self.context.claim.task_id):
                                     return None
                             headroom = await BudgetService(session, self.context.base).research_headroom(self.context.claim)
-                        if (self.context.reuse_sources and headroom["finish_only"]
+                        if (self.context.reuse_sources and (headroom["finish_only"] or self.context.reuse_plan)
                                 and spec.name == "prepare_company_view" and final_review_ready(ctx.messages)):
                             return None
                         if headroom["finish_only"] and spec.name != "prepare_company_view":

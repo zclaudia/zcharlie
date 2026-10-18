@@ -447,3 +447,19 @@ def test_current_schema_feedback_does_not_repeat_the_rejected_input():
     assert projected[-2] is response and "input" not in projected[-1].parts[0].content[0]
     assert projected[-1].parts[0].content[0]["loc"] == error["loc"]
     assert messages[-1].parts[0].content[0]["input"] == error["input"]
+
+
+def test_preparation_text_window_matches_exact_offset_and_hash_without_claiming_full_read():
+    import hashlib
+
+    from investment_agent.agent.context import reuse_preparation_materials
+
+    text = "original text with important opposing context afterwards"
+    window = {"start": 0, "end": 8, "full_length": len(text), "text": text[:8],
+              "sha256": hashlib.sha256(text[:8].encode()).hexdigest()}
+    material = {"id": "source", "revision": 1, "content_hash": "full-original-hash", "text": text, "verification": "candidate"}
+    record = {k: v for k, v in material.items() if k != "text"} | {"_text_window": window}
+    projected = reuse_preparation_materials({"materials": [material]}, (record,))
+    assert "shown text window" in projected["materials"][0]["exact_record"]
+    changed = {**record, "_text_window": {**window, "sha256": "wrong"}}
+    assert reuse_preparation_materials({"materials": [material]}, (changed,))["materials"] == [material]
