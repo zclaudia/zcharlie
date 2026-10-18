@@ -53,6 +53,15 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
 .ai-conv-title { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 500; }
 .ai-conv-meta { display: flex; align-items: center; gap: 6px; margin-top: 1px; font-size: var(--fs-xs); color: var(--ink-3); }
 .ai-conv-none { margin: var(--sp-3) var(--sp-4); }
+.ai-conv-row { position: relative; }
+.ai-conv-act { position: absolute; top: 7px; right: 12px; min-height: 0; padding: 1px 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); box-shadow: none; color: var(--ink-2); font-size: 12px; line-height: 20px; opacity: 0; }
+.ai-conv-act:hover { border-color: var(--line-2); background: var(--surface); color: var(--ink); }
+.ai-conv-row:hover .ai-conv-act, .ai-conv-row:focus-within .ai-conv-act { opacity: 1; }
+@media (hover: none) { .ai-conv-act { opacity: 1; } .ai-conv-row .ai-conv-title { padding-right: 3rem; } }
+.ai-conv-archived .ai-conv-title { color: var(--ink-3); }
+.ai-archived-toggle { display: block; width: calc(100% - 12px); margin: var(--sp-3) 6px 2px; padding: 6px 12px; border: 0; border-radius: var(--r-sm); background: none; box-shadow: none; color: var(--ink-3); font-size: var(--fs-xs); font-weight: 500; text-align: left; }
+.ai-archived-toggle:hover { background: var(--hover); border: 0; color: var(--ink-2); }
+.ai-archived-note { margin: 0 var(--sp-4) var(--sp-1); font-size: var(--fs-xs); line-height: 1.5; }
 .ai-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); }
 .ai-dot-run { background: var(--ai); }
 .ai-dot-wait { background: var(--amber); }
@@ -333,7 +342,7 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
   #agent-mode-btn { grid-area: mode; min-height: 32px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--surface-2); }
   .ai-cbox #agent-send { grid-area: send; width: 34px; height: 34px; min-height: 34px; border-radius: 50%; }
   .ai-cbox #agent-send:disabled, .ai-cbox:has(textarea:placeholder-shown) #agent-send { opacity: .45; }
-  .ai-chat button:not(.ai-icon-btn):not(.ai-chip-x):not(.ai-chip-btn):not(#agent-send):not(.ai-mode):not(.ai-conv):not(.ai-new) { min-height: 36px; }
+  .ai-chat button:not(.ai-icon-btn):not(.ai-chip-x):not(.ai-chip-btn):not(#agent-send):not(.ai-mode):not(.ai-conv):not(.ai-conv-act):not(.ai-new) { min-height: 36px; }
   .ai-chat .ai-opt { min-height: 44px; }
   .ai-chip-x { min-height: 0; }
 

@@ -92,6 +92,8 @@ class ConversationSummary(Contract):
     message_count: Annotated[int, Field(strict=True, ge=0)] = 0
     attention: ConversationAttention
     latest_task: ConversationTaskView | None = None
+    archived_at: datetime | None = None
+    purge_at: datetime | None = None
 
 
 class ConversationPage(Contract):
@@ -108,6 +110,11 @@ class ConversationTitleState(Contract):
     id: UUID
     title: str | None
     title_revision: Annotated[int, Field(strict=True, ge=1)]
+
+
+class ConversationArchiveState(Contract):
+    id: UUID
+    archived_at: datetime | None
 
 
 class Usage(Contract):

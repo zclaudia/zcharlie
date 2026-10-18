@@ -238,3 +238,30 @@ async def test_subjects_follow_latest_user_message(api_client, monkeypatch):
     fresh = create(api_client, context_refs=(good,))
     assert summaries(api_client)["items"][0]["id"] == fresh["id"]
     assert summaries(api_client)["items"][0]["subjects"][0]["status"] == "available"
+
+
+@pytest.mark.asyncio
+async def test_archive_restore_and_409_contracts(api_client, monkeypatch):
+    monkeypatch.setenv("INVESTOR_AGENT_ENABLED", "true")
+    conversation = create(api_client, title="归档")
+    url = f"/agent/conversations/{conversation['id']}"
+    receipt = submit(api_client, conversation["id"])
+    busy = api_client.post(f"{url}/archive", headers=KEY)
+    assert busy.status_code == 409 and busy.json()["detail"]["code"] == "conversation_active"
+    execution = await claim_task(receipt["task"]["id"])
+    await answer(execution)
+
+    archived = api_client.post(f"{url}/archive", headers=KEY)
+    assert archived.status_code == 200 and archived.json()["archived_at"] is not None
+    assert summaries(api_client)["items"] == []
+    assert [item["id"] for item in summaries(api_client, archived="true")["items"]] == [conversation["id"]]
+    assert api_client.get("/agent/conversations", headers=KEY).json() == []
+    blocked = api_client.post(f"{url}/messages", headers=KEY,
+        json={"client_message_id": str(uuid4()), "text": "再问一个", "context_refs": []})
+    assert blocked.status_code == 409 and blocked.json()["detail"]["code"] == "conversation_archived"
+    assert api_client.get(f"{url}/messages", headers=KEY).status_code == 200  # still readable
+
+    restored = api_client.post(f"{url}/unarchive", headers=KEY)
+    assert restored.status_code == 200 and restored.json()["archived_at"] is None
+    assert [item["id"] for item in summaries(api_client)["items"]] == [conversation["id"]]
+    assert api_client.post(f"/agent/conversations/{uuid4()}/archive", headers=KEY).status_code == 404

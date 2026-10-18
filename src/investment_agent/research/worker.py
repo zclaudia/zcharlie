@@ -420,6 +420,8 @@ class ResearchWorker:
 
                 await TaskService(session).expire_due(now=datetime.now(UTC), limit=100)
                 await TaskService(session).retain_events(now=datetime.now(UTC), limit=500)
+                from investment_agent.agent.conversations import ConversationService
+                await ConversationService(session, self.settings).purge_archived(now=datetime.now(UTC), limit=50)
                 from investment_agent.agent.observation import resume_collectors
                 await resume_collectors(session)
                 from investment_agent.investor.monitoring import MonitoringService

@@ -136,6 +136,7 @@ class ConversationRow(Base):
     last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     title_revision: Mapped[int] = mapped_column(default=1, server_default="1")
     subject_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list, server_default="[]")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 

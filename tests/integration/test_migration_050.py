@@ -90,7 +90,7 @@ def _metadata_diffs(db_path: Path) -> list[object]:
 def test_revision_050_follows_049_and_current_head() -> None:
     script = ScriptDirectory(str(REPO_ROOT / "alembic"))
     assert script.get_revision("050").down_revision == "049"
-    assert script.get_current_head() == "054"
+    assert script.get_current_head() == "055"
 
 
 def test_sqlite_off_guards_assessment_and_ranking_entries(

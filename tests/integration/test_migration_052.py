@@ -86,7 +86,7 @@ def _rows(database: Path, columns: str, where: str = "") -> list[tuple]:
 def test_revision_chain_and_fresh_head_metadata(tmp_path, monkeypatch) -> None:
     script = ScriptDirectory(str(ROOT / "alembic"))
     assert script.get_revision("052").down_revision == "051"
-    assert script.get_current_head() == "054"
+    assert script.get_current_head() == "055"
     database = tmp_path / "fresh-052.db"
     config = _config(database, monkeypatch)
     command.upgrade(config, "head")

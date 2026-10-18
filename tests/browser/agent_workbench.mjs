@@ -85,7 +85,7 @@ try {
     await page.locator('#agent-input').fill('原会话草稿');
     await clickNew(page); await page.waitForFunction(() => !document.querySelector('#agent-new').disabled && document.querySelector('#agent-input').value==='');
     await page.locator('#agent-input').fill('另一会话草稿');
-    await pane(page, 'list'); await page.locator('#agent-conversations button').last().click();
+    await pane(page, 'list'); await page.locator('#agent-conversations .ai-conv').last().click();
     // Explicit conversation route restores its own persisted draft, independent of list ordering.
     await page.goto(base+`/app/agent?conversation=${sent.conversation_ref.id}`);
     await page.waitForFunction(() => document.querySelector('#agent-input').value==='原会话草稿');

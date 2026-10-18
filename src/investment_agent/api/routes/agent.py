@@ -13,6 +13,7 @@ from starlette.types import Receive, Scope, Send
 
 from investment_agent.agent.contracts import (
     Conversation,
+    ConversationArchiveState,
     ConversationPage,
     ConversationTitleState,
     ConversationTitleUpdate,
@@ -24,6 +25,8 @@ from investment_agent.agent.contracts import (
     TaskProgress,
 )
 from investment_agent.agent.conversations import (
+    ConversationActiveError,
+    ConversationArchivedError,
     ConversationCreate,
     ConversationService,
     ConversationTitleConflictError,
@@ -111,6 +114,10 @@ async def service(base: BaseSettings) -> AsyncIterator[ConversationService]:
         raise HTTPException(422, detail={"code": "invalid_reference", "message": str(exc)}) from exc
     except IdempotencyPayloadMismatchError as exc:
         raise HTTPException(409, detail={"code": "idempotency_conflict"}) from exc
+    except ConversationActiveError as exc:
+        raise HTTPException(409, detail={"code": "conversation_active"}) from exc
+    except ConversationArchivedError as exc:
+        raise HTTPException(409, detail={"code": "conversation_archived"}) from exc
     except ExecutionDeniedError as exc:
         raise HTTPException(409, detail={"code": "execution_denied"}) from exc
     except TaskBoundaryError as exc:
@@ -142,12 +149,13 @@ async def conversation(conversation_id: UUID, svc: Service) -> Conversation:
 async def conversation_summaries(svc: Service,
     before: Annotated[str, Query(max_length=512)] | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
-    attention: Literal["needs_you", "running", "none"] | None = None) -> ConversationPage:
+    attention: Literal["needs_you", "running", "none"] | None = None,
+    archived: bool = False) -> ConversationPage:
     # Same short real read snapshot as /tasks/{id}/snapshot: activity order,
     # attention states and identities must come from one consistent read.
     await svc.session.execute(text("BEGIN"))
     try:
-        return await svc.summaries(before=before, limit=limit, attention=attention)
+        return await svc.summaries(before=before, limit=limit, attention=attention, archived=archived)
     except SummaryCursorInvalidError as exc:
         raise HTTPException(422, detail={"code": "invalid_cursor"}) from exc
 
@@ -159,6 +167,17 @@ async def rename_conversation(conversation_id: UUID, body: ConversationTitleUpda
         return await svc.rename(conversation_id, body)
     except ConversationTitleConflictError as exc:
         raise HTTPException(409, detail={"code": "conversation_title_conflict"}) from exc
+
+
+@router.post("/conversations/{conversation_id}/archive")
+async def archive_conversation(conversation_id: UUID, svc: Service) -> ConversationArchiveState:
+    """Hide the conversation; it is purged automatically after 30 days unless restored."""
+    return await svc.archive(conversation_id)
+
+
+@router.post("/conversations/{conversation_id}/unarchive")
+async def unarchive_conversation(conversation_id: UUID, svc: Service) -> ConversationArchiveState:
+    return await svc.unarchive(conversation_id)
 
 
 @router.get("/candidate-context/{candidate_id}")

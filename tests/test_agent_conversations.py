@@ -392,3 +392,80 @@ async def test_evidence_and_snapshot_exact_versions_derive_trusted_subject(conve
             await submit(conversation, message(context_refs=(invalid,)))
     answer = await submit(conversation, message(context_refs=(evidence.model_copy(update={"field_path":"text"}),)))
     assert answer.message.context_refs[0].field_path == "text"
+
+
+@pytest.mark.asyncio
+async def test_archive_hides_conversation_blocks_new_messages_and_restores(conversation_db):
+    from investment_agent.agent.conversations import ConversationArchivedError
+
+    conversation = await new_conversation()
+    async with session_scope() as session:
+        service = ConversationService(session, base())
+        state = await service.archive(conversation.id)
+        assert state.archived_at is not None
+        assert (await service.archive(conversation.id)).archived_at == state.archived_at  # idempotent
+        assert [c.id for c in await service.list()] == []
+        assert (await service.summaries()).items == ()
+        archived = (await service.summaries(archived=True)).items
+        assert [item.id for item in archived] == [conversation.id] and archived[0].archived_at is not None
+        assert archived[0].purge_at == archived[0].archived_at + timedelta(days=30)
+        assert await service.get(conversation.id)  # still readable
+    with pytest.raises(ConversationArchivedError):
+        await submit(conversation)
+    async with session_scope() as session:
+        service = ConversationService(session, base())
+        assert (await service.unarchive(conversation.id)).archived_at is None
+        assert [c.id for c in await service.list()] == [conversation.id]
+        assert (await service.summaries(archived=True)).items == ()
+    assert (await submit(conversation)).task.id
+
+
+@pytest.mark.asyncio
+async def test_archive_refused_while_a_task_is_unfinished(conversation_db):
+    from investment_agent.agent.conversations import ConversationActiveError
+
+    conversation = await new_conversation()
+    receipt = await submit(conversation)
+    async with session_scope() as session:
+        with pytest.raises(ConversationActiveError):
+            await ConversationService(session, base()).archive(conversation.id)
+    async with session_scope() as session:
+        await TaskService(session).cancel(receipt.task.id)
+    async with session_scope() as session:
+        assert (await ConversationService(session, base()).archive(conversation.id)).archived_at is not None
+
+
+@pytest.mark.asyncio
+async def test_purge_removes_only_conversations_archived_over_thirty_days(conversation_db):
+    old, recent, active = await new_conversation(), await new_conversation(), await new_conversation()
+    receipt = await submit(old)
+    async with session_scope() as session:
+        await TaskService(session).cancel(receipt.task.id)
+    now = datetime.now(UTC)
+    async with session_scope() as session:
+        service = ConversationService(session, base())
+        await service.archive(old.id, now=now - timedelta(days=31))
+        await service.archive(recent.id, now=now - timedelta(days=29))
+    async with session_scope() as session:
+        assert await ConversationService(session, base()).purge_archived(now=now) == 1
+    async with session_scope() as session:
+        service = ConversationService(session, base())
+        with pytest.raises(LookupError):
+            await service.get(old.id)
+        assert await session.scalar(select(func.count()).select_from(MessageRow).where(MessageRow.conversation_id == str(old.id))) == 0
+        assert await service.get(recent.id) and await service.get(active.id)
+        # The research task outlives its conversation.
+        assert (await TaskService(session).get_task(receipt.task.id)).status == TaskStatus.CANCELLED
+        assert await service.purge_archived(now=now) == 0
+        assert await service.purge_archived(now=now + timedelta(days=2)) == 1
+
+
+@pytest.mark.asyncio
+async def test_default_worker_maintenance_purges_expired_archives(conversation_db):
+    conversation = await new_conversation()
+    async with session_scope() as session:
+        await ConversationService(session, base()).archive(conversation.id, now=datetime.now(UTC) - timedelta(days=45))
+    worker = ResearchWorker(settings=base(investor_agent_enabled=False), worker_id="archive-purge")
+    assert await worker.run_once() is None
+    async with session_scope() as session:
+        assert await session.scalar(select(func.count()).select_from(ConversationRow)) == 0

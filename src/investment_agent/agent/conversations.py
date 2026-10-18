@@ -9,16 +9,17 @@ import json
 import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import ColumnElement, Exists, and_, func, or_, select, update
+from sqlalchemy import ColumnElement, Exists, and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.agent.contracts import (
     ContextBinding,
     Conversation,
+    ConversationArchiveState,
     ConversationAttention,
     ConversationPage,
     ConversationSubject,
@@ -71,6 +72,14 @@ class ConversationTitleConflictError(ValueError):
     pass
 
 
+class ConversationActiveError(ValueError):
+    """Archiving needs every task of the conversation to be finished."""
+
+
+class ConversationArchivedError(ValueError):
+    """An archived conversation is read-only until it is restored."""
+
+
 class ConversationCreate(Contract):
     title: str | None = None
     context_refs: tuple[ObjectRef, ...] = ()
@@ -78,6 +87,9 @@ class ConversationCreate(Contract):
 
 # Task statuses aggregate to "running"; waiting_user alone means needs_you.
 RUNNING_STATUSES = ("queued", "running", "waiting_data")
+LIVE_STATUSES = (*RUNNING_STATUSES, "waiting_user")
+# Archived conversations are purged (messages included) after this long.
+ARCHIVE_RETENTION = timedelta(days=30)
 _CURSOR_VERSION = 1
 _CURSOR_MAX_LENGTH = 512
 
@@ -294,7 +306,8 @@ class ConversationService:
         return Conversation.model_validate((await self._conversation(conversation_id)).payload)
 
     async def list(self, *, after: UUID | None = None, limit: int = 100) -> tuple[Conversation, ...]:
-        query = select(ConversationRow).where(ConversationRow.owner_id == self.owner)
+        query = select(ConversationRow).where(ConversationRow.owner_id == self.owner,
+            ConversationRow.archived_at.is_(None))
         if after:
             query = query.where(ConversationRow.id > str(after))
         rows = await self.session.scalars(query.order_by(ConversationRow.id).limit(limit))
@@ -322,6 +335,8 @@ class ConversationService:
                 assert message.task_ref is not None
                 task = await TaskService(self.session).get_task(UUID(str(message.task_ref.id)))
                 return MessageAccepted(message=message, task=task, events_url=f"/agent/tasks/{task.id}/events")
+            if conversation.archived_at is not None:
+                raise ConversationArchivedError("conversation is archived")
             scope = await self.resolve_context(body.context_refs)
             if body.reply_to is not None:
                 reply = await self.session.get(MessageRow, str(body.reply_to.id))
@@ -505,11 +520,61 @@ class ConversationService:
         return ConversationTitleState(id=UUID(conversation.id), title=title,
             title_revision=conversation.title_revision)
 
+    async def _has_live_task(self, conversation_id: str) -> bool:
+        task_id = MessageRow.payload["task_ref"]["id"].as_string()
+        found = await self.session.scalar(select(AgentTask.id).where(
+            MessageRow.conversation_id == conversation_id, AgentTask.id == task_id,
+            AgentTask.owner_id == self.owner, AgentTask.status.in_(LIVE_STATUSES)).limit(1))
+        return found is not None
+
+    async def archive(self, conversation_id: UUID, *, now: datetime | None = None) -> ConversationArchiveState:
+        """Idempotent; a conversation with unfinished research cannot be archived."""
+        conversation = await self._conversation(conversation_id, lock=True)
+        if conversation.archived_at is None:
+            if await self._has_live_task(conversation.id):
+                raise ConversationActiveError("conversation has unfinished tasks")
+            conversation.archived_at = now or datetime.now(UTC)
+            await self.session.flush()
+        return ConversationArchiveState(id=UUID(conversation.id), archived_at=as_utc(conversation.archived_at))
+
+    async def unarchive(self, conversation_id: UUID) -> ConversationArchiveState:
+        conversation = await self._conversation(conversation_id, lock=True)
+        if conversation.archived_at is not None:
+            conversation.archived_at = None
+            await self.session.flush()
+        return ConversationArchiveState(id=UUID(conversation.id), archived_at=None)
+
+    async def purge_archived(self, *, now: datetime | None = None, limit: int = 50) -> int:
+        """Delete a bounded batch of conversations archived longer than the retention.
+
+        Only the conversation and its messages go. Tasks, their events and the saved
+        research artifacts are separate records (retained by their own rules). A
+        conversation that somehow still has unfinished tasks is left alone.
+        """
+        if not 1 <= limit <= 500:
+            raise ValueError("invalid purge limit")
+        cutoff = (now or datetime.now(UTC)) - ARCHIVE_RETENTION
+        rows = list(await self.session.scalars(select(ConversationRow).where(
+            ConversationRow.owner_id == self.owner, ConversationRow.archived_at.isnot(None),
+            ConversationRow.archived_at < cutoff).order_by(ConversationRow.archived_at).limit(limit)))
+        purged = 0
+        for row in rows:
+            if await self._has_live_task(row.id):
+                continue
+            await self.session.execute(delete(MessageRow).where(MessageRow.conversation_id == row.id))
+            await self.session.execute(delete(ConversationRow).where(ConversationRow.id == row.id))
+            purged += 1
+        return purged
+
     async def summaries(self, *, before: str | None = None, limit: int = 50,
-        attention: ConversationAttention | None = None) -> ConversationPage:
-        """Keyset page over activity time; attention filters before pagination."""
+        attention: ConversationAttention | None = None, archived: bool = False) -> ConversationPage:
+        """Keyset page over activity time; attention filters before pagination.
+
+        Archived conversations are listed only on request (``archived=True``).
+        """
         cursor = decode_cursor(before, attention) if before is not None else None
-        query = select(ConversationRow).where(ConversationRow.owner_id == self.owner)
+        query = select(ConversationRow).where(ConversationRow.owner_id == self.owner,
+            ConversationRow.archived_at.isnot(None) if archived else ConversationRow.archived_at.is_(None))
         if attention is not None:
             query = query.where(_attention_matches(self.owner, attention))
         if cursor is not None:
@@ -615,5 +680,7 @@ class ConversationService:
                 title_revision=conversation_row.title_revision,
                 subjects=tuple(subject_view(ref) for ref in subjects_by_conversation[conversation_row.id]),
                 message_count=counts.get(conversation_row.id, 0), attention=aggregate(conversation_row.id),
-                latest_task=view))
+                latest_task=view,
+                archived_at=as_utc(conversation_row.archived_at) if conversation_row.archived_at else None,
+                purge_at=as_utc(conversation_row.archived_at) + ARCHIVE_RETENTION if conversation_row.archived_at else None))
         return tuple(items)

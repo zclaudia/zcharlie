@@ -46,7 +46,8 @@ export function bootAgent() {
   state.labels ||= {};
   state.ui ||= {};
   let current = null, generation = 0, searchGeneration = 0, creating = false, searchTimer, autoCompare = false;
-  let conversations = [], messages = [], refs = [], stops = [], updateTimer;
+  let conversations = [], archivedConvs = [], messages = [], refs = [], stops = [], updateTimer;
+  let showArchived = !!state.ui.archived;
   const locks = new Set(), tasks = new Map(), opinionViews = new Map();
   function noticeText(text) { $("notice").textContent = text; $("notice").hidden = !text; }
   const notice = noticeText;
@@ -235,7 +236,7 @@ export function bootAgent() {
       note.textContent = `原请求固定的对象：${pending.context_refs.map(refLabel).join("；") || "无证券绑定"}`;
     }
     $("retry").hidden = !pending;
-    $("send").disabled = (!!current && locks.has(current)) || !!pending || creating;
+    $("send").disabled = (!!current && locks.has(current)) || !!pending || creating || isArchived(current);
     $("retry").disabled = !current || locks.has(current);
   }
   function restoreDraft() {
@@ -278,32 +279,85 @@ export function bootAgent() {
     return null;
   }
   const taskStates = new Map();
+  const isArchived = id => !!id && archivedConvs.some(c => c.id === id);
+  const byNewest = (a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0);
+  // 归档会话的清理倒计时（purge_at 由后端给出）。
+  function purgeText(c) {
+    const days = Math.ceil((Date.parse(c.purge_at) - Date.now()) / 86400000);
+    return days > 1 ? `${days} 天后清理` : "即将清理";
+  }
+  // 一行 = 选择会话的主按钮 + 归档/恢复操作；data-conversation-id 与 .ai-conv 保持在主按钮上。
+  function conversationRow(c, archived) {
+    const row = el("div", {class:`ai-conv-row${archived ? " ai-conv-archived" : ""}`});
+    const button = el("button", {type:"button", class:"ai-conv", "aria-current":c.id === current ? "true" : undefined, "data-conversation-id":c.id});
+    const meta = el("span", {class:"ai-conv-meta"});
+    const status = archived ? null : conversationStatus(c);
+    if (status) { const dot = el("span", {}, ""); dot.className = `ai-dot ${status.cls}`; meta.append(dot, el("span", {}, status.text)); }
+    // Today's items show the time, older ones the date (Beijing time via format.js).
+    const stamp = formatDateTime(c.created_at);
+    meta.append(el("span", {}, archived ? purgeText(c) : groupOf(c.created_at) === "今天" ? stamp.slice(11) : stamp.slice(5, 10)));
+    button.append(el("span", {class:"ai-conv-title"}, c.title || "未命名对话"), meta);
+    button.addEventListener("click", () => selectConversation(c.id).catch(showError));
+    const act = el("button", {type:"button", class:"ai-conv-act", "aria-label":`${archived ? "恢复" : "归档"}会话：${c.title || "未命名对话"}`}, archived ? "恢复" : "归档");
+    act.addEventListener("click", () => (archived ? restoreConversation(c) : archiveConversation(c)).catch(showArchiveError));
+    row.append(button, act);
+    return row;
+  }
   function renderList() {
     const box = $("conversations");
     box.replaceChildren();
     let group = null;
     const query = $("conv-filter").value.trim().toLowerCase();
-    const shown = query ? conversations.filter(c => (c.title || "").toLowerCase().includes(query)) : conversations;
-    if (query && !shown.length) box.append(el("p", {class:"ai-faint ai-conv-none"}, "没有匹配的会话"));
+    const match = c => !query || (c.title || "").toLowerCase().includes(query);
+    const shown = conversations.filter(match), shownArchived = archivedConvs.filter(match);
+    if (query && !shown.length && !shownArchived.length) box.append(el("p", {class:"ai-faint ai-conv-none"}, "没有匹配的会话"));
     shown.forEach(c => {
       const name = groupOf(c.created_at);
       if (name !== group) { group = name; box.append(el("div", {class:"ai-group"}, name)); }
-      const button = el("button", {type:"button", class:"ai-conv", "aria-current":c.id === current ? "true" : undefined, "data-conversation-id":c.id});
-      const meta = el("span", {class:"ai-conv-meta"});
-      const status = conversationStatus(c);
-      if (status) meta.append(el("span", {}, ""), el("span", {}, status.text));
-      if (status) meta.firstChild.className = `ai-dot ${status.cls}`;
-      // Today's items show the time, older ones the date (Beijing time via format.js).
-      const stamp = formatDateTime(c.created_at);
-      meta.append(el("span", {}, name === "今天" ? stamp.slice(11) : stamp.slice(5, 10)));
-      button.append(el("span", {class:"ai-conv-title"}, c.title || "未命名对话"), meta);
-      button.addEventListener("click", () => selectConversation(c.id).catch(showError));
-      box.append(button);
+      box.append(conversationRow(c, false));
     });
+    if (archivedConvs.length) {
+      const toggle = el("button", {type:"button", class:"ai-archived-toggle", "aria-expanded":String(showArchived)}, `${showArchived ? "▾" : "▸"} 已归档 · ${archivedConvs.length}`);
+      toggle.addEventListener("click", () => { showArchived = !showArchived; state.ui.archived = showArchived; persist(); renderList(); });
+      box.append(toggle);
+      if (showArchived) {
+        box.append(el("p", {class:"ai-faint ai-archived-note"}, "归档的会话为只读，30 天后自动清理；清理只删除会话与消息，研究任务和产物保留。"));
+        shownArchived.forEach(c => box.append(conversationRow(c, true)));
+      }
+    }
+  }
+  function showArchiveError(error) {
+    const code = error.detail?.code;
+    notice({conversation_active:"这个会话还有进行中的研究，完成或取消后才能归档。", not_found:"会话已不存在或不可访问。"}[code] || `操作失败：${error.message}`);
+  }
+  // 当前会话被归档后回到“新对话”空状态（首次发送时才会真正创建会话）。
+  function leaveConversation() {
+    saveDraft(); stopWatching(); taskStates.clear();
+    current = null; state.current = null; generation++;
+    delete root.dataset.conversation;
+    history.replaceState(null, "", urlFor(null));
+    messages = []; opinionViews.clear(); $("updates").replaceChildren();
+    $("title").textContent = "新对话";
+    restoreDraft(); renderMessages(); persist();
+  }
+  async function archiveConversation(c) {
+    await post(`/agent/conversations/${c.id}/archive`, {});
+    conversations = conversations.filter(x => x.id !== c.id);
+    await listArchived();
+    if (c.id === current) leaveConversation();
+    renderList();
+    notice("已归档，30 天后自动清理；可在列表底部的“已归档”中恢复。");
+  }
+  async function restoreConversation(c) {
+    await post(`/agent/conversations/${c.id}/unarchive`, {});
+    archivedConvs = archivedConvs.filter(x => x.id !== c.id);
+    conversations = [...conversations, {id:c.id, title:c.title, created_at:c.created_at}].sort(byNewest);
+    if (c.id === current) { binding(); notice("已恢复，可以继续提问。"); }
+    renderList();
   }
   function showError(error) {
     const code = error.detail?.code;
-    const explanation = {execution_denied:"当前执行未获授权，请核对启用状态与权限",idempotency_conflict:"原请求与已保存收据冲突，请恢复原请求内容",invalid_reference:"对象或版本不可用，请重新选择明确对象",task_conflict:"任务状态已变化，请恢复当前状态",not_found:"对象已不存在或不可访问"}[code];
+    const explanation = {execution_denied:"当前执行未获授权，请核对启用状态与权限",idempotency_conflict:"原请求与已保存收据冲突，请恢复原请求内容",invalid_reference:"对象或版本不可用，请重新选择明确对象",task_conflict:"任务状态已变化，请恢复当前状态",conversation_archived:"会话已归档，请先在“已归档”中恢复再提问",not_found:"对象已不存在或不可访问"}[code];
     notice(`${explanation || error.message}。输入已保留；未确认的消息可用“确认是否已送达”重取原请求。`);
   }
   async function listConversations() {
@@ -312,7 +366,18 @@ export function bootAgent() {
       const page = await get(`/agent/conversations?limit=100${after ? `&after=${encodeURIComponent(after)}` : ""}`);
       all.push(...page); after = page.length === 100 ? page.at(-1).id : null;
     } while (after);
-    conversations = all; renderList();
+    conversations = all.sort(byNewest);
+    await listArchived(); renderList();
+  }
+  async function listArchived() {
+    const items = []; let before;
+    try {
+      do {
+        const page = await get(`/agent/conversation-summaries?archived=true&limit=100${before ? `&before=${encodeURIComponent(before)}` : ""}`);
+        items.push(...page.items); before = page.next_cursor;
+      } while (before);
+    } catch { /* 归档列表不可用时不影响主列表 */ }
+    archivedConvs = items;
   }
   async function readMessages(id) {
     const all = []; let after = 0;
@@ -413,12 +478,16 @@ export function bootAgent() {
     history.replaceState(null,"",urlFor(id));
     $("search-results").replaceChildren(); openPicker(false); openMode(false);
     messages = []; opinionViews.clear(); $("messages").replaceChildren(); $("updates").replaceChildren();
-    $("title").textContent = conversations.find(c => c.id === id)?.title || "对话";
+    $("title").textContent = [...conversations, ...archivedConvs].find(c => c.id === id)?.title || "对话";
     updateSubtitle();
     restoreDraft(); renderList(); persist(); notice("正在恢复消息与任务…");
     if (window.matchMedia("(max-width: 56rem)").matches) setPane("chat");
     await reloadMessages(id, token);
-    if (isCurrent(id, token)) { notice(draft().pending ? "上次发送结果尚待确认，请重取原请求。" : "已恢复会话。"); refreshUpdates(id, token); }
+    if (isCurrent(id, token)) {
+      const gone = archivedConvs.find(c => c.id === id);
+      notice(gone ? `此会话已归档（${purgeText(gone)}），只读；恢复后才能继续提问。` : draft().pending ? "上次发送结果尚待确认，请重取原请求。" : "已恢复会话。");
+      refreshUpdates(id, token); binding();
+    }
   }
   function startTitle(seed, text) {
     const names = seed.refs.map(r => state.labels[`${r.kind}:${r.id}:${r.revision}`]?.name).filter(Boolean).join("、") || seed.refs.map(refLabel).join("、");

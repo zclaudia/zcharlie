@@ -19,7 +19,7 @@ def test_054_is_independent_successor_and_empty_downgrade_is_allowed(tmp_path, m
     config = _config(database, monkeypatch)
     command.upgrade(config, "head")
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("054",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("055",)
         plan = connection.execute(
             "EXPLAIN QUERY PLAN SELECT id,payload_hash,payload FROM supplemental_change_receipt "
             "WHERE owner_id=? AND listing_id=? AND context=? AND kind='source_page' "
