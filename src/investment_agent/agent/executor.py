@@ -109,9 +109,11 @@ class _RequestBudget:
             return ""
         async with self.ctx.sessions() as session:
             grant, _ = await check_boundary(session, self.ctx.claim, self.ctx.base)
-            if grant.research_kind not in {"company_research", "review"}:
+            if grant.research_kind not in {"company_research", "review", "local_check"}:
                 return ""
             state = await BudgetService(session, self.ctx.base).research_headroom(self.ctx.claim)
+        planning = ("非收尾阶段先实际调用保存计划和取证工具。" if grant.research_kind in {"company_research", "review"}
+                    else "局部核查与解释只读取直接相关材料，不扩展为完整研究；已有材料足够形成有界回答时立即收尾。")
         return ("Trusted remaining research resources: " + str(state) +
                 ". Preserve the conclusion reserve for synthesis and validation. "
                 "When finish_only is true, ALL tools including save_research_progress are unavailable. Return the final JSON now; the controller saves final progress automatically. Conclude from inspected or recovered material, "
@@ -120,7 +122,7 @@ class _RequestBudget:
                 "Omit optional empty fields; keep enough output space for the final JSON. "
                 "中文文本字段仅写定性分析和公司名，禁止写证券代码、日期、数量、中文数词与内部编号；"
                 "例如写‘历史估值窗口’而不是‘五年窗口’，写公司名而不是代码。数字只能使用可解析的 numeric_claim 引用。"
-                "非收尾阶段先实际调用保存计划和取证工具。收尾阶段禁止再调用任何工具（包括保存进展）；请直接返回最终 JSON，由控制器保存结论。已恢复的证据可直接分析，无需重新取证。")
+                + planning + "收尾阶段禁止再调用任何工具（包括保存进展）；请直接返回最终 JSON，由控制器保存结论。已恢复的证据可直接分析，无需重新取证。")
 
     async def reserve(self, estimated_input: int) -> UUID:
         output = self.config.values["agent_max_tokens"]

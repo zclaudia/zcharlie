@@ -204,9 +204,10 @@ async def test_waiting_tasks_show_no_next(progress_db):
 
 
 @pytest.mark.asyncio
-async def test_finish_only_matches_headroom_and_unknown_usage(progress_db):
+@pytest.mark.parametrize("research_kind", ["company_research", "local_check"])
+async def test_finish_only_matches_headroom_and_unknown_usage(progress_db, research_kind):
     conversation = await new_conversation()
-    receipt = await submit(conversation, message(research_kind="company_research"))
+    receipt = await submit(conversation, message(research_kind=research_kind))
     execution = await claim(receipt.task.id)
     async with session_scope() as session:
         session.add(BudgetEntry(id=str(uuid4()), task_id=str(receipt.task.id),

@@ -830,9 +830,10 @@ async def test_real_worker_retry_known_provider_failure_keeps_task_budget(execut
     assert calls == [1, 1]
 
 
-async def test_conclusion_headroom_uses_remaining_lifetime_and_daily_caps(execution_db):
+@pytest.mark.parametrize("research_kind", ["company_research", "review", "local_check"])
+async def test_conclusion_headroom_uses_remaining_lifetime_and_daily_caps(execution_db, research_kind):
     base = settings(investor_agent_task_tokens=100000, investor_agent_daily_tokens=100000)
-    task, trusted = await admitted(base, grant(research_kind="company_research"))
+    task, trusted = await admitted(base, grant(research_kind=research_kind))
     async with session_scope() as session:
         budget = BudgetService(session, base)
         initial = await budget.research_headroom(trusted)

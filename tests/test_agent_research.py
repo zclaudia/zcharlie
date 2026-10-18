@@ -612,7 +612,8 @@ def test_company_schema_omits_unrelated_contracts_without_weakening_runtime_vali
 
 
 @pytest.mark.asyncio
-async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conversation_db):
+@pytest.mark.parametrize("research_kind", ["company_research", "local_check"])
+async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conversation_db, research_kind):
     from datetime import timedelta
 
     import httpx
@@ -632,8 +633,9 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
             open=10, high=10, low=10, close=10, volume=100, adjust='none', raw_ref='fixture:close'))
     selected = base(investor_agent_task_requests=4, investor_agent_task_tokens=120000, agent_max_tokens=4096)
     conversation = await new_conversation()
-    receipt = await submit(conversation, message(text='深入研究', context_refs=(subject,), research_at=cutoff), settings=selected)
-    plan = full_progress(candidate.thesis.assessed_dimensions, answered=False)
+    receipt = await submit(conversation, message(text='深入研究', context_refs=(subject,), research_at=cutoff, research_kind=research_kind), settings=selected)
+    plan = (full_progress(candidate.thesis.assessed_dimensions, answered=False) if research_kind == "company_research"
+            else progress(kind=research_kind, answered=False))
     bodies = []
     captured = None
     def handle(request):
@@ -683,6 +685,9 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
         assert sum(e.estimated_tokens for e in entries) == sum(d['input_estimate'] + 4096 for d in audit.config_snapshot['request_sizes'])
         assert audit.config_snapshot['request_sizes'][-1]['tools_bytes'] < audit.config_snapshot['request_sizes'][1]['tools_bytes']
 
+    if research_kind == "local_check":
+        return  # Cross-task evidence continuation is specific to full research/review.
+
     # Resume from owned source records, not private model history or stale plans.
     from investment_agent.agent.context import pack_evidence
     from investment_agent.settings.store import SettingsStore
@@ -691,7 +696,7 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
     final_settings = selected.model_copy(update={"investor_agent_task_requests": 1})
     async with session_scope() as session:
         await SettingsStore(session).apply({"investor_agent_task_requests": 1}, actor="fixture")
-    continuation = await submit(conversation, message(text='深入研究并完成结论', context_refs=(subject,), research_at=cutoff), settings=final_settings)
+    continuation = await submit(conversation, message(text='深入研究并完成结论', context_refs=(subject,), research_at=cutoff, research_kind=research_kind), settings=final_settings)
     # Public continuation admission: the same grant, re-admitted as a child of
     # the finished research through admit() rather than private row writes.
     from investment_agent.agent.execution import ExecutionGrant, admit

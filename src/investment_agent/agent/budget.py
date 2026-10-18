@@ -101,7 +101,7 @@ class BudgetService:
         request_bound = max((r.estimated_tokens for r in task if r.kind == "model"), default=0)
         return {"remaining_tokens": remaining_tokens, "remaining_requests": remaining_requests,
                 "conclusion_reserve": 2 * request_bound,
-                "finish_only": research_kind in {"company_research", "review"} and (remaining_requests <= 2 or bool(request_bound and remaining_tokens < 2 * request_bound))}
+                "finish_only": research_kind in {"company_research", "review", "local_check"} and (remaining_requests <= 2 or bool(request_bound and remaining_tokens < 2 * request_bound))}
 
     async def research_headroom(self, claim: TaskClaim) -> dict[str, int | bool]:
         """Planning envelope only. Atomic reserve/check remain the spending authority."""
