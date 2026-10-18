@@ -225,6 +225,9 @@ class TrustedTools:
                             # into every subsequent request. The durable receipt
                             # remains complete for UI, review and recovery.
                             return {"status": "saved", "artifact_ref": result["artifact_ref"], "refs": result["refs"]}
+                        if spec.name == "search_saved_sources":
+                            from investment_agent.agent.builtin_tools import model_search_result
+                            return model_search_result(result)
                         return result
                     except ResearchValidationError as exc:
                         if exc.repairable and ctx.retry < min(validation_retries, 2):
@@ -239,7 +242,7 @@ class TrustedTools:
                     if self.context.phase == "research:v1":
                         async with self.context.sessions() as session:
                             headroom = await BudgetService(session, self.context.base).research_headroom(self.context.claim)
-                        if headroom["finish_only"]:
+                        if headroom["finish_only"] and spec.name != "prepare_company_view":
                             return None
                     if spec.name in {"discover_disclosures", "fetch_disclosure_original", "parse_disclosure_original", "read_disclosure_original", "get_industry_peer_context"}:
                         from investment_agent.settings.loader import load_settings

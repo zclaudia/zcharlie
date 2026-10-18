@@ -272,7 +272,8 @@ async def test_real_collector_deferred_resumption_preserves_pit_and_budget(conve
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("semantic_pass", [True, False])
-async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass):
+@pytest.mark.parametrize("finish_only", [False, True])
+async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass, finish_only):
     from investment_agent.agent.research_publication import (
         CompanyViewInput,
         HypothesisInput,
@@ -285,8 +286,9 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
         SemanticAssessment,
     )
     candidate, evidence, subject = await fixture()
+    selected = base(investor_agent_task_requests=3) if finish_only else base()
     conversation = await new_conversation()
-    receipt = await submit(conversation, message(text="深入研究它", context_refs=(subject,)))
+    receipt = await submit(conversation, message(text="深入研究它", context_refs=(subject,)), settings=selected)
     plan = full_progress(candidate.thesis.assessed_dimensions, fact_refs=(evidence,))
     business = CompanyViewInput(case_ref=candidate.thesis.case_ref, question_scope="Bounded whole company research", change_reason="Initial research",
         assessed_dimensions=candidate.thesis.assessed_dimensions, claims=candidate.thesis.claims, counter_case=candidate.thesis.counter_case,
@@ -301,6 +303,8 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
             assert "prepare_company_view" not in names
             return ModelResponse([ToolCallPart("save_research_progress", {"business": plan.model_dump(mode="json")}, tool_call_id="plan")], usage=RequestUsage(input_tokens=10, output_tokens=5))
         assert "prepare_company_view" in names
+        if finish_only:
+            assert names == {"prepare_company_view"}
         if not any(p.tool_name == "prepare_company_view" for p in returns):
             return ModelResponse([ToolCallPart("prepare_company_view", {"business": business.model_dump(mode="json")}, tool_call_id="prepare")], usage=RequestUsage(input_tokens=10, output_tokens=5))
         prepared = next(p.content for p in returns if p.tool_name == "prepare_company_view")
@@ -309,7 +313,7 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
             assessments=tuple(SemanticAssessment(claim_id=c.id, fact_relation="The exact saved cash supports a bounded observation", counter_evidence_relevance="Temporary working capital remains an alternative", materiality_reason="Cash persistence affects the observation", issues=() if semantic_pass else ("Durability is unresolved",)) for c in exact.thesis.claims),
             checked_sources=(evidence,), unresolved_questions=(), conclusion="pass" if semantic_pass else "revise")
         return response(ResearchOutput(progress=plan, semantic_review=review))
-    task = await run(receipt, FunctionModel(model))
+    task = await run(receipt, FunctionModel(model), selected)
     assert task.status == (TaskStatus.SUCCEEDED if semantic_pass else TaskStatus.PARTIAL)
     async with session_scope() as session:
         notes = await research_artifacts(session, task.id)
@@ -695,7 +699,7 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
             call = ('capture_snapshot', {'ticker': '600519.SH', 'field': 'close', 'as_of': cutoff.isoformat()})
         else:
             assert len(bodies) == 3
-            assert {t['function']['name'] for t in body.get('tools', [])} <= {'save_research_progress'}
+            assert {t['function']['name'] for t in body.get('tools', [])} == ({'prepare_company_view'} if research_kind == 'company_research' else set())
             captured = next(json.loads(m['content']) for m in body['messages'] if m['role'] == 'tool' and 'materials' in m['content'])
             record = captured['materials'][0]['record']
             assert record['verification'] == 'candidate' and record['value']['value'] is not None
@@ -797,3 +801,31 @@ async def test_two_bounded_output_repairs_do_not_get_misclassified_as_research_s
     task = await run(receipt, FunctionModel(model), base(agent_retries=2))
     assert turns == task.usage.requests == 3 and task.status == TaskStatus.SUCCEEDED
     assert task.usage.input_tokens == 60 and task.usage.output_tokens == 30
+
+
+def test_native_search_projection_preserves_risks_and_exact_refs_without_mutating_receipt():
+    from copy import deepcopy
+
+    from pydantic import ValidationError
+
+    from investment_agent.agent.builtin_tools import AgentSearchRequest, model_search_result
+
+    hit = {"evidence_ref": {"kind": "evidence", "id": str(uuid4()), "revision": 1},
+           "subject_ref": {"kind": "listing", "id": 178, "revision": 1},
+           "text": "context " * 600, "text_truncated": False,
+           "effective_status": "conflict", "verification_states": ["candidate"],
+           "warnings": ["source_corrected"], "original_hash": "exact-original",
+           "source_copy_count": 2, "adjacent_context": [{"text": "Full adjacent disclosure"}],
+           "source_audit": [{"verification": "candidate"}, {"verification": "verified"}]}
+    receipt = {"matches": [hit], "scanned_records": 4, "window_exhausted": True}
+    before = deepcopy(receipt)
+    projection = model_search_result(receipt)
+    assert receipt == before
+    shown = projection["matches"][0]
+    assert shown["evidence_ref"] == hit["evidence_ref"]
+    assert shown["warnings"] == hit["warnings"] and shown["effective_status"] == "conflict"
+    assert shown["verification_states"] == ["candidate"] and shown["source_copy_count"] == 2
+    assert shown["text_truncated"] and shown["read_required"] and len(shown["text"]) == 500
+    assert projection["window_exhausted"] and shown["source_audit_count"] == 2
+    with pytest.raises(ValidationError):
+        AgentSearchRequest(listing_ids=(178,), query="玻璃", as_of=datetime.now(UTC), limit=6)

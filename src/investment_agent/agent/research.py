@@ -206,7 +206,7 @@ For calculation_output use ref.kind="calculation", the saved calculation UUID
 and ref.field_path="results.<exact result key>" (plural results), for example
 "results.percentile". Copy keys from the saved results map; never use "result."
 or invent a calculation field.
-Only materials with eligibility.fact_reference_allowed=true may enter fact_refs,
+For capture_snapshot, only materials with eligibility.fact_reference_allowed=true may enter fact_refs,
 counter_refs, dimensions.refs or numeric_claim. Missing/conflicted materials explain
 gaps only; missing data is never counter evidence. Copy a returned numeric_claim
 template when available; its field path and display format are server-selected.

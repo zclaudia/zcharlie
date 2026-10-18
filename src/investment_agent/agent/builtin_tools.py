@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from investment_agent.agent.execution import ExecutionDeniedError
 from investment_agent.agent.tools import ToolRegistration
 from investment_agent.evidence.queries import RefreshService, SnapshotQueryService
+from investment_agent.evidence.search import SearchRequest
 from investment_agent.factors.field_sources import default_field_sources
 from investment_agent.investor.common import ObjectRef
 from investment_agent.storage.repositories.listing import ListingRepository
@@ -62,12 +63,29 @@ async def refresh(session: AsyncSession, operation: UUID, business: BaseModel) -
         "local_owner", business.ticker, business.as_of, operation,
         report_period=business.report_period)).model_dump(mode="json")
 
+class AgentSearchRequest(SearchRequest):
+    # The browsing API retains its wider pagination contract. Native research
+    # discovers a small window, then reads an exact saved source when needed.
+    limit: int = Field(default=3, ge=1, le=5)
+
+
+def model_search_result(result: dict[str, Any]) -> dict[str, Any]:
+    matches = []
+    for hit in result.get("matches", []):
+        text = hit.get("text", "")
+        matches.append({**{k: v for k, v in hit.items() if k not in {"adjacent_context", "source_audit", "text", "text_truncated"}},
+                        "text": text[:500], "text_truncated": hit.get("text_truncated", False) or len(text) > 500,
+                        "source_audit_count": len(hit.get("source_audit", [])),
+                        "read_required": True})
+    return {**result, "matches": matches,
+            "projection": "Discovery excerpts only; adjacent context and full source audit remain in the durable receipt. Read exact evidence_ref with get_evidence before relying on a claim. Verification, warnings, conflicts and copy counts are preserved."}
+
 
 def builtin_registrations() -> tuple[ToolRegistration, ...]:
-    from investment_agent.evidence.search import SavedComparisonRequest, SearchRequest
+    from investment_agent.evidence.search import SavedComparisonRequest
     return (
         ToolRegistration("compare_saved_sources", SavedComparisonRequest, saved_comparison_scope, database=saved_comparison, description="Compare exact saved evidence references only when verified, current, same period/unit/currency/metric/reporting scope. Mismatch explicitly not comparable; never hard ranking."),
-        ToolRegistration("search_saved_sources", SearchRequest, search_scope, database=search_sources, description="Bounded literal keyword search of already saved authorized listing evidence and parse manifests at task cutoff. Exact refs, hashes and adjacent context; discovery leads only, relevance is not verification. No network or parsing. Same-original copies never increase independent support."),
+        ToolRegistration("search_saved_sources", AgentSearchRequest, search_scope, database=search_sources, description="Small discovery search of already saved authorized listing evidence and parse manifests at task cutoff. Use a single literal substring, not space-separated keywords. Read exact get_evidence sources before relying on a claim. Exact refs, hashes and adjacent context; discovery leads only, relevance is not verification. No network or parsing. Same-original copies never increase independent support."),
         ToolRegistration("get_evidence", EvidenceParameters, evidence_scope, database=evidence, description="Read an existing saved evidence ref (kind evidence, UUID id), never listing/case. First discover stored fields with get_snapshot and save a candidate with capture_snapshot; use its returned evidence ref. subject_ref must be the exact authorized listing."),
         ToolRegistration("get_event", EventParameters, event_scope, database=event),
         ToolRegistration("compare_stocks", ComparisonParameters, comparison_scope, database=comparison),
@@ -163,7 +181,6 @@ async def comparison(session: AsyncSession, operation: UUID, business: BaseModel
 
 
 async def search_scope(session: AsyncSession, business: BaseModel) -> tuple[ObjectRef, ...]:
-    from investment_agent.evidence.search import SearchRequest
     del session
     assert isinstance(business, SearchRequest)
     return tuple(ObjectRef(kind="listing", id=i, revision=1) for i in business.listing_ids)
