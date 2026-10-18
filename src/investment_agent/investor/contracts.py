@@ -48,7 +48,7 @@ class EntityNode(Contract):
 
 class NumericNode(Contract):
     type: Literal["numeric_claim"]
-    ref: ObjectRef
+    ref: ObjectRef = Field(description='For historical_fact, reference saved evidence with field_path="value"; a bare evidence record ref with field_path=null is not a numeric value reference.')
     role: NumericRole
     display_format: Literal["decimal", "percent", "date", "code"]
     # Value, subject, unit and precision are resolved by the publishing service.

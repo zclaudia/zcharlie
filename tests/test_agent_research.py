@@ -120,6 +120,35 @@ async def test_numeric_text_and_foreign_refs_rejected(conversation_db):
 
 
 @pytest.mark.asyncio
+async def test_native_numeric_value_path_gets_bounded_repair(conversation_db):
+    from pydantic_ai.messages import RetryPromptPart
+
+    from investment_agent.investor.contracts import NumericNode
+
+    _, evidence, subject = await fixture()
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="Check saved cash", context_refs=(subject,), research_kind="local_check"))
+    rounds = 0
+
+    def model(messages, info):
+        nonlocal rounds
+        rounds += 1
+        if rounds == 2:
+            retries = [p for m in messages for p in m.parts if isinstance(p, RetryPromptPart)]
+            assert retries and 'field_path="value"' in str(retries[-1].content)
+        ref = evidence if rounds == 1 else evidence.model_copy(update={"field_path": "value"})
+        output = progress(kind="local_check", fact_refs=(evidence,), content=(
+            NumericNode(type="numeric_claim", ref=ref, role="historical_fact", display_format="decimal"),))
+        return response(ResearchOutput(progress=output))
+
+    task = await run(receipt, FunctionModel(model), base(agent_retries=1))
+    assert rounds == 2 and task.status == TaskStatus.SUCCEEDED
+    async with session_scope() as session:
+        answers = await ConversationService(session, base()).messages(conversation.id)
+        assert answers[-1].role == "assistant" and "1234500000" in answers[-1].text
+
+
+@pytest.mark.asyncio
 async def test_no_progress_ignores_changed_metadata(conversation_db):
     conversation = await new_conversation()
     receipt = await submit(conversation)

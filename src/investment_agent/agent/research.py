@@ -177,6 +177,11 @@ Use qualitative wording such as "within the task's observation cutoff" instead.
 中文展示文本只写定性描述与公司名；不要复述日期、证券代码、数值或中文数词。
 具体数值只能通过已保存证据的 numeric_claim 引用展示；日期和身份保留在结构化元数据中。
 Cite exact saved refs; never grant yourself verified status.
+For a numeric_claim with role historical_fact, use the exact saved evidence UUID
+and revision with ref.field_path="value" (never null). The bare refs returned in
+fact_refs/materials identify the record, not its numeric value field. Use
+display_format="percent" for fraction/percent values and "decimal" for other
+quantities; never invent a unit or rewrite a source value.
 Historical percentile only describes historical position, not cheapness. The real
 FCFE qualification is unavailable: do not substitute CFO-capex or fabricate DCF.
 Before publishing perform an explicit semantic review of every critical claim,
@@ -499,6 +504,10 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
                     subject = next(iter(identities))
             if subject not in subjects:
                 raise ResearchValidationError("research_reference_scope_mismatch", f"progress.content.{index}.ref", "证据主体必须与本任务明确授权的证券一致。")
+            if (isinstance(node, NumericNode) and node.ref.kind == "evidence"
+                    and node.role.value == "historical_fact" and node.ref.field_path is None):
+                raise ResearchValidationError("research_numeric_reference_format", f"progress.content.{index}.ref.field_path",
+                    'historical_fact 的 numeric_claim 必须使用 ref.field_path="value"；保留已保存证据的原 UUID 与 revision，不要改写数值。')
             try:
                 rendered.append((await NumericResolver(EvidenceService(session), subject, cutoff).resolve(node)).text)
             except InvestorError as exc:

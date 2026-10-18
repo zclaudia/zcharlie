@@ -51,6 +51,7 @@ class ResearchValidationError(ExecutionDeniedError):
         # Scope, permission, stale claims and budget failures remain terminal.
         return self.code in {
             "research_numeric_text_requires_reference",
+            "research_numeric_reference_format",
             "research_reference_unavailable",
             "research_reference_validation_failed",
             "research_plan_is_not_final_answer",
