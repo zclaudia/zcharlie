@@ -103,6 +103,15 @@ class _RequestBudget:
         self.ctx, self.config = context, config
         self.reservations: list[UUID] = []
         self.output_repair_pending = False
+        self.native_validation_retries = 0
+
+    def validation_retry(self) -> None:
+        # Native schema validation happens before our business/output callback.
+        # Give its bounded corrections the same stagnation treatment as output
+        # repair; all request/token/time/tool/permission checks still run.
+        if self.native_validation_retries < 2:
+            self.native_validation_retries += 1
+            self.output_repair_pending = True
 
     async def guidance(self) -> str:
         if self.ctx.phase != "research:v1":

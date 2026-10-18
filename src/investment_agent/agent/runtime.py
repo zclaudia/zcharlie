@@ -26,6 +26,7 @@ from pydantic_ai.messages import (
     ModelMessagesTypeAdapter,
     ModelRequest,
     ModelResponse,
+    RetryPromptPart,
     ToolCallPart,
 )
 from pydantic_ai.models import Model, ModelRequestParameters, StreamedResponse
@@ -126,6 +127,7 @@ class _BudgetedModel(WrapperModel):
         self.active: UUID | None = None
         self.fixture_usage: list[dict[str, int] | None] = []
         self.projection_sizes: dict[str, int] = {}
+        self.validation_repairs: list[dict[str, Any]] = []
 
     async def before_send(self) -> None:
         assert self.active is not None
@@ -144,6 +146,21 @@ class _BudgetedModel(WrapperModel):
         diagnostic["admitted"] = True
 
     async def _begin(self, messages: list[ModelMessage], params: ModelRequestParameters) -> UUID | None:
+        latest = messages[-1] if messages else None
+        feedback = [p for p in latest.parts if isinstance(p, RetryPromptPart)] if isinstance(latest, ModelRequest) else []
+        if feedback:
+            for part in feedback:
+                errors = []
+                for error in part.content if isinstance(part.content, list) else []:
+                    # Persist schema locations/types only, never input values,
+                    # model drafts, source excerpts or provider error bodies.
+                    location = [v if isinstance(v, int) or isinstance(v, str) and v.isascii() and v.replace("_", "").isalnum() else "<dynamic>"
+                                for v in error.get("loc", ())]
+                    errors.append({"type": error.get("type"), "loc": location})
+                self.validation_repairs.append({"tool": part.tool_name, "errors": errors[:20]})
+            repair = getattr(self.lifecycle, "validation_retry", None)
+            if repair is not None:
+                repair()
         if not self.injected:
             # Encoding happens inside the SDK. Reserve at the HTTP hook before I/O.
             return None
@@ -347,7 +364,8 @@ async def run_agent(
         id=str(call_id), pipeline_run_id=pipeline_run_id,
         task_id=str(task_id) if task_id else None,
         attempt_id=str(attempt_id) if attempt_id else None,
-        config_version=config.version, config_snapshot={**config.snapshot(), "request_sizes": trace.request_sizes},
+        config_version=config.version, config_snapshot={**config.snapshot(), "request_sizes": trace.request_sizes,
+            "validation_repairs": guarded.validation_repairs if guarded else []},
         framework_version=FRAMEWORK_VERSION,
         started_at=started, latency_ms=int((time.monotonic() - clock) * 1000),
         success=result is not None, error_code=failure,

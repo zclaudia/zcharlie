@@ -273,7 +273,8 @@ async def test_real_collector_deferred_resumption_preserves_pit_and_budget(conve
 @pytest.mark.asyncio
 @pytest.mark.parametrize("semantic_pass", [True, False])
 @pytest.mark.parametrize("finish_only", [False, True])
-async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass, finish_only):
+@pytest.mark.parametrize("repair", [False, True])
+async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass, finish_only, repair):
     from investment_agent.agent.research_publication import (
         CompanyViewInput,
         HypothesisInput,
@@ -286,7 +287,7 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
         SemanticAssessment,
     )
     candidate, evidence, subject = await fixture()
-    selected = base(investor_agent_task_requests=3) if finish_only else base()
+    selected = base(investor_agent_task_requests=4 if repair else 3) if finish_only else base()
     conversation = await new_conversation()
     receipt = await submit(conversation, message(text="深入研究它", context_refs=(subject,)), settings=selected)
     plan = full_progress(candidate.thesis.assessed_dimensions, fact_refs=(evidence,))
@@ -296,15 +297,22 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
         business_view="undetermined", price_view="undetermined", sufficiency="bounded",
         hypotheses=(HypothesisInput(key="cash", question="Is cash durable?", scope="Operating cash", support_condition="Cash follows operating demand", falsification_condition="Cash reverses without operating growth"),),
         condition_hypothesis_keys=("cash",), monitors=(MonitorInput(hypothesis_key="cash",trigger="calendar"),))
+    invalid_sent = False
     def model(messages, info):
+        nonlocal invalid_sent
         returns = [p for m in messages for p in m.parts if isinstance(p, ToolReturnPart)]
         names = {tool.name for tool in info.function_tools}
         if not any(p.tool_name == "save_research_progress" for p in returns):
             assert "prepare_company_view" not in names
             return ModelResponse([ToolCallPart("save_research_progress", {"business": plan.model_dump(mode="json")}, tool_call_id="plan")], usage=RequestUsage(input_tokens=10, output_tokens=5))
         assert "prepare_company_view" in names
-        if finish_only:
+        if finish_only and (not repair or invalid_sent):
             assert names == {"prepare_company_view"}
+        if repair and not invalid_sent:
+            invalid_sent = True
+            malformed = business.model_dump(mode="json")
+            del malformed["question_scope"]
+            return ModelResponse([ToolCallPart("prepare_company_view", {"business": malformed}, tool_call_id="invalid-prepare")], usage=RequestUsage(input_tokens=10, output_tokens=5))
         if not any(p.tool_name == "prepare_company_view" for p in returns):
             return ModelResponse([ToolCallPart("prepare_company_view", {"business": business.model_dump(mode="json")}, tool_call_id="prepare")], usage=RequestUsage(input_tokens=10, output_tokens=5))
         prepared = next(p.content for p in returns if p.tool_name == "prepare_company_view")
@@ -316,6 +324,11 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
     task = await run(receipt, FunctionModel(model), selected)
     assert task.status == (TaskStatus.SUCCEEDED if semantic_pass else TaskStatus.PARTIAL)
     async with session_scope() as session:
+        if repair:
+            from investment_agent.storage.models.agent import AgentModelRun
+            audit = await session.scalar(select(AgentModelRun).where(AgentModelRun.task_id == str(task.id)))
+            assert audit.config_snapshot["validation_repairs"][0]["errors"] == [{"type": "missing", "loc": ["question_scope"]}]
+            assert task.usage.requests == 4
         notes = await research_artifacts(session, task.id)
         assert notes and notes[0]["progress"]["hypotheses"][0]["falsification_condition"]
         current = await PublicationService(session).foundation.get_case("local_owner", candidate.thesis.case_ref.id)
@@ -872,3 +885,15 @@ async def test_native_discovery_then_readback_progress_and_repeated_search_stop(
     task = await run(receipt, FunctionModel(respond))
     assert task.stop_reason == (StopReason.NO_PROGRESS if repeat else StopReason.ANSWERED)
     assert task.usage.requests == (2 if repeat else 4)
+
+
+def test_native_schema_retry_stagnation_exemption_is_finite():
+    from investment_agent.agent.executor import _RequestBudget
+
+    budget = _RequestBudget(SimpleNamespace(), SimpleNamespace())
+    for _ in range(2):
+        budget.validation_retry()
+        assert budget.output_repair_pending
+        budget.output_repair_pending = False
+    budget.validation_retry()
+    assert not budget.output_repair_pending and budget.native_validation_retries == 2

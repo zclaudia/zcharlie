@@ -320,6 +320,10 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
     output = {"preparation_ref": ref.model_dump(mode="json"), "candidate": candidate.model_dump(mode="json"),
         "candidate_hash": candidate_hash(candidate), "material_set_hash": material_hash,
         "materials": summaries, "material_count": len(materials), "material_review_blocked": review_blocked, "material_limit": "At most thirty-two exact sources and bounded summaries; narrow scope or save a material gap when exceeded", "review_required": "Assess every exact claim ID and relevant opposing material before final output"}
+    output["publication_constraints"] = {
+        "pending_critical_claim_ids": [str(c.id) for c in claims if c.materiality == "critical" and c.verification != "verified"],
+        "policy": "Critical historical facts and directional claims require verified, conflict-free premises. If a direction cannot be substantiated, keep that business/price view undetermined and explain the remaining gaps. Pending material may remain explicitly labelled context; never upgrade its verification. Publication rechecks all rules after semantic review.",
+    }
     if coverage:
         # Only bound tasks carry coverage fields; the legacy receipt stays
         # byte-identical to the pre-P3 shape.

@@ -807,7 +807,7 @@ async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:
             resolved.extend(result.get("progress", {}).get("completed_steps", []))
     data = dict(row.checkpoint.get("data", {}))
     dependencies = sorted(data.get("deferred_results", {}))
-    signature = fingerprint({"dependencies": dependencies, "material": sorted(material), "discoveries": sorted(discoveries), "resolved": sorted(set(resolved)), "refs": [r.model_dump(mode="json") for r in task.artifact_refs if r.kind in {"evidence", "calculation"}]})
+    signature = fingerprint({"dependencies": dependencies, "material": sorted(material), "discoveries": sorted(discoveries), "resolved": sorted(set(resolved)), "refs": [r.model_dump(mode="json") for r in task.artifact_refs if r.kind in {"evidence", "calculation", "publication_preparation"}]})
     last = data.get("progress_guard")
     stagnant = last["stagnant"] + 1 if last and last["signature"] == signature else 0
     if stagnant >= 2:
