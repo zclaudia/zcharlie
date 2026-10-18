@@ -89,6 +89,29 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
 .ai-answer { margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.7; }
 .ai-answer + .ai-answer { margin-top: var(--sp-2); }
 .ai-body .ai-banner { margin-top: var(--sp-2); }
+
+/* 助手回复：正文 / 关键数值卡 / 推断·假设·缺口·局限 板块 / 页脚 */
+.ai-ans { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ai-ans > .ai-answer + .ai-answer { margin-top: 0; }
+.ai-figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: var(--sp-2); }
+.ai-fig { min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); line-height: 1.35; }
+.ai-fig-k { font-size: var(--fs-sm); color: var(--ink-2); }
+.ai-fig-v { margin-top: 2px; font-size: 18px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.ai-fig-v span { margin-left: 3px; font-size: var(--fs-sm); font-weight: 500; color: var(--ink-2); }
+.ai-fig-s { margin-top: 1px; font-size: var(--fs-xs); color: var(--ink-3); }
+.ai-fig-s:empty { display: none; }
+.ai-sec { padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.ai-sec-infer { border-color: var(--ai-line); background: var(--ai-soft); }
+.ai-sec-h { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: var(--fs-sm); font-weight: 600; color: var(--ink-2); }
+.ai-sec-infer .ai-sec-h { color: var(--ai); }
+.ai-sec-gap .ai-sec-h { color: var(--warn-ink); }
+.ai-sec-n { min-width: 18px; padding: 0 5px; border-radius: var(--r-pill); background: var(--sunken); color: var(--ink-3); font-size: var(--fs-xs); font-weight: 500; line-height: 18px; text-align: center; }
+.ai-sec-infer .ai-sec-n { background: var(--surface); color: var(--ai); }
+.ai-sec-l { display: grid; gap: 4px; margin: 0; padding-left: 1.1rem; font-size: 13.5px; line-height: 1.65; color: var(--ink); }
+.ai-sec-gap .ai-sec-l, .ai-sec-limit .ai-sec-l { color: var(--ink-2); }
+.ai-sec-l li::marker { color: var(--ink-3); }
+.ai-ans-meta { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ai-meta-row { margin: 0; font-size: var(--fs-sm); line-height: 1.6; color: var(--ink-3); }
 .ai-body small { display: block; margin-top: var(--sp-1); }
 
 /* 任务卡：紧跟触发它的消息，缩进到头像之后；排队 / 执行 / 完成 三段进度条 */
@@ -276,6 +299,9 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
   .ai-msg { gap: 10px; }
   .ai-av { width: 26px; height: 26px; }
   .ai-body, .ai-answer { font-size: 14.5px; line-height: 1.7; }
+  .ai-figs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ai-sec { padding: 10px 12px; }
+  .ai-sec-l { font-size: 14px; }
   .ai-bubble { padding: 9px 13px; border-radius: 18px 18px 4px 18px; font-size: 14.5px; }
   .ai-thread > .ai-task { width: auto; margin: -6px 0 0 36px; }
   .ai-task { padding: 11px 12px; border-radius: 14px; background: var(--surface); }

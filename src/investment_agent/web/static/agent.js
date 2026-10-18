@@ -3,6 +3,7 @@ import { randomUUID } from "./uuid.js";
 // AI page shell: conversation list / thread / research drawer, plus portfolio and controls tabs.
 import { get, post, FETCH_MARKER_HEADERS } from "./api.js";
 import { el } from "./dom.js";
+import { renderAnswer } from "./agent_answer.js";
 import { formatDate, formatDateTime } from "./format.js";
 const TASK = {queued:"排队中",running:"进行中",waiting_data:"等待数据",waiting_user:"等你处理",succeeded:"已完成",partial:"部分完成",failed:"失败",cancelled:"已取消"};
 const STOP = {answered:"已回答",evidence_blocked:"证据受阻",no_progress:"无进展",budget_exhausted:"预算用完",cancelled:"已取消",failed:"失败"};
@@ -374,7 +375,7 @@ export function bootAgent() {
         const who = el("div", {class:"ai-who"});
         who.append(el("b", {}, "研究助手"), el("span", {}, "基于已保存材料 · 不构成建议"));
         body.append(who);
-        m.text.split(/\n{2,}/).filter(Boolean).forEach(part => body.append(el("p", {class:"ai-answer"}, part)));
+        body.append(renderAnswer(m.text, m.content || []));
         if (m.context_refs.length) body.append(el("small", {class:"ai-faint"}, `回答时对象：${m.context_refs.map(refLabel).join("；")}`));
       }
       // AG18 consumes saved references through this real lifecycle event; no numeric-node evaluation here.
