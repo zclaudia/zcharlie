@@ -55,6 +55,8 @@ class ResearchValidationError(ExecutionDeniedError):
             "research_reference_unavailable",
             "research_reference_validation_failed",
             "research_plan_is_not_final_answer",
+            "research_counter_references_mismatch",
+            "research_publication_pending_premises",
         }
 
     def repair_message(self) -> str:

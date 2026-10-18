@@ -109,6 +109,72 @@ async def test_local_never_replaces_global_and_critical_counter_restricts(conver
 
 
 @pytest.mark.asyncio
+async def test_native_counter_reference_mismatch_gets_repair_before_completion(conversation_db):
+    from pydantic_ai.messages import RetryPromptPart
+    _, evidence, subject = await fixture()
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="Check cash locally", context_refs=(subject,)))
+    rounds = []
+    def model(messages, info):
+        rounds.append(messages)
+        if len(rounds) > 1:
+            assert any(isinstance(p, RetryPromptPart) and "research_counter_references_mismatch" in str(p.content) for m in messages for p in m.parts)
+        return response(ResearchOutput(progress=progress(kind="local_check", fact_refs=(evidence,),
+            counter_refs=(evidence,) if len(rounds) > 1 else ()), critical_counter_evidence=(evidence,)))
+    task = await run(receipt, FunctionModel(model))
+    assert len(rounds) == 2 and task.status == TaskStatus.SUCCEEDED
+
+
+@pytest.mark.asyncio
+async def test_pending_direction_gets_reprepared_as_explicitly_undetermined_study(conversation_db):
+    from pydantic_ai.messages import RetryPromptPart
+    from sqlalchemy import update
+
+    from investment_agent.agent.research_publication import CompanyViewInput, SemanticInput
+    from investment_agent.investor.publication import PublicationCandidate, SemanticAssessment
+    from investment_agent.storage.models.evidence import SavedEvidence
+    candidate, evidence, subject = await fixture()
+    async with session_scope() as session:
+        row = await session.get(SavedEvidence, (str(evidence.id), evidence.revision))
+        await session.execute(update(SavedEvidence).where(SavedEvidence.id == str(evidence.id)).values(payload={**row.payload, "verification": "candidate"}))
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="深入研究", context_refs=(subject,)))
+    plan = full_progress(candidate.thesis.assessed_dimensions, fact_refs=(evidence,))
+    source_claim = candidate.thesis.claims[0]
+    def model(messages, info):
+        returns = [p for m in messages for p in m.parts if isinstance(p, ToolReturnPart)]
+        if not any(p.tool_name == "save_research_progress" for p in returns):
+            return ModelResponse([ToolCallPart("save_research_progress", {"business": plan.model_dump(mode="json")})], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        preparations = [p.content for p in returns if p.tool_name == "prepare_company_view"]
+        repairs = [p for m in messages for p in m.parts if isinstance(p, RetryPromptPart) and "research_publication_pending_premises" in str(p.content)]
+        revised = bool(repairs)
+        if not preparations or (revised and len(preparations) == 1):
+            claim = source_claim.model_copy(update={"materiality": "context", "text": (TextNode(type="text", text="Saved cash is pending verification and supports no business or price direction."),)}) if revised else source_claim
+            business = CompanyViewInput(case_ref=candidate.thesis.case_ref, question_scope="Company study with explicit verification gaps",
+                change_reason="Candidate sources cannot support direction", assessed_dimensions=plan.dimensions,
+                claims=(claim,), counter_case=candidate.thesis.counter_case, gaps=("Source verification and durable economics remain unresolved",),
+                dependencies=() if revised else candidate.recommendation.dependency_refs,
+                business_view="undetermined" if revised else "favorable", price_view="undetermined", sufficiency="bounded")
+            return ModelResponse([ToolCallPart("prepare_company_view", {"business": business.model_dump(mode="json")})], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        prepared = preparations[-1]
+        exact = PublicationCandidate.model_validate(prepared["candidate"])
+        review = SemanticInput(preparation_ref=ObjectRef.model_validate(prepared["preparation_ref"]),
+            assessments=tuple(SemanticAssessment(claim_id=c.id, fact_relation="The source is pending; it supports only a transparent research gap",
+                counter_evidence_relevance="Temporary cash remains an untested alternative", materiality_reason="No business or price direction is asserted") for c in exact.thesis.claims),
+            checked_sources=(evidence,), unresolved_questions=(), conclusion="pass")
+        final = plan.model_copy(update={"content": (TextNode(type="text", text="The company warrants further research; candidate cash material does not establish a business or price direction."),)})
+        return response(ResearchOutput(progress=final, semantic_review=review))
+    task = await run(receipt, FunctionModel(model))
+    async with session_scope() as session:
+        prepared = (await session.scalars(select(ToolAction).where(ToolAction.task_id == str(task.id)))).all()
+        errors = [e.payload for e in await TaskService(session).get_events(task.id) if e.type == "error"]
+        assert task.status == TaskStatus.SUCCEEDED, (task.stop_reason, errors, [(a.intent_key, a.result) for a in prepared if a.intent_key == "completion:publish"])
+        assert len([a for a in prepared if a.parameters.get("tool") == "prepare_company_view"]) == 2
+        row = await session.get(SavedEvidence, (str(evidence.id), evidence.revision))
+        assert row.payload["verification"] == "candidate"
+
+
+@pytest.mark.asyncio
 async def test_numeric_text_and_foreign_refs_rejected(conversation_db):
     conversation = await new_conversation()
     receipt = await submit(conversation)

@@ -202,6 +202,13 @@ Use qualitative wording such as "within the task's observation cutoff" instead.
 中文展示文本只写定性描述与公司名；不要复述日期、证券代码、数值或中文数词。
 具体数值只能通过已保存证据的 numeric_claim 引用展示；日期和身份保留在结构化元数据中。
 Cite exact saved refs; never grant yourself verified status.
+An undetermined company view with explicit known material, risks and unresolved
+gaps is a valid completed study. Do not confuse completing this question with
+proving a favorable business or price direction. When all relevant sources remain
+pending, report them as pending context and leave directions undetermined; never
+retain a directional conclusion by relabelling its critical premises as context.
+critical_counter_evidence is only for exact sources already checked and included
+in progress.counter_refs, not a list of speculative risks or missing data.
 For a numeric_claim with role historical_fact, use the exact saved evidence UUID
 and revision with ref.field_path="value" (never null). The bare refs returned in
 fact_refs/materials identify the record, not its numeric value field. Use
@@ -631,6 +638,14 @@ class ResearchPolicy:
         assert isinstance(output, ResearchOutput)
         await validate_progress(session, claim.task_id, output.progress, final=True)
         progress = output.progress
+        if not set(output.critical_counter_evidence) <= set(progress.counter_refs):
+            raise ResearchValidationError("research_counter_references_mismatch", "critical_counter_evidence",
+                "关键反证必须逐项出现在已读回并核查的 progress.counter_refs；潜在风险或缺失材料应写入缺口，不得冒充已核查反证。请修正引用清单后重新提交。")
+        if output.semantic_review is not None and output.semantic_review.conclusion == "pass":
+            candidate, _ = await reviewed_candidate(session, claim.task_id, output.semantic_review)
+            if any(c.materiality == "critical" and c.verification != "verified" for c in candidate.thesis.claims):
+                raise ResearchValidationError("research_publication_pending_premises", "semantic_review.preparation_ref",
+                    "准备的观点仍依赖待核验的关键来源，不能通过发布审查。请重新调用 prepare_company_view，依据实际来源修订观点，再审查新的 preparation_ref。无法证实方向时应明确暂不判断，说明已读材料、风险和缺口；不得只改审查结论或把支撑方向的关键前提降为背景。")
         has_progress = await session.scalar(select(ToolAction.operation_id).where(ToolAction.task_id == str(claim.task_id), ToolAction.state == "committed").limit(1))
         if progress.kind in {"company_research", "review"} and not progress.stopped_because and not (progress.fact_refs or progress.counter_refs or any(d.refs for d in progress.dimensions) or has_progress):
             raise ResearchValidationError("research_plan_is_not_final_answer", "progress.stopped_because",

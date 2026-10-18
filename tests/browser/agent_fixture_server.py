@@ -177,6 +177,22 @@ async def main():
                 RunLease(run.id, "fixture-held", run.attempt_count))
         return {"done": True}
 
+    @app.post("/fixture/save-progress/{task_id}", dependencies=[Depends(verify_api_key_or_session)])
+    async def save_live_progress(task_id: UUID):
+        from investment_agent.agent.research import ResearchProgress, save_progress
+        from investment_agent.investor.contracts import TextNode
+
+        progress = ResearchProgress(kind="local_check", question="运行中保存的核查",
+            content=(TextNode(type="text", text="核查材料已保存，研究仍在执行。"),),
+            completed_steps=("已保存运行中的研究进展",))
+        async with session_scope() as session:
+            service = TaskService(session)
+            action = await service.prepare_action(claims[task_id], intent_key="fixture:live-progress",
+                parameters={"tool": "save_research_progress", "business": progress.model_dump(mode="json"), "phase": "research:v1"})
+            await service.settle_action(claims[task_id], UUID(action.operation_id),
+                lambda s, op: save_progress(s, op, progress))
+        return {"done": True}
+
     @app.post("/fixture/ack/{task_id}", dependencies=[Depends(verify_api_key_or_session)])
     async def ack(task_id: UUID):
         async with session_scope() as session:

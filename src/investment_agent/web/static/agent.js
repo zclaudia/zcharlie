@@ -486,10 +486,10 @@ export function bootAgent() {
     ["排队", "执行", "完成"].forEach(name => stages.append(el("li", {}, name)));
     const link = el("a", {class:"ai-task-link", href:"/app/runs"}, "在运行中心查看");
     head.append(label, badge, link, cancel); panel.append(head, stages, progress); tasks.set(taskId, panel); placeTask(taskId); updateSubtitle();
-    let cursor = 0, failures = 0, stopped = false, timer, controller, task, finishing;
+    let cursor = 0, failures = 0, stopped = false, timer, artifactTimer, controller, task, finishing;
     const seen = new Set();
     const alive = () => !stopped && isCurrent(id,token);
-    const stop = () => { stopped = true; clearTimeout(timer); controller?.abort(); };
+    const stop = () => { stopped = true; clearTimeout(timer); clearTimeout(artifactTimer); controller?.abort(); };
     stops.push(stop);
     const endpoint = `/agent/tasks/${taskId}`;
     function paint(value) {
@@ -527,6 +527,21 @@ export function bootAgent() {
       if (!alive() || seen.has(value.event_id) || value.event_id <= cursor) return;
       seen.add(value.event_id); cursor = value.event_id;
       const p = value.payload;
+      // SSE carries artifact references separately from state transitions. Read
+      // the authoritative task once per burst so the research rail can display
+      // saved plans/materials while the model is still running.
+      if (value.type === "artifact_saved" && !artifactTimer) {
+        artifactTimer = setTimeout(async () => {
+          artifactTimer = null;
+          if (!alive()) return;
+          try {
+            const latest = await get(endpoint);
+            if (!alive() || latest.revision < task.revision) return;
+            paint(latest);
+            if (TERMINAL.has(latest.status)) await finish();
+          } catch (error) { if (alive()) notice(`研究档案更新暂不可用：${error.message}。已保存材料会在重连后恢复。`); }
+        }, 200);
+      }
       if (value.type === "task_state" && task) {
         paint({...task,status:p.status,cancel_requested:p.cancel_requested});
         // State events omit wait metadata and terminal reasons; read the authoritative task.

@@ -95,6 +95,18 @@ try {
     const cancellingTask=cancellationMessages.at(-1).task_ref.id;
     await api(`/fixture/claim/${cancellingTask}`,{});
     await page.waitForFunction(() => document.querySelector('#agent-messages').innerText.includes('进行中'));
+    // A real committed artifact event updates the rail before any state change,
+    // without reload or a terminal assistant message (the SSE browser path).
+    await api(`/fixture/save-progress/${cancellingTask}`,{});
+    await page.locator('.agent-conversation-progress').filter({hasText:'运行中保存的核查'}).waitFor({state:'attached'});
+    if(!await page.locator('#agent-artifact-panel').isVisible()){
+      if(await page.locator('#agent-drawer-toggle').isVisible())await page.locator('#agent-drawer-toggle').click();
+      else await pane(page,'drawer');
+    }
+    await page.locator('.agent-conversation-progress').filter({hasText:'运行中保存的核查'}).waitFor();
+    assert.equal((await api(`/agent/tasks/${cancellingTask}`)).status,'running');
+    if(await page.locator('#agent-artifact-panel [data-agent-go="chat"]').isVisible())await page.locator('#agent-artifact-panel [data-agent-go="chat"]').click();
+    else if(await page.locator('#agent-drawer-toggle').getAttribute('aria-expanded')==='true')await page.locator('#agent-drawer-toggle').click();
     await page.locator('#agent-messages button:not(:disabled)').click();
     await page.waitForFunction(() => document.querySelector('#agent-messages').innerText.includes('正在停止'));
     assert.equal((await api(`/agent/tasks/${cancellingTask}`)).status,'running');
