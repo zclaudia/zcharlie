@@ -9,6 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 from pydantic_ai import CallDeferred, RunContext
+from pydantic_ai.messages import ModelRequest, RetryPromptPart, ToolReturnPart
 from pydantic_ai.tools import ToolDefinition
 from pydantic_ai.toolsets import FunctionToolset
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -249,6 +250,9 @@ class TrustedTools:
                                 if not await preparation_ready(session, self.context.claim.task_id):
                                     return None
                             headroom = await BudgetService(session, self.context.base).research_headroom(self.context.claim)
+                        if (self.context.reuse_sources and headroom["finish_only"]
+                                and spec.name == "prepare_company_view" and final_review_ready(ctx.messages)):
+                            return None
                         if headroom["finish_only"] and spec.name != "prepare_company_view":
                             return None
                     if spec.name in {"discover_disclosures", "fetch_disclosure_original", "parse_disclosure_original", "read_disclosure_original", "get_industry_peer_context"}:
@@ -268,3 +272,19 @@ class TrustedTools:
                 return available
             toolset.add_function(build(spec), name=name, description=spec.description, prepare=prepare(spec), sequential=True)
         return toolset
+
+
+def final_review_ready(messages: list[Any]) -> bool:
+    """Drop the redundant prepare schema for synthesis, restore it on feedback.
+
+    No permission or publication check is relaxed. A blocked preparation still
+    needs revision; an output/tool validator's retry restores the same tool.
+    """
+    if not messages or not isinstance(messages[-1], ModelRequest):
+        return False
+    parts = messages[-1].parts
+    if any(isinstance(p, RetryPromptPart) for p in parts):
+        return False
+    return any(isinstance(p, ToolReturnPart) and p.tool_name == "prepare_company_view"
+               and isinstance(p.content, dict) and p.content.get("candidate")
+               and not p.content.get("material_review_blocked") for p in parts)

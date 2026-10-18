@@ -63,7 +63,8 @@ async def test_source_window_deduplicates_exact_refs_and_reports_every_omission(
 
 
 @pytest.mark.asyncio
-async def test_real_http_full_company_reuses_published_sources_and_completes_with_small_daily_headroom(conversation_db):
+@pytest.mark.parametrize("large_source", [False, True])
+async def test_real_http_full_company_reuses_published_sources_and_completes_with_small_daily_headroom(conversation_db, large_source):
     import json
 
     import httpx
@@ -81,6 +82,20 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
     from tests.support.research import full_progress, wire_results
 
     candidate, ref, subject = await fixture()
+    if large_source:
+        from investment_agent.investor.contracts import NumericNode
+        async with session_scope() as session:
+            original = await session.get(SavedEvidence, (str(ref.id), 1))
+            payload = {**original.payload, "id": str(uuid4()), "text": "qualitative original source; " * 340}
+            session.add(SavedEvidence(id=payload["id"], revision=1, owner_id="local_owner", payload=payload))
+            ref = ObjectRef(kind="evidence", id=payload["id"], revision=1)
+            claims = tuple(c.model_copy(update={"support_refs": (ref,), "text": tuple(
+                n.model_copy(update={"ref": ref.model_copy(update={"field_path": "value"})})
+                if isinstance(n, NumericNode) else n for n in c.text)}) for c in candidate.thesis.claims)
+            dependencies = tuple(d.model_copy(update={"ref": ref}) for d in candidate.recommendation.dependency_refs)
+            candidate = candidate.model_copy(update={"thesis": candidate.thesis.model_copy(update={"claims": claims}),
+                "recommendation": candidate.recommendation.model_copy(update={"claims": claims,
+                    "provenance": (ref,), "dependency_refs": dependencies})})
     assert (await publish(candidate)).published
     selected = base(investor_agent_daily_tokens=100000, investor_agent_task_tokens=2000000,
         investor_agent_daily_requests=6, agent_max_tokens=16384)
@@ -98,6 +113,7 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
         assert "claims" not in company["recommendation"]
         assert company["reusable_sources"]["records"][0]["ref"] == ref.model_dump(mode="json")
         if len(requests) == 1:
+            assert {t["function"]["name"] for t in body["tools"]} == {"save_research_progress"}
             call = ("save_research_progress", plan.model_copy(update={"answered": False}).model_dump(mode="json"))
         elif len(requests) == 2:
             case = company["case"]
@@ -109,6 +125,7 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
             call = ("prepare_company_view", business.model_dump(mode="json"))
         else:
             assert len(requests) == 3
+            assert not body.get("tools")
             prepared = wire_results(body, "prepare_company_view")[-1]
             exact = PublicationCandidate.model_validate(prepared["candidate"])
             assert prepared["materials"][0]["exact_record"]
@@ -133,4 +150,18 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
         task = await TaskService(session).get_task(receipt.task.id)
         assert task.status == "succeeded" and task.usage.requests == 3 and task.usage.tool_calls == 2
         assert task.usage.input_tokens + task.usage.output_tokens == 57000
-        assert len((await session.scalars(select(SavedEvidence))).all()) == 1
+        assert len((await session.scalars(select(SavedEvidence))).all()) == 1 + int(large_source)
+
+
+def test_synthesis_only_schema_gate_restores_preparation_on_feedback_and_keeps_blocked_materials():
+    from pydantic_ai.messages import ModelRequest, RetryPromptPart, ToolReturnPart
+
+    from investment_agent.agent.tools import final_review_ready
+
+    prepared = ToolReturnPart(tool_name="prepare_company_view", tool_call_id="prepared", content={"candidate": {"claims": ["exact"]}})
+    assert final_review_ready([ModelRequest(parts=[prepared])])
+    feedback = RetryPromptPart(content="Revise the exact candidate before publication", tool_name=None)
+    assert not final_review_ready([ModelRequest(parts=[prepared]), ModelRequest(parts=[feedback])])
+    blocked = ToolReturnPart(tool_name="prepare_company_view", tool_call_id="blocked",
+        content={"candidate": {"claims": ["exact"]}, "material_review_blocked": True})
+    assert not final_review_ready([ModelRequest(parts=[blocked])])

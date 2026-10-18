@@ -248,9 +248,13 @@ class AgentExecutor:
                 return output
             output_type = self.specification.output_type
             if self.specification.phase == "research:v1" and grant.research_kind in {"company_research", "review"}:
-                from investment_agent.agent.research import CompanyResearchOutput, ResearchOutput
+                from investment_agent.agent.research import (
+                    CompanyResearchOutput,
+                    CompanyStudyOutput,
+                    ResearchOutput,
+                )
                 if output_type is ResearchOutput:
-                    output_type = CompanyResearchOutput
+                    output_type = CompanyStudyOutput if grant.research_kind == "company_research" else CompanyResearchOutput
             elif self.specification.phase == "research:v1" and grant.research_kind == "local_check":
                 from investment_agent.agent.research import LocalResearchOutput, ResearchOutput
                 if output_type is ResearchOutput:

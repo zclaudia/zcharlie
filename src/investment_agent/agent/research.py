@@ -127,6 +127,12 @@ class CompanyResearchOutput(ResearchOutput):
     proposal: SkipJsonSchema[Operation | None] = None
 
 
+class CompanyStudyOutput(CompanyResearchOutput):
+    """A new company study publishes a new view, not a maintain/extend review."""
+    review: SkipJsonSchema[ReviewEvent | None] = None
+    extend: SkipJsonSchema[bool] = False
+
+
 class LocalResearchProgress(ResearchProgress):
     """Bounded answers retain runtime checks without asking for a full plan."""
 
