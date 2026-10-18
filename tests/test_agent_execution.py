@@ -113,6 +113,18 @@ async def test_disabled_admission_and_missing_trusted_grant(execution_db):
     assert not calls
 
 
+@pytest.mark.parametrize("mode,kind,error", [
+    ("interactive", "portfolio_action", "portfolio_mandate_required"),
+    ("background", "company_research", "mandate_unavailable"),
+])
+async def test_company_independence_never_grants_personal_or_background_authority(execution_db, mode, kind, error):
+    selected = settings(investor_agent_background_enabled=True)
+    with pytest.raises(ExecutionDeniedError, match=error):
+        await admitted(selected, grant(mode=mode,
+            source="authenticated_message" if mode == "interactive" else "authorized_background",
+            research_kind=kind))
+
+
 async def test_atomic_daily_reservation_across_file_connections(execution_db):
     base = settings(investor_agent_daily_tokens=100)
     _, first = await admitted(base)

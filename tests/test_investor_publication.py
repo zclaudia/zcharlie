@@ -90,6 +90,23 @@ async def test_atomic_publish_replay_context_history_and_immutability(publicatio
                 await session.flush()
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("linked", [False, True])
+async def test_missing_personal_mandate_only_blocks_explicitly_linked_views(publication_db, linked):
+    from sqlalchemy import delete
+
+    from investment_agent.storage.models.investor import MandateHead, MandateRevision
+    candidate, _, _ = await fixture()
+    if not linked:
+        candidate = candidate.model_copy(update={"recommendation": candidate.recommendation.model_copy(update={"mandate_revision_id": None})})
+    async with session_scope() as session:
+        await session.execute(delete(MandateHead))
+        await session.execute(delete(MandateRevision))
+        check, _ = await PublicationService(session).check(candidate, semantic(candidate))
+        assert bool(check.field_errors) == linked
+        assert ("mandate_revision_id" in check.field_errors) == linked
+
+
 @pytest.mark.parametrize("failure", ["arabic", "chinese", "gap_number", "reason_number", "wrong_subject", "wrong_role", "wrong_path", "wrong_unit", "future", "unverified", "conflict", "method", "semantic", "semantic_issue", "missing_premise", "missing_dimension_gap", "missing_dependency", "insufficient_buy", "local", "review_before_cutoff"])
 @pytest.mark.asyncio
 async def test_failed_publication_retains_repairable_exact_draft(publication_db, failure):

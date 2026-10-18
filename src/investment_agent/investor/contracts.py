@@ -217,7 +217,9 @@ class CompanyRecommendation(Record):
     next_review_at: datetime
     monitor_refs: tuple[ObjectRef, ...]
     dependency_refs: tuple[Dependency, ...]
-    mandate_revision_id: ObjectRef
+    # Objective company research does not require a personal investment profile.
+    # Existing explicitly bound opinions retain their revision checks.
+    mandate_revision_id: ObjectRef | None = None
     method_revision_id: ObjectRef
     provenance: tuple[ObjectRef, ...]
     business_view: BusinessView

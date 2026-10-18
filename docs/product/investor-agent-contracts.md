@@ -43,7 +43,7 @@ common:
   sufficiency: insufficient | bounded | sufficient_for_scope
   claims, counter_case, assumptions, gaps, conditions
   valid_until, next_review_at, monitor_refs, dependency_refs
-  mandate_revision_id, method_revision_id, provenance
+  mandate_revision_id?（公司研究可为空；显式关联时校验版本）, method_revision_id, provenance
 company_view:
   case_ids: 恰好一个
   business_view: favorable | mixed | unfavorable | undetermined

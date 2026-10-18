@@ -147,8 +147,25 @@ async def test_current_mandate_scope_revalidation_and_exact_case_version(convers
     async with session_scope() as session:
         with pytest.raises(ExecutionDeniedError, match="scope_revoked"):
             await check_boundary(session, execution, base())
+    # Personal scope revocation remains enforced above; a new, independently
+    # authorized company study is not restricted to the portfolio's universe.
+    company = await submit(conversation, message(context_refs=(refs[0],), research_kind="company_research"))
+    assert all(ref.kind != "mandate" for ref in company.task.binding.base_refs)
+    company_claim = await claim(company.task)
+    async with session_scope() as session:
+        permission, _ = await check_boundary(session, company_claim, base())
+        assert permission.mandate_id is None
     with pytest.raises(ExecutionDeniedError):
         await submit(conversation, message(context_refs=(case_ref, ObjectRef(kind="mandate", id=mandate.id, revision=1))))
+
+
+@pytest.mark.asyncio
+async def test_personal_allocation_requires_mandate_at_admission(conversation_db):
+    conversation = await new_conversation()
+    with pytest.raises(InvalidContextError, match="个人配置建议需要先设置投资约定"):
+        await submit(conversation, message(text="给出我的仓位配置", research_kind="portfolio_action"))
+    async with session_scope() as session:
+        assert await session.scalar(select(func.count()).select_from(AgentTask)) == 0
 
 
 @pytest.mark.asyncio

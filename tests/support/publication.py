@@ -96,7 +96,7 @@ def semantic(candidate):
 async def prepared(candidate, review=None, *, permission=True):
     review = review or semantic(candidate)
     async with session_scope() as session:
-        grant = ExecutionGrant(mode="interactive", source="authenticated_message", prompt="Research the company", tool_names=("publish_recommendation", "extend_recommendation") if permission else (), scope_refs=(candidate.thesis.case_ref,), mandate_id=candidate.recommendation.mandate_revision_id.id)
+        grant = ExecutionGrant(mode="interactive", source="authenticated_message", prompt="Research the company", tool_names=("publish_recommendation", "extend_recommendation") if permission else (), scope_refs=(candidate.thesis.case_ref,), mandate_id=candidate.recommendation.mandate_revision_id.id if candidate.recommendation.mandate_revision_id else None)
         task = await admit(session, base=base(), input_key=str(uuid4()), binding=ContextBinding(context_refs=(candidate.thesis.case_ref,), base_refs=(candidate.thesis.case_ref,), as_of=datetime.now(UTC)), grant=grant)
         run = await PipelineRunRepository(session).claim_next(worker_id=str(task.id), kinds=["agent_turn"])
         claim = await TaskService(session).claim(task.id, RunLease(run.id, str(task.id), run.attempt_count))

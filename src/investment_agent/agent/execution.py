@@ -182,6 +182,8 @@ async def live_policy(
         raise ExecutionDeniedError("invalid_authorization_source")
     if grant.mode == "background" and not settings.investor_agent_background_enabled:
         raise ExecutionDeniedError("background_disabled")
+    if grant.research_kind == "portfolio_action" and grant.mandate_id is None:
+        raise ExecutionDeniedError("portfolio_mandate_required")
     if grant.mandate_id is not None or grant.mode == "background":
         head = await session.get(MandateHead, grant.owner, populate_existing=True)
         if head is None or head.mandate_id != str(grant.mandate_id):

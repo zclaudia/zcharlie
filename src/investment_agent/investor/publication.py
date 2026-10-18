@@ -278,9 +278,13 @@ class PublicationService:
                     errors[f"{prefix}.assessed_dimensions.{index}.refs"] = "Evidenced state requires saved sources"
         if thesis.method_ref != recommendation.method_revision_id or thesis.method_ref not in self.policy.methods:
             errors["method_revision_id"] = "Method version is unknown or inconsistent"
-        mandate = await self.foundation.get_mandate("local_owner")
-        if recommendation.mandate_revision_id != ObjectRef(kind="mandate", id=mandate.id, revision=mandate.revision):
-            errors["mandate_revision_id"] = "Current mandate revision changed"
+        if recommendation.mandate_revision_id is not None:
+            try:
+                mandate = await self.foundation.get_mandate("local_owner")
+                if recommendation.mandate_revision_id != ObjectRef(kind="mandate", id=mandate.id, revision=mandate.revision):
+                    errors["mandate_revision_id"] = "Current mandate revision changed"
+            except InvestorError as exc:
+                errors["mandate_revision_id"] = str(exc)
         directional = recommendation.business_view.value != "undetermined" or recommendation.price_view.value != "undetermined" or any(a.action.value != "wait" for a in recommendation.conditional_actions)
         if recommendation.sufficiency.value == "insufficient" and directional:
             errors["sufficiency"] = "Insufficient evidence only supports an undetermined view"

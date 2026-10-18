@@ -328,12 +328,18 @@ class ConversationService:
                 if body.reply_to.kind != "message" or body.reply_to.revision != 1 or body.reply_to.field_path is not None or reply is None or reply.conversation_id != str(conversation_id):
                     raise InvalidContextError("reply must belong to this conversation")
             head = await self.session.get(MandateHead, self.owner, populate_existing=True)
-            mandate_ref = () if head is None else (ObjectRef(kind="mandate", id=UUID(head.mandate_id), revision=head.revision),)
-            binding_refs = tuple(dict.fromkeys((*body.context_refs, *scope, *mandate_ref)))
             securities = tuple(ref for ref in scope if ref.kind == "listing")
             from investment_agent.agent.research import classify
             from investment_agent.investor.common import utc_timestamp
             kind = classify(body.text, body.research_kind)
+            # Company facts and price research are independent of the owner's
+            # personal allocation mandate. Portfolio work keeps its live gate.
+            if kind in {"company_research", "review"}:
+                head = None
+            if kind == "portfolio_action" and head is None:
+                raise InvalidContextError("个人配置建议需要先设置投资约定")
+            mandate_ref = () if head is None else (ObjectRef(kind="mandate", id=UUID(head.mandate_id), revision=head.revision),)
+            binding_refs = tuple(dict.fromkeys((*body.context_refs, *scope, *mandate_ref)))
             cutoff = utc_timestamp(body.research_at) if body.research_at else datetime.now(UTC)
             if cutoff > datetime.now(UTC):
                 raise InvalidContextError("research cutoff cannot be future")

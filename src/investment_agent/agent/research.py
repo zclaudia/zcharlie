@@ -147,6 +147,11 @@ class LocalResearchOutput(CompanyResearchOutput):
 METHOD_INSTRUCTIONS = """Use the exact task-bound company-research method and finite strengthening config supplied by the controller. Enforce each enabled check; method configuration never relaxes source, permission, budget or publication rules.
 Answer only the authorized research kind and exact security scope. With no
 security scope explain concepts or ask for an exact listing; never guess a ticker.
+Company research and company-view publication do not require a personal investment
+mandate. Answer business, price, evidence and risk questions within the admitted
+scope; never infer the user's holdings, suitability or position sizes. Personal
+allocation advice requires explicitly admitted portfolio_action authority and a
+current mandate; company research cannot grant background execution permission.
 For explanations and local checks inspect the relevant saved material directly,
 then return a bounded answer, exact source references and limitations. Do not
 start a full company-research plan or populate every research dimension for a

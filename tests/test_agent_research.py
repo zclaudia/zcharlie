@@ -275,6 +275,8 @@ async def test_real_collector_deferred_resumption_preserves_pit_and_budget(conve
 @pytest.mark.parametrize("finish_only", [False, True])
 @pytest.mark.parametrize("repair", [False, True])
 async def test_native_full_preparation_and_exact_semantic_publication(conversation_db, semantic_pass, finish_only, repair):
+    from sqlalchemy import delete
+
     from investment_agent.agent.research_publication import (
         CompanyViewInput,
         HypothesisInput,
@@ -286,7 +288,13 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
         PublicationService,
         SemanticAssessment,
     )
+    from investment_agent.storage.models.investor import MandateHead, MandateRevision
     candidate, evidence, subject = await fixture()
+    # Real native plan -> prepare -> semantic review -> atomic publication must
+    # work without creating a placeholder personal investment mandate.
+    async with session_scope() as session:
+        await session.execute(delete(MandateHead))
+        await session.execute(delete(MandateRevision))
     selected = base(investor_agent_task_requests=4 if repair else 3) if finish_only else base()
     conversation = await new_conversation()
     receipt = await submit(conversation, message(text="深入研究它", context_refs=(subject,)), settings=selected)
@@ -317,6 +325,7 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
             return ModelResponse([ToolCallPart("prepare_company_view", {"business": business.model_dump(mode="json")}, tool_call_id="prepare")], usage=RequestUsage(input_tokens=10, output_tokens=5))
         prepared = next(p.content for p in returns if p.tool_name == "prepare_company_view")
         exact = PublicationCandidate.model_validate(prepared["candidate"])
+        assert exact.recommendation.mandate_revision_id is None
         review = SemanticInput(preparation_ref=ObjectRef.model_validate(prepared["preparation_ref"]),
             assessments=tuple(SemanticAssessment(claim_id=c.id, fact_relation="The exact saved cash supports a bounded observation", counter_evidence_relevance="Temporary working capital remains an alternative", materiality_reason="Cash persistence affects the observation", issues=() if semantic_pass else ("Durability is unresolved",)) for c in exact.thesis.claims),
             checked_sources=(evidence,), unresolved_questions=(), conclusion="pass" if semantic_pass else "revise")
@@ -335,6 +344,7 @@ async def test_native_full_preparation_and_exact_semantic_publication(conversati
         assert bool(current.current_recommendation_ref) == semantic_pass
         if semantic_pass:
             view = await PublicationService(session).get_recommendation(current.current_recommendation_ref)
+            assert view.recommendation.mandate_revision_id is None
             assert view.recommendation.assumptions[0].falsification_condition == "Cash reverses without operating growth"
             monitor = await PublicationService(session).artifact(view.recommendation.monitor_refs[0])
             assert monitor.payload["trigger"] == "calendar" and monitor.payload["conditions"] == []

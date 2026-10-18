@@ -130,7 +130,6 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
     case = await foundation.get_case("local_owner", business.case_ref.id)  # type: ignore[arg-type]
     if business.case_ref != ObjectRef(kind="case", id=case.id, revision=case.revision):
         raise ExecutionDeniedError("publication_case_revision_changed")
-    mandate = await foundation.get_mandate("local_owner")
     cutoff = await effective_cutoff(session, task_id)
     resolver = NumericResolver(EvidenceService(session), case.listing_ref, cutoff)
     # WP12: the peer-context method entry verifies its own calculations and
@@ -312,7 +311,6 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
         sufficiency=business.sufficiency, claims=tuple(claims), counter_case=business.counter_case,
         assumptions=hypotheses, gaps=business.gaps, conditions=(*business.condition_refs, *(hypothesis_refs[k] for k in business.condition_hypothesis_keys)), valid_until=valid_until,
         next_review_at=next_review, monitor_refs=tuple(ObjectRef(kind="monitor", id=m.id, revision=1) for m in monitors), dependency_refs=business.dependencies,
-        mandate_revision_id=ObjectRef(kind="mandate", id=mandate.id, revision=mandate.revision),
         method_revision_id=method.method_ref, provenance=tuple(dict.fromkeys(r for c in claims for r in (*c.support_refs, *c.opposition_refs, *c.assumption_refs))),
         business_view=business.business_view, price_view=business.price_view, conditional_actions=business.conditional_actions)
     candidate = PublicationCandidate(thesis=thesis, recommendation=recommendation, monitors=monitors)
