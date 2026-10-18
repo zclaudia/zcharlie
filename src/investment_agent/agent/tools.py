@@ -79,6 +79,7 @@ class ExecutionContext:
     phase: str = "run:v1"  # AG13 may supply a trusted stable phase/version.
     reuse_sources: bool = False
     reuse_plan: bool = False
+    reuse_preparation: bool = False
 
 
 class TrustedTools:
@@ -243,6 +244,8 @@ class TrustedTools:
                     if ctx.deps is not self.context:
                         raise ExecutionDeniedError("invalid_trusted_context")
                     if self.context.phase == "research:v1":
+                        if self.context.reuse_preparation and not any(isinstance(p, RetryPromptPart) for m in ctx.messages[-1:] for p in m.parts):
+                            return None
                         if self.context.reuse_plan and spec.name != "prepare_company_view":
                             return None
                         async with self.context.sessions() as session:

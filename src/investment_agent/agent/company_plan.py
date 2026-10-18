@@ -7,13 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.agent.execution import ExecutionGrant, ResearchValidationError
 from investment_agent.agent.tasks import ActionResult, TaskClaim, TaskService
+from investment_agent.config import Settings
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.enums import DimensionStatus
 from investment_agent.storage.models.agent import ExecutionGrantRow, MessageRow, ToolAction
 
 
 async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: ExecutionGrant,
-                             message: MessageRow, method_ref: ObjectRef) -> dict | None:
+                             message: MessageRow, method_ref: ObjectRef, *, base: Settings) -> dict | None:
     from investment_agent.agent.research import ResearchProgress, save_progress, validate_progress
     from investment_agent.investor.methods import task_method
     service = TaskService(session)
@@ -66,8 +67,33 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
             result = await save_progress(owned, operation, plan)
             return ActionResult({**result.output, "reused_plan_from": source_operation}, artifact_refs=result.artifact_refs)
         result = await service.settle_action(claim, UUID(action.operation_id), save)
-        return {"artifact_ref": result["artifact_ref"], "source_task_id": str(task_id), "question": plan.question,
+        reused = {"artifact_ref": result["artifact_ref"], "source_task_id": str(task_id), "question": plan.question,
             "hypothesis_questions": [h.question for h in plan.hypotheses],
             "completion_criteria": list(plan.completion_criteria), "stop_conditions": list(plan.stop_conditions),
             "policy": "The same-question public plan was copied into this task through the normal fenced save_progress transaction, revalidated under this grant/method/cutoff. No old conclusions or private reasoning were imported. Do not save another plan: prepare a concise view from current reusable source windows, then return final progress and semantic review. Final plan wording may be concise; all required fields and seven dimensions remain mandatory."}
+        preparations = [r for r in task.artifact_refs if r.kind == "publication_preparation"]
+        if preparations:
+            previous_preparation = await session.get(ToolAction, str(preparations[-1].id))
+            if (previous_preparation and previous_preparation.state == "committed" and previous_preparation.result
+                    and not previous_preparation.result.get("material_review_blocked")):
+                from investment_agent.agent.budget import BudgetService
+                from investment_agent.agent.execution import check_boundary
+                from investment_agent.agent.research_publication import CompanyViewInput, prepare
+                from investment_agent.investor.foundations import InvestorService
+                business = CompanyViewInput.model_validate(previous_preparation.parameters["business"])
+                case = await InvestorService(session).get_case(grant.owner, business.case_ref.id)
+                business = business.model_copy(update={"case_ref": ObjectRef(kind="case", id=case.id, revision=case.revision)})
+                await check_boundary(session, claim, base, tool="prepare_company_view", required_refs=(business.case_ref,))
+                await BudgetService(session, base).check(claim)
+                params = {"tool": "prepare_company_view", "business": business.model_dump(mode="json"),
+                          "phase": "research:v1", "reused_preparation_from": previous_preparation.operation_id}
+                prepared = await service.prepare_action(claim, intent_key="continuation:public-candidate", parameters=params, effect="database")
+                try:
+                    async def rebuild(owned, operation, business=business):
+                        return await prepare(owned, operation, business)
+                    reused["prepared_review"] = await service.settle_action(claim, UUID(prepared.operation_id), rebuild)
+                    reused["policy"] = "Public planning and an unpublished candidate were revalidated and prepared under this task's current authorization/cutoff/method. Only the new model's final semantic review and answer remain. No old private reasoning or semantic approval was reused. Do not repeat planning or preparation; publication still checks every gate."
+                except ResearchValidationError:
+                    pass  # Changed premises need a real new model revision.
+        return reused
     return None

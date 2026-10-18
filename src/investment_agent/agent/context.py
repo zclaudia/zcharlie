@@ -149,6 +149,14 @@ def _retry_feedback(part: RetryPromptPart) -> RetryPromptPart:
     return replace(part, content=[{k: v for k, v in error.items() if k != "input"} for error in part.content])
 
 
+def reusable_context_preparation(instructions: str) -> bool:
+    marker = "\nTrusted current context:\n"
+    try:
+        return bool(json.loads(instructions.split(marker, 1)[1]).get("reused_research_plan", {}).get("prepared_review"))
+    except (IndexError, ValueError, TypeError, AttributeError):
+        return False
+
+
 def pack_values(value: Any) -> dict[str, Any]:
     """Lossless exact-subtree factoring, with aliases outside untrusted data.
 

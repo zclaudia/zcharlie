@@ -432,8 +432,16 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
     data["company_context"] = views
     if source and grant.research_kind == "company_research" and any(v.get("reusable_sources", {}).get("records") for v in views):
         from investment_agent.agent.company_plan import reuse_question_plan
-        reused_plan = await reuse_question_plan(session, claim, grant, source, method.method_ref)
+        reused_plan = await reuse_question_plan(session, claim, grant, source, method.method_ref, base=base)
         if reused_plan:
+            if reused_plan.get("prepared_review"):
+                from investment_agent.agent.context import pack_values, reuse_preparation_materials
+                records = tuple({**i["record"], **({"_text_window": i["text_window"]} if i.get("text_window") else {})}
+                    for view in views for i in view.get("reusable_sources", {}).get("records", []))
+                reused_plan["prepared_review"] = pack_values(reuse_preparation_materials(reused_plan["prepared_review"], records))
+                for view in views:
+                    if "recommendation" in view:
+                        view["recommendation"]["provenance"] = [r for r in view["recommendation"]["provenance"] if r["kind"] != "evidence"]
             data["reused_research_plan"] = reused_plan
     recovered = await recovered_evidence(session, claim, grant)
     if recovered is not None:
@@ -446,6 +454,9 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
     if grant.research_kind in {"company_research", "review"}:
         from investment_agent.agent.company_context import COMPANY_INSTRUCTIONS
         instructions = COMPANY_INSTRUCTIONS
+        if data.get("reused_research_plan", {}).get("prepared_review"):
+            from investment_agent.agent.company_context import COMPANY_REVIEW_INSTRUCTIONS
+            instructions = COMPANY_REVIEW_INSTRUCTIONS
     return instructions + "\nTrusted current context:\n" + json.dumps(data, ensure_ascii=False, separators=(",", ":")), memory.stamp, memory.private_history_allowed
 
 

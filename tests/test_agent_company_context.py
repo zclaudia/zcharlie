@@ -71,7 +71,7 @@ async def test_source_window_deduplicates_exact_refs_and_reports_every_omission(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("large_source", [False, True])
-@pytest.mark.parametrize("continuation", [False, True])
+@pytest.mark.parametrize("continuation", [False, True, "prepared"])
 async def test_real_http_full_company_reuses_published_sources_and_completes_with_small_daily_headroom(conversation_db, large_source, continuation):
     import json
 
@@ -89,6 +89,8 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
     from tests.support.publication import publish
     from tests.support.research import full_progress, response, run, wire_results
 
+    prepared_continuation = continuation == "prepared"
+    continuation = bool(continuation)
     candidate, ref, subject = await fixture()
     if large_source:
         from investment_agent.investor.contracts import NumericNode
@@ -114,7 +116,29 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
         partial = full_progress(candidate.thesis.assessed_dimensions, answered=False, stopped_because="Source coverage remains incomplete")
         previous = await run(previous, FunctionModel(lambda messages, info: response(ResearchOutput(progress=partial))))
         assert previous.status == "partial"
-    selected = base(investor_agent_daily_tokens=68000 if continuation else 100000, investor_agent_task_tokens=2000000,
+        if prepared_continuation:
+            from pydantic_ai.messages import ModelResponse, ThinkingPart, ToolCallPart
+            middle = await submit(conversation, message(text="这家公司为什么值得关注？",
+                context_refs=(subject,), research_kind="company_research"))
+            turns = 0
+            def prepare_only(messages, info):
+                nonlocal turns
+                turns += 1
+                if turns == 1:
+                    context = json.JSONDecoder().raw_decode(info.instructions.split("Trusted current context:\n", 1)[1])[0]
+                    case = context["company_context"][0]["case"]
+                    business = CompanyViewInput(case_ref=ObjectRef(kind="case", id=case["id"], revision=case["revision"]),
+                        question_scope="Bounded whole company study", change_reason="Recheck owned sources",
+                        assessed_dimensions=candidate.thesis.assessed_dimensions, claims=candidate.thesis.claims,
+                        counter_case=candidate.thesis.counter_case, gaps=candidate.recommendation.gaps,
+                        dependencies=candidate.recommendation.dependency_refs, business_view="undetermined",
+                        price_view="undetermined", sufficiency="bounded")
+                    return ModelResponse([ThinkingPart("PRIVATE_REASONING_MUST_NOT_BE_IMPORTED"),
+                        ToolCallPart("prepare_company_view", {"business": business.model_dump(mode="json")})])
+                return response(ResearchOutput(progress=partial))
+            previous = await run(middle, FunctionModel(prepare_only))
+            assert previous.status == "partial"
+    selected = base(investor_agent_daily_tokens=50000 if prepared_continuation else 68000 if continuation else 100000, investor_agent_task_tokens=2000000,
         investor_agent_daily_requests=4 if continuation else 6, agent_max_tokens=8192 if continuation else 16384)
     receipt = await submit(conversation, message(text="这家公司为什么值得关注？",
         context_refs=(subject,), research_kind="company_research"), settings=selected)
@@ -129,7 +153,7 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
         company = context["company_context"][0]
         assert "claims" not in company["recommendation"]
         assert company["reusable_sources"]["records"][0]["ref"] == ref.model_dump(mode="json")
-        step = len(requests) + int(continuation)
+        step = len(requests) + (2 if prepared_continuation else int(continuation))
         if continuation:
             assert context["reused_research_plan"]["source_task_id"] == str(previous.id)
         if step == 1:
@@ -148,7 +172,12 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
         else:
             assert step == 3
             assert not body.get("tools")
-            prepared = wire_results(body, "prepare_company_view")[-1]
+            if prepared_continuation:
+                from investment_agent.agent.context import unpack_values
+                prepared = unpack_values(context["reused_research_plan"]["prepared_review"])
+                assert "PRIVATE_REASONING_MUST_NOT_BE_IMPORTED" not in json.dumps(body)
+            else:
+                prepared = wire_results(body, "prepare_company_view")[-1]
             exact = PublicationCandidate.model_validate(prepared["candidate"])
             assert prepared["materials"][0]["exact_record"]
             review = SemanticInput(preparation_ref=ObjectRef.model_validate(prepared["preparation_ref"]),
@@ -170,8 +199,11 @@ async def test_real_http_full_company_reuses_published_sources_and_completes_wit
     await ResearchWorker(settings=selected, worker_id="small-reuse", handlers=[AgentJobHandler("agent_turn", executor)]).run_once()
     async with session_scope() as session:
         task = await TaskService(session).get_task(receipt.task.id)
-        assert task.status == "succeeded" and task.usage.requests == 3 - int(continuation) and task.usage.tool_calls == 2 - int(continuation)
-        assert task.usage.input_tokens + task.usage.output_tokens == 19000 * (3 - int(continuation))
+        expected_requests = 1 if prepared_continuation else 3 - int(continuation)
+        assert task.status == "succeeded" and task.usage.requests == expected_requests and task.usage.tool_calls == expected_requests - 1
+        assert task.usage.input_tokens + task.usage.output_tokens == 19000 * expected_requests
+        if previous:
+            assert (await TaskService(session).get_task(previous.id)).status == "partial"
         assert len((await session.scalars(select(SavedEvidence))).all()) == 1 + int(large_source)
 
 
@@ -200,7 +232,7 @@ async def test_public_plan_continuation_never_crosses_question_scope_method_or_c
     from investment_agent.agent.tasks import TaskService
     from investment_agent.investor.methods import task_method
     from investment_agent.storage.models.agent import ExecutionGrantRow, MessageRow
-    from tests.support.conversations import claim, message, new_conversation, submit
+    from tests.support.conversations import base, claim, message, new_conversation, submit
     from tests.support.research import full_progress, response, run
 
     candidate, _, subject = await fixture()
@@ -224,5 +256,5 @@ async def test_public_plan_continuation_never_crosses_question_scope_method_or_c
         if mismatch == "method":
             method = method.model_copy(update={"id": uuid4()})
         source = await session.get(MessageRow, str(second.task.message_ref.id))
-        assert await reuse_question_plan(session, owned, grant, source, method) is None
+        assert await reuse_question_plan(session, owned, grant, source, method, base=base()) is None
         assert not (await TaskService(session).get_task(second.task.id)).artifact_refs
