@@ -235,6 +235,10 @@ class AgentExecutor:
                 from investment_agent.agent.research import CompanyResearchOutput, ResearchOutput
                 if output_type is ResearchOutput:
                     output_type = CompanyResearchOutput
+            elif self.specification.phase == "research:v1" and grant.research_kind == "local_check":
+                from investment_agent.agent.research import LocalResearchOutput, ResearchOutput
+                if output_type is ResearchOutput:
+                    output_type = LocalResearchOutput
             # An audit-only session performs no read/write until run_agent's
             # final flush; it never holds a transaction across model/tool I/O.
             async with self.sessions() as audit:

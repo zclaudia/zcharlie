@@ -629,15 +629,17 @@ async def test_native_progress_receipt_is_compact_but_durable_research_is_comple
         assert all(n['text'].startswith(saved.content[0].text) for n in notes)
 
 
-def test_company_schema_omits_unrelated_contracts_without_weakening_runtime_validation():
+@pytest.mark.parametrize("output_name", ["CompanyResearchOutput", "LocalResearchOutput"])
+def test_company_schema_omits_unrelated_contracts_without_weakening_runtime_validation(output_name):
     from pydantic import ValidationError
 
-    from investment_agent.agent.research import CompanyResearchOutput
-    schema = CompanyResearchOutput.model_json_schema()
+    from investment_agent.agent import research
+    output_type = getattr(research, output_name)
+    schema = output_type.model_json_schema()
     assert 'portfolio_review' not in schema['properties'] and 'proposal' not in schema['properties']
     assert len(json.dumps(schema)) < len(json.dumps(ResearchOutput.model_json_schema())) * .6
     with pytest.raises(ValidationError):
-        CompanyResearchOutput.model_validate({'progress': progress().model_dump(mode='json'), 'proposal': {'unknown': True}})
+        output_type.model_validate({'progress': progress().model_dump(mode='json'), 'proposal': {'unknown': True}})
 
 
 @pytest.mark.asyncio
@@ -681,6 +683,13 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
             captured = next(json.loads(m['content']) for m in body['messages'] if m['role'] == 'tool' and 'materials' in m['content'])
             record = captured['materials'][0]['record']
             assert record['verification'] == 'candidate' and record['value']['value'] is not None
+            material = captured['materials'][0]
+            assert material['eligibility']['fact_reference_allowed'] is True
+            assert material['numeric_claim']['ref'] == {**material['ref'], 'field_path': 'value'}
+            assert material['numeric_claim']['role'] == 'historical_fact'
+            missing = [m for item in body['messages'] if item['role'] == 'tool' and 'materials' in item['content']
+                       for m in json.loads(item['content'])['materials'] if not m['record'].get('value') or m['record']['value']['value'] is None]
+            assert missing and all(not m['eligibility']['fact_reference_allowed'] and 'numeric_claim' not in m for m in missing)
             final = plan.model_copy(update={'fact_refs': tuple(ObjectRef.model_validate(r) for r in captured['refs']),
                 'inferences': ('A visible quote establishes price availability but cannot establish durable business value.',),
                 'assumptions': ('Operating durability still requires original disclosures.',),
@@ -721,7 +730,8 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
     from investment_agent.agent.context import pack_evidence
     from investment_agent.settings.store import SettingsStore
     packed = pack_evidence(captured['materials'])
-    assert [{"ref": p["ref"], "record": {**packed["shared"][p["shared_index"]], **p["record"]}} for p in packed["records"]] == captured['materials']
+    assert [{**{k: v for k, v in p.items() if k not in {'shared_index', 'record'}},
+             "record": {**packed["shared"][p["shared_index"]], **p["record"]}} for p in packed["records"]] == captured['materials']
     final_settings = selected.model_copy(update={"investor_agent_task_requests": 1})
     async with session_scope() as session:
         await SettingsStore(session).apply({"investor_agent_task_requests": 1}, actor="fixture")

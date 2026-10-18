@@ -127,6 +127,23 @@ class CompanyResearchOutput(ResearchOutput):
     proposal: SkipJsonSchema[Operation | None] = None
 
 
+class LocalResearchProgress(ResearchProgress):
+    """Bounded answers retain runtime checks without asking for a full plan."""
+
+    hypotheses: SkipJsonSchema[tuple[ResearchHypothesis, ...]] = ()
+    evidence_steps: SkipJsonSchema[tuple[Text, ...]] = ()
+    completion_criteria: SkipJsonSchema[tuple[Text, ...]] = ()
+    stop_conditions: SkipJsonSchema[tuple[Text, ...]] = ()
+    dimensions: SkipJsonSchema[tuple[DimensionAssessment, ...]] = ()
+    completed_steps: SkipJsonSchema[tuple[Text, ...]] = ()
+
+
+class LocalResearchOutput(CompanyResearchOutput):
+    progress: LocalResearchProgress
+    semantic_review: SkipJsonSchema[SemanticInput | None] = None
+    review: SkipJsonSchema[ReviewEvent | None] = None
+
+
 METHOD_INSTRUCTIONS = """Use the exact task-bound company-research method and finite strengthening config supplied by the controller. Enforce each enabled check; method configuration never relaxes source, permission, budget or publication rules.
 Answer only the authorized research kind and exact security scope. With no
 security scope explain concepts or ask for an exact listing; never guess a ticker.
@@ -135,6 +152,9 @@ then return a bounded answer, exact source references and limitations. Do not
 start a full company-research plan or populate every research dimension for a
 local question. The controller saves the final answer; an extra
 save_research_progress call is unnecessary for a short explanation/local check.
+For a local check gather a small relevant batch, then answer concisely from it;
+do not keep collecting to fill every dimension. Avoid repeating the same prose
+across content, inferences, gaps and limitations. Omit optional empty fields.
 Never replace a global company view. For complete company research and formal
 review first call save_research_progress with the question, falsifiable hypotheses,
 strongest alternative explanations, prioritized evidence steps, completion and stop
@@ -182,6 +202,10 @@ and revision with ref.field_path="value" (never null). The bare refs returned in
 fact_refs/materials identify the record, not its numeric value field. Use
 display_format="percent" for fraction/percent values and "decimal" for other
 quantities; never invent a unit or rewrite a source value.
+Only materials with eligibility.fact_reference_allowed=true may enter fact_refs,
+counter_refs, dimensions.refs or numeric_claim. Missing/conflicted materials explain
+gaps only; missing data is never counter evidence. Copy a returned numeric_claim
+template when available; its field path and display format are server-selected.
 Historical percentile only describes historical position, not cheapness. The real
 FCFE qualification is unavailable: do not substitute CFO-capex or fabricate DCF.
 Before publishing perform an explicit semantic review of every critical claim,
@@ -552,7 +576,21 @@ async def capture(session: AsyncSession, operation: UUID, business: Any) -> Acti
     for ref in result.refs:
         row = await session.get(SavedEvidence, (str(ref.id), ref.revision))
         assert row is not None
-        payload["materials"].append({"ref": ref.model_dump(mode="json"), "record": row.payload})
+        subject = ObjectRef.model_validate(row.payload["subject_ref"])
+        material: dict[str, Any] = {"ref": ref.model_dump(mode="json"), "record": row.payload,
+            "eligibility": {"fact_reference_allowed": False}}
+        try:
+            record = await NumericResolver(EvidenceService(session), subject, business.as_of).fact(ref)
+            material["eligibility"]["fact_reference_allowed"] = True
+            if record.value is not None and record.value.value is not None:
+                display = "percent" if record.value.unit in {"fraction", "percent"} else "decimal"
+                node = NumericNode(type="numeric_claim", ref=ref.model_copy(update={"field_path": "value"}),
+                    role="historical_fact", display_format=display)
+                await NumericResolver(EvidenceService(session), subject, business.as_of).resolve(node)
+                material["numeric_claim"] = node.model_dump(mode="json")
+        except InvestorError as exc:
+            material["eligibility"]["restriction"] = exc.detail.message
+        payload["materials"].append(material)
     return ActionResult(payload, artifact_refs=result.refs)
 
 
