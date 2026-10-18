@@ -21,6 +21,7 @@ try {
     page.on('pageerror',e=>errors.push(e.stack || String(e)));page.on('dialog',()=>{throw Error('XSS dialog');});
     await page.goto(base+'/app/agent?pane=drawer');await page.locator('[name=api_key]').fill('ag17-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/agent?pane=drawer&conversation='+fixture.conversation_id);
     if(!await page.getByRole('button',{name:'公司档案',exact:true}).count()){await page.waitForTimeout(1000);assert.ok(await page.getByRole('button',{name:'公司档案',exact:true}).count(),JSON.stringify(errors)+' '+await page.locator('body').innerText());}
+    await page.waitForFunction(()=>document.querySelector('#agent-notice')?.textContent==='已恢复会话。');
     if(!await page.getByRole('button',{name:'对话产物',exact:true}).isVisible()){if(await page.locator('#agent-drawer-toggle').isVisible())await page.locator('#agent-drawer-toggle').click();else await page.getByRole('button',{name:'研究档案',exact:true}).click();}
     await page.getByRole('button',{name:'对话产物',exact:true}).click();
     await page.locator('.agent-conversation-progress').first().waitFor();
