@@ -207,6 +207,9 @@ gaps is a valid completed study. Do not confuse completing this question with
 proving a favorable business or price direction. When all relevant sources remain
 pending, report them as pending context and leave directions undetermined; never
 retain a directional conclusion by relabelling its critical premises as context.
+Keep the prepared claim set small and the final answer concise. Do not echo raw
+page text or the prepared candidate JSON in final output; return only the final
+progress and the exact semantic review needed for this question.
 critical_counter_evidence is only for exact sources already checked and included
 in progress.counter_refs, not a list of speculative risks or missing data.
 For a numeric_claim with role historical_fact, use the exact saved evidence UUID

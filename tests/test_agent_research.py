@@ -148,7 +148,7 @@ async def test_pending_direction_gets_reprepared_as_explicitly_undetermined_stud
         preparations = [p.content for p in returns if p.tool_name == "prepare_company_view"]
         repairs = [p for m in messages for p in m.parts if isinstance(p, RetryPromptPart) and "research_publication_pending_premises" in str(p.content)]
         revised = bool(repairs)
-        if not preparations or (revised and len(preparations) == 1):
+        if not preparations or (revised and preparations[-1]["candidate"]["recommendation"]["business_view"] != "undetermined"):
             claim = source_claim.model_copy(update={"materiality": "context", "text": (TextNode(type="text", text="Saved cash is pending verification and supports no business or price direction."),)}) if revised else source_claim
             business = CompanyViewInput(case_ref=candidate.thesis.case_ref, question_scope="Company study with explicit verification gaps",
                 change_reason="Candidate sources cannot support direction", assessed_dimensions=plan.dimensions,
@@ -169,7 +169,8 @@ async def test_pending_direction_gets_reprepared_as_explicitly_undetermined_stud
         prepared = (await session.scalars(select(ToolAction).where(ToolAction.task_id == str(task.id)))).all()
         errors = [e.payload for e in await TaskService(session).get_events(task.id) if e.type == "error"]
         assert task.status == TaskStatus.SUCCEEDED, (task.stop_reason, errors, [(a.intent_key, a.result) for a in prepared if a.intent_key == "completion:publish"])
-        assert len([a for a in prepared if a.parameters.get("tool") == "prepare_company_view"]) == 2
+        assert len([a for a in prepared if a.parameters.get("tool") == "prepare_company_view" and a.state == "committed"]) == 1
+        assert task.usage.tool_calls == 3  # saved plan, rejected preparation, revised preparation
         row = await session.get(SavedEvidence, (str(evidence.id), evidence.revision))
         assert row.payload["verification"] == "candidate"
 

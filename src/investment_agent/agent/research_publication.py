@@ -8,7 +8,11 @@ from pydantic import Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.agent.execution import ExecutionDeniedError, ExecutionGrant
+from investment_agent.agent.execution import (
+    ExecutionDeniedError,
+    ExecutionGrant,
+    ResearchValidationError,
+)
 from investment_agent.agent.observation import effective_cutoff
 from investment_agent.agent.tasks import ActionResult, fingerprint
 from investment_agent.agent.tools import ToolRegistration
@@ -171,6 +175,12 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
         if claim.kind == "fact" and not claim.support_refs:
             verified = False
         claims.append(claim.model_copy(update={"id": uuid5(operation, f"claim:{index}"), "verification": "verified" if verified else "pending"}))
+    if any(c.materiality == "critical" and c.verification != "verified" for c in claims):
+        # Return bounded native correction feedback before echoing an invalid
+        # candidate and its full material set into all subsequent requests.
+        # The publication gate still rechecks the eventual prepared revision.
+        raise ResearchValidationError("research_publication_pending_premises", "claims",
+            "关键主张依赖的保存来源仍待核验，当前观点无法发布。请修订 prepare_company_view：无法证实方向时将 business_view 与 price_view 设为 undetermined，明确已读材料、核验缺口及风险；只有不再支撑方向的候选材料可作为明确标注的 context。不得把原方向保留并仅降低主张的重要性，也不得自行提升来源核验状态。")
     now = datetime.now(UTC)
     origin = ObjectRef(kind="task", id=task_id, revision=1)
     metadata: dict[str, Any] = {"revision": 1, "actor": "research_service", "created_at": now, "origin_ref": origin}
