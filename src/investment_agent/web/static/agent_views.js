@@ -173,7 +173,7 @@ export function bootAgentViews() {
     for(const r of recommendations)body.append(art('查看正式公司观点 · 版本 '+r.revision,()=>opinionPage([r])));
     if(recommendations.length>1)body.append(art('并列查看引用的观点',()=>opinionPage(recommendations)));
     if(!taskRefs.size)body.append(el('p',{},'发送问题后，这里会显示研究进展和保存的依据。'));
-    for(const t of [...taskRefs.values()].reverse()){
+    for(const t of [...taskRefs.values()].sort((a,b)=>(b.created_at || '').localeCompare(a.created_at || '') || b.id.localeCompare(a.id))){
       const section=el('section',{class:'agent-conversation-progress','data-task-id':t.id});
       section.append(art(`查看研究过程 · ${label(t.status)}`,()=>taskPage(t.id)));body.append(section);
       const key=t.id+':'+JSON.stringify(t.artifact_refs || []);
@@ -181,9 +181,11 @@ export function bootAgentViews() {
       try{
         const progress=await progressReads.get(key);if(!alive(token))return;
         const item=progress.at(-1),p=item?.progress || item;
-        if(!p){section.append(el('p',{},'尚未保存核查记录；任务状态：'+label(t.status)));continue;}
+        const materials=[...new Map([...(t.artifact_refs || []),...(p?.fact_refs || []),...(p?.counter_refs || [])].filter(r=>['evidence','calculation'].includes(r.kind)).map(r=>[refText(r),r])).values()];
+        if(materials.length){const saved=el('details',{class:'agent-collected-materials'});saved.append(el('summary',{},`已保存材料 ${materials.length} 项（含候选或缺失记录）`));refs(saved,materials);section.append(saved);}
+        if(!p){section.append(el('p',{},'尚未保存核查结论；任务状态：'+label(t.status)));continue;}
         section.append(el('h3',{},p.question || '本次问题研究'));
-        section.append(el('p',{},`已完成核查 ${(p.completed_steps || []).length} 项 · 保存依据 ${(p.fact_refs || []).length} 项 · 反证 ${(p.counter_refs || []).length} 项`));
+        section.append(el('p',{},`已完成核查 ${(p.completed_steps || []).length} 项 · 结论引用 ${(p.fact_refs || []).length} 项 · 反证 ${(p.counter_refs || []).length} 项`));
         for(const d of p.dimensions || [])section.append(el('p',{},`${label(d.dimension)}：${label(d.status)}${d.reason?' · '+d.reason:''}`));
         lines(section,'已完成核查',p.completed_steps);
         const gaps=[...(p.gaps || []),...(p.limitations || [])];

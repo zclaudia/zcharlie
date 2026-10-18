@@ -27,6 +27,7 @@ try {
     await page.waitForFunction(()=>document.querySelector('.agent-conversation-progress')?.innerText.includes('读取保存的现金证据'));
     assert.match(await page.locator('.agent-conversation-progress').first().innerText(),/仍需现金流附注/);
     assert.ok(await page.locator('.agent-conversation-progress [data-ref-id]').count());
+    assert.match(await page.locator('.agent-collected-materials summary').first().innerText(),/已保存材料 1 项（含候选或缺失记录）/);
     await page.getByRole('button',{name:'公司档案',exact:true}).click();await page.locator(`[data-case-id="${fixture.case_id}"]`).click();
     await page.getByRole('heading',{name:'用户决定时间线'}).waitFor();assert.match(await page.locator('.agent-review-body').innerText(),/现金来源是否可靠/);assert.match(await page.locator('.agent-review-body').innerText(),/旧观点已被替代/);assert.match(await page.locator('.agent-review-body').innerText(),/1234500000.00 CNY/);assert.match(await page.locator('.agent-review-body').innerText(),/未知不等于未采纳/);
     await page.locator(`[data-ref-id="${fixture.recommendations[1].id}"]`).first().click();
