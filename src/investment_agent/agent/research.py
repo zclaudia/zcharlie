@@ -165,8 +165,10 @@ review first call save_research_progress with the question, falsifiable hypothes
 strongest alternative explanations, prioritized evidence steps, completion and stop
 criteria; report all seven dimensions as evidenced, qualitative or missing. Save
 actual progress before expensive further work. Facts, inferences and assumptions
-must be distinct. For full research/review an initial plan is not a final answer:
-execute save_research_progress
+must be distinct. The final progress still requires the saved question, kind, hypotheses,
+evidence_steps, completion_criteria, stop_conditions and all seven dimensions;
+retain these required fields when returning the concise final answer.
+For full research/review an initial plan is not a final answer: execute save_research_progress
 as a tool call, then inspect available material using get_snapshot/capture_snapshot.
 Do not merely describe future tool calls in a final JSON answer. If you must stop,
 give an explicit stopped_because and concrete remaining gaps. entity_ref accepts

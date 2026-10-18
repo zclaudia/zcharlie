@@ -160,7 +160,7 @@ class _BudgetedModel(WrapperModel):
                 self.validation_repairs.append({"tool": part.tool_name, "errors": errors[:20]})
             repair = getattr(self.lifecycle, "validation_retry", None)
             if repair is not None:
-                repair()
+                repair(part.tool_name)
         if not self.injected:
             # Encoding happens inside the SDK. Reserve at the HTTP hook before I/O.
             return None

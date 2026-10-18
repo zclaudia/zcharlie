@@ -104,12 +104,19 @@ class _RequestBudget:
         self.reservations: list[UUID] = []
         self.output_repair_pending = False
         self.native_validation_retries = 0
+        self.native_validation_retries_by_scope: dict[str, int] = {}
 
-    def validation_retry(self) -> None:
+    def validation_retry(self, tool_name: str | None = None) -> None:
         # Native schema validation happens before our business/output callback.
         # Give its bounded corrections the same stagnation treatment as output
         # repair; all request/token/time/tool/permission checks still run.
-        if self.native_validation_retries < 2:
+        # Native retries belong to each tool/output validator. A preparation
+        # correction must not consume the final-output validator's allowance.
+        # Framework retries and the shared task/day ledger remain authoritative.
+        scope = tool_name or "<output>"
+        used = self.native_validation_retries_by_scope.get(scope, 0)
+        if used < 2:
+            self.native_validation_retries_by_scope[scope] = used + 1
             self.native_validation_retries += 1
             self.output_repair_pending = True
 

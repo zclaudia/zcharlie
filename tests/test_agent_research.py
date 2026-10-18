@@ -934,6 +934,27 @@ async def test_two_bounded_output_repairs_do_not_get_misclassified_as_research_s
     assert task.usage.input_tokens == 60 and task.usage.output_tokens == 30
 
 
+@pytest.mark.asyncio
+async def test_tool_schema_repairs_do_not_consume_final_output_repair_allowance(conversation_db):
+    receipt = await submit(await new_conversation())
+    turns = 0
+
+    def model(messages, info):
+        nonlocal turns
+        turns += 1
+        if turns <= 3:
+            business = {} if turns < 3 else progress(answered=False).model_dump(mode="json")
+            return ModelResponse([ToolCallPart("save_research_progress", {"business": business},
+                tool_call_id=f"save-{turns}")], usage=RequestUsage(input_tokens=20, output_tokens=10))
+        if turns < 6:
+            return ModelResponse([TextPart('{"progress":{}}')], usage=RequestUsage(input_tokens=20, output_tokens=10))
+        return response(ResearchOutput(progress=progress()))
+
+    task = await run(receipt, FunctionModel(model), base(agent_retries=2))
+    assert turns == task.usage.requests == 6 and task.status == TaskStatus.SUCCEEDED
+    assert task.usage.input_tokens == 120 and task.usage.output_tokens == 60
+
+
 def test_native_search_projection_preserves_risks_and_exact_refs_without_mutating_receipt():
     from copy import deepcopy
 
