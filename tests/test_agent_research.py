@@ -176,6 +176,43 @@ async def test_pending_direction_gets_reprepared_as_explicitly_undetermined_stud
 
 
 @pytest.mark.asyncio
+async def test_native_publication_preflight_repairs_review_before_any_formal_write(conversation_db):
+    from pydantic_ai.messages import RetryPromptPart
+
+    from investment_agent.agent.research_publication import CompanyViewInput, SemanticInput
+    from investment_agent.investor.publication import PublicationCandidate, SemanticAssessment
+    candidate, evidence, subject = await fixture()
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="深入研究", context_refs=(subject,)))
+    plan = full_progress(candidate.thesis.assessed_dimensions, fact_refs=(evidence,))
+    business = CompanyViewInput(case_ref=candidate.thesis.case_ref, question_scope="Company research with historical cash only",
+        change_reason="Initial bounded study", assessed_dimensions=plan.dimensions, claims=candidate.thesis.claims,
+        counter_case=candidate.thesis.counter_case, gaps=candidate.recommendation.gaps,
+        dependencies=candidate.recommendation.dependency_refs, business_view="undetermined", price_view="undetermined", sufficiency="bounded")
+    corrected = []
+    def model(messages, info):
+        returns = [p for m in messages for p in m.parts if isinstance(p, ToolReturnPart)]
+        if not any(p.tool_name == "save_research_progress" for p in returns):
+            return ModelResponse([ToolCallPart("save_research_progress", {"business": plan.model_dump(mode="json")})], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        if not any(p.tool_name == "prepare_company_view" for p in returns):
+            return ModelResponse([ToolCallPart("prepare_company_view", {"business": business.model_dump(mode="json")})], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        repaired = any(isinstance(p, RetryPromptPart) and "research_publication_requires_revision" in str(p.content) for m in messages for p in m.parts)
+        corrected.append(repaired)
+        prepared = next(p.content for p in returns if p.tool_name == "prepare_company_view")
+        exact = PublicationCandidate.model_validate(prepared["candidate"])
+        review = SemanticInput(preparation_ref=ObjectRef.model_validate(prepared["preparation_ref"]),
+            assessments=tuple(SemanticAssessment(claim_id=c.id, fact_relation="Only saved historical cash is established; no durability conclusion is asserted",
+                counter_evidence_relevance="Temporary working capital remains an untested alternative",
+                materiality_reason="Historical cash alone cannot establish durable returns",
+                issues=() if repaired else ("Durability was not established",)) for c in exact.thesis.claims),
+            checked_sources=(evidence,), unresolved_questions=(), conclusion="pass")
+        return response(ResearchOutput(progress=plan, semantic_review=review))
+    task = await run(receipt, FunctionModel(model))
+    assert corrected == [False, True] and task.status == TaskStatus.SUCCEEDED
+    assert not any(r.kind == "draft" for r in task.artifact_refs)
+
+
+@pytest.mark.asyncio
 async def test_numeric_text_and_foreign_refs_rejected(conversation_db):
     conversation = await new_conversation()
     receipt = await submit(conversation)

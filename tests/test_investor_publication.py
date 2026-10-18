@@ -107,6 +107,19 @@ async def test_missing_personal_mandate_only_blocks_explicitly_linked_views(publ
         assert ("mandate_revision_id" in check.field_errors) == linked
 
 
+@pytest.mark.asyncio
+async def test_preflight_reports_exact_publication_errors_without_writing_artifacts(publication_db):
+    candidate, _, _ = await fixture()
+    review = semantic(candidate)
+    review = review.model_copy(update={"assessments": (review.assessments[0].model_copy(update={"issues": ("Unresolved cash interpretation",)}),)})
+    async with session_scope() as session:
+        service = PublicationService(session)
+        check = await service.preflight(uuid4(), candidate, review)
+        assert "semantic_review.assessments.0" in check.field_errors
+        assert await session.scalar(select(func.count()).select_from(PublicationArtifact)) == 0
+        assert (await service.foundation.get_case("local_owner", candidate.thesis.case_ref.id)).current_recommendation_ref is None
+
+
 @pytest.mark.parametrize("failure", ["arabic", "chinese", "gap_number", "reason_number", "wrong_subject", "wrong_role", "wrong_path", "wrong_unit", "future", "unverified", "conflict", "method", "semantic", "semantic_issue", "missing_premise", "missing_dimension_gap", "missing_dependency", "insufficient_buy", "local", "review_before_cutoff"])
 @pytest.mark.asyncio
 async def test_failed_publication_retains_repairable_exact_draft(publication_db, failure):

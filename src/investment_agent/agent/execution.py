@@ -57,6 +57,7 @@ class ResearchValidationError(ExecutionDeniedError):
             "research_plan_is_not_final_answer",
             "research_counter_references_mismatch",
             "research_publication_pending_premises",
+            "research_publication_requires_revision",
         }
 
     def repair_message(self) -> str:

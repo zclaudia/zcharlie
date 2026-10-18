@@ -230,8 +230,12 @@ FCFE qualification is unavailable: do not substitute CFO-capex or fabricate DCF.
 Before publishing perform an explicit semantic review of every critical claim,
 its support, opposing material, effect if wrong and unresolved questions, binding
 candidate/material hashes and fixed method. Call prepare_company_view to receive
-the server-built candidate, exact material and preparation_ref; inspect these and
-return semantic_review bound to that preparation_ref
+the server-built candidate, exact material and preparation_ref; inspect them.
+A claim containing calculation results is inference,
+not historical fact; every numeric/entity node must also declare its exact ref
+in that claim's premises. Review issues must be resolved by revising the claim
+or its evidence before conclusion=pass; unresolved research gaps remain explicit.
+Return semantic_review bound to that preparation_ref
 only for full company research/revision; the controller may save a failed draft.
 A maintain review preserves the existing thesis; extend only when still valid and
 all exact critical dependencies were checked. Expired/restricted views need a new
@@ -645,10 +649,19 @@ class ResearchPolicy:
             raise ResearchValidationError("research_counter_references_mismatch", "critical_counter_evidence",
                 "关键反证必须逐项出现在已读回并核查的 progress.counter_refs；潜在风险或缺失材料应写入缺口，不得冒充已核查反证。请修正引用清单后重新提交。")
         if output.semantic_review is not None and output.semantic_review.conclusion == "pass":
-            candidate, _ = await reviewed_candidate(session, claim.task_id, output.semantic_review)
+            candidate, semantic = await reviewed_candidate(session, claim.task_id, output.semantic_review)
             if any(c.materiality == "critical" and c.verification != "verified" for c in candidate.thesis.claims):
                 raise ResearchValidationError("research_publication_pending_premises", "semantic_review.preparation_ref",
                     "准备的观点仍依赖待核验的关键来源，不能通过发布审查。请重新调用 prepare_company_view，依据实际来源修订观点，再审查新的 preparation_ref。无法证实方向时应明确暂不判断，说明已读材料、风险和缺口；不得只改审查结论或把支撑方向的关键前提降为背景。")
+            method = await task_method(session, claim.task_id)
+            publication = PublicationService(session, policy=PublicationPolicy(methods=(method.method_ref,)))
+            check = await publication.preflight(claim.task_id, candidate, semantic)
+            if check.failures:
+                paths = ", ".join(check.field_errors)
+                current = check.field_errors.get("dependency_refs.current", "")
+                dependency_hint = ("关键财务依赖已被更新报告期替代；需要当前经营判断时重新取证。若本次只陈述历史事实且不据此判断方向，应同时据实修订主张与依赖的重要性。" if "critical_financial_field_replaced" in current else "")
+                raise ResearchValidationError("research_publication_requires_revision", "semantic_review",
+                    "发布预检未通过，具体字段：" + paths + "。历史 fact 只能引用 evidence；含计算结果的主张应按实际推理使用 inference，所有内容节点必须声明对应依据。审查需具体说明事实关系、反证相关性和影响；未解决问题不能同时标为 pass。失效的关键依赖需重新取证并修订观点，不能保留原方向而仅降低重要性。" + dependency_hint + "候选观点变更须重新 prepare_company_view 并审查新的 preparation_ref；确实未能解决时提交 revise，保留草稿及具体缺口。")
         has_progress = await session.scalar(select(ToolAction.operation_id).where(ToolAction.task_id == str(claim.task_id), ToolAction.state == "committed").limit(1))
         if progress.kind in {"company_research", "review"} and not progress.stopped_because and not (progress.fact_refs or progress.counter_refs or any(d.refs for d in progress.dimensions) or has_progress):
             raise ResearchValidationError("research_plan_is_not_final_answer", "progress.stopped_because",

@@ -588,6 +588,17 @@ class PublicationService:
         await session.flush()
         return tuple(refs)
 
+    async def preflight(self, task_id: UUID, candidate: PublicationCandidate, semantic: SemanticReview) -> PublicationCheck:
+        """Read-only feedback; atomic publication repeats every check and lock."""
+        peer_context = await self._task_peer_context(task_id)
+        rule_context = await self._rule_review_context(task_id, semantic)
+        check, _ = await self.check(candidate, semantic, peer_context=peer_context, rule_context=rule_context)
+        limits = await self._dependency_limits(candidate.recommendation, datetime.now(UTC))
+        if limits:
+            fields = {**check.field_errors, "dependency_refs.current": "; ".join(limits)}
+            check = check.model_copy(update={"field_errors": fields, "failures": tuple(fields), "passed": ()})
+        return check
+
     @staticmethod
     def _claim_gate(claim: Claim, path: str, errors: dict[str, str], directional: bool) -> None:
         if not claim.text or not claim.impact_if_wrong.strip():
