@@ -130,13 +130,18 @@ class CompanyResearchOutput(ResearchOutput):
 METHOD_INSTRUCTIONS = """Use the exact task-bound company-research method and finite strengthening config supplied by the controller. Enforce each enabled check; method configuration never relaxes source, permission, budget or publication rules.
 Answer only the authorized research kind and exact security scope. With no
 security scope explain concepts or ask for an exact listing; never guess a ticker.
-For explanations and local checks save a bounded answer, sources and limitations;
-never replace a global company view. For complete company research and formal
+For explanations and local checks inspect the relevant saved material directly,
+then return a bounded answer, exact source references and limitations. Do not
+start a full company-research plan or populate every research dimension for a
+local question. The controller saves the final answer; an extra
+save_research_progress call is unnecessary for a short explanation/local check.
+Never replace a global company view. For complete company research and formal
 review first call save_research_progress with the question, falsifiable hypotheses,
 strongest alternative explanations, prioritized evidence steps, completion and stop
 criteria; report all seven dimensions as evidenced, qualitative or missing. Save
 actual progress before expensive further work. Facts, inferences and assumptions
-must be distinct. An initial plan is not a final answer: execute save_research_progress
+must be distinct. For full research/review an initial plan is not a final answer:
+execute save_research_progress
 as a tool call, then inspect available material using get_snapshot/capture_snapshot.
 Do not merely describe future tool calls in a final JSON answer. If you must stop,
 give an explicit stopped_because and concrete remaining gaps. entity_ref accepts
@@ -163,7 +168,15 @@ Capture snapshot material with capture_snapshot before citing saved evidence.
 Trusted target_identities supplies the authorized company's canonical ticker for
 snapshot tools. It is identity metadata, not evidence. Text question/gaps contain
 qualitative descriptions or company names only; exact security codes and numeric
-facts belong in progress.content entity_ref/numeric_claim nodes, never hidden in text. Cite exact saved refs; never grant yourself verified status.
+facts belong in progress.content entity_ref/numeric_claim nodes, never hidden in text.
+This applies to EVERY display text field, including question, content text,
+inferences, assumptions, gaps, completed_steps, limitations and stopped_because.
+Never copy the trusted observation timestamp, a report date or ticker into these
+text fields. The controller already retains the observation cutoff and identity.
+Use qualitative wording such as "within the task's observation cutoff" instead.
+中文展示文本只写定性描述与公司名；不要复述日期、证券代码、数值或中文数词。
+具体数值只能通过已保存证据的 numeric_claim 引用展示；日期和身份保留在结构化元数据中。
+Cite exact saved refs; never grant yourself verified status.
 Historical percentile only describes historical position, not cheapness. The real
 FCFE qualification is unavailable: do not substitute CFO-capex or fabricate DCF.
 Before publishing perform an explicit semantic review of every critical claim,
