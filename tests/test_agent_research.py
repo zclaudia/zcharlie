@@ -148,6 +148,8 @@ async def test_pending_direction_gets_reprepared_as_explicitly_undetermined_stud
         preparations = [p.content for p in returns if p.tool_name == "prepare_company_view"]
         repairs = [p for m in messages for p in m.parts if isinstance(p, RetryPromptPart) and "research_publication_pending_premises" in str(p.content)]
         revised = bool(repairs)
+        if revised:
+            assert "claims.0" in str(repairs[-1].content)
         if not preparations or (revised and preparations[-1]["candidate"]["recommendation"]["business_view"] != "undetermined"):
             claim = source_claim.model_copy(update={"materiality": "context", "text": (TextNode(type="text", text="Saved cash is pending verification and supports no business or price direction."),)}) if revised else source_claim
             business = CompanyViewInput(case_ref=candidate.thesis.case_ref, question_scope="Company study with explicit verification gaps",
