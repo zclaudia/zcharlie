@@ -76,6 +76,7 @@ class ExecutionContext:
     sessions: SessionFactory
     base: Settings
     phase: str = "run:v1"  # AG13 may supply a trusted stable phase/version.
+    reuse_sources: bool = False
 
 
 class TrustedTools:
@@ -241,6 +242,12 @@ class TrustedTools:
                         raise ExecutionDeniedError("invalid_trusted_context")
                     if self.context.phase == "research:v1":
                         async with self.context.sessions() as session:
+                            if self.context.reuse_sources and spec.name != "save_research_progress":
+                                from investment_agent.agent.research_publication import (
+                                    preparation_ready,
+                                )
+                                if not await preparation_ready(session, self.context.claim.task_id):
+                                    return None
                             headroom = await BudgetService(session, self.context.base).research_headroom(self.context.claim)
                         if headroom["finish_only"] and spec.name != "prepare_company_view":
                             return None

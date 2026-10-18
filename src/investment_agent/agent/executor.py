@@ -7,7 +7,7 @@ policy, and AG09 consumes saved material through its message/event service.
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -131,14 +131,12 @@ class _RequestBudget:
         planning = ("非收尾阶段先实际调用保存计划和取证工具。" if grant.research_kind in {"company_research", "review"}
                     else "局部核查与解释只读取直接相关材料，不扩展为完整研究；已有材料足够形成有界回答时立即收尾。")
         return ("Trusted remaining research resources: " + str(state) +
-                ". Preserve the conclusion reserve for synthesis and validation. "
-                "When finish_only is true, gathering tools and save_research_progress are unavailable. For full research/review, prepare_company_view remains available under its existing plan, authorization and publication checks: prepare and inspect a defensible scoped view before final semantic review. Otherwise return final JSON now; the controller saves final progress automatically. Conclude from inspected or recovered material, "
-                "separate candidate evidence from verified facts, explain the strongest alternative and unresolved gaps. "
-                "Return a concise final progress with stopped_because if incomplete; do not return another plan. "
-                "Omit optional empty fields; keep enough output space for the final JSON. "
-                "中文文本字段仅写定性分析和公司名，禁止写证券代码、日期、数量、中文数词与内部编号；"
-                "例如写‘历史估值窗口’而不是‘五年窗口’，写公司名而不是代码。数字只能使用可解析的 numeric_claim 引用。"
-                + planning + "收尾阶段停止取证和保存进展；完整研究可准备公司观点并显式评审，随后返回最终 JSON，由控制器保存结论。已恢复的证据可直接分析，无需重新取证。")
+                ". Preserve conclusion reserve. finish_only hides gathering/save-progress tools; full research "
+                "may still prepare_company_view under the existing plan/publication gates, then return final "
+                "progress plus semantic_review. The controller saves the final answer. Reuse inspected sources, "
+                "keep candidate quality and exact refs; explicit gaps may support an undetermined view. "
+                "Text fields are qualitative only: numbers/dates/tickers require numeric_claim/entity_ref. "
+                "Omit optional empty fields, never required plan fields. If incomplete, explain stopped_because. " + planning)
 
     async def reserve(self, estimated_input: int) -> UUID:
         output = self.config.values["agent_max_tokens"]
@@ -186,7 +184,6 @@ class AgentExecutor:
     async def __call__(self, claim: TaskClaim, ctx: JobContext) -> JobOutcome:
         del ctx  # worker owns heartbeat/retry; executor owns task checkpoint boundaries.
         execution = ExecutionContext(claim, self.sessions, self.base, self.specification.phase)
-        tools = TrustedTools(execution, self.registrations)
         try:
             async with self.sessions() as session:
                 grant, settings = await check_boundary(session, claim, self.base)
@@ -205,6 +202,9 @@ class AgentExecutor:
                 await TaskService(session).append_event(claim.task_id, claim.attempt_id, "step_started",
                     {"step_id": str(uuid4()), "summary": "Executing authorized agent phase"})
             # Read/reconcile durable effects before constructing the native run.
+            from investment_agent.agent.context import reusable_context_sources
+            execution = replace(execution, reuse_sources=bool(reusable_context_sources(instructions)))
+            tools = TrustedTools(execution, self.registrations)
             await tools.recover()
             if checkpoint.get("history") and checkpoint.get("memory_revision", 0) != grant.memory_revision:
                 raise ExecutionDeniedError("memory_context_changed_rebuild_required")

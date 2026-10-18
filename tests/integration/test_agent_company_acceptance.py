@@ -291,7 +291,8 @@ async def test_default_native_worker_authorized_identity_reads_exact_source(conv
             ticker="600001.SH" if wrong_scope else context["target_identities"][0]["canonical_ticker"]
             msg={"role":"assistant","content":None,"tool_calls":[{"id":"identity-read","type":"function","function":{"name":"get_snapshot","arguments":json.dumps({"business":{"ticker":ticker,"field":"operating_cash_flow","as_of":context["observation_cutoff"],"report_period":"2025-12-31"}})}}]}
         else:
-            returned=next(m["content"] for m in body["messages"] if m["role"]=="tool")
+            from tests.support.research import wire_results
+            returned=json.dumps(wire_results(body, "get_snapshot"))
             assert "123.45" in returned if historical else "9999" in returned
             plan=full_progress(candidate.thesis.assessed_dimensions, answered=False, gaps=("官方核验材料仍不足",))
             msg={"role":"assistant","content":ResearchOutput(progress=plan).model_dump_json()}

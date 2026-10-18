@@ -831,15 +831,16 @@ async def test_http_company_plan_capture_conclusion_with_reserved_headroom(conve
         else:
             assert len(bodies) == 3
             assert {t['function']['name'] for t in body.get('tools', [])} == ({'prepare_company_view'} if research_kind == 'company_research' else set())
-            captured = next(json.loads(m['content']) for m in body['messages'] if m['role'] == 'tool' and 'materials' in m['content'])
+            from tests.support.research import wire_results
+            receipts = wire_results(body, 'capture_snapshot')
+            captured = next(r for r in receipts if any(m['record'].get('value', {}).get('value') is not None for m in r['materials']))
             record = captured['materials'][0]['record']
             assert record['verification'] == 'candidate' and record['value']['value'] is not None
             material = captured['materials'][0]
             assert material['eligibility']['fact_reference_allowed'] is True
             assert material['numeric_claim']['ref'] == {**material['ref'], 'field_path': 'value'}
             assert material['numeric_claim']['role'] == 'historical_fact'
-            missing = [m for item in body['messages'] if item['role'] == 'tool' and 'materials' in item['content']
-                       for m in json.loads(item['content'])['materials'] if not m['record'].get('value') or m['record']['value']['value'] is None]
+            missing = [m for item in receipts for m in item['materials'] if not m['record'].get('value') or m['record']['value']['value'] is None]
             assert missing and all(not m['eligibility']['fact_reference_allowed'] and 'numeric_claim' not in m for m in missing)
             final = plan.model_copy(update={'fact_refs': tuple(ObjectRef.model_validate(r) for r in captured['refs']),
                 'inferences': ('A visible quote establishes price availability but cannot establish durable business value.',),

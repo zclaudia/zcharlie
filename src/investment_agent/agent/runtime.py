@@ -36,7 +36,7 @@ from pydantic_ai.toolsets import AbstractToolset
 from pydantic_ai.usage import RunUsage, UsageLimits
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.agent.context import project_history
+from investment_agent.agent.context import project_history, reusable_context_sources
 from investment_agent.agent.model import AgentModelConfig, HTTPTrace, build_agent, create_model
 from investment_agent.investor.common import FieldError
 from investment_agent.storage.models.agent import AgentModelRun
@@ -121,13 +121,14 @@ class _BudgetedModel(WrapperModel):
     """
 
     def __init__(self, wrapped: Model, lifecycle: RequestLifecycle, trace: HTTPTrace,
-                 injected: bool) -> None:
+                 injected: bool, known_sources: tuple[dict[str, Any], ...] = ()) -> None:
         super().__init__(wrapped)
         self.lifecycle, self.trace, self.injected = lifecycle, trace, injected
         self.active: UUID | None = None
         self.fixture_usage: list[dict[str, int] | None] = []
         self.projection_sizes: dict[str, int] = {}
         self.validation_repairs: list[dict[str, Any]] = []
+        self.known_sources = known_sources
 
     async def before_send(self) -> None:
         assert self.active is not None
@@ -217,7 +218,7 @@ class _BudgetedModel(WrapperModel):
             if self.injected:
                 await self.before_send()
                 sent = True
-            projected = messages if self.injected else project_history(messages)
+            projected = messages if self.injected else project_history(messages, known_sources=self.known_sources)
             self.projection_sizes = {"native_history_bytes": len(ModelMessagesTypeAdapter.dump_json(messages)),
                                      "projected_history_bytes": len(ModelMessagesTypeAdapter.dump_json(projected))}
             result = await self.wrapped.request(projected, model_settings, model_request_parameters)
@@ -241,7 +242,7 @@ class _BudgetedModel(WrapperModel):
             if self.injected:
                 await self.before_send()
                 sent = True
-            projected = messages if self.injected else project_history(messages)
+            projected = messages if self.injected else project_history(messages, known_sources=self.known_sources)
             try:
                 async with self.wrapped.request_stream(projected, model_settings, model_request_parameters, run_context) as stream:
                     yield stream
@@ -305,7 +306,8 @@ async def run_agent(
         if model is None:
             model, client = create_model(config, trace, transport=transport)
         if request_lifecycle is not None:
-            guarded = _BudgetedModel(model, request_lifecycle, trace, injected)
+            guarded = _BudgetedModel(model, request_lifecycle, trace, injected,
+                                     known_sources=reusable_context_sources(instructions))
             async def before_send() -> None:
                 if before_model_request is not None:
                     await before_model_request()

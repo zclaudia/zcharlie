@@ -13,6 +13,24 @@ from investment_agent.storage.database import session_scope
 from tests.support.conversations import base
 
 
+def wire_results(body, tool_name):
+    """Read native and losslessly projected receipts from the actual HTTP body."""
+    import json
+
+    from investment_agent.agent.context import unpack_values
+    results = []
+    for message in body["messages"]:
+        content = message.get("content")
+        if not isinstance(content, str):
+            continue
+        if message["role"] == "tool" and message.get("name") == tool_name:
+            results.append(json.loads(content))
+        elif message["role"] == "user" and content.startswith("Completed exchange journal."):
+            rows = unpack_values(json.loads(content.split("\n", 1)[1]))
+            results.extend(row["result"] for row in rows if row.get("tool") == tool_name and "result" in row)
+    return results
+
+
 def progress(kind="explanation", **updates):
     data = dict(kind=kind, question="Explain the bounded question", content=(TextNode(type="text", text="The available material has limits."),), answered=True,
         limitations=("This is a bounded answer, not a company-wide judgment.",))

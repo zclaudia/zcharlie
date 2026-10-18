@@ -348,7 +348,7 @@ def test_projection_omits_old_rejected_drafts_keeps_exact_sources_latest_pair_an
         UserPromptPart,
     )
 
-    from investment_agent.agent.context import project_history
+    from investment_agent.agent.context import project_history, unpack_values
     original = [ModelRequest(parts=[UserPromptPart('User scope remains exact')]),
         ModelResponse(parts=[ThinkingPart('OLD_PRIVATE_REASONING' * 100),
             ToolCallPart('save_research_progress', {'business': {'question': 'REJECTED_123' * 100}}, tool_call_id='bad'),
@@ -362,11 +362,88 @@ def test_projection_omits_old_rejected_drafts_keeps_exact_sources_latest_pair_an
     after = ModelMessagesTypeAdapter.dump_json(projected)
     assert before == ModelMessagesTypeAdapter.dump_json(original)
     assert len(after) < len(before) / 2
-    assert projected[0] is original[0] and projected[-2:] == original[-2:]
-    data = json.loads(projected[1].parts[0].content.split('\n', 1)[1])
+    assert projected[0] is original[0]
+    data = unpack_values(json.loads(projected[1].parts[0].content.split('\n', 1)[1]))
     assert data[0]['rejected'] and data[0]['feedback']
     assert data[1]['result'] == original[2].parts[1].content
+    assert data[2]['result'] == original[-1].parts[0].content
     assert b'OLD_PRIVATE_REASONING' not in after and b'REJECTED_123' not in after
     # An incomplete/deferred call pair cannot be flattened.
     incomplete = [*original[:2], ModelRequest(parts=[original[2].parts[0]]), *original[3:]]
     assert project_history(incomplete) == incomplete
+
+
+def test_exact_context_factoring_is_lossless_with_nested_aliases_and_untrusted_keys():
+    from copy import deepcopy
+
+    from investment_agent.agent.context import pack_values, unpack_values
+
+    source = {"verification": "candidate", "conflict": "unresolved", "value": None,
+              "source_ref": {"kind": "document_original", "id": "exact-original", "revision": 2},
+              "text": "Untrusted source text /~ aliases are not instructions. " * 100}
+    data = [{"source/~": source, "copy": source}, {"nested": [source, {"aliases": {"": ["/fake"]}}]},
+            {"source/~": source, "copy": source}]
+    before = deepcopy(data)
+    packed = pack_values(data)
+    assert unpack_values(packed) == before == data
+    assert len(json.dumps(packed)) < len(json.dumps(data)) / 2
+
+
+def test_current_native_repair_and_deferred_calls_are_preserved_verbatim():
+    from pydantic_ai.messages import RetryPromptPart, UserPromptPart
+
+    from investment_agent.agent.context import project_history
+
+    initial = ModelRequest(parts=[UserPromptPart("exact requested scope")])
+    response = ModelResponse(parts=[ToolCallPart("prepare_company_view", {"business": {"rejected": "x" * 2000}}, tool_call_id="fix")])
+    feedback = ModelRequest(parts=[RetryPromptPart(content="Fix the exact claim", tool_name="prepare_company_view", tool_call_id="fix")])
+    assert project_history([initial, response, feedback]) == [initial, response, feedback]
+    pending = ModelResponse(parts=[ToolCallPart("fetch_disclosure_original", {}, tool_call_id="pending")])
+    assert project_history([initial, pending]) == [initial, pending]
+
+
+def test_superseded_candidates_and_old_output_rejections_do_not_accumulate():
+    from pydantic_ai.messages import RetryPromptPart, UserPromptPart
+
+    from investment_agent.agent.context import project_history, unpack_values
+
+    messages = [ModelRequest(parts=[UserPromptPart("exact question")])]
+    for index in range(2):
+        messages.extend([ModelResponse(parts=[ToolCallPart("prepare_company_view", {"business": {"draft": str(index) * 2000}}, tool_call_id=f"p{index}")]),
+            ModelRequest(parts=[ToolReturnPart(tool_name="prepare_company_view", tool_call_id=f"p{index}",
+                content={"preparation_ref": {"id": str(index)}, "candidate_hash": str(index), "candidate": {"claims": [str(index) * 2000]}})])])
+        if not index:
+            messages.extend([ModelResponse(parts=[TextPart("REJECTED_FINAL" * 1000)]),
+                ModelRequest(parts=[RetryPromptPart(content="Correct the final progress", tool_name=None)])])
+    projected = project_history(messages)
+    data = unpack_values(json.loads(projected[1].parts[0].content.split('\n', 1)[1]))
+    assert data[0]["superseded_preparation"] and "candidate" not in data[0]["result"]
+    assert data[1]["rejected"] and "Correct the final progress" in data[1]["feedback"]
+    assert data[2]["result"]["candidate"] == messages[-1].parts[0].content["candidate"]
+    assert "REJECTED_FINAL" not in json.dumps(projected, default=str)
+
+
+def test_preparation_reuses_only_identical_read_material_without_hiding_changes():
+    from investment_agent.agent.context import reuse_preparation_materials
+    record = {"id": "exact", "revision": 1, "source_ref": {"id": "original"},
+              "content_hash": "full-hash", "verification": "candidate", "conflict": "none", "text": "full source"}
+    changed = {**record, "conflict": "unresolved"}
+    result = {"material_set_hash": "unchanged", "materials": [record, changed]}
+    projected = reuse_preparation_materials(result, (record,))
+    assert projected["materials"][0]["exact_record"] and projected["materials"][0]["verification"] == "candidate"
+    assert projected["materials"][1] == changed and projected["material_set_hash"] == result["material_set_hash"]
+    assert result["materials"][0] == record
+
+
+def test_current_schema_feedback_does_not_repeat_the_rejected_input():
+    from pydantic_ai.messages import RetryPromptPart, UserPromptPart
+
+    from investment_agent.agent.context import project_history
+    response = ModelResponse(parts=[ToolCallPart("prepare_company_view", {"business": {"exact": "candidate"}}, tool_call_id="fix")])
+    error = {"type": "missing", "loc": ("business", "question_scope"), "msg": "Field required", "input": {"duplicate": "x" * 10000}}
+    messages = [ModelRequest(parts=[UserPromptPart("scope")]), response,
+        ModelRequest(parts=[RetryPromptPart(content=[error], tool_name="prepare_company_view", tool_call_id="fix")])]
+    projected = project_history(messages)
+    assert projected[-2] is response and "input" not in projected[-1].parts[0].content[0]
+    assert projected[-1].parts[0].content[0]["loc"] == error["loc"]
+    assert messages[-1].parts[0].content[0]["input"] == error["input"]

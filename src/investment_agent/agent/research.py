@@ -212,6 +212,13 @@ retain a directional conclusion by relabelling its critical premises as context.
 Keep the prepared claim set small and the final answer concise. Do not echo raw
 page text or the prepared candidate JSON in final output; return only the final
 progress and the exact semantic review needed for this question.
+When reusable_sources are supplied, they have already been read at this task's
+cutoff. Use them directly, preserving their exact refs and quality. Do not repeat
+search, capture_snapshot or get_evidence for those same sources. Save the plan,
+inspect only specific decision-relevant gaps or changes, then prepare the view
+and return final progress plus semantic review. Do not add optional valuation
+calculations when their assumptions or qualification are unavailable. A complete
+study can explicitly record missing dimensions; never manufacture their evidence.
 critical_counter_evidence is only for exact sources already checked and included
 in progress.counter_refs, not a list of speculative risks or missing data.
 For a numeric_claim with role historical_fact, use the exact saved evidence UUID
@@ -372,6 +379,7 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
         filtered_context["memories"] = [m.model_dump(mode="json") for m in memory.memories if m.created_at <= cutoff]
     method = await task_method(session, claim.task_id)
     data = {"method_ref": method.method_ref.model_dump(mode="json"), "method_config": method.config.model_dump(mode="json"), "method_scope_policy": "Only exact single-listing company research/review can use a scoped method; comparison, portfolio and multiple-listing tasks retain baseline", "research_kind": grant.research_kind,
+        "peer_context_bound": grant.peer_context is not None,
         "scope_refs": [r.model_dump(mode="json") for r in grant.scope_refs],
         "admission_cutoff": task.binding.as_of.isoformat(), "observation_cutoff": (await effective_cutoff(session, task.id)).isoformat(),
         "current_research": grant.current_research, "context": filtered_context,
@@ -395,7 +403,23 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
             publication_ref = ObjectRef.model_validate(ref)
             saved_publication = await publications.artifact(publication_ref)
             if datetime.fromisoformat(saved_publication.payload["created_at"].replace("Z", "+00:00")) <= cutoff:
-                item["recommendation"] = (await publications.get_recommendation(publication_ref, at=cutoff)).model_dump(mode="json")
+                recommendation = await publications.get_recommendation(publication_ref, at=cutoff)
+                if grant.research_kind in {"company_research", "review"}:
+                    from investment_agent.agent.company_context import (
+                        prior_company_view,
+                        reuse_company_sources,
+                    )
+                    item["recommendation"] = prior_company_view(recommendation.recommendation, publication_ref)
+                    item["recommendation"]["status"] = recommendation.status
+                    item["recommendation"]["limitation_reasons"] = list(recommendation.limitation_reasons)
+                    item["recommendation"]["effective_valid_until"] = recommendation.effective_valid_until.isoformat()
+                    item["recommendation"]["effective_next_review_at"] = recommendation.effective_next_review_at.isoformat()
+                    item["recommendation"]["replacement_ref"] = recommendation.replacement_ref.model_dump(mode="json") if recommendation.replacement_ref else None
+                    item["reusable_sources"] = await reuse_company_sources(session, owner=grant.owner,
+                        subject=ObjectRef(kind="listing", id=case.listing_id, revision=1),
+                        cutoff=cutoff, recommendation=recommendation.recommendation)
+                else:
+                    item["recommendation"] = recommendation.model_dump(mode="json")
             else:
                 item["case"] = {"listing_ref": case.payload["listing_ref"], "historical_context_unavailable": True}
         views.append(item)
@@ -408,6 +432,9 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
     instructions = METHOD_INSTRUCTIONS
     if grant.research_kind != "portfolio_action":
         instructions = instructions.split("For explicitly admitted portfolio_action")[0]
+    if grant.research_kind in {"company_research", "review"}:
+        from investment_agent.agent.company_context import COMPANY_INSTRUCTIONS
+        instructions = COMPANY_INSTRUCTIONS
     return instructions + "\nTrusted current context:\n" + json.dumps(data, ensure_ascii=False, separators=(",", ":")), memory.stamp, memory.private_history_allowed
 
 
