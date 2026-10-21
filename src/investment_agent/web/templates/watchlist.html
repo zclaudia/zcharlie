@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/watchlist.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/watchlist.css') }}">{% endblock %}
 {% block appbar_actions %}
 <button type="button" class="icon-btn" data-overlay-open="watchlist-add-drawer" aria-controls="watchlist-add-drawer" aria-label="添加股票">{{ icon("plus", "ico", 21) }}</button>
 <button type="button" class="icon-btn" id="watchlist-refresh-proxy" aria-label="刷新全部">{{ icon("refresh", "ico", 20) }}</button>

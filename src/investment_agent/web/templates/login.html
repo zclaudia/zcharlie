@@ -4,7 +4,7 @@
 {% block body %}
 <main class="login-shell" id="main">
   <section class="login-card card">
-    <img class="login-brand-icon" src="/app/static/brand/icon-180.png" width="48" height="48" alt="zcharlie">
+    <img class="login-brand-icon" src="{{ static_url('brand/icon-180.png') }}" width="48" height="48" alt="zcharlie">
     <h1>登录研究台</h1>
     <p class="muted">输入与 API 相同的 API Key；密钥只用于服务端验证，不会写入 Cookie。</p>
     {% if error %}<p class="notice notice-error" role="alert">{{ error }}</p>{% endif %}

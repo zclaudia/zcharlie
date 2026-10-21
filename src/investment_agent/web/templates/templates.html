@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/templates.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/templates.css') }}">{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>规则模板</h1>

@@ -6,6 +6,7 @@ from investment_agent.web.session import (
     SESSION_COOKIE_NAME,
     create_session_token,
 )
+from investment_agent.web.static_assets import static_url
 
 
 def _login(client, api_key="secret", **kwargs):
@@ -70,8 +71,8 @@ def test_authenticated_shell_renders_nav_and_disclaimer(api_client):
         "/app/runs",
         "今日概览",
         "研究辅助，非投资建议",
-        "/app/static/app.css",
-        "/app/static/app.js",
+        static_url("app.css"),
+        static_url("app.js"),
     ):
         assert fragment in html
 

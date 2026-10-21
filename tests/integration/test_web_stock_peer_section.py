@@ -33,6 +33,7 @@ from investment_agent.industry_peers.contracts import (
     PeerContextStatus,
     PeerMetricStatus,
 )
+from investment_agent.web.static_assets import static_url
 from tests.support.peer_world import PEERS_JS, labels_object
 
 
@@ -53,8 +54,8 @@ def test_stock_page_declares_the_independent_peer_section(api_client):
     assert 'id="peer-context-bound"' in html
     assert 'id="peer-context-evidence"' in html
     # The section ships its own assets (CSP style-src 'self' forbids inline styles).
-    assert "/app/static/industry_peers.css" in html
-    assert '<script type="module" src="/app/static/industry_peers.js"></script>' in html
+    assert static_url("industry_peers.css") in html
+    assert f'<script type="module" src="{static_url("industry_peers.js")}"></script>' in html
 
 
 def test_peer_section_is_not_in_the_financial_branch(api_client):

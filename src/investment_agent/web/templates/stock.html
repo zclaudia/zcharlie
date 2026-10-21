@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/stock.css"><link rel="stylesheet" href="/app/static/pages/account_fit.css">{% if not financial %}
-<link rel="stylesheet" href="/app/static/pages/supplemental_rules.css">
-<link rel="stylesheet" href="/app/static/industry_peers.css">{% endif %}{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/stock.css') }}"><link rel="stylesheet" href="{{ static_url('pages/account_fit.css') }}">{% if not financial %}
+<link rel="stylesheet" href="{{ static_url('pages/supplemental_rules.css') }}">
+<link rel="stylesheet" href="{{ static_url('industry_peers.css') }}">{% endif %}{% endblock %}
 {% block mobile_back %}<a href="/app/watchlist">观察池</a>{% endblock %}
 {% block content %}
 {% if financial %}
@@ -379,7 +379,7 @@
   <a class="btn btn-lg" href="/app/agent?ticker={{ ticker }}">{{ icon("agent", "ico", 18) }}问 AI</a>
   <button type="button" class="btn btn-lg btn-primary" data-overlay-open="stock-run-drawer">{{ icon("runs", "ico", 18) }}运行研究</button>
 </div>
-<script type="module" src="/app/static/industry_peers.js"></script>
+<script type="module" src="{{ static_url('industry_peers.js') }}"></script>
 {% endif %}
 {% if not financial %}
 <section class="card account-fit-card" id="account-fit-root" data-listing-id="{{ listing_id or '' }}" data-listing-ticker="{{ ticker }}" data-listing-name="{{ financial.company_name if financial else ticker }}">

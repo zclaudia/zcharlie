@@ -23,13 +23,15 @@ const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 
 /// 静态资源缓存策略：WebView 每次导航都会重新请求 `/app/static`，而安卓
 /// WebView 对拦截（shouldInterceptRequest）响应不走 HTTP 缓存，这些请求会
-/// 全部落到网关按 IP 的限流桶里。协议 handler 维护一个进程内小缓存：
-/// 仅缓存 `/app/static/` 下未跟随重定向的 GET 200，TTL 取后端 `Cache-Control`
-/// 的 `max-age`（缺省 10 分钟，上限 1 天，`no-store/no-cache/private` 不缓存）。
+/// 全部落到网关。协议 handler 维护一个进程内小缓存：仅缓存 `/app/static/`
+/// 下未跟随重定向的 GET 200，TTL 取后端 `Cache-Control` 的 `max-age`（缺省
+/// 10 分钟，上限 1 天，`no-store/no-cache/private` 不缓存）。后端只给带内容
+/// 版本的 `/app/static/v/<version>/…` 发长 `max-age`，无版本 URL 是 `no-cache`；
+/// 错误响应（429/5xx 等）一律不缓存，否则一次限流会让页面坏 10 分钟。
 const STATIC_PREFIX: &str = "/app/static/";
 const DEFAULT_STATIC_TTL: Duration = Duration::from_secs(600);
 const MAX_STATIC_TTL: Duration = Duration::from_secs(86_400);
-const MAX_STATIC_ENTRIES: usize = 64;
+const MAX_STATIC_ENTRIES: usize = 128;
 const MAX_STATIC_BODY_BYTES: usize = 4 * 1024 * 1024;
 
 type StaticCache = HashMap<String, (Instant, tauri::http::Response<Vec<u8>>)>;
@@ -95,13 +97,59 @@ pub(crate) fn load_pairing_context(app: &tauri::AppHandle) -> Result<PairingCont
     })
 }
 
+/// 配对的进程内缓存：keystore 每次读取都要经 UI 主线程做一次 Android Keystore
+/// 解密（模拟器实测 ~12ms/次），而每个 WebView 请求都要读配对。JS 侧写入/删除
+/// 配对后调 `invalidate_pairing_cache` 清空；代次号防止失效前已开始的 keystore
+/// 读取在失效之后把旧配对写回缓存。
+#[derive(Default)]
+struct PairingCache {
+    generation: u64,
+    pairing: Option<Pairing>,
+}
+
+impl PairingCache {
+    fn invalidate(&mut self) {
+        self.generation += 1;
+        self.pairing = None;
+    }
+
+    /// 只有读取期间没有发生失效（代次未变）才回填。
+    fn fill(&mut self, generation: u64, pairing: Pairing) {
+        if self.generation == generation {
+            self.pairing = Some(pairing);
+        }
+    }
+}
+
+fn pairing_cache() -> std::sync::MutexGuard<'static, PairingCache> {
+    static CACHE: OnceLock<Mutex<PairingCache>> = OnceLock::new();
+    CACHE
+        .get_or_init(|| Mutex::new(PairingCache::default()))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[tauri::command]
+pub fn invalidate_pairing_cache() {
+    pairing_cache().invalidate();
+}
+
 fn read_pairing(app: &tauri::AppHandle) -> Option<Pairing> {
+    let generation = {
+        let cache = pairing_cache();
+        if let Some(pairing) = &cache.pairing {
+            return Some(pairing.clone());
+        }
+        cache.generation
+    };
     let response = tauri_plugin_secure_keystore::SecureKeystoreExt::secure_keystore(app)
         .get_item(tauri_plugin_secure_keystore::ItemKey {
             key: STORE_KEY.to_string(),
         })
         .ok()?;
-    serde_json::from_str(&response.value?).ok()
+    let pairing: Pairing = serde_json::from_str(&response.value?).ok()?;
+    pairing_cache().fill(generation, pairing.clone());
+    Some(pairing)
 }
 
 fn client() -> &'static reqwest::Client {
@@ -430,7 +478,10 @@ fn cache_lookup(cache: &mut StaticCache, key: &str) -> Option<tauri::http::Respo
 }
 
 fn cache_store(cache: &mut StaticCache, key: &str, response: &tauri::http::Response<Vec<u8>>, ttl: Duration) {
-    if ttl.is_zero() || response.body().len() > MAX_STATIC_BODY_BYTES {
+    if ttl.is_zero()
+        || response.status() != tauri::http::StatusCode::OK
+        || response.body().len() > MAX_STATIC_BODY_BYTES
+    {
         return;
     }
     if !cache.contains_key(key) && cache.len() >= MAX_STATIC_ENTRIES {
@@ -661,6 +712,59 @@ mod tests {
         cache.insert("stale".to_string(), (Instant::now() - Duration::from_secs(1), response));
         assert!(cache_lookup(&mut cache, "stale").is_none());
         assert!(!cache.contains_key("stale"));
+    }
+
+    fn pairing(token: &str) -> Pairing {
+        Pairing {
+            gateway_url: GW.to_string(),
+            backend_id: ID.to_string(),
+            device_token: token.to_string(),
+        }
+    }
+
+    #[test]
+    fn pairing_cache_fills_and_invalidates() {
+        let mut cache = PairingCache::default();
+        let generation = cache.generation;
+        cache.fill(generation, pairing("zgd_a"));
+        assert_eq!(cache.pairing.as_ref().unwrap().device_token, "zgd_a");
+
+        cache.invalidate();
+        assert!(cache.pairing.is_none());
+        cache.fill(cache.generation, pairing("zgd_b"));
+        assert_eq!(cache.pairing.as_ref().unwrap().device_token, "zgd_b");
+    }
+
+    #[test]
+    fn pairing_cache_drops_reads_that_raced_an_invalidation() {
+        let mut cache = PairingCache::default();
+        // 读取开始时记下代次；读取期间 JS 侧改写了配对并清缓存。
+        let started_at = cache.generation;
+        cache.invalidate();
+        cache.fill(started_at, pairing("zgd_stale"));
+        assert!(cache.pairing.is_none(), "stale keystore read must not repopulate the cache");
+    }
+
+    #[test]
+    fn static_cache_skips_error_responses() {
+        let mut cache = StaticCache::new();
+        for status in [429u16, 404, 500, 502, 304] {
+            let response = tauri::http::Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(b"{}".to_vec())
+                .unwrap();
+            cache_store(&mut cache, "asset", &response, DEFAULT_STATIC_TTL);
+            assert!(cache.is_empty(), "status {status} must not be cached");
+        }
+    }
+
+    #[test]
+    fn static_ttl_caps_immutable_versioned_assets() {
+        // 后端给带版本的静态 URL 发一年 max-age；进程内缓存按上限 1 天收。
+        let versioned = cache_control_headers("public, max-age=31536000, immutable");
+        assert_eq!(static_ttl(&versioned), MAX_STATIC_TTL);
+        assert!(is_cacheable_path("/app/static/v/0123456789ab/app.js"));
     }
 
     #[test]

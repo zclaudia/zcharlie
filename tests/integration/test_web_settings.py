@@ -11,6 +11,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from investment_agent.web.static_assets import static_url
+
 STATIC = Path("src/investment_agent/web/static")
 DISCLAIMER = "研究辅助，非投资建议"
 KEY = {"X-API-Key": "secret"}
@@ -62,7 +64,7 @@ def test_settings_page_shell(api_client: TestClient) -> None:
         'data-state="loading"',
         "<noscript>",
         DISCLAIMER,
-        "/app/static/app.js",
+        static_url("app.js"),
     ):
         assert fragment in html, fragment
 

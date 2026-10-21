@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from investment_agent.web.static_assets import static_url
 from tests.unit._candidate_support import seed_promotable
 
 KEY = {"X-API-Key": "secret"}
@@ -72,7 +73,7 @@ def test_candidates_list_shell(api_client) -> None:
         'data-state="loading"',
         "<noscript>",
         DISCLAIMER,
-        "/app/static/app.js",
+        static_url("app.js"),
     ):
         assert fragment in html, fragment
     for status in ("open", "promoted", "dismissed", "expired"):

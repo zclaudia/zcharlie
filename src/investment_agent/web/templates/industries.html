@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/industries.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('industries.css') }}">{% endblock %}
 {% block content %}
 <header class="page-head">
   <h1>行业年度研究</h1>
@@ -13,5 +13,5 @@
 </section>
 <div id="industries-list" class="data-region" aria-live="polite"><p class="notice notice-loading">正在读取已保存名单…</p></div>
 <section id="industry-detail" class="data-region" aria-live="polite"></section>
-<script type="module" src="/app/static/industries.js"></script>
+<script type="module" src="{{ static_url('industries.js') }}"></script>
 {% endblock %}

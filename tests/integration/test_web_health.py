@@ -11,6 +11,8 @@ from typing import Any
 
 import pytest
 
+from investment_agent.web.static_assets import static_url
+
 STATIC = Path("src/investment_agent/web/static")
 TEMPLATES = Path("src/investment_agent/web/templates")
 DISCLAIMER = "研究辅助，非投资建议"
@@ -65,7 +67,7 @@ def test_health_page_shell(api_client) -> None:
         "数据健康",
         "<noscript>",
         DISCLAIMER,
-        '<script type="module" src="/app/static/app.js">',
+        f'<script type="module" src="{static_url("app.js")}">',
     ):
         assert fragment in html, fragment
     for section in SECTIONS:

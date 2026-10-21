@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/runs.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/runs.css') }}">{% endblock %}
 {% block appbar_actions %}<button type="button" class="icon-btn" id="runs-refresh-m" aria-label="刷新">{{ icon("refresh", "ico", 20) }}</button>{% endblock %}
 {% block content %}
 <header class="page-head">

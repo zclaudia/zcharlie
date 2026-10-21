@@ -36,13 +36,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ page_title or "个人投资研究台" }}{% endblock %} · zcharlie</title>
-  <link rel="icon" type="image/png" sizes="16x16" href="/app/static/brand/icon-16.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/app/static/brand/icon-32.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="/app/static/brand/icon-512.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/app/static/brand/icon-180.png">
-  <link rel="stylesheet" href="/app/static/app.css">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ static_url('brand/icon-16.png') }}">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ static_url('brand/icon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="512x512" href="{{ static_url('brand/icon-512.png') }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ static_url('brand/icon-180.png') }}">
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
   {% block page_css %}{% endblock %}
-  <script src="/app/static/nav.js"></script>
+  <script src="{{ static_url('nav.js') }}"></script>
 </head>
 <body class="{{ 'has-back' if _has_back else 'has-tabbar' }}{% block body_class %}{% endblock %}"{% if _embedded %} data-embedded="android"{% endif %}>
 {% block body %}
@@ -51,7 +51,7 @@
     <aside class="sidebar" aria-label="侧栏">
       <div class="sb-brand">
         <a class="brand" href="/app">
-          <img class="brand-icon" src="/app/static/brand/icon-64.png" width="28" height="28" alt="">
+          <img class="brand-icon" src="{{ static_url('brand/icon-64.png') }}" width="28" height="28" alt="">
           <span class="sb-name">zcharlie<small>个人研究台</small></span>
         </a>
         <button type="button" class="icon-btn sb-collapse" id="sb-collapse" aria-label="收起侧栏" aria-pressed="false">{{ icon("panel") }}</button>
@@ -208,8 +208,8 @@
     <div class="palette-foot"><span>↑↓ 选择</span><span>↵ 打开</span><span>Esc 关闭</span></div>
   </div>
 
-  <script type="module" src="/app/static/app.js"></script>
-  <script type="module" src="/app/static/shell.js"></script>
+  <script type="module" src="{{ static_url('app.js') }}"></script>
+  <script type="module" src="{{ static_url('shell.js') }}"></script>
 {% endblock %}
 </body>
 </html>

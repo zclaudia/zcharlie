@@ -52,6 +52,11 @@ from investment_agent.web.session import (
     session_is_valid,
     signing_material,
 )
+from investment_agent.web.static_assets import (
+    VERSIONED_PREFIX,
+    VersionedStaticFiles,
+    static_url,
+)
 
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -83,6 +88,7 @@ def _is_embedded(request: Request) -> bool:
 
 
 templates.env.globals["is_embedded"] = _is_embedded
+templates.env.globals["static_url"] = static_url
 
 router = APIRouter(prefix="/app", tags=["web"], include_in_schema=False)
 
@@ -275,6 +281,8 @@ def register_web(app: Any) -> None:
     app.add_middleware(WebSessionMiddleware)
     app.add_api_route("/", _root_redirect, methods=["GET"], include_in_schema=False)
     app.include_router(router)
+    # Before the plain mount, which would otherwise swallow /app/static/v/….
+    app.mount(VERSIONED_PREFIX, VersionedStaticFiles(), name="web_static_versioned")
     app.mount(
         "/app/static",
         StaticFiles(directory=str(WEB_DIR / "static")),

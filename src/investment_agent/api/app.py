@@ -143,8 +143,9 @@ class SecurityHeadersMiddleware:
             return
         path = str(scope.get("path", ""))
         is_web = path.startswith("/app")
-        # Static UI files carry no version in their URLs: make browsers
-        # revalidate (ETag -> 304) so an upgrade never runs stale JS modules.
+        # Unversioned static URLs: make browsers revalidate (ETag -> 304) so an
+        # upgrade never runs stale JS modules. Versioned /app/static/v/… URLs
+        # set their own Cache-Control (web/static_assets.py) and keep it.
         is_static = path.startswith("/app/static/")
 
         async def send_with_headers(message: Any) -> None:

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/candidates.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/candidates.css') }}">{% endblock %}
 {% block mobile_back %}<a href="/app/candidates">候选池</a>{% endblock %}
 {% block appbar_actions %}<a class="icon-btn" href="/app/agent?candidate={{ candidate_id }}" aria-label="在对话工作台讨论此候选">{{ icon("agent", "ico", 21) }}</a>{% endblock %}
 {% block content %}

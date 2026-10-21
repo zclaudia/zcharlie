@@ -337,7 +337,7 @@ try {
   await page.locator('#supplemental-items-root').waitFor();
   await page.getByText(/覆盖尚未完整|用户报告，尚未核验|没有可展示的逐规则应用/).first().waitFor({timeout: 10000});
   await page.getByText(/已读取范围：证券 600090；评估视角：company_research/).waitFor();
-  assert.equal(await page.locator('link[href="/app/static/pages/supplemental_rules.css"]').count(), 1);
+  assert.equal(await page.locator('link[href^="/app/static/v/"][href$="/pages/supplemental_rules.css"]').count(), 1);
   for (const width of [1440, 390]) {
     await page.setViewportSize({width, height: 950});
     await page.locator('#supplemental-items-root').scrollIntoViewIfNeeded();

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/settings.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/settings.css') }}">{% endblock %}
 {% block content %}
 <header class="page-head">
   <button type="button" id="settings-back" class="link-button settings-back" hidden>设置</button>

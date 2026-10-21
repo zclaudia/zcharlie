@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from investment_agent.web.static_assets import static_url
+
 STATIC = Path("src/investment_agent/web/static")
 
 
@@ -23,8 +25,8 @@ def test_candidate_page_has_an_independent_account_ranking_root(api_client) -> N
     assert response.status_code == 200
     assert 'id="candidate-ranking-root"' in response.text
     assert 'id="candidate-ranking-content"' in response.text
-    assert "/app/static/app.js" in response.text
-    assert "/app/static/pages/account_fit.css" in response.text
+    assert static_url("app.js") in response.text
+    assert static_url("pages/account_fit.css") in response.text
 
 
 def test_stock_page_has_account_fit_root_and_reads_existing_listing_id(api_client) -> None:
@@ -34,7 +36,7 @@ def test_stock_page_has_account_fit_root_and_reads_existing_listing_id(api_clien
     assert 'id="account-fit-root"' in response.text
     assert 'data-listing-id="' in response.text
     assert 'id="account-fit-content"' in response.text
-    assert "/app/static/app.js" in response.text
+    assert static_url("app.js") in response.text
 
 
 def test_ranking_confirmation_is_not_prechecked_and_history_is_closed_by_default() -> None:

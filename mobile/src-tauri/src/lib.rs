@@ -18,6 +18,7 @@ pub fn run() {
             bridge::move_task_to_back,
             bridge::proxy_request,
             bridge::stream_task_events,
+            gateway_proxy::invalidate_pairing_cache,
             is_debug_build,
         ])
         .register_asynchronous_uri_scheme_protocol("zcharlie", gateway_proxy::handle)

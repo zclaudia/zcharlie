@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/watchlist.css">
-<link rel="stylesheet" href="/app/static/pages/portfolio.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/watchlist.css') }}">
+<link rel="stylesheet" href="{{ static_url('pages/portfolio.css') }}">{% endblock %}
 {% block content %}
 {% include "_funnel_seg.html" %}
 <header class="page-head">

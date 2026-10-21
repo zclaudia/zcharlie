@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/methods.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/methods.css') }}">{% endblock %}
 {% block title %}研究方法{% endblock %}
 {% block content %}
 <div id="method-workbench" class="method-workbench">
@@ -77,5 +77,5 @@
     <span>离线重放经过原生模型边界；前瞻步骤影子检查评估后新任务的真实输出。只有前瞻步骤影子可供批准，两者都是工程检查，不能证明研究质量。新任务固定方法版本；已有任务与历史观点保留原版本。</span>
   </div>
 </div>
-<script type="module" src="/app/static/methods.js"></script>
+<script type="module" src="{{ static_url('methods.js') }}"></script>
 {% endblock %}

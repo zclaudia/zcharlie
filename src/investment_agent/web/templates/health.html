@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/health.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/health.css') }}">{% endblock %}
 {# 可折叠分区：桌面默认展开（卡片），手机默认折叠成一行列表（health.js 按断点设置 open）。 #}
 {% macro fold(sid, title, ico) -%}
 <section id="health-{{ sid }}" class="card card--flush health-section health-fold" hidden>

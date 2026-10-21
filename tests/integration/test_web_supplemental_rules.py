@@ -11,6 +11,7 @@ import pytest
 
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Company, Listing, Market
+from investment_agent.web.static_assets import static_url
 
 STATIC = Path("src/investment_agent/web/static")
 
@@ -29,8 +30,8 @@ def test_management_page_has_structured_controls_and_p2_boundary(api_client) -> 
     assert 'id="supplemental-event-form"' in response.text
     assert "不会改变基础分数" in response.text
     assert "不会标为“已核验”" in response.text
-    assert "/app/static/pages/supplemental_rules.css" in response.text
-    assert "/app/static/app.js" in response.text
+    assert static_url("pages/supplemental_rules.css") in response.text
+    assert static_url("app.js") in response.text
 
 
 @pytest.mark.asyncio
@@ -44,11 +45,11 @@ async def test_stock_page_uses_read_only_supplemental_panel_without_p1_changes(a
     response = api_client.get("/app/stocks/600406.SH")
     assert response.status_code == 200
     assert 'id="supplemental-items-root"' in response.text
-    assert '/app/static/pages/supplemental_rules.css' in response.text
+    assert static_url("pages/supplemental_rules.css") in response.text
     assert 'data-context="company_research"' in response.text
     assert "不改变财务基础评分" in response.text
     assert "研究可用状态会随来源和规则限制更新" in response.text
-    assert "/app/static/app.js" in response.text
+    assert static_url("app.js") in response.text
     # P3 binding/coverage provenance container beside the applications panel.
     assert 'id="supplemental-coverage-content"' in response.text
 

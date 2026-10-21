@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="/app/static/pages/agent.css">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/agent.css') }}">{% endblock %}
 {% block content %}
 <div id="agent-workbench" class="agent-workbench" data-tab="chat" data-pane="chat" data-drawer="open">
   <h1 class="sr-only">AI</h1>
