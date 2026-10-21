@@ -136,3 +136,65 @@ async def test_bars_empty_when_no_snapshots(api_client):
         "as_of": body["as_of"],
         "bars": [],
     }
+
+
+# ---- GET /market/bars?tickers=…: one request for a whole list page ---------------
+
+
+def test_batch_requires_auth(api_client):
+    assert api_client.get("/market/bars?tickers=600519.SH").status_code == 401
+
+
+async def test_batch_matches_single_ticker_bars_in_request_order(api_client):
+    await _seed("600519.SH", 1000)
+    await _seed("000001.SZ", 10)
+
+    response = api_client.get(
+        "/market/bars?tickers=000001.sz, 600519.SH,000001.SZ,300750.SZ&days=20", headers=H
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "baostock,tencent"
+    assert body["days"] == 20
+    assert datetime.fromisoformat(body["as_of"]).tzinfo is not None
+    # Normalised, de-duplicated, request order kept; unknown listings are reported, not dropped.
+    assert [item["ticker"] for item in body["items"]] == ["000001.SZ", "600519.SH", "300750.SZ"]
+    assert [item["found"] for item in body["items"]] == [True, True, False]
+    assert body["items"][2]["bars"] == []
+    for item in body["items"][:2]:
+        single = api_client.get(f"/market/{item['ticker']}/bars?days=20", headers=H).json()
+        assert item["bars"] == single["bars"]
+    assert [bar["close"] for bar in body["items"][1]["bars"]] == [
+        float(1000 + i) for i in range(130, 150)
+    ]
+
+
+async def test_batch_default_window_is_120(api_client):
+    await _seed("600519.SH", 1000)
+    body = api_client.get("/market/bars?tickers=600519.SH", headers=H).json()
+    assert body["days"] == 120
+    assert len(body["items"][0]["bars"]) == 120
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "",
+        "tickers=",
+        "tickers=,,",
+        "tickers=600519.SH,AAPL",
+        "tickers=600519.SH&days=4",
+        "tickers=600519.SH&days=1001",
+    ],
+)
+def test_batch_rejects_bad_requests(api_client, query: str):
+    assert api_client.get(f"/market/bars?{query}", headers=H).status_code == 422
+
+
+def test_batch_size_is_bounded(api_client):
+    from investment_agent.api.routes.market import MAX_BATCH_TICKERS
+
+    allowed = ",".join(f"{600000 + i}.SH" for i in range(MAX_BATCH_TICKERS))
+    assert api_client.get(f"/market/bars?tickers={allowed}", headers=H).status_code == 200
+    too_many = f"{allowed},{600000 + MAX_BATCH_TICKERS}.SH"
+    assert api_client.get(f"/market/bars?tickers={too_many}", headers=H).status_code == 422

@@ -231,10 +231,64 @@ def test_sparkline_component_and_mounts():
     assert "export async function fillSparklines" in ui
     for marker in ('viewBox: `0 0 ${SPARK_W} ${SPARK_H}`', 'preserveAspectRatio: "none"', "non-scaling-stroke", "spark-band", "spark-last", "spark-empty"):
         assert marker in ui, marker
+    market = (WEB_STATIC / "market.js").read_text(encoding="utf-8")
+    assert "/market/bars?tickers=" in market
     for module in ("watchlist.js", "candidates.js"):
         source = (WEB_STATIC / module).read_text(encoding="utf-8")
-        assert "/market/" in source, module
+        assert 'from "./market.js"' in source, module
+        assert "loadSparkBars" in source, module
         assert "fillSparklines" in source, module
+        # 列表迷你图走批量接口，不再逐行请求 /market/{ticker}/bars。
+        assert "bars?days=${SPARK_DAYS}" not in source, module
+
+
+def test_list_sparklines_load_in_one_batched_request():
+    uri = (WEB_STATIC / "market.js").resolve().as_uri()
+    script = f"""
+import assert from 'node:assert/strict';
+globalThis.document = {{ body: null }};
+const calls = [];
+let fail = false;
+globalThis.fetch = async (path) => {{
+  calls.push(path);
+  if (fail) throw new TypeError('network down');
+  const url = new URL(path, 'http://x');
+  const tickers = url.searchParams.get('tickers').split(',');
+  const items = tickers.map((t) => ({{ ticker: t, found: t !== '000002.SZ', bars: [{{ trade_date: '2026-10-20', close: 1 }}] }}));
+  const body = {{ provider: 'baostock,tencent', as_of: '2026-10-21T00:00:00Z', days: Number(url.searchParams.get('days')), items }};
+  return {{ status: 200, ok: true, headers: {{ get: () => 'application/json' }}, json: async () => body, text: async () => JSON.stringify(body) }};
+}};
+const m = await import({json.dumps(uri)});
+
+const one = await m.loadBarsMany(['600519.sh', '000001.SZ', '600519.SH', '', '000002.SZ'], 120);
+const firstCalls = calls.splice(0);
+
+const many = Array.from({{ length: 150 }}, (_, i) => `${{String(600000 + i)}}.SH`);
+const big = await m.loadBarsMany(many, 30);
+const bigCalls = calls.splice(0);
+
+const root = {{ querySelectorAll: () => ['600519.SH', '000001.SZ'].map((t) => ({{ getAttribute: () => t }})) }};
+const viaRoot = await m.loadSparkBars(root, 120);
+const rootCalls = calls.splice(0);
+fail = true;
+const failed = await m.loadSparkBars(root, 120);
+const empty = await m.loadSparkBars({{ querySelectorAll: () => [] }}, 120);
+console.log(JSON.stringify({{
+  firstCalls, oneKeys: [...one.keys()], missing: one.get('000002.SZ').found,
+  bigCalls: bigCalls.map((c) => new URL(c, 'http://x').searchParams.get('tickers').split(',').length),
+  bigSize: big.size, rootCalls: rootCalls.length, viaRoot: viaRoot.size,
+  failedSize: failed.size, emptySize: empty.size, callsAfterEmpty: calls.length,
+}}));
+"""
+    out = _run_node(script)
+    assert out["firstCalls"] == ["/market/bars?tickers=600519.SH%2C000001.SZ%2C000002.SZ&days=120"]
+    assert out["oneKeys"] == ["600519.SH", "000001.SZ", "000002.SZ"]
+    assert out["missing"] is False
+    assert out["bigCalls"] == [100, 50]
+    assert out["bigSize"] == 150
+    assert out["rootCalls"] == 1 and out["viaRoot"] == 2
+    assert out["failedSize"] == 0
+    assert out["emptySize"] == 0
 
 
 def test_sparkline_builds_expected_svg_structure():
@@ -542,7 +596,7 @@ def test_watchlist_metadata_autofill_ignores_superseded_requests():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js"],
+    ["api.js", "app.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")

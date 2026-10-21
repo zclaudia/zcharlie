@@ -40,6 +40,7 @@ import {
   templateLabel,
 } from "./format.js";
 import { humanizeText } from "./research_format.js";
+import { loadSparkBars } from "./market.js";
 import { mountPriceChart } from "./pricechart.js";
 import { aiStamp, fillSparklines, kpi, legend, scale, timeline } from "./ui.js";
 
@@ -508,14 +509,17 @@ function renderCandidateList(region) {
   const container = el("div", { class: "cand-list" });
   for (const candidate of items) container.appendChild(candidateItem(candidate));
   renderRegion(region, "ready", container);
-  fillSparklines(
-    container.querySelectorAll("[data-spark]"),
-    async (ticker) => {
-      const data = await get(`/market/${encodeURIComponent(ticker)}/bars?days=${SPARK_DAYS}`);
-      fillPriceSummary(container, ticker, data && data.bars);
-      return data;
-    },
-    { width: "100%", height: 56 }
+  const targets = container.querySelectorAll("[data-spark]");
+  loadSparkBars(container, SPARK_DAYS).then((byTicker) =>
+    fillSparklines(
+      targets,
+      async (ticker) => {
+        const data = byTicker.get(ticker.toUpperCase()) || null;
+        if (data) fillPriceSummary(container, ticker, data.bars);
+        return data;
+      },
+      { width: "100%", height: 56 }
+    )
   );
 }
 

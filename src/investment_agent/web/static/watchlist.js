@@ -24,6 +24,7 @@ import {
   zoneEventLine,
   zonesBlock,
 } from "./rule_review.js";
+import { loadSparkBars } from "./market.js";
 import { fillSparklines, thinBar } from "./ui.js";
 
 export const WATCHLIST_REGIONS = new Set(["watchlist-list"]);
@@ -35,18 +36,15 @@ const SPARK_MOBILE = { width: 76, height: 30 };
 const MOBILE_QUERY = "(max-width: 56rem)";
 const LONG_PRESS_MS = 520;
 
-export function loadBars(ticker, days) {
-  return get(`/market/${encodeURIComponent(ticker)}/bars?days=${days}`);
-}
-
 function sparkSlot(ticker, cls = "spark-slot") {
   return el("span", { class: `spark spark-pending ${cls}`.trim(), "data-spark": ticker, "aria-hidden": "true" });
 }
 
-function mountSparklines(root, days, options) {
+async function mountSparklines(root, days, options) {
   const targets = root.querySelectorAll("[data-spark]");
-  if (!targets.length) return Promise.resolve();
-  return fillSparklines(targets, (ticker) => loadBars(ticker, days), options);
+  if (!targets.length) return;
+  const byTicker = await loadSparkBars(root, days);
+  await fillSparklines(targets, async (ticker) => byTicker.get(ticker.toUpperCase()) || null, options);
 }
 
 function isMobile() {

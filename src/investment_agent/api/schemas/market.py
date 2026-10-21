@@ -19,3 +19,20 @@ class MarketBarsOut(BaseModel):
     provider: str
     as_of: datetime
     bars: list[MarketBar]
+
+
+class MarketBarsBatchItem(BaseModel):
+    """One requested ticker; ``found`` is false when no A-share listing exists."""
+
+    ticker: str
+    found: bool
+    bars: list[MarketBar]
+
+
+class MarketBarsBatchOut(BaseModel):
+    """Latest ``days`` closes for several listings at one ``as_of`` (request order)."""
+
+    provider: str
+    as_of: datetime
+    days: int
+    items: list[MarketBarsBatchItem]
