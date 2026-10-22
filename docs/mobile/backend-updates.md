@@ -46,3 +46,5 @@ Chromium 用隔离后端和模拟旧/新 APK 命令面验证刷新与降级；�
 - 首次重新进入研究台后，旧 APK 已加载检测脚本；页面与 `/app/release` 的版本均为 `27c28eff3cccfcdc0b50fe02`，版本清单响应为 `200` / `Cache-Control: no-store`。
 - 该 APK 调用 `bridge_capabilities` 返回命令不存在；网页正确协商为 `{bridge_version: 0, legacy: true}`。原有 `proxy_request` 仍成功读取生产 `/healthz`，返回功能提交版本。
 - 本记录作为随后的一次文档发布，用于继续验收旧 APK 的周期检测、未提交输入保护和安全空闲后的自动刷新。该阶段保持 APK 与页面安装状态不变，不手动刷新页面。
+- 后续文档发布 `baaeaad0470c` 后，旧 APK 自行提示有新版本并保留临时输入；处理完输入后自动重新加载。页面版本从 `27c28eff3cccfcdc0b50fe02` 变为 `a5711b9b09f6156061628813`，与生产清单一致，浏览器导航类型为 `reload`，本地刷新记录的目标版本也一致。
+- 验收前后 APK SHA-256、版本号和安装时间一致。复验使用系统触控与输入，避免程序化填值未触发 Android WebView 焦点事件而影响初始值采集。
