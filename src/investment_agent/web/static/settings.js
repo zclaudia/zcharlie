@@ -7,6 +7,7 @@ import { ApiError, get, lockWhileBusy, patch, post, renderRegion } from "./api.j
 import { clear, el, kvTable, table } from "./dom.js";
 import { formatDateTime, label } from "./format.js";
 import { localTime } from "./health.js";
+import { registerRefreshGuard } from "./refresh_state.js";
 
 export const SETTINGS_REGIONS = new Set(["settings-form", "settings-history", "settings-bootstrap"]);
 
@@ -161,6 +162,10 @@ function inputId(key) {
 function dirtyCount() {
   return state.edits.size;
 }
+
+// Topic navigation can unmount edited controls while keeping their unsaved
+// values in state. DOM-only edit tracking cannot see those fields.
+registerRefreshGuard("settings", () => dirtyCount() ? "有尚未保存的设置" : "");
 
 function placeTopic() {
   const section = state.sections.find((item) => item.id === state.place.sectionId) || null;

@@ -157,6 +157,8 @@ class SecurityHeadersMiddleware:
                     (b"referrer-policy", b"same-origin"),
                 ]
                 if is_web:
+                    if not is_static:
+                        extra.append((b"cache-control", b"no-store"))
                     extra.append(
                         (b"content-security-policy", WEB_CONTENT_SECURITY_POLICY.encode())
                     )

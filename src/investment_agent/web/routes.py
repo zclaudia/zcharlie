@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Annotated, Any, Final
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -45,6 +45,7 @@ from investment_agent.materials.context import (
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.reference import Listing
 from investment_agent.storage.repositories.listing import ListingRepository
+from investment_agent.web.release import web_release
 from investment_agent.web.session import (
     SESSION_COOKIE_NAME,
     create_session_token,
@@ -89,8 +90,15 @@ def _is_embedded(request: Request) -> bool:
 
 templates.env.globals["is_embedded"] = _is_embedded
 templates.env.globals["static_url"] = static_url
+templates.env.globals["web_release"] = web_release
 
 router = APIRouter(prefix="/app", tags=["web"], include_in_schema=False)
+
+
+@router.get("/release")
+async def release_manifest() -> JSONResponse:
+    """Session/embedded authentication is enforced by WebSessionMiddleware."""
+    return JSONResponse(web_release(), headers={"Cache-Control": "no-store"})
 
 _DISCLAIMER = "研究辅助，非投资建议"
 

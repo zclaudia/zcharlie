@@ -5,6 +5,8 @@
 import { get } from "./api.js";
 import { clear, el } from "./dom.js";
 import { DEBOUNCE_MS, searchStocks } from "./combobox.js";
+import { startReleaseMonitor } from "./release.js";
+import { supportsNative } from "./native_bridge.js";
 
 const STATUS_TAGS = { suspended: "停牌", delisted: "退市" };
 const COUNTS_KEY = "zc-shell-counts";
@@ -322,7 +324,9 @@ function wireAndroidBack() {
   const branch = () => {
     if (window.zcOverlay && window.zcOverlay.isOpen()) { window.zcOverlay.close(); return; }
     if (location.pathname !== "/app" && history.length > 1) { history.back(); return; }
-    internals.invoke("move_task_to_back").catch(() => {});
+    supportsNative("move_task_to_back").then(supported => {
+      if (supported) return internals.invoke("move_task_to_back");
+    }).catch(() => {});
   };
   try {
     const callback = internals.transformCallback(branch);
@@ -338,3 +342,4 @@ wireTopbar();
 wireEmbeddedBack();
 wireAndroidBack();
 loadCounts();
+startReleaseMonitor();

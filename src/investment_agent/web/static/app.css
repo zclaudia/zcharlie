@@ -1166,3 +1166,15 @@ a.stock-name:hover { color: var(--accent); }
   .kv-list { grid-template-columns: 1fr; }
   .kv-list dd { margin-bottom: var(--sp-1); }
 }
+/* Backend-delivered release notice; leaves forms and task controls accessible. */
+.release-notice {
+  position: fixed; z-index: 120; left: 16px; right: 16px;
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  max-width: 680px; margin-inline: auto; padding: 12px 16px;
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  background: var(--surface, #fff); color: var(--ink, #182230);
+  border: 1px solid var(--border, #cbd5e1); border-radius: 12px;
+  box-shadow: 0 4px 24px #0002; font-size: 14px;
+}
+.release-notice[hidden] { display: none; }
+.release-notice button { flex-shrink: 0; }

@@ -1,4 +1,6 @@
 import { randomUUID } from "./uuid.js";
+import { holdRefresh } from "./refresh_state.js";
+import { supportsNative, missingNativeCommand, disableNativeCommand } from "./native_bridge.js";
 // 统一浏览器 API client：JSON/204/下载、401/403/409/422/503、超时、
 // loading/empty/error/retry 四态、提交锁定与幂等键。
 // 页面不解释 score 语义，只渲染版本化 API 返回的结构。
@@ -45,11 +47,11 @@ function encodeUtf8Base64(text) {
 }
 
 // IPC 桥：安卓内嵌页经 Tauri IPC 调 App 的 Rust 代理命令——请求体不再挤进请求头，
-// 也不受拦截层"响应整包缓冲 / ~30s 截止"约束。返回 null = 桥不可用（非 App 环境
-// 或桥故障），调用方回退到头桥 fetch 路径。
+// 也不受拦截层"响应整包缓冲 / ~30s 截止"约束。返回 null = 能力不可用或命令不存在，
+// 调用方回退到头桥 fetch；结果不明的传输错误直接抛出，避免重发写请求。
 async function bridgeRequest(path, { method, payload, idempotencyKey: idemKey }) {
   const invoke = globalThis.__TAURI_INTERNALS__?.invoke;
-  if (!invoke) return null;
+  if (!invoke || !await supportsNative("proxy_request")) return null;
   try {
     const result = await invoke("proxy_request", {
       method,
@@ -68,11 +70,23 @@ async function bridgeRequest(path, { method, payload, idempotencyKey: idemKey })
     if (error === "pairing_required") {
       throw new ApiError(0, "设备配对已清除，请回到 App 重新配对。");
     }
-    return null;
+    if (missingNativeCommand(error)) {
+      disableNativeCommand("proxy_request");
+      return null;
+    }
+    // A transport failure may happen after the server committed a write.
+    // Never silently replay it through a different transport.
+    throw new ApiError(0, "网络请求失败或结果尚待确认，请重试原操作。", { retryable: true });
   }
 }
 
 async function request(path, { method = "GET", body, idempotency = false, signal } = {}) {
+  const release = holdRefresh(method === "GET" ? "正在读取页面数据" : "正在提交操作");
+  try { return await performRequest(path, { method, body, idempotency, signal }); }
+  finally { release(); }
+}
+
+async function performRequest(path, { method, body, idempotency, signal }) {
   const headers = { ...FETCH_MARKER_HEADERS };
   let payload;
   if (body !== undefined) {
@@ -168,6 +182,12 @@ export function del(path, body, options = {}) {
 }
 
 export async function download(path) {
+  const release = holdRefresh("正在下载文件");
+  try { return await performDownload(path); }
+  finally { release(); }
+}
+
+async function performDownload(path) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   let response;

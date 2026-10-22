@@ -5,6 +5,8 @@ import { get, post, FETCH_MARKER_HEADERS } from "./api.js";
 import { el } from "./dom.js";
 import { renderAnswer } from "./agent_answer.js";
 import { formatDate, formatDateTime } from "./format.js";
+import { registerRefreshGuard } from "./refresh_state.js";
+import { supportsNative, missingNativeCommand, disableNativeCommand } from "./native_bridge.js";
 const TASK = {queued:"排队中",running:"进行中",waiting_data:"等待数据",waiting_user:"等你处理",succeeded:"已完成",partial:"部分完成",failed:"失败",cancelled:"已取消"};
 const STOP = {answered:"已回答",evidence_blocked:"证据受阻",no_progress:"无进展",budget_exhausted:"预算用完",cancelled:"已取消",failed:"失败"};
 const OPINION = {published:"有效",review_required:"待复核",expired:"已过期",superseded:"已被替代",withdrawn:"已撤回"};
@@ -49,6 +51,14 @@ export function bootAgent() {
   let conversations = [], archivedConvs = [], messages = [], refs = [], stops = [], updateTimer;
   let showArchived = !!state.ui.archived;
   const locks = new Set(), tasks = new Map(), opinionViews = new Map();
+  let readyForRefresh = false;
+  registerRefreshGuard("agent", () => {
+    if (!readyForRefresh || creating || locks.size) return "正在恢复会话或发送消息";
+    if ($("input").value.trim()) return "有尚未发送的草稿";
+    if (Object.values(state.drafts).some(d => d.pending)) return "有发送结果待确认的消息";
+    if ([...tasks.keys()].some(id => !TERMINAL.has(taskStates.get(id)?.status))) return "有进行中的研究任务";
+    return "";
+  });
   function noticeText(text) { $("notice").textContent = text; $("notice").hidden = !text; }
   const notice = noticeText;
   function persist() {
@@ -59,6 +69,10 @@ export function bootAgent() {
   function saveDraft() {
     const d = draft(); d.text = $("input").value; d.kind = $("kind").value; d.refs = refs;
     const ok = persist();
+    if (ok) {
+      $("input").dispatchEvent(new CustomEvent("release:form-saved", { bubbles: true }));
+      $("kind").dispatchEvent(new CustomEvent("release:form-saved", { bubbles: true }));
+    }
     $("draft-state").textContent = ok && d.text.trim() ? "草稿已保存" : "";
   }
 
@@ -677,7 +691,7 @@ export function bootAgent() {
     // 终态不走这里：task_state 事件由 event() 既有逻辑处理并 finish。
     async function bridgeLive() {
       const internals = window.__TAURI_INTERNALS__;
-      if (!internals?.invoke || !internals.transformCallback) return "degrade";
+      if (!internals?.invoke || !internals.transformCallback || !await supportsNative("stream_task_events")) return "degrade";
       root.dataset.transport = "stream";
       return new Promise((resolve) => {
         let settled = false;
@@ -692,7 +706,10 @@ export function bootAgent() {
           else if (message.kind === "rate_limited") done({ rate: Number(message.retry_after) || 10 });
           else done("degrade");
         });
-        internals.invoke("stream_task_events", { taskId, cursor, onEvent: "__CHANNEL__:" + callback }).catch(() => done("degrade"));
+        internals.invoke("stream_task_events", { taskId, cursor, onEvent: "__CHANNEL__:" + callback }).catch(error => {
+          if (missingNativeCommand(error)) disableNativeCommand("stream_task_events");
+          done("degrade");
+        });
       });
     }
     async function live() {
@@ -806,5 +823,5 @@ export function bootAgent() {
     }
     root.dispatchEvent(new CustomEvent("agent:ready", {detail:{artifactHost:$("artifact-extension"),controlsHost:$("controls-extension")}}));
   }
-  init().catch(showError);
+  init().then(() => { readyForRefresh = true; }).catch(showError);
 }

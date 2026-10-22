@@ -1,5 +1,7 @@
 # 移动端技术路线（Android，供 review）
 
+2026-10-22 补充：[后端发布检测、安全刷新与旧 APK 兼容契约](backend-updates.md)。
+
 2026-10-16。本文是移动端实现的整体技术路线综述：架构、关键决策及依据、两条数据面、安全模型、
 平台约束、构建发布与测试体系。逐项细节不在此重复：早期选型论证见 [decision.md](decision.md)，
 API 全量清单见 [api-audit.md](api-audit.md)，协议 handler 设计见
