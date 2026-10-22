@@ -37,3 +37,12 @@ cd src-tauri && cargo test --locked
 ```
 
 Chromium 用隔离后端和模拟旧/新 APK 命令面验证刷新与降级；它不替代真机的 WebView、网关及安装包验收。
+
+## 2026-10-22 生产启用记录
+
+- 功能提交 `db86f38667db` 已通过标准脚本部署到 ai-server；API、worker、scheduler 均 healthy，数据库迁移保持 `055`。
+- 使用模拟器中 2026-10-21 09:32 已安装的 Debug APK（`com.zcharlie.mobile.debug`，版本 `0.1.1` / `1001`），未重新构建或安装。APK SHA-256 为 `4ab171d146d33e6b59f38c35daade16598ab2b97d51222f043cd8c2d82d57df2`。
+- 通过真实生产网关 `http://192.168.2.1:3200` 接入后端，验收使用仅限 zcharlie 后端、有效期一天的临时设备凭证；原有配对单独保留以便验收后还原。
+- 首次重新进入研究台后，旧 APK 已加载检测脚本；页面与 `/app/release` 的版本均为 `27c28eff3cccfcdc0b50fe02`，版本清单响应为 `200` / `Cache-Control: no-store`。
+- 该 APK 调用 `bridge_capabilities` 返回命令不存在；网页正确协商为 `{bridge_version: 0, legacy: true}`。原有 `proxy_request` 仍成功读取生产 `/healthz`，返回功能提交版本。
+- 本记录作为随后的一次文档发布，用于继续验收旧 APK 的周期检测、未提交输入保护和安全空闲后的自动刷新。该阶段保持 APK 与页面安装状态不变，不手动刷新页面。
