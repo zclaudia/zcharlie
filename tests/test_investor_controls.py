@@ -27,6 +27,7 @@ from investment_agent.investor.controls import (
     RevokeAction,
     UserAuthority,
     UserControlService,
+    WatchlistAddAction,
     authenticated_message,
     authenticated_request,
     memory_revision,
@@ -38,7 +39,9 @@ from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models.agent import ExecutionGrantRow, MessageRow
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.investor import UserObject, UserObjectRevision
+from investment_agent.storage.models.reference import Company, Listing
 from investment_agent.storage.models.user_domain import HoldingItem, WatchlistItem
+from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
 from tests.support.investor import case_ref, execute, request  # noqa: F401
 from tests.support.publication import base, fixture, publish
@@ -543,3 +546,59 @@ async def test_concurrent_proposal_single_consumption_and_revoke_cas(controls_db
     async with session_scope() as session:
         assert (await UserControlService(session).get_memories())[0].revision == 2
         assert await memory_revision(session) == 2
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_creates_listing_item_and_replays(controls_db):
+    parameters = WatchlistAddAction(ticker="600519.SH", company_name="贵州茅台")
+    body = request(parameters)
+    async with session_scope() as session:
+        saved = await UserControlService(session).execute(body, authenticated_request(parameters))
+        assert saved.actor == "user" and saved.origin_ref.kind == "instruction"
+        assert saved.ticker == "600519.SH" and not saved.already_on_watchlist
+        assert saved.draft_state == "needs_template"
+        item = await session.get(WatchlistItem, saved.watchlist_id)
+        assert item is not None and item.enabled and item.provider == "auto"
+        listing = await session.get(Listing, saved.listing_ref.id)
+        assert listing is not None and listing.market_code == "SSE" and listing.ticker == "600519"
+        company = await session.get(Company, listing.company_id)
+        assert company is not None and company.canonical_name == "贵州茅台"
+        assert await UserControlService(session).execute(body, authenticated_request(parameters)) == saved
+    async with session_scope() as session:
+        repeated = await UserControlService(session).execute(
+            request(WatchlistAddAction(ticker="600519.SH", company_name="贵州茅台")), authenticated_request(parameters))
+        assert repeated.already_on_watchlist and repeated.watchlist_id == saved.watchlist_id
+        assert await session.scalar(select(func.count()).select_from(WatchlistItem)) == 1
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_existing_listing_needs_no_directory_name(controls_db):
+    async with session_scope() as session:
+        seeded = await ListingRepository(session).ensure_a_share_listing("600000.SH", company_name="浦发银行")
+    async with session_scope() as session:
+        saved = await execute(session, WatchlistAddAction(ticker="600000.SH"))
+        assert saved.listing_ref.id == seeded.id
+        assert saved.draft_state == "needs_template"
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_rejects_non_canonical_or_unknown_tickers(controls_db):
+    async with session_scope() as session:
+        for ticker, message in (("AAPL", "canonical A-share ticker"), ("600519", "canonical A-share ticker"), ("茅台", "canonical A-share ticker"), ("999999.SH", "directory company name")):
+            with pytest.raises(InvestorError, match=message):
+                await execute(session, WatchlistAddAction(ticker=ticker))
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_outer_rollback_restores_receipt_and_rows(controls_db):
+    parameters = WatchlistAddAction(ticker="600519.SH", company_name="贵州茅台")
+    body = request(parameters)
+    async with session_scope() as session:
+        await UserControlService(session).execute(body, authenticated_request(parameters))
+        await session.rollback()
+    async with session_scope() as session:
+        assert await session.scalar(select(func.count()).select_from(WatchlistItem)) == 0
+        assert await session.scalar(select(func.count()).select_from(Listing)) == 0
+        assert await session.scalar(select(func.count()).select_from(UserObject)) == 0
+        saved = await UserControlService(session).execute(body, authenticated_request(parameters))
+        assert not saved.already_on_watchlist

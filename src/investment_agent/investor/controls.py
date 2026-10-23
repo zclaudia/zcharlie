@@ -19,7 +19,14 @@ from investment_agent.agent.contracts import Message
 from investment_agent.agent.tasks import TaskClaim
 from investment_agent.config import Settings
 from investment_agent.investor.common import Contract, Mutation, ObjectRef, OwnerId, Record, Text
-from investment_agent.investor.contracts import Case, Episode, Mandate, Memory, UserDecision
+from investment_agent.investor.contracts import (
+    Case,
+    Episode,
+    Mandate,
+    Memory,
+    UserDecision,
+    WatchlistChange,
+)
 from investment_agent.investor.enums import CaseStatus, DecisionKind
 from investment_agent.investor.foundations import InvestorError, InvestorService, storage_conflicts
 from investment_agent.investor.publication import PublicationService
@@ -72,7 +79,15 @@ class RevokeAction(Contract):
     reason: Text
 
 
-Operation = Annotated[CaseAction | MandateAction | DecisionAction | MemoryAction | RevokeAction, Field(discriminator="operation")]
+class WatchlistAddAction(Contract):
+    """Authenticated watchlist add; the ticker must be canonical A-share."""
+
+    operation: Literal["watchlist_add"] = "watchlist_add"
+    ticker: str
+    company_name: str | None = None
+
+
+Operation = Annotated[CaseAction | MandateAction | DecisionAction | MemoryAction | RevokeAction | WatchlistAddAction, Field(discriminator="operation")]
 
 
 class ExecuteRequest(Contract):
@@ -322,6 +337,17 @@ class UserControlService(InvestorService):
                     from investment_agent.storage.models.reference import Listing
                     if ref.revision != 1 or await self.session.get(Listing, ref.id) is None:
                         raise InvestorError("invalid_reference", "Listing scope unavailable")
+        elif isinstance(parameters, WatchlistAddAction):
+            from investment_agent.domain.a_share import parse_a_share_ticker
+            from investment_agent.storage.repositories.listing import ListingRepository
+
+            parsed = parse_a_share_ticker(parameters.ticker)
+            if parsed is None:
+                raise InvestorError("invalid_reference", "Watchlist add requires a canonical A-share ticker (600519.SH)")
+            symbol, market = parsed
+            listing = await ListingRepository(self.session).get_by_ticker(market.market_code, symbol)
+            if listing is None and not (parameters.company_name or "").strip():
+                raise InvestorError("invalid_reference", "Unknown ticker requires the directory company name")
         else:
             await self._object(parameters.memory_ref, "memory", current=True)
 
@@ -367,7 +393,7 @@ class UserControlService(InvestorService):
 
     @staticmethod
     def _parse_result(parameters: Operation, payload: dict[str, Any]) -> Record:
-        model: type[Record] = Case if isinstance(parameters, CaseAction) else Mandate if isinstance(parameters, MandateAction) else UserDecision if isinstance(parameters, DecisionAction) else Memory
+        model: type[Record] = Case if isinstance(parameters, CaseAction) else Mandate if isinstance(parameters, MandateAction) else UserDecision if isinstance(parameters, DecisionAction) else WatchlistChange if isinstance(parameters, WatchlistAddAction) else Memory
         return model.model_validate(payload)
 
     async def _apply(self, parameters: Operation, source: ObjectRef, key: UUID, message_ref: ObjectRef | None = None) -> Record:
@@ -415,6 +441,29 @@ class UserControlService(InvestorService):
                 decision=parameters.decision, user_text=parameters.user_text, reason=parameters.reason, decided_at=now)
             self._save("decision", decision)
             return decision
+        if isinstance(parameters, WatchlistAddAction):
+            # The watchlist lives outside the versioned investor objects; the
+            # same receipt/instruction provenance still covers this write.
+            from investment_agent.clock import shanghai_today
+            from investment_agent.domain.a_share import parse_a_share_ticker
+            from investment_agent.storage.repositories.listing import ListingRepository
+            from investment_agent.storage.repositories.watchlist import WatchlistRepository
+            from investment_agent.watchlist.drafts import sync_add_state
+
+            parsed = parse_a_share_ticker(parameters.ticker)
+            assert parsed is not None  # _validate rejected non-canonical tickers
+            symbol, market = parsed
+            listings = ListingRepository(self.session)
+            listing = await listings.get_by_ticker(market.market_code, symbol)
+            if listing is None:
+                listing = await listings.ensure_a_share_listing(parameters.ticker, company_name=parameters.company_name)
+            watchlist = WatchlistRepository(self.session)
+            already = await watchlist.get_by_listing(listing.id) is not None
+            item = await watchlist.add(listing.id, None)
+            await sync_add_state(self.session, item, template_id=None, as_of=shanghai_today(), triggered_by="agent_command")
+            return WatchlistChange(id=uuid4(), revision=1, created_at=now, actor="user", origin_ref=source,
+                listing_ref=ObjectRef(kind="listing", id=listing.id, revision=1), watchlist_id=item.id,
+                ticker=parameters.ticker, already_on_watchlist=already, draft_state=item.draft_state)
         if isinstance(parameters, MemoryAction):
             sources = tuple(dict.fromkeys((*parameters.source_refs, *((message_ref,) if message_ref else ()), source)))
             memory = Memory(id=uuid4(), revision=1, created_at=now, actor="user", origin_ref=source,

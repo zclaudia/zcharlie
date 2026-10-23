@@ -278,6 +278,16 @@ class UserDecision(Record):
         return self
 
 
+class WatchlistChange(Record):
+    """Result of an authenticated watchlist add (not a versioned pool object)."""
+
+    listing_ref: ObjectRef
+    watchlist_id: int
+    ticker: str
+    already_on_watchlist: bool
+    draft_state: str
+
+
 class Memory(Record):
     kind: Literal["explicit_preference", "unverified_observation"]
     text: Text
