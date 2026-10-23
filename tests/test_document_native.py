@@ -96,9 +96,9 @@ async def test_actual_parse_releases_writer_and_post_parse_rechecks_atomically(
     started, released = asyncio.Event(), asyncio.Event()
     real = module.parse_staged
 
-    async def paused(body, mime):
+    async def paused(body, mime, **window):
         # Invoke the production subprocess, not a fake text result.
-        parsed = await real(body, mime)
+        parsed = await real(body, mime, **window)
         started.set()
         await released.wait()
         return parsed

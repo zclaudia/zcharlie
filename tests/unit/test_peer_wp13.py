@@ -592,12 +592,12 @@ def _dimensions():
     )
 
 
-def _claim(refs, *, kind: str = "inference") -> Claim:
+def _claim(refs, *, kind: str = "inference", materiality: str = "critical") -> Claim:
     return Claim(
         id=uuid4(),
         kind=kind,
         text=(TextNode(type="text", text="The roster statistics describe the sample position"),),
-        materiality="critical",
+        materiality=materiality,
         support_refs=tuple(refs),
         opposition_refs=(),
         assumption_refs=(),
@@ -746,7 +746,14 @@ async def test_insufficient_source_verification_stays_pending_despite_the_digest
     task = await _admit_peer_task(case_ref, listing_ref(synthetic, TARGET), binding)
     trusted = await claim(task)
     await _committed_progress(trusted)
-    result = await _committed_prepare(trusted.task_id, trusted, _business(case, (_claim((mutated,)),), _dimensions()))
+    from investment_agent.agent.execution import ResearchValidationError
+
+    with pytest.raises(ResearchValidationError) as rejected:
+        await _committed_prepare(trusted.task_id, trusted, _business(case, (_claim((mutated,)),), _dimensions()))
+    # A pending critical premise now refuses the preparation with bounded
+    # correction feedback (never a silent downgrade of the direction).
+    assert rejected.value.code == "research_publication_pending_premises"
+    result = await _committed_prepare(trusted.task_id, trusted, _business(case, (_claim((mutated,), materiality="context"),), _dimensions()))
     digests = [m for m in result["materials"] if m.get("summary_schema") == DIGEST_SCHEMA]
     assert len(digests) == 1  # the model received the digest
     assert digests[0]["verification_counts"] == {}

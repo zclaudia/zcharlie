@@ -261,9 +261,12 @@ async def test_user_nomination_uses_existing_authenticated_direct_path_without_t
         accepted=await service.submit(conversation.id,MessageInput(client_message_id=uuid4(),text="Research cash durability",context_refs=(subjects[0],),research_kind="company_research"))
         grant=await session.get(ExecutionGrantRow,str(accepted.task.id))
         assert grant.payload["mode"]=="interactive"
+        # Company research is decoupled from the personal allocation mandate.
+        assert grant.payload["mandate_id"] is None
         assert await session.scalar(select(func.count()).select_from(DiscoveryBatch))==0
+        mandate=await InvestorService(session).get_mandate("local_owner")
         with pytest.raises(ExecutionDeniedError,match="scope_revoked"):
-            await admit(session,base=selected,input_key="unauthorized",binding=accepted.task.binding,grant=ExecutionGrant(mode="interactive",source="authenticated_message",scope_refs=(ObjectRef(kind="listing",id=999,revision=1),),mandate_id=UUID(grant.payload["mandate_id"]),prompt="Not authorized"))
+            await admit(session,base=selected,input_key="unauthorized",binding=accepted.task.binding,grant=ExecutionGrant(mode="interactive",source="authenticated_message",scope_refs=(ObjectRef(kind="listing",id=999,revision=1),),mandate_id=mandate.id,prompt="Not authorized"))
 
 
 @pytest.mark.asyncio

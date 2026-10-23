@@ -153,7 +153,7 @@ async def test_unbound_prepare_matches_legacy_output_shape():
     result = await run_prepare(claim, business_input(case, evidence_ref))
     assert set(result) == {"preparation_ref", "candidate", "candidate_hash", "material_set_hash",
                            "materials", "material_count", "material_review_blocked",
-                           "material_limit", "review_required"}
+                           "material_limit", "review_required", "publication_constraints"}
     assert await _coverage_payloads() == []
 
 

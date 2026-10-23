@@ -147,10 +147,13 @@ async def test_default_worker_native_maintain_extend_cycle_completed_quiet(publi
         async with session_scope() as session:
             await MonitoringService(session, selected).manual(candidate.thesis.case_ref.id, uuid4(), expected_revision=2, reason="Recheck the inference even on unchanged materials")
     calls = []
+    plan = full_progress(candidate, evidence)
     def respond(messages, info):
         returns = [p for m in messages if isinstance(m, ModelRequest) for p in m.parts if isinstance(p, ToolReturnPart)]
         calls.append(len(returns))
-        if not returns:
+        if not any(p.tool_name == "save_research_progress" for p in returns):
+            return ModelResponse([ToolCallPart("save_research_progress", {"business": plan.model_dump(mode="json")})], usage=RequestUsage(input_tokens=10, output_tokens=10))
+        if not any(p.tool_name == "get_evidence" for p in returns):
             return ModelResponse([ToolCallPart("get_evidence", {"ref": evidence.model_dump(mode="json"), "subject_ref": subject.model_dump(mode="json"), "as_of": receipt["started_at"]})], usage=RequestUsage(input_tokens=10, output_tokens=10))
         review = unchanged_review(result.recommendation_ref, (evidence,))
         output = ResearchOutput(progress=full_progress(candidate, evidence), review=review, extend=True)
@@ -176,7 +179,7 @@ async def test_default_worker_native_maintain_extend_cycle_completed_quiet(publi
         assert view.effective_valid_until > view.recommendation.valid_until
         notes = await MonitoringService(session, selected).notifications()
         assert len(notes) == 1 and notes[0]["stage"] == "published"
-        assert calls == ([0, 1, 0, 1] if pending_question else [0, 1])
+        assert calls == ([0, 1, 2, 0, 1, 2] if pending_question else [0, 1, 2])
         cycles = (await session.scalars(select(ReviewCycle))).all()
         assert len(cycles) == (2 if pending_question else 1) and all(c.state == "completed" for c in cycles)
     before = await stats()
@@ -376,11 +379,14 @@ async def test_native_capture_receipt_old_snapshot_unknown_cannot_extend(publica
             await MarketSnapshotRepository(session).insert(listing_id=old_bar.listing_id, trade_date=anchor.date(), open=value, high=value, low=value, close=value, volume=Decimal(100), provider="baostock", captured_at=anchor + timedelta(hours=12))
     async with session_scope() as session:
         receipt = await MonitoringService(session, selected).manual(candidate.thesis.case_ref.id, uuid4(), expected_revision=2)
+    plan = full_progress(candidate, evidence)
     def respond(messages, info):
         returns = [p for m in messages if isinstance(m, ModelRequest) for p in m.parts if isinstance(p, ToolReturnPart)]
-        if not returns:
+        if not any(p.tool_name == "save_research_progress" for p in returns):
+            return ModelResponse([ToolCallPart("save_research_progress", {"business": plan.model_dump(mode="json")})], usage=RequestUsage(input_tokens=10, output_tokens=10))
+        if not any(p.tool_name == "capture_snapshot" for p in returns):
             return ModelResponse([ToolCallPart("capture_snapshot", {"ticker": "600519.SH", "field": "close", "as_of": receipt["started_at"]})], usage=RequestUsage(input_tokens=10, output_tokens=10))
-        data = returns[0].content
+        data = next(p.content for p in returns if p.tool_name == "capture_snapshot")
         refs = tuple(ObjectRef.model_validate(ref) for ref in data.get("data") or ())
         review = unchanged_review(published.recommendation_ref, (evidence, *refs))
         output = ResearchOutput(progress=full_progress(candidate, evidence), review=review, extend=True)
