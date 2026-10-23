@@ -1,4 +1,5 @@
 """Finite exact user commands; model suggestions cannot mint this authority."""
+import re
 from datetime import UTC, datetime
 from uuid import UUID, uuid5
 
@@ -16,12 +17,15 @@ from investment_agent.investor.controls import (
     MemoryAction,
     Operation,
     UserControlService,
+    WatchlistAddAction,
     authenticated_message,
 )
 from investment_agent.investor.enums import StopReason
 from investment_agent.storage.models.agent import AgentTask
 from investment_agent.storage.models.investor import InvestorCase
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
+
+_WATCHLIST_ADD = re.compile(r"^把\s*(?P<ticker>\S{1,12})\s*加入观察池$")
 
 
 async def command(session: AsyncSession, text: str, scope_refs: tuple[ObjectRef, ...], source: ObjectRef) -> Operation | None:
@@ -38,6 +42,26 @@ async def command(session: AsyncSession, text: str, scope_refs: tuple[ObjectRef,
     prefix = "记住我的偏好："
     if value.startswith(prefix) and value[len(prefix):].strip():
         return MemoryAction(kind="explicit_preference", text=value[len(prefix):].strip(), source_refs=(source,))
+    match = _WATCHLIST_ADD.fullmatch(value)
+    if match is not None:
+        from investment_agent.domain.a_share import parse_a_share_ticker
+        from investment_agent.storage.repositories.listing import ListingRepository
+        from investment_agent.storage.repositories.stock_directory import StockDirectoryRepository
+
+        parsed = parse_a_share_ticker(match.group("ticker"))
+        if parsed is None:
+            return None  # not a canonical code; the model turn answers instead
+        symbol, market = parsed
+        canonical = f"{symbol}.{market.suffix}"
+        company_name: str | None = None
+        if await ListingRepository(session).get_by_ticker(market.market_code, symbol) is None:
+            # The local directory is the only name source for a new listing; an
+            # unknown code is not a command and falls back to the model turn.
+            rows = await StockDirectoryRepository(session).search(canonical, limit=5)
+            company_name = next((row.name for row in rows if row.ticker == canonical), None)
+            if company_name is None:
+                return None
+        return WatchlistAddAction(ticker=canonical, company_name=company_name)
     return None
 
 

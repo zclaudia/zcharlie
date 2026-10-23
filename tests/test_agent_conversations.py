@@ -1,7 +1,7 @@
 """AG09 atomic admission, authentic HTTP, recovery and trusted deliverables."""
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 import pytest
@@ -34,9 +34,15 @@ from investment_agent.storage.models.agent import (
 )
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.reference import Company, Listing, Market
+from investment_agent.storage.models.user_domain import WatchlistItem
+from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import (
     IdempotencyPayloadMismatchError,
     PipelineRunRepository,
+)
+from investment_agent.storage.repositories.stock_directory import (
+    DirectoryUpsert,
+    StockDirectoryRepository,
 )
 from tests.support.conversations import (  # noqa: F401
     base,
@@ -469,3 +475,46 @@ async def test_default_worker_maintenance_purges_expired_archives(conversation_d
     assert await worker.run_once() is None
     async with session_scope() as session:
         assert await session.scalar(select(func.count()).select_from(ConversationRow)) == 0
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_command_executes_exactly_without_model(conversation_db):
+    async with session_scope() as session:
+        await StockDirectoryRepository(session).upsert_all(
+            [DirectoryUpsert("600519.SH", "贵州茅台", "gzmt", "listed")],
+            synced_on=date.today(), captured_at=datetime.now(UTC), provider="fixture",
+        )
+    conversation = await new_conversation()
+    body = message(text="把 600519.SH 加入观察池")
+    receipt = await submit(conversation, body)
+    assert receipt.task.status == TaskStatus.SUCCEEDED
+    repeated = await submit(conversation, body)
+    assert repeated.task.id == receipt.task.id
+    async with session_scope() as session:
+        item = (await session.scalars(select(WatchlistItem))).one()
+        assert item.draft_state == "needs_template" and item.enabled
+        listing = await session.get(Listing, item.listing_id)
+        assert listing.market_code == "SSE" and listing.ticker == "600519"
+        messages = await ConversationService(session, base()).messages(conversation.id)
+        assert len(messages) == 2 and messages[1].role == "assistant"
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_command_existing_listing_needs_no_directory(conversation_db):
+    async with session_scope() as session:
+        seeded = await ListingRepository(session).ensure_a_share_listing("600000.SH", company_name="浦发银行")
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="把 600000.SH 加入观察池"))
+    assert receipt.task.status == TaskStatus.SUCCEEDED
+    async with session_scope() as session:
+        item = (await session.scalars(select(WatchlistItem))).one()
+        assert item.listing_id == seeded.id
+
+
+@pytest.mark.asyncio
+async def test_watchlist_add_command_unknown_ticker_falls_back_to_model(conversation_db):
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="把 999999.SH 加入观察池"))
+    assert receipt.task.status != TaskStatus.SUCCEEDED
+    async with session_scope() as session:
+        assert await session.scalar(select(func.count()).select_from(WatchlistItem)) == 0
