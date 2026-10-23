@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from investment_agent.clock import shanghai_today
 from investment_agent.investor.common import ObjectRef, Quantity
 from investment_agent.investor.contracts import (
     Mandate,
@@ -33,7 +34,10 @@ from investment_agent.portfolio.suitability_contracts import (
 from investment_agent.portfolio.valuation import Valuation, ValuationHolding
 from investment_agent.storage.models import Base
 
-AS_OF = datetime(2026, 10, 16, 4, tzinfo=UTC)
+# The fixtures describe *current* account inputs; a fixed calendar anchor made
+# every freshness check (e.g. the 5-trading-day price_stale rule) rot with time.
+AS_OF = datetime.now(UTC)
+PRICE_DATE = shanghai_today()
 
 
 @asynccontextmanager
@@ -100,7 +104,7 @@ def make_inputs(
             quantity_subtotal=Decimal(quantity),
             price=Decimal(price),
             price_ref=ObjectRef(kind="market_snapshot", id=listing_id + 9000000, revision=1),
-            price_date=date(2026, 10, 15),
+            price_date=PRICE_DATE,
             market_value=Decimal(quantity) * Decimal(price),
             weight=None,
         )
@@ -164,7 +168,7 @@ def make_inputs(
                 quantity=Decimal(quantity),
                 price=Decimal(price),
                 price_ref=ObjectRef(kind="market_snapshot", id=listing_id + 9000000, revision=1),
-                price_date=date(2026, 10, 15),
+                price_date=PRICE_DATE,
                 market_value=Decimal(quantity) * Decimal(price),
                 weight=None,
             )
@@ -178,7 +182,7 @@ def make_inputs(
             account_id=account_id,
             snapshot_id=snapshot_id,
             ledger_revision=1,
-            valuation_date=date(2026, 10, 15),
+            valuation_date=PRICE_DATE,
             knowledge_cutoff=AS_OF - timedelta(minutes=30),
             algorithm_version="daily_valuation_v1",
             input_digest="a" * 64,
@@ -204,7 +208,7 @@ def make_inputs(
             price_ref=ObjectRef(kind="market_snapshot", id=listing_id + 9000000, revision=1)
             if price_value is not None
             else None,
-            price_date=date(2026, 10, 15) if price_value is not None else None,
+            price_date=PRICE_DATE if price_value is not None else None,
             provider="synthetic_fixture" if price_value is not None else None,
             captured_at=AS_OF - timedelta(minutes=30) if price_value is not None else None,
             available_at=AS_OF - timedelta(minutes=30) if price_value is not None else None,
