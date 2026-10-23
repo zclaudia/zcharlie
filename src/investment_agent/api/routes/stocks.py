@@ -6,8 +6,9 @@ name substring, then initials and full-pinyin prefixes; see
 :meth:`~investment_agent.storage.repositories.stock_directory.StockDirectoryRepository.search`.
 
 ``search_directory`` and its classification / annual-disclosure helpers now
-live in :mod:`investment_agent.api.views` (shared with the MCP
-``search_stocks`` tool); this module imports them from there.
+live in :mod:`investment_agent.directory_search` (shared with the MCP
+``search_stocks`` tool and the agent's ``search_stock_directory`` tool); this
+module imports them from there.
 """
 
 import asyncio
@@ -23,13 +24,13 @@ from investment_agent.api.schemas.stocks import (
     StockReportYearItem,
     StockSearchItem,
 )
-from investment_agent.api.views import (
+from investment_agent.clock import shanghai_today
+from investment_agent.config import Settings
+from investment_agent.directory_search import (
     _annual_disclosures,
     _stock_industries,
     search_directory,
 )
-from investment_agent.clock import shanghai_today
-from investment_agent.config import Settings
 from investment_agent.domain.a_share import parse_a_share_ticker
 from investment_agent.providers.baostock_market import BaostockMarketClient
 from investment_agent.providers.baostock_reference import BaostockReferenceClient, IndustrySnapshot

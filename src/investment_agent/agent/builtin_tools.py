@@ -78,7 +78,7 @@ async def directory_scope(session: AsyncSession, business: BaseModel) -> tuple[O
 
 
 async def directory_search(session: AsyncSession, operation: UUID, business: BaseModel) -> dict[str, Any]:
-    from investment_agent.api.views import search_directory
+    from investment_agent.directory_search import search_directory
     del operation
     assert isinstance(business, DirectorySearchParameters)
     items = await search_directory(session, None, business.q, limit=business.limit)

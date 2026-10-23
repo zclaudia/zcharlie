@@ -26,8 +26,8 @@ def register_stocks(server: MCPServer, ctx: ServerContext) -> None:
         """Stock directory search by code prefix, name substring or pinyin
         initials (local directory, nothing fetched upstream)."""
 
-        from investment_agent.api.views import search_directory
         from investment_agent.clock import shanghai_today
+        from investment_agent.directory_search import search_directory
 
         async with ctx.session() as session:
             items = await search_directory(session, ctx.settings(), q, limit=limit)

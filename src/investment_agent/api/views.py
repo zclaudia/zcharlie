@@ -23,12 +23,11 @@ the MCP server) must not pull in route modules.
 from __future__ import annotations
 
 import json
-from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import inspect, or_, select, union_all
+from sqlalchemy import inspect
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.schemas.admin import (
@@ -48,7 +47,6 @@ from investment_agent.api.schemas.candidates import (
     ScreenResultOut,
     SegmentOut,
 )
-from investment_agent.api.schemas.stocks import StockSearchItem
 from investment_agent.candidates.lifecycle import (
     context_with_industry_name,
     effective_draft,
@@ -56,7 +54,8 @@ from investment_agent.candidates.lifecycle import (
     rule_params,
 )
 from investment_agent.clock import shanghai_today, today_in
-from investment_agent.config import Settings, SnapshotScheduleConfig
+from investment_agent.config import Settings
+from investment_agent.directory_search import snapshot_universes
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
 from investment_agent.domain.time import (
     as_utc as _as_utc,
@@ -66,11 +65,6 @@ from investment_agent.domain.time import (
 )
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.field_sources import default_field_sources, market_precedence
-from investment_agent.factors.industry_groups import usable_sw_code
-from investment_agent.providers.shenwan_directory import (
-    SW2021_SYSTEM,
-    default_shenwan_directory,
-)
 from investment_agent.rules.drafting import load_stock_context
 from investment_agent.rules.screen import evaluate_zone_conditions
 from investment_agent.rules.store import instance_from_record, template_from_record
@@ -80,7 +74,6 @@ from investment_agent.scheduler.trading_calendar import (
     TradingCalendar,
     load_trading_calendar,
 )
-from investment_agent.settings.loader import load_runtime
 from investment_agent.snapshots.health import (
     DataHealth,
     HealthSettings,
@@ -88,10 +81,7 @@ from investment_agent.snapshots.health import (
     build_data_health,
 )
 from investment_agent.storage.models.candidates import CandidateRecord, DecisionRecord
-from investment_agent.storage.models.earnings_events import DisclosureScheduleRecord
 from investment_agent.storage.models.pit_snapshot import (
-    FinancialSnapshot,
-    IndustryClassification,
     MarketSnapshot,
 )
 from investment_agent.storage.models.reference import Company, Listing
@@ -103,7 +93,6 @@ from investment_agent.storage.models.rules import (
 from investment_agent.storage.models.user_domain import WatchlistItem
 from investment_agent.storage.repositories.candidate import DecisionRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
-from investment_agent.storage.repositories.pit import end_of_business_day_utc
 from investment_agent.storage.repositories.research_change import (
     ResearchChangeRepository,
 )
@@ -111,8 +100,6 @@ from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
     score_item_from_payload,
 )
-from investment_agent.storage.repositories.stock_directory import StockDirectoryRepository
-from investment_agent.storage.repositories.universe import UniverseRepository
 from investment_agent.watchlist.drafts import rule_snapshot
 
 log = structlog.get_logger(__name__)
@@ -569,20 +556,6 @@ def _optional_float(value: object) -> float | None:
 # --------------------------------------------------------------------------- #
 
 _TIMEZONE = "Asia/Shanghai"
-_APP_CONFIG_PATH = Path("config/app.yaml")
-
-
-async def _snapshot_universes(session: AsyncSession, settings: Settings) -> tuple[str, ...]:
-    """The snapshot target pool from the runtime schedule (settings store)."""
-
-    try:
-        snapshot: SnapshotScheduleConfig = (
-            await load_runtime(session, settings, _APP_CONFIG_PATH)
-        ).schedule.snapshot
-    except Exception:
-        log.warning("data_health.schedule_unavailable")
-        snapshot = SnapshotScheduleConfig()
-    return tuple(dict.fromkeys(snapshot.universes))
 
 
 def _calendar() -> TradingCalendar | None:
@@ -630,138 +603,10 @@ async def compute_data_health(
         session,
         health_settings(
             settings,
-            universes=await _snapshot_universes(session, settings),
+            universes=await snapshot_universes(session, settings),
             include_calendar_warnings=include_calendar_warnings,
         ),
         now=datetime.now(UTC),
         today=today_in(_TIMEZONE),
     )
 
-
-# --------------------------------------------------------------------------- #
-# Stock directory search (GET /stocks/search and the MCP search_stocks tool)
-# --------------------------------------------------------------------------- #
-
-
-async def search_directory(
-    session: AsyncSession, settings: Settings | None, q: str, *, limit: int
-) -> list[StockSearchItem]:
-    """Directory hits for ``q`` with the target-pool / watchlist flags
-    (shared by the API and the MCP ``search_stocks`` tool).
-
-    ``settings=None`` (agent tool) skips the runtime target-pool lookup and
-    reports every item as outside the universe.
-    """
-
-    query = q.strip()
-    if not query:
-        return []
-    rows = await StockDirectoryRepository(session).search(query, limit=limit)
-    if not rows:
-        return []
-    tickers = {row.ticker for row in rows}
-    today = shanghai_today()
-    industries = await _stock_industries(session, tickers, today)
-    annuals = await _annual_disclosures(session, tickers, today)
-    universes = await _snapshot_universes(session, settings) if settings is not None else ()
-    members = await UniverseRepository(session).members_as_of(universes[0], today) if universes else ()
-    in_universe = {member.ticker for member in members} & tickers
-    on_watchlist = await _watchlist_tickers(session) & tickers
-    return [
-        StockSearchItem(
-            ticker=row.ticker,
-            name=row.name,
-            industry=industries.get(row.ticker),
-            report_year=annuals[row.ticker][0] if row.ticker in annuals and annuals[row.ticker][0] == today.year - 1 else None,
-            disclosed_on=annuals[row.ticker][1] if row.ticker in annuals and annuals[row.ticker][0] == today.year - 1 else None,
-            status=row.status,
-            in_universe=row.ticker in in_universe,
-            on_watchlist=row.ticker in on_watchlist,
-        )
-        for row in rows
-    ]
-
-
-async def _annual_disclosures(
-    session: AsyncSession, tickers: set[str], today: date
-) -> dict[str, tuple[int, date]]:
-    """Actual annual disclosures from financial captures or published schedules."""
-    cutoff = end_of_business_day_utc(today)
-    snapshots = select(
-        FinancialSnapshot.listing_id.label("listing_id"),
-        FinancialSnapshot.report_period.label("period"),
-        FinancialSnapshot.available_from.label("disclosed_on"),
-    ).where(
-        FinancialSnapshot.period_kind == "annual",
-        FinancialSnapshot.availability == "actual",
-        FinancialSnapshot.available_from <= today,
-        FinancialSnapshot.captured_at < cutoff,
-    )
-    schedules = select(
-        DisclosureScheduleRecord.listing_id,
-        DisclosureScheduleRecord.report_period,
-        DisclosureScheduleRecord.actual_date,
-    ).where(
-        DisclosureScheduleRecord.actual_date <= today,
-        DisclosureScheduleRecord.captured_at < cutoff,
-    )
-    disclosures = union_all(snapshots, schedules).subquery()
-    stmt = select(
-        Listing.ticker, Listing.market_code, disclosures.c.period, disclosures.c.disclosed_on
-    ).join(disclosures, disclosures.c.listing_id == Listing.id).where(
-        Listing.ticker.in_({ticker.split(".")[0] for ticker in tickers}),
-    )
-    annuals: dict[str, tuple[int, date]] = {}
-    for symbol, market, period, disclosed_on in (await session.execute(stmt)).all():
-        ticker = format_listing_ticker(ticker=symbol, market_code=market)
-        if ticker not in tickers or (period.month, period.day) != (12, 31) or period.year >= today.year:
-            continue
-        known = annuals.get(ticker)
-        if not known or period.year > known[0] or (period.year == known[0] and disclosed_on < known[1]):
-            annuals[ticker] = (period.year, disclosed_on)
-    return annuals
-
-
-async def _stock_industries(
-    session: AsyncSession, tickers: set[str], today: date
-) -> dict[str, str]:
-    """Batch local industries using the same preference as candidate promotion."""
-    stmt = (
-        select(Listing.ticker, Listing.market_code, IndustryClassification)
-        .join(IndustryClassification, IndustryClassification.listing_id == Listing.id)
-        .where(
-            Listing.ticker.in_({ticker.split(".")[0] for ticker in tickers}),
-            IndustryClassification.system.in_((SW2021_SYSTEM, "csrc")),
-            IndustryClassification.valid_from <= today,
-            or_(IndustryClassification.valid_to.is_(None), IndustryClassification.valid_to > today),
-        )
-        .order_by(IndustryClassification.valid_from.desc())
-    )
-    industries: dict[str, str] = {}
-    shenwan: dict[str, str] = {}
-    directory = default_shenwan_directory()
-    for symbol, market, classification in (await session.execute(stmt)).all():
-        ticker = format_listing_ticker(ticker=symbol, market_code=market)
-        if ticker not in tickers:
-            continue
-        if classification.system == SW2021_SYSTEM:
-            code = usable_sw_code(
-                classification.code, classification.valid_from, classification.valid_to,
-                directory, classification.name,
-            )
-            chain = directory.chain(code) if code else ()
-            if chain and chain[0].level == 1:
-                shenwan.setdefault(ticker, chain[0].name)
-        elif classification.name:
-            industries.setdefault(ticker, classification.name)
-    return {**industries, **shenwan}
-
-
-async def _watchlist_tickers(session: AsyncSession) -> set[str]:
-    stmt = select(Listing.ticker, Listing.market_code).join(
-        WatchlistItem, WatchlistItem.listing_id == Listing.id
-    )
-    return {
-        format_listing_ticker(ticker=ticker, market_code=market_code)
-        for ticker, market_code in (await session.execute(stmt)).all()
-    }

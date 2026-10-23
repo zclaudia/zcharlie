@@ -24,13 +24,16 @@ from fastapi import APIRouter, Depends
 
 from investment_agent.api.auth import get_settings, verify_api_key_or_session
 
-# Re-exported for existing importers: the aggregate and its universe helper now
-# live in :mod:`investment_agent.api.views`. The dashboard route imports
+# Re-exported for existing importers: the aggregate lives in
+# :mod:`investment_agent.api.views` and the universe helper in
+# :mod:`investment_agent.directory_search`. The dashboard route imports
 # ``compute_data_health`` from here and ``tests/unit/test_settings_consumers.py``
 # reads ``_snapshot_universes`` from here, so both names are kept on this module.
-from investment_agent.api.views import _snapshot_universes as _snapshot_universes
 from investment_agent.api.views import compute_data_health as compute_data_health
 from investment_agent.config import Settings
+from investment_agent.directory_search import (
+    snapshot_universes as _snapshot_universes,  # noqa: F401  (re-export)
+)
 from investment_agent.snapshots.health import DataHealth
 from investment_agent.storage.database import session_scope
 
