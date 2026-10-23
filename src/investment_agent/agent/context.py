@@ -7,7 +7,7 @@ reasoning and rejected drafts are not evidence and need not be replayed forever.
 import hashlib
 import json
 from dataclasses import replace
-from typing import Any
+from typing import Any, cast
 
 from pydantic_ai.messages import (
     ModelMessage,
@@ -18,15 +18,16 @@ from pydantic_ai.messages import (
     ToolReturnPart,
     UserPromptPart,
 )
+from pydantic_core import ErrorDetails
 
 
 def project_history(messages: list[ModelMessage], *, known_sources: tuple[dict[str, Any], ...] = ()) -> list[ModelMessage]:
     projected: list[ModelMessage] = []
     journal: list[dict[str, Any]] = []
-    preparations = [p for m in messages if isinstance(m, ModelRequest) for p in m.parts
+    preparations = [p.content["preparation_ref"] for m in messages if isinstance(m, ModelRequest) for p in m.parts
                     if isinstance(p, ToolReturnPart) and p.tool_name == "prepare_company_view"
                     and isinstance(p.content, dict) and p.content.get("preparation_ref")]
-    current_preparation = preparations[-1].content["preparation_ref"] if preparations else None
+    current_preparation = preparations[-1] if preparations else None
 
     def flush() -> None:
         if journal:
@@ -105,11 +106,15 @@ def reuse_preparation_materials(result: dict[str, Any], sources: tuple[dict[str,
     materials = []
     for material in result.get("materials", []):
         record = known.get((material.get("id"), material.get("revision")))
-        def equal_field(key: str, value: Any, record=record) -> bool:
+        def equal_field(key: str, value: Any, record: dict[str, Any] | None = record) -> bool:
+            if record is None:
+                return False
             if key == "text" and "_text_window" in record:
-                window = record["_text_window"]
-                excerpt = value[window["start"]:window["end"]] if isinstance(value, str) else None
-                return (excerpt == window["text"] and len(value) == window["full_length"]
+                window: dict[str, Any] = record["_text_window"]
+                if not isinstance(value, str):
+                    return False
+                excerpt = value[window["start"]:window["end"]]
+                return bool(excerpt == window["text"] and len(value) == window["full_length"]
                         and hashlib.sha256(excerpt.encode()).hexdigest() == window["sha256"])
             return key in record and record[key] == value
         if record and all(equal_field(key, value) for key, value in material.items()):
@@ -146,7 +151,7 @@ def _retry_feedback(part: RetryPromptPart) -> RetryPromptPart:
     # response. ErrorDetails.input would echo that entire draft a second time.
     if not isinstance(part.content, list):
         return part
-    return replace(part, content=[{k: v for k, v in error.items() if k != "input"} for error in part.content])
+    return replace(part, content=[cast(ErrorDetails, {k: v for k, v in error.items() if k != "input"}) for error in part.content])
 
 
 def reusable_context_preparation(instructions: str) -> bool:

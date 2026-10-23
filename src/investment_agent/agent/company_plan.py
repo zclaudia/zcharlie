@@ -1,5 +1,6 @@
 """Continue an exact question from its public validated plan, not model history."""
 from datetime import timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -14,7 +15,7 @@ from investment_agent.storage.models.agent import ExecutionGrantRow, MessageRow,
 
 
 async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: ExecutionGrant,
-                             message: MessageRow, method_ref: ObjectRef, *, base: Settings) -> dict | None:
+                             message: MessageRow, method_ref: ObjectRef, *, base: Settings) -> dict[str, Any] | None:
     from investment_agent.agent.research import ResearchProgress, save_progress, validate_progress
     from investment_agent.investor.methods import task_method
     service = TaskService(session)
@@ -44,7 +45,7 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
         actions = (await session.scalars(select(ToolAction).where(ToolAction.task_id == str(task_id),
             ToolAction.state == "committed"))).all()
         planned = next((a for a in actions if a.parameters.get("tool") == "save_research_progress" and a.result), None)
-        if planned is None:
+        if planned is None or planned.result is None:
             continue
         progress = ResearchProgress.model_validate(planned.result["progress"])
         if progress.answered:
@@ -63,7 +64,7 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
         parameters = {"tool": "save_research_progress", "business": plan.model_dump(mode="json"),
                       "phase": "research:v1", "reused_plan_from": planned.operation_id}
         action = await service.prepare_action(claim, intent_key="continuation:public-plan", parameters=parameters, effect="database")
-        async def save(owned, operation, plan=plan, source_operation=planned.operation_id):
+        async def save(owned: AsyncSession, operation: UUID, plan: ResearchProgress = plan, source_operation: str = planned.operation_id) -> ActionResult:
             result = await save_progress(owned, operation, plan)
             return ActionResult({**result.output, "reused_plan_from": source_operation}, artifact_refs=result.artifact_refs)
         result = await service.settle_action(claim, UUID(action.operation_id), save)
@@ -81,7 +82,7 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
                 from investment_agent.agent.research_publication import CompanyViewInput, prepare
                 from investment_agent.investor.foundations import InvestorService
                 business = CompanyViewInput.model_validate(previous_preparation.parameters["business"])
-                case = await InvestorService(session).get_case(grant.owner, business.case_ref.id)
+                case = await InvestorService(session).get_case(grant.owner, UUID(str(business.case_ref.id)))
                 business = business.model_copy(update={"case_ref": ObjectRef(kind="case", id=case.id, revision=case.revision)})
                 await check_boundary(session, claim, base, tool="prepare_company_view", required_refs=(business.case_ref,))
                 await BudgetService(session, base).check(claim)
@@ -89,7 +90,7 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
                           "phase": "research:v1", "reused_preparation_from": previous_preparation.operation_id}
                 prepared = await service.prepare_action(claim, intent_key="continuation:public-candidate", parameters=params, effect="database")
                 try:
-                    async def rebuild(owned, operation, business=business):
+                    async def rebuild(owned: AsyncSession, operation: UUID, business: CompanyViewInput = business) -> ActionResult:
                         return await prepare(owned, operation, business)
                     reused["prepared_review"] = await service.settle_action(claim, UUID(prepared.operation_id), rebuild)
                     reused["policy"] = "Public planning and an unpublished candidate were revalidated and prepared under this task's current authorization/cutoff/method. Only the new model's final semantic review and answer remain. No old private reasoning or semantic approval was reused. Do not repeat planning or preparation; publication still checks every gate."

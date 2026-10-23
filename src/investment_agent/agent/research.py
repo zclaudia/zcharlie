@@ -6,7 +6,7 @@ not private framework histories and not formal company recommendations.
 import json
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, Literal, cast
 from uuid import UUID, uuid5
 
 from pydantic import model_validator
@@ -399,7 +399,7 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
     if not grant.current_research:
         filtered_context["memories"] = [m.model_dump(mode="json") for m in memory.memories if m.created_at <= cutoff]
     method = await task_method(session, claim.task_id)
-    data = {"method_ref": method.method_ref.model_dump(mode="json"), "method_config": method.config.model_dump(mode="json"), "method_scope_policy": "Only exact single-listing company research/review can use a scoped method; comparison, portfolio and multiple-listing tasks retain baseline", "research_kind": grant.research_kind,
+    data: dict[str, Any] = {"method_ref": method.method_ref.model_dump(mode="json"), "method_config": method.config.model_dump(mode="json"), "method_scope_policy": "Only exact single-listing company research/review can use a scoped method; comparison, portfolio and multiple-listing tasks retain baseline", "research_kind": grant.research_kind,
         "peer_context_bound": grant.peer_context is not None,
         "scope_refs": [r.model_dump(mode="json") for r in grant.scope_refs],
         "admission_cutoff": task.binding.as_of.isoformat(), "observation_cutoff": (await effective_cutoff(session, task.id)).isoformat(),
@@ -677,9 +677,11 @@ async def capture(session: AsyncSession, operation: UUID, business: Any) -> Acti
             record = await NumericResolver(EvidenceService(session), subject, business.as_of).fact(ref)
             material["eligibility"]["fact_reference_allowed"] = True
             if record.value is not None and record.value.value is not None:
-                display = "percent" if record.value.unit in {"fraction", "percent"} else "decimal"
+                from investment_agent.investor.enums import NumericRole
+
+                display: Literal["decimal", "percent"] = "percent" if record.value.unit in {"fraction", "percent"} else "decimal"
                 node = NumericNode(type="numeric_claim", ref=ref.model_copy(update={"field_path": "value"}),
-                    role="historical_fact", display_format=display)
+                    role=NumericRole.FACT, display_format=display)
                 await NumericResolver(EvidenceService(session), subject, business.as_of).resolve(node)
                 material["numeric_claim"] = node.model_dump(mode="json")
         except InvestorError as exc:
