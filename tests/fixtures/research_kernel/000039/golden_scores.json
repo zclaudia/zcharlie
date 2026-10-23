@@ -7,7 +7,7 @@
       "ifind-proxy"
     ],
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "freshness_policy": {
       "as_of": "2026-10-05T15:25:07.638374+00:00",
       "max_market_age_trading_days": 1,
@@ -20,7 +20,7 @@
     {
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "000039",
       "name": "中集集团",
       "market": "SZ",
@@ -423,7 +423,18 @@
         "debt_ratio": 0.599445,
         "revenue_growth_3y": 0.034312,
         "net_profit_growth_3y": -0.590649,
-        "max_drawdown_1y": 0.456036
+        "max_drawdown_1y": 0.456036,
+        "latest_price": 8.6,
+        "ps": 0.2961,
+        "return_1y": 0.047503,
+        "volatility_1y": 0.497268,
+        "revenue": 156611446000.0,
+        "net_profit": 220820000.0,
+        "gross_margin": 0.12448000000000001,
+        "net_margin": 0.008539,
+        "roe_stability": 0.178557,
+        "operating_cash_flow": 18514449000.0,
+        "free_cash_flow": 13795722000.0
       },
       "missing_fields": [
         "dividend_yield"

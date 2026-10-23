@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "300750",
       "name": "宁德时代",
       "strategy_type": "steady_quality_growth",
@@ -703,7 +703,18 @@
         "debt_ratio": 0.6193930000000001,
         "revenue_growth_3y": 0.088429,
         "net_profit_growth_3y": 0.329428,
-        "max_drawdown_1y": 0.37425
+        "max_drawdown_1y": 0.37425,
+        "latest_price": 291.11,
+        "ps": 3.1356,
+        "return_1y": -0.276026,
+        "volatility_1y": 0.359683,
+        "revenue": 423701834000.0,
+        "net_profit": 72201282000.0,
+        "gross_margin": 0.262728,
+        "net_margin": 0.18122699999999997,
+        "roe_stability": 0.967825,
+        "operating_cash_flow": 133219982000.0,
+        "free_cash_flow": 90875424000.0
       },
       "missing_fields": [
         "dividend_yield"

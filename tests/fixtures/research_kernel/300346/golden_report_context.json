@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "300346",
       "name": "南大光电",
       "strategy_type": "high_growth_venture",
@@ -723,7 +723,18 @@
         "debt_ratio": 0.353297,
         "revenue_growth_3y": 0.178097,
         "net_profit_growth_3y": 0.196371,
-        "max_drawdown_1y": 0.496703
+        "max_drawdown_1y": 0.496703,
+        "latest_price": 49.45,
+        "ps": 13.2191,
+        "return_1y": 0.152681,
+        "volatility_1y": 0.660761,
+        "revenue": 2585462641.18,
+        "net_profit": 319755424.09,
+        "gross_margin": 0.396205,
+        "net_margin": 0.15612600000000001,
+        "roe_stability": 0.977406,
+        "operating_cash_flow": 732522948.58,
+        "free_cash_flow": 562486565.4300001
       },
       "missing_fields": [
         "dividend_yield"

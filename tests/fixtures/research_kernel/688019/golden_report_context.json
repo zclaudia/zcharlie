@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "688019",
       "name": "安集科技",
       "strategy_type": "high_growth_venture",
@@ -735,7 +735,18 @@
         "debt_ratio": 0.299197,
         "revenue_growth_3y": 0.324893,
         "net_profit_growth_3y": 0.375018,
-        "max_drawdown_1y": 0.38645
+        "max_drawdown_1y": 0.38645,
+        "latest_price": 211.0,
+        "ps": 14.2027,
+        "return_1y": 0.197367,
+        "volatility_1y": 0.656457,
+        "revenue": 2504217940.48,
+        "net_profit": 783648337.86,
+        "gross_margin": 0.567237,
+        "net_margin": 0.312931,
+        "roe_stability": 0.942629,
+        "operating_cash_flow": 439774055.91,
+        "free_cash_flow": 84394209.18
       },
       "missing_fields": [
         "dividend_yield"

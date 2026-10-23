@@ -17,7 +17,7 @@ manifest_schema_version: 1
 created_at: "2026-10-05"
 canonical_schema_version: "ifind-canonical.v1"
 scoring_version: "v1.3"
-score_schema_version: "v2.1"
+score_schema_version: "v2.2"
 report_year: 2025
 fixture_policy:
   provider: ifind-proxy

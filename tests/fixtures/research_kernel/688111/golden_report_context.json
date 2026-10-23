@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "688111",
       "name": "金山办公",
       "strategy_type": "steady_quality_growth",
@@ -744,7 +744,18 @@
         "debt_ratio": 0.292047,
         "revenue_growth_3y": 0.151309,
         "net_profit_growth_3y": 0.180071,
-        "max_drawdown_1y": 0.473596
+        "max_drawdown_1y": 0.473596,
+        "latest_price": 218.8,
+        "ps": 17.0936,
+        "return_1y": -0.309975,
+        "volatility_1y": 0.449476,
+        "revenue": 5928744673.06,
+        "net_profit": 1836468727.81,
+        "gross_margin": 0.8594759999999999,
+        "net_margin": 0.30729399999999996,
+        "roe_stability": 0.948112,
+        "operating_cash_flow": 2501503094.95,
+        "free_cash_flow": 2403616120.18
       },
       "missing_fields": [
         "dividend_yield"

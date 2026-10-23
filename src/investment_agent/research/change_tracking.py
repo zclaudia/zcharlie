@@ -5,6 +5,7 @@ from typing import TypeGuard
 
 CHANGE_SCHEMA_VERSION = "research-change.v2"
 SCORING_VERSION_CHANGED = "scoring_version_changed"
+SCORE_SCHEMA_CHANGED = "score_schema_changed"
 SOURCE_CHANGED = "source_changed"
 # Scores persisted before P1-B5 carry no ``source_mode``; they came from iFinD.
 DEFAULT_SOURCE_MODE = "ifind"
@@ -137,6 +138,11 @@ def build_research_diff(
     carries ``source_changed=True``, and every other delta is kept but marked
     non-meaningful with ``suppressed_reason="source_changed"``: score and
     metric jumps then reflect the data-source switch, not the company.
+
+    Across output schema versions, metrics present in only one snapshot have
+    no comparable baseline. Their deltas are kept but non-meaningful with
+    ``suppressed_reason="score_schema_changed"``. Existing keys, including
+    explicitly null values, retain the normal change rules.
     """
 
     if previous_score is None:
@@ -163,6 +169,13 @@ def build_research_diff(
     before_mode = previous_source_mode or _source_mode_value(previous_score)
     after_mode = current_source_mode or _source_mode_value(current_score)
     source_changed = before_mode != after_mode
+    before_schema = previous_score.get("schema_version")
+    after_schema = current_score.get("schema_version")
+    schema_changed = (
+        isinstance(before_schema, str)
+        and isinstance(after_schema, str)
+        and before_schema != after_schema
+    )
     if source_changed:
         changes.append(
             {
@@ -230,8 +243,11 @@ def build_research_diff(
         )
 
     metric_keys = _mapping_keys(previous_score, current_score, "key_metrics")
+    previous_metrics = previous_score.get("key_metrics", {})
+    current_metrics = current_score.get("key_metrics", {})
     for key in metric_keys:
         field = f"key_metrics.{key}"
+        change_start = len(changes)
         _append_change(
             changes,
             category="financial_metric",
@@ -240,6 +256,17 @@ def build_research_diff(
             after=_path_value(current_score, field),
             threshold=METRIC_THRESHOLDS.get(key, DEFAULT_METRIC_THRESHOLD),
         )
+        if (
+            schema_changed
+            and isinstance(previous_metrics, dict)
+            and isinstance(current_metrics, dict)
+            and (key not in previous_metrics or key not in current_metrics)
+        ):
+            # A newly exposed metric has no historical baseline. Keep the
+            # delta for audit, but do not call it a company/data change.
+            for change in changes[change_start:]:
+                change["meaningful"] = False
+                change["suppressed_reason"] = SCORE_SCHEMA_CHANGED
 
     _append_change(
         changes,

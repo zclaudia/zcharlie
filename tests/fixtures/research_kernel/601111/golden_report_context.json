@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "601111",
       "name": "中国国航",
       "strategy_type": "quality_growth",
@@ -739,7 +739,18 @@
         "debt_ratio": 0.885638,
         "revenue_growth_3y": 0.480005,
         "net_profit_growth_3y": null,
-        "max_drawdown_1y": 0.388474
+        "max_drawdown_1y": 0.388474,
+        "latest_price": 5.91,
+        "ps": 0.6013,
+        "return_1y": -0.257538,
+        "volatility_1y": 0.333813,
+        "revenue": 171484646000.0,
+        "net_profit": -1770393000.0,
+        "gross_margin": 0.051534,
+        "net_margin": -0.020555,
+        "roe_stability": null,
+        "operating_cash_flow": 42045213000.0,
+        "free_cash_flow": 24483937000.0
       },
       "missing_fields": [
         "dividend_yield",

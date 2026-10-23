@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "002230",
       "name": "科大讯飞",
       "strategy_type": "steady_quality_growth",
@@ -744,7 +744,18 @@
         "debt_ratio": 0.5572050000000001,
         "revenue_growth_3y": 0.129302,
         "net_profit_growth_3y": 0.143612,
-        "max_drawdown_1y": 0.414634
+        "max_drawdown_1y": 0.414634,
+        "latest_price": 37.22,
+        "ps": 3.1745,
+        "return_1y": -0.374454,
+        "volatility_1y": 0.330186,
+        "revenue": 27105390547.66,
+        "net_profit": 839390861.36,
+        "gross_margin": 0.423568,
+        "net_margin": 0.031339,
+        "roe_stability": 0.858067,
+        "operating_cash_flow": 3208095271.78,
+        "free_cash_flow": 57450859.71000004
       },
       "missing_fields": [
         "dividend_yield"

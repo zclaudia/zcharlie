@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "600406",
       "name": "国电南瑞",
       "strategy_type": "steady_quality_growth",
@@ -691,7 +691,18 @@
         "debt_ratio": 0.427306,
         "revenue_growth_3y": 0.122478,
         "net_profit_growth_3y": 0.086988,
-        "max_drawdown_1y": 0.297914
+        "max_drawdown_1y": 0.297914,
+        "latest_price": 22.52,
+        "ps": 2.7311,
+        "return_1y": 0.078028,
+        "volatility_1y": 0.270579,
+        "revenue": 66228963223.21,
+        "net_profit": 8278971723.32,
+        "gross_margin": 0.258371,
+        "net_margin": 0.133749,
+        "roe_stability": 0.989676,
+        "operating_cash_flow": 12768702125.04,
+        "free_cash_flow": 10658347202.94
       },
       "missing_fields": [
         "dividend_yield"

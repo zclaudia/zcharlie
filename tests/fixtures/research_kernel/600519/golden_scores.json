@@ -7,7 +7,7 @@
       "ifind-proxy"
     ],
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "freshness_policy": {
       "as_of": "2026-10-05T15:22:50.891048+00:00",
       "max_market_age_trading_days": 1,
@@ -20,7 +20,7 @@
     {
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "600519",
       "name": "贵州茅台",
       "market": "SH",
@@ -424,7 +424,18 @@
         "debt_ratio": 0.16415400000000002,
         "revenue_growth_3y": 0.104902,
         "net_profit_growth_3y": 0.094901,
-        "max_drawdown_1y": 0.230684
+        "max_drawdown_1y": 0.230684,
+        "latest_price": 1258.62,
+        "ps": 9.1607,
+        "return_1y": -0.088003,
+        "volatility_1y": 0.223896,
+        "revenue": 172054171890.91,
+        "net_profit": 82320067101.68,
+        "gross_margin": 0.9117959999999999,
+        "net_margin": 0.505279,
+        "roe_stability": 0.93741,
+        "operating_cash_flow": 61522204989.35,
+        "free_cash_flow": 58394610072.94
       },
       "missing_fields": [
         "dividend_yield"

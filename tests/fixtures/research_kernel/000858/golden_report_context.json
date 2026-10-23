@@ -4,7 +4,7 @@
     "generated_at": "2026-10-06T04:23:24+00:00",
     "skill_version": "0.3.0",
     "scoring_version": "v1.3",
-    "schema_version": "v2.1",
+    "schema_version": "v2.2",
     "top": 1
   },
   "items": [
@@ -12,7 +12,7 @@
       "rank": 1,
       "skill_version": "0.3.0",
       "scoring_version": "v1.3",
-      "schema_version": "v2.1",
+      "schema_version": "v2.2",
       "symbol": "000858",
       "name": "五粮液",
       "strategy_type": "dividend_blue_chip",
@@ -729,7 +729,18 @@
         "debt_ratio": 0.356891,
         "revenue_growth_3y": -0.181715,
         "net_profit_growth_3y": -0.305152,
-        "max_drawdown_1y": 0.408887
+        "max_drawdown_1y": 0.408887,
+        "latest_price": 70.06,
+        "ps": 6.71,
+        "return_1y": -0.387641,
+        "volatility_1y": 0.225662,
+        "revenue": 40528509770.23,
+        "net_profit": 8954257202.51,
+        "gross_margin": 0.7754179999999999,
+        "net_margin": 0.22989,
+        "roe_stability": 0.6236,
+        "operating_cash_flow": 29706259919.13,
+        "free_cash_flow": 27738852602.77
       },
       "missing_fields": [
         "dividend_yield"

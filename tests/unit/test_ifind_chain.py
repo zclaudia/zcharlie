@@ -1,6 +1,8 @@
 import json
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -245,8 +247,6 @@ def test_explanation_flattens_structured_workflow_conclusion():
 
 
 async def test_explain_score_retries_once_on_schema_error(monkeypatch):
-    from contextlib import asynccontextmanager
-
     calls: list[str] = []
     replies = [
         json.dumps({"classification_rationale": []}),
@@ -286,3 +286,135 @@ async def test_explain_score_retries_once_on_schema_error(monkeypatch):
     assert explanation.summary == "summary"
     assert len(calls) == 2
     assert "summary: Field required" in calls[1]
+
+
+@pytest.fixture
+def explanation_client(monkeypatch):
+    replies = []
+    calls = []
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def complete(self, **kwargs):
+            calls.append(kwargs)
+            reply = replies[len(calls) - 1]
+            if isinstance(reply, Exception):
+                raise reply
+            return SimpleNamespace(output=kwargs["output_model"].model_validate(reply))
+
+    @asynccontextmanager
+    async def fake_scope():
+        yield None
+
+    monkeypatch.setattr(ifind_chain, "OpenAICompatibleClient", FakeClient)
+    monkeypatch.setattr(ifind_chain, "session_scope", fake_scope)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="test",
+        llm_tier3_api_key="test",
+    )
+    return replies, calls, settings
+
+
+async def test_explain_score_advertises_only_resolvable_field_paths(explanation_client):
+    replies, calls, settings = explanation_client
+    replies.append(_explanation_payload())
+    score_item = {
+        "key_metrics": {"roe": 0.16, "pb": None},
+        "missing_fields": ["pb"],
+        "quality_flags": {},
+        "literal.dotted.key": 1,
+        "": 2,
+    }
+
+    await ifind_chain._explain_score(settings=settings, run_id=1, score_item=score_item)
+
+    schema = json.JSONDecoder().raw_decode(
+        calls[0]["system_prompt"].split("对象，不要省略字段：\n")[1]
+    )[0]
+    allowed = schema["$defs"]["EvidenceClaim"]["properties"]["supporting_fields"]["items"]["enum"]
+    assert allowed == [
+        "key_metrics",
+        "key_metrics.pb",
+        "key_metrics.roe",
+        "missing_fields",
+        "quality_flags",
+    ]
+    assert all(ifind_chain._path_exists(score_item, path) for path in allowed)
+    assert "key_metrics.operating_cash_flow" not in allowed
+    assert "key_metrics.volatility_1y" not in allowed
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize(
+    ("invalid_fields", "conclusion", "error"),
+    [
+        (
+            ["key_metrics.operating_cash_flow", "key_metrics.volatility_1y"],
+            "needs_review",
+            "Agent cited unknown canonical fields: key_metrics.operating_cash_flow, key_metrics.volatility_1y",
+        ),
+        (["key_metrics.pb"], "needs_review", "Agent cited missing or null fields as evidence"),
+        (["key_metrics.roe"], "ready", "did not preserve the required needs_review"),
+    ],
+)
+async def test_explain_score_retries_policy_errors_with_feedback(
+    explanation_client, invalid_fields, conclusion, error
+):
+    replies, calls, settings = explanation_client
+    invalid = _explanation_payload(
+        positive_evidence=[{"text": "invalid claim", "supporting_fields": invalid_fields}],
+        workflow_conclusion=conclusion,
+    )
+    corrected = _explanation_payload(
+        positive_evidence=[{"text": "ROE 为 16%", "supporting_fields": ["key_metrics.roe"]}],
+        data_quality_notes=[{"text": "缺少 PB", "supporting_fields": ["key_metrics.pb"]}],
+    )
+    replies.extend([invalid, corrected])
+    score_item = {
+        "needs_agent_review": True,
+        "key_metrics": {"roe": 0.16, "pb": None},
+        "missing_fields": ["pb"],
+    }
+
+    explanation = await ifind_chain._explain_score(
+        settings=settings, run_id=42, score_item=score_item
+    )
+
+    assert explanation.model_dump() == corrected
+    assert len(calls) == 2
+    assert error in calls[1]["user_message"]
+    assert json.dumps(score_item, ensure_ascii=False, sort_keys=True) in calls[1]["user_message"]
+    assert ResearchExplanation.model_validate(invalid).model_dump_json() in calls[1]["user_message"]
+    assert calls[0]["system_prompt"] == calls[1]["system_prompt"]
+    assert all(call["pipeline_run_id"] == 42 for call in calls)
+
+
+@pytest.mark.parametrize("first_schema_error", [False, True])
+async def test_explain_score_stops_after_shared_correction_budget(
+    explanation_client, first_schema_error
+):
+    replies, calls, settings = explanation_client
+    invalid = _explanation_payload(
+        risk_factors=[{"text": "invalid", "supporting_fields": ["key_metrics.volatility_1y"]}]
+    )
+    replies.extend([{} if first_schema_error else invalid, invalid])
+
+    with pytest.raises(ValueError, match="unknown canonical fields: key_metrics.volatility_1y"):
+        await ifind_chain._explain_score(
+            settings=settings, run_id=1, score_item={"needs_agent_review": True}
+        )
+
+    assert len(calls) == 2
+
+
+async def test_explain_score_does_not_retry_unrelated_client_errors(explanation_client):
+    replies, calls, settings = explanation_client
+    replies.append(ValueError("client configuration failed"))
+
+    with pytest.raises(ValueError, match="client configuration failed"):
+        await ifind_chain._explain_score(settings=settings, run_id=1, score_item={})
+
+    assert len(calls) == 1

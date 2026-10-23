@@ -1,6 +1,49 @@
 """Deterministic research change tracking tests."""
 
+import pytest
+
 from investment_agent.research.change_tracking import build_research_diff
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("fundamentals_change", [False, True])
+def test_metric_schema_additions_do_not_report_a_company_change(reverse, fundamentals_change):
+    previous = {"schema_version": "v2.1", "key_metrics": {"roe": 0.10, "free_cash_flow": None}}
+    current = {
+        "schema_version": "v2.2",
+        "key_metrics": {
+            "roe": 0.15 if fundamentals_change else 0.10,
+            "free_cash_flow": 100 if fundamentals_change else None,
+            "operating_cash_flow": 200,
+        },
+    }
+    if reverse:
+        previous, current = current, previous
+
+    diff = build_research_diff(
+        current_run_id=2, current_score=current, previous_run_id=1, previous_score=previous
+    )
+    changes = {change["field"]: change for change in diff.changes}
+    assert changes["key_metrics.operating_cash_flow"]["meaningful"] is False
+    assert changes["key_metrics.operating_cash_flow"]["suppressed_reason"] == "score_schema_changed"
+    # Real changes and an explicitly null metric recovering still matter.
+    if fundamentals_change:
+        assert changes["key_metrics.roe"]["meaningful"] is True
+        assert changes["key_metrics.free_cash_flow"]["meaningful"] is True
+    else:
+        assert set(changes) == {"key_metrics.operating_cash_flow"}
+    assert diff.has_meaningful_changes is fundamentals_change
+
+
+def test_new_metric_without_a_schema_change_remains_meaningful():
+    diff = build_research_diff(
+        current_run_id=2,
+        current_score={"schema_version": "v2.2", "key_metrics": {"operating_cash_flow": 200}},
+        previous_run_id=1,
+        previous_score={"schema_version": "v2.2", "key_metrics": {}},
+    )
+    assert diff.has_meaningful_changes is True
+    assert "suppressed_reason" not in diff.changes[0]
 
 
 def test_first_snapshot_is_an_explicit_baseline():

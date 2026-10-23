@@ -20,8 +20,12 @@ FIELD_LABELS: dict[str, str] = {
     "revenue_growth_3y": "营收 3 年复合增速",
     "free_cash_flow": "自由现金流",
     "operating_cash_flow": "经营现金流",
+    "latest_price": "最新价",
+    "revenue": "营业收入",
+    "net_profit": "净利润",
     "pe": "PE",
     "pb": "PB",
+    "ps": "PS",
     "pe_ttm": "PE(TTM)",
     "pb_mrq": "PB(MRQ)",
     "market_cap": "总市值",
@@ -80,7 +84,7 @@ def readability_rules() -> str:
         "（如写“ROE”而不是 key_metrics.roe，写“PB 5 年分位”而不是 pb_percentile_5y）；"
         "标识符只放在 supporting_fields / cited_factors 等结构化字段中。\n"
         "- 数值写成人类可读形式：比例写百分比并保留 1 位小数（0.167 → 16.7%），"
-        "估值倍数写“倍”（10.32 → 10.3 倍），金额写“亿元”，分数保留 1 位小数；"
+        "估值倍数写“倍”（10.32 → 10.3 倍），总额写“亿元”，最新价和每股金额写“元”，分数保留 1 位小数；"
         "不要写 0.120198 这类原始小数。\n"
         f"- 常用中文名：{names}。"
     )

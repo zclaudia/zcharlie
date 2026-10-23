@@ -332,6 +332,10 @@ export const FIELD_LABELS = Object.freeze({
   ...FACTOR_LABELS,
   pe: "PE",
   pb: "PB",
+  ps: "PS",
+  latest_price: "最新价",
+  revenue: "营业收入",
+  net_profit: "净利润",
   dividend_yield: "股息率",
   close: "收盘价",
   turnover: "换手率",
@@ -352,8 +356,12 @@ export const FIELD_LABELS = Object.freeze({
 // 关键指标与因子的单位，复用 formatFactorValue。
 export const METRIC_UNITS = Object.freeze({
   market_cap: "CNY",
+  latest_price: "CNY/share",
+  revenue: "CNY",
+  net_profit: "CNY",
   pe: "times",
   pb: "times",
+  ps: "times",
   pe_ttm: "times",
   pb_mrq: "times",
   ps_ttm: "times",

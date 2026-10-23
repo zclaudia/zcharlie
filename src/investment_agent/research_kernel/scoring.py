@@ -42,7 +42,7 @@ __all__ = [
 ]
 
 SCORING_VERSION = "v1.3"
-SCHEMA_VERSION = "v2.1"
+SCHEMA_VERSION = "v2.2"
 # Market data age is measured in exchange trading sessions, not calendar days:
 # a quote from the last session before a weekend or holiday is still current.
 DEFAULT_MAX_MARKET_AGE_TRADING_DAYS = 1
@@ -777,12 +777,25 @@ def score_stock(
         "missing_factors": missing_factors,
         "provider_unavailable_fields": unavailable_fields,
         "key_metrics": {
+            # Expose every canonical numeric metric, not just a display subset:
+            # the explanation agent must see values as well as their sources.
             "market_cap": market_cap,
+            "latest_price": metric(market, "latest_price"),
             "pe": pe,
             "pb": pb,
+            "ps": metric(market, "ps"),
             "dividend_yield": metric(market, "dividend_yield"),
+            "return_1y": metric(market, "return_1y"),
+            "volatility_1y": metric(market, "volatility_1y"),
+            "revenue": metric(financial, "revenue"),
+            "net_profit": metric(financial, "net_profit"),
+            "gross_margin": metric(financial, "gross_margin"),
+            "net_margin": metric(financial, "net_margin"),
             "roe": metric(financial, "roe"),
+            "roe_stability": metric(financial, "roe_stability"),
             "debt_ratio": metric(financial, "debt_ratio"),
+            "operating_cash_flow": metric(financial, "operating_cash_flow"),
+            "free_cash_flow": metric(financial, "free_cash_flow"),
             "revenue_growth_3y": metric(financial, "revenue_growth_3y"),
             "net_profit_growth_3y": metric(financial, "net_profit_growth_3y"),
             "max_drawdown_1y": metric(market, "max_drawdown_1y"),

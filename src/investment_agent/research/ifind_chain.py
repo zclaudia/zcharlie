@@ -958,15 +958,31 @@ def validate_explanation_policy(
 
 
 EXPLANATION_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的解释 Agent。只解释输入 JSON 中已经生成的事实与分数，不能补充外部事实，不能给出买入、卖出、仓位或收益承诺。
-每条 classification_rationale、positive_evidence、negative_evidence、risk_factors、data_quality_notes 都必须给出 supporting_fields，并使用输入 JSON 中真实存在的点路径，例如 business_score、key_metrics.roe、factor_scores.growth_durability、missing_fields。
+每条 classification_rationale、positive_evidence、negative_evidence、risk_factors、data_quality_notes 都必须给出 supporting_fields。每个引用只能从下方 JSON Schema 的 supporting_fields.items.enum 白名单中逐字选择；该白名单根据本次输入 JSON 的实际字段生成，不得推测或拼接其他字段路径。
 值为 null 或列在 missing_fields 中的字段不能作为分类、正面、负面或风险论据，只能在 data_quality_notes 中引用。
 如果 needs_agent_review 为 true，workflow_conclusion 必须是包含“needs_review”的字符串，并优先解释 missing_fields、quality_flags、freshness 和 warnings。输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要省略字段：
 {output_schema}"""
 
 
-# One extra call when the model's JSON misses the schema (dropped fields,
-# wrong types); the retry tells it exactly what failed.
-EXPLANATION_SCHEMA_ATTEMPTS = 2
+# Share one correction attempt across schema and policy failures so malformed
+# output and invalid citations cannot trigger an unbounded series of LLM calls.
+EXPLANATION_ATTEMPTS = 2
+
+
+def _explanation_field_paths(payload: dict[str, Any], prefix: str = "") -> list[str]:
+    """List resolvable dotted paths, including containers but not list indices."""
+
+    paths: list[str] = []
+    for key, value in sorted(payload.items()):
+        # The resolver treats dots as separators, so literal dotted keys cannot
+        # be advertised as paths. Lists can only be cited as whole containers.
+        if not key or "." in key:
+            continue
+        path = f"{prefix}.{key}" if prefix else key
+        paths.append(path)
+        if isinstance(value, dict):
+            paths.extend(_explanation_field_paths(value, path))
+    return paths
 
 
 def _schema_retry_message(score_item: dict[str, Any], exc: ValidationError) -> str:
@@ -982,31 +998,47 @@ def _schema_retry_message(score_item: dict[str, Any], exc: ValidationError) -> s
     )
 
 
+def _policy_retry_message(
+    score_item: dict[str, Any], explanation: ResearchExplanation, exc: ValueError
+) -> str:
+    return (
+        json.dumps(score_item, ensure_ascii=False, sort_keys=True)
+        + "\n\n上一次输出：\n"
+        + explanation.model_dump_json()
+        + "\n\n上一次输出未通过解释校验：\n"
+        + str(exc)
+        + "\n请根据上述错误重新输出完整 JSON 对象。supporting_fields 只能从 Schema 的 enum "
+        "白名单中选择，并以输入中的实际值为依据修正或删除相关论据；"
+        "缺失或 null 字段只能用于 data_quality_notes。"
+        "如果 needs_agent_review 为 true，workflow_conclusion 必须包含 needs_review。"
+    )
+
+
 async def _explain_score(
     *,
     settings: Settings,
     run_id: int,
     score_item: dict[str, Any],
 ) -> ResearchExplanation:
-    output_schema = json.dumps(
-        ResearchExplanation.model_json_schema(),
-        ensure_ascii=False,
-        sort_keys=True,
+    schema = ResearchExplanation.model_json_schema()
+    schema["$defs"]["EvidenceClaim"]["properties"]["supporting_fields"]["items"]["enum"] = (
+        _explanation_field_paths(score_item)
     )
+    output_schema = json.dumps(schema, ensure_ascii=False, sort_keys=True)
     system_prompt = (
         EXPLANATION_SYSTEM_PROMPT_TEMPLATE.format(output_schema=output_schema)
         + "\n\n"
         + readability_rules()
     )
-    async with session_scope() as session:
-        client = OpenAICompatibleClient(
-            tier_name="tier3",
-            config=settings.llm_tier3,
-            session=session,
-        )
-        user_message = json.dumps(score_item, ensure_ascii=False, sort_keys=True)
-        for attempt in range(EXPLANATION_SCHEMA_ATTEMPTS):
-            try:
+    user_message = json.dumps(score_item, ensure_ascii=False, sort_keys=True)
+    for attempt in range(EXPLANATION_ATTEMPTS):
+        try:
+            async with session_scope() as session:
+                client = OpenAICompatibleClient(
+                    tier_name="tier3",
+                    config=settings.llm_tier3,
+                    session=session,
+                )
                 result = await client.complete(
                     system_prompt=system_prompt,
                     user_message=user_message,
@@ -1014,16 +1046,25 @@ async def _explain_score(
                     purpose="ifind_research_explanation",
                     pipeline_run_id=run_id,
                 )
-                break
-            except ValidationError as exc:
-                if attempt + 1 >= EXPLANATION_SCHEMA_ATTEMPTS:
-                    raise
-                user_message = _schema_retry_message(score_item, exc)
-    explanation = result.output
-    if not isinstance(explanation, ResearchExplanation):
-        raise ValueError("Explanation agent did not return ResearchExplanation")
-    validate_explanation_policy(explanation, score_item)
-    return explanation
+        except ValidationError as exc:
+            if attempt + 1 >= EXPLANATION_ATTEMPTS:
+                raise
+            user_message = _schema_retry_message(score_item, exc)
+            continue
+        # Keep policy validation outside the call's transaction so a rejected
+        # explanation does not roll back its LLM usage/audit record.
+        explanation = result.output
+        if not isinstance(explanation, ResearchExplanation):
+            raise ValueError("Explanation agent did not return ResearchExplanation")
+        try:
+            validate_explanation_policy(explanation, score_item)
+        except ValueError as exc:
+            if attempt + 1 >= EXPLANATION_ATTEMPTS:
+                raise
+            user_message = _policy_retry_message(score_item, explanation, exc)
+            continue
+        return explanation
+    raise RuntimeError("Explanation attempt budget exhausted")
 
 
 _REPORT_TITLES = {
