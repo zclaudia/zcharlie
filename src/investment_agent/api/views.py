@@ -644,10 +644,14 @@ async def compute_data_health(
 
 
 async def search_directory(
-    session: AsyncSession, settings: Settings, q: str, *, limit: int
+    session: AsyncSession, settings: Settings | None, q: str, *, limit: int
 ) -> list[StockSearchItem]:
     """Directory hits for ``q`` with the target-pool / watchlist flags
-    (shared by the API and the MCP ``search_stocks`` tool)."""
+    (shared by the API and the MCP ``search_stocks`` tool).
+
+    ``settings=None`` (agent tool) skips the runtime target-pool lookup and
+    reports every item as outside the universe.
+    """
 
     query = q.strip()
     if not query:
@@ -659,8 +663,8 @@ async def search_directory(
     today = shanghai_today()
     industries = await _stock_industries(session, tickers, today)
     annuals = await _annual_disclosures(session, tickers, today)
-    universes = await _snapshot_universes(session, settings)
-    members = await UniverseRepository(session).members_as_of(universes[0], today)
+    universes = await _snapshot_universes(session, settings) if settings is not None else ()
+    members = await UniverseRepository(session).members_as_of(universes[0], today) if universes else ()
     in_universe = {member.ticker for member in members} & tickers
     on_watchlist = await _watchlist_tickers(session) & tickers
     return [

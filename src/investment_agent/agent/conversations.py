@@ -405,7 +405,7 @@ class ConversationService:
                     if saved_valuation is None or saved_valuation.account_id != saved_snapshot.account_id:
                         raise InvalidContextError("Valuation context must belong to the exact snapshot account")
                     portfolio_valuation_ref = portfolio_valuations[0]
-            tools: tuple[str, ...] = ("save_research_progress", "prepare_user_operation")
+            tools: tuple[str, ...] = ("save_research_progress", "prepare_user_operation", "search_stock_directory")
             if kind == "portfolio_action":
                 tools += ("get_portfolio_context", "calculate_portfolio_options", "prepare_portfolio_plan", "publish_portfolio_plan")
             if disclosure_permissions:

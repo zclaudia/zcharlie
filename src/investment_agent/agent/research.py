@@ -4,6 +4,7 @@ Research notes live in the existing action ledger. They are readable artifacts,
 not private framework histories and not formal company recommendations.
 """
 import json
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid5
@@ -66,6 +67,11 @@ from investment_agent.portfolio.plan_contracts import PlanSemanticInput
 from investment_agent.storage.models.agent import MessageRow, ToolAction
 from investment_agent.storage.models.evidence import SavedCalculation, SavedEvidence
 from investment_agent.valuation.tools import valuation_registrations
+
+# A canonical A-share ticker (suffixed, e.g. 600519.SH) is an identity token
+# in qualitative text - the directory-candidate answer and the watchlist-add
+# reply command both carry it. Bare numbers stay quantitative claims.
+_A_SHARE_CANONICAL_TOKEN = re.compile(r"(?<![A-Za-z0-9])\d{6}\.(?:SH|SZ|BJ)(?![A-Za-z0-9])")
 
 
 class ResearchHypothesis(Contract):
@@ -152,7 +158,8 @@ class LocalResearchOutput(CompanyResearchOutput):
 
 METHOD_INSTRUCTIONS = """Use the exact task-bound company-research method and finite strengthening config supplied by the controller. Enforce each enabled check; method configuration never relaxes source, permission, budget or publication rules.
 Answer only the authorized research kind and exact security scope. With no
-security scope explain concepts or ask for an exact listing; never guess a ticker.
+security scope explain concepts, resolve the company with search_stock_directory
+or ask for an exact listing; never guess a ticker.
 Company research and company-view publication do not require a personal investment
 mandate. Answer business, price, evidence and risk questions within the admitted
 scope; never infer the user's holdings, suitability or position sizes. Personal
@@ -191,6 +198,12 @@ republication cannot add independent corroboration. Respect explicit coverage ca
 parse availability and fixed task cutoff; a later parse needs a new message.
 Use compare_saved_sources for exact saved numeric facts; it explicitly refuses
 mismatched period, unit, currency, metric, reporting scope or restricted sources.
+search_stock_directory resolves a user's fuzzy company name, code prefix or pinyin
+initials to canonical A-share tickers from the local stock directory (name, status,
+industry, on_watchlist). It is directory discovery only, never research material.
+When the user wants a stock added to the watchlist, list the matching candidates
+with their canonical tickers and tell the user to reply the exact command
+「把 <代码> 加入观察池」; no tool call can add it, and you cannot.
 get_evidence accepts only saved evidence UUID refs, never listing/case refs.
 Prefer capture_snapshot directly for a known stored field: it reads and saves in one call,
 returning exact saved evidence and source material together. No preceding get_snapshot
@@ -200,8 +213,10 @@ Missing or candidate provider data must remain a gap, not a verified fact.
 Capture snapshot material with capture_snapshot before citing saved evidence.
 Trusted target_identities supplies the authorized company's canonical ticker for
 snapshot tools. It is identity metadata, not evidence. Text question/gaps contain
-qualitative descriptions or company names only; exact security codes and numeric
-facts belong in progress.content entity_ref/numeric_claim nodes, never hidden in text.
+qualitative descriptions or company names only; numeric facts belong in
+progress.content entity_ref/numeric_claim nodes, never hidden in text. A
+canonical A-share ticker (e.g. 600519.SH) may appear in text as the identity
+token of a directory candidate and the watchlist-add reply command.
 This applies to EVERY display text field, including question, content text,
 inferences, assumptions, gaps, completed_steps, limitations and stopped_because.
 Never copy the trusted observation timestamp, a report date or ticker into these
@@ -547,9 +562,9 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
         text_fragments.append(("progress.stopped_because", progress.stopped_because))
     text_fragments.extend((f"progress.content.{index}.text", node.text) for index, node in enumerate(progress.content) if isinstance(node, TextNode))
     for field, text in text_fragments:
-        if NUMBER.search(text):
+        if NUMBER.search(_A_SHARE_CANONICAL_TOKEN.sub("", text)):
             raise ResearchValidationError("research_numeric_text_requires_reference", field,
-                "该文本字段仅写无量化描述；具体数字或证券身份请放入 progress.content 的 numeric_claim/entity_ref 引用节点，保留来源、单位和期间。")
+                "该文本字段仅写无量化描述；具体数字请放入 progress.content 的 numeric_claim/entity_ref 引用节点，保留来源、单位和期间（规范 A 股代码如 600519.SH 可作为身份令牌出现）。")
     rendered = []
     node_refs = []
     for index, node in enumerate(progress.content):

@@ -211,7 +211,7 @@ class TrustedTools:
             if spec is None:
                 if name in {"publish_recommendation", "extend_recommendation", "prepare_user_operation", "publish_portfolio_plan"}:
                     continue  # Trusted completion capabilities, never model tools.
-                if self.context.phase != "research:v1" and name in {"save_research_progress", "prepare_company_view"}:
+                if self.context.phase != "research:v1" and name in {"save_research_progress", "prepare_company_view", "search_stock_directory"}:
                     continue  # Preserve explicitly injected non-research handlers.
                 raise ExecutionDeniedError("unregistered_tool")
             def build(spec: ToolRegistration) -> Callable[..., Awaitable[dict[str, Any]]]:

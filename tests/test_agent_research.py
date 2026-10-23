@@ -1037,3 +1037,29 @@ def test_native_schema_retry_stagnation_exemption_is_finite():
         budget.output_repair_pending = False
     budget.validation_retry()
     assert not budget.output_repair_pending and budget.native_validation_retries == 2
+
+
+@pytest.mark.asyncio
+async def test_directory_search_tool_resolves_fuzzy_names_without_scope(conversation_db):
+    from investment_agent.storage.repositories.stock_directory import (
+        DirectoryUpsert,
+        StockDirectoryRepository,
+    )
+
+    async with session_scope() as session:
+        await StockDirectoryRepository(session).upsert_all(
+            [DirectoryUpsert("600519.SH", "贵州茅台", "gzmt", "listed"),
+             DirectoryUpsert("000858.SZ", "五粮液", "wly", "listed")],
+            synced_on=date.today(), captured_at=datetime.now(UTC), provider="fixture")
+    conversation = await new_conversation()
+    receipt = await submit(conversation, message(text="茅台是哪家？看看能不能加观察池"))
+    def resolve(messages, info):
+        returned = [p for m in messages for p in m.parts if isinstance(p, ToolReturnPart)]
+        if not any(p.tool_name == "search_stock_directory" for p in returned):
+            return ModelResponse([ToolCallPart("search_stock_directory", {"business": {"q": "gzmt", "limit": 5}}, tool_call_id="directory")], usage=RequestUsage(input_tokens=10, output_tokens=5))
+        payload = next(p.content for p in returned if p.tool_name == "search_stock_directory")
+        assert [item["ticker"] for item in payload["items"]] == ["600519.SH"]
+        assert payload["items"][0]["name"] == "贵州茅台" and payload["items"][0]["on_watchlist"] is False
+        return response(ResearchOutput(progress=progress(kind="local_check", content=(TextNode(type="text", text="贵州茅台 600519.SH；回复「把 600519.SH 加入观察池」即可加入"),))))
+    task = await run(receipt, FunctionModel(resolve))
+    assert task.status == TaskStatus.SUCCEEDED

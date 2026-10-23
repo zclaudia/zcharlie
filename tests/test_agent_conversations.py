@@ -76,7 +76,7 @@ async def test_admission_receipt_normalization_concurrent_and_feature_off(conver
         assert await session.scalar(select(func.count()).select_from(AgentTask)) == 1
         assert await session.scalar(select(func.count()).select_from(PipelineRun)) == 1
         grant = (await session.get(ExecutionGrantRow, str(repeat.task.id))).payload
-        assert grant["tool_names"] == ["save_research_progress", "prepare_user_operation"] and grant["scope_refs"] == []
+        assert grant["tool_names"] == ["save_research_progress", "prepare_user_operation", "search_stock_directory"] and grant["scope_refs"] == []
 
 
 @pytest.mark.asyncio

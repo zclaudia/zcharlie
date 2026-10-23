@@ -42,6 +42,12 @@ class RefreshParameters(BaseModel):
     report_period: date | None = None
 
 
+class DirectorySearchParameters(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    q: str = Field(min_length=1, max_length=32)
+    limit: int = Field(default=10, ge=1, le=50)
+
+
 async def listing_scope(session: AsyncSession, business: BaseModel) -> tuple[ObjectRef, ...]:
     assert isinstance(business, (SnapshotParameters, RefreshParameters))
     listing = await ListingRepository(session).get_a_share_listing(business.ticker)
@@ -62,6 +68,22 @@ async def refresh(session: AsyncSession, operation: UUID, business: BaseModel) -
     return (await RefreshService(session, authorized_scope="watchlist").request_data_refresh(
         "local_owner", business.ticker, business.as_of, operation,
         report_period=business.report_period)).model_dump(mode="json")
+
+
+async def directory_scope(session: AsyncSession, business: BaseModel) -> tuple[ObjectRef, ...]:
+    # Directory facts are not listing-scoped material; the empty requirement
+    # set is the progress_scope precedent for a scope-exempt read.
+    del session, business
+    return ()
+
+
+async def directory_search(session: AsyncSession, operation: UUID, business: BaseModel) -> dict[str, Any]:
+    from investment_agent.api.views import search_directory
+    del operation
+    assert isinstance(business, DirectorySearchParameters)
+    items = await search_directory(session, None, business.q, limit=business.limit)
+    return {"items": [item.model_dump(mode="json") for item in items]}
+
 
 class AgentSearchRequest(SearchRequest):
     # The browsing API retains its wider pagination contract. Native research
@@ -92,6 +114,8 @@ def builtin_registrations() -> tuple[ToolRegistration, ...]:
         ToolRegistration("get_snapshot", SnapshotParameters, listing_scope, database=snapshot, description="Discover one stored field for a canonical ticker (e.g. 600036.SH), at task cutoff. Fields include close, roe, operating_cash_flow, capital_expenditure, net_profit_parent, net_profit_total, revenue_main, revenue_total. This is read-only provider material, not saved verified evidence. Use capture_snapshot to obtain a saved evidence ref before citing."),
         ToolRegistration("request_data_refresh", RefreshParameters, listing_scope,
                          database=refresh, whole_watchlist=True),
+        ToolRegistration("search_stock_directory", DirectorySearchParameters, directory_scope, database=directory_search,
+            description="Resolve a fuzzy company name, code prefix or pinyin initials to canonical A-share tickers from the local stock directory (name, status, industry, on_watchlist). Directory discovery only, never research material. Adding to the watchlist is not a tool: tell the user to reply the exact command 把 <canonical ticker> 加入观察池."),
     )
 
 
