@@ -73,7 +73,7 @@ def run_ifind_research(
     async def main() -> ResearchChainResult:
         settings = await load_settings(base=bootstrap)
         if explanation_model:
-            from investment_agent.llm.catalog import parse_catalog
+            from investment_agent.domain.llm_catalog import parse_catalog
 
             catalog = parse_catalog(settings.llm_catalog)
             catalog.bindings.pop("research", None)

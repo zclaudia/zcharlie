@@ -78,7 +78,7 @@ def store_for(session: AsyncSession, settings: Settings) -> SettingsStore:
 
 
 async def _overlay(session: AsyncSession, base: Settings) -> Settings:
-    from investment_agent.llm.catalog import CatalogError
+    from investment_agent.domain.llm_catalog import CatalogError
 
     store = store_for(session, base)
     if await store.imported_at() is None:
@@ -109,7 +109,7 @@ async def load_settings(
     must be initialized).
     """
 
-    from investment_agent.llm.catalog import resolve_catalog_settings
+    from investment_agent.settings.llm_catalog import resolve_catalog_settings
 
     bootstrap = base if base is not None else Settings()  # type: ignore[call-arg]
     if session is not None:

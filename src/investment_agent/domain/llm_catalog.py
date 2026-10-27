@@ -6,13 +6,10 @@ An absent binding retains the legacy configuration; a broken binding fails close
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import Any, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
-
-if TYPE_CHECKING:
-    from investment_agent.config import Settings
 
 
 class CatalogError(ValueError):
@@ -100,13 +97,12 @@ class LLMCatalog(CatalogModel):
         raise CatalogError("Selected provider/model is missing; change its binding before deleting it")
 
     def public(self) -> dict[str, Any]:
-        from investment_agent.settings.crypto import secret_hint
-
         result = self.model_dump(mode="json", exclude={"providers": {"__all__": {"api_key"}}})
         for item, provider in zip(result["providers"], self.providers, strict=True):
             item["api_key"] = None
             item["configured"] = bool(provider.api_key)
-            item["hint"] = secret_hint(provider.api_key or "")
+            key = provider.api_key or ""
+            item["hint"] = key[-4:] if len(key) >= 8 else ""
         return result
 
 
@@ -136,9 +132,8 @@ def validate_catalog(value: str) -> str:
     return parse_catalog(value).model_dump_json() if value else ""
 
 
-def resolve_catalog_settings(settings: Settings) -> Settings:
-    """Adapt selected models into the existing consumers' immutable parameters."""
-    catalog = parse_catalog(settings.llm_catalog)
+def catalog_settings_overrides(catalog: LLMCatalog) -> dict[str, Any]:
+    """Map catalog bindings to consumer parameters without reading settings or secrets stores."""
     update: dict[str, Any] = {}
     for binding, ref in catalog.bindings.items():
         if binding not in {"agent", "research"}:
@@ -155,10 +150,4 @@ def resolve_catalog_settings(settings: Settings) -> Settings:
                         "supports_json_object", "tool_choice_required", "thinking",
                         "timeout_seconds", "temperature", "max_tokens", "retries"):
                 update[f"agent_{key}"] = getattr(model, key)
-    if not update:
-        return settings
-    selected = settings.model_copy(update=update)
-    selected._llm_legacy_credentials = settings._llm_legacy_credentials or {
-        key: getattr(settings, key) for key in ("agent_api_key", "llm_tier3_api_key")
-    }
-    return selected
+    return update

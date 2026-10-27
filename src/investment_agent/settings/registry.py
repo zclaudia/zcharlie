@@ -271,7 +271,7 @@ class RuntimeSettings(BaseModel):
     @field_validator("llm_catalog")
     @classmethod
     def valid_llm_catalog(cls, value: str) -> str:
-        from investment_agent.llm.catalog import validate_catalog
+        from investment_agent.domain.llm_catalog import validate_catalog
         return validate_catalog(value)
 
     llm_tier3_base_url: str = "https://api.openai.com/v1"

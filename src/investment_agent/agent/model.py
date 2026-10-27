@@ -25,7 +25,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.toolsets import AbstractToolset
 
 from investment_agent.config import Settings
-from investment_agent.llm.catalog import ModelRef
+from investment_agent.domain.llm_catalog import ModelRef
 from investment_agent.settings.registry import ENV_KEYS, RuntimeSettings
 
 
@@ -57,7 +57,8 @@ class AgentModelConfig(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Settings, revision: int) -> AgentModelConfig:
-        from investment_agent.llm.catalog import parse_catalog, resolve_catalog_settings
+        from investment_agent.domain.llm_catalog import parse_catalog
+        from investment_agent.settings.llm_catalog import resolve_catalog_settings
 
         settings = resolve_catalog_settings(settings)
         ref = parse_catalog(settings.llm_catalog).bindings.get("agent")

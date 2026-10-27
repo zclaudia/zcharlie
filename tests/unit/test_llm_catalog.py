@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from investment_agent.agent.model import AgentConfigurationError, AgentModelConfig
 from investment_agent.agent.runtime import run_agent
 from investment_agent.config import Settings
-from investment_agent.llm.catalog import CatalogError, merge_catalog, parse_catalog
+from investment_agent.domain.llm_catalog import CatalogError, merge_catalog, parse_catalog
 from investment_agent.settings.crypto import EncryptionKeyError
 from investment_agent.settings.loader import load_agent_model_config, load_settings
 from investment_agent.settings.store import SettingsStore, SettingsValidationError

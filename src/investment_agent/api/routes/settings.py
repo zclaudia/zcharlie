@@ -49,7 +49,7 @@ from investment_agent.api.schemas.settings import (
     SettingsPatchRequest,
 )
 from investment_agent.config import Settings
-from investment_agent.llm.catalog import CatalogError, merge_catalog, parse_catalog
+from investment_agent.domain.llm_catalog import CatalogError, merge_catalog, parse_catalog
 from investment_agent.settings.crypto import EncryptionKeyError, SecretCipher, secret_hint
 from investment_agent.settings.loader import ensure_imported, load_settings, store_for
 from investment_agent.settings.registry import GROUPS, SPECS_BY_KEY, cron_timezone_key

@@ -154,7 +154,7 @@ class Settings(BaseSettings):
     @field_validator("llm_catalog")
     @classmethod
     def valid_llm_catalog(cls, value: str) -> str:
-        from investment_agent.llm.catalog import validate_catalog
+        from investment_agent.domain.llm_catalog import validate_catalog
         return validate_catalog(value)
 
     # Tier 3: research explanation model (any OpenAI-compatible endpoint).
@@ -298,15 +298,15 @@ class Settings(BaseSettings):
 
     @property
     def llm_tier3(self) -> LLMTierConfig:
-        from investment_agent.llm.catalog import resolve_catalog_settings
+        from investment_agent.domain.llm_catalog import catalog_settings_overrides, parse_catalog
 
-        selected = resolve_catalog_settings(self)
+        selected = catalog_settings_overrides(parse_catalog(self.llm_catalog))
         return LLMTierConfig(
-            base_url=selected.llm_tier3_base_url,
-            api_key=selected.llm_tier3_api_key,
-            model=selected.llm_tier3_model,
-            timeout_seconds=selected.llm_request_timeout_seconds,
-            thinking=selected.llm_tier3_thinking,
+            base_url=selected.get("llm_tier3_base_url", self.llm_tier3_base_url),
+            api_key=selected.get("llm_tier3_api_key", self.llm_tier3_api_key),
+            model=selected.get("llm_tier3_model", self.llm_tier3_model),
+            timeout_seconds=selected.get("llm_request_timeout_seconds", self.llm_request_timeout_seconds),
+            thinking=selected.get("llm_tier3_thinking", self.llm_tier3_thinking),
         )
 
     @property

@@ -145,7 +145,7 @@ class SettingsStore:
             runtime = RuntimeSettings.model_validate(unflatten(flat))
         except ValidationError as exc:
             if any(error["loc"][:1] == ("llm_catalog",) for error in exc.errors()):
-                from investment_agent.llm.catalog import CatalogError
+                from investment_agent.domain.llm_catalog import CatalogError
                 raise CatalogError("Stored LLM catalog is invalid; repair it in settings") from None
             # A stored value the current code rejects (e.g. a universe that was
             # removed) must not take every other setting down: fall back to the
@@ -201,7 +201,7 @@ class SettingsStore:
         rows = await self._rows()
         current, secrets = self._resolve(rows)
         if "llm_catalog" in values:
-            from investment_agent.llm.catalog import CatalogError, merge_catalog
+            from investment_agent.domain.llm_catalog import CatalogError, merge_catalog
 
             if secrets["llm_catalog"].decrypt_error:
                 raise SettingsValidationError({"llm_catalog": [
