@@ -8,7 +8,7 @@ from typing import Literal, Self
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _log = logging.getLogger(__name__)
@@ -70,6 +70,9 @@ def validate_gateway_identifier(value: str) -> str:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_nested_delimiter="__", extra="ignore")
+    # Workers may reuse effective Settings as their next load's bootstrap.
+    # Retain the original env fallback keys separately from selected credentials.
+    _llm_legacy_credentials: dict[str, str] = PrivateAttr(default_factory=dict)
 
     app_env: Literal["dev", "prod"] = "dev"
     log_level: str = "INFO"
@@ -145,6 +148,14 @@ class Settings(BaseSettings):
     agent_temperature: float | None = Field(default=None, ge=0, le=2)
     agent_max_tokens: int | None = Field(default=None, gt=0)
     agent_retries: int = Field(default=1, ge=0, le=5)
+
+    llm_catalog: str = Field(default="", repr=False)
+
+    @field_validator("llm_catalog")
+    @classmethod
+    def valid_llm_catalog(cls, value: str) -> str:
+        from investment_agent.llm.catalog import validate_catalog
+        return validate_catalog(value)
 
     # Tier 3: research explanation model (any OpenAI-compatible endpoint).
     llm_tier3_base_url: str = "https://api.openai.com/v1"
@@ -287,12 +298,15 @@ class Settings(BaseSettings):
 
     @property
     def llm_tier3(self) -> LLMTierConfig:
+        from investment_agent.llm.catalog import resolve_catalog_settings
+
+        selected = resolve_catalog_settings(self)
         return LLMTierConfig(
-            base_url=self.llm_tier3_base_url,
-            api_key=self.llm_tier3_api_key,
-            model=self.llm_tier3_model,
-            timeout_seconds=self.llm_request_timeout_seconds,
-            thinking=self.llm_tier3_thinking,
+            base_url=selected.llm_tier3_base_url,
+            api_key=selected.llm_tier3_api_key,
+            model=selected.llm_tier3_model,
+            timeout_seconds=selected.llm_request_timeout_seconds,
+            thinking=selected.llm_tier3_thinking,
         )
 
     @property

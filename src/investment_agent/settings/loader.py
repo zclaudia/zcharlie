@@ -78,22 +78,29 @@ def store_for(session: AsyncSession, settings: Settings) -> SettingsStore:
 
 
 async def _overlay(session: AsyncSession, base: Settings) -> Settings:
+    from investment_agent.llm.catalog import CatalogError
+
     store = store_for(session, base)
     if await store.imported_at() is None:
         return base
     state = await store.state()
+    if state.secrets["llm_catalog"].decrypt_error:
+        raise CatalogError("LLM catalog cannot be decrypted; restore SETTINGS_ENCRYPTION_KEY")
     values = flatten(state.runtime)
     update: dict[str, Any] = {
         key: values[key]
         for key in ENV_KEYS
         if key not in SECRET_KEYS or key in state.stored_keys
     }
+    for key, credential in base._llm_legacy_credentials.items():
+        if key not in state.stored_keys:
+            update[key] = credential
     # Validated by RuntimeSettings with the same bounds as Settings.
     return base.model_copy(update=update)
 
 
 async def load_settings(
-    session: AsyncSession | None = None, *, base: Settings | None = None
+    session: AsyncSession | None = None, *, base: Settings | None = None, resolve_models: bool = True
 ) -> Settings:
     """``Settings`` with the runtime fields taken from the DB.
 
@@ -102,11 +109,15 @@ async def load_settings(
     must be initialized).
     """
 
+    from investment_agent.llm.catalog import resolve_catalog_settings
+
     bootstrap = base if base is not None else Settings()  # type: ignore[call-arg]
     if session is not None:
-        return await _overlay(session, bootstrap)
-    async with session_scope() as own:
-        return await _overlay(own, bootstrap)
+        effective = await _overlay(session, bootstrap)
+    else:
+        async with session_scope() as own:
+            effective = await _overlay(own, bootstrap)
+    return resolve_catalog_settings(effective) if resolve_models else effective
 
 
 def env_import_values(settings: Settings) -> dict[str, Any]:

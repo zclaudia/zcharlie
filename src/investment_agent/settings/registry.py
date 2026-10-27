@@ -266,6 +266,14 @@ class RuntimeSettings(BaseModel):
     agent_max_tokens: int | None = Field(default=None, gt=0)
     agent_retries: int = Field(default=1, ge=0, le=5)
 
+    llm_catalog: str = Field(default="", repr=False)
+
+    @field_validator("llm_catalog")
+    @classmethod
+    def valid_llm_catalog(cls, value: str) -> str:
+        from investment_agent.llm.catalog import validate_catalog
+        return validate_catalog(value)
+
     llm_tier3_base_url: str = "https://api.openai.com/v1"
     llm_tier3_model: str = "gpt-5"
     llm_tier3_api_key: str = ""
@@ -380,6 +388,7 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("notification_webhook_url", "notifications", "HTTPS webhook 地址", "用户指定的公网 HTTPS 地址；加密保存，拒绝重定向、私网及环境导入。", "next_job", secret=True),
     _env("notification_webhook_token", "notifications", "Webhook Bearer 凭证", "加密保存；为空则不发送认证头。", "next_job", secret=True),
     _env("notification_webhook_idempotent", "notifications", "接收端保证幂等", "只有接收端保证 Idempotency-Key 去重时启用；否则确认未知后停止，不自动重试。", "next_job"),
+    _env("llm_catalog", "llm", "Provider 与模型目录", "多个 Provider 及其模型；Agent 和研究解释分别选择，下个任务生效。凭证加密保存，只写不读。", "next_job", secret=True),
     _env("llm_tier3_base_url", "llm", "接口地址", "OpenAI 兼容接口的 base URL。", "next_job"),
     _env("llm_tier3_model", "llm", "模型", "研究解释与规则草拟使用的模型名。", "next_job"),
     _env("llm_tier3_api_key", "llm", "API Key", "加密保存，只写不读。", "next_job", secret=True),

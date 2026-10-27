@@ -49,10 +49,11 @@ from investment_agent.api.schemas.settings import (
     SettingsPatchRequest,
 )
 from investment_agent.config import Settings
+from investment_agent.llm.catalog import CatalogError, merge_catalog, parse_catalog
 from investment_agent.settings.crypto import EncryptionKeyError, SecretCipher, secret_hint
-from investment_agent.settings.loader import ensure_imported, store_for
+from investment_agent.settings.loader import ensure_imported, load_settings, store_for
 from investment_agent.settings.registry import GROUPS, SPECS_BY_KEY, cron_timezone_key
-from investment_agent.settings.store import SettingsValidationError
+from investment_agent.settings.store import SettingsConflictError, SettingsValidationError
 from investment_agent.storage.database import session_scope
 
 log = structlog.get_logger(__name__)
@@ -176,6 +177,8 @@ async def settings_view(session: AsyncSession, settings: Settings) -> SettingsOu
                     extra["next_run"] = fire
         grouped[spec.group].append(SettingItemOut.model_validate({**item, **extra}))
     configured, error = _encryption_status(settings)
+    state = await store.state()
+    catalog_value = state.runtime.llm_catalog if "llm_catalog" in state.stored_keys else settings.llm_catalog
     return SettingsOut(
         revision=await store.revision(),
         encryption_key_configured=configured,
@@ -185,6 +188,7 @@ async def settings_view(session: AsyncSession, settings: Settings) -> SettingsOu
             for key, title in GROUPS.items()
         ],
         bootstrap=bootstrap_items(settings),
+        llm_catalog=parse_catalog(catalog_value).public(),
     )
 
 
@@ -213,9 +217,22 @@ async def patch_settings(
     await _ensure_imported(settings)
     try:
         async with session_scope() as session:
-            changed = await store_for(session, settings).apply(
-                dict(body.values), actor=actor, note=note
+            store = store_for(session, settings)
+            values = dict(body.values)
+            # An import made before encryption was configured may still
+            # use an env catalog. Its redacted keys must survive first save.
+            if (isinstance(values.get("llm_catalog"), str) and settings.llm_catalog
+                    and "llm_catalog" not in (await store.state()).stored_keys):
+                values["llm_catalog"] = merge_catalog(values["llm_catalog"], settings.llm_catalog)
+            changed = await store.apply(
+                values, actor=actor, note=note, expected_revision=body.expected_revision
             )
+    except CatalogError as exc:
+        raise HTTPException(status_code=422, detail={"message": "settings validation failed", "issues": [
+            {"key": "llm_catalog", "messages": [str(exc)]}
+        ]}) from None
+    except SettingsConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SettingsValidationError as exc:
         raise HTTPException(
             status_code=422,
@@ -290,13 +307,34 @@ def _pick(candidate: str | None, stored: str) -> str:
 @router.post("/test/llm", response_model=ConnectionTestOut)
 async def check_llm(
     body: LlmTestRequest,
-    settings: Annotated[Settings, Depends(get_settings)],
+    settings: Annotated[Settings, Depends(get_bootstrap_settings)],
 ) -> ConnectionTestOut:
     """One tiny chat completion with the candidate endpoint / model / key."""
 
+    async with session_scope() as session:
+        settings = await load_settings(session, base=settings, resolve_models=not body.use_legacy)
     base_url = _pick(body.base_url, settings.llm_tier3_base_url)
     model = _pick(body.model, settings.llm_tier3_model)
     api_key = _pick(body.api_key, settings.llm_tier3_api_key)
+    thinking = body.thinking or settings.llm_tier3_thinking
+    if body.provider_id is not None:
+        catalog = parse_catalog(settings.llm_catalog)
+        provider = next((p for p in catalog.providers if p.id == body.provider_id), None)
+        saved_model = None
+        if provider and body.model_id:
+            saved_model = next((m for m in provider.models if m.id == body.model_id), None)
+            if saved_model is None and not body.model:
+                raise HTTPException(status_code=422, detail="Selected model is missing")
+        # Candidate fields support testing providers/models before saving them.
+        if not body.base_url and provider is None:
+            raise HTTPException(status_code=422, detail="Provider is missing; specify its endpoint")
+        base_url = _pick(body.base_url, provider.base_url if provider else "")
+        model = _pick(body.model, saved_model.model if saved_model else "")
+        saved_key = (provider.api_key or "") if provider else ""
+        api_key = body.api_key.strip() if body.api_key is not None else saved_key
+        thinking = body.thinking or (saved_model.thinking if saved_model else "auto")
+        if not model:
+            raise HTTPException(status_code=422, detail="Choose a model to test")
     if not api_key:
         return ConnectionTestOut(ok=False, latency_ms=0, message="未配置 API Key，无法测试。")
     timeout = min(TEST_TIMEOUT_SECONDS, settings.llm_request_timeout_seconds)
@@ -307,6 +345,7 @@ async def check_llm(
             model=model,
             messages=[{"role": "user", "content": "Reply with: ok"}],
             max_tokens=8,
+            extra_body={"thinking": {"type": thinking}} if thinking != "auto" else None,
         )
     except APITimeoutError:
         return ConnectionTestOut(

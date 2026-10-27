@@ -149,3 +149,23 @@
   .settings-savebar-row input { flex: 1 1 100%; order: -1; }
   .settings-savebar-row .settings-dirty-count { flex: 1 1 auto; }
 }
+/* Shared Provider / Model catalog */
+.setting.is-catalog { display: block; }
+.setting.is-catalog > .set-c { width: 100%; max-width: none; }
+.llm-catalog { border: 0; margin: 0; padding: 0; min-width: 0; }
+.llm-provider-list { display: grid; gap: 16px; }
+.llm-provider { border: 1px solid var(--border, #d7dce2); border-radius: 12px; padding: 16px; margin-bottom: 12px; min-width: 0; }
+.llm-card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.llm-card-head h3 { margin: 0; }
+.llm-field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.llm-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.llm-field input, .llm-field select { width: 100%; min-width: 0; box-sizing: border-box; }
+.llm-field input[type="checkbox"] { width: auto; align-self: flex-start; }
+.llm-model { padding: 14px 0; border-top: 1px solid var(--border, #d7dce2); }
+.llm-model details { margin-bottom: 12px; }
+.llm-model summary { cursor: pointer; margin-bottom: 10px; }
+.llm-bindings { display: grid; gap: 12px; margin: 16px 0 20px; }
+@media (max-width: 600px) {
+  .llm-field-grid { grid-template-columns: minmax(0, 1fr); }
+  .llm-provider { padding: 12px; }
+}

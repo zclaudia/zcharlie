@@ -72,11 +72,13 @@ class SettingsOut(BaseModel):
     encryption_key_error: str | None = None
     groups: list[SettingGroupOut]
     bootstrap: list[BootstrapItemOut]
+    llm_catalog: dict[str, Any] = Field(default_factory=dict)
 
 
 class SettingsPatchRequest(BaseModel):
     values: dict[str, Any] = Field(min_length=1)
     note: str | None = Field(default=None, max_length=500)
+    expected_revision: int | None = Field(default=None, ge=0)
 
 
 class SettingsPatchOut(BaseModel):
@@ -101,9 +103,13 @@ class SettingsHistoryOut(BaseModel):
 
 
 class LlmTestRequest(BaseModel):
+    use_legacy: bool = False
+    provider_id: str | None = Field(default=None, max_length=100)
+    model_id: str | None = Field(default=None, max_length=100)
     base_url: str | None = Field(default=None, max_length=500)
     model: str | None = Field(default=None, max_length=200)
     api_key: str | None = Field(default=None, max_length=500)
+    thinking: str | None = Field(default=None, pattern="^(auto|enabled|disabled)$")
     """Empty / omitted = the stored key."""
 
 

@@ -373,6 +373,17 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
 `config/app.yaml` 的调度段会一次性导入数据库；此后以数据库为准，`.env` / `app.yaml` 里的这些值
 被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
 `LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
+
+设置 → 大模型 → Provider 与模型可添加多个 OpenAI 兼容或 DeepSeek Provider，
+每个 Provider 配置独立的地址和 API Key，并添加多个模型。模型可分别设置推理模式、
+超时及 Agent 输出能力；投资 Agent 与研究解释可分别选择目录中的模型，规则草拟沿用研究解释的选择。
+选择「沿用原配置」时继续读取原有 `agent_*` / `llm_tier3_*` 设置，无需迁移即可升级。
+模型选择在下个任务加载；正在使用的 Provider / 模型需先更改选择才能删除。
+目录和凭证通过现有 `SETTINGS_ENCRYPTION_KEY` 加密保存在 `llm_catalog` 运行时项，
+API 只返回目录、密钥状态与末四位提示；编辑时省略密钥会保留原值，清除需显式操作。
+目录使用稳定的 Provider / Model ID 和按 Agent 标识索引的 `bindings`，便于后续加入更多 Agent。
+切换 Agent 模型会改变配置指纹，计费价格须与新模型和新指纹重新核验。
+
 交易日历基线路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），基线文件是
 `config/calendars/a_share.yaml`（未知年份 fail-closed；由双源核对生成，每年带
 `verified_by` / `verified_on`）。**运行时以 `DATA_DIR/calendars/<名>` 优先**：健康页卡片

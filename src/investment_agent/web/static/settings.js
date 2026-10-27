@@ -8,6 +8,7 @@ import { clear, el, kvTable, table } from "./dom.js";
 import { formatDateTime, label } from "./format.js";
 import { localTime } from "./health.js";
 import { registerRefreshGuard } from "./refresh_state.js";
+import { catalogControl, catalogPayload, catalogSelectionLabel } from "./settings_llm_catalog.js";
 
 export const SETTINGS_REGIONS = new Set(["settings-form", "settings-history", "settings-bootstrap"]);
 
@@ -220,7 +221,12 @@ function onEdit(key) {
   const node = state.nodes.get(key);
   if (!item || !node) return;
   state.raw.set(key, node.read());
-  if (item.secret) {
+  if (key === "llm_catalog") {
+    const raw = node.read();
+    if (raw === catalogPayload(state.data.llm_catalog)) state.edits.delete(key);
+    else state.edits.set(key, raw);
+    showIssues(key, []);
+  } else if (item.secret) {
     const raw = node.read();
     if (state.cleared.has(key)) state.edits.set(key, "");
     else if (raw) state.edits.set(key, raw);
@@ -352,6 +358,15 @@ function secretControl(item, encryptionReady) {
 
 function controlFor(item, encryptionReady) {
   const type = item.input && item.input.type;
+  if (item.key === "llm_catalog") {
+    const value = state.raw.has(item.key) ? JSON.parse(state.raw.get(item.key)) : state.data.llm_catalog;
+    for (const provider of value.providers || []) {
+      const saved = state.data.llm_catalog.providers.find((p) => p.id === provider.id);
+      provider.configured = saved?.configured || false;
+      provider.hint = saved?.hint || "";
+    }
+    return catalogControl(value, encryptionReady && !item.decrypt_error);
+  }
   if (item.secret) return secretControl(item, encryptionReady);
   if (typeof item.default === "boolean") {
     const control = el("input", {id: inputId(item.key), type: "checkbox"});
@@ -379,7 +394,7 @@ function metaLine(item) {
 function settingRow(item, encryptionReady) {
   const control = controlFor(item, encryptionReady);
   const isSwitch = control.control && control.control.type === "checkbox";
-  const root = el("div", { class: `setting set-row${isSwitch ? " is-switch" : ""}`, "data-key": item.key });
+  const root = el("div", { class: `setting set-row${isSwitch ? " is-switch" : ""}${item.key === "llm_catalog" ? " is-catalog" : ""}`, "data-key": item.key });
   const left = el("div", { class: "set-k" });
   left.appendChild(el("label", { for: inputId(item.key), class: "setting-label" }, item.label));
   left.appendChild(el("p", { class: "setting-help faint" }, item.help));
@@ -443,6 +458,7 @@ function connectionTest(group) {
       ? {
           path: "/settings/test/llm",
           body: () => ({
+            use_legacy: true,
             base_url: currentValue("llm_tier3_base_url"),
             model: currentValue("llm_tier3_model"),
             api_key: state.cleared.has("llm_tier3_api_key") ? null : state.edits.get("llm_tier3_api_key") || null,
@@ -682,12 +698,17 @@ export const SETTINGS_SECTIONS = Object.freeze([
     id: "llm",
     navGroup: "研究",
     groups: ["llm"],
-    title: "解释模型",
-    blurb: "研究解释和规则草拟用这一组，与投资 Agent 的模型无关。",
+    title: "大模型",
+    blurb: "管理多个 Provider 和模型，分别为投资 Agent、研究解释选择模型。",
     topics: [{
+      id: "catalog",
+      title: "Provider 与模型",
+      note: "每个 Provider 共享接口地址与 API Key，可添加多个模型。选择沿用原配置时，继续使用原有设置。",
+      keys: ["llm_catalog"],
+    }, {
       id: "llm",
-      title: "解释模型",
-      note: "未配置 Key 时，解释和规则草拟会直接失败。",
+      title: "原解释模型配置",
+      note: "目录中选择研究模型后，接口、模型、推理模式和超时使用所选模型的设置。规则草拟推理模式仍可单独覆盖。",
       keys: ["llm_tier3_base_url", "llm_tier3_model", "llm_tier3_api_key", "llm_tier3_thinking", "llm_rule_draft_thinking", "llm_request_timeout_seconds"],
     }],
   },
@@ -860,7 +881,9 @@ export function topicSummary(topic, read) {
       return on === 0 ? "全部关闭" : `${on} 项开启`;
     }
     case "model":
-      return String(value("agent_model") || "").trim() || "未填写";
+      return value("llm_catalog")?.bindings?.agent ? catalogSelectionLabel(value("llm_catalog"), "agent") : String(value("agent_model") || "").trim() || "未填写";
+    case "catalog":
+      return `${value("llm_catalog")?.providers?.length || 0} 个 Provider`;
     case "price":
       return blankValue(value("investor_agent_input_usd_per_million")) ? "为空则停用" : "价格已填";
     case "quota":
@@ -903,14 +926,14 @@ export function sectionHome(section, read, lookup) {
   const row = (key) => lookup(key);
   switch (section.id) {
     case "agent": {
-      const model = String(value("agent_model") || "").trim();
+      const model = value("llm_catalog")?.bindings?.agent ? catalogSelectionLabel(value("llm_catalog"), "agent") : String(value("agent_model") || "").trim();
       const price = blankValue(value("investor_agent_input_usd_per_million")) ? "价格为空" : "价格已填";
       return { value: value("investor_agent_enabled") === true ? "已开启" : "已关闭", detail: `${model || "模型未填"} · ${price}` };
     }
     case "llm":
       return {
-        value: String(value("llm_tier3_model") || "未填模型"),
-        detail: row("llm_tier3_api_key")?.configured ? "Key 已设置" : "Key 未配置",
+        value: `${value("llm_catalog")?.providers?.length || 0} 个 Provider`,
+        detail: value("llm_catalog")?.bindings?.research ? catalogSelectionLabel(value("llm_catalog"), "research") : row("llm_tier3_api_key")?.configured ? "原解释模型 Key 已设置" : "原解释模型 Key 未配置",
       };
     case "notify":
       return { value: value("notification_external_enabled") ? "外部推送" : "仅站内", detail: "只发新变化的状态和引用" };
@@ -971,6 +994,7 @@ function indexItems(data) {
 }
 
 function readNow(key) {
+  if (key === "llm_catalog") return state.raw.has(key) ? JSON.parse(state.raw.get(key)) : state.data?.llm_catalog;
   return currentValue(key);
 }
 
@@ -1096,6 +1120,12 @@ function renderTopic(topic, section) {
     body.appendChild(el("p", { class: "settings-apply" }, `生效：${label(APPLY_LABELS, apply)}。${label(APPLY_TITLES, apply)}`));
   }
   if (topic.note) body.appendChild(el("p", { class: "faint settings-note" }, topic.note));
+  if (section.id === "agent" && topic.id === "model") {
+    body.appendChild(el("p", {class: "notice"}, `目录中的 Agent 模型：${catalogSelectionLabel(state.data.llm_catalog, "agent")}。选择目录模型后，使用该模型的参数；下方保留原配置。`));
+    const choose = el("button", {type: "button", class: "btn btn-sm secondary"}, "选择 Provider / Model");
+    choose.addEventListener("click", () => openPlace("llm", "catalog"));
+    body.appendChild(choose);
+  }
   const noticeKey = topicNoticeKey(topic);
   if (noticeKey) {
     const items = keys.map((key) => state.items.get(key)).filter(Boolean);
@@ -1405,7 +1435,7 @@ async function save(button) {
   const values = Object.fromEntries(keys.map((key) => [key, state.edits.get(key)]));
   const noteInput = document.getElementById("settings-note");
   const note = noteInput && noteInput.value.trim() ? noteInput.value.trim() : null;
-  const promise = patch(ENDPOINT, { values, note })
+  const promise = patch(ENDPOINT, { values, note, expected_revision: state.data.revision })
     .then((result) => {
       commitSettings(result.settings, keys);
       if (noteInput) noteInput.value = "";

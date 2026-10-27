@@ -164,6 +164,29 @@ def test_settings_catalog_covers_every_key(api_client: TestClient) -> None:
     assert keys == covered
 
 
+def test_provider_editor_supports_lan_http_without_crypto_random_uuid() -> None:
+    from tests.integration.test_web_client_contract import FAKE_DOM
+
+    catalog_uri = (STATIC / "settings_llm_catalog.js").resolve().as_uri()
+    out = _run_settings(FAKE_DOM + f"""
+const {{webcrypto}} = await import('node:crypto');
+Object.defineProperty(globalThis, 'crypto', {{configurable: true, value: {{
+  getRandomValues: bytes => webcrypto.getRandomValues(bytes),
+}}}});
+globalThis.document = {{createElement: tag => new FakeNode(tag)}};
+const {{catalogControl}} = await import({json.dumps(catalog_uri)});
+const editor = catalogControl({{providers: [], bindings: {{}}}}, true);
+editor.root.dispatchEvent = () => true;
+editor.root.children.find(node => node.textContent === '添加 Provider').click();
+console.log(editor.read());
+""")
+    assert len(out["providers"]) == 1
+    from uuid import UUID
+
+    assert UUID(out["providers"][0]["id"]).version == 4
+    assert out["providers"][0]["api_key"] is None
+
+
 def test_settings_navigation_helpers() -> None:
     out = _run_settings(
         """
@@ -172,6 +195,7 @@ console.log(JSON.stringify({
   legacy: s.resolveSettingsPlace("#agent-settings"),
   model: s.resolveSettingsPlace("#agent/model"),
   llm: s.resolveSettingsPlace("#llm"),
+  catalog: s.resolveSettingsPlace("#llm/catalog"),
   cron: [s.cronSummary(""), s.cronSummary("10 15 * * 1-5"), s.cronSummary("1 2 3 4 5")],
   agent: s.sectionHome(
     s.SETTINGS_SECTIONS.find((section) => section.id === "agent"),
@@ -184,7 +208,8 @@ console.log(JSON.stringify({
     assert out["home"] == {"sectionId": None, "topicId": None}
     assert out["legacy"] == {"sectionId": "agent", "topicId": None}
     assert out["model"] == {"sectionId": "agent", "topicId": "model"}
-    assert out["llm"] == {"sectionId": "llm", "topicId": "llm"}
+    assert out["llm"] == {"sectionId": "llm", "topicId": None}
+    assert out["catalog"] == {"sectionId": "llm", "topicId": "catalog"}
     assert out["cron"] == ["已停用", "工作日 15:10", "1 2 3 4 5"]
     assert out["agent"]["value"] == "已关闭"
 

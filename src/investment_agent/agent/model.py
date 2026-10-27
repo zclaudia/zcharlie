@@ -25,6 +25,7 @@ from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.toolsets import AbstractToolset
 
 from investment_agent.config import Settings
+from investment_agent.llm.catalog import ModelRef
 from investment_agent.settings.registry import ENV_KEYS, RuntimeSettings
 
 
@@ -37,6 +38,7 @@ class AgentModelConfig(BaseModel):
 
     revision: int = Field(ge=0)
     values_json: str = Field(repr=False)
+    selection: ModelRef | None = None
 
     @field_validator("values_json")
     @classmethod
@@ -55,14 +57,21 @@ class AgentModelConfig(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Settings, revision: int) -> AgentModelConfig:
+        from investment_agent.llm.catalog import parse_catalog, resolve_catalog_settings
+
+        settings = resolve_catalog_settings(settings)
+        ref = parse_catalog(settings.llm_catalog).bindings.get("agent")
         values = settings.model_dump(mode="json", include={
             k for k in ENV_KEYS if k.startswith("agent_") and k != "agent_api_key"
         })
-        return cls(revision=revision, values_json=json.dumps(values), credential=SecretStr(settings.agent_api_key))
+        return cls(revision=revision, values_json=json.dumps(values), credential=SecretStr(settings.agent_api_key),
+                   selection=ref)
 
     @property
     def version(self) -> str:
         body = json.dumps(self.values, sort_keys=True, separators=(",", ":"))
+        if self.selection:
+            body += json.dumps(self.selection.model_dump(), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(body.encode()).hexdigest()
 
     def validate_ready(self) -> None:
@@ -81,7 +90,10 @@ class AgentModelConfig(BaseModel):
         # Never expose a potentially credential-bearing endpoint in audit/public data.
         values = {k: v for k, v in self.values.items() if k != "agent_base_url"}
         values["endpoint_hash"] = hashlib.sha256(self.values["agent_base_url"].encode()).hexdigest()
-        return {"revision": self.revision, "version": self.version, "values": values}
+        snapshot = {"revision": self.revision, "version": self.version, "values": values}
+        if self.selection:
+            snapshot["selection"] = self.selection.model_dump()
+        return snapshot
 
     def profile(self) -> OpenAIModelProfile:
         v = self.values

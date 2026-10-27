@@ -50,6 +50,10 @@ log = structlog.get_logger(__name__)
 SECRET_MASK = "***"
 
 
+class SettingsConflictError(ValueError):
+    """A stale settings editor must reload before replacing the catalog."""
+
+
 class SettingsValidationError(ValueError):
     """A write was rejected; ``issues`` maps a key (or group path) to messages."""
 
@@ -140,6 +144,9 @@ class SettingsStore:
         try:
             runtime = RuntimeSettings.model_validate(unflatten(flat))
         except ValidationError as exc:
+            if any(error["loc"][:1] == ("llm_catalog",) for error in exc.errors()):
+                from investment_agent.llm.catalog import CatalogError
+                raise CatalogError("Stored LLM catalog is invalid; repair it in settings") from None
             # A stored value the current code rejects (e.g. a universe that was
             # removed) must not take every other setting down: fall back to the
             # default for the offending keys.
@@ -159,7 +166,8 @@ class SettingsStore:
         return (await self.state()).runtime
 
     async def apply(
-        self, values: dict[str, Any], *, actor: str, note: str | None = None
+        self, values: dict[str, Any], *, actor: str, note: str | None = None,
+        expected_revision: int | None = None,
     ) -> list[str]:
         """Validate and write ``{key: value}``; returns the keys that changed.
 
@@ -178,8 +186,32 @@ class SettingsStore:
         if issues:
             raise SettingsValidationError(issues)
 
+        if expected_revision is not None:
+            await self._meta()
+            # Fence before reading/merging keys. SQLite's writer lock prevents
+            # a concurrent edit from replacing the catalog between these reads.
+            matched = await self.session.execute(
+                update(AppSettingMeta)
+                .where(AppSettingMeta.id == META_ROW_ID, AppSettingMeta.revision == expected_revision)
+                .values(revision=AppSettingMeta.revision)
+            )
+            if matched.rowcount != 1:  # type: ignore[attr-defined]
+                raise SettingsConflictError("设置已被其他操作修改，请刷新后重试。")
+
         rows = await self._rows()
         current, secrets = self._resolve(rows)
+        if "llm_catalog" in values:
+            from investment_agent.llm.catalog import CatalogError, merge_catalog
+
+            if secrets["llm_catalog"].decrypt_error:
+                raise SettingsValidationError({"llm_catalog": [
+                    "LLM catalog cannot be decrypted; restore SETTINGS_ENCRYPTION_KEY before editing"
+                ]})
+            values = dict(values)
+            try:
+                values["llm_catalog"] = merge_catalog(values["llm_catalog"], current["llm_catalog"])
+            except CatalogError as exc:
+                raise SettingsValidationError({"llm_catalog": [str(exc)]}) from None
         merged = {**current, **values}
         try:
             validated = flatten(RuntimeSettings.model_validate(unflatten(merged)))
@@ -203,7 +235,7 @@ class SettingsStore:
         for key in to_write:
             new_value = validated[key]
             if key in SECRET_KEYS:
-                new_status = SecretStatus(bool(new_value), secret_hint(new_value))
+                new_status = SecretStatus(bool(new_value), "" if key == "llm_catalog" else secret_hint(new_value))
                 old_logged: Any = _masked(secrets[key])
                 new_logged: Any = _masked(new_status)
                 columns: dict[str, Any] = {
