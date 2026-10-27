@@ -116,7 +116,7 @@ export function catalogControl(value, encryptionReady) {
       const fields = el("div", {class: "llm-field-grid"});
       field(fields, "Provider 名称", provider, "name", {refresh: true});
       field(fields, "接口类型", provider, "kind", {options: [["openai", "OpenAI 兼容"], ["deepseek", "DeepSeek"]]});
-      field(fields, "接口地址", provider, "base_url", {type: "url", placeholder: "https://api.example.com/v1"});
+      field(fields, "接口地址", provider, "base_url", {type: "url", placeholder: "填写接口的完整 URL"});
       const key = field(fields, "API Key", provider, "api_key", {type: "password", placeholder: provider.configured ? `已设置 ···${provider.hint || ""}；留空不修改` : "输入 API Key"});
       key.addEventListener("input", () => {if (!key.value) provider.api_key = null; notify();});
       card.appendChild(fields);
