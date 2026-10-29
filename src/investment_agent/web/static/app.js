@@ -1488,8 +1488,8 @@ async function loadStockHistory(region, snapshots) {
 }
 
 // 股票页顶部：收盘价曲线（区间可选），与研究快照无关（无快照也画）。
-const STOCK_RANGE_DAYS = [30, 60, 120, 240, 480, 1000];
-const STOCK_RANGE_DAYS_COMPACT = [60, 240, 480, 1000];
+const STOCK_RANGE_DAYS = [7, 30, 60, 120, 240, 480, 1000];
+const STOCK_RANGE_DAYS_COMPACT = [7, 60, 240, 480, 1000];
 
 function loadStockSpark() {
   const host = document.querySelector("#stock-spark");

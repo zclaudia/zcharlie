@@ -124,6 +124,66 @@ def test_stock_page_declares_history_and_change_regions(api_client):
     assert 'data-ticker="600406.SH"' in html
 
 
+@pytest.mark.parametrize("compact", [False, True], ids=["desktop", "mobile"])
+def test_stock_chart_can_select_seven_days_without_research(compact):
+    """观察池详情在桌面和手机上都保留候选页的 7 日线，即使尚无研究快照。"""
+    uri = (WEB_STATIC / "app.js").resolve().as_uri()
+    script = FAKE_DOM + f"""
+import assert from 'node:assert/strict';
+class ChartNode extends FakeNode {{
+  constructor(tag) {{ super(tag); this.style = {{}}; }}
+  get classList() {{
+    return {{ ...super.classList, toggle: (name, on) => {{
+      if (on) this.classes.add(name); else this.classes.delete(name);
+    }} }};
+  }}
+}}
+const host = new ChartNode('div'), title = new ChartNode('h2');
+host.setAttribute('data-ticker', '600406.SH');
+host.clientWidth = {390 if compact else 1000};
+globalThis.window = {{ matchMedia: () => ({{ matches: {json.dumps(compact)} }}) }};
+globalThis.document = {{
+  readyState: 'loading', addEventListener() {{}},
+  createElement: (tag) => new ChartNode(tag),
+  createElementNS: (_ns, tag) => new ChartNode(tag),
+  querySelector: (sel) => sel === '#stock-spark' ? host : sel === '#stock-spark-title' ? title : null,
+}};
+const calls = [];
+globalThis.fetch = async (path) => {{
+  calls.push(path);
+  const bars = Array.from({{ length: 7 }}, (_, i) => ({{
+    trade_date: `2026-10-${{String(19 + i).padStart(2, '0')}}`, close: 10 + i,
+  }}));
+  return new Response(JSON.stringify({{ bars }}), {{ headers: {{ 'Content-Type': 'application/json' }} }});
+}};
+const {{ loadStockDetail }} = await import({json.dumps(uri)});
+await loadStockDetail(new ChartNode('section'), null);
+await new Promise(setImmediate);
+const tabs = host.children[0].children[1].children;
+const seven = tabs.find((node) => node.textContent === '7日');
+assert.ok(seven, '观察池股票详情必须提供 7 日线');
+assert.equal(calls[0], '/market/600406.SH/bars?days=240');
+seven.click();
+await new Promise(setImmediate);
+const plot = host.children[1];
+const chart = plot.children[1].children[0];
+console.log(JSON.stringify({{
+  calls, title: title.textContent, active: seven.getAttribute('aria-pressed'),
+  chartLabel: chart.getAttribute('aria-label'),
+  pointCount: chart.children.find((node) => node.tag === 'polyline').getAttribute('points').split(' ').length,
+  tickCount: plot.children[3].children.length,
+}}));
+"""
+    out = _run_node(script)
+    assert out["calls"] == [
+        "/market/600406.SH/bars?days=240", "/market/600406.SH/bars?days=7",
+    ]
+    assert out["title"] == "近 7 个交易日收盘价"
+    assert out["active"] == "true"
+    assert out["chartLabel"] == "600406.SH 近 7 个交易日收盘价曲线"
+    assert out["pointCount"] == out["tickCount"] == 7
+
+
 def test_runs_page_declares_status_filter_and_list_region(api_client):
     _login(api_client)
     html = api_client.get("/app/runs").text
