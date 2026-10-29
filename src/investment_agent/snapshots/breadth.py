@@ -62,7 +62,7 @@ from investment_agent.snapshots.jobs import (
     MarketSnapshotPayload,
     period_kind,
 )
-from investment_agent.snapshots.scope import scope_members
+from investment_agent.snapshots.scope import collection_members
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.financial_snapshot import FinancialSnapshotRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
@@ -225,7 +225,7 @@ async def collect_baostock_market(
     del now  # captured_at comes from the provider client (its clock)
     trade_date = payload.trade_date
     async with session_scope() as session:
-        listing_by_ticker = await scope_members(session, payload, trade_date)
+        listing_by_ticker = await collection_members(session, payload, trade_date)
         listing_ids = list(listing_by_ticker.values())
         repository = MarketSnapshotRepository(session)
         last: dict[str, dict[int, date]] = {
@@ -429,7 +429,7 @@ async def collect_baostock_financial(
     kind = period_kind(report_period)
     year, quarter = quarter_of(report_period)
     async with session_scope() as session:
-        listing_by_ticker = await scope_members(session, payload, payload.as_of)
+        listing_by_ticker = await collection_members(session, payload, payload.as_of)
         present = await FinancialSnapshotRepository(session).listings_with_period(
             list(listing_by_ticker.values()), report_period, provider=BAOSTOCK_PROVIDER
         )

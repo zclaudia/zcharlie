@@ -55,6 +55,7 @@ DIVIDEND_SNAPSHOT = "dividend_snapshot"
 CLOSE_QUOTE = "close_quote"
 EARNINGS_EVENT = "earnings_event"
 CALENDAR_PROBE = "calendar_probe"
+STOCK_BOOTSTRAP = "stock_bootstrap"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
     INDUSTRY_SYNC,
@@ -65,6 +66,7 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     CLOSE_QUOTE,
     EARNINGS_EVENT,
     CALENDAR_PROBE,
+    STOCK_BOOTSTRAP,
 )
 
 SnapshotProvider = Literal["baostock", "ifind", "akshare", "tencent"]
@@ -353,6 +355,13 @@ class CalendarProbePayload(_Payload):
     force: bool = False
 
 
+class StockBootstrapPayload(_Payload):
+    """Initial free-source history and company data for a manually selected stock."""
+
+    ticker: str = Field(pattern=r"^\d{6}\.(SH|SZ|BJ)$")
+    as_of: date
+
+
 SnapshotPayload = (
     UniverseSyncPayload
     | IndustrySyncPayload
@@ -363,6 +372,7 @@ SnapshotPayload = (
     | CloseQuotePayload
     | EarningsEventPayload
     | CalendarProbePayload
+    | StockBootstrapPayload
 )
 
 PAYLOAD_MODELS: dict[str, type[_Payload]] = {
@@ -375,6 +385,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     CLOSE_QUOTE: CloseQuotePayload,
     EARNINGS_EVENT: EarningsEventPayload,
     CALENDAR_PROBE: CalendarProbePayload,
+    STOCK_BOOTSTRAP: StockBootstrapPayload,
 }
 
 
@@ -389,6 +400,8 @@ def idempotency_key(payload: SnapshotPayload) -> str:
     """kind (+ provider) + scope + date (+ period): one run per scheduled slot."""
 
     kind = payload_kind(payload)
+    if isinstance(payload, StockBootstrapPayload):
+        return f"{kind}:{payload.ticker}:{payload.as_of.isoformat()}"
     if isinstance(payload, CalendarProbePayload):
         return f"{kind}:{payload.year}:{payload.as_of.isoformat()}"
     if isinstance(payload, UniverseSyncPayload):

@@ -40,7 +40,7 @@ from investment_agent.snapshots.collect import (
     fence_writes,
 )
 from investment_agent.snapshots.jobs import DividendSnapshotPayload
-from investment_agent.snapshots.scope import scope_members
+from investment_agent.snapshots.scope import collection_members
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.pipeline_run import LeaseLostError, RunLease
@@ -247,7 +247,7 @@ async def collect_baostock_dividends(
 
     del now  # captured_at comes from the provider client (its clock)
     async with session_scope() as session:
-        listing_by_ticker = await scope_members(session, payload, payload.as_of)
+        listing_by_ticker = await collection_members(session, payload, payload.as_of)
     completeness = Completeness(expected=sorted(listing_by_ticker))
     report = CollectionReport(completeness, provider=BAOSTOCK_PROVIDER)
     plan = {

@@ -95,7 +95,7 @@ from investment_agent.snapshots.jobs import (
     idempotency_key,
     period_kind,
 )
-from investment_agent.snapshots.scope import scope_members
+from investment_agent.snapshots.scope import collection_members, scope_members
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
@@ -322,16 +322,7 @@ async def akshare_scope(
                 f"{payload.as_of.isoformat()}; run universe_sync / the membership backfill first"
             )
         return {member.ticker: member.listing_id for member in sorted(members, key=_ticker)}
-    resolved = await scope_members(session, payload, payload.as_of)
-    try:
-        watchlist = await scope_members(
-            session,
-            payload.model_copy(update={"scope": "watchlist", "universe_code": None}),
-            payload.as_of,
-        )
-    except SnapshotPreconditionError:
-        watchlist = {}
-    return dict(sorted({**watchlist, **resolved}.items()))
+    return await collection_members(session, payload, payload.as_of)
 
 
 def _ticker(member: Any) -> str:

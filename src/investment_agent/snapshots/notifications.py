@@ -43,6 +43,7 @@ _KIND_LABELS = {
     "market_snapshot": "日线快照",
     "financial_snapshot": "财报快照",
     "snapshot_backfill": "历史回补",
+    "stock_bootstrap": "单股数据补采",
     "dividend_snapshot": "分红快照",
     "close_quote": "收盘快照",
     "earnings_event": "财报事件",

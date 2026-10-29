@@ -183,7 +183,7 @@ async def collect_earnings_events(
             calendar=calendar,
             run_id=run_id,
         )
-    return await _collect_segments(
+    return await collect_segments_for_listings(
         payload, listing_by_ticker, client=client, artifacts=artifacts, lease=lease, circuit=circuit
     )
 
@@ -564,7 +564,7 @@ def _segment_rows(statement: SegmentStatement, period: date) -> list[SegmentRow]
     ]
 
 
-async def _collect_segments(
+async def collect_segments_for_listings(
     payload: EarningsEventPayload,
     listing_by_ticker: dict[str, int],
     *,

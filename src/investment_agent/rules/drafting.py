@@ -58,7 +58,7 @@ import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -95,6 +95,9 @@ from investment_agent.storage.models.rules import RuleInstanceRecord, ScreenResu
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 
+if TYPE_CHECKING:
+    from investment_agent.snapshots.handlers import SnapshotRuntime
+
 log = structlog.get_logger(__name__)
 
 RULE_DRAFT = "rule_draft"
@@ -120,6 +123,8 @@ class RuleDraftPayload(BaseModel):
     template_version: int = Field(ge=1)
     as_of: date
     screen_result_id: int | None = None
+    prepare_data: bool = False
+    """Manual selections collect their free-source history before model drafting."""
     preference_notes: list[str] = Field(default_factory=list)
     scope: Literal["candidate", "holding"] = "candidate"
     """The rule slot the draft belongs to (WP8 adds ``holding``)."""
@@ -935,10 +940,12 @@ class RuleDraftHandler(BaseJobHandler):
         settings: Settings,
         client_factory: ClientFactory | None = None,
         stock_loader: StockLoader | None = None,
+        snapshot_runtime: SnapshotRuntime | None = None,
     ) -> None:
         self.settings = settings
         self.client_factory = client_factory
         self.stock_loader = stock_loader
+        self.snapshot_runtime = snapshot_runtime
 
     async def on_claimed(self, session: AsyncSession, job: ClaimedJob) -> None:
         """Mark a watchlist request ``drafting`` while its run is claimed."""
@@ -960,8 +967,36 @@ class RuleDraftHandler(BaseJobHandler):
 
     async def execute(self, job: ClaimedJob, ctx: JobContext) -> JobOutcome:
         payload = RuleDraftPayload.model_validate(job.request_json)
+        preparation: dict[str, object] | None = None
 
         async def work() -> DraftResult:
+            nonlocal preparation
+            if payload.prepare_data:
+                # Skip network work for a request that has already lost its
+                # generation; draft_rule performs the same check before the LLM.
+                async with session_scope() as session:
+                    stale = await preflight_reason(
+                        session, symbol=payload.ticker, scope=payload.scope,
+                        token=_frozen_token(payload),
+                    )
+                if stale is None:
+                    from investment_agent.snapshots.bootstrap import collect_stock_bootstrap
+                    from investment_agent.snapshots.collect import ArtifactWriter
+                    from investment_agent.snapshots.handlers import default_runtime
+                    from investment_agent.snapshots.jobs import StockBootstrapPayload
+
+                    preparation = await collect_stock_bootstrap(
+                        StockBootstrapPayload(ticker=payload.ticker, as_of=payload.as_of),
+                        runtime=self.snapshot_runtime or default_runtime(self.settings),
+                        artifacts=ArtifactWriter(
+                            self.settings.data_dir, run_id=job.run_id, attempt=job.attempt,
+                        ),
+                        lease=job.lease,
+                    )
+                    async with session_scope() as session:
+                        await PipelineRunRepository(session).set_stage(
+                            job.run_id, "drafting", lease=job.lease,
+                        )
             return await draft_rule(
                 payload,
                 settings=self.settings,
@@ -980,6 +1015,8 @@ class RuleDraftHandler(BaseJobHandler):
             "draft_request_id": payload.draft_request_id,
             **result.metadata(),
         }
+        if preparation is not None:
+            metadata["data_preparation"] = preparation
         async with session_scope() as session:
             runs = PipelineRunRepository(session)
             if result.ok:

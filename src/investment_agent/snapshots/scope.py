@@ -144,3 +144,20 @@ async def user_pools(session: AsyncSession) -> UserPools:
         candidates=await a_share_tickers(session, candidate_ids),
         holdings=await a_share_tickers(session, holding_ids),
     )
+
+
+async def collection_members(
+    session: AsyncSession,
+    payload: MarketSnapshotPayload | FinancialSnapshotPayload | DividendSnapshotPayload,
+    as_of: date,
+) -> dict[str, int]:
+    """Free-source live collection covers the index and all user-owned pools.
+
+    Keep explicit watchlist/iFinD requests bounded to their original scope;
+    this does not change index membership or historical screening universes.
+    """
+    members = await scope_members(session, payload, as_of)
+    if payload.scope == "universe" and payload.provider in {"baostock", "akshare"}:
+        pools = await user_pools(session)
+        members = {**members, **pools.members}
+    return dict(sorted(members.items()))

@@ -175,6 +175,9 @@ async def _universe_scope(payload: IndustrySyncPayload) -> set[str] | None:
         return None
     scope: set[str] = set()
     async with session_scope() as session:
+        from investment_agent.snapshots.scope import user_pools
+
+        scope.update((await user_pools(session)).members)
         universes = UniverseRepository(session)
         for code in payload.universe_codes:
             members = await universes.members_as_of(code, payload.as_of)

@@ -129,6 +129,7 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "market_snapshot",
         "financial_snapshot",
         "snapshot_backfill",
+        "stock_bootstrap",
         "dividend_snapshot",
         "close_quote",
         "earnings_event",

@@ -174,6 +174,23 @@ class BackfillClient(Protocol):
 # --------------------------------------------------------------------------- #
 
 
+@dataclass(frozen=True)
+class StockHistoryPayload:
+    """Reuse the resumable collectors for one stock without inventing index membership."""
+
+    as_of: date
+    symbols: tuple[str, ...]
+    part: str
+    price_years: int = 5
+    annual_years: int = 6
+    quarters: int = 4
+    chunk: int = 0
+    universe_code: None = None
+
+
+HistoryPayload = SnapshotBackfillPayload | StockHistoryPayload
+
+
 def years_before(day: date, years: int) -> date:
     try:
         return day.replace(year=day.year - years)
@@ -181,7 +198,7 @@ def years_before(day: date, years: int) -> date:
         return day.replace(year=day.year - years, day=28)
 
 
-def window_start(payload: SnapshotBackfillPayload) -> date:
+def window_start(payload: HistoryPayload) -> date:
     return years_before(payload.as_of, payload.price_years)
 
 
@@ -233,7 +250,7 @@ def report_periods(as_of: date, *, annual_years: int, quarters: int) -> list[dat
     return sorted(periods, reverse=True)
 
 
-def dividend_years(payload: SnapshotBackfillPayload) -> list[int]:
+def dividend_years(payload: HistoryPayload) -> list[int]:
     """Ex-date years of the dividend backfill: one year before the window start
     through ``as_of`` (the trailing-365-day yield at the window start needs it)."""
 
@@ -532,7 +549,7 @@ async def _listing_ids(symbols: Sequence[str]) -> dict[str, int]:
 
 
 async def backfill_prices(
-    payload: SnapshotBackfillPayload,
+    payload: HistoryPayload,
     *,
     client: BackfillClient,
     artifacts: ArtifactWriter,
@@ -651,7 +668,7 @@ async def backfill_prices(
 
 
 async def backfill_financials(
-    payload: SnapshotBackfillPayload,
+    payload: HistoryPayload,
     *,
     client: BackfillClient,
     artifacts: ArtifactWriter,
@@ -787,7 +804,7 @@ async def _listing_date(
 
 
 def _chunk_metadata(
-    payload: SnapshotBackfillPayload, completeness: Completeness
+    payload: HistoryPayload, completeness: Completeness
 ) -> dict[str, object]:
     return {
         "part": payload.part,
@@ -806,7 +823,7 @@ def _chunk_metadata(
 
 
 async def backfill_dividends(
-    payload: SnapshotBackfillPayload,
+    payload: HistoryPayload,
     *,
     client: BackfillClient,
     artifacts: ArtifactWriter,

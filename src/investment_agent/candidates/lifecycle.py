@@ -321,6 +321,10 @@ async def enqueue_rule_draft(
         screen_result_id=screen_result_id,
         preference_notes=await preference_notes(session),
     )
+    if screen_result_id is None and any(
+        source.get("kind") == "manual" for source in candidate.sources or []
+    ):
+        payload["prepare_data"] = True
     repository = PipelineRunRepository(session)
     key = await _draft_run_key(
         repository,
@@ -615,6 +619,13 @@ async def nominate_candidate(
             triggered_by="manual",
         )
         draft_run_id = run.id
+    elif template_id is None:
+        from investment_agent.snapshots.jobs import StockBootstrapPayload, enqueue_snapshot_job
+
+        await enqueue_snapshot_job(
+            session, StockBootstrapPayload(ticker=ticker, as_of=as_of),
+            triggered_by="manual_nomination",
+        )
     return NominationOutcome(candidate, created, draft_run_id)
 
 

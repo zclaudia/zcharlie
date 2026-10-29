@@ -73,6 +73,7 @@ from investment_agent.snapshots.jobs import (
     MARKET_SNAPSHOT,
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
+    STOCK_BOOTSTRAP,
     UNIVERSE_SYNC,
     CalendarProbePayload,
     CloseQuotePayload,
@@ -82,6 +83,7 @@ from investment_agent.snapshots.jobs import (
     IndustrySyncPayload,
     MarketSnapshotPayload,
     SnapshotBackfillPayload,
+    StockBootstrapPayload,
     UniverseSyncPayload,
 )
 from investment_agent.snapshots.market import collect_market_snapshot
@@ -261,6 +263,14 @@ class SnapshotJobHandler(BaseJobHandler):
     async def _collect(self, job: ClaimedJob, artifacts: ArtifactWriter) -> _Result:
         request = job.request_json
         lease = job.lease
+        if self.kind == STOCK_BOOTSTRAP:
+            from investment_agent.snapshots.bootstrap import collect_stock_bootstrap
+
+            metadata = await collect_stock_bootstrap(
+                StockBootstrapPayload.model_validate(request),
+                runtime=self.runtime, artifacts=artifacts, lease=lease,
+            )
+            return _Result("success", {"data_preparation": metadata})
         if self.kind == UNIVERSE_SYNC:
             metadata = await sync_universe(
                 UniverseSyncPayload.model_validate(request),
