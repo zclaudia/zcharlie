@@ -1,6 +1,6 @@
 """Tests for LLMCallRepository."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -58,6 +58,10 @@ async def test_list_recent_limit_orders_desc(db_session):
 @pytest.mark.asyncio
 async def test_cost_summary_aggregates(db_session):
     now = datetime.now(UTC)
+    # UTC-consistent month boundary: date.today() (local) can already be in the
+    # next month while UTC rows are still in the previous one, excluding every
+    # row from the summary during that window.
+    month_start = now.date().replace(day=1)
     db_session.add_all(
         [
             _make_call(
@@ -84,7 +88,6 @@ async def test_cost_summary_aggregates(db_session):
         ]
     )
     await db_session.flush()
-    month_start = date.today().replace(day=1)
     summary = await LLMCallRepository(db_session).cost_summary(
         month_start=month_start
     )
