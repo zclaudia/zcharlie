@@ -1,7 +1,7 @@
 """Public conversation/task/event contracts, independent of provider messages."""
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field, model_validator
@@ -19,6 +19,9 @@ from investment_agent.investor.common import (
 )
 from investment_agent.investor.contracts import ContentNode, PublicationCheck
 from investment_agent.investor.enums import StopReason, TaskStatus
+
+if TYPE_CHECKING:
+    from investment_agent.investor.methods import MethodConfig
 
 
 class ContextBinding(Contract):
@@ -277,6 +280,46 @@ ResearchKind = Literal[
 class PlanStep(Contract):
     text: Text
     state: Literal["done", "next", "pending"]
+    # §9 many-to-many mapping to package method steps; v1 tasks project ().
+    method_step_ids: tuple[str, ...] = ()
+
+
+CoverageStatus = Literal["uncovered", "planned", "satisfied", "completed_with_gap", "missing"]
+
+
+class MethodCoverageStep(Contract):
+    """§9 coverage state of one package step inside the method block."""
+
+    method_step_id: str
+    blocking: bool
+    status: CoverageStatus
+
+
+class MethodCoverage(Contract):
+    """§9 package method coverage, projected for v2 tasks only.
+
+    ``steps`` carries every step of the frozen package, so blocking steps that
+    never entered the plan surface as ``uncovered`` instead of disappearing.
+    """
+
+    package_key: str
+    version: int
+    content_hash: str
+    discipline: "MethodConfig"
+    steps: tuple[MethodCoverageStep, ...]
+
+
+def rebuild_method_coverage() -> None:
+    """Resolve :class:`MethodConfig` for :class:`MethodCoverage` on first use.
+
+    This module sits below the agent task graph (``agent/tasks.py`` imports
+    it) while ``investor/methods.py`` sits above it, so a module-level import
+    would close an import cycle; the projection module owns the real import
+    and calls this before building a method block.
+    """
+    from investment_agent.investor.methods import MethodConfig
+
+    MethodCoverage.model_rebuild(_types_namespace={"MethodConfig": MethodConfig})
 
 
 class PlanView(Contract):
@@ -288,6 +331,7 @@ class PlanView(Contract):
     extra_completed: tuple[Text, ...] = ()
     completion_criteria: tuple[Text, ...] = ()
     stop_conditions: tuple[Text, ...] = ()
+    method: MethodCoverage | None = None
 
     @model_validator(mode="after")
     def saved_at_known_shape(self) -> "PlanView":

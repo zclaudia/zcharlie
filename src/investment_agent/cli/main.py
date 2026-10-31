@@ -7,6 +7,7 @@ from investment_agent.cli.commands import api as api_cmd
 from investment_agent.cli.commands import bank_rollover as bank_rollover_cmd
 from investment_agent.cli.commands import materials as materials_cmd
 from investment_agent.cli.commands import mcp as mcp_cmd
+from investment_agent.cli.commands import methods as methods_cmd
 from investment_agent.cli.commands import migrate as migrate_cmd
 from investment_agent.cli.commands import peer_annual as peer_annual_cmd
 from investment_agent.cli.commands import peer_cohort as peer_cohort_cmd
@@ -33,6 +34,11 @@ app.add_typer(rules_cmd.app, name="rules", help="Rule templates and instances")
 app.add_typer(screen_cmd.app, name="screen", help="Weekly template screen")
 app.add_typer(verify_cmd.app, name="verify", help="iFinD on-demand verification (P1-A13)")
 app.add_typer(settings_cmd.app, name="settings", help="Runtime settings stored in the database")
+app.add_typer(
+    methods_cmd.app,
+    name="methods",
+    help="Method packages (validate, sync, list, show, status, activate-global)",
+)
 app.add_typer(mcp_cmd.app, name="mcp", help="Read-only MCP server (stdio)")
 app.add_typer(
     peer_cohort_cmd.app, name="peers", help="Industry & peer reference (offline roster administration)"

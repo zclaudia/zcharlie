@@ -130,6 +130,16 @@ class MethodHead(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 
+class MethodDefaultHead(Base):
+    """Global default method head; mutable with revision like MethodHead."""
+
+    __tablename__ = "investor_method_default_head"
+    owner_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    channel: Mapped[str] = mapped_column(String(32), primary_key=True)
+    revision: Mapped[int]
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
 class TaskMethodBinding(Base):
     __tablename__ = "agent_task_method_binding"
     task_id: Mapped[str] = mapped_column(ForeignKey("agent_task.id"), primary_key=True)

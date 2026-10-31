@@ -16,8 +16,12 @@ from investment_agent.storage.models.agent import ExecutionGrantRow, MessageRow,
 
 async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: ExecutionGrant,
                              message: MessageRow, method_ref: ObjectRef, *, base: Settings) -> dict[str, Any] | None:
-    from investment_agent.agent.research import ResearchProgress, save_progress, validate_progress
-    from investment_agent.investor.methods import task_method
+    from investment_agent.agent.research import (
+        MethodPlannedProgress,
+        save_progress,
+        validate_progress,
+    )
+    from investment_agent.investor.methods import task_method, task_method_receipt
     service = TaskService(session)
     current = await service.get_task(claim.task_id)
     prior_messages = (await session.scalars(select(MessageRow).where(
@@ -28,6 +32,11 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
         if payload.get("role") != "user" or payload.get("text") != grant.prompt or not payload.get("task_ref"):
             continue
         task_id = UUID(payload["task_ref"]["id"])
+        # §7.3 (card 15): a candidate-package shadow task never feeds formal
+        # plan reuse, even when every other selection condition matches.
+        predecessor = await task_method_receipt(session, task_id)
+        if predecessor is not None and predecessor.shadow is not None:
+            continue
         task = await service.get_task(task_id)
         if (task.status not in {"partial", "failed"} or task.stop_reason not in {"budget_exhausted", "no_progress", "evidence_blocked"}
                 or current.created_at - task.created_at > timedelta(days=1)
@@ -47,12 +56,16 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
         planned = next((a for a in actions if a.parameters.get("tool") == "save_research_progress" and a.result), None)
         if planned is None or planned.result is None:
             continue
-        progress = ResearchProgress.model_validate(planned.result["progress"])
+        # v2 predecessors save plan bindings; the v2 subtype reads both shapes.
+        progress = MethodPlannedProgress.model_validate(planned.result["progress"])
         if progress.answered:
             continue
         # Only public planning is carried over. No previous answer, prepared
-        # opinion or private reasoning becomes a current finding.
+        # opinion or private reasoning becomes a current finding. §4.4: the
+        # copy keeps evidence_steps and plan_bindings and clears step results
+        # and old conclusions.
         plan = progress.model_copy(update={"answered": False, "content": (), "completed_steps": (),
+            "step_results": (),
             "fact_refs": (), "counter_refs": (), "inferences": (), "assumptions": (),
             "gaps": (), "limitations": (), "stopped_because": None,
             "dimensions": tuple(d.model_copy(update={"status": DimensionStatus.MISSING, "refs": (),
@@ -64,7 +77,7 @@ async def reuse_question_plan(session: AsyncSession, claim: TaskClaim, grant: Ex
         parameters = {"tool": "save_research_progress", "business": plan.model_dump(mode="json"),
                       "phase": "research:v1", "reused_plan_from": planned.operation_id}
         action = await service.prepare_action(claim, intent_key="continuation:public-plan", parameters=parameters, effect="database")
-        async def save(owned: AsyncSession, operation: UUID, plan: ResearchProgress = plan, source_operation: str = planned.operation_id) -> ActionResult:
+        async def save(owned: AsyncSession, operation: UUID, plan: MethodPlannedProgress = plan, source_operation: str = planned.operation_id) -> ActionResult:
             result = await save_progress(owned, operation, plan)
             return ActionResult({**result.output, "reused_plan_from": source_operation}, artifact_refs=result.artifact_refs)
         result = await service.settle_action(claim, UUID(action.operation_id), save)

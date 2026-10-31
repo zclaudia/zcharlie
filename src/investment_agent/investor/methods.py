@@ -3,13 +3,22 @@
 Artifacts freeze actual saved inputs/outputs. Offline model runs are explicitly
 FunctionModel replays, engineering evidence only, never semantic quality proof.
 """
+import hashlib
+import inspect
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from functools import wraps
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID, uuid4
 
-from pydantic import Field, StrictBool, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    StrictBool,
+    ValidationError,
+    model_serializer,
+    model_validator,
+)
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,10 +30,16 @@ from investment_agent.storage.models.agent import AgentTask, ToolAction
 from investment_agent.storage.models.investor import (
     InvestorMutation,
     MethodArtifact,
+    MethodDefaultHead,
     MethodHead,
     MethodProposal,
     TaskMethodBinding,
 )
+
+if TYPE_CHECKING:
+    from investment_agent.agent.method_receipt import TaskMethodReceipt
+    from investment_agent.config import Settings
+    from investment_agent.investor.method_packages import MethodPackage
 
 
 def method_transaction[T](fn: Callable[..., Awaitable[T]]) -> Callable[..., Awaitable[T]]:
@@ -49,10 +64,40 @@ class MethodConfig(Contract):
 
 
 class MethodBinding(Contract):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 1
     method_ref: ObjectRef = FIXED_METHOD
     config: MethodConfig = MethodConfig()
     listing_ref: ObjectRef | None = None
+    # v2 only: the immutable package artifact behind this method version.
+    package_ref: ObjectRef | None = None
+    package_hash: str | None = None
+
+    @model_validator(mode="after")
+    def package_shape(self) -> "MethodBinding":
+        if self.schema_version == 1 and (self.package_ref is not None or self.package_hash is not None):
+            raise ValueError("v1 bindings cannot carry a package reference")
+        if self.schema_version == 2 and (self.package_ref is None or self.package_hash is None):
+            raise ValueError("v2 bindings require package_ref and package_hash")
+        return self
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # v1 payloads keep their exact existing shape (no new keys); only v2
+        # bindings carry the package fields (§4.3).
+        data = cast(dict[str, Any], handler(self))
+        if self.schema_version == 1:
+            data.pop("package_ref", None)
+            data.pop("package_hash", None)
+        return data
+
+
+# ``method_packages`` imports this module for ``MethodConfig`` while the
+# proposal contract below reuses its ``MethodPackageDefinition``; the import
+# resolves here, after that class exists (see the import note in
+# investor/method_packages.py), so either import order converges. The stored
+# ``MethodPackage`` artifact class is defined only after that deferred import,
+# so it stays under TYPE_CHECKING and binds at call time in the helpers.
+from investment_agent.investor.method_packages import MethodPackageDefinition  # noqa: E402
 
 
 class CreateProposal(Contract):
@@ -63,6 +108,14 @@ class CreateProposal(Contract):
     error_pattern: Text = Field(max_length=1000)
     summary: Text = Field(max_length=1000)
     config: MethodConfig
+    package: MethodPackageDefinition | None = None  # §7: package proposals carry the candidate contract
+
+
+# In the packages-first import order this class is created while
+# method_packages is still completing its own deferred discipline annotation;
+# the rebuild makes schema completion explicit instead of relying on
+# pydantic's implicit rebuild at first use.
+CreateProposal.model_rebuild()
 
 
 class EvaluationCase(Contract):
@@ -103,9 +156,30 @@ class MethodRollback(Contract):
     reason: Text = Field(max_length=1000)
 
 
+class ActivateGlobal(Contract):
+    mutation_id: UUID
+    channel: str = "company-research"
+    package_ref: ObjectRef
+    expected_revision: int = Field(ge=0)
+    reason: Text
+
+
 async def task_method(session: AsyncSession, task_id: UUID) -> MethodBinding:
+    from investment_agent.agent.method_receipt import parse_task_method_payload
     receipt = await session.get(TaskMethodBinding, str(task_id))
-    return MethodBinding.model_validate(receipt.payload) if receipt else MethodBinding()
+    if not receipt:
+        return MethodBinding()
+    binding, _ = parse_task_method_payload(receipt.payload)
+    return binding
+
+
+async def task_method_receipt(session: AsyncSession, task_id: UUID) -> "TaskMethodReceipt | None":
+    """The v2 admission receipt; None for v1 tasks, which never froze one."""
+    from investment_agent.agent.method_receipt import parse_task_method_payload
+    receipt = await session.get(TaskMethodBinding, str(task_id))
+    if not receipt:
+        return None
+    return parse_task_method_payload(receipt.payload)[1]
 
 
 async def enforce_steps(session: AsyncSession, config: MethodConfig, progress: Any, cutoff: Any, *, final: bool = False, formal_directional: bool = False) -> None:
@@ -168,6 +242,63 @@ class MethodService:
             raise InvestorError("not_found", "方法证据不可用")
         return row.payload
 
+    @method_transaction
+    async def save_package(
+        self, definition: "MethodPackageDefinition", *, source: str, proposal_id: UUID | None = None, evidence_hash: str | None = None
+    ) -> dict[str, Any]:
+        """Append-only package storage; identical content dedupes to one artifact."""
+        from investment_agent.investor.method_packages import (
+            MethodPackage,
+            MethodPackageError,
+            canonical_hash,
+            validate_definition,
+        )
+        if errors := validate_definition(definition):
+            raise MethodPackageError(errors, source=source)
+        content_hash = canonical_hash(definition)
+        rows = (await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "package"))).all()
+        versions: list[int] = []
+        for row in rows:
+            if row.payload["package_key"] != definition.package_key:
+                continue
+            versions.append(row.payload["version"])
+            if row.payload["content_hash"] == content_hash:
+                return row.payload
+        artifact_id = uuid4()
+        package = MethodPackage(
+            **definition.model_dump(),
+            artifact_id=artifact_id,
+            version=max(versions, default=0) + 1,
+            content_hash=content_hash,
+            created_at=datetime.now(UTC),
+            source=source,
+            proposal_id=proposal_id,
+            evidence_hash=evidence_hash,
+        )
+        payload = package.model_dump(mode="json")
+        self.session.add(MethodArtifact(id=str(artifact_id), owner_id=self.owner, kind="package", payload=payload))
+        await self.session.flush()
+        return payload
+
+    async def package(self, package_key: str, version: int) -> dict[str, Any]:
+        rows = (await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "package"))).all()
+        for row in rows:
+            if row.payload["package_key"] == package_key and row.payload["version"] == version:
+                return row.payload
+        raise InvestorError("not_found", "方法包版本不可用")
+
+    async def package_by_ref(self, ref: ObjectRef) -> dict[str, Any]:
+        row = await self.session.get(MethodArtifact, str(ref.id))
+        if ref.kind != "package" or not row or row.owner_id != self.owner or row.kind != "package":
+            raise InvestorError("not_found", "方法包工件不可用")
+        return row.payload
+
+    async def packages(self, package_key: str | None = None) -> list[dict[str, Any]]:
+        """Read-only listing of stored package artifacts, key filter, version ascending."""
+        rows = (await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "package"))).all()
+        payloads = [row.payload for row in rows if package_key is None or row.payload["package_key"] == package_key]
+        return sorted(payloads, key=lambda payload: (payload["package_key"], payload["version"]))
+
     async def proposal(self, identifier: UUID) -> MethodProposal:
         row = await self.session.get(MethodProposal, str(identifier), populate_existing=True)
         if not row or row.owner_id != self.owner:
@@ -192,16 +323,90 @@ class MethodService:
         row = await self.session.get(MethodHead, (self.owner, listing.id), populate_existing=True)
         return (row.revision, MethodBinding.model_validate(row.payload)) if row else (0, MethodBinding(listing_ref=listing))
 
-    async def freeze_task(self, task_id: UUID, refs: tuple[ObjectRef, ...], research_kind: str) -> None:
+    async def default_head(self, channel: str = "company-research") -> tuple[int, MethodBinding | None]:
+        row = await self.session.get(MethodDefaultHead, (self.owner, channel), populate_existing=True)
+        return (row.revision, MethodBinding.model_validate(row.payload)) if row else (0, None)
+
+    async def resolve_binding(self, listing: ObjectRef | None, research_kind: str) -> MethodBinding:
+        """per-listing head -> global default head -> legacy v1 baseline (§5)."""
+        if listing is not None and research_kind in {"company_research", "review"}:
+            revision, binding = await self.current(listing)
+            if revision:
+                return binding
+            _, default = await self.default_head()
+            if default is not None:
+                return default
+        return MethodBinding()
+
+    async def freeze_task(self, task_id: UUID, refs: tuple[ObjectRef, ...], research_kind: str, *, tool_names: tuple[str, ...] = (), override_binding: "MethodBinding | None" = None) -> None:
         # Historical Tasks without this receipt always remain the exact baseline.
         # Multi-listing/comparison/portfolio contexts have a documented baseline,
         # never a silently mixed policy. Only one-listing full research can opt in.
         listings = tuple({r for r in refs if r.kind == "listing"})
-        binding = MethodBinding()
-        if len(listings) == 1 and research_kind in {"company_research", "review"}:
-            head = await self.session.get(MethodHead, (self.owner, listings[0].id))
-            binding = MethodBinding.model_validate(head.payload) if head else MethodBinding(listing_ref=listings[0])
-        self.session.add(TaskMethodBinding(task_id=str(task_id), payload=binding.model_dump(mode="json")))
+        if override_binding is not None:
+            # §7.3 candidate-package prospective shadow: the caller freezes the
+            # proposal's candidate v2 binding; no head is read and the shadow
+            # task really executes the candidate package.
+            binding = override_binding
+        else:
+            binding = MethodBinding()
+            if len(listings) == 1 and research_kind in {"company_research", "review"}:
+                # §5 resolution order: per-listing head, then the explicit global
+                # default head; without either, the documented v1 baseline keeps
+                # its exact current payload shape (listing_ref included).
+                head = await self.session.get(MethodHead, (self.owner, listings[0].id))
+                resolved = MethodBinding.model_validate(head.payload) if head else None
+                if resolved is None:
+                    resolved = (await self.default_head())[1]
+                binding = MethodBinding(listing_ref=listings[0]) if resolved is None else resolved
+        if binding.package_ref is None:
+            self.session.add(TaskMethodBinding(task_id=str(task_id), payload=binding.model_dump(mode="json")))
+            return
+        receipt = await self._freeze_package_receipt(binding, research_kind, tool_names, shadow=override_binding is not None)
+        self.session.add(TaskMethodBinding(task_id=str(task_id), payload={"schema_version": 2, "receipt": receipt.model_dump(mode="json")}))
+
+    async def _freeze_package_receipt(self, binding: MethodBinding, research_kind: str, tool_names: tuple[str, ...], *, shadow: bool = False) -> "TaskMethodReceipt":
+        """v2 admission (§6.1): verify the package artifact, then freeze the receipt.
+
+        A hash or config mismatch is storage corruption and fails closed; the
+        stored package is the immutable source, never re-fetched from YAML.
+        Missing capabilities deny admission - they never silently downgrade
+        the task to the v1 baseline.
+        """
+        from investment_agent.agent.execution import ExecutionDeniedError
+        from investment_agent.agent.method_receipt import VALIDATOR_V1, build_receipt
+        from investment_agent.investor.method_packages import (
+            MethodPackage,
+            canonical_hash,
+            validate_definition,
+        )
+        assert binding.package_ref is not None and binding.package_hash is not None
+        try:
+            package = MethodPackage.model_validate(await self.package_by_ref(binding.package_ref))
+        except ValidationError as exc:
+            raise InvestorError("method_package_corrupt", "方法包工件不可读，任务拒绝准入") from exc
+        if canonical_hash(package) != binding.package_hash or binding.config != package.discipline:
+            raise InvestorError("method_package_corrupt", "方法包工件与绑定不一致，任务拒绝准入")
+        if errors := validate_definition(package):
+            raise InvestorError("method_package_corrupt", f"方法包复验失败：{'；'.join(errors)}")
+        if research_kind not in package.applicable_kinds:
+            raise InvestorError("method_package_not_applicable", "方法包不适用于该研究类型，任务拒绝准入")
+        # Card 07 (§11 M2): new v2 tasks freeze as enforcing (validator v1).
+        # Receipts frozen before this switch keep their render-only version and
+        # stay render-only forever (§10) - the validator dispatches on the
+        # frozen string, never on the deployed code.
+        receipt = build_receipt(binding, package, validator_version=VALIDATOR_V1)
+        required: set[str] = set()
+        for members in receipt.tool_family_members.values():
+            required.update(members)
+        if missing := sorted(required - set(tool_names)):
+            raise ExecutionDeniedError(f"method_capability_unavailable: {', '.join(missing)}")
+        if shadow:
+            # §7.3: the shadow receipt records the marker plus the proposal's
+            # old-method ref (the caller builds the binding with exactly that
+            # method_ref); candidate_shadow_result re-checks the equality.
+            receipt = receipt.model_copy(update={"shadow": "candidate_package", "candidate_base_method_ref": binding.method_ref})
+        return receipt
 
     @method_transaction
     async def process_review(self, task_id: UUID) -> dict[str, Any]:
@@ -250,13 +455,69 @@ class MethodService:
         scopes = review["inputs"]["task"]["binding"]["base_refs"]
         if request.listing_ref.model_dump(mode="json") not in scopes or request.old_method != old.method_ref or review["status"] not in {"failed", "partial"}:
             raise InvestorError("invalid_reference", "提案必须关联该证券实际失败或不完整复盘及原方法")
-        if not request.config.stronger_than(old.config):
-            raise InvestorError("invalid_reference", "仅支持加强现有研究步骤；不能放松规则")
         identifier = str(uuid4())
-        value = {"id": identifier, "revision": 1, "created_at": datetime.now(UTC).isoformat(), "status": "evaluating", "request": request.model_dump(mode="json"), "evaluation_ids": [], "shadow_ids": [], "prospective_ids": []}
+        frozen: dict[str, Any] = {}
+        if request.package is None:
+            # config-only proposals keep the exact existing strengthening path.
+            if not request.config.stronger_than(old.config):
+                raise InvestorError("invalid_reference", "仅支持加强现有研究步骤；不能放松规则")
+        else:
+            frozen = await self._freeze_package_candidate(request, old, identifier)
+        # The request section keeps the full model dump (including nested nulls):
+        # evaluate/prospective/decide compare these dicts against review scope
+        # refs, and package proposals add their frozen candidate keys on top.
+        request_payload = request.model_dump(mode="json")
+        request_payload.update(frozen)
+        value = {"id": identifier, "revision": 1, "created_at": datetime.now(UTC).isoformat(), "status": "evaluating", "request": request_payload, "evaluation_ids": [], "shadow_ids": [], "prospective_ids": []}
         self.session.add(MethodProposal(id=identifier, owner_id=self.owner, revision=1, payload=value))
         self.save("proposal_version", value)
         return await self.receipt(request.mutation_id, request, value)
+
+    async def _freeze_package_candidate(self, request: CreateProposal, old: MethodBinding, identifier: str) -> dict[str, Any]:
+        """Validate a package proposal and freeze its candidate (design §7).
+
+        ``config`` must equal ``package.discipline`` field by field; the
+        definition passes the aggregate validator; §8 requires zero
+        strengthening violations against the old method's package and at least
+        one strictly stronger research requirement (version/hash/presentation
+        changes alone are no enhancement). The stored artifact ref, content
+        hash and rendered-method hash then freeze with this proposal version:
+        ``revise`` never rewrites them and a duplicate ``create`` replays.
+        """
+        from investment_agent.agent.method_receipt import render_method
+        from investment_agent.investor.method_packages import (
+            MethodPackage,
+            legacy_package_for,
+            strengthening_violations,
+            strictly_stronger_requirements,
+            validate_definition,
+        )
+        assert request.package is not None
+        package = request.package
+        mismatched = [name for name in type(request.config).model_fields if getattr(request.config, name) != getattr(package.discipline, name)]
+        if mismatched:
+            raise InvestorError("invalid_reference", f"提案 config 与 package.discipline 不一致：{', '.join(mismatched)}")
+        if errors := validate_definition(package):
+            raise InvestorError("invalid_reference", f"方法包校验失败：{'；'.join(errors)}")
+        if old.package_ref is None:
+            # FIXED_METHOD or a v1 method version: the virtual legacy baseline
+            # with the review's frozen discipline switches (§8).
+            old_definition, old_kind = legacy_package_for(old.config), "legacy"
+        else:
+            # A v2 method version: the stored package artifact is the baseline.
+            old_definition, old_kind = MethodPackage.model_validate(await self.package_by_ref(old.package_ref)), "package"
+        if violations := strengthening_violations(old_definition, package):
+            raise InvestorError("invalid_reference", f"包提案违反加强约束：{'；'.join(violations)}")
+        if not strictly_stronger_requirements(old_definition, package):
+            raise InvestorError("invalid_reference", "包提案无实质增强：仅版本、哈希或文案变化不构成研究要求增强")
+        saved = await self.save_package(package, source="proposal", proposal_id=UUID(identifier), evidence_hash=None)
+        rendered = render_method(package)
+        return {
+            "package_ref": ObjectRef(kind="package", id=UUID(saved["artifact_id"]), revision=saved["version"]).model_dump(mode="json"),
+            "content_hash": saved["content_hash"],
+            "rendered_method_hash": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
+            "old_package_kind": old_kind,
+        }
 
     async def revise(self, row: MethodProposal, revision: int, changes: dict[str, Any]) -> dict[str, Any]:
         value = {**row.payload, **changes, "revision": revision + 1}
@@ -289,7 +550,13 @@ class MethodService:
             raise InvestorError("stale_revision", "提案状态已变化")
         config = MethodConfig.model_validate(row.payload["request"]["config"])
         old = await self.known(ObjectRef.model_validate(row.payload["request"]["old_method"]))
+        # §7.1: package proposals replay every applicable sample against the
+        # proposal-frozen candidate; config-only proposals keep the exact
+        # existing check_sample path byte for byte.
+        candidate = await self._frozen_candidate(row)
+        strictly = await self._strengthened_requirements(row, candidate) if candidate is not None else ()
         results = []
+        shadow: set[str] = set()
         for sample in request.cases:
             review = await self.artifact(sample.review_id, "process_review")
             scopes = review["inputs"]["task"]["binding"]["base_refs"]
@@ -299,12 +566,80 @@ class MethodService:
                 raise InvestorError("invalid_reference", "失败样本范围或原方法不一致")
             if (sample.role == "failure" and (review["status"] not in {"failed", "partial"} or sample.expected != "block")) or (sample.role == "counterexample" and (review["status"] != "succeeded" or sample.expected != "pass")):
                 raise InvestorError("invalid_reference", "失败与反例必须来自相应真实任务状态")
-            results.append({**sample.model_dump(mode="json"), "frozen_review": review, "applicable": applicable, "baseline": await self.check_sample(review, baseline.config, review["progress"]), "proposed": await self.check_sample(review, config if applicable else baseline.config, review["progress"])})
+            baseline_check = await self.check_sample(review, baseline.config, review["progress"])
+            if candidate is None:
+                proposed = await self.check_sample(review, config if applicable else baseline.config, review["progress"])
+            elif applicable:
+                proposed = await self._replay_sample(review, candidate)
+                shadow.update(proposed["requires_candidate_shadow"])
+            else:
+                # Out-of-scope counterexamples keep their own method and the
+                # existing baseline pass semantics; the candidate never touches them.
+                proposed = await self.check_sample(review, baseline.config, review["progress"])
+            results.append({**sample.model_dump(mode="json"), "frozen_review": review, "applicable": applicable, "baseline": baseline_check, "proposed": proposed})
         complete = {r["role"] for r in results} == {"failure", "counterexample"} and any(r["role"] == "counterexample" and not r["applicable"] for r in results) and any(r["role"] == "counterexample" and r["applicable"] for r in results) and row.payload["request"]["review_id"] in {r["review_id"] for r in results}
-        passed = complete and all(r["proposed"]["result"] == r["expected"] for r in results) and all(r["baseline"]["result"] == "pass" for r in results if r["role"] == "counterexample") and any(r["baseline"]["result"] == "pass" and r["proposed"]["result"] == "block" for r in results if r["role"] == "failure")
+        if candidate is None:
+            passed = complete and all(r["proposed"]["result"] == r["expected"] for r in results) and all(r["baseline"]["result"] == "pass" for r in results if r["role"] == "counterexample") and any(r["baseline"]["result"] == "pass" and r["proposed"]["result"] == "block" for r in results if r["role"] == "failure")
+        else:
+            def substantial(entry: dict[str, Any]) -> bool:
+                return entry["proposed"]["state"] == "block" and bool(set(entry["proposed"]["blocked_requirements"]) & set(strictly))
+            failures = [r for r in results if r["role"] == "failure"]
+            passed = (complete
+                and all(r["baseline"]["result"] == "pass" for r in results if r["role"] == "counterexample")
+                and any(r["baseline"]["result"] == "pass" for r in failures)
+                and all(substantial(r) for r in failures)
+                and all(r["proposed"]["state"] != "block" for r in results if r["role"] == "counterexample" and r["applicable"])
+                and all(r["proposed"]["result"] == "pass" for r in results if r["role"] == "counterexample" and not r["applicable"]))
         value = self.save("evaluation", {"proposal_id": row.id, "proposal_revision": row.revision, "cases": results, "complete": complete, "passed": passed, "quality": "structural_engineering_replay_not_semantic_acceptance"})
-        proposal = await self.revise(row, request.expected_revision, {"evaluation_ids": [*row.payload["evaluation_ids"], value["id"]], "status": "shadow" if passed else "evaluating"})
+        changes: dict[str, Any] = {"evaluation_ids": [*row.payload["evaluation_ids"], value["id"]], "status": "shadow" if passed else "evaluating"}
+        if candidate is not None:
+            # Cumulative not-replayable requirement ids across evaluations (§7.1);
+            # a non-empty set never blocks here - the prospective candidate
+            # shadows must cover it before approval (§7.3, card 15/16).
+            changes["requires_candidate_shadow"] = sorted(set(row.payload.get("requires_candidate_shadow", [])) | shadow)
+        proposal = await self.revise(row, request.expected_revision, changes)
         return await self.receipt(request.mutation_id, request, {"evaluation": value, "proposal": proposal})
+
+    async def _frozen_candidate(self, row: MethodProposal) -> "MethodPackage | None":
+        """The proposal-frozen candidate artifact; None for config-only proposals."""
+        from investment_agent.investor.method_packages import MethodPackage
+        if row.payload["request"].get("package_ref") is None:
+            return None
+        return MethodPackage.model_validate(await self.package_by_ref(ObjectRef.model_validate(row.payload["request"]["package_ref"])))
+
+    async def _strengthened_requirements(self, row: MethodProposal, candidate: "MethodPackageDefinition") -> tuple[str, ...]:
+        """§8 ids of the research requirements the candidate tightens over the old method."""
+        from investment_agent.investor.method_packages import (
+            MethodPackage,
+            legacy_package_for,
+            strictly_stronger_requirements,
+        )
+        old = await self.known(ObjectRef.model_validate(row.payload["request"]["old_method"]))
+        old_definition: MethodPackageDefinition
+        if row.payload["request"].get("old_package_kind") == "package":
+            # A v2 method version: the stored package artifact is the baseline,
+            # exactly as frozen at proposal creation (§7/§8).
+            assert old.package_ref is not None
+            old_definition = MethodPackage.model_validate(await self.package_by_ref(old.package_ref))
+        else:
+            # FIXED_METHOD or a v1 method version: the virtual legacy baseline.
+            old_definition = legacy_package_for(old.config)
+        return strictly_stronger_requirements(old_definition, candidate)
+
+    async def _replay_sample(self, review: dict[str, Any], candidate: "MethodPackage") -> dict[str, Any]:
+        """One sample's three-state replay payload against the candidate (§7.1)."""
+        from investment_agent.agent.method_receipt import RENDERER_VERSION, VALIDATOR_V1
+        from investment_agent.agent.method_validation import (
+            replay_context,
+            replay_requirements,
+            replay_sample_state,
+        )
+        from investment_agent.agent.research import MethodPlannedProgress
+        context = await replay_context(self.session, review, candidate, renderer_version=RENDERER_VERSION, validator_version=VALIDATOR_V1)
+        replayed, significant = await replay_requirements(context, MethodPlannedProgress.model_validate(review["progress"]))
+        state = replay_sample_state(replayed)
+        significant = sorted(set(significant))
+        return {"state": state, "replayed": replayed, "blocked_requirements": significant if state == "block" else [], "requires_candidate_shadow": significant if state == "not_replayable" else []}
 
     @method_transaction
     async def prospective(self, request: "ProspectiveRequest") -> dict[str, Any]:
@@ -334,6 +669,125 @@ class MethodService:
         value = self.save("prospective_shadow", {"proposal_id": row.id, "proposal_revision": row.revision, "evaluation_id": evaluation["id"], "evaluation_hash": fingerprint(evaluation), "cases": cases, "complete": complete, "passed": passed, "quality": "prospective_gate_only_actual_new_native_task_outputs_not_semantic_quality", "side_effects": "none; observes existing completed tasks; no model/publish/notification/ledger calls"})
         proposal = await self.revise(row, row.revision, {"prospective_ids": [*row.payload.get("prospective_ids", []), value["id"]]})
         return await self.receipt(request.mutation_id, request, {"prospective": value, "proposal": proposal})
+
+    @method_transaction
+    async def start_candidate_shadow(self, request: "CandidateShadowRequest", *, base: "Settings") -> dict[str, Any]:
+        """§7.3 candidate-package prospective shadow initiation (card 15).
+
+        Only package proposals in ``status="shadow"`` with a passed latest
+        evaluation qualify. The server builds a background shadow grant bound
+        to the proposal listing: publication (``prepare_company_view``) and the
+        portfolio family are stripped from the tool whitelist (no publishing,
+        no ledger), and the budget follows the existing mandate daily/task cost
+        configuration. ``admit()`` enqueues a real ``agent_research`` task
+        whose receipt freezes the candidate v2 binding (FunctionModel is never
+        usable on this path). The same mutation replays without a new task.
+        """
+        from investment_agent.agent.contracts import ContextBinding
+        from investment_agent.agent.execution import ExecutionGrant, admit
+        from investment_agent.agent.research import registrations
+        from investment_agent.investor.foundations import InvestorService
+        if result := await self.replay(request.mutation_id, request):
+            return result
+        row = await self.proposal(request.proposal_id)
+        if row.payload["status"] != "shadow" or not row.payload.get("evaluation_ids") or row.payload["request"].get("package_ref") is None:
+            raise InvestorError("invalid_reference", "候选包前瞻影子只接受已通过评估的包提案")
+        evaluation = await self.artifact(UUID(row.payload["evaluation_ids"][-1]), "evaluation")
+        if not evaluation["passed"] or evaluation["proposal_id"] != row.id:
+            raise InvestorError("stale_revision", "需要当前已通过的评估")
+        candidate = await self._frozen_candidate(row)
+        assert candidate is not None  # package_ref presence checked above
+        listing = ObjectRef.model_validate(row.payload["request"]["listing_ref"])
+        await self.scope(listing)
+        kinds = [kind for kind in ("company_research", "review") if kind in candidate.applicable_kinds]
+        if not kinds:
+            raise InvestorError("invalid_reference", "候选包不适用于任何前瞻影子研究类型")
+        mandate = await InvestorService(self.session).get_mandate("local_owner")
+        tool_names = tuple(name for name in (registration.name for registration in registrations()) if name not in CANDIDATE_SHADOW_FORBIDDEN_TOOLS)
+        binding = MethodBinding(
+            schema_version=2,
+            method_ref=ObjectRef.model_validate(row.payload["request"]["old_method"]),
+            config=candidate.discipline,
+            listing_ref=listing,
+            package_ref=ObjectRef(kind="package", id=candidate.artifact_id, revision=candidate.version),
+            package_hash=candidate.content_hash,
+        )
+        grant = ExecutionGrant(mode="background", source="authorized_background", prompt=request.prompt,
+            tool_names=tool_names, scope_refs=(listing,), mandate_id=mandate.id, current_research=True, research_kind=kinds[0])
+        task = await admit(self.session, base=base, input_key=f"candidate-shadow:{row.id}:{request.mutation_id}",
+            binding=ContextBinding(context_refs=(listing,), base_refs=(listing,), as_of=datetime.now(UTC)),
+            grant=grant, kind="agent_research", method_override=binding)
+        claim = self.save("candidate_shadow_claim", {"proposal_id": row.id, "proposal_revision": row.revision,
+            "evaluation_id": evaluation["id"], "task_id": str(task.id), "expected": request.expected,
+            "prompt": request.prompt, "research_kind": kinds[0],
+            "quality": "real_worker_shadow_task_no_function_model"})
+        return await self.receipt(request.mutation_id, request, {"claim": claim, "task_id": str(task.id), "status": "queued"})
+
+    @method_transaction
+    async def candidate_shadow_result(self, request: "CandidateShadowResultRequest") -> dict[str, Any]:
+        """Register one finished candidate shadow (§7.3/card 15 §4, idempotent replay).
+
+        Reads the shadow task's committed progress plus committed actions,
+        rebuilds the frozen validation context (candidate package, frozen
+        receipt/grant) and runs ``validate_final``: ``expected="pass"`` must
+        pass (positive control covering the current ``requires_candidate_shadow``
+        ids), ``expected="block"`` must be rejected (negative control). The
+        result artifact records the actual outcome either way; only matched
+        runs count as approval evidence (card 16).
+        """
+        from investment_agent.agent.execution import ExecutionGrant, ResearchValidationError
+        from investment_agent.agent.method_validation import build_context, validate_final
+        from investment_agent.agent.progress import committed_progress
+        from investment_agent.agent.research import MethodPlannedProgress
+        from investment_agent.agent.tasks import TaskService
+        from investment_agent.storage.models.agent import ExecutionGrantRow
+        if result := await self.replay(request.mutation_id, request):
+            return result
+        row = await self.proposal(request.proposal_id)
+        if row.payload["request"].get("package_ref") is None:
+            raise InvestorError("invalid_reference", "候选影子结果只登记包提案")
+        claims = (await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "candidate_shadow_claim"))).all()
+        claim = next((item.payload for item in claims if item.payload["task_id"] == str(request.task_id) and item.payload["proposal_id"] == row.id), None)
+        if claim is None:
+            raise InvestorError("not_found", "该任务不是此提案发起的前瞻影子")
+        task_row = await self.session.get(AgentTask, str(request.task_id))
+        if task_row is None or task_row.owner_id != self.owner or task_row.status not in COMPLETED_TASK_STATUSES:
+            raise InvestorError("invalid_reference", "前瞻影子结果需要真实已完成的影子任务")
+        receipt = await task_method_receipt(self.session, request.task_id)
+        old_method = ObjectRef.model_validate(row.payload["request"]["old_method"])
+        if receipt is None or receipt.shadow != "candidate_package" or receipt.candidate_base_method_ref != old_method:
+            raise InvestorError("invalid_reference", "影子任务未绑定该提案的候选包或原方法")
+        evaluation = await self.artifact(UUID(claim["evaluation_id"]), "evaluation")
+        admitted_at = datetime.fromisoformat(task_row.payload["created_at"].replace("Z", "+00:00"))
+        if admitted_at <= datetime.fromisoformat(evaluation["created_at"]):
+            raise InvestorError("invalid_reference", "前瞻影子任务必须在评估之后新建")
+        grant_row = await self.session.get(ExecutionGrantRow, str(request.task_id))
+        if grant_row is None:
+            raise InvestorError("invalid_reference", "影子任务缺少冻结授权")
+        grant = ExecutionGrant.model_validate(grant_row.payload)
+        if row.payload["request"]["listing_ref"] not in [ref.model_dump(mode="json") for ref in grant.scope_refs]:
+            raise InvestorError("invalid_reference", "影子任务范围与提案不一致")
+        service = TaskService(self.session)
+        context = await build_context(self.session, task_id=request.task_id, receipt=receipt, grant=grant)
+        committed = await committed_progress(self.session, await service.get_task(request.task_id), MethodPlannedProgress)
+        if not committed:
+            raise InvestorError("invalid_reference", "影子任务没有已提交的研究进展")
+        outcome, errors = "passed", []
+        try:
+            await validate_final(self.session, context, committed[-1][1])
+        except ResearchValidationError as exc:
+            outcome = "blocked"
+            errors = [f"{exc.code}: {error.field}: {error.message}" for error in exc.field_errors]
+        matched = (claim["expected"] == "pass" and outcome == "passed") or (claim["expected"] == "block" and outcome == "blocked")
+        requirement_ids = sorted(row.payload.get("requires_candidate_shadow", [])) if claim["expected"] == "pass" and outcome == "passed" else []
+        value = self.save("candidate_shadow", {"proposal_id": row.id, "proposal_revision": row.revision,
+            "claim_id": claim["id"], "task_id": str(request.task_id), "expected": claim["expected"],
+            "outcome": outcome, "matched": matched, "requirement_ids": requirement_ids, "errors": errors,
+            "rendered_method_hash": receipt.rendered_method_hash,
+            "quality": "prospective_shadow_engineering_evidence_only_no_publication"})
+        proposal = await self.revise(row, request.expected_revision, {"candidate_shadow_ids": [*row.payload.get("candidate_shadow_ids", []), value["id"]]})
+        return await self.receipt(request.mutation_id, request, {"candidate_shadow": value, "proposal": proposal})
+
 
     def summary(self, row: MethodProposal) -> dict[str, Any]:
         payload = dict(row.payload)
@@ -382,7 +836,42 @@ class MethodService:
             collections[output] = values
         revision, current = await self.current(ObjectRef.model_validate(row.payload["request"]["listing_ref"]))
         payload = {**summary, **collections, "artifact_hashes": hashes, "head_revision": revision, "current_binding": current.model_dump(mode="json"), "detail_loaded": True, "history_note": "Latest evidence only; prior immutable artifacts accessible by exact ID. Display excerpts are bounded."}
+        if row.payload["request"].get("package_ref") is not None:
+            # §7.4: a package approval additionally binds the candidate side
+            # (frozen package/render hashes, versions, last evaluation and the
+            # latest prospective candidate shadow). The offline shadow stays
+            # engineering evidence only - it is shown in the shadows collection
+            # above and never enters this binding. Config-only proposals keep
+            # their exact payload shape.
+            payload["candidate_binding"] = await self._candidate_binding(row, hashes)
         return {**payload, "evidence_hash": fingerprint(payload), "approval_summary": row.payload["request"]["summary"]}
+
+    async def _candidate_binding(self, row: MethodProposal, hashes: dict[str, str]) -> dict[str, Any]:
+        """§7.4 candidate-side fields one package-proposal approval binds (card 16).
+
+        The evidence fingerprint covers the proposal-frozen package content
+        hash, the frozen rendered-method hash and the renderer/validator
+        versions, the last evaluation and the latest prospective
+        ``candidate_shadow`` artifact by exact id + fingerprint - so any newer
+        shadow registration fences a stale approval with ``stale_revision``.
+        """
+        from investment_agent.agent.method_receipt import RENDERER_VERSION, VALIDATOR_V1
+        request = row.payload["request"]
+        evaluations, shadows = row.payload["evaluation_ids"], row.payload.get("candidate_shadow_ids", [])
+        binding: dict[str, Any] = {
+            "package_ref": request["package_ref"],
+            "content_hash": request["content_hash"],
+            "rendered_method_hash": request["rendered_method_hash"],
+            "renderer_version": RENDERER_VERSION,
+            "validator_version": VALIDATOR_V1,
+            "evaluation_id": evaluations[-1] if evaluations else None,
+            "evaluation_hash": hashes.get(evaluations[-1]) if evaluations else None,
+            "candidate_shadow_id": shadows[-1] if shadows else None,
+            "candidate_shadow_hash": None,
+        }
+        if shadows:
+            binding["candidate_shadow_hash"] = fingerprint(await self.artifact(UUID(shadows[-1]), "candidate_shadow"))
+        return binding
 
     async def move_head(self, listing: ObjectRef, expected: int, binding: MethodBinding) -> None:
         head = await self.session.get(MethodHead, (self.owner, listing.id), populate_existing=True)
@@ -394,6 +883,18 @@ class MethodService:
                 raise InvestorError("stale_revision", "适用范围的方法已变化")
         else:
             self.session.add(MethodHead(owner_id=self.owner, listing_id=listing.id, revision=1, payload=binding.model_dump(mode="json")))
+
+    async def move_default_head(self, channel: str, expected: int, binding: MethodBinding) -> int:
+        head = await self.session.get(MethodDefaultHead, (self.owner, channel), populate_existing=True)
+        if (head.revision if head else 0) != expected:
+            raise InvestorError("stale_revision", "全局默认方法已变化")
+        if head:
+            changed = await self.session.execute(update(MethodDefaultHead).where(MethodDefaultHead.owner_id == self.owner, MethodDefaultHead.channel == channel, MethodDefaultHead.revision == expected).values(revision=expected + 1, payload=binding.model_dump(mode="json")))
+            if changed.rowcount != 1:  # type: ignore[attr-defined]
+                raise InvestorError("stale_revision", "全局默认方法已变化")
+        else:
+            self.session.add(MethodDefaultHead(owner_id=self.owner, channel=channel, revision=1, payload=binding.model_dump(mode="json")))
+        return expected + 1 if head else 1
 
     @method_transaction
     async def decide(self, request: MethodDecision, *, actor: str) -> dict[str, Any]:
@@ -409,14 +910,33 @@ class MethodService:
             raise InvestorError("stale_revision", "该提案已结束")
         changes: dict[str, Any] = {"status": "rejected", "decision": request.model_dump(mode="json"), "actor": actor}
         if request.decision == "approve":
-            evaluations, prospective = evidence["evaluations"], evidence["prospective"]
-            if row.payload["status"] != "shadow" or not evaluations or not evaluations[-1]["passed"] or not prospective or not prospective[-1]["passed"] or prospective[-1]["evaluation_id"] != evaluations[-1]["id"]:
+            package_ref = row.payload["request"].get("package_ref")
+            evaluations = evidence["evaluations"]
+            if row.payload["status"] != "shadow" or not evaluations or not evaluations[-1]["passed"]:
                 raise InvestorError("invalid_reference", "需要完整通过的失败样本、反例与隔离影子运行")
+            if package_ref is None:
+                # Config-only approvals keep the exact existing prospective gate.
+                prospective = evidence["prospective"]
+                if not prospective or not prospective[-1]["passed"] or prospective[-1]["evaluation_id"] != evaluations[-1]["id"]:
+                    raise InvestorError("invalid_reference", "需要完整通过的失败样本、反例与隔离影子运行")
+            else:
+                # §7.3/§7.4 (card 16): package approvals require the latest
+                # prospective candidate shadow to cover every
+                # requires_candidate_shadow id plus one rejected expected-block
+                # candidate - never the config-only observation path.
+                await self._require_candidate_shadow(row)
             _, current = await self.current(request.listing_ref)
             if current.method_ref != ObjectRef.model_validate(row.payload["request"]["old_method"]):
                 raise InvestorError("stale_revision", "当前方法已改变，需要重新评估")
             method_id = uuid4()
-            binding = MethodBinding(method_ref=ObjectRef(kind="method", id=method_id, revision=1), listing_ref=request.listing_ref, config=MethodConfig.model_validate(row.payload["request"]["config"]))
+            if package_ref is None:
+                binding = MethodBinding(method_ref=ObjectRef(kind="method", id=method_id, revision=1), listing_ref=request.listing_ref, config=MethodConfig.model_validate(row.payload["request"]["config"]))
+            else:
+                # §7.4: the approved method version is a v2 binding on the
+                # proposal-frozen package artifact (never re-read from YAML);
+                # the head moves per-listing only, MethodDefaultHead is left to
+                # the explicit activate-global operation (§5).
+                binding = MethodBinding(schema_version=2, method_ref=ObjectRef(kind="method", id=method_id, revision=1), listing_ref=request.listing_ref, config=MethodConfig.model_validate(row.payload["request"]["config"]), package_ref=ObjectRef.model_validate(package_ref), package_hash=row.payload["request"]["content_hash"])
             self.session.add(MethodArtifact(id=str(method_id), owner_id=self.owner, kind="version", payload={"id": str(method_id), "created_at": datetime.now(UTC).isoformat(), "binding": binding.model_dump(mode="json"), "proposal_id": row.id, "evidence_hash": request.evidence_hash, "actor": actor}))
             active_proposals = (await self.session.scalars(select(MethodProposal).where(MethodProposal.owner_id == self.owner))).all()
             for active in active_proposals:
@@ -425,8 +945,35 @@ class MethodService:
             await self.move_head(request.listing_ref, request.expected_head_revision, binding)
             changes.update(status="active", method_ref=binding.method_ref.model_dump(mode="json"))
         proposal = await self.revise(row, request.expected_revision, changes)
-        self.save("event", {"operation": request.decision, "proposal_id": row.id, "proposal": proposal, "frozen_evidence": evidence, "request": request.model_dump(mode="json")})
+        event: dict[str, Any] = {"operation": request.decision, "proposal_id": row.id, "proposal": proposal, "frozen_evidence": evidence, "request": request.model_dump(mode="json")}
+        if request.decision == "approve" and row.payload["request"].get("package_ref") is not None:
+            # §7.4: the decision event freezes the candidate hashes and the
+            # exact evaluation/shadow references the approval was bound to.
+            bound = evidence["candidate_binding"]
+            event["candidate"] = {"package_hash": bound["content_hash"], "rendered_method_hash": bound["rendered_method_hash"], "renderer_version": bound["renderer_version"], "validator_version": bound["validator_version"], "evaluation_id": bound["evaluation_id"], "candidate_shadow_id": bound["candidate_shadow_id"]}
+        self.save("event", event)
         return await self.receipt(request.mutation_id, request, proposal)
+
+    async def _require_candidate_shadow(self, row: MethodProposal) -> None:
+        """§7.3/§7.4 approval coverage gate for package proposals (card 16).
+
+        The latest registered candidate shadow must be a matched positive run
+        whose frozen requirement ids cover every ``requires_candidate_shadow``
+        item, and at least one expected-block candidate task must have been
+        rejected by the package-level validation. Every refusal names the
+        exact open requirements.
+        """
+        shadows = row.payload.get("candidate_shadow_ids", [])
+        required = sorted({str(item) for item in row.payload.get("requires_candidate_shadow", [])})
+        if not shadows:
+            raise InvestorError("invalid_reference", "批准前必须已有覆盖待影子要求的前瞻影子；缺口：" + (", ".join(required) or "全部待影子要求"))
+        records = [await self.artifact(UUID(identifier), "candidate_shadow") for identifier in shadows]
+        latest = records[-1]
+        covered = {str(item) for item in latest["requirement_ids"]} if latest["expected"] == "pass" and latest["matched"] and latest["outcome"] == "passed" else set[str]()
+        if missing := sorted(set(required) - covered):
+            raise InvestorError("invalid_reference", f"最新前瞻影子未覆盖全部待影子要求：{', '.join(missing)}")
+        if not any(record["expected"] == "block" and record["matched"] for record in records):
+            raise InvestorError("invalid_reference", "批准前缺少一个被包级校验拒绝的预期失败候选影子")
 
     @method_transaction
     async def rollback(self, request: MethodRollback, *, actor: str) -> dict[str, Any]:
@@ -453,6 +1000,34 @@ class MethodService:
         self.save("event", {"operation": "rollback", "version": value, "request": request.model_dump(mode="json")})
         return await self.receipt(request.mutation_id, request, value)
 
+    @method_transaction
+    async def activate_global(self, request: ActivateGlobal, *, actor: str) -> dict[str, Any]:
+        """Explicit user activation of the global default head; never moves per-listing heads."""
+        from investment_agent.investor.method_packages import MethodPackage
+        if actor != "authenticated_user":
+            raise InvestorError("invalid_reference", "模型不能启用全局方法")
+        if result := await self.replay(request.mutation_id, request):
+            return result
+        if request.channel != "company-research":
+            raise InvestorError("invalid_reference", "首版全局默认仅支持 company-research 通道")
+        definition = MethodPackage.model_validate(await self.package_by_ref(request.package_ref))
+        if not {"company_research", "review"} <= set(definition.applicable_kinds):
+            raise InvestorError("invalid_reference", "首版通道要求包同时适用于 company_research 与 review")
+        method_id = uuid4()
+        binding = MethodBinding(
+            schema_version=2,
+            method_ref=ObjectRef(kind="method", id=method_id, revision=1),
+            config=definition.discipline,
+            listing_ref=None,
+            package_ref=ObjectRef(kind="package", id=definition.artifact_id, revision=definition.version),
+            package_hash=definition.content_hash,
+        )
+        value = {"id": str(method_id), "created_at": datetime.now(UTC).isoformat(), "binding": binding.model_dump(mode="json"), "package_hash": definition.content_hash, "reason": request.reason, "actor": actor}
+        self.session.add(MethodArtifact(id=str(method_id), owner_id=self.owner, kind="version", payload=value))
+        head_revision = await self.move_default_head(request.channel, request.expected_revision, binding)
+        self.save("event", {"operation": "activate_global", "version": value, "request": request.model_dump(mode="json"), "package_hash": definition.content_hash})
+        return await self.receipt(request.mutation_id, request, {**value, "channel": request.channel, "head_revision": head_revision})
+
 
 class ShadowRequest(Contract):
     mutation_id: UUID
@@ -461,12 +1036,152 @@ class ShadowRequest(Contract):
     evaluation_id: UUID
 
 
+CANDIDATE_OUTPUT_CONTRACT = (
+    "Candidate output contract (fixed server template): the replayed progress keeps every"
+    " frozen field unchanged and may add only plan_bindings and step_results. plan_bindings:"
+    " list of {evidence_step_index: 0-based index into evidence_steps, method_step_id: an id"
+    " from the candidate rendered method}; cover every blocking step. step_results: list of"
+    " {method_step_id, evidence_step_indices: indices bound for that step in plan_bindings,"
+    " status: satisfied | completed_with_gap, action_ids: only ids listed in frozen_actions,"
+    " output_refs: only {kind, id, revision} refs that appear in frozen_progress,"
+    " hypothesis_indices: indices into the frozen hypotheses, gap_reason: required for"
+    " completed_with_gap}; every blocking step carries exactly one final result. Any other"
+    " change to the frozen progress is rejected."
+)
+"""The deterministic §4.4 schema description sent with every candidate shadow prompt (§7.2)."""
+
+
+def _ref_identity(ref: Any) -> tuple[str, str, int, str | None]:
+    """Canonical identity of one ObjectRef model or JSON mapping, for frozen-ref matching."""
+    if callable(getattr(ref, "get", None)):
+        kind, identifier, revision, field_path = ref.get("kind"), ref.get("id"), ref.get("revision", 0), ref.get("field_path")
+    else:
+        kind, identifier, revision, field_path = ref.kind, ref.id, ref.revision, ref.field_path
+    try:
+        identifier = str(UUID(str(identifier)))
+    except (ValueError, TypeError):
+        identifier = str(identifier)
+    return (str(kind), identifier, int(revision), field_path)
+
+
+def _frozen_ref_identities(value: Any) -> set[tuple[str, str, int, str | None]]:
+    """Every ObjectRef-shaped identity appearing anywhere in the frozen progress JSON."""
+    if isinstance(value, dict):
+        found = {_ref_identity(value)} if {"kind", "id", "revision"} <= set(value) else set()
+        return found | {identity for child in value.values() for identity in _frozen_ref_identities(child)}
+    if isinstance(value, (list, tuple)):
+        return {identity for child in value for identity in _frozen_ref_identities(child)}
+    return set()
+
+
+def _candidate_shadow_replay(inner: Any, frozen: dict[str, Any]) -> Any:
+    """Enforcing candidate replay boundary (§7.2).
+
+    Whatever the inner model function attempts, the returned progress JSON is
+    rebuilt as the frozen sample content plus only the two new metadata fields
+    (plan_bindings/step_results) - the model can never alter a frozen field.
+    Every action id / output ref the metadata cites must exist in the frozen
+    sample; a hallucinated identity raises InvestorError right here, so
+    deterministic code intercepts instead of trusting model self-discipline.
+    """
+    import json
+
+    from pydantic import ValidationError
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+
+    from investment_agent.agent.research import MethodPlanBinding, MethodStepResult
+
+    def sanitize(response: Any, info: Any) -> ModelResponse:
+        part = next(
+            (
+                candidate_part
+                for candidate_part in getattr(response, "parts", ())
+                if getattr(candidate_part, "part_kind", None) == "tool-call"
+                and getattr(candidate_part, "tool_name", None) == info.output_tools[0].name
+            ),
+            None,
+        )
+        args = getattr(part, "args", None)
+        try:
+            attempted = json.loads(args) if isinstance(args, str) else args
+        except ValueError as exc:
+            raise InvestorError("invalid_reference", "候选影子输出不是合法 JSON，重放拒绝") from exc
+        if not isinstance(attempted, dict):
+            raise InvestorError("invalid_reference", "候选影子重放缺少输出工具调用参数，重放拒绝")
+        try:
+            bindings = [MethodPlanBinding.model_validate(item) for item in attempted.get("plan_bindings") or ()]
+            results = [MethodStepResult.model_validate(item) for item in attempted.get("step_results") or ()]
+        except (ValidationError, TypeError, ValueError) as exc:
+            raise InvestorError("invalid_reference", "候选影子新元数据不符合输出 schema，重放拒绝") from exc
+        for result in results:
+            if unknown := [str(action_id) for action_id in result.action_ids if str(action_id) not in frozen["action_ids"]]:
+                raise InvestorError("invalid_reference", f"候选影子引用了冻结样本中不存在的动作 id：{unknown[0]}")
+            if foreign := [ref for ref in result.output_refs if _ref_identity(ref) not in frozen["refs"]]:
+                raise InvestorError("invalid_reference", f"候选影子引用了冻结 progress 中不存在的 output ref：{foreign[0].kind}:{foreign[0].id}")
+        payload = {
+            **frozen["progress"],
+            "plan_bindings": [binding.model_dump(mode="json") for binding in bindings],
+            "step_results": [result.model_dump(mode="json") for result in results],
+        }
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, payload)])
+
+    if inspect.iscoroutinefunction(inner):
+        async def replay(messages: Any, info: Any) -> Any:
+            return sanitize(await inner(messages, info), info)
+    else:
+        def replay(messages: Any, info: Any) -> Any:  # type: ignore[misc]
+            return sanitize(inner(messages, info), info)
+    return replay
+
+
+async def _candidate_shadow_verdict(
+    session: AsyncSession, review: dict[str, Any], candidate: "MethodPackage", output: dict[str, Any]
+) -> tuple[str, list[str]]:
+    """Package-level ``validate_final`` over one replayed candidate progress (§7.2).
+
+    The offline run's only committed plan is the replayed candidate progress
+    itself, so its plan part serves as ``first_plan``: the historical first
+    committed save predates the candidate schema and carries no plan bindings,
+    so binding it would render every sample ``method_plan_changed`` and make
+    the whole shadow vacuous. Dependency order over historical actions without
+    ``committed_sequence`` cannot be satisfied by any replayed metadata - that
+    single failure kind is the offline not-replayable item (§7.1) and does not
+    count against an in-scope counterexample.
+    """
+    from dataclasses import replace
+
+    from pydantic import ValidationError
+
+    from investment_agent.agent.execution import ResearchValidationError
+    from investment_agent.agent.method_receipt import RENDERER_VERSION, VALIDATOR_V1
+    from investment_agent.agent.method_validation import replay_context, validate_final
+    from investment_agent.agent.research import MethodPlannedProgress
+
+    progress = MethodPlannedProgress.model_validate(output)
+    context = await replay_context(session, review, candidate, renderer_version=RENDERER_VERSION, validator_version=VALIDATOR_V1)
+    try:
+        await validate_final(session, replace(context, first_plan=progress), progress)
+    except ResearchValidationError as exc:
+        details = [f"{error.field}: {error.message}" for error in exc.field_errors]
+        not_replayable = exc.code == "method_step_order_violation" and any("缺少已提交动作顺序" in error.message for error in exc.field_errors)
+        return ("not_replayable_only" if not_replayable else "block"), [f"{exc.code}: {item}" for item in details]
+    except (InvestorError, ValidationError, ValueError, LookupError) as exc:
+        return "error", [type(exc).__name__ + ":" + str(exc)[:200]]
+    return "pass", []
+
+
 async def run_offline_shadow(factory: Any, request: ShadowRequest, model: Any) -> dict[str, Any]:
     """One finite native FunctionModel run per frozen sample, no tools or effects.
 
     This is an offline model-boundary replay, never a paid/production trial. No
     transaction spans a model call. Reject/change/rollback fences stale results.
-    Stable mutation replay never repeats an uncertain model call.
+    Stable mutation replay never repeats an uncertain model call. Package
+    proposals replay the candidate package (§7.2): the prompt carries the
+    rendered candidate method, the fixed output contract and the frozen action
+    summary; the enforcing replay boundary rebuilds frozen content plus only
+    the new plan_bindings/step_results metadata and intercepts hallucinated
+    identities; every applicable sample is judged by the package-level
+    ``validate_final``. Config-only proposals keep the exact existing path.
     """
     from pydantic_ai import Agent
     from pydantic_ai.models.function import FunctionModel
@@ -489,19 +1204,42 @@ async def run_offline_shadow(factory: Any, request: ShadowRequest, model: Any) -
         if row.revision != request.expected_revision or row.payload["status"] != "shadow" or not evaluation["passed"] or row.payload["evaluation_ids"][-1] != evaluation["id"] or evaluation["proposal_id"] != row.id:
             raise InvestorError("stale_revision", "影子运行需要当前完整通过的评估")
         config = MethodConfig.model_validate(row.payload["request"]["config"])
+        candidate = await service._frozen_candidate(row)
+        frozen: list[dict[str, Any]] = []
+        if candidate is not None:
+            # §7.2: the same committed-action ledger feeds the prompt summary,
+            # the replay-boundary interception and the judge-side context.
+            from investment_agent.agent.method_validation import _committed_actions
+            for sample in evaluation["cases"]:
+                actions = await _committed_actions(session, UUID(sample["frozen_review"]["task_id"]))
+                frozen.append({
+                    "progress": sample["frozen_review"]["progress"],
+                    "actions": [{"id": str(action["operation_id"]), "tool": action["tool"], "committed_sequence": action["committed_sequence"]} for action in actions],
+                    "action_ids": {str(action["operation_id"]) for action in actions},
+                    "refs": _frozen_ref_identities(sample["frozen_review"]["progress"]),
+                })
         claim = service.save("shadow_claim", {"proposal_id": row.id, "evaluation_id": evaluation["id"], "evaluation_hash": fingerprint(evaluation), "request": request.model_dump(mode="json")})
         await service.revise(row, row.revision, {"shadow_claim_id": claim["id"]})
         await service.receipt(request.mutation_id, request, {"status": "running", "claim_id": claim["id"], "retry_policy": "same mutation returns receipt; explicit new trial required after interrupted offline run"})
         await session.commit()
     outputs = []
-    for sample in evaluation["cases"]:
+    for index, sample in enumerate(evaluation["cases"]):
         try:
             import json
-            agent = Agent(model, output_type=ResearchProgress, retries=0, instructions="Offline method replay. Return the frozen research progress; no tools, publication or external effects.")
-            native_result = await agent.run(json.dumps({"frozen_progress": sample["frozen_review"]["progress"], "method_config": config.model_dump(mode="json")}), usage_limits=UsageLimits(request_limit=1))
+            if candidate is None:
+                agent = Agent(model, output_type=ResearchProgress, retries=0, instructions="Offline method replay. Return the frozen research progress; no tools, publication or external effects.")
+                native_result = await agent.run(json.dumps({"frozen_progress": sample["frozen_review"]["progress"], "method_config": config.model_dump(mode="json")}), usage_limits=UsageLimits(request_limit=1))
+            else:
+                from investment_agent.agent.method_receipt import render_method
+                from investment_agent.agent.research import MethodPlannedProgress
+                agent = Agent(FunctionModel(_candidate_shadow_replay(model.function, frozen[index])), output_type=MethodPlannedProgress, retries=0, instructions="Offline candidate-package replay. Return the frozen research progress adding only plan_bindings and step_results per the candidate output contract; cite only ids and refs that exist in the frozen sample; no tools, publication or external effects.")
+                native_result = await agent.run(json.dumps({"frozen_progress": sample["frozen_review"]["progress"], "method_config": config.model_dump(mode="json"), "candidate_rendered_method": render_method(candidate), "candidate_output_contract": CANDIDATE_OUTPUT_CONTRACT, "frozen_actions": frozen[index]["actions"]}), usage_limits=UsageLimits(request_limit=1))
             outputs.append({"review_id": sample["review_id"], "output": native_result.output.model_dump(mode="json"), "usage": {"requests": native_result.usage.requests, "input_tokens": native_result.usage.input_tokens, "output_tokens": native_result.usage.output_tokens}})
         except Exception as exc:
-            outputs.append({"review_id": sample["review_id"], "error": type(exc).__name__})
+            record: dict[str, Any] = {"review_id": sample["review_id"], "error": type(exc).__name__}
+            if candidate is not None and isinstance(exc, InvestorError):
+                record["detail"] = f"{exc.detail.code}: {exc.detail.message}"
+            outputs.append(record)
     async with factory() as session:
         service = MethodService(session)
         await service.reserve()
@@ -511,10 +1249,48 @@ async def run_offline_shadow(factory: Any, request: ShadowRequest, model: Any) -
         else:
             cases = []
             for sample, output in zip(evaluation["cases"], outputs, strict=True):
-                sample_config = config if sample["applicable"] else MethodBinding.model_validate(sample["frozen_review"]["old_method"]).config
-                checked = await service.check_sample(sample["frozen_review"], sample_config, output["output"]) if "output" in output else {"result": "model_error", "errors": [output["error"]]}
-                cases.append({"review_id": sample["review_id"], "role": sample["role"], "expected": sample["expected"], "checked": checked, "output": output})
-            value = service.save("shadow", {"proposal_id": row.id, "evaluation_id": evaluation["id"], "evaluation_hash": fingerprint(evaluation), "cases": cases, "passed": all(c["checked"]["result"] == c["expected"] for c in cases), "quality": "offline_FunctionModel_engineering_only"})
+                if candidate is None:
+                    sample_config = config if sample["applicable"] else MethodBinding.model_validate(sample["frozen_review"]["old_method"]).config
+                    checked = await service.check_sample(sample["frozen_review"], sample_config, output["output"]) if "output" in output else {"result": "model_error", "errors": [output["error"]]}
+                    cases.append({"review_id": sample["review_id"], "role": sample["role"], "expected": sample["expected"], "checked": checked, "output": output})
+                else:
+                    review = sample["frozen_review"]
+                    conclusion: str
+                    errors: list[str]
+                    if "output" not in output:
+                        conclusion, errors = "model_error", [str(output.get("detail", output["error"]))]
+                    elif not sample["applicable"]:
+                        # Out-of-scope samples keep their own method and the
+                        # existing baseline semantics (§7.1): the candidate
+                        # never touches them, so only the frozen content is
+                        # checked, with the replay-added metadata stripped.
+                        checked = await service.check_sample(review, MethodBinding.model_validate(review["old_method"]).config, {key: value for key, value in output["output"].items() if key not in {"plan_bindings", "step_results"}})
+                        conclusion, errors = str(checked["result"]), [str(error) for error in checked.get("errors", ())]
+                    else:
+                        conclusion, errors = await _candidate_shadow_verdict(session, review, candidate, output["output"])
+                    cases.append({
+                        "review_id": sample["review_id"],
+                        "role": sample["role"],
+                        "expected": sample["expected"],
+                        "applicable": sample["applicable"],
+                        "candidate_conclusion": conclusion,
+                        "errors": errors,
+                        "matched": conclusion in ({"block"} if sample["expected"] == "block" else {"pass", "not_replayable_only"}),
+                        "output": output,
+                    })
+            if candidate is None:
+                value = service.save("shadow", {"proposal_id": row.id, "evaluation_id": evaluation["id"], "evaluation_hash": fingerprint(evaluation), "cases": cases, "passed": all(c["checked"]["result"] == c["expected"] for c in cases), "quality": "offline_FunctionModel_engineering_only"})
+            else:
+                value = service.save("shadow", {
+                    "proposal_id": row.id,
+                    "evaluation_id": evaluation["id"],
+                    "evaluation_hash": fingerprint(evaluation),
+                    "candidate_shadow": True,
+                    "rendered_method_hash": row.payload["request"]["rendered_method_hash"],
+                    "cases": cases,
+                    "passed": all(case["matched"] for case in cases),
+                    "quality": "offline_FunctionModel_engineering_only",
+                })
             await service.revise(row, row.revision, {"shadow_ids": [*row.payload["shadow_ids"], value["id"]]})
         # Immutable original mutation receipt stays a claim. Results are found
         # through that exact claim, allowing lost acknowledgements to recover.
@@ -535,3 +1311,28 @@ class ProspectiveRequest(Contract):
         if len(set(self.task_ids)) != len(self.task_ids):
             raise ValueError("distinct actual fresh tasks required")
         return self
+
+
+CANDIDATE_SHADOW_FORBIDDEN_TOOLS = frozenset({
+    "prepare_company_view",  # no formal view preparation / publication
+    "get_portfolio_context", "calculate_portfolio_options", "prepare_portfolio_plan",  # no portfolio ledger family
+})
+"""§7.3 shadow boundary: stripped from the shadow grant's tool whitelist, so
+the model can never call them (no publication, no notification/ledger path)."""
+
+
+class CandidateShadowRequest(Contract):
+    """Body of POST /investor/methods/proposals/{proposal_id}/candidate-shadow;
+    the proposal id arrives on the path and is bound into this contract."""
+
+    mutation_id: UUID
+    proposal_id: UUID
+    prompt: Text = Field(max_length=2000)
+    expected: Literal["pass", "block"]
+
+
+class CandidateShadowResultRequest(Contract):
+    mutation_id: UUID
+    proposal_id: UUID
+    task_id: UUID
+    expected_revision: int = Field(ge=1)

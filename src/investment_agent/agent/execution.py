@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 from uuid import UUID
 
 from pydantic import (
@@ -32,6 +32,9 @@ from investment_agent.settings.loader import load_settings
 from investment_agent.storage.models.agent import AgentTask, ExecutionGrantRow
 from investment_agent.storage.models.investor import InvestorCase, MandateHead, MandateRevision
 
+if TYPE_CHECKING:
+    from investment_agent.investor.methods import MethodBinding
+
 
 class ExecutionDeniedError(TaskBoundaryError):
     """Safe classification for a stopped execution boundary."""
@@ -49,6 +52,9 @@ class ResearchValidationError(ExecutionDeniedError):
     def repairable(self) -> bool:
         # Only presentation/reference mistakes may reach the model as feedback.
         # Scope, permission, stale claims and budget failures remain terminal.
+        # The method_* entries are the §6.2 package-level validation codes the
+        # model can fix by re-planning or re-settling step results; fabricated
+        # actions (method_action_invalid) and capability gaps stay terminal.
         return self.code in {
             "research_numeric_text_requires_reference",
             "research_numeric_reference_format",
@@ -58,6 +64,13 @@ class ResearchValidationError(ExecutionDeniedError):
             "research_counter_references_mismatch",
             "research_publication_pending_premises",
             "research_publication_requires_revision",
+            "method_plan_binding_invalid",
+            "method_step_required",
+            "method_step_output_required",
+            "method_step_order_violation",
+            "method_plan_changed",
+            "method_step_gap_invalid",
+            "method_step_result_premature",
         }
 
     def repair_message(self) -> str:
@@ -289,12 +302,15 @@ async def cost_limits(session: AsyncSession, grant: ExecutionGrant) -> tuple[Dec
 async def admit(
     session: AsyncSession, *, base: Settings, input_key: str, binding: ContextBinding,
     grant: ExecutionGrant, kind: str = "agent_turn", parent_task_id: UUID | None = None,
-    message_ref: ObjectRef | None = None,
+    message_ref: ObjectRef | None = None, method_override: MethodBinding | None = None,
 ) -> Task:
     """Authenticated caller owns transaction with message + task + immutable grant.
 
     No public API accepts a grant, actor or operation id. AG09 must construct it
     from the authenticated source and currently authorized scope.
+    ``method_override`` is the §7.3 candidate-shadow pass-through only: it
+    freezes that caller-built v2 binding instead of resolving a head, and is
+    never set by message/portfolio/discovery admissions.
     """
     from investment_agent.investor.controls import memory_deadline, memory_revision
     grant = grant.model_copy(update={"purpose": budget_purpose(grant), "memory_revision": await memory_revision(session, grant.owner), "memory_valid_until": await memory_deadline(session, grant.owner)})
@@ -329,7 +345,7 @@ async def admit(
             raise IdempotencyPayloadMismatchError("task admission reused with different authorization")
     else:
         from investment_agent.investor.methods import MethodService
-        await MethodService(session, grant.owner).freeze_task(task.id, grant.scope_refs, grant.research_kind)
+        await MethodService(session, grant.owner).freeze_task(task.id, grant.scope_refs, grant.research_kind, tool_names=grant.tool_names, override_binding=method_override)
         await session.flush()
         await bind_research_rules(session, grant=grant, task=task, settings=effective)
         from investment_agent.agent.peer_tools import inherit_peer_context

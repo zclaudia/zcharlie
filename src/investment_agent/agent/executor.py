@@ -210,7 +210,41 @@ class AgentExecutor:
             execution = replace(execution, reuse_sources=bool(reusable_context_sources(instructions)),
                                 reuse_plan=reusable_context_plan(instructions),
                                 reuse_preparation=reusable_context_preparation(instructions))
-            tools = TrustedTools(execution, self.registrations)
+            output_type = self.specification.output_type
+            run_registrations = self.registrations
+            if self.specification.phase == "research:v1" and grant.research_kind in {"company_research", "review"}:
+                from investment_agent.agent.method_receipt import VALIDATOR_V1
+                from investment_agent.agent.research import (
+                    CompanyResearchOutput,
+                    CompanyStudyOutput,
+                    MethodCompanyResearchOutput,
+                    MethodCompanyStudyOutput,
+                    ResearchOutput,
+                )
+                if output_type is ResearchOutput:
+                    output_type = CompanyStudyOutput if grant.research_kind == "company_research" else CompanyResearchOutput
+                # §4.4: only an enforcing receipt (validator v1) swaps in the
+                # method-planned output subtypes. Render-only receipts and v1
+                # tasks without a receipt keep the dispatch above exactly as-is;
+                # card 07 freezes new v2 tasks as enforcing.
+                if output_type in {CompanyStudyOutput, CompanyResearchOutput}:
+                    from investment_agent.investor.methods import task_method_receipt
+                    async with self.sessions() as session:
+                        receipt = await task_method_receipt(session, claim.task_id)
+                    if receipt is not None and receipt.validator_version == VALIDATOR_V1:
+                        output_type = MethodCompanyStudyOutput if output_type is CompanyStudyOutput else MethodCompanyResearchOutput
+                        # The same enforcing receipt swaps the
+                        # save_research_progress schema, so the first committed
+                        # plan can carry plan bindings and the settlement can
+                        # carry step results (§4.4). Other runs keep the exact
+                        # v1 tool schema.
+                        from investment_agent.agent.research import method_planned_registrations
+                        run_registrations = method_planned_registrations(run_registrations)
+            elif self.specification.phase == "research:v1" and grant.research_kind == "local_check":
+                from investment_agent.agent.research import LocalResearchOutput, ResearchOutput
+                if output_type is ResearchOutput:
+                    output_type = LocalResearchOutput
+            tools = TrustedTools(execution, run_registrations)
             await tools.recover()
             if checkpoint.get("history") and checkpoint.get("memory_revision", 0) != grant.memory_revision:
                 raise ExecutionDeniedError("memory_context_changed_rebuild_required")
@@ -252,19 +286,6 @@ class AgentExecutor:
                         return output
                     raise
                 return output
-            output_type = self.specification.output_type
-            if self.specification.phase == "research:v1" and grant.research_kind in {"company_research", "review"}:
-                from investment_agent.agent.research import (
-                    CompanyResearchOutput,
-                    CompanyStudyOutput,
-                    ResearchOutput,
-                )
-                if output_type is ResearchOutput:
-                    output_type = CompanyStudyOutput if grant.research_kind == "company_research" else CompanyResearchOutput
-            elif self.specification.phase == "research:v1" and grant.research_kind == "local_check":
-                from investment_agent.agent.research import LocalResearchOutput, ResearchOutput
-                if output_type is ResearchOutput:
-                    output_type = LocalResearchOutput
             # An audit-only session performs no read/write until run_agent's
             # final flush; it never holds a transaction across model/tool I/O.
             async with self.sessions() as audit:

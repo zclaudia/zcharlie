@@ -28,6 +28,7 @@ from investment_agent.storage.models.agent import (
     ToolAction,
 )
 from investment_agent.storage.models.analysis import PipelineRun
+from investment_agent.storage.models.investor import TaskMethodBinding
 from investment_agent.storage.repositories.pipeline_run import (
     IdempotencyPayloadMismatchError,
     PipelineRunRepository,
@@ -402,6 +403,25 @@ class TaskService:
             raise LookupError("action not found")
         return action
 
+    async def _next_committed_sequence(self, task_id: UUID) -> int | None:
+        """Task-local commit order for v2 method settlement; None keeps v1 NULL.
+
+        Only tasks with a frozen v2 method receipt (payload carrying a
+        ``"receipt"``) number their committed actions: ``SELECT max`` inside
+        the committing transaction is safe under SQLite's single writer. v1
+        tasks never reach the write, so their rows and behavior stay unchanged
+        and later validation reads NULL as "no order information".
+        """
+        receipt = await self.session.get(TaskMethodBinding, str(task_id))
+        if receipt is None or "receipt" not in receipt.payload:
+            return None
+        current = await self.session.scalar(
+            select(func.max(ToolAction.committed_sequence)).where(
+                ToolAction.task_id == str(task_id)
+            )
+        )
+        return (current or 0) + 1
+
     async def settle_action(
         self, claim: TaskClaim, operation_id: UUID, write: WriteAction
     ) -> dict[str, Any]:
@@ -418,6 +438,9 @@ class TaskService:
             written = await write(self.session, operation_id)
             result = written.output if isinstance(written, ActionResult) else written
             row = await self.fence(claim)  # callback cannot bypass a revoked lease/cancellation
+            sequence = await self._next_committed_sequence(claim.task_id)
+            if sequence is not None:
+                action.committed_sequence = sequence
             if isinstance(written, ActionResult) and written.artifact_refs:
                 task = Task.model_validate(row.payload)
                 refs = tuple(dict.fromkeys((*task.artifact_refs, *written.artifact_refs)))
@@ -437,6 +460,12 @@ class TaskService:
     async def _external_cas(
         self, action: ToolAction, expected_revision: int, state: str, result: dict[str, Any] | None
     ) -> int:
+        values: dict[str, Any] = {"state": state, "result": result, "revision": expected_revision + 1}
+        if state == "committed":
+            # The external commit choke point numbers v2 actions like settle_action.
+            sequence = await self._next_committed_sequence(UUID(action.task_id))
+            if sequence is not None:
+                values["committed_sequence"] = sequence
         changed = await self.session.execute(
             update(ToolAction)
             .where(
@@ -444,7 +473,7 @@ class TaskService:
                 ToolAction.revision == expected_revision,
                 ToolAction.state != "committed",
             )
-            .values(state=state, result=result, revision=expected_revision + 1)
+            .values(**values)
             .execution_options(synchronize_session=False)
         )
         if changed.rowcount != 1:  # type: ignore[attr-defined]

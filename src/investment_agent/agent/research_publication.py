@@ -342,13 +342,15 @@ async def prepare(session: AsyncSession, operation: UUID, business: CompanyViewI
 
 async def preparation_ready(session: AsyncSession, task_id: UUID) -> bool:
     """Schema availability mirrors the existing server prerequisite; grants stay intact."""
-    from investment_agent.agent.research import ResearchProgress
+    from investment_agent.agent.research import MethodPlannedProgress
     rows = (await session.scalars(select(ToolAction).where(
         ToolAction.task_id == str(task_id), ToolAction.state == "committed"
     ))).all()
     for action in rows:
         if action.parameters.get("tool") == "save_research_progress" and action.result:
-            progress = ResearchProgress.model_validate(action.result["progress"])
+            # v2 saved progress carries plan bindings/step results; the v2
+            # subtype validates v1 payloads unchanged and keeps them readable.
+            progress = MethodPlannedProgress.model_validate(action.result["progress"])
             if progress.kind in {"company_research", "review"}:
                 return True
     return False

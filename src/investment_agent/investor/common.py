@@ -88,6 +88,7 @@ class ObjectRef(Contract):
         "rule_application",
         "rule_coverage",
         "research_rule_binding",
+        "package",
     ]
     id: UUID | Annotated[int, Field(strict=True, ge=1)]
     revision: Revision

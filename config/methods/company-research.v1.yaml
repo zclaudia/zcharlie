@@ -1,0 +1,60 @@
+# 公司研究基线方法包 (company research baseline),schema v1。
+#
+# 本文件是 src/investment_agent/investor/method_packages.py 中
+# LEGACY_BASELINE_DEFINITION 的 YAML 形式:把 ResearchProgress.depth
+# (agent/research.py)对 company_research / review 的现行要求显式化,
+# 不新增任何研究要求。两边不允许悄悄分叉——
+# tests/unit/test_method_packages.py 将两者(description 除外)的
+# canonical 内容对齐断言。
+#
+# 生命周期字段(artifact_id / version / content_hash / 来源)由存储分配,
+# 不写在此文件;文件名中的 v1 仅供参考,不参与 canonical hash。
+schema_version: 1
+package_key: company-research
+description: "公司研究现行要求的显式化,v2 基线:把 v1 对公司研究/复用评审的现行要求以结构化步骤表达,不新增研究要求。"
+applicable_kinds:
+  - company_research
+  - review
+discipline:
+  require_two_counter_hypotheses: false
+  require_verified_counter_evidence: false
+  require_explicit_stop_decision: false
+steps:
+  # 现行 depth 要求:计划含可证伪假设、完成与停止条件 → blocking 计划步骤。
+  - id: falsifiable_plan
+    title: Falsifiable research plan
+    instruction_kind: falsifiable_plan
+    blocking: true
+    required_outputs:
+      - type: plan
+        require_completion_criteria: true
+        require_stop_conditions: true
+      - type: hypotheses
+        min_count: 1
+  # 反证加强在 v1 仅由 discipline 三个开关表达(全 False,即现状),
+  # 因此 counter_analysis 非 blocking 且无输出要求。
+  - id: counter_analysis
+    title: Counter-evidence analysis
+    instruction_kind: counter_analysis
+    blocking: false
+  # 现行 depth 要求:七个维度恰好各一次 → blocking 维度步骤逐维输出要求,
+  # minimum_status 默认 "missing",不新增状态要求。
+  - id: dimension_assessment
+    title: Seven-dimension assessment
+    instruction_kind: dimension_assessment
+    blocking: true
+    required_outputs:
+      - type: dimension
+        dimension: business_demand
+      - type: dimension
+        dimension: competition_durability
+      - type: dimension
+        dimension: financial_cash
+      - type: dimension
+        dimension: balance_sheet_allocation
+      - type: dimension
+        dimension: price_expectations
+      - type: dimension
+        dimension: downside_counter_case
+      - type: dimension
+        dimension: portfolio_alternatives

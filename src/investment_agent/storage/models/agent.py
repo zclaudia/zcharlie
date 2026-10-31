@@ -51,6 +51,9 @@ class ToolAction(Base):
     effect: Mapped[str] = mapped_column(String(16))
     state: Mapped[str] = mapped_column(String(24))
     result: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # Task-local monotonic commit order for v2 method settlement; assigned in
+    # code, historical actions stay NULL.
+    committed_sequence: Mapped[int | None] = mapped_column(nullable=True)
 
 
 class PublicTaskEvent(Base):

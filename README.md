@@ -11,7 +11,7 @@
 自主研究、候选发现、买卖与仓位意见、持续复核和复盘；真实交易仍由用户决定和执行。
 实现方案与阶段验收见[技术设计与交付计划](docs/product/investor-agent-architecture.md)。本 README 其余内容描述当前已交付能力。
 
-完整专题：[研究与运营](docs/product/investor-agent-research-policy.md)、[领域契约与交互](docs/product/investor-agent-contracts.md)、[估值计算](docs/product/investor-agent-valuation.md)。
+完整专题：[研究与运营](docs/product/investor-agent-research-policy.md)、[领域契约与交互](docs/product/investor-agent-contracts.md)、[估值计算](docs/product/investor-agent-valuation.md)、[方法包契约设计](docs/product/investor-agent-method-packages.md)（M1–M4 已实现）。
 
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
@@ -89,6 +89,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `ia scheduler` | `start` | 日终刷新与快照采集调度 |
 | `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`backfill`、`status` | 时点快照采集（见下节） |
 | `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>`、`draft --ticker --template [--as-of] [--now]` | 规则模板 / 实例校验与版本库、LLM 规则起草（见“规则与筛选”） |
+| `ia methods` | `validate <file>`、`sync [--dir]`、`list`、`show <key[@ver]>`、`status [--channel]`、`activate-global --package <key@ver> --expected-revision <n> --reason <text>` | 方法包：校验 / 导入 / 查看 / 全局启用（不移动 per-listing head，见“方法包”） |
 | `ia screen` | `run [--universe] [--as-of] [--now] [--rerun]`、`show <run_id> [--reasons]` | 周频模板筛选 |
 | `ia verify` | `status`、`request --ticker [--trigger] [--fields] [--period]`、`run [--now]` | iFinD 按需核对队列与预算（见“iFinD 按需核对”） |
 | `ia research` | `snapshot <ticker> [--as-of] [--industry]`、`ifind <ticker> --industry --report-year` | 单股同步研究：免费源快照（日常，无 iFinD 调用）/ iFinD 深度研究（计入预算）；制品同 API 路径 |
@@ -300,6 +301,37 @@ ia snapshot backfill --universe CSI300 --status                                 
   通过的草稿存为 `scope=candidate` 的 `draft`（`drafted_by=llm:<model>`，`draft_rationale` 为 JSON），同内容重复起草返回已有草稿；
   每次调用记入 `llm_call`（`purpose=rule_draft`）。手动试用：`ia rules draft --ticker 600519.SH --template quality_growth --as-of 2026-09-30 --now`
   （会调用已配置的 LLM）。
+
+## 方法包
+
+方法包把公司研究方法从「全局静态提示词 + 三个加强开关」扩展为**版本化、可审阅的结构化步骤定义**
+（步骤与依赖、有类型的输出要求、纪律开关），是 method version 的内容载体；契约、head 解析与
+结算校验见[方法包契约设计](docs/product/investor-agent-method-packages.md)（M1–M4 已实现）。
+仓库方法包定义在 `config/methods/`（基线包与加强候选包）：
+`ia methods validate <file>` 离线校验、`ia methods sync` 按内容哈希导入（append-only、幂等去重，
+绝不移动任何 head）、`ia methods list/show/status` 查看存储的包与 head；
+`ia methods activate-global --package <key@version> --expected-revision <n> --reason <text>`
+是显式的全局启用入口（追加 method version 与审批事件，只移动全局默认 head；per-listing head
+仍只经现有提案批准 / 回退移动）。**生产默认仍 v1**：全局默认 head 初始为空，单股公司研究 /
+评审任务按 per-listing `MethodHead` → `MethodDefaultHead` → legacy `FIXED_METHOD` 解析，
+其他研究类型永远使用 v1 基线；未显式启用前，方法包不改变任何任务的行为。
+
+包级提案与影子（M4，均只由 authenticated_user 驱动）：提案（`POST /investor/methods/proposals`）
+可携带完整 `MethodPackageDefinition`，config 必须逐字段等于 `package.discipline`，创建时做聚合校验与
+加强偏序判定（删除 / 改名步骤、放松要求、动既有能力前置或仅改文案都拒绝），候选包工件 ref、内容哈希
+与渲染哈希随提案版本冻结；评估对每个样本做三态历史回放（`pass / block / not_replayable`）——失败样本
+必须因候选**实质增强**的要求而 block，旧输出缺 v2 元数据判 `not_replayable`（累计记入
+`requires_candidate_shadow`，绝不当 pass），config-only 提案既有路径不变。离线影子
+（`POST /investor/methods/offline-shadow`）对包提案的 FunctionModel 输入含候选渲染指令、输出契约与
+冻结动作摘要，只许引用冻结样本里真实的 action id / output ref（越界被确定性代码拦截），结果仅是
+工程证据。候选包前瞻影子由用户显式发起（`POST /investor/methods/proposals/{id}/candidate-shadow`）：
+绑定候选包 receipt 的真实 worker 任务（预算沿用既有 daily / task cost 配置），工具白名单剥离发布与 portfolio 族，
+无发布 / 通知 / 账本 / 正式计划复用副作用，完成后经 `POST /investor/methods/candidate-shadow-results`
+按包级校验登记正反例；批准门槛：失败样本实质 block + 反例（含范围外）pass + 最新前瞻影子覆盖全部
+`requires_candidate_shadow` 且有一个预期失败候选被包级校验拒绝，`evidence_hash` 绑定候选包哈希、
+渲染哈希、renderer / validator 版本与最新评估及前瞻影子（新影子登记使旧 hash 失效）。工作台详情
+（`GET /investor/methods/proposals/{id}`）对包提案增补候选身份、结构 diff、回放三态与影子覆盖展示；
+回退支持 v2 包版本（历史任务 receipt 与发布 method_ref 不变）。
 
 ## 候选与决策日志（P1-D1～D3，迁移 `018`）
 

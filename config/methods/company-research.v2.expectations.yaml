@@ -1,0 +1,77 @@
+# 公司研究候选方法包:基线三步骤 + 变异认知(expectations gap),schema v1。
+#
+# 与 company-research.v1.yaml 的关系:基线步骤 id、指令类型、blocking 与
+# required_outputs 原样保留,仅追加 blocking 的 expectations_gap 步骤,
+# 因此相对基线是 §8 意义上的加强(步骤只增不减、新增 blocking 步骤),
+# 同 package_key 导入后成为新版本。
+#
+# expectations_gap 纪律:方向性价格判断前,必须实际运行反向 DCF 并把
+# price_expectations 维度至少提升到 qualitative(说得出价格隐含预期与自身
+# 取证预期的差异)。allow_missing: true 表示反向 DCF 对该证券不适用时,
+# 保留真实尝试动作与 gap_reason 后可带缺口完成——价格判断因此不得是
+# 方向性的,即「降级而非硬写」。
+#
+# 不声明 depends_on:依赖顺序校验要求两侧 step result 都携带已提交动作
+# 序列,而维度步骤不是 action-backed,硬连边会在结算时永久违规;反向
+# DCF 的先后关系由本步骤自己的 calculation 输出要求保证。
+#
+# 生命周期:此文件经 `ia methods sync` 导入为 append-only 包工件,sync
+# 不移动任何 head;全局启用必须显式执行
+# `ia methods activate-global --package company-research@<version>`。
+schema_version: 1
+package_key: company-research
+description: "基线三步骤 + 变异认知步骤:方向性价格判断必须锚定价格隐含预期(反向 DCF 真实尝试),price_expectations 至少 qualitative;说不出预期差时价格判断保持 balanced/undetermined 并记录缺口。"
+applicable_kinds:
+  - company_research
+  - review
+discipline:
+  require_two_counter_hypotheses: false
+  require_verified_counter_evidence: false
+  require_explicit_stop_decision: false
+steps:
+  - id: falsifiable_plan
+    title: Falsifiable research plan
+    instruction_kind: falsifiable_plan
+    blocking: true
+    required_outputs:
+      - type: plan
+        require_completion_criteria: true
+        require_stop_conditions: true
+      - type: hypotheses
+        min_count: 1
+  - id: counter_analysis
+    title: Counter-evidence analysis
+    instruction_kind: counter_analysis
+    blocking: false
+  - id: dimension_assessment
+    title: Seven-dimension assessment
+    instruction_kind: dimension_assessment
+    blocking: true
+    required_outputs:
+      - type: dimension
+        dimension: business_demand
+      - type: dimension
+        dimension: competition_durability
+      - type: dimension
+        dimension: financial_cash
+      - type: dimension
+        dimension: balance_sheet_allocation
+      - type: dimension
+        dimension: price_expectations
+      - type: dimension
+        dimension: downside_counter_case
+      - type: dimension
+        dimension: portfolio_alternatives
+  - id: expectations_gap
+    title: Expectations gap (variant perception)
+    instruction_kind: expectations_gap
+    blocking: true
+    allow_missing: true
+    required_capabilities:
+      - valuation
+    required_outputs:
+      - type: calculation
+        method: reverse_dcf_fcfe
+      - type: dimension
+        dimension: price_expectations
+        minimum_status: qualitative

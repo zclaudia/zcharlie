@@ -5,11 +5,12 @@ not private framework histories and not formal company recommendations.
 """
 import json
 import re
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID, uuid5
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +58,13 @@ from investment_agent.investor.controls import (
 )
 from investment_agent.investor.enums import RecommendationStatus, StopReason
 from investment_agent.investor.foundations import InvestorError
-from investment_agent.investor.methods import MethodConfig, enforce_steps, task_method
+from investment_agent.investor.methods import (
+    MethodConfig,
+    MethodService,
+    enforce_steps,
+    task_method,
+    task_method_receipt,
+)
 from investment_agent.investor.publication import (
     PublicationPolicy,
     PublicationService,
@@ -154,6 +161,49 @@ class LocalResearchOutput(CompanyResearchOutput):
     progress: LocalResearchProgress
     semantic_review: SkipJsonSchema[SemanticInput | None] = None
     review: SkipJsonSchema[ReviewEvent | None] = None
+
+
+class MethodPlanBinding(Contract):
+    """§4.4 explicit evidence-step-to-method-step mapping (indices start at 0)."""
+
+    evidence_step_index: int = Field(ge=0)
+    method_step_id: str
+
+
+class MethodStepResult(Contract):
+    """§4.4 final settlement of one package method step."""
+
+    method_step_id: str
+    evidence_step_indices: tuple[int, ...] = ()
+    status: Literal["satisfied", "completed_with_gap"]
+    action_ids: tuple[UUID, ...] = ()
+    output_refs: tuple[ObjectRef, ...] = ()
+    hypothesis_indices: tuple[int, ...] = ()
+    gap_reason: Text | None = None
+
+
+class MethodPlannedProgress(ResearchProgress):
+    """v2 company research additionally maps and settles package method steps.
+
+    v1 tasks never emit these fields, so their schema, payload and validation
+    stay byte-identical; the extra fields are plain schema members (no
+    SkipJsonSchema) because the enforcing validator reads them from the wire.
+    """
+
+    plan_bindings: tuple[MethodPlanBinding, ...] = ()
+    step_results: tuple[MethodStepResult, ...] = ()
+
+
+class MethodCompanyStudyOutput(CompanyStudyOutput):
+    """company_research under an enforcing method receipt (design §4.4)."""
+
+    progress: MethodPlannedProgress
+
+
+class MethodCompanyResearchOutput(CompanyResearchOutput):
+    """review under an enforcing method receipt (design §4.4)."""
+
+    progress: MethodPlannedProgress
 
 
 METHOD_INSTRUCTIONS = """Use the exact task-bound company-research method and finite strengthening config supplied by the controller. Enforce each enabled check; method configuration never relaxes source, permission, budget or publication rules.
@@ -472,6 +522,18 @@ async def assemble(session: AsyncSession, claim: TaskClaim, base: Settings, prio
         if data.get("reused_research_plan", {}).get("prepared_review"):
             from investment_agent.agent.company_context import COMPANY_REVIEW_INSTRUCTIONS
             instructions = COMPANY_REVIEW_INSTRUCTIONS
+        # §6.1 item 3: a v2 receipt appends its admission-frozen rendered method
+        # after the exact company baseline above. v1 tasks never froze a receipt,
+        # so their instruction path keeps every existing byte; render-only
+        # receipts change instructions only - output-type dispatch stays with
+        # the executor (card 06).
+        receipt = await task_method_receipt(session, claim.task_id)
+        if receipt is not None:
+            assert receipt.binding.package_ref is not None and receipt.binding.package_hash is not None
+            package = await MethodService(session, grant.owner).package_by_ref(receipt.binding.package_ref)
+            data["method_package"] = {"package_key": package["package_key"], "version": package["version"],
+                "package_hash": receipt.binding.package_hash, "validator_version": receipt.validator_version}
+            instructions = instructions + "\n\n" + receipt.rendered_method
     return instructions + "\nTrusted current context:\n" + json.dumps(data, ensure_ascii=False, separators=(",", ":")), memory.stamp, memory.private_history_allowed
 
 
@@ -631,6 +693,25 @@ async def validate_progress(session: AsyncSession, task_id: UUID, progress: Rese
             except InvestorError as exc:
                 raise ResearchValidationError("research_content_reference_validation_failed", f"progress.content.{index}.ref", exc.detail.message) from exc
             node_refs.append(node.ref)
+    # §6.2 (card 07): package-level validation runs only for an enforcing v2
+    # receipt and only after every generic check above; v1 tasks (no receipt)
+    # and render-only receipts never reach this branch. The first committed
+    # save is the plan baseline and must validate as a plan; the final
+    # submission settles the step results against the frozen package.
+    from investment_agent.agent.method_receipt import VALIDATOR_V1
+    from investment_agent.agent.method_validation import (
+        build_context,
+        validate_final,
+        validate_first_plan,
+    )
+    receipt = await task_method_receipt(session, task_id)
+    if receipt is not None and receipt.validator_version == VALIDATOR_V1 and progress.kind in {"company_research", "review"}:
+        context = await build_context(session, task_id=task_id, receipt=receipt, grant=grant)
+        planned = progress if isinstance(progress, MethodPlannedProgress) else MethodPlannedProgress.model_validate(progress.model_dump(mode="json"))
+        if final:
+            await validate_final(session, context, planned)
+        elif context.first_plan is None:
+            validate_first_plan(context, planned)
     if not rendered:
         rendered = ["研究进展已保存。"]
     for title, values in (("分析推断", progress.inferences), ("假设", progress.assumptions), ("材料缺口", progress.gaps), ("已完成", progress.completed_steps), ("局限", progress.limitations)):
@@ -696,8 +777,21 @@ def registrations() -> tuple[ToolRegistration, ...]:
     from investment_agent.agent.peer_tools import registrations as peer_registrations
     from investment_agent.agent.portfolio_tools import registrations as portfolio_registrations
     return (*builtin_registrations(), *valuation_registrations(), registration(), *portfolio_registrations(), *disclosure_registrations(), *document_registrations(), *peer_registrations(),
-        ToolRegistration("capture_snapshot", SnapshotParameters, listing_scope, database=capture, description="Read and save one stored field directly (no get_snapshot prerequisite): close, roe, operating_cash_flow, capital_expenditure, net_profit_parent, net_profit_total, revenue_main, revenue_total. Returns exact saved evidence refs AND records with source/period/unit/cutoff, missing values and conflicts. Never upgrades candidate verification."),
+        ToolRegistration("capture_snapshot", SnapshotParameters, listing_scope, database=capture, description="Read and save one stored field directly (no get_snapshot prerequisite): close, roe, operating_cash_flow, capital_expenditure, net_profit_parent, net_profit_total, revenue_main, revenue_total, total_assets. Returns exact saved evidence refs AND records with source/period/unit/cutoff, missing values and conflicts. Never upgrades candidate verification."),
         ToolRegistration("save_research_progress", ResearchProgress, progress_scope, database=save_progress))
+
+
+def method_planned_registrations(registrations: tuple[ToolRegistration, ...]) -> tuple[ToolRegistration, ...]:
+    """The enforcing v2 tool schema: save_research_progress carries §4.4 fields.
+
+    Only runs dispatched to an enforcing receipt swap the schema, so the first
+    committed plan can carry plan bindings and the settlement can carry step
+    results. v1 and render-only runs keep the exact v1 ResearchProgress schema.
+    """
+    return tuple(
+        replace(registration, parameters=MethodPlannedProgress) if registration.name == "save_research_progress" else registration
+        for registration in registrations
+    )
 
 
 class ResearchPolicy:
@@ -716,6 +810,16 @@ class ResearchPolicy:
         if not set(output.critical_counter_evidence) <= set(progress.counter_refs):
             raise ResearchValidationError("research_counter_references_mismatch", "critical_counter_evidence",
                 "关键反证必须逐项出现在已读回并核查的 progress.counter_refs；潜在风险或缺失材料应写入缺口，不得冒充已核查反证。请修正引用清单后重新提交。")
+        # §7.3 (card 15): a candidate-package shadow task completes on the
+        # package-level validation above - never on publication. Any
+        # publication/portfolio/user-operation request is refused here, and the
+        # publication preflight below never runs for a shadow task.
+        shadow = await task_method_receipt(session, claim.task_id)
+        if shadow is not None and shadow.shadow == "candidate_package":
+            if output.semantic_review is not None or output.review is not None or output.portfolio_review is not None or output.proposal is not None:
+                raise ResearchValidationError("shadow_publication_forbidden", "semantic_review",
+                    "候选包影子任务不发布正式观点、不提交组合方案或用户操作；请只提交研究进展，由包级校验收尾。")
+            return
         if output.semantic_review is not None and output.semantic_review.conclusion == "pass":
             candidate, semantic = await reviewed_candidate(session, claim.task_id, output.semantic_review)
             if any(c.materiality == "critical" and c.verification != "verified" for c in candidate.thesis.claims):
@@ -748,6 +852,16 @@ class ResearchPolicy:
         await service.settle_action(claim, UUID(action.operation_id), lambda s, op: save_progress(s, op, output.progress))
         refs = list((await service.get_task(claim.task_id)).artifact_refs)
         method = await task_method(session, claim.task_id)
+        # §7.3 (card 15): the candidate shadow's completion IS the package-level
+        # validation re-check above. No case restriction, portfolio plan,
+        # publication, user operation or assistant message follows for a shadow
+        # task; only the final research progress was settled as its artifact.
+        shadow = await task_method_receipt(session, claim.task_id)
+        if shadow is not None and shadow.shadow == "candidate_package":
+            current_task = await service.get_task(claim.task_id)
+            await service.checkpoint(claim, checkpoint=(await service.get_checkpoint(claim.task_id))[0].get("data", {}), artifact_refs=tuple(dict.fromkeys((*current_task.artifact_refs, *refs))))
+            complete = output.progress.answered
+            return TaskDisposition("succeeded" if complete else "partial", StopReason.ANSWERED if complete else StopReason.EVIDENCE_BLOCKED)
         publication = PublicationService(session, policy=PublicationPolicy(methods=(method.method_ref,)))
         # A local answer never publishes. Critical counter material restricts
         # the affected current view before any further review or response.
