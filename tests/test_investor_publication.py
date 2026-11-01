@@ -25,7 +25,7 @@ from investment_agent.investor.contracts import (
     NumericNode,
     TextNode,
 )
-from investment_agent.investor.enums import NumericRole, Sufficiency
+from investment_agent.investor.enums import NumericRole, PriceView, Sufficiency
 from investment_agent.investor.foundations import InvestorError, InvestorService
 from investment_agent.investor.publication import (
     FIXED_METHOD,
@@ -105,6 +105,54 @@ async def test_missing_personal_mandate_only_blocks_explicitly_linked_views(publ
         check, _ = await PublicationService(session).check(candidate, semantic(candidate))
         assert bool(check.field_errors) == linked
         assert ("mandate_revision_id" in check.field_errors) == linked
+
+
+@pytest.mark.asyncio
+async def test_directional_price_view_without_valuation_anchor_is_rejected(publication_db):
+    candidate, _, _ = await fixture()
+    rec = candidate.recommendation.model_copy(update={"price_view": PriceView.DEMANDING})
+    candidate = candidate.model_copy(update={"recommendation": rec})
+    async with session_scope() as session:
+        check, _ = await PublicationService(session).check(candidate, semantic(candidate))
+        assert check.field_errors["price_view"] == (
+            "Directional price view requires an implied-expectations anchor from a valuation calculation"
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["reverse_dcf_fcfe", "pe_percentile_5y"])
+async def test_directional_price_view_accepts_valuation_calculation_anchor(publication_db, method):
+    candidate, _, _ = await fixture()
+    calc_id = uuid4()
+    record = CalculationRecord(**metadata(), method=method, method_version=f"{method}.v1",
+                               fact_refs=(), assumption_refs=(), input_hash="fixture-anchor", assumptions=(),
+                               as_of=datetime.now(UTC), applicable=True, status="ok",
+                               results={"percentile": Quantity(value="0.62", unit="ratio")},
+                               quality=(), errors=(), details={})
+    async with session_scope() as session:
+        session.add(SavedCalculation(id=str(calc_id), revision=1, owner_id="local_owner", payload=record.model_dump(mode="json")))
+    calc_ref = ObjectRef(kind="calculation", id=calc_id, revision=1)
+    anchor = candidate.recommendation.claims[0].model_copy(update={
+        "kind": "inference",
+        "support_refs": (calc_ref,),
+        "text": (TextNode(type="text", text="Implied expectation "),
+                 NumericNode(type="numeric_claim", ref=calc_ref.model_copy(update={"field_path": "results.percentile"}),
+                             role="calculation_output", display_format="percent")),
+    })
+    thesis = candidate.thesis.model_copy(update={"claims": (*candidate.thesis.claims, anchor)})
+    rec = candidate.recommendation.model_copy(update={"price_view": PriceView.DEMANDING, "claims": (*candidate.recommendation.claims, anchor)})
+    candidate = candidate.model_copy(update={"thesis": thesis, "recommendation": rec})
+    async with session_scope() as session:
+        check, _ = await PublicationService(session).check(candidate, semantic(candidate))
+        assert "price_view" not in check.field_errors
+
+
+@pytest.mark.asyncio
+async def test_undetermined_price_view_needs_no_valuation_anchor(publication_db):
+    candidate, _, _ = await fixture()
+    async with session_scope() as session:
+        check, _ = await PublicationService(session).check(candidate, semantic(candidate))
+        assert "price_view" not in check.field_errors
 
 
 @pytest.mark.asyncio

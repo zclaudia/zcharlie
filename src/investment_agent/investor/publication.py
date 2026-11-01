@@ -45,7 +45,7 @@ from investment_agent.investor.publication_numbers import (
     ResolvedNode,
     resolve_assumption,
 )
-from investment_agent.storage.models.evidence import SavedEvidence
+from investment_agent.storage.models.evidence import SavedCalculation, SavedEvidence
 from investment_agent.storage.models.investor import InvestorCase
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot
 from investment_agent.storage.models.publication import (
@@ -63,6 +63,10 @@ from investment_agent.storage.repositories.supplemental_rules import (
 )
 
 FIXED_METHOD = ObjectRef(kind="method", id=uuid5(NAMESPACE_URL, "investment-agent/company-research.v1"), revision=1)
+
+VALUATION_ANCHOR_METHODS = frozenset({"reverse_dcf_fcfe", "pe_percentile_5y", "pb_percentile_5y"})
+"""Saved-calculation methods that articulate what the current price implies; a
+directional price view must cite at least one of them as a claim anchor."""
 
 
 class SemanticAssessment(Contract):
@@ -296,6 +300,8 @@ class PublicationService:
             errors["claims"] = "A formal limited view still needs known facts or an evidenced gap"
         if directional and not any(c.materiality == "critical" for c in recommendation.claims):
             errors["claims"] = "Directional view requires explicit critical claims"
+        if recommendation.price_view.value != "undetermined" and not await self._price_view_anchored(thesis, recommendation):
+            errors["price_view"] = "Directional price view requires an implied-expectations anchor from a valuation calculation"
         if semantic.candidate_hash != candidate_hash(candidate) or semantic.material_set_hash != thesis.evidence_set_hash or semantic.method_ref != thesis.method_ref:
             errors["semantic_review"] = "Review does not bind these exact candidate/material/method versions"
         claim_ids = {c.id for c in (*thesis.claims, *recommendation.claims)}
@@ -599,6 +605,25 @@ class PublicationService:
             check = check.model_copy(update={"field_errors": fields, "failures": tuple(fields), "passed": ()})
         return check
 
+    async def _price_view_anchored(self, thesis: ThesisRevision, recommendation: CompanyRecommendation) -> bool:
+        """Whether any claim cites a valuation calculation output as its anchor.
+
+        Reverse-DCF implied growth or a historical valuation percentile states
+        what the current price implies; a directional price view (attractive or
+        demanding) must carry at least one such anchor, otherwise it stays
+        balanced or undetermined instead of asserting a priced-in expectation.
+        """
+        for claim in (*thesis.claims, *recommendation.claims):
+            for node in claim.text:
+                if not isinstance(node, NumericNode) or node.ref.kind != "calculation":
+                    continue
+                if node.role.value != "calculation_output":
+                    continue
+                row = await self.session.get(SavedCalculation, (str(node.ref.id), node.ref.revision))
+                if row is not None and row.payload.get("method") in VALUATION_ANCHOR_METHODS:
+                    return True
+        return False
+
     @staticmethod
     def _claim_gate(claim: Claim, path: str, errors: dict[str, str], directional: bool) -> None:
         if not claim.text or not claim.impact_if_wrong.strip():
@@ -644,13 +669,16 @@ class PublicationService:
                 # publish. A trusted caller cannot bypass strengthening merely
                 # by constructing a candidate with the selected method label.
                 from investment_agent.agent.execution import ExecutionDeniedError
-                from investment_agent.agent.research import ResearchProgress, validate_progress
+                from investment_agent.agent.research import MethodPlannedProgress, validate_progress
                 from investment_agent.storage.models.agent import ToolAction
                 progress_action = await session.scalar(select(ToolAction).where(ToolAction.task_id == str(claim.task_id), ToolAction.intent_key == "completion:progress", ToolAction.state == "committed"))
                 try:
                     if progress_action is None or not progress_action.result:
                         raise ValueError("Exact final research progress required")
-                    await validate_progress(session, claim.task_id, ResearchProgress.model_validate(progress_action.result["progress"]), final=True, formal_directional=self._directional(candidate.recommendation))
+                    # v2 final progress carries step results; the v2 subtype
+                    # reads v1 payloads unchanged and lets the settlement
+                    # re-check run over the exact committed progress.
+                    await validate_progress(session, claim.task_id, MethodPlannedProgress.model_validate(progress_action.result["progress"]), final=True, formal_directional=self._directional(candidate.recommendation))
                 except (ExecutionDeniedError, InvestorError, ValueError, LookupError) as exc:
                     fields = {**check.field_errors, "method_steps": str(exc)}
                     check = check.model_copy(update={"field_errors": fields, "failures": tuple(fields), "passed": ()})
@@ -1137,12 +1165,14 @@ class PublicationService:
         binding = await task_method(self.session, task_id)
         if binding.config == MethodConfig():
             return
-        from investment_agent.agent.research import ResearchProgress, validate_progress
+        from investment_agent.agent.research import MethodPlannedProgress, validate_progress
         from investment_agent.storage.models.agent import ToolAction
         action = await self.session.scalar(select(ToolAction).where(ToolAction.task_id == str(task_id), ToolAction.intent_key == "completion:progress", ToolAction.state == "committed"))
         if action is None or not action.result:
             raise InvestorError("invalid_reference", "Exact final research progress required for method renewal")
-        await validate_progress(self.session, task_id, ResearchProgress.model_validate(action.result["progress"]), final=True, formal_directional=self._directional(recommendation))
+        # v2 final progress carries step results; the v2 subtype reads v1
+        # payloads unchanged, so the renewal re-check covers both eras.
+        await validate_progress(self.session, task_id, MethodPlannedProgress.model_validate(action.result["progress"]), final=True, formal_directional=self._directional(recommendation))
 
     @storage_conflicts
     async def extend(self, claim: TaskClaim, operation_id: UUID, ref: ObjectRef, review: ReviewEvent, *, expected_case_revision: int, base: Settings) -> RecommendationView:
