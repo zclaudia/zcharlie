@@ -29,8 +29,8 @@ MVP 保留策略：**不自动删除任何原始证据**。备份按日期目录
 
 ```bash
 # 1. 停止写入（保证制品目录与数据库一致）
-docker compose stop          # Compose 部署
-# 或手动停止 uvicorn / ia worker start / ia scheduler start 对应进程
+docker compose stop          # Compose 部署（含 worker-agent 与采集 worker）
+# 或手动停止 uvicorn、两个 ia worker start、ia scheduler start
 
 # 2. 生成备份（含 manifest.json：每个文件的大小与 SHA-256）
 .venv/bin/python tools/backup_research.py --data-dir ./data --output ~/backups/$(date +%F)

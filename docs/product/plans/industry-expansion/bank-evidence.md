@@ -67,4 +67,4 @@
 
 本地 run-02 导入可登记两份通过既有原件身份/报告期检查的文件：工行 601398 与江苏银行 600919；它们只进入披露原件库作为 candidate original，四个比率字段仍为 candidate，因为未建立银行字段级页面定位/语义检查。招行 600036 的 PDF 封面抽取不含可确认的年度报告期，拒绝登记；导入结果和字段证明记录原件未登记原因。其余七家公司本地没有原件。原件 title 只额外接受“YYYY年度报告”明确变体，PDF 实际首页仍必须确认目标年度与年度报告；江苏银行英文名称通过显式 `江苏银行`→`BANK OF JIANGSU` 封面别名对应。
 
-银行字段级 proof 校验器/显式 proof 输入格式本轮尚未实现；即使保留原件，字段不会因此升级为 verified。可执行端到端命令和覆盖现状见上文实现参数及 `tests/fixtures/bank_run02/SOURCE.md`。
+2026-10 当时：银行字段级 proof 校验器/显式 proof 输入格式本轮尚未实现；即使保留原件，字段不会因此升级为 verified。此后 `industry_peers/bank_proofs.py` 已落地字段级校验；verified 仍只来自通过校验的原件，不是这份旧记录自动升级的。可执行端到端命令和覆盖现状见 `tests/fixtures/bank_run02/SOURCE.md`。

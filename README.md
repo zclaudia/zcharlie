@@ -7,9 +7,7 @@
 
 **研究辅助，非投资建议。** 没有下单、模拟盘、自动调仓或任何券商连接路径。
 
-下一阶段设计（尚未实现）：[个人投资 Agent](docs/product/investor-agent-design.md)将产品扩展为
-自主研究、候选发现、买卖与仓位意见、持续复核和复盘；真实交易仍由用户决定和执行。
-实现方案与阶段验收见[技术设计与交付计划](docs/product/investor-agent-architecture.md)。本 README 其余内容描述当前已交付能力。
+个人投资 Agent 已在本仓库交付：自主研究、候选发现、买卖与仓位意见、持续复核和复盘走独立契约（`agent/`、`investor/`、方法包、持仓账本与 `/app` 工作台）。真实交易仍由用户决定和执行，没有券商连接。设计与验收见[产品设计](docs/product/investor-agent-design.md)和[技术设计](docs/product/investor-agent-architecture.md)。港美在线刷新默认关闭。本 README 其余内容描述当前已交付能力。
 
 完整专题：[研究与运营](docs/product/investor-agent-research-policy.md)、[领域契约与交互](docs/product/investor-agent-contracts.md)、[估值计算](docs/product/investor-agent-valuation.md)、[方法包契约设计](docs/product/investor-agent-method-packages.md)（M1–M4 已实现）。
 
@@ -443,11 +441,21 @@ API 只返回目录、密钥状态与末四位提示；编辑时省略密钥会�
 
 ## 测试与门禁
 
+数量以收集结果为准，不要沿用 2026-10-07 记录的 1219。本地与 CI 使用同一套离线命令（fixture 脱敏，不访问网络、不使用真实 secrets）：
+
 ```bash
-pytest -q -m "not network"  # 1219 个测试（离线，fixture 全部脱敏）
-ruff check .
-mypy src/investment_agent  # strict
+uv sync --frozen --extra dev
+uv run ruff check .
+uv run mypy src          # strict
+uv run pytest -q -m "not network"
 ```
+
+GitHub Actions（`.github/workflows/ci.yml`，push `main` 与 pull request）只跑上面四步：`uv sync --frozen`、ruff、`mypy src`、`pytest -q -m "not network"`。job 超时 45 分钟。`DATA_DIR` 写在测试步骤上（`${{ runner.temp }}`），不能写在 job 级 `env`。
+
+不在 CI 里：
+
+- 浏览器回归 `tests/browser/run.sh`（需要本机 Playwright 与 Chromium，脚本串行；见脚本头注释）。
+- Android 客户端 `cd mobile && pnpm test`（vitest）。版本以 `mobile/package.json`、`mobile/src-tauri/tauri.conf.json` 与 `Cargo.toml` 的 `0.1.1` 为准。
 
 离线端到端 smoke（P1-F1，`tests/integration/test_funnel_e2e.py`，默认套件内，约 11 秒）：
 空库 `ia migrate up` 后经 worker 跑真实任务处理器——成分 / 行业（证监会 + 申万）同步、日线 / 财报 /
@@ -457,8 +465,7 @@ HTTP 晋级（决策日志、观察池、iFinD 晋级核对请求、研究入队
 只在数据源边界替换：合成 baostock / 申万 / 东财（`tests/integration/_funnel_support.py`，10 只股票覆盖
 银行、公用事业、周期、成长、亏损股、次新股）、respx 桩 LLM 与假 ifind-proxy；时间冻结，结果确定。
 
-CI（`.github/workflows/ci.yml`）在 push/PR 上运行同样三门禁；默认测试不访问
-网络、不使用真实 secrets。golden corpus（13 只不同特征 A 股）离线重放，
+golden corpus（13 只不同特征 A 股）在默认离线套件里重放，
 任何算法变化必须升级 scoring version 并附差异说明，不允许静默改 golden。
 
 ## 已知限制

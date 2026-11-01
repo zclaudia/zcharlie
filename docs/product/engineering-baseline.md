@@ -8,7 +8,8 @@
 > 用户已确认自主研究、候选发现和独立买卖与仓位意见属于目标职责，真实交易仍由用户决定和执行。
 > 本文的只解释与禁止独立操作意见条款继续描述既有接口，不约束新 Agent 的设计；
 > 新能力使用独立契约渐进交付，事实溯源、确定性计算、历史保留和无交易执行路径继续适用。
-> 具体迁移与验收见[技术设计与交付计划](investor-agent-architecture.md)，目前为 Draft，尚未实现。
+> 具体迁移与验收见[技术设计与交付计划](investor-agent-architecture.md)。
+> 2026-11 状态：个人投资 Agent 主路径已在代码中交付（`agent/`、`investor/`、方法包 M1–M4、持仓账本与 Web 工作台）。本文第 1–7 节仍是 MVP 研究台的不可破坏规则。真实交易执行没有实现。港美在线刷新默认关闭（`ONLINE_REFRESH_ENABLED = False`）。行情 / FX / 市净率 / TTM 与跨币种发布仍未启用。
 
 适用范围：`zcharlie`、`ifind-proxy` 与 baostock 参考数据组成的 A 股个人投研系统
 
@@ -160,10 +161,13 @@ MVP 服务等级目标：
 提交门禁：
 
 ```bash
-pytest -q
-ruff check .
-mypy src/investment_agent
+uv sync --frozen --extra dev
+uv run ruff check .
+uv run mypy src
+uv run pytest -q -m "not network"
 ```
+
+这四步是 GitHub Actions 的 `quality-gates`（超时 45 分钟）。`tests/browser/run.sh` 与 `cd mobile && pnpm test` 不在该门禁里。2026-10 文档里的 `pytest -q` 与 `mypy src/investment_agent` 以本节为准。
 
 测试层级：
 

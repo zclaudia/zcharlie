@@ -2,7 +2,7 @@
 
 日期：2026-10-09；2026-10-10 确认技术栈与模型独立配置，补充完整研究、交互、领域与估值设计。
 
-状态：产品方向与技术栈已确认；具体集成方案为设计草案，尚未实现。产品方向见[产品设计](investor-agent-design.md)，研究规则见[研究与运营设计](investor-agent-research-policy.md)，对象、状态和交互以[领域契约](investor-agent-contracts.md)细化，公式与输入以[估值计算设计](investor-agent-valuation.md)为准。主模型与输出模式通过前置验证选择，应用动作账本的恢复在 A0 任务基础验收；运行限额为可配置默认值。
+状态（2026-11）：技术栈已按本文落地。Pydantic AI 驱动 `agent/` 的模型与工具循环；任务、权限、研究状态和发布校验在应用内。队列由两个 worker 分担：`worker-agent` 只跑 `agent_*` 并负责维护与外部通知，采集 `worker` 跑其余 kind。运行限额仍是可配置默认值。真实交易执行没有实现。港美在线刷新默认关闭。产品方向见[产品设计](investor-agent-design.md)，研究规则见[研究与运营设计](investor-agent-research-policy.md)，对象、状态和交互以[领域契约](investor-agent-contracts.md)细化，公式与输入以[估值计算设计](investor-agent-valuation.md)为准。下文 2026-10-10 的句子若与代码冲突，以代码为准。
 
 采用 Python 与 Pydantic AI 构建 Agent，复用现有模块化单体、FastAPI、SQLite、worker 和 scheduler。Pydantic AI 负责一次运行中的模型与工具循环，应用负责跨运行任务、业务权限、研究状态和发布校验。模型独立配置并支持更换供应商。真实交易执行不属于任何工具能力。
 
@@ -33,7 +33,7 @@ LangGraph 保留为备选，只在研究流程出现多分支、多轮人工介�
 | 数据与计算 | `research/contracts.py`、`factors/`、`research_kernel/`、PIT repositories | 继续管理事实、时点与确定性计算；新 Agent 不复制算法 |
 | 单次解释 | `research/ifind_chain.py` 中 `ResearchExplanation` 和解释提示词 | 保留旧接口；新建多来源证据和投资意见契约 |
 | LLM 客户端 | `llm/openai_compatible.py` 仅发送 system/user 两条消息；签名中的 `tools` 未传给上游 | 旧接口保留；新 Agent 使用 Pydantic AI，复用配置存储和调用审计，不自行补写通用循环 |
-| Agent 依赖 | `uv.lock` 已锁定 Pydantic AI 2.31.1，当前主链路未使用 `Agent` 运行 | 将该版本作为框架集成验证基线 |
+| Agent 依赖 | `uv.lock` 锁定 Pydantic AI 2.31.1；`agent/` 用它跑模型与工具循环 | CI 用 `uv sync --frozen` 安装这一锁文件 |
 | 只读 MCP | `mcp_server/server.py` 的 9 个工具；数据库只读，无任务入队 | 复用查询领域服务，保留外部 MCP 的只读契约；内部工具具有独立权限 |
 | 候选晋级 | `candidates/promote.py` 同一事务内批准规则、写自选和决策日志 | 新建独立的持续研究入口；旧接口保持兼容 |
 | 任务系统 | `pipeline_run`、租约、心跳、有限重试、`JobHandler` | 复用任务承载，补 Agent 检查点、依赖、取消和事件流 |

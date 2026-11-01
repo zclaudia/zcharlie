@@ -8,6 +8,8 @@
 `config/app.yaml`。问题：
 
 - 改业务参数（候选过期天数、iFinD 预算等）要改文件并重启 api/worker/scheduler 三个进程；
+
+2026-11：运行时项已在数据库里，保存后不必重启。常驻进程是 api、`worker-agent`、采集 `worker`、scheduler，见 [operations.md](operations.md)。
 - worker / scheduler 常驻进程只在启动时读一次配置；
 - LLM / iFinD 密钥只能在文件里改，无法在 UI 里测试连通性；
 - 配置的取值范围、说明散落在代码注释、`.env.example`、`app.yaml` 注释里。
