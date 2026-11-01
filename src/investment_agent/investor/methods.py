@@ -684,15 +684,23 @@ class MethodService:
         usable on this path). The same mutation replays without a new task.
         Card 19 caps the evidence-collection cost: once the proposal already
         has ``method_candidate_shadow_max_per_proposal`` claim artifacts the
-        initiation is refused before any write.
+        initiation is refused before any write. Card 20 routes the per-item
+        admission through the shared ``_admit_candidate_shadow`` coroutine.
         """
-        from investment_agent.agent.contracts import ContextBinding
-        from investment_agent.agent.execution import ExecutionGrant, admit
-        from investment_agent.agent.research import registrations
-        from investment_agent.investor.foundations import InvestorService
         if result := await self.replay(request.mutation_id, request):
             return result
-        row = await self.proposal(request.proposal_id)
+        row, evaluation, candidate = await self._candidate_shadow_target(request.proposal_id)
+        started = sum(1 for item in await self._started_shadow_claims() if item.payload["proposal_id"] == row.id)
+        if started >= base.method_candidate_shadow_max_per_proposal:
+            raise InvestorError("invalid_reference", f"该包提案的候选影子任务数已达上限 {base.method_candidate_shadow_max_per_proposal}（已发起 {started} 个），不能继续发起")
+        claim, task_id = await self._admit_candidate_shadow(row, evaluation, candidate, request.prompt, request.expected, f"candidate-shadow:{row.id}:{request.mutation_id}", base=base)
+        return await self.receipt(request.mutation_id, request, {"claim": claim, "task_id": task_id, "status": "queued"})
+
+    async def _candidate_shadow_target(self, proposal_id: UUID) -> tuple[MethodProposal, dict[str, Any], "MethodPackage"]:
+        """Shared admission state check (card 20): a package proposal in
+        ``status="shadow"`` whose latest evaluation passed, plus its
+        proposal-frozen candidate artifact."""
+        row = await self.proposal(proposal_id)
         if row.payload["status"] != "shadow" or not row.payload.get("evaluation_ids") or row.payload["request"].get("package_ref") is None:
             raise InvestorError("invalid_reference", "候选包前瞻影子只接受已通过评估的包提案")
         evaluation = await self.artifact(UUID(row.payload["evaluation_ids"][-1]), "evaluation")
@@ -700,15 +708,31 @@ class MethodService:
             raise InvestorError("stale_revision", "需要当前已通过的评估")
         candidate = await self._frozen_candidate(row)
         assert candidate is not None  # package_ref presence checked above
+        return row, evaluation, candidate
+
+    async def _started_shadow_claims(self) -> list[MethodArtifact]:
+        """Every ``candidate_shadow_claim`` artifact this owner has written."""
+        return list((await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "candidate_shadow_claim"))).all())
+
+    async def _admit_candidate_shadow(
+        self, row: MethodProposal, evaluation: dict[str, Any], candidate: "MethodPackage", prompt: Text, expected: Literal["pass", "block"], input_key: str, *, base: "Settings"
+    ) -> tuple[dict[str, Any], str]:
+        """Shared per-item admission (card 20): listing scope and kind
+        admission, the shadow grant (publication/portfolio tools stripped),
+        the ``freeze_task`` override via ``admit(method_override=...)`` and
+        the ``candidate_shadow_claim`` artifact. The single initiation and
+        every batch item run exactly this code path, so their behaviors
+        cannot drift; only the caller's ``input_key`` distinguishes them.
+        """
+        from investment_agent.agent.contracts import ContextBinding
+        from investment_agent.agent.execution import ExecutionGrant, admit
+        from investment_agent.agent.research import registrations
+        from investment_agent.investor.foundations import InvestorService
         listing = ObjectRef.model_validate(row.payload["request"]["listing_ref"])
         await self.scope(listing)
         kinds = [kind for kind in ("company_research", "review") if kind in candidate.applicable_kinds]
         if not kinds:
             raise InvestorError("invalid_reference", "候选包不适用于任何前瞻影子研究类型")
-        claims = (await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "candidate_shadow_claim"))).all()
-        started = sum(1 for item in claims if item.payload["proposal_id"] == row.id)
-        if started >= base.method_candidate_shadow_max_per_proposal:
-            raise InvestorError("invalid_reference", f"该包提案的候选影子任务数已达上限 {base.method_candidate_shadow_max_per_proposal}（已发起 {started} 个），不能继续发起")
         mandate = await InvestorService(self.session).get_mandate("local_owner")
         tool_names = tuple(name for name in (registration.name for registration in registrations()) if name not in CANDIDATE_SHADOW_FORBIDDEN_TOOLS)
         binding = MethodBinding(
@@ -719,16 +743,43 @@ class MethodService:
             package_ref=ObjectRef(kind="package", id=candidate.artifact_id, revision=candidate.version),
             package_hash=candidate.content_hash,
         )
-        grant = ExecutionGrant(mode="background", source="authorized_background", prompt=request.prompt,
+        grant = ExecutionGrant(mode="background", source="authorized_background", prompt=prompt,
             tool_names=tool_names, scope_refs=(listing,), mandate_id=mandate.id, current_research=True, research_kind=kinds[0])
-        task = await admit(self.session, base=base, input_key=f"candidate-shadow:{row.id}:{request.mutation_id}",
+        task = await admit(self.session, base=base, input_key=input_key,
             binding=ContextBinding(context_refs=(listing,), base_refs=(listing,), as_of=datetime.now(UTC)),
             grant=grant, kind="agent_research", method_override=binding)
         claim = self.save("candidate_shadow_claim", {"proposal_id": row.id, "proposal_revision": row.revision,
-            "evaluation_id": evaluation["id"], "task_id": str(task.id), "expected": request.expected,
-            "prompt": request.prompt, "research_kind": kinds[0],
+            "evaluation_id": evaluation["id"], "task_id": str(task.id), "expected": expected,
+            "prompt": prompt, "research_kind": kinds[0],
             "quality": "real_worker_shadow_task_no_function_model"})
-        return await self.receipt(request.mutation_id, request, {"claim": claim, "task_id": str(task.id), "status": "queued"})
+        return claim, str(task.id)
+
+    @method_transaction
+    async def start_candidate_shadows(self, request: "CandidateShadowBatchRequest", *, base: "Settings") -> dict[str, Any]:
+        """§9 batch initiation (card 20): one mutation, one transaction, up to
+        four distinct-prompt items.
+
+        Every item admits through the same shared coroutine as the single
+        initiation with its own ``input_key``
+        (``candidate-shadow:{proposal_id}:{mutation_id}:{index}``) and its own
+        ``candidate_shadow_claim`` artifact; the card-19 per-proposal cap
+        counts the whole batch before any write, so an over-cap batch is
+        refused atomically. A same-mutation replay returns the original
+        receipt without starting new tasks.
+        """
+        if result := await self.replay(request.mutation_id, request):
+            return result
+        row, evaluation, candidate = await self._candidate_shadow_target(request.proposal_id)
+        started = sum(1 for item in await self._started_shadow_claims() if item.payload["proposal_id"] == row.id)
+        if started + len(request.items) > base.method_candidate_shadow_max_per_proposal:
+            raise InvestorError("invalid_reference", f"该包提案的候选影子任务数已达上限 {base.method_candidate_shadow_max_per_proposal}（已发起 {started} 个），批量发起 {len(request.items)} 个将超出上限")
+        claims: list[dict[str, Any]] = []
+        task_ids: list[str] = []
+        for index, item in enumerate(request.items):
+            claim, task_id = await self._admit_candidate_shadow(row, evaluation, candidate, item.prompt, item.expected, f"candidate-shadow:{row.id}:{request.mutation_id}:{index}", base=base)
+            claims.append(claim)
+            task_ids.append(task_id)
+        return await self.receipt(request.mutation_id, request, {"claims": claims, "task_ids": task_ids, "status": "queued"})
 
     @method_transaction
     async def candidate_shadow_result(self, request: "CandidateShadowResultRequest") -> dict[str, Any]:
@@ -1352,3 +1403,27 @@ class CandidateShadowResultRequest(Contract):
     proposal_id: UUID
     task_id: UUID
     expected_revision: int = Field(ge=1)
+
+
+class CandidateShadowItem(Contract):
+    """One batch shadow item: its own prompt and expectation (card 20 §1)."""
+
+    prompt: Text = Field(max_length=2000)
+    expected: Literal["pass", "block"]
+
+
+class CandidateShadowBatchRequest(Contract):
+    """Body of POST /investor/methods/proposals/{proposal_id}/candidate-shadow-batch;
+    the proposal id arrives on the path and is bound into this contract. The
+    whole batch shares one mutation id (one idempotent replay) and its prompts
+    must be distinct."""
+
+    mutation_id: UUID
+    proposal_id: UUID
+    items: tuple[CandidateShadowItem, ...] = Field(min_length=1, max_length=4)
+
+    @model_validator(mode="after")
+    def distinct_prompts(self) -> "CandidateShadowBatchRequest":
+        if len({item.prompt for item in self.items}) != len(self.items):
+            raise ValueError("distinct prompts required in one batch")
+        return self

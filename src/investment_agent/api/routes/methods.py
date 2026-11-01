@@ -3,7 +3,7 @@ from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import Field
+from pydantic import Field, ValidationError, model_validator
 from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 from sqlalchemy import select
@@ -12,13 +12,17 @@ from investment_agent.agent.tasks import COMPLETED_TASK_STATUSES
 from investment_agent.api.auth import get_bootstrap_settings, verify_api_key_or_session
 from investment_agent.api.deps import session_service
 from investment_agent.config import Settings
-from investment_agent.investor.common import Contract, ObjectRef
+from investment_agent.investor.common import Contract, ObjectRef, Text
 from investment_agent.investor.foundations import InvestorError
+from investment_agent.investor.method_packages import MethodPackageDefinition
 from investment_agent.investor.methods import (
+    CandidateShadowBatchRequest,
+    CandidateShadowItem,
     CandidateShadowRequest,
     CandidateShadowResultRequest,
     CreateProposal,
     EvaluateProposal,
+    MethodConfig,
     MethodDecision,
     MethodRollback,
     MethodService,
@@ -60,7 +64,9 @@ async def list_methods(svc: Service, offset: Annotated[int, Query(ge=0)] = 0, li
     proposals, reviews, versions, heads, tasks = proposals[:limit], reviews[:limit], versions[:limit], heads[:limit], tasks[:limit]
     listing_ids = {p.payload["request"]["listing_ref"]["id"] for p in proposals} | {h.listing_id for h in heads}
     names = (await svc.session.execute(select(Listing.id, Listing.ticker, Company.canonical_name).join(Company, Listing.company_id == Company.id).where(Listing.id.in_(listing_ids)))).all()
-    return {"scope_names": {str(identifier): name + " · " + ticker for identifier, ticker, name in names}, "baseline_method": FIXED_METHOD.model_dump(mode="json"), "proposals": [_proposal_summary(svc, p) for p in proposals], "reviews": [svc.review_summary(r.payload) for r in reviews], "versions": [{"id": r.id, "binding": r.payload["binding"]} for r in versions], "heads": [{"revision": h.revision, "binding": h.payload} for h in heads], "completed_tasks": [{"id": t.id, "status": t.status, "created_at": t.payload["created_at"], "base_refs": t.payload["binding"]["base_refs"][:16]} for t in tasks], "page": {"offset": offset, "limit": limit, "truncated": more, "next_offset": offset + limit if more else None, "ordering": "Newest task/proposal/review first; offsets may shift after writes; refresh to latest"}, "limits": "One listing only; offline replays cannot authorize activation. Prospective gate-shadow observes new actual outputs; no semantic quality acceptance. Existing Tasks keep frozen methods. Comparison/portfolio use baseline."}
+    default_revision, default_binding = await svc.default_head()
+    default_head = {"revision": default_revision, "binding": default_binding.model_dump(mode="json")} if default_binding is not None else None
+    return {"scope_names": {str(identifier): name + " · " + ticker for identifier, ticker, name in names}, "baseline_method": FIXED_METHOD.model_dump(mode="json"), "proposals": [_proposal_summary(svc, p) for p in proposals], "reviews": [svc.review_summary(r.payload) for r in reviews], "versions": [{"id": r.id, "binding": r.payload["binding"]} for r in versions], "heads": [{"revision": h.revision, "binding": h.payload} for h in heads], "default_head": default_head, "completed_tasks": [{"id": t.id, "status": t.status, "created_at": t.payload["created_at"], "base_refs": t.payload["binding"]["base_refs"][:16]} for t in tasks], "page": {"offset": offset, "limit": limit, "truncated": more, "next_offset": offset + limit if more else None, "ordering": "Newest task/proposal/review first; offsets may shift after writes; refresh to latest"}, "limits": "One listing only; offline replays cannot authorize activation. Prospective gate-shadow observes new actual outputs; no semantic quality acceptance. Existing Tasks keep frozen methods. Comparison/portfolio use baseline."}
 
 
 @router.get("/proposals/{proposal_id}")
@@ -78,6 +84,7 @@ async def proposal_detail(proposal_id: UUID, svc: Service) -> dict[str, Any]:
         payload["structure_diff"] = await _structure_diff(svc, row)
         payload["replay"] = _replay_display(row, payload["evaluations"][-1] if payload["evaluations"] else None)
         payload["candidate_shadows"] = await _candidate_shadows_display(svc, row)
+        payload["candidate_shadow_claims"] = await _candidate_claims_display(svc, row)
     if len(json.dumps(payload, ensure_ascii=False)) > 2_000_000:
         raise HTTPException(413, "Artifact exceeds bounded response; use exact proposal evidence summary and immutable hash")
     return payload
@@ -208,6 +215,25 @@ async def _candidate_shadows_display(svc: MethodService, row: MethodProposal) ->
     return {"items": shadows, "total": len(identifiers), "truncated": len(shown) < len(identifiers)}
 
 
+async def _candidate_claims_display(svc: MethodService, row: MethodProposal) -> dict[str, Any]:
+    """§9 ``candidate_shadow_claims`` block: started shadow claims (card 20).
+
+    Every ``candidate_shadow_claim`` artifact this proposal started (single or
+    batch initiation), newest ``WORKBENCH_SHADOW_LIMIT`` shown, each projected
+    to its task id, expectation, truncated prompt and whether the result has
+    already been registered - the queue view between initiation and
+    registration. Config-only proposals never carry this block.
+    """
+    claims = (await svc.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == svc.owner, MethodArtifact.kind == "candidate_shadow_claim"))).all()
+    mine = sorted((item.payload for item in claims if item.payload["proposal_id"] == row.id), key=lambda payload: (payload["created_at"], payload["id"]))
+    registered: set[str] = set()
+    for identifier in row.payload.get("candidate_shadow_ids", []):
+        registered.add((await svc.artifact(UUID(str(identifier)), "candidate_shadow"))["task_id"])
+    shown = mine[-WORKBENCH_SHADOW_LIMIT:]
+    items = [{"task_id": claim["task_id"], "expected": claim["expected"], "prompt": claim["prompt"][:200], "created_at": claim["created_at"], "registered": claim["task_id"] in registered} for claim in shown]
+    return {"items": items, "total": len(mine), "truncated": len(shown) < len(mine)}
+
+
 @router.get("/artifacts/{kind}/{artifact_id}")
 async def method_artifact(kind: Literal["process_review", "evaluation", "shadow", "prospective_shadow", "version", "event", "proposal_version", "shadow_claim", "shadow_result", "candidate_shadow", "candidate_shadow_claim"], artifact_id: UUID, svc: Service) -> dict[str, Any]:
     import json
@@ -222,9 +248,59 @@ async def freeze_review(task_id: UUID, svc: Service) -> dict[str, Any]:
     return await svc.process_review(task_id)
 
 
+class CreateProposalBody(Contract):
+    """Route-level proposal body (card 20 §3): the ``CreateProposal`` fields
+    plus the optional ``package_yaml`` entry.
+
+    ``config`` stays mandatory on the existing wire paths (config-only and
+    direct-JSON package requests keep their exact behavior) and may be omitted
+    only together with ``package_yaml``, whose parsed candidate then fills it
+    from the definition's ``discipline``; a given ``config`` passes through
+    unchanged and the service layer's config≡discipline check applies.
+    """
+
+    mutation_id: UUID
+    review_id: UUID
+    listing_ref: ObjectRef
+    old_method: ObjectRef
+    error_pattern: Text = Field(max_length=1000)
+    summary: Text = Field(max_length=1000)
+    config: MethodConfig | None = None
+    package: MethodPackageDefinition | None = None
+    package_yaml: Text | None = None
+
+    @model_validator(mode="after")
+    def yaml_entry_shape(self) -> "CreateProposalBody":
+        if self.package_yaml is not None and self.package is not None:
+            raise ValueError("package_yaml 与 package 不能同时提供")
+        if self.package_yaml is None and self.config is None:
+            raise ValueError("config 必填；package_yaml 请求可省略，由候选包 discipline 填充")
+        return self
+
+
 @router.post("/proposals")
-async def create_proposal(body: CreateProposal, svc: Service) -> dict[str, Any]:
-    return await svc.create(body)
+async def create_proposal(body: CreateProposalBody, svc: Service) -> dict[str, Any]:
+    import yaml
+
+    payload = body.model_dump(mode="json", exclude={"package_yaml"})
+    if body.package_yaml is not None:
+        # Card 20 §3: the YAML candidate replaces the JSON package; config may
+        # be filled from the parsed discipline. Parse failures carry the
+        # offline-shadow invalid_reference convention (422 via the deps table).
+        try:
+            parsed = yaml.safe_load(body.package_yaml)
+        except yaml.YAMLError as exc:
+            raise InvestorError("invalid_reference", "候选包 YAML 无法解析") from exc
+        if not isinstance(parsed, dict):
+            raise InvestorError("invalid_reference", "候选包 YAML 无法解析")
+        payload["package"] = parsed
+        if body.config is None:
+            payload["config"] = parsed.get("discipline") or {}
+    try:
+        request = CreateProposal.model_validate(payload)
+    except ValidationError as exc:
+        raise InvestorError("invalid_reference", "候选包 YAML 不符合方法包定义") from exc
+    return await svc.create(request)
 
 
 @router.post("/evaluations")
@@ -369,6 +445,25 @@ async def candidate_shadow(proposal_id: UUID, body: CandidateShadowBody, svc: Se
         return await svc.start_candidate_shadow(request, base=settings)
     except ExecutionDeniedError as exc:
         # Admission boundaries carry safe codes as their message only.
+        raise HTTPException(409, detail={"code": "candidate_shadow_denied", "message": str(exc)}) from exc
+
+
+class CandidateShadowBatchBody(Contract):
+    """§9/card 20 wire body for the batch initiation; the proposal id comes
+    from the path, one mutation covers the whole batch."""
+
+    mutation_id: UUID
+    items: Annotated[tuple[CandidateShadowItem, ...], Field(min_length=1, max_length=4)]
+
+
+@router.post("/proposals/{proposal_id}/candidate-shadow-batch")
+async def candidate_shadow_batch(proposal_id: UUID, body: CandidateShadowBatchBody, svc: Service, settings: BootstrapSettings) -> dict[str, Any]:
+    from investment_agent.agent.execution import ExecutionDeniedError
+    request = CandidateShadowBatchRequest(proposal_id=proposal_id, **body.model_dump(mode="json"))
+    try:
+        return await svc.start_candidate_shadows(request, base=settings)
+    except ExecutionDeniedError as exc:
+        # Same admission-boundary convention as the single initiation.
         raise HTTPException(409, detail={"code": "candidate_shadow_denied", "message": str(exc)}) from exc
 
 
