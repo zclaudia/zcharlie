@@ -682,6 +682,9 @@ class MethodService:
         configuration. ``admit()`` enqueues a real ``agent_research`` task
         whose receipt freezes the candidate v2 binding (FunctionModel is never
         usable on this path). The same mutation replays without a new task.
+        Card 19 caps the evidence-collection cost: once the proposal already
+        has ``method_candidate_shadow_max_per_proposal`` claim artifacts the
+        initiation is refused before any write.
         """
         from investment_agent.agent.contracts import ContextBinding
         from investment_agent.agent.execution import ExecutionGrant, admit
@@ -702,6 +705,10 @@ class MethodService:
         kinds = [kind for kind in ("company_research", "review") if kind in candidate.applicable_kinds]
         if not kinds:
             raise InvestorError("invalid_reference", "候选包不适用于任何前瞻影子研究类型")
+        claims = (await self.session.scalars(select(MethodArtifact).where(MethodArtifact.owner_id == self.owner, MethodArtifact.kind == "candidate_shadow_claim"))).all()
+        started = sum(1 for item in claims if item.payload["proposal_id"] == row.id)
+        if started >= base.method_candidate_shadow_max_per_proposal:
+            raise InvestorError("invalid_reference", f"该包提案的候选影子任务数已达上限 {base.method_candidate_shadow_max_per_proposal}（已发起 {started} 个），不能继续发起")
         mandate = await InvestorService(self.session).get_mandate("local_owner")
         tool_names = tuple(name for name in (registration.name for registration in registrations()) if name not in CANDIDATE_SHADOW_FORBIDDEN_TOOLS)
         binding = MethodBinding(
@@ -897,7 +904,7 @@ class MethodService:
         return expected + 1 if head else 1
 
     @method_transaction
-    async def decide(self, request: MethodDecision, *, actor: str) -> dict[str, Any]:
+    async def decide(self, request: MethodDecision, *, actor: str, base: "Settings | None" = None) -> dict[str, Any]:
         if actor != "authenticated_user":
             raise InvestorError("invalid_reference", "模型不能批准方法")
         if result := await self.replay(request.mutation_id, request):
@@ -923,8 +930,11 @@ class MethodService:
                 # §7.3/§7.4 (card 16): package approvals require the latest
                 # prospective candidate shadow to cover every
                 # requires_candidate_shadow id plus one rejected expected-block
-                # candidate - never the config-only observation path.
-                await self._require_candidate_shadow(row)
+                # candidate - never the config-only observation path. Card 19
+                # routes the matched-positive minimum through the caller's
+                # Settings; without one the card-16 default (1) applies.
+                min_positives = base.method_candidate_shadow_min_positives if base is not None else 1
+                await self._require_candidate_shadow(row, min_positives=min_positives)
             _, current = await self.current(request.listing_ref)
             if current.method_ref != ObjectRef.model_validate(row.payload["request"]["old_method"]):
                 raise InvestorError("stale_revision", "当前方法已改变，需要重新评估")
@@ -954,14 +964,17 @@ class MethodService:
         self.save("event", event)
         return await self.receipt(request.mutation_id, request, proposal)
 
-    async def _require_candidate_shadow(self, row: MethodProposal) -> None:
+    async def _require_candidate_shadow(self, row: MethodProposal, *, min_positives: int = 1) -> None:
         """§7.3/§7.4 approval coverage gate for package proposals (card 16).
 
         The latest registered candidate shadow must be a matched positive run
         whose frozen requirement ids cover every ``requires_candidate_shadow``
         item, and at least one expected-block candidate task must have been
-        rejected by the package-level validation. Every refusal names the
-        exact open requirements.
+        rejected by the package-level validation. Card 19 adds the operations
+        default ``min_positives``: that many matched positive runs (each
+        expected="pass", matched, outcome="passed") must be registered before
+        an approval; the coverage rule itself is never relaxed. Every refusal
+        names the exact open requirements or counts.
         """
         shadows = row.payload.get("candidate_shadow_ids", [])
         required = sorted({str(item) for item in row.payload.get("requires_candidate_shadow", [])})
@@ -974,6 +987,9 @@ class MethodService:
             raise InvestorError("invalid_reference", f"最新前瞻影子未覆盖全部待影子要求：{', '.join(missing)}")
         if not any(record["expected"] == "block" and record["matched"] for record in records):
             raise InvestorError("invalid_reference", "批准前缺少一个被包级校验拒绝的预期失败候选影子")
+        positives = [record for record in records if record["expected"] == "pass" and record["matched"] and record["outcome"] == "passed"]
+        if len(positives) < min_positives:
+            raise InvestorError("invalid_reference", f"批准前需要 {min_positives} 个匹配成功的正例前瞻影子，已有 {len(positives)} 个")
 
     @method_transaction
     async def rollback(self, request: MethodRollback, *, actor: str) -> dict[str, Any]:

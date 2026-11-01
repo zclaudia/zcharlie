@@ -198,6 +198,14 @@ class Settings(BaseSettings):
     # dismissed listing is not re-proposed by the screen within the cooldown.
     candidate_expiry_days: int = Field(default=14, ge=1, le=365)
     candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
+    # Candidate-package prospective shadows (§7.3/card 19): an approval needs
+    # at least ``method_candidate_shadow_min_positives`` matched positive runs
+    # (each expected="pass", matched, outcome="passed"); one package proposal
+    # may start at most ``method_candidate_shadow_max_per_proposal`` shadow
+    # tasks - the hard cap on evidence-collection cost. Defaults keep the
+    # card-16 gate; the values only tighten, never loosen it.
+    method_candidate_shadow_min_positives: int = Field(default=1, ge=1)
+    method_candidate_shadow_max_per_proposal: int = Field(default=8, ge=1)
 
     # Industry & peer context (WP1): off by default; the flag is enforced at
     # the API / page / agent boundaries as its own work packages land. The

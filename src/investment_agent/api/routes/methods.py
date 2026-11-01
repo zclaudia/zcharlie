@@ -233,8 +233,10 @@ async def evaluate(body: EvaluateProposal, svc: Service) -> dict[str, Any]:
 
 
 @router.post("/decisions")
-async def decision(body: MethodDecision, svc: Service) -> dict[str, Any]:
-    return await svc.decide(body, actor="authenticated_user")
+async def decision(body: MethodDecision, svc: Service, settings: BootstrapSettings) -> dict[str, Any]:
+    # Card 19: the bootstrap Settings carry the candidate-shadow operations
+    # defaults into the approval gate.
+    return await svc.decide(body, actor="authenticated_user", base=settings)
 
 
 @router.post("/rollback")
