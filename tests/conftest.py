@@ -2,6 +2,15 @@
 
 import os
 
+# Applied at import, before test modules pull in Rich. GitHub-hosted runners
+# advertise a color terminal; Rich then draws CLI help as a cropped panel and
+# highlights digits, so assertions on option names and plain values fail.
+# A dumb terminal plus a wide size keeps that help as plain text.
+os.environ["TERM"] = "dumb"
+os.environ["NO_COLOR"] = "1"
+os.environ["COLUMNS"] = "220"
+os.environ["LINES"] = "80"
+
 import pytest
 import pytest_asyncio
 
