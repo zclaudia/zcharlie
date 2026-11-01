@@ -30,6 +30,7 @@ UNITS: dict[str, str] = {
     "eps_ttm": "CNY/share",
     "debt_ratio": "fraction",
     "total_equity": "CNY",
+    "total_assets": "CNY",
     "net_profit_parent": "CNY",
     "net_profit_total": "CNY",
     "revenue_main": "CNY",

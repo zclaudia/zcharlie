@@ -71,7 +71,7 @@ def resolve_family_members(families: Iterable[ToolFamily]) -> tuple[str, ...]:
     return tuple(resolved)
 
 
-CalculationMethod = Literal["historical_valuation_percentile", "reverse_dcf_fcfe"]
+CalculationMethod = Literal["historical_valuation_percentile", "reverse_dcf_fcfe", "roe_dupont"]
 
 # ``agent/builtin_tools.py SnapshotParameters`` derives its field enum from
 # ``default_field_sources`` (financial/market tables); that registry is a
@@ -86,6 +86,7 @@ SnapshotField = Literal[
     "net_profit_total",
     "revenue_main",
     "revenue_total",
+    "total_assets",
 ]
 SNAPSHOT_FIELDS: tuple[SnapshotField, ...] = (
     "close",
@@ -96,6 +97,7 @@ SNAPSHOT_FIELDS: tuple[SnapshotField, ...] = (
     "net_profit_total",
     "revenue_main",
     "revenue_total",
+    "total_assets",
 )
 
 # --------------------------------------------------------------------------- #

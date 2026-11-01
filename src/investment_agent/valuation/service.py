@@ -12,7 +12,12 @@ from investment_agent.clock import SHANGHAI_TZ
 from investment_agent.evidence.contracts import CalculationAssumption, CalculationRecord
 from investment_agent.evidence.snapshots import digest
 from investment_agent.evidence.store import EvidenceService
-from investment_agent.factors.library import STALE_PRICE_DAYS
+from investment_agent.factors.field_resolution import (
+    ProviderFields,
+    factor_fields,
+    resolve_period_fields,
+)
+from investment_agent.factors.library import CORE_FACTORS, STALE_PRICE_DAYS
 from investment_agent.factors.snapshot_model import Bar, FinancialPeriod, SnapshotView
 from investment_agent.factors.valuation import VALUATION_FACTORS, years_before
 from investment_agent.investor.common import ObjectRef, OwnerId, Quantity
@@ -23,6 +28,7 @@ from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
 from investment_agent.valuation.contracts import (
+    DuPontRequest,
     PercentileRequest,
     QualificationResolver,
     ReverseDCFRequest,
@@ -96,7 +102,7 @@ class ValuationService:
                 if record.status == Status.OK else None}
 
     async def _replay(self, owner: OwnerId, operation: UUID, version: str,
-                      request: ReverseDCFRequest | PercentileRequest) -> dict[str, Any] | None:
+                      request: ReverseDCFRequest | PercentileRequest | DuPontRequest) -> dict[str, Any] | None:
         replay = await self.store.receipts._replay(owner, operation,
             {"operation": "valuation", "version": version, "request": request.model_dump(mode="json")})
         if replay is not None:
@@ -435,6 +441,102 @@ class ValuationService:
                    "policy": "baostock raw daily; captured and public <= as_of; no backfill exception",
                    "current_price": str(rows[-1].close) if rows else None,
                    "current_price_date": rows[-1].trade_date.isoformat() if rows else None,
+                   "latest_report_period": max(latest_fin).isoformat() if latest_fin else None}
+        details["report_context"] = {"overdue_periods": [r.report_period.isoformat() for r in overdue]}
+        return await self._save(owner, operation, factor.name, f"{factor.name}.v{factor.version}",
+                                request.as_of, request.model_dump(mode="json"), tuple(facts), (),
+                                status, results, (value.quality, *errors), tuple(errors), details)
+
+    async def dupont(self, owner: OwnerId, request: DuPontRequest,
+                     operation: UUID) -> dict[str, Any]:
+        """Latest-annual ROE identity decomposition via the roe_dupont.v1 factor.
+
+        Same PIT shape as ``percentile``: akshare financial rows public and
+        captured by ``as_of``, latest version per report period, overdue reports
+        flag the result stale. Components come from the factor's recorded
+        identity; a residual is only produced when the same period stores roe.
+        """
+        from investment_agent.evidence.snapshots import materialize
+        await self.ensure_consistent_read()
+        version = "roe_dupont.v1"
+        replay = await self._replay(owner, operation, version, request)
+        if replay is not None:
+            return replay
+        listing = await ListingRepository(self.session).get_a_share_listing(request.ticker)
+        if listing is None:
+            raise InvestorError("invalid_reference", "Stored canonical listing required")
+        day = request.as_of.astimezone(SHANGHAI_TZ).date()
+        rows = list(await self.session.scalars(select(FinancialSnapshot).where(
+            FinancialSnapshot.listing_id == listing.id,
+            FinancialSnapshot.provider == "akshare",
+            FinancialSnapshot.captured_at <= request.as_of,
+            FinancialSnapshot.available_from <= day,
+            FinancialSnapshot.availability != "unknown",
+            FinancialSnapshot.report_period <= day,
+        ).order_by(FinancialSnapshot.report_period, FinancialSnapshot.version)))
+        latest_fin: dict[date, FinancialSnapshot] = {}
+        for row in rows:
+            latest_fin[row.report_period] = row
+        overdue = await ReportOverdueRepository(self.session).open_as_of(listing.id, day)
+        periods = []
+        for report_period, row in sorted(latest_fin.items()):
+            # Resolve as an akshare-anchored row so registry names survive; the
+            # resulting per-field sources keep the view from re-anchoring to
+            # baostock and renaming the fields away (snapshot_model.build).
+            fields, sources = resolve_period_fields(
+                [ProviderFields("akshare", factor_fields("akshare", row.fields),
+                                f"financial_snapshot:{row.id}@{row.version}")],
+                anchor="akshare")
+            periods.append(FinancialPeriod(report_period=report_period, period_kind=row.period_kind,
+                                           available_from=row.available_from, availability=row.availability,
+                                           fields=fields, sources=sources,
+                                           ref=f"financial_snapshot:{row.id}@{row.version}"))
+        view = SnapshotView.build(ticker=request.ticker, as_of=day, raw_bars=(), periods=periods,
+                                  overdue_periods=[r.report_period for r in overdue])
+        factor = next(f for f in CORE_FACTORS if f.name == "roe_dupont")
+        value = factor.compute(view)
+        flags = value.flags
+        status = Status.OK if value.value is not None else Status.MISSING_INPUTS
+        if "non_positive_denominator" in flags:
+            status = Status.NOT_APPLICABLE
+        if "report_overdue" in flags:
+            status = Status.STALE_INPUTS
+        components = dict(value.inputs_ref.get("components", {}))
+        results: dict[str, Quantity] = {}
+        if value.value is not None:
+            for key in ("net_margin", "asset_turnover", "equity_multiplier", "roe_product"):
+                if components.get(key) is not None:
+                    results[key] = Quantity(value=Decimal(str(components[key])), unit="fraction")
+            if components.get("identity_residual") is not None:
+                results["identity_residual"] = Quantity(
+                    value=Decimal(str(components["identity_residual"])), unit="fraction")
+        annual = view.latest_annual()
+        facts = []
+        errors = list(flags)
+        if annual is not None and latest_fin:
+            row = latest_fin[annual.report_period]
+            for field in ("net_profit_parent", "revenue_total", "total_assets", "total_equity"):
+                evidence = materialize(row, field)
+                if evidence.value is None or evidence.value.value is None:
+                    continue
+                if await self._source_conflict(evidence, request.as_of):
+                    errors.append("cross_source_conflict")
+                    status = Status.MISSING_INPUTS
+                    continue
+                facts.append(await self.store.save_evidence(owner, evidence,
+                    uuid5(operation, f"dupont-input:{field}")))
+        details = {"financial_inputs": [{"ref": ObjectRef(kind="financial_snapshot", id=r.id,
+                             revision=r.version).model_dump(mode="json"),
+                             "report_period": r.report_period.isoformat(),
+                             "available_from": r.available_from.isoformat() if r.available_from else None,
+                             "captured_at": str(r.captured_at)} for r in latest_fin.values()],
+                   "factor": {"name": value.name, "version": value.version,
+                              "quality": value.quality, "flags": list(flags),
+                              "inputs_ref": dict(value.inputs_ref)},
+                   "components": components,
+                   "policy": "akshare (Eastmoney) financial rows; latest version per report "
+                             "period; captured and public <= as_of; end-of-period balance-sheet "
+                             "values, no averaging",
                    "latest_report_period": max(latest_fin).isoformat() if latest_fin else None}
         details["report_context"] = {"overdue_periods": [r.report_period.isoformat() for r in overdue]}
         return await self._save(owner, operation, factor.name, f"{factor.name}.v{factor.version}",

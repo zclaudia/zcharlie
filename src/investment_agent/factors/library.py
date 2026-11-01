@@ -67,6 +67,7 @@ FLAG_MAIN_BUSINESS_REVENUE_UNAVAILABLE = "main_business_revenue_unavailable"
 FLAG_SUSPECT_PROVIDER_VALUE = "suspect_provider_value"
 FLAG_PROVIDER_FALLBACK = "provider_fallback"
 FLAG_NO_SHARES = "no_total_shares"
+FLAG_NON_POSITIVE_DENOMINATOR = "non_positive_denominator"
 
 NOT_FINANCIAL = Applicability(excluded=FINANCIAL_GROUPS)
 # A latest bar older than this (calendar days) before as_of is flagged stale;
@@ -269,6 +270,53 @@ def _free_cash_flow(view: SnapshotView) -> Partial:
     if value is not None and approx:
         return Partial(value, quality="approx", inputs_ref=ref)
     return Partial(value, inputs_ref=ref)
+
+
+def _roe_dupont(view: SnapshotView) -> Partial:
+    """Latest-annual ROE identity decomposition; components live in ``inputs_ref``.
+
+    The value is the product (net profit / equity); margin, turnover, multiplier
+    and the residual vs the stored ``roe`` are recorded, never asserted as
+    independent facts. Non-positive denominators make the identity meaningless.
+    """
+    period = view.latest_annual()
+    if period is None:
+        return Partial(None, flags=(FLAG_NO_ANNUAL_REPORT,))
+    profit = period.value("net_profit_parent")
+    revenue = period.value("revenue_total")
+    assets = period.value("total_assets")
+    equity = period.value("total_equity")
+    stored_roe = period.value("roe")
+    ref = _ref(
+        period,
+        formula="(net_profit_parent / revenue_total) * (revenue_total / total_assets)"
+        " * (total_assets / total_equity)",
+        source_fields=("net_profit_parent", "revenue_total", "total_assets", "total_equity", "roe"),
+    )
+    if profit is None or revenue is None or assets is None or equity is None:
+        return Partial(None, inputs_ref=ref)
+    if revenue <= 0 or assets <= 0 or equity <= 0:
+        return Partial(None, flags=(FLAG_NON_POSITIVE_DENOMINATOR,), inputs_ref=ref)
+    margin = profit / revenue
+    turnover = revenue / assets
+    multiplier = assets / equity
+    product = margin * turnover * multiplier
+    ref["components"] = {
+        "report_period": period.report_period.isoformat(),
+        "net_margin": margin,
+        "asset_turnover": turnover,
+        "equity_multiplier": multiplier,
+        "roe_product": product,
+        "stored_roe": stored_roe,
+        "identity_residual": None if stored_roe is None else product - stored_roe,
+    }
+    approx = any(
+        (resolution := period.source(name)) is not None and resolution.approx
+        for name in ("net_profit_parent", "revenue_total", "total_assets", "total_equity")
+    )
+    if approx:
+        return Partial(product, quality="approx", inputs_ref=ref)
+    return Partial(product, inputs_ref=ref)
 
 
 # --------------------------------------------------------------------------- #
@@ -571,6 +619,27 @@ CORE_FACTORS: tuple[Factor, ...] = (
             FactorInput("ifind", "capital_expenditure", _FIN),
         ),
         _free_cash_flow,
+        carries_overdue_flag=True,
+    ),
+    Factor(
+        "roe_dupont",
+        "1",
+        "fraction",
+        "ROE identity decomposition of the latest annual report: net margin x asset "
+        "turnover x equity multiplier (Eastmoney statements via the field source "
+        "registry). The value is the product; components and the residual vs the "
+        "stored roe are recorded in inputs_ref, not asserted as independent facts.",
+        (
+            FactorInput("baostock", "net_profit_parent", _FIN),
+            FactorInput("baostock", "revenue_total", _FIN),
+            FactorInput("baostock", "total_assets", _FIN),
+            FactorInput("baostock", "total_equity", _FIN),
+            FactorInput("ifind", "net_profit_parent", _FIN),
+            FactorInput("ifind", "revenue_total", _FIN),
+            FactorInput("ifind", "total_assets", _FIN),
+            FactorInput("ifind", "total_equity", _FIN),
+        ),
+        _roe_dupont,
         carries_overdue_flag=True,
     ),
     Factor(

@@ -11,7 +11,9 @@ from sqlalchemy import func, select
 
 from investment_agent.evidence.contracts import EvidenceRecord, Period
 from investment_agent.evidence.store import EvidenceService
-from investment_agent.factors.snapshot_model import Bar, SnapshotView
+from investment_agent.factors.field_resolution import FieldResolution
+from investment_agent.factors.library import CORE_FACTORS
+from investment_agent.factors.snapshot_model import Bar, FinancialPeriod, SnapshotView
 from investment_agent.factors.valuation import VALUATION_FACTORS
 from investment_agent.investor.common import ObjectRef, Quantity
 from investment_agent.investor.enums import CalculationStatus as Status
@@ -19,10 +21,12 @@ from investment_agent.investor.foundations import InvestorError
 from investment_agent.storage.database import engine_lifespan, session_scope
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.evidence import SavedCalculation, SavedEvidence
+from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
 from investment_agent.valuation.contracts import (
+    DuPontRequest,
     PercentileRequest,
     ReverseDCFRequest,
 )
@@ -303,8 +307,11 @@ async def test_file_sqlite_concurrent_receipts_and_outer_rollback(tmp_path):
 
 
 def test_native_registration_closed_parameters_and_bounded_sensitivity():
-    dcf, percentile = valuation_registrations()
+    dcf, percentile, dupont = valuation_registrations()
     assert dcf.name == "reverse_dcf_fcfe" and percentile.name == "historical_valuation_percentile"
+    assert dupont.name == "roe_dupont"
+    with pytest.raises(ValidationError):
+        DuPontRequest(ticker="600519.SH", as_of=AS_OF, operation_id=uuid4())
     payload = {"as_of": AS_OF, "equity_value_ref": ObjectRef(kind="evidence", id=uuid4(), revision=1), "annual_fcfe_refs": ()}
     for control in ("operation_id", "verified", "subject_ref", "approval", "equity_value", "applicable"):
         with pytest.raises(ValidationError):
@@ -384,3 +391,75 @@ async def test_cross_source_price_conflict_saves_gap_instead_of_unusable_fact(db
     assert output["status"] == "missing_inputs" and output["result"] is None
     assert "cross_source_conflict" in output["calculation"]["errors"]
     assert len(output["calculation"]["fact_refs"]) == 1
+
+
+# --------------------------------------------------------------------------- #
+# roe_dupont.v1: ROE identity decomposition (roe_dupont factor + tool)
+# --------------------------------------------------------------------------- #
+
+
+def _dupont_view(fields: dict[str, float | None]) -> SnapshotView:
+    # akshare-anchored, pre-resolved period: ``sources`` keeps the view from
+    # re-anchoring to baostock and renaming the factor-layer fields away.
+    sources = {name: FieldResolution("akshare", "unverified", None) for name in fields}
+    period = FinancialPeriod(report_period=date(2025, 12, 31), period_kind="annual",
+                             available_from=date(2026, 4, 1), availability="actual",
+                             fields=dict(fields), sources=sources, ref="financial_snapshot:fixture@1")
+    return SnapshotView.build(ticker="600519.SH", as_of=AS_OF.date(), periods=(period,))
+
+
+def test_roe_dupont_factor_identity_components_and_gates():
+    factor = next(f for f in CORE_FACTORS if f.name == "roe_dupont")
+    fields = {"net_profit_parent": 12.0, "revenue_total": 100.0,
+              "total_assets": 200.0, "total_equity": 80.0}
+    value = factor.compute(_dupont_view(fields))
+    assert value.value == pytest.approx(0.15) and value.quality == "ok"
+    components = value.inputs_ref["components"]
+    assert components["net_margin"] == pytest.approx(0.12)
+    assert components["asset_turnover"] == pytest.approx(0.5)
+    assert components["equity_multiplier"] == pytest.approx(2.5)
+    assert components["roe_product"] == pytest.approx(0.15)
+    # No stored roe in the same akshare row means no residual, never a guessed one.
+    assert components["stored_roe"] is None and components["identity_residual"] is None
+
+    residual = factor.compute(_dupont_view({**fields, "roe": 0.14}))
+    assert residual.inputs_ref["components"]["identity_residual"] == pytest.approx(0.01)
+
+    missing = factor.compute(_dupont_view({"net_profit_parent": 12.0}))
+    assert missing.value is None
+    non_positive = factor.compute(_dupont_view({**fields, "total_equity": -5.0}))
+    assert non_positive.value is None and "non_positive_denominator" in non_positive.flags
+    no_report = factor.compute(SnapshotView.build(ticker="600519.SH", as_of=AS_OF.date()))
+    assert no_report.value is None and "no_annual_report" in no_report.flags
+
+
+@pytest.mark.asyncio
+async def test_dupont_service_known_answer_overdue_and_replay(db_session):
+    listing = await ListingRepository(db_session).ensure_a_share_listing("600519.SH", company_name="Fictional fixture")
+    db_session.add(FinancialSnapshot(listing_id=listing.id, report_period=date(2025, 12, 31),
+        period_kind="annual", provider="akshare", version=1, availability="actual",
+        available_from=date(2026, 4, 1), captured_at=AS_OF - timedelta(days=1), is_backfill=False,
+        fields={"net_profit_parent": 12.0, "revenue_total": 100.0, "total_assets": 200.0,
+                "total_equity": 80.0}, raw_ref="fixture-only"))
+    await db_session.flush()
+    service = ValuationService(db_session)
+    request = DuPontRequest(ticker="600519.SH", as_of=AS_OF)
+    operation = uuid4()
+    output = await service.dupont("local_owner", request, operation)
+    assert output["status"] == "ok"
+    record = output["calculation"]
+    assert record["method"] == "roe_dupont" and record["method_version"] == "roe_dupont.v1"
+    results = {key: float(item["value"]) for key, item in record["results"].items()}
+    assert results["net_margin"] == pytest.approx(0.12)
+    assert results["asset_turnover"] == pytest.approx(0.5)
+    assert results["equity_multiplier"] == pytest.approx(2.5)
+    assert results["roe_product"] == pytest.approx(0.15)
+    assert "identity_residual" not in results
+    assert len(record["fact_refs"]) == 4 and record["details"]["components"]["report_period"] == "2025-12-31"
+    # Same operation replays the identical receipt; no new calculation row.
+    assert await service.dupont("local_owner", request, operation) == output
+
+    await ReportOverdueRepository(db_session).record(listing_id=listing.id,
+        report_period=date(2025, 12, 31), deadline=date(2026, 4, 30),
+        detected_on=date(2026, 5, 1), provider="fixture")
+    assert (await service.dupont("local_owner", request, uuid4()))["status"] == "stale_inputs"

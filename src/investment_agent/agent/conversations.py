@@ -411,7 +411,7 @@ class ConversationService:
             if disclosure_permissions:
                 tools += ("discover_disclosures", "fetch_disclosure_original", "parse_disclosure_original", "read_disclosure_original")
             if securities:
-                tools += ("compare_saved_sources", "search_saved_sources", "get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "reverse_dcf_fcfe", "historical_valuation_percentile")
+                tools += ("compare_saved_sources", "search_saved_sources", "get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "reverse_dcf_fcfe", "historical_valuation_percentile", "roe_dupont")
             # WP11: exactly one in-scope security is a peer-context target; the
             # trusted binding is frozen below from the read at this message's
             # cutoff, and the tool whitelist follows the feature gate.

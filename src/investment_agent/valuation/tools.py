@@ -11,6 +11,7 @@ from investment_agent.agent.tools import ToolRegistration
 from investment_agent.investor.common import ObjectRef
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.valuation.contracts import (
+    DuPontRequest,
     PercentileRequest,
     QualificationResolver,
     ReverseDCFRequest,
@@ -61,6 +62,11 @@ def valuation_registrations(qualification: QualificationResolver | None = None
         assert isinstance(business, PercentileRequest)
         return tool_summary(await ValuationService(session).percentile("local_owner", business, operation))
 
+    async def dupont(session: AsyncSession, operation: UUID, business: BaseModel) -> dict[str, Any]:
+        assert isinstance(business, DuPontRequest)
+        return tool_summary(await ValuationService(session).dupont("local_owner", business, operation))
+
     return (ToolRegistration("reverse_dcf_fcfe", ReverseDCFRequest, dcf_scope, database=dcf),
             ToolRegistration("historical_valuation_percentile", PercentileRequest,
-                             percentile_scope, database=percentile))
+                             percentile_scope, database=percentile),
+            ToolRegistration("roe_dupont", DuPontRequest, percentile_scope, database=dupont))

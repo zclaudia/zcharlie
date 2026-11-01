@@ -26,6 +26,13 @@ class PercentileRequest(Contract):
     metric: Literal["pe", "pb"]
 
 
+class DuPontRequest(Contract):
+    """Latest-annual ROE identity decomposition; deterministic inputs, no scenarios."""
+
+    ticker: str
+    as_of: datetime
+
+
 @dataclass(frozen=True)
 class ValuationQualification:
     """AG11 contract: deterministic source mapping must attest each exact evidence version.

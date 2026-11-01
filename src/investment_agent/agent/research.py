@@ -1023,7 +1023,7 @@ async def check_progress_round(session: AsyncSession, claim: TaskClaim) -> None:
                 elif isinstance(value, list):
                     for child in value:
                         collect(child)
-            if action.parameters.get("tool") in {"get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "historical_valuation_percentile", "reverse_dcf_fcfe", "get_portfolio_context", "calculate_portfolio_options", "get_industry_peer_context"}:
+            if action.parameters.get("tool") in {"get_snapshot", "get_evidence", "get_event", "compare_stocks", "capture_snapshot", "historical_valuation_percentile", "reverse_dcf_fcfe", "roe_dupont", "get_portfolio_context", "calculate_portfolio_options", "get_industry_peer_context"}:
                 collect(result)
         if action.parameters.get("tool") == "save_research_progress":
             resolved.extend(result.get("progress", {}).get("completed_steps", []))
