@@ -42,11 +42,11 @@
    本机实测：baostock 部分约 3 小时 15 分（439 只，含 139 只历史调出股）；分红约 15 分钟；
    东财按期汇总约 4 分钟；东财单股现金流量表约 2.5 小时。
 4. 同步规则模板：`ia rules sync`（筛选任务每次运行前也会自动同步）。
-5. 启动三个常驻进程：`ia api serve`、`ia worker start`、`ia scheduler start`。
+5. 启动四个常驻进程：`ia api serve`、`ia worker start --kinds agent_turn,agent_research,agent_review,agent_discovery`（对话与 Agent 维护）、`ia worker start` 的采集进程（除 `agent_*` 外的全部 kind，见 `docker-compose.yml` 的 `worker`）、`ia scheduler start`。只起一个不带 `--kinds` 的 worker 仍然合法，它会同时认领两边并独自做维护和通知投递。
 
 ### 2.1 Docker 一键部署 / 回滚
 
-`tools/deploy.sh` 把 api、worker、scheduler 作为一组部署（本机差异——端口、外部网络、数据库卷——只写在未提交的 `docker-compose.override.yml`）：
+`tools/deploy.sh` 把 api、worker-agent、worker、scheduler 作为一组部署（本机差异——端口、外部网络、数据库卷——只写在未提交的 `docker-compose.override.yml`）：
 
 ```bash
 tools/deploy.sh             # 预检 → 停 worker/scheduler → 备份 → 构建 → 迁移 → 启动 → 验证
@@ -55,10 +55,11 @@ tools/deploy.sh rollback    # 回到上一次部署的镜像（不跑迁移）
 ```
 
 - **预检**：docker 可用；`.env` 有 `API_KEY`、`SETTINGS_ENCRYPTION_KEY`；compose 引用的外部网络（如 `ifind-proxy_default`）已存在；所有服务的 `DATABASE_URL` 一致（防止 `migrate` 迁到另一个库）。
-- **备份**：先停 worker / scheduler，用当前镜像在线备份 SQLite 并校验、压缩，存到 `~/backups/deploy-<时间>-<提交号>`（保留最近 5 份；`BACKUP_ROOT` 可改）。备份失败会恢复原服务并中止，镜像和数据库都不动。`--no-backup` 可跳过。
+- **备份**：先停 worker-agent / worker / scheduler，用当前镜像在线备份 SQLite 并校验、压缩，存到 `~/backups/deploy-<时间>-<提交号>`（保留最近 5 份；`BACKUP_ROOT` 可改）。备份失败会恢复原服务并中止，镜像和数据库都不动。`--no-backup` 可跳过。
 - **构建**：只从 `git archive HEAD` 构建，工作区里未提交 / 未跟踪的文件不会进入镜像；当前镜像先另存为 `investment-agent:prev`。提交号写进镜像，`/healthz` 返回 `{"status":"ok","version":"<提交号>"}`。
-- **启动顺序**（`docker-compose.yml` 自带，直接 `docker compose up -d` 也一样）：一次性服务 `migrate`（`ia migrate up`）成功后启动 api，api 健康后再启动 worker 与 scheduler。
-- **健康检查**：api 查 `/healthz`；worker / scheduler 在事件循环里每 15 秒刷新 `$LIVENESS_FILE`（`/tmp/*.alive`），超过 120 秒未刷新判为不健康。
+- **启动顺序**（`docker-compose.yml` 自带，直接 `docker compose up -d` 也一样）：一次性服务 `migrate`（`ia migrate up`）成功后启动 api，api 健康后再启动 `worker-agent`、`worker` 与 scheduler。
+- **两个 worker**：`worker-agent` 只认领 `agent_turn` / `agent_research` / `agent_review` / `agent_discovery`，并独自做 Agent 维护（过期、会话清理、复核与发现）和外部通知投递。`worker` 认领其余全部 kind（快照、回补、筛选、规则起草、iFinD 核对、日历、持仓估值等）。两边 kind 不重叠，所以同一条任务不会被两个进程认领；维护和通知也不跑两遍。对话不再排在财报回补后面。
+- **健康检查**：api 查 `/healthz`；两个 worker 与 scheduler 在事件循环里每 15 秒刷新 `$LIVENESS_FILE`（`/tmp/worker-agent.alive`、`/tmp/worker.alive`、`/tmp/scheduler.alive`），超过 120 秒未刷新判为不健康。
 - **验证**：等三个服务都 healthy（默认最多 300 秒，`DEPLOY_WAIT_SECONDS`），并确认 api 报告的版本就是刚构建的提交号。部署记录写在 `.deploy/last.env`。
 - **回退**：把 `:prev` 标回 `:dev`，只重建 api / worker / scheduler（跳过 `migrate`：旧代码不认识新迁移）。如果上次部署改了数据库迁移版本，脚本拒绝回退，提示先用部署前备份按 [备份与恢复](backup-and-recovery.md) 恢复数据库；确认兼容可加 `--force`。被替换的镜像保存为 `investment-agent:rolled-back`。
 - **回退到加存活检查之前的版本（一次性注意事项）**：worker / scheduler 的存活文件健康检查从 `27b354c`（2026-10-15）开始才有。第一次用 `tools/deploy.sh` 部署时，`:prev` 是这之前的旧镜像，它的 worker / scheduler 不会写存活文件，回退后会一直被判为不健康，脚本等待超时报错——但进程本身是正常在跑的。遇到这种情况用 `docker compose logs worker scheduler` 确认它们在工作即可，或者别回退到那个版本。之后再正常部署一次，`:prev` 就是带存活检查的版本，这个问题不再出现。
@@ -92,7 +93,7 @@ tools/deploy-remote.sh rollback
 - Linux 上 `tools/deploy.sh` 用宿主机 uid/gid 构建镜像（`APP_UID=$(id -u)`），`./data`、`~/backups` 与数据库卷都归部署用户所有；Mac/colima 保持镜像默认 10001。
 - ifind-proxy 的代码改动：在其 Mac checkout 里 `git push ai-server HEAD:main`，再 `ssh ai-server 'cd ~/services/ifind-proxy && docker compose up -d --build'`；它必须先于 zcharlie 启动（外部网络 `ifind-proxy_default` 由它创建）。
 
-**常用操作**（ssh 到 ai-server 后在 `~/services/zcharlie` 下）：`docker compose logs -f worker`、`docker compose exec -T api sqlite3 /app/db/app.db`。ai-server 重启后 docker 随系统启动，服务按 `restart: unless-stopped` 自动拉起。
+**常用操作**（ssh 到 ai-server 后在 `~/services/zcharlie` 下）：`docker compose logs -f worker-agent worker`、`docker compose exec -T api sqlite3 /app/db/app.db`。ai-server 重启后 docker 随系统启动，服务按 `restart: unless-stopped` 自动拉起。从单个 `worker` 服务升级时，`tools/deploy.sh` 会 `--remove-orphans`，旧的单 worker 容器不会和两个新进程一起抢任务。
 
 **迁移记录（2026-10-15）**：停 Mac 服务 → 数据库卷整体 tar 迁移（sha256 一致、112 张表行数一致、`integrity_check` ok）→ rsync `./data` → 在 ai-server 用 `tools/deploy.sh` 启动。Mac 上的容器与 `zcharlie-db` 卷只停未删，保留作回退参考；它停在迁移时刻，不能再启动 worker / scheduler。
 

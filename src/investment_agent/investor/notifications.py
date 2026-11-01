@@ -194,11 +194,32 @@ async def recover_capacity(
     return resumed
 
 
+_ACTIONABLE_DELIVERY_STATES = ("pending", "retry", "sending", "capacity_blocked")
+
+
+def _external_delivery_enabled(row: AppSetting | None) -> bool:
+    return bool(row and row.value_json is True and row.updated_by in {"api", "web"})
+
+
 async def deliver_one(
     base: Settings, *, transport: Transport | None = None, now: datetime | None = None
 ) -> str | None:
     at = now or datetime.now(UTC)
     async with session_scope() as session:
+        enabled = await session.get(
+            AppSetting, "notification_external_enabled", populate_existing=True
+        )
+        if not _external_delivery_enabled(enabled):
+            # Idle and switched off: do not take the writer reservation. Rows
+            # already queued still go through the path below so they can be
+            # suppressed instead of sitting pending forever.
+            queued = await session.scalar(
+                select(func.count())
+                .select_from(NotificationDelivery)
+                .where(NotificationDelivery.state.in_(_ACTIONABLE_DELIVERY_STATES))
+            )
+            if not queued:
+                return None
         # Short writer reservation serializes independent deliverers and config
         # checks; commit sending before any socket can be opened.
         await session.execute(

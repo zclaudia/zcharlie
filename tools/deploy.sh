@@ -48,7 +48,7 @@ BACKUP_ROOT="${BACKUP_ROOT:-$HOME/backups}"
 WAIT_SECONDS="${DEPLOY_WAIT_SECONDS:-300}"
 KEEP_BACKUPS=5
 REQUIRED_ENV_KEYS=(API_KEY SETTINGS_ENCRYPTION_KEY)
-LONG_RUNNING=(api worker scheduler)
+LONG_RUNNING=(api worker-agent worker scheduler)
 
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!!\033[0m %s\n' "$*" >&2; }
@@ -241,7 +241,7 @@ backup() {
 
 restart_previous() {
     warn "恢复原来的 worker / scheduler"
-    docker compose start worker scheduler >/dev/null 2>&1 || true
+    docker compose start worker-agent worker scheduler >/dev/null 2>&1 || true
 }
 
 deploy() {
@@ -261,7 +261,7 @@ deploy() {
 
     BACKUP_DIR=""
     say "停止 worker / scheduler"
-    docker compose stop worker scheduler >/dev/null 2>&1 || true
+    docker compose stop worker-agent worker scheduler >/dev/null 2>&1 || true
     if [ "$no_backup" -eq 0 ]; then
         backup || { restart_previous; die "备份失败，已中止部署（未改动镜像和数据库）"; }
     else
@@ -275,7 +275,9 @@ deploy() {
     build_image || { restart_previous; die "构建失败，已中止部署（数据库未改动）"; }
 
     say "迁移数据库并启动 api / worker / scheduler"
-    if ! GIT_SHA="$GIT_SHA" docker compose up -d --no-build; then
+    # --remove-orphans drops a pre-split `worker` container if the project
+    # still has one under the old service name from a previous compose file.
+    if ! GIT_SHA="$GIT_SHA" docker compose up -d --no-build --remove-orphans; then
         docker compose logs --tail 40 migrate >&2 || true
         die "启动失败。迁移日志见上；部署前备份：${BACKUP_DIR:-无}；回退：tools/deploy.sh rollback"
     fi

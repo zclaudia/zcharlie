@@ -54,11 +54,11 @@ def test_compose_runs_migrations_first_and_health_checks_every_service() -> None
     assert migrate["command"] == ["ia", "migrate", "up"]
     assert migrate["restart"] == "no"
 
-    for name in ("api", "worker", "scheduler"):
+    for name in ("api", "worker-agent", "worker", "scheduler"):
         service = services[name]
         assert service["depends_on"]["migrate"]["condition"] == "service_completed_successfully"
         assert "healthcheck" in service, name
-    for name in ("worker", "scheduler"):
+    for name in ("worker-agent", "worker", "scheduler"):
         service = services[name]
         assert service["depends_on"]["api"]["condition"] == "service_healthy"
         assert service["environment"][LIVENESS_ENV].startswith("/tmp/")
