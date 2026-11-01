@@ -1,6 +1,6 @@
 """admin sub-commands: cost summary, db migrate, provider-call ledger prune."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import typer
@@ -9,6 +9,7 @@ from rich.table import Table
 from sqlalchemy import func, select
 
 from investment_agent.cli.runtime import bootstrap_settings
+from investment_agent.clock import shanghai_today
 from investment_agent.storage.database import run_with_engine, session_scope
 from investment_agent.storage.models.ops import LLMCall
 from investment_agent.storage.repositories.provider_call import ProviderCallRepository
@@ -19,13 +20,13 @@ _console = Console()
 
 @app.command("cost")
 def cost_summary(
-    month: str = typer.Option(
-        date.today().strftime("%Y-%m"),
-        help="Month in YYYY-MM format",
+    month: str | None = typer.Option(
+        None, help="Month in YYYY-MM format (default: the current month in Asia/Shanghai)"
     ),
 ) -> None:
     """Print monthly LLM cost grouped by model/provider/purpose."""
-    year, mo = month.split("-")
+    resolved = month or shanghai_today().strftime("%Y-%m")
+    year, mo = resolved.split("-")
     start = datetime(int(year), int(mo), 1, tzinfo=UTC)
     if int(mo) == 12:
         end = datetime(int(year) + 1, 1, 1, tzinfo=UTC)

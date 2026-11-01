@@ -33,6 +33,7 @@ from typing import Final
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from investment_agent.clock import shanghai_today
 from investment_agent.domain.security import DEFAULT_PILOT_LIST_PATH, find_identity
 from investment_agent.materials import hk_native, us_sec
 from investment_agent.materials.jobs import (
@@ -234,11 +235,12 @@ def _refresh_batch(
     adapter_versions: dict[str, str],
     decisions: dict[str, dict[str, object]],
 ) -> str:
-    """The refresh batch: the real current date and effective decision digest.
+    """The refresh batch: the Shanghai business date and effective decision digest.
 
-    Same sources + same day + same effective gates = same batch and idempotency
-    key. A gate change makes a new audit run even on the same day. The date is
-    today's real date (never derived from a period or a caller field).
+    Same sources + same Shanghai day + same effective gates = same batch and
+    idempotency key. A gate change makes a new audit run even on the same day.
+    The date is today's Asia/Shanghai date (never the host-local date, a period,
+    or a caller field).
     """
 
     decision_digest = hashlib.sha256(
@@ -250,4 +252,4 @@ def _refresh_batch(
     ).hexdigest()[:16]
     # Sources are already included in the idempotency payload. Keep the batch
     # below its 64-character contract while changing it when a gate changes.
-    return f"{date.today().isoformat()}|{decision_digest}"
+    return f"{shanghai_today().isoformat()}|{decision_digest}"

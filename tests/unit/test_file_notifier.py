@@ -1,10 +1,10 @@
 """Tests for FileNotifier."""
 
-from datetime import date
 from pathlib import Path
 
 import pytest
 
+from investment_agent.clock import shanghai_today
 from investment_agent.domain.protocols import RenderedContent
 from investment_agent.notifiers.file_notifier import FileNotifier
 
@@ -32,7 +32,7 @@ async def test_writes_markdown_file_with_expected_name_and_content(
 async def test_creates_day_directory_when_missing(tmp_path: Path) -> None:
     notifier = FileNotifier(tmp_path / "deep" / "reports")
     content = RenderedContent(format="markdown", body="body", metadata={})
-    today = date.today().isoformat()
+    today = shanghai_today().isoformat()
     result = await notifier.send(
         content,
         channel_metadata={"kind": "research_change", "run_id": 1},

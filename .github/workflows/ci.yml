@@ -19,11 +19,14 @@ concurrency:
 jobs:
   quality-gates:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # pytest alone is about 19 minutes locally, before pip install and mypy.
+    timeout-minutes: 45
     env:
       APP_ENV: dev
       LOG_LEVEL: INFO
-      DATA_DIR: ${{ runner.temp }}/zcharlie-data
+      # runner.temp is not a valid context in jobs.<job_id>.env (GitHub
+      # rejects the workflow before scheduling any job). DATA_DIR is set
+      # on the test step, where the runner context exists.
     steps:
       - uses: actions/checkout@v4
 
@@ -33,17 +36,22 @@ jobs:
           cache: pip
 
       - name: Install project with dev dependencies
-        run: python -m pip install -e ".[dev]"
+        run: |
+          python -m pip install uv
+          uv sync --frozen --extra dev --python "$(command -v python)"
 
       - name: Lint (ruff)
-        run: ruff check .
+        run: uv run ruff check .
 
       - name: Types (strict mypy)
-        run: mypy src
+        run: uv run mypy src
 
       - name: Tests (offline, secret-free)
-        run: pytest -q -m "not network"
+        run: |
+          mkdir -p "$DATA_DIR"
+          uv run pytest -q -m "not network"
         env:
+          DATA_DIR: ${{ runner.temp }}/zcharlie-data
           # Inert placeholders so required Settings fields parse; nothing
           # in the suite reads real credentials or calls real providers.
           API_KEY: ci-inert-api-key

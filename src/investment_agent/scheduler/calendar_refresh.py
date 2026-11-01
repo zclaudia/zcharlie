@@ -23,6 +23,7 @@ from typing import Any
 
 import yaml
 
+from investment_agent.clock import shanghai_today
 from investment_agent.scheduler.trading_calendar import TradingCalendar, TradingCalendarYear
 
 HEADER = """\
@@ -191,7 +192,7 @@ def refresh_years(calendar: TradingCalendar, *, today: date | None = None) -> li
 
     covered = sorted(item.year for item in calendar.years)
     if not covered:
-        return [(today or date.today()).year]
+        return [(today or shanghai_today()).year]
     return sorted({*covered, covered[-1] + 1})
 
 

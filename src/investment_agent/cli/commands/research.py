@@ -1,12 +1,12 @@
 """Research validation commands."""
 
 import os
-from datetime import date
 from pathlib import Path
 
 import typer
 from rich import print as rprint
 
+from investment_agent.cli.parsing import date_option
 from investment_agent.cli.runtime import bootstrap_settings
 
 app = typer.Typer(help="Evidence-first research workflows")
@@ -18,7 +18,9 @@ def run_ifind_research(
     ticker: str = typer.Argument(..., help="A-share ticker, e.g. 600406.SH"),
     industry: str = typer.Option(..., help="Canonical industry used by classification"),
     report_year: int = typer.Option(..., min=1990, help="Latest complete annual report year"),
-    as_of: str = typer.Option(date.today().isoformat(), help="Research date (YYYY-MM-DD)"),
+    as_of: str | None = typer.Option(
+        None, help="Research date (YYYY-MM-DD, default: today in Asia/Shanghai)"
+    ),
     proxy_url: str | None = typer.Option(
         None,
         envvar="IFIND_PROXY_URL",
@@ -93,7 +95,7 @@ def run_ifind_research(
             ticker=ticker,
             industry=industry,
             report_year=report_year,
-            as_of=date.fromisoformat(as_of),
+            as_of=date_option(as_of),
             output_root=output_root,
             idempotency_key=idempotency_key,
         )
@@ -112,7 +114,9 @@ def run_ifind_research(
 @app.command("snapshot")
 def run_snapshot_research(
     ticker: str = typer.Argument(..., help="A-share ticker, e.g. 600519.SH"),
-    as_of: str = typer.Option(date.today().isoformat(), help="Research date (YYYY-MM-DD)"),
+    as_of: str | None = typer.Option(
+        None, help="Research date (YYYY-MM-DD, default: today in Asia/Shanghai)"
+    ),
     industry: str | None = typer.Option(
         None,
         help="Optional user industry text (overrides the Shenwan / CSRC industry group)",
@@ -158,7 +162,7 @@ def run_snapshot_research(
             ticker=ticker.upper(),
             industry=industry,
             report_year=report_year,
-            as_of=date.fromisoformat(as_of),
+            as_of=date_option(as_of),
             output_root=output_root,
             idempotency_key=idempotency_key,
             source_mode="snapshot",
