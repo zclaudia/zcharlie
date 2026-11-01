@@ -1,5 +1,7 @@
 # zcharlie Android 客户端
 
+应用版本 `0.1.1`，与 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 一致。`pnpm test` 只在本地跑，不在 GitHub Actions 的 `quality-gates` 里。
+
 ## 构建 Debug APK
 
 需要 Node.js 22、pnpm、Rust、Tauri CLI、JDK 17、Android SDK/NDK，以及
