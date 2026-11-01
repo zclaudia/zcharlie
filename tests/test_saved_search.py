@@ -125,7 +125,11 @@ async def test_exact_saved_comparison_period_scope_and_effective_correction():
     async with session_scope() as session:
         refs = [dict(listing_id=1, ref=result["fact_refs"][0]), dict(listing_id=2, ref=ObjectRef(kind="evidence", id=other.id, revision=1))]
         comparison = SavedComparisonRequest(items=refs, as_of=datetime.now(UTC))
-        assert (await compare_saved(session, comparison))["comparable"]
+        compared = await compare_saved(session, comparison)
+        assert compared["comparable"]
+        # 来源分层标签只描述层级（文档=一手披露），不影响可比性与排名。
+        assert [row["source_tier"] for row in compared["rows"]] == ["disclosure_original", "disclosure_original"]
+        assert all(row["source_tier_label"] == "一手披露" for row in compared["rows"])
         mismatched = other.model_copy(update={"id": uuid4(), "period": Period(start=date(2024,1,1), end=date(2024,12,31), basis='period_to_date/annual')})
         session.add(SavedEvidence(id=str(mismatched.id), revision=1, owner_id="local_owner", payload=mismatched.model_dump(mode="json")))
         await session.flush()

@@ -12,6 +12,7 @@ from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.evidence.contracts import EvidenceRecord
+from investment_agent.evidence.source_tiers import SOURCE_TIER_LABELS, source_tier
 from investment_agent.evidence.store import EvidenceService
 from investment_agent.investor.common import Contract, ObjectRef, OwnerId
 from investment_agent.storage.models.disclosure import DisclosureItem, DisclosureOriginal
@@ -300,11 +301,14 @@ async def compare_saved(session: AsyncSession, request: SavedComparisonRequest) 
                      "fact": record.model_dump(mode="json", exclude={"text"}) if record else None,
                      "text_excerpt": (record.text or "")[:2000] if record else None,
                      "text_truncated": bool(record and record.text and len(record.text) > 2000),
-                     "reporting_scope": basis})
+                     "reporting_scope": basis,
+                     # 展示与审计标签：只说明层级，绝不参与比较或仲裁。
+                     "source_tier": source_tier(record) if record else None,
+                     "source_tier_label": SOURCE_TIER_LABELS[source_tier(record)] if record else None})
     if len(set(i.listing_id for i in request.items)) != len(request.items):
         reasons.append("distinct_companies_required")
     if len(set(identities)) > 1:
         reasons.append("period_unit_currency_scope_or_metric_mismatch")
     return {"comparable": not reasons, "rows": rows, "not_comparable_reasons": sorted(set(reasons)),
             "ranking": None, "as_of": request.as_of.isoformat(),
-            "policy": "相同报告期、单位、币种、指标及合并口径才能比较；不同材料仅并列，不作硬排名。"}
+            "policy": "相同报告期、单位、币种、指标及合并口径才能比较；不同材料仅并列，不作硬排名。来源分层标签仅供展示，不参与比较或仲裁。"}
