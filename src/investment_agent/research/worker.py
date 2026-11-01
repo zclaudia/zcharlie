@@ -72,6 +72,13 @@ ResearchRunner = Callable[..., Awaitable[ResearchChainResult]]
 
 IFIND_RESEARCH_KIND = "ifind_research"
 MAX_LOOP_BACKOFF_SECONDS = 60.0
+# Agent jobs enqueue collectors, reviews and discovery. Those followers are
+# the reason the next poll runs maintenance immediately. Snapshot and other
+# collection kinds do not: resetting the timer on every backfill shard made
+# the agent maintenance block run between chunks.
+_MAINTENANCE_RESET_KINDS = frozenset(
+    ("agent_turn", "agent_research", "agent_review", "agent_discovery")
+)
 
 
 async def wake_supplemental_updates(session: AsyncSession, *, settings: Settings) -> bool:
@@ -267,6 +274,20 @@ def default_job_handlers(
     ]
 
 
+def partition_worker_kinds(settings: Settings) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Split every registered kind into the agent worker and the collection worker.
+
+    The two tuples are disjoint and cover ``default_job_handlers``. Singleton
+    duties (agent maintenance and external notification delivery) stay with
+    the agent tuple so a second worker does not repeat them.
+    """
+
+    registered = tuple(handler.kind for handler in default_job_handlers(settings))
+    agent = tuple(kind for kind in registered if kind in _MAINTENANCE_RESET_KINDS)
+    collection = tuple(kind for kind in registered if kind not in _MAINTENANCE_RESET_KINDS)
+    return agent, collection
+
+
 def _calendar_path() -> str | None:
     """The trading calendar in effect (data-dir copy first; plan 2.10 / WP10)."""
 
@@ -346,6 +367,16 @@ class ResearchWorker:
     def kinds(self) -> list[str]:
         return list(self.handlers)
 
+    def owns_singleton_duties(self) -> bool:
+        """Agent maintenance and outbound notification delivery run on one worker.
+
+        That worker is the one serving agent kinds. A collection-only worker
+        skips both, so two compose processes do not each write the outbox or
+        scan the agent tables on every poll.
+        """
+
+        return any(kind in _MAINTENANCE_RESET_KINDS for kind in self.kinds)
+
     async def refresh_settings(self, session: AsyncSession) -> bool:
         """Reload settings and rebuild the default handlers if the store changed.
 
@@ -397,9 +428,9 @@ class ResearchWorker:
 
         Idle polls skip the full scans until ``maintenance_interval_seconds``
         elapsed, so an empty queue no longer pays a group of maintenance
-        transactions every second. A claimed run resets the interval: follower
-        work it enqueues (collectors, reviews, discovery) must be visible on
-        the next poll without waiting out the idle window.
+        transactions every second. Only an agent kind resets the interval:
+        those jobs enqueue collectors, reviews or discovery. A snapshot or
+        backfill shard does not.
         """
         now = time.monotonic()
         if now < self._maintenance_at:
@@ -410,12 +441,12 @@ class ResearchWorker:
     async def run_once(self, *, run_id: int | None = None) -> int | None:
         """Claim and run one job; ``run_id`` claims that specific queued run."""
 
-        if self._reloads_settings:
+        if self._reloads_settings and self.owns_singleton_duties():
             from investment_agent.investor.notifications import deliver_one
             await deliver_one(self.settings)
         async with session_scope() as session:
             await self.refresh_settings(session)
-            if self._reloads_settings and self._maintenance_due():
+            if self._reloads_settings and self.owns_singleton_duties() and self._maintenance_due():
                 from investment_agent.agent.tasks import TaskService
 
                 await TaskService(session).expire_due(now=datetime.now(UTC), limit=100)
@@ -451,9 +482,9 @@ class ResearchWorker:
             handler = self.handlers[job.kind]
             await handler.on_claimed(session, job)
 
-        if run is not None:
-            # The claimed run may enqueue follower work; maintain on the next
-            # poll instead of waiting out the idle interval.
+        if job.kind in _MAINTENANCE_RESET_KINDS:
+            # This kind can enqueue collectors, reviews or discovery. Run
+            # maintenance on the next poll instead of waiting out the interval.
             self._maintenance_at = 0.0
         try:
             # Every lifecycle update made for this run is fenced by the lease,

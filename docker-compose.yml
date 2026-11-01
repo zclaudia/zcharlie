@@ -1,6 +1,8 @@
 # One-command deploy: `tools/deploy.sh` (pre-flight, backup, build, migrate,
 # start, verify). Plain `docker compose up -d` also works and keeps the order:
-# migrate (one-shot) -> api -> worker + scheduler once the api is healthy.
+# migrate (one-shot) -> api -> worker-agent + worker + scheduler once the api
+# is healthy. `worker-agent` serves only agent_* and owns maintenance plus
+# external notification delivery. `worker` serves every other kind.
 #
 # Shared by every service:
 # - code (src/, alembic/) ships in the image; only data is writable. On Linux
@@ -76,10 +78,34 @@ services:
     healthcheck: *liveness-check
     restart: unless-stopped
 
+  worker-agent:
+    <<: *app
+    container_name: investment-agent-worker-agent
+    command:
+      - ia
+      - worker
+      - start
+      - --kinds
+      - agent_turn,agent_research,agent_review,agent_discovery
+    environment:
+      LIVENESS_FILE: /tmp/worker-agent.alive
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    healthcheck: *liveness-check
+    restart: unless-stopped
+
   worker:
     <<: *app
     container_name: investment-agent-worker
-    command: ["ia", "worker", "start"]
+    command:
+      - ia
+      - worker
+      - start
+      - --kinds
+      - account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
     environment:
       LIVENESS_FILE: /tmp/worker.alive
     depends_on:

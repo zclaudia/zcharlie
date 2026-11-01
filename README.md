@@ -34,9 +34,12 @@ cp .env.example .env
 # 3. 建库（alembic 迁移，尊重 DATABASE_URL）
 ia migrate up
 
-# 4. 三个进程：API、worker、scheduler
+# 4. 常驻进程：API、两个 worker、scheduler
 ia api serve          # 默认 127.0.0.1:8000；远程/Docker 需显式 --host 0.0.0.0
-ia worker start       # 研究执行器；调试可用 ia worker start --once
+ia worker start --kinds agent_turn,agent_research,agent_review,agent_discovery
+                      # 对话与 Agent 维护、外部通知投递（只此一个进程）
+ia worker start --kinds account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
+                      # 快照、筛选、核对、日历等；调试可用 --once
 ia scheduler start    # A 股日终观察池刷新（Asia/Shanghai，版本化交易日历）
 
 # 5. 打开 Web UI 登录
