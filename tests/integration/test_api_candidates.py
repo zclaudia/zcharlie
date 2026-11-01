@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 import types
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
@@ -15,6 +16,7 @@ from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun
 from investment_agent.storage.models.candidates import CandidateRecord, DecisionRecord
 from investment_agent.storage.models.rules import RuleInstanceRecord
+from investment_agent.storage.models.stock_directory import StockDirectoryEntry
 from investment_agent.web.session import SESSION_COOKIE_NAME
 from tests.unit._candidate_support import seed_draft, seed_promotable, seed_template
 
@@ -160,6 +162,27 @@ async def test_manual_nomination(api_client) -> None:
         "/candidates", json={"ticker": "600900.SH", "template_id": "unknown"}, headers=KEY
     )
     assert unknown.status_code == 422
+
+
+async def test_manual_nomination_names_a_new_listing_from_the_directory(api_client) -> None:
+    """A ticker outside every index has no listing yet; the nomination must take
+    the company name from ``stock_directory`` instead of naming it by its code."""
+
+    async with session_scope() as session:
+        session.add(
+            StockDirectoryEntry(
+                ticker="002772.SZ",
+                name="众兴菌业",
+                pinyin_initials="zxjy",
+                status="listed",
+                synced_on=date(2026, 10, 23),
+                provider="baostock",
+                captured_at=datetime(2026, 10, 26, tzinfo=UTC),
+            )
+        )
+    created = api_client.post("/candidates", json={"ticker": "002772.SZ"}, headers=KEY)
+    assert created.status_code == 201, created.text
+    assert created.json()["candidate"]["name"] == "众兴菌业"
 
 
 async def test_summary_extracts_llm_overall_rationale(api_client) -> None:

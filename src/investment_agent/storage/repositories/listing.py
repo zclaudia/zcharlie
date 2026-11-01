@@ -7,6 +7,7 @@ from sqlalchemy import select
 from investment_agent.domain.a_share import AShareMarket, parse_a_share_ticker
 from investment_agent.domain.security import ControlledIdentity, SecurityMarket
 from investment_agent.storage.models.reference import Company, Listing, Market
+from investment_agent.storage.models.stock_directory import StockDirectoryEntry
 from investment_agent.storage.repositories.base import Repository
 
 
@@ -78,24 +79,67 @@ class ListingRepository(Repository[Listing]):
     ) -> Listing:
         """Return the listing for a canonical A-share ticker, creating it if absent.
 
-        Creates the exchange ``market`` row and the company on first sight; an
-        existing listing is returned unchanged. Without a ``company_name`` the
-        ticker itself names the new company.
+        Creates the exchange ``market`` row and the company on first sight.
+        Without a ``company_name`` the stock directory names the company when
+        it knows the ticker, falling back to the ticker itself. An existing
+        listing whose company still carries that ticker placeholder is renamed
+        once a real name is known.
         """
 
         parsed = parse_a_share_ticker(ticker)
         if parsed is None:
             raise ValueError(f"not a canonical A-share ticker: {ticker!r}")
         symbol, market = parsed
+        canonical = f"{symbol}.{market.suffix}"
         existing = await self.get_by_ticker(market.market_code, symbol)
         if existing is not None:
+            await self._replace_placeholder_name(
+                existing,
+                canonical,
+                company_name or await self._directory_name(canonical),
+            )
             return existing
         await self.ensure_a_share_market(market)
         return await self.upsert_listing(
             market_code=market.market_code,
             ticker=symbol,
-            company_name=company_name or f"{symbol}.{market.suffix}",
+            company_name=(
+                company_name or await self._directory_name(canonical) or canonical
+            ),
         )
+
+    async def _directory_name(self, ticker: str) -> str | None:
+        """The stock directory's name for a canonical A-share ticker, if known."""
+
+        entry = await self.session.get(StockDirectoryEntry, ticker)
+        name = entry.name.strip() if entry is not None else ""
+        return name or None
+
+    async def _replace_placeholder_name(
+        self, listing: Listing, ticker: str, company_name: str | None
+    ) -> None:
+        """Repair a company first created without a name (named by its ticker).
+
+        Only an exact ticker placeholder is replaced, and only when no other
+        company already carries the real name - the same conservative rule
+        ``upsert_listing`` applies when matching by name.
+        """
+
+        name = (company_name or "").strip()
+        if not name or name == ticker:
+            return
+        company = await self.session.get(Company, listing.company_id)
+        if company is None or company.canonical_name != ticker:
+            return
+        taken = (
+            await self.session.execute(
+                select(Company.id).where(Company.canonical_name == name).limit(1)
+            )
+        ).scalar_one_or_none()
+        if taken is not None:
+            return
+        company.canonical_name = name
+        await self.session.flush()
 
     async def ensure_market(self, market: SecurityMarket) -> Market:
         """Create or re-stamp the ``Market`` row from its registry entry.

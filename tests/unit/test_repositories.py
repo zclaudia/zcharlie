@@ -1,6 +1,74 @@
+from datetime import UTC, date, datetime
+
 import pytest
 
+from investment_agent.storage.models.reference import Company
+from investment_agent.storage.models.stock_directory import StockDirectoryEntry
 from investment_agent.storage.repositories.listing import ListingRepository
+
+
+def _directory_entry(ticker: str, name: str) -> StockDirectoryEntry:
+    return StockDirectoryEntry(
+        ticker=ticker,
+        name=name,
+        pinyin_initials="zxjy",
+        status="listed",
+        synced_on=date(2026, 10, 23),
+        provider="baostock",
+        captured_at=datetime(2026, 10, 26, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_ensure_a_share_listing_uses_stock_directory_name(db_session):
+    db_session.add(_directory_entry("002772.SZ", "众兴菌业"))
+    await db_session.flush()
+
+    listing = await ListingRepository(db_session).ensure_a_share_listing("002772.SZ")
+
+    company = await db_session.get(Company, listing.company_id)
+    assert company is not None and company.canonical_name == "众兴菌业"
+
+
+@pytest.mark.asyncio
+async def test_ensure_a_share_listing_prefers_explicit_name(db_session):
+    db_session.add(_directory_entry("002772.SZ", "众兴菌业"))
+    await db_session.flush()
+
+    listing = await ListingRepository(db_session).ensure_a_share_listing(
+        "002772.SZ", company_name="菌业股份"
+    )
+
+    company = await db_session.get(Company, listing.company_id)
+    assert company is not None and company.canonical_name == "菌业股份"
+
+
+@pytest.mark.asyncio
+async def test_ensure_a_share_listing_repairs_ticker_placeholder(db_session):
+    repo = ListingRepository(db_session)
+    listing = await repo.ensure_a_share_listing("002772.SZ")
+    company = await db_session.get(Company, listing.company_id)
+    assert company is not None and company.canonical_name == "002772.SZ"
+
+    db_session.add(_directory_entry("002772.SZ", "众兴菌业"))
+    await db_session.flush()
+    assert await repo.ensure_a_share_listing("002772.SZ") is not None
+
+    await db_session.refresh(company)
+    assert company.canonical_name == "众兴菌业"
+
+
+@pytest.mark.asyncio
+async def test_ensure_a_share_listing_keeps_a_real_name(db_session):
+    repo = ListingRepository(db_session)
+    listing = await repo.ensure_a_share_listing("002772.SZ", company_name="众兴菌业")
+    db_session.add(_directory_entry("002772.SZ", "别的名字"))
+    await db_session.flush()
+
+    await repo.ensure_a_share_listing("002772.SZ")
+
+    company = await db_session.get(Company, listing.company_id)
+    assert company is not None and company.canonical_name == "众兴菌业"
 
 
 @pytest.mark.asyncio
