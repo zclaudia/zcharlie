@@ -1,6 +1,6 @@
 [package]
 name = "zcharlie-mobile"
-version = "0.1.0"
+version = "0.1.1"
 description = "zcharlie Android client"
 authors = ["zcharlie"]
 edition = "2021"
