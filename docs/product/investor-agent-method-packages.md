@@ -342,12 +342,16 @@ retired。回退追加新 method version 指向目标包，历史任务 receipt 
   diff，以及评估中的 `not_replayable` 和影子覆盖情况。
 - 不新增公开写端点；包导入走 CLI，全局启用需要独立用户操作，per-listing 批准沿用现有接口。
 
-> 实现备注（2026-10-31，M4）：提案工作台的「结构化 diff、`not_replayable` 与影子覆盖」展示以 API
-> 响应块交付——`GET /investor/methods/proposals/{id}` 对包提案增补只读的 `candidate`（提案冻结的
-> 包身份）、`structure_diff`（按 §8 增强项分组的新旧对比）、`replay`（逐样本三态与累计
-> `requires_candidate_shadow`）和 `candidate_shadows`（前瞻影子登记）四块，均有界截断且不复制冻结
-> 工件；`list_methods` 概要增补 `package_key`。本轮不改静态页面，UI 呈现留给后续界面卡；
-> 配置与形态验证以 `tests/unit/test_method_replay.py` 的工作台测试为准。
+> 实现备注（2026-10-31，M4；2026-11-01 收尾轮更新）：提案工作台的「结构化 diff、`not_replayable`
+> 与影子覆盖」展示以 API 响应块交付——`GET /investor/methods/proposals/{id}` 对包提案增补只读的
+> `candidate`（提案冻结的包身份）、`structure_diff`（按 §8 增强项分组的新旧对比）、`replay`（逐样本
+> 三态与累计 `requires_candidate_shadow`）和 `candidate_shadows`（前瞻影子登记）四块，均有界截断且
+> 不复制冻结工件；`list_methods` 概要增补 `package_key`，并增补只读 `default_head`（全局默认 head
+> 投影，空为 null）。收尾轮（卡 19–21）补齐界面与运营层：`/app/methods` 页面渲染上述展示块与
+> `candidate_shadow_claims`（发起与登记之间的队列视图），提供候选影子单个 / 批量发起、结果登记与
+> 批准入口，提案创建支持粘贴候选包 YAML（服务端解析并以 `discipline` 填充 config）；配置与形态验证
+> 以 `tests/unit/test_method_replay.py`（工作台四块）与 `tests/unit/test_candidate_shadow_ops.py`
+> （运营默认值、批量、claims、YAML 入口）为准。
 
 ## 10. 兼容与回放不变项
 
@@ -382,6 +386,10 @@ retired。回退追加新 method version 指向目标包，历史任务 receipt 
    只能选择已发布方法，不能覆盖其参数边界。
 4. 候选包前瞻影子的最小样本数、预算和界面批量操作需要运营默认值；它们只影响证据收集成本，不得降低第 7
    节对新增非回放要求的覆盖门槛。
+   **已落地（2026-11-01，卡 19–21）**：`Settings.method_candidate_shadow_min_positives`（默认 1，
+   只允许调高）要求批准前有相应数量的 matched 正例影子；`Settings.method_candidate_shadow_max_per_proposal`
+   （默认 8）是每提案发起候选影子任务的硬上限；`POST …/candidate-shadow-batch` 支持一次发起 1–4 条。
+   全部覆盖门槛（最新正例全覆盖 + 一个被拒反例）保持不变。
 5. 跨步骤条件约束的表达：某步骤未满足时限制最终结论强度（如「答不出预期差则价格判断强制非方向性」）
    目前 `OutputRequirement` 词汇表无法表达，只能用维度 `minimum_status` 近似或由发布门槛代码实现；是否为
    包 schema 引入结论级条件，待第一个真实候选包（expectations_gap）运营后再评估。

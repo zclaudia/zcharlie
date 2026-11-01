@@ -59,3 +59,12 @@
 ## 验收
 
 三门禁 + 目标测试全绿;`tests/unit/test_method_replay.py` 既有断言零改动。
+
+## 执行结果(2026-11-01)
+
+完成并提交(d99e54b)。单发路径重构为共享 `_candidate_shadow_target` / `_admit_candidate_shadow`
+(input_key 与行为逐字不变);`start_candidate_shadows` 一次事务整批 admit、整批计数上限、单 mutation
+幂等。路由:批量端点(ExecutionDeniedError→409)、`list_methods.default_head`、包提案 detail 的
+`candidate_shadow_claims`({items,total,truncated} 包装,config-only 键集合钉死不变)、
+`CreateProposalBody` 的 `package_yaml` 入口(package 与 package_yaml 互斥;可解析但不符定义的 YAML
+统一 422)。6 个新测试全过;既有测试零改动。

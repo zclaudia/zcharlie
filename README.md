@@ -327,10 +327,15 @@ ia snapshot backfill --universe CSI300 --status                                 
 工程证据。候选包前瞻影子由用户显式发起（`POST /investor/methods/proposals/{id}/candidate-shadow`）：
 绑定候选包 receipt 的真实 worker 任务（预算沿用既有 daily / task cost 配置），工具白名单剥离发布与 portfolio 族，
 无发布 / 通知 / 账本 / 正式计划复用副作用，完成后经 `POST /investor/methods/candidate-shadow-results`
-按包级校验登记正反例；批准门槛：失败样本实质 block + 反例（含范围外）pass + 最新前瞻影子覆盖全部
+按包级校验登记正反例；批量发起（`POST /investor/methods/proposals/{id}/candidate-shadow-batch`，
+一次 1–4 条不同 prompt、整批一个 mutation）与运营默认值（`method_candidate_shadow_min_positives`
+批准前最小正例数、`method_candidate_shadow_max_per_proposal` 每提案发起上限，均只影响证据收集成本）
+不改变质量门槛；批准门槛：失败样本实质 block + 反例（含范围外）pass + 最新前瞻影子覆盖全部
 `requires_candidate_shadow` 且有一个预期失败候选被包级校验拒绝，`evidence_hash` 绑定候选包哈希、
 渲染哈希、renderer / validator 版本与最新评估及前瞻影子（新影子登记使旧 hash 失效）。工作台详情
-（`GET /investor/methods/proposals/{id}`）对包提案增补候选身份、结构 diff、回放三态与影子覆盖展示；
+（`GET /investor/methods/proposals/{id}`）对包提案增补候选身份、结构 diff、回放三态与影子覆盖展示，
+`/app/methods` 页面渲染这些块并提供复盘 → 提案（可粘候选包 YAML）→ 评估 → 离线影子 → 候选影子
+（单个 / 批量发起、结果登记、批准）的完整入口，并展示全局默认方法 head；
 回退支持 v2 包版本（历史任务 receipt 与发布 method_ref 不变）。
 
 ## 候选与决策日志（P1-D1～D3，迁移 `018`）

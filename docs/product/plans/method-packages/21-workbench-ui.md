@@ -52,3 +52,16 @@ config-only 表单。提交前本地校验行数与空值,失败用 `method-stat
 - `ruff check .`、`mypy`(web 静态文件不在 mypy 范围)、全量相关 pytest 不受影响。
 - 主 Agent 以浏览器实测:本地起 api,造一个包提案(测试脚本或直接调 API),
   逐块核对渲染与操作入口;config-only 页面回归不变。
+
+## 执行结果(2026-11-01)
+
+完成并提交(a0abf6a)。`packageEvidence`(四块 + claims 队列视图)、`candidateShadowOps`(单发/批量/
+逐条登记,复用 mutate() 幂等)、`packageApprovalGaps`(批准按钮缺口镜像,服务端权威)、
+`#method-default-head` 全局默认行、`method-package-yaml` 表单(隐藏 config-only 开关)。
+附带守卫:evidence() 对包提案的 replay/离线影子形状做空值回退(config-only 输出逐字不变);
+mutate() 增 queued / candidate_shadow 回执文案。node --check 通过;子 Agent DOM 桩冒烟 46 断言通过;
+主 Agent 浏览器实测(seed 库真实服务):四块渲染、结构对比六组、重放三态、影子覆盖 10 项、
+待登记 claim 行、批准按钮状态(证据齐 → 可用,缺 → 禁用+缺口文案)、YAML 显隐开关、
+全局默认 head 行、config-only 回归,并端到端点击批准成功(徽章「已启用」)。
+已知瑕疵:包提案卡片同时显示 config-only 前瞻影子记录区(服务端不接受其作为包提案批准证据,无门槛
+影响);IAB 输入模拟对 textarea 清空/全选有怪癖,程序化事件验证显隐逻辑正确。

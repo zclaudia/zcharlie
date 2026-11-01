@@ -51,3 +51,11 @@
 
 三门禁 + 目标测试全绿;`tests/test_method_evolution.py`、`tests/unit/test_candidate_shadow.py`
 既有断言零改动;不触碰用户在途文件(见 m4-plan 全局约束 6)。
+
+## 执行结果(2026-11-01)
+
+完成并提交(a824c36)。Settings 两字段、`_require_candidate_shadow` 最小正例数校验(既有三条校验
+前置不变)、`start_candidate_shadow` 写入前上限拒绝、`/decisions` 路由透传 base。
+`tests/unit/test_candidate_shadow_ops.py` 四场景通过;`tests/test_method_evolution.py`、
+`tests/unit/test_candidate_shadow.py` 零改动。组织性偏差:场景 4(不传 base 与 min=1 行为一致)因
+conversation_db 单库限制,批准侧与场景 1 互为镜像各证一次,断言内容未减。

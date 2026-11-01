@@ -296,6 +296,11 @@ class RuntimeSettings(BaseModel):
     candidate_expiry_days: int = Field(default=14, ge=1, le=365)
     candidate_dismiss_cooldown_days: int = Field(default=30, ge=0, le=365)
 
+    # Candidate-package prospective shadows (method packages card 19): the
+    # constraints mirror ``Settings``; a registry test keeps them in sync.
+    method_candidate_shadow_min_positives: int = Field(default=1, ge=1)
+    method_candidate_shadow_max_per_proposal: int = Field(default=8, ge=1)
+
     # Industry & peer context (WP1): defaults and bounds mirror ``Settings``.
     industry_peer_context_enabled: bool = False
     peer_collect_min_interval_seconds: float = Field(default=1.0, ge=0, le=60)
@@ -444,6 +449,14 @@ SPECS: tuple[SettingSpec, ...] = (
     _env(
         "candidate_dismiss_cooldown_days", "candidates", "忽略冷却天数",
         "被忽略的股票在多少天内不再被筛选重新提名，0–365。", "live",
+    ),
+    _env(
+        "method_candidate_shadow_min_positives", "agent", "候选影子最小正例数",
+        "包提案批准前需要的匹配成功正例前瞻影子数，≥1；只影响证据收集成本，不降低覆盖门槛。", "live",
+    ),
+    _env(
+        "method_candidate_shadow_max_per_proposal", "agent", "候选影子每提案上限",
+        "每个包提案允许发起的候选影子任务总数，≥1；达到上限后拒绝新的发起（含批量）。", "live",
     ),
     _env(
         "industry_peer_context_enabled", "peers", "启用行业与同行参照",
