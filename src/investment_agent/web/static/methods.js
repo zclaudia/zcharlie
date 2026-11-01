@@ -20,6 +20,19 @@ import {formatDateTime} from './format.js';
   const listing = review => review.inputs.task.binding.base_refs.filter(r => r.kind === 'listing');
   const option = (select, value, text) => { const node = element('option', text); node.value = value; select.append(node); };
   const button = (host, text, handler, kind) => { const node = element('button', text); node.type = 'button'; node.className = kind ? `btn ${kind}` : 'btn'; node.onclick = handler; host.append(node); return node; };
+  // 包提案（卡 21）：概要带 package_key（路由层附加），详情带 package_ref（服务端冻结）。
+  const isPackageProposal = p => p.request.package_ref != null || p.request.package_key != null;
+  const shortId = value => String(value ?? '').slice(0, 8);
+  // §9 三态重放结论的固定文案；config-only 检查结果（result/errors）不经过这里。
+  const replayStateText = state => ({pass: '通过', block: '拦截', not_replayable: '不可重放'})[state] ?? '—';
+  const disciplineLabels = discipline => {
+    const labels = [];
+    if (!discipline) return labels;
+    if (discipline.require_two_counter_hypotheses) labels.push('两个不同反向解释');
+    if (discipline.require_verified_counter_evidence) labels.push('已验证反证');
+    if (discipline.require_explicit_stop_decision) labels.push('明确停止或继续判断');
+    return labels;
+  };
   // 步骤条：当前步骤高亮，之前的步骤标为已完成（只改 class，不碰数据）。
   const setStep = current => { for (const index of [1, 2, 3]) { for (const id of [`method-step-${index}`, `method-panel-${index}`]) { const node = $(id); if (!node) continue; if (index === current) node.classList.add('on'); else node.classList.remove('on'); if (index < current) node.classList.add('done'); else node.classList.remove('done'); } } };
   const stateKind = {evaluating: 'ai', shadow: 'ai', active: 'accent', rejected: 'warn', retired: ''};
@@ -57,7 +70,12 @@ import {formatDateTime} from './format.js';
       status('正在保存明确的操作内容…');
       const result = await api(pending.path, pending.body);
       sessionStorage.removeItem(storageKey);
-      status(result.status === 'running' ? '离线运行已有领取记录，请查看影子结果。中断后需要发起新的试验。' : '已保存。提案创建不会自动启用方法。');
+      // 卡 21：候选影子的两种新回执补专门提示；既有路径文案逐字保留。
+      const note = result.status === 'running' ? '离线运行已有领取记录，请查看影子结果。中断后需要发起新的试验。'
+        : result.status === 'queued' ? '候选影子任务已发起：真实研究任务，占用研究预算；无发布、通知或账本副作用。任务完成后请回此处登记结果。'
+        : result.candidate_shadow ? '候选影子结果已登记，可刷新核对覆盖情况。'
+        : '已保存。提案创建不会自动启用方法。';
+      status(note);
       selected = pending.body.proposal_id || result.proposal?.id || (result.request ? result.id : selected);
       offset = 0; await load();
     } catch (error) {
@@ -79,8 +97,12 @@ import {formatDateTime} from './format.js';
     for (const evaluation of item.evaluations) {
       const box = element('details'); box.append(element('summary', `评估 ${evaluation.id} · ${evaluation.passed ? '通过工程检查' : '未通过'} · 完整：${evaluation.complete ? '是' : '否'}`));
       for (const sample of evaluation.cases) {
-        box.append(element('p', `${sample.role === 'failure' ? '失败样本' : '反例'} ${sample.review_id} · 适用：${sample.applicable ? '是' : '否（原方法）'} · 预期 ${sample.expected} · 基线 ${sample.baseline.result} · 提案 ${sample.proposed.result}`));
-        box.append(element('p', `实际检查：${sample.proposed.errors.join('；') || '通过'}；冻结材料 hash：${sample.frozen_review.input_hash}`));
+        // 包提案的 proposed 是三态重放结果（state/replayed，无 result/errors）；
+        // config-only 两条路径都有 result/errors，输出逐字不变。
+        const proposed = sample.proposed.result ?? replayStateText(sample.proposed.state);
+        const check = (sample.proposed.errors || []).join('；') || (sample.proposed.state ? `${replayStateText(sample.proposed.state)}${(sample.proposed.blocked_requirements || []).length ? `（${sample.proposed.blocked_requirements.join('；')}）` : ''}` : '通过');
+        box.append(element('p', `${sample.role === 'failure' ? '失败样本' : '反例'} ${sample.review_id} · 适用：${sample.applicable ? '是' : '否（原方法）'} · 预期 ${sample.expected} · 基线 ${sample.baseline.result} · 提案 ${proposed}`));
+        box.append(element('p', `实际检查：${check}；冻结材料 hash：${sample.frozen_review.input_hash}`));
         box.append(element('p', `实际问题：${sample.frozen_review.progress.question}；停止说明：${sample.frozen_review.progress.stopped_because || '未保存'}`));
       }
       host.append(box);
@@ -88,7 +110,10 @@ import {formatDateTime} from './format.js';
     for (const shadow of item.shadows) {
       const box = element('details'); box.append(element('summary', `离线影子 ${shadow.id} · ${shadow.passed ? '通过工程检查' : '未通过'} · 评估 ${shadow.evaluation_id}`));
       for (const sample of shadow.cases || []) {
-        box.append(element('p', `${sample.role === 'failure' ? '失败样本' : '反例'} ${sample.review_id} · 预期 ${sample.expected} · 实际 ${sample.checked.result} · ${sample.checked.errors.join('；')}`));
+        // 包提案离线影子的结论在 candidate_conclusion/errors（无 checked）；config-only 仍读 checked。
+        const conclusion = sample.checked ? sample.checked.result : `${sample.candidate_conclusion}${sample.matched ? '' : '（与预期不符）'}`;
+        const detail = sample.checked ? sample.checked.errors.join('；') : (sample.errors || []).join('；');
+        box.append(element('p', `${sample.role === 'failure' ? '失败样本' : '反例'} ${sample.review_id} · 预期 ${sample.expected} · 实际 ${conclusion} · ${detail}`));
         const progress = sample.output.output;
         if (progress) box.append(element('p', `影子实际输出：${progress.question}；反向解释 ${(progress.hypotheses || []).map(h => h.alternative).join('；')}；停止说明 ${progress.stopped_because || '未保存'}`));
       }
@@ -102,6 +127,118 @@ import {formatDateTime} from './format.js';
       }
       host.append(box);
     }
+  }
+  // §9 结构对比分组：id 前缀到中文标签（与后端 _STRUCTURE_DIFF_GROUPS 对应）。
+  const diffGroups = [
+    ['new_blocking_steps', '新增拦截步骤'],
+    ['outputs', '输出收紧'],
+    ['dimension_minimums', '维度下限提高'],
+    ['depends_on', '新增依赖'],
+    ['discipline', '纪律开关'],
+    ['applicable_kinds', '适用研究类型'],
+    ['gap_tightenings', '缺口容忍收紧'],
+  ];
+  // §9 包提案工作台四块：candidate / structure_diff / replay / candidate_shadows。
+  // 只读展示 detail 附带的投影；缺失的块跳过，不影响 config-only 详情。
+  function packageEvidence(card, item) {
+    const candidate = item.candidate || {};
+    card.append(element('p', `候选包：${candidate.package_key ?? '—'} @ 版本 ${candidate.version ?? '—'} · 内容 hash ${candidate.content_hash ?? '—'}`));
+    const labels = disciplineLabels(candidate.discipline);
+    if (labels.length) card.append(element('p', `包内纪律开关：${labels.join('；')}`));
+    const structure = item.structure_diff;
+    if (structure) {
+      const box = element('details');
+      box.append(element('summary', `结构对比 · 旧方法形态：${structure.old_package_kind === 'package' ? '方法包' : '旧基线（legacy）'}`));
+      let shown = 0;
+      for (const [key, label] of diffGroups) {
+        const group = structure[key];
+        if (!group || !group.items.length) continue;
+        shown += 1;
+        box.append(element('p', `${label}（${group.total}）：${group.items.join('；')}${group.truncated ? `（仅展示前 ${group.items.length} 条）` : ''}`));
+      }
+      const enhancements = structure.enhancement_ids;
+      if (enhancements && enhancements.items.length) box.append(element('p', `全部增强项（${enhancements.total}）：${enhancements.items.join('；')}${enhancements.truncated ? `（仅展示前 ${enhancements.items.length} 条）` : ''}`));
+      if (!shown && !(enhancements && enhancements.items.length)) box.append(element('p', '无结构差异条目。'));
+      card.append(box);
+    }
+    const replay = item.replay;
+    if (replay) {
+      const box = element('details');
+      const required = replay.requires_candidate_shadow || [];
+      box.append(element('summary', `失败样本与反例重放 · 待候选影子覆盖 ${required.length} 项`));
+      if (required.length) box.append(element('p', `待候选影子覆盖项：${required.join('；')}`));
+      for (const sample of replay.samples || []) {
+        const applicable = sample.applicable === true ? '是' : sample.applicable === false ? '否' : '—';
+        box.append(element('p', `${sample.role === 'failure' ? '失败样本' : '反例'} ${sample.review_id} · 适用：${applicable} · 重放：${replayStateText(sample.state)}${(sample.not_replayable || []).length ? ` · 不可重放项：${sample.not_replayable.join('；')}` : ''}`));
+      }
+      card.append(box);
+    }
+    const shadows = item.candidate_shadows;
+    if (shadows) {
+      const box = element('details');
+      box.append(element('summary', `候选影子结果 ${shadows.total} 条`));
+      for (const shadow of shadows.items || []) {
+        // item 无 matched 字段：按 expected/outcome 推导（与登记侧一致）。
+        const matched = (shadow.expected === 'pass' && shadow.outcome === 'passed') || (shadow.expected === 'block' && shadow.outcome === 'blocked');
+        const covered = shadow.requirement_ids || [];
+        box.append(element('p', `影子任务 ${shortId(shadow.task_id)} · 预期 ${shadow.expected} · 实际 ${shadow.outcome} · ${matched ? '与预期一致' : '与预期不符'} · 覆盖 ${covered.length} 项${covered.length ? `：${covered.join('；')}` : ''}`));
+      }
+      if (!(shadows.items || []).length) box.append(element('p', '尚无已登记的候选影子结果。'));
+      if (shadows.truncated) box.append(element('p', `仅展示最近 ${shadows.items.length} 条，共 ${shadows.total} 条。`));
+      card.append(box);
+    }
+  }
+  // §7.3/卡 16 批准门槛的展示镜像：服务端仍为权威，409 由 mutate() 处理。
+  // 返回缺口说明；空数组表示候选影子证据满足。
+  function packageApprovalGaps(item) {
+    const shadows = item.candidate_shadows?.items || [];
+    const required = item.replay?.requires_candidate_shadow || [];
+    const positive = [...shadows].reverse().find(s => s.expected === 'pass' && s.outcome === 'passed');
+    const missing = positive ? required.filter(id => !(positive.requirement_ids || []).includes(id)) : required;
+    const gaps = [];
+    if (!positive) gaps.push('匹配成功的正例候选影子');
+    if (missing.length) gaps.push(`待覆盖：${missing.join('、')}`);
+    if (!shadows.some(s => s.expected === 'block' && s.outcome === 'blocked')) gaps.push('被拒绝的反例影子');
+    return gaps;
+  }
+  // §2 候选影子操作（包提案 status=shadow 且评估通过）：单发、批量与结果登记。
+  function candidateShadowOps(card, item) {
+    const p = item.proposal;
+    const box = element('div'); box.className = 'method-shadow-ops';
+    box.append(element('p', '候选影子：真实 worker 研究任务，占用研究预算；无发布、通知或账本副作用。离线影子（上方按钮）不能替代候选影子。'));
+    const prompt = element('input'); prompt.maxLength = 2000; prompt.setAttribute('aria-label', '候选影子任务的研究问题');
+    prompt.placeholder = '候选影子任务的研究问题（prompt）';
+    const singleExpected = element('select'); singleExpected.setAttribute('aria-label', '单发候选影子预期');
+    option(singleExpected, 'pass', '预期通过（pass）'); option(singleExpected, 'block', '预期拦截（block）');
+    const singleRow = element('div'); singleRow.className = 'method-shadow-row';
+    singleRow.append(prompt, singleExpected);
+    button(singleRow, '发起候选影子任务', () => { const text = prompt.value.trim(); if (!text) return status('请先填写候选影子任务的研究问题。'); return mutate(`/proposals/${p.id}/candidate-shadow`, {mutation_id: randomUUID(), prompt: text, expected: singleExpected.value}); }, 'btn-sm');
+    box.append(singleRow);
+    const batchText = element('textarea'); batchText.setAttribute('aria-label', '批量候选影子研究问题（每行一条，最多 4 条）');
+    batchText.placeholder = '批量发起：每行一个研究问题，最多 4 行（空行忽略），prompt 不得重复';
+    const batchExpected = element('select'); batchExpected.setAttribute('aria-label', '批量候选影子预期');
+    option(batchExpected, 'pass', '预期通过（pass）'); option(batchExpected, 'block', '预期拦截（block）');
+    const batchRow = element('div'); batchRow.className = 'method-shadow-row';
+    batchRow.append(batchText, batchExpected);
+    button(batchRow, '批量发起候选影子', () => {
+      const items = batchText.value.split('\n').map(line => line.trim()).filter(Boolean);
+      if (!items.length) return status('请先填写批量候选影子的研究问题，每行一条。');
+      if (items.length > 4) return status(`批量候选影子每次最多 4 条，当前 ${items.length} 条，请删减后重试。`);
+      if (new Set(items).size !== items.length) return status('同一批候选影子的研究问题不得重复。');
+      return mutate(`/proposals/${p.id}/candidate-shadow-batch`, {mutation_id: randomUUID(), items: items.map(text => ({prompt: text, expected: batchExpected.value}))});
+    }, 'btn-sm');
+    box.append(batchRow);
+    const pending = (item.candidate_shadow_claims?.items || []).filter(claim => !claim.registered);
+    if (pending.length) {
+      box.append(element('p', '待登记结果的候选影子（任务完成后登记，以服务端校验为准）：'));
+      for (const claim of pending) {
+        const line = element('p'); line.className = 'method-claim-line';
+        line.append(element('span', `任务 ${shortId(claim.task_id)} · ${claim.expected === 'pass' ? '预期通过' : '预期拦截'} · ${claim.prompt.length > 60 ? claim.prompt.slice(0, 60) + '…' : claim.prompt}`));
+        button(line, '登记影子结果', () => mutate('/candidate-shadow-results', {mutation_id: randomUUID(), proposal_id: p.id, task_id: claim.task_id, expected_revision: p.revision}), 'btn-sm');
+        box.append(line);
+      }
+    }
+    card.append(box);
   }
   function render() {
     for (const id of ['method-task', 'method-failure', 'method-proposals', 'method-heads']) $(id).replaceChildren();
@@ -118,6 +255,7 @@ import {formatDateTime} from './format.js';
         $('method-proposals').append(card); continue;
       }
       evidence(card, item);
+      if (isPackageProposal(p)) packageEvidence(card, item);
       const history = element('details'); history.append(element('summary', '方法完整历史与原始证据'));
       history.append(element('p', `已保存 ${item.history_counts.evaluation_ids} 次评估、${item.history_counts.shadow_ids} 次离线重放、${item.history_counts.prospective_ids} 次前瞻步骤影子。当前展示最近证据；所有旧记录保留。`));
       const historyRows = element('div'); history.append(historyRows);
@@ -139,6 +277,8 @@ import {formatDateTime} from './format.js';
         const noEvaluation = () => status('尚无已保存评估，请先完成真实失败与反例评估。');
         const shadow = button(card, '运行冻结样本的离线影子检查', () => latestEvaluationId ? mutate('/offline-shadow', {mutation_id: randomUUID(), proposal_id: p.id, expected_revision: p.revision, evaluation_id: latestEvaluationId}) : noEvaluation(), 'btn-sm');
         if (!latestEvaluationId) shadow.disabled = true;
+        // §2 候选影子操作入口：包提案且评估通过（与发起侧门槛一致）。
+        if (isPackageProposal(p) && item.evaluations.at(-1)?.passed) candidateShadowOps(card, item);
         const newTasks = evaluation ? data.completed_tasks.filter(t => Date.parse(t.created_at) > Date.parse(evaluation.created_at) && t.base_refs.some(r => r.kind === 'listing' && r.id === p.request.listing_ref.id)) : [];
         const failure = element('select'), success = element('select');
         failure.setAttribute('aria-label', '评估后新建的不完整研究任务'); success.setAttribute('aria-label', '评估后新建的成功研究任务');
@@ -151,13 +291,31 @@ import {formatDateTime} from './format.js';
       }
       if (['evaluating', 'shadow'].includes(p.status)) {
         const decision = action => mutate('/decisions', {mutation_id: randomUUID(), proposal_id: p.id, expected_revision: p.revision, expected_head_revision: item.head_revision, listing_ref: p.request.listing_ref, evidence_hash: item.evidence_hash, summary: item.approval_summary, decision: action});
-        if (item.evaluations.at(-1)?.passed && item.prospective?.at(-1)?.passed) button(card, '明确批准并用于该证券的新任务', () => decision('approve'), 'btn-primary');
+        if (isPackageProposal(p)) {
+          // §3 包提案批准入口：镜像候选影子覆盖门槛；按钮始终显示，未满足时禁用并说明缺口。
+          const evaluationPassed = Boolean(item.evaluations.at(-1)?.passed);
+          const gaps = evaluationPassed ? packageApprovalGaps(item) : ['通过的评估'];
+          const approve = button(card, '明确批准并用于该证券的新任务', () => decision('approve'), 'btn-primary');
+          if (!evaluationPassed || gaps.length) { approve.disabled = true; card.append(element('p', `批准前还缺：${gaps.join('；')}`)); }
+        } else if (item.evaluations.at(-1)?.passed && item.prospective?.at(-1)?.passed) {
+          button(card, '明确批准并用于该证券的新任务', () => decision('approve'), 'btn-primary');
+        }
         button(card, '拒绝此提案', () => decision('reject'), 'btn-danger-ghost');
       }
       $('method-proposals').append(card);
     }
     if (!data.proposals.length) { const note = element('p', '尚无方法提案。需要真实已完成任务复盘。'); note.className = 'muted method-none'; $('method-proposals').append(note); }
     setStep(data.proposals.length ? 3 : $('method-failure').children.length ? 2 : 1);
+    // §4/§5 全局默认方法 head：未设置时新单证券公司研究/复核任务用 legacy v1 基线。
+    const defaultHead = data.default_head;
+    if (defaultHead && defaultHead.binding) {
+      const binding = defaultHead.binding;
+      let line = `全局默认方法（company-research）· 修订 ${defaultHead.revision} · 方法 ${shortId(binding.method_ref?.id)}`;
+      if (binding.package_ref) line += ` · 包 ${binding.package_ref.revision} 版`;
+      $('method-default-head').textContent = line;
+    } else {
+      $('method-default-head').textContent = '全局默认方法未设置：新的单证券公司研究/复核任务使用 legacy v1 基线。';
+    }
     $('method-heads-empty').hidden = data.heads.length > 0;
     for (const head of data.heads) {
       const card = element('article'); card.className = 'method-card';
@@ -177,9 +335,17 @@ import {formatDateTime} from './format.js';
   $('method-next').onclick = () => { offset = data.page.next_offset; return load(); };
   $('method-prev').onclick = () => { offset = Math.max(0, offset - 20); return load(); };
   $('method-review').onclick = () => { const task = $('method-task').value; if (task) mutate('/reviews/' + task, {}); };
+  // §5 候选包 YAML（可选）：填写后以包提案提交（不发 config/package，服务端按包内
+  // discipline 填充），三个 config-only 开关隐藏；留空走既有提交，逐字不变。
+  const togglePackageChecks = () => { $('method-checks').hidden = $('method-package-yaml').value.trim().length > 0; };
+  $('method-package-yaml').addEventListener('input', togglePackageChecks);
+  $('method-package-yaml').addEventListener('change', togglePackageChecks);
+  togglePackageChecks();
   $('method-create').onsubmit = event => {
     event.preventDefault(); const review = data.reviews.find(r => r.id === $('method-failure').value); if (!review) return status('请先保存一个真实失败或不完整复盘。');
     const refs = listing(review); if (refs.length !== 1) return status('只支持一个明确证券。');
+    const packageYaml = $('method-package-yaml').value.trim();
+    if (packageYaml) return mutate('/proposals', {mutation_id: randomUUID(), review_id: review.id, listing_ref: refs[0], old_method: review.old_method.method_ref, error_pattern: $('method-pattern').value, summary: $('method-summary').value, package_yaml: packageYaml});
     mutate('/proposals', {mutation_id: randomUUID(), review_id: review.id, listing_ref: refs[0], old_method: review.old_method.method_ref, error_pattern: $('method-pattern').value, summary: $('method-summary').value, config: {schema_version: 1, require_two_counter_hypotheses: $('method-two').checked, require_verified_counter_evidence: $('method-verified').checked, require_explicit_stop_decision: $('method-stop').checked}});
   };
   if (sessionStorage.getItem(storageKey)) {

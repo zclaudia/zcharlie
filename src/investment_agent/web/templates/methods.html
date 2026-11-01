@@ -38,7 +38,8 @@
           <div class="field full"><label for="method-failure">失败或不完整复盘</label><select id="method-failure" required></select></div>
           <div class="field"><label for="method-summary">改进摘要</label><textarea id="method-summary" maxlength="1000" required></textarea></div>
           <div class="field"><label for="method-pattern">实际错误模式与证据说明</label><textarea id="method-pattern" maxlength="1000" required></textarea></div>
-          <div class="full method-checks">
+          <div class="field full"><label for="method-package-yaml">候选包 YAML（可选）</label><textarea id="method-package-yaml" spellcheck="false" aria-describedby="method-package-yaml-hint"></textarea><div class="hint" id="method-package-yaml-hint">填写后以候选包提案提交：研究开关由服务端按包内纪律填充，下方三个开关不参与提交；批准前需候选影子覆盖全部待影子要求并含一个被拒绝的反例。留空则按既有开关创建普通提案。</div></div>
+          <div id="method-checks" class="full method-checks">
             <label class="check-row"><input id="method-two" type="checkbox"><span>要求两个不同的反向解释</span></label>
             <label class="check-row"><input id="method-verified" type="checkbox"><span>要求已验证、无未解冲突的反证来源</span></label>
             <label class="check-row"><input id="method-stop" type="checkbox"><span>未回答时要求明确停止或继续判断</span></label>
@@ -62,6 +63,7 @@
       <div class="card-head card-head--rule"><h2>方法版本记录</h2></div>
       <div class="method-records-body">
         <p class="hint">当前适用方法与版本回退。只适用一个明确证券；多证券、比较与组合任务使用固定基线。回退会追加新版本并保留所有记录；执行中的任务继续使用原版本。</p>
+        <p id="method-default-head" class="method-default-head"></p>
         <div id="method-heads"></div>
         <div id="method-heads-empty" class="empty-state method-empty">
           <div class="empty-icon">{{ icon("methods", "ico", 20) }}</div>

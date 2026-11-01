@@ -73,6 +73,22 @@
 .method-empty { padding: 24px 8px; }
 .method-callout { margin-top: var(--sp-4); }
 
+/* 全局默认方法行（方法版本记录顶部，卡 21） */
+.method-default-head { margin: 0 0 var(--sp-3); padding: 8px 12px; border-radius: var(--r-sm); background: var(--sunken); color: var(--ink-2); font-size: 12.5px; }
+
+/* 候选包 YAML 模式下隐藏 config-only 开关（display:grid 会盖过 [hidden]） */
+.method-checks[hidden] { display: none; }
+
+/* 候选影子操作区（包提案，卡 21）：单发/批量表单与待登记 claim 列表 */
+.method-shadow-ops { display: grid; gap: var(--sp-2); margin: var(--sp-2) 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.method-shadow-ops > p { margin: 0; }
+.method-shadow-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.method-shadow-row > input { flex: 1 1 12rem; min-width: 0; margin: 0; }
+.method-shadow-row > select { flex: none; width: auto; margin: 0; }
+.method-shadow-row > textarea { flex: 1 1 100%; min-height: 4rem; margin: 0; }
+.method-claim-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.method-claim-line .btn { flex: none; }
+
 @media (min-width: 56rem) {
   .method-grid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
   #method-panel-1 { grid-column: 1 / span 7; grid-row: 1; }
