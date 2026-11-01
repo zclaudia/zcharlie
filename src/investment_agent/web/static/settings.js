@@ -690,6 +690,7 @@ export const SETTINGS_SECTIONS = Object.freeze([
             "agent_credential_ref", "agent_supports_json_schema", "agent_supports_json_object", "agent_tool_choice_required",
             "agent_thinking", "agent_timeout_seconds", "agent_temperature", "agent_max_tokens", "agent_retries",
           ]),
+          blocks("方法影子运营", ["method_candidate_shadow_min_positives", "method_candidate_shadow_max_per_proposal"]),
         ],
       },
     ],

@@ -389,6 +389,14 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("agent_temperature", "agent", "Agent temperature", "Agent 独立模型配置；下次运行生效。", "next_job"),
     _env("agent_max_tokens", "agent", "Agent 最大输出 token", "Agent 独立模型配置；下次运行生效。", "next_job"),
     _env("agent_retries", "agent", "Agent 框架校验重试次数", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env(
+        "method_candidate_shadow_min_positives", "agent", "候选影子最小正例数",
+        "包提案批准前需要的匹配成功正例前瞻影子数，≥1；只影响证据收集成本，不降低覆盖门槛。", "live",
+    ),
+    _env(
+        "method_candidate_shadow_max_per_proposal", "agent", "候选影子每提案上限",
+        "每个包提案允许发起的候选影子任务总数，≥1；达到上限后拒绝新的发起（含批量）。", "live",
+    ),
     _env("notification_external_enabled", "notifications", "我启用外部通知", "默认关闭。仅从此刻的新变化发送状态及引用，不发送私有提示词或原文。", "next_job"),
     _env("notification_webhook_url", "notifications", "HTTPS webhook 地址", "用户指定的公网 HTTPS 地址；加密保存，拒绝重定向、私网及环境导入。", "next_job", secret=True),
     _env("notification_webhook_token", "notifications", "Webhook Bearer 凭证", "加密保存；为空则不发送认证头。", "next_job", secret=True),
@@ -449,14 +457,6 @@ SPECS: tuple[SettingSpec, ...] = (
     _env(
         "candidate_dismiss_cooldown_days", "candidates", "忽略冷却天数",
         "被忽略的股票在多少天内不再被筛选重新提名，0–365。", "live",
-    ),
-    _env(
-        "method_candidate_shadow_min_positives", "agent", "候选影子最小正例数",
-        "包提案批准前需要的匹配成功正例前瞻影子数，≥1；只影响证据收集成本，不降低覆盖门槛。", "live",
-    ),
-    _env(
-        "method_candidate_shadow_max_per_proposal", "agent", "候选影子每提案上限",
-        "每个包提案允许发起的候选影子任务总数，≥1；达到上限后拒绝新的发起（含批量）。", "live",
     ),
     _env(
         "industry_peer_context_enabled", "peers", "启用行业与同行参照",
