@@ -24,6 +24,15 @@ from investment_agent.web.session import SESSION_COOKIE_NAME
 from tests.unit._snapshot_support import seed_universe, seed_watchlist
 
 H = {"X-API-Key": "secret"}
+
+
+def _freeze_shanghai(monkeypatch, day: date) -> None:
+    """Search reads the clock from directory_search; report-year reads it from the route."""
+
+    monkeypatch.setattr(stocks, "shanghai_today", lambda: day)
+    monkeypatch.setattr(
+        "investment_agent.directory_search.shanghai_today", lambda: day
+    )
 ROWS = [
     ("600519.SH", "贵州茅台", "listed"),
     ("600518.SH", "ST康美", "delisted"),
@@ -153,7 +162,7 @@ async def test_session_cookie_works_for_the_browser(api_client) -> None:
 async def test_search_industry_prefers_shenwan_level_one_and_uses_current_intervals(api_client, monkeypatch) -> None:
     await _seed_directory()
     today = date(2026, 10, 11)
-    monkeypatch.setattr(stocks, "shanghai_today", lambda: today)
+    _freeze_shanghai(monkeypatch, today)
     async with session_scope() as session:
         for ticker, system, code, name, start, end in [
             ("600519.SH", "csrc", "C15", "酒、饮料和精制茶制造业", date(2021, 10, 4), None),
@@ -238,7 +247,7 @@ async def _seed_financial(ticker, period, published, *, availability="actual", k
 
 async def test_report_year_uses_actual_annual_disclosures_not_quarters_or_appointments(api_client, monkeypatch):
     await _seed_directory()
-    monkeypatch.setattr(stocks, "shanghai_today", lambda: date(2026, 10, 11))
+    _freeze_shanghai(monkeypatch, date(2026, 10, 11))
     await _seed_financial("600519.SH", date(2025, 12, 31), date(2026, 3, 30))
     await _seed_financial("600519.SH", date(2026, 9, 30), date(2026, 10, 8), kind="q3")
     await _seed_financial("600519.SH", date(2026, 12, 31), date(2027, 3, 30))
@@ -273,7 +282,7 @@ async def test_report_year_uses_actual_annual_disclosures_not_quarters_or_appoin
 
 async def test_older_report_year_is_checked_against_newer_disclosures(api_client, monkeypatch):
     await _seed_directory()
-    monkeypatch.setattr(stocks, "shanghai_today", lambda: date(2026, 3, 1))
+    _freeze_shanghai(monkeypatch, date(2026, 3, 1))
     await _seed_financial("600519.SH", date(2024, 12, 31), date(2025, 3, 30))
     calls = []
     class Client:
@@ -296,7 +305,7 @@ async def test_older_report_year_is_checked_against_newer_disclosures(api_client
 
 async def test_missing_annual_disclosure_is_fetched_and_cached_with_raw_source(api_client, monkeypatch):
     await _seed_directory()
-    monkeypatch.setattr(stocks, "shanghai_today", lambda: date(2026, 10, 11))
+    _freeze_shanghai(monkeypatch, date(2026, 10, 11))
     calls = []
     class Client:
         def __init__(self, **kwargs):
@@ -329,7 +338,7 @@ async def test_report_year_artifact_is_deterministic_per_ticker_and_period(api_c
     of accumulating a new uuid4 file per call (upstream behaviour unchanged)."""
 
     await _seed_directory()
-    monkeypatch.setattr(stocks, "shanghai_today", lambda: date(2026, 10, 11))
+    _freeze_shanghai(monkeypatch, date(2026, 10, 11))
 
     class Client:
         def __init__(self, **kwargs):

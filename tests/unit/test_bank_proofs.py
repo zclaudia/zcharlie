@@ -626,10 +626,12 @@ def test_real_jiangsu_parent_equity_locator_checks_the_original_pdf() -> None:
         row for row in manifest["records"]
         if row["code"] == "600919.SH" and row["metric"] == "equity_parent"
     )
-    body = (root / audit["pdf_path"]).read_bytes()
-    metadata = json.loads(
-        (root / "research/industry-data-validation/evidence/run-02/derived/filings/600919.SH.json").read_text()
-    )
+    pdf_path = root / audit["pdf_path"]
+    metadata_path = root / "research/industry-data-validation/evidence/run-02/derived/filings/600919.SH.json"
+    if not pdf_path.is_file() or not metadata_path.is_file():
+        pytest.skip("downloaded Jiangsu Bank official annual PDF is unavailable in this checkout")
+    body = pdf_path.read_bytes()
+    metadata = json.loads(metadata_path.read_text())
     original = AnnualOriginal(
         code="600919.SH",
         period=date(2025, 12, 31),
@@ -906,9 +908,10 @@ def test_jiangsu_nim_annual_single_year_table_requires_group_narrative() -> None
 
 def test_ping_an_total_equity_needs_report_specific_zero_nci_derivation() -> None:
     root = Path(__file__).resolve().parents[2]
-    source_manifest = json.loads(
-        (root / "research/industry-data-validation/evidence/bank-proof-2026-10-15/source-manifest.json").read_text()
-    )
+    manifest_path = root / "research/industry-data-validation/evidence/bank-proof-2026-10-15/source-manifest.json"
+    if not manifest_path.is_file():
+        pytest.skip("downloaded Ping An official annual PDF is unavailable in this checkout")
+    source_manifest = json.loads(manifest_path.read_text())
     pdf_path = root / source_manifest["sources"]["000001.SZ"]["pdf_path"]
     if not pdf_path.exists():
         pytest.skip("downloaded Ping An official annual PDF is unavailable in this checkout")

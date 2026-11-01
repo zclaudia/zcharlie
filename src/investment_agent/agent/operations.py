@@ -1,9 +1,11 @@
 """Bounded scheduling of the existing durable queue; no new task or budget ledger.
 
 The cursor is durable and protected by a short SQLite writer reservation. Slots
-are 3 interactive : 1 review : 1 exploration : 1 legacy, with empty-slot lending.
-Within a class, least recently served account/case wins, then immutable enqueue
-order. Retries never reset the cursor, task identity or lifetime budget.
+are 3 interactive : 1 review : 1 exploration, with empty-slot lending. Only
+agent jobs enter this scheduler. Non-agent work is claimed separately, oldest
+due first, and does not consume these running caps. Within a class, least
+recently served account/case wins, then immutable enqueue order. Retries never
+reset the cursor, task identity or lifetime budget.
 """
 
 from datetime import UTC, datetime
@@ -42,9 +44,9 @@ async def reconcile_budget(
     return await BudgetService(session, base).reconcile(
         entry_id, action=action, operator=operator, reason=reason, usage=usage
     )
-SLOTS = ("interactive", "interactive", "interactive", "review", "exploration", "legacy")
-# Four total native executions, one slot reserved from all background work.
-CONCURRENCY = {"interactive": 4, "review": 2, "exploration": 1, "legacy": 4}
+SLOTS = ("interactive", "interactive", "interactive", "review", "exploration")
+# Four total agent executions, one slot reserved from all background agent work.
+CONCURRENCY = {"interactive": 4, "review": 2, "exploration": 1}
 CAPACITY = {"interactive": 128, "review": 96, "exploration": 32}
 MAX_CONCURRENCY = 4
 MAX_BACKGROUND = 3
@@ -144,35 +146,37 @@ async def admission(session: AsyncSession, class_name: str) -> bool:
 async def choose(
     session: AsyncSession, *, kinds: list[str], now: datetime, run_id: int | None = None
 ) -> int | None:
+    """Pick the next due agent run, or None when agent work cannot proceed.
+
+    Non-agent kinds are ignored. A None result must not stop the caller from
+    claiming a due snapshot, screen, or calendar job. Running caps count agent
+    jobs only, across workers.
+    """
+
+    agent_kinds = [item for item in kinds if item in AGENT_KINDS]
+    if not agent_kinds:
+        return None
     cursor = await reserve(session)
     eligible = select(PipelineRun).where(
         PipelineRun.status == "queued",
+        PipelineRun.kind.in_(agent_kinds),
         PipelineRun.attempt_count < PipelineRun.max_attempts,
         or_(PipelineRun.available_at.is_(None), PipelineRun.available_at <= now),
     )
     if run_id is not None:
         eligible = eligible.where(PipelineRun.id == run_id)
-    native = list(
-        await session.scalars(
-            eligible.where(PipelineRun.kind.in_([k for k in kinds if k in AGENT_KINDS]))
-            .order_by(PipelineRun.id)
-            .limit(sum(CAPACITY.values()))
-        )
+    rows = list(
+        await session.scalars(eligible.order_by(PipelineRun.id).limit(sum(CAPACITY.values())))
     )
-    legacy = list(
-        await session.scalars(
-            eligible.where(PipelineRun.kind.in_([k for k in kinds if k not in AGENT_KINDS]))
-            .order_by(PipelineRun.id)
-            .limit(128)
-        )
-    )
-    rows = native + legacy
     classes = await classify(session, rows)
-    # Limits are global across all kinds/workers, not just this worker's registry.
     global_running = list(
         await session.scalars(
             select(PipelineRun)
-            .where(PipelineRun.status == "running", PipelineRun.worker_id.is_not(None))
+            .where(
+                PipelineRun.status == "running",
+                PipelineRun.worker_id.is_not(None),
+                PipelineRun.kind.in_(AGENT_KINDS),
+            )
             .limit(MAX_CONCURRENCY)
         )
     )

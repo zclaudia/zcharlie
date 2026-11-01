@@ -217,25 +217,39 @@ class PipelineRunRepository(Repository[PipelineRun]):
         run_id: int | None = None,
         now: datetime | None = None,
     ) -> PipelineRun | None:
-        """Atomically claim the oldest available run for one worker.
+        """Claim the next run this worker can execute.
 
-        ``kind`` / ``kinds`` restrict the claim to the job kinds this worker
-        can execute; ``run_id`` claims one specific queued run (inline CLI
-        execution) instead of the oldest one.
+        Agent kinds go through the fairness scheduler and its running caps.
+        When that scheduler returns nothing, a due non-agent job is still
+        claimed, oldest ``available_at`` then lowest id, with no id window and
+        no agent cap. ``run_id`` claims that specific queued run when it is
+        eligible; a declined agent id does not fall through to a different job.
         """
 
         claimed_at = now or datetime.now(UTC)
         from investment_agent.agent.operations import AGENT_KINDS, choose
-        selected_kinds = list(kinds) if kinds is not None else [kind] if kind else []
-        if run_id is not None and not selected_kinds:
-            selected_kind = await self.session.scalar(select(PipelineRun.kind).where(PipelineRun.id == run_id))
-            if selected_kind in AGENT_KINDS:
-                selected_kinds = [selected_kind]
-        if any(k in AGENT_KINDS for k in selected_kinds):
-            selected_id = await choose(self.session, kinds=selected_kinds, now=claimed_at, run_id=run_id)
-            if selected_id is None:
+
+        selected_kinds = list(kinds) if kinds is not None else ([kind] if kind else [])
+        target_kind: str | None = None
+        if run_id is not None:
+            target_kind = await self.session.scalar(
+                select(PipelineRun.kind).where(PipelineRun.id == run_id)
+            )
+            if not selected_kinds and target_kind in AGENT_KINDS:
+                selected_kinds = [target_kind]
+        agent_kinds = [item for item in selected_kinds if item in AGENT_KINDS]
+        plain_kinds = [item for item in selected_kinds if item not in AGENT_KINDS]
+        target_is_agent = target_kind in AGENT_KINDS
+        chosen_id: int | None = None
+        if agent_kinds and (run_id is None or target_is_agent):
+            chosen_id = await choose(
+                self.session,
+                kinds=agent_kinds,
+                now=claimed_at,
+                run_id=run_id if target_is_agent else None,
+            )
+            if chosen_id is None and (target_is_agent or not plain_kinds):
                 return None
-            run_id = selected_id
         candidate = (
             select(PipelineRun.id)
             .where(
@@ -249,9 +263,17 @@ class PipelineRunRepository(Repository[PipelineRun]):
             .order_by(PipelineRun.available_at.asc(), PipelineRun.id.asc())
             .limit(1)
         )
-        candidate = candidate.where(*_kind_criteria(kind, kinds))
-        if run_id is not None:
+        if chosen_id is not None:
+            candidate = candidate.where(PipelineRun.id == chosen_id)
+        elif run_id is not None:
             candidate = candidate.where(PipelineRun.id == run_id)
+        filters = _kind_criteria(kind, kinds)
+        if chosen_id is None and run_id is None and agent_kinds:
+            if not plain_kinds:
+                return None
+            filters.append(PipelineRun.kind.in_(plain_kinds))
+        if filters:
+            candidate = candidate.where(*filters)
 
         statement = (
             update(PipelineRun)

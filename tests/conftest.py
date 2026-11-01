@@ -1,5 +1,7 @@
 """Shared test fixtures."""
 
+import os
+
 import pytest
 import pytest_asyncio
 
@@ -9,6 +11,22 @@ from investment_agent.storage.database import init_engine, session_scope
 # ``Base.metadata`` carries all tables (single registration list; see the
 # package docstring).
 from investment_agent.storage.models import Base
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _deterministic_console_size():
+    """Rich treats TERM=dumb as 80x25 and then ellipsizes CLI tables.
+
+    Pin a size large enough for the existing substring assertions. Help text
+    and highlighted numbers stay on the dumb-terminal path (no ANSI).
+    """
+
+    os.environ["COLUMNS"] = "220"
+    os.environ["LINES"] = "80"
+    import rich
+
+    rich.reconfigure(width=220, height=80)
+    yield
 
 
 @pytest.fixture(autouse=True, scope="session")

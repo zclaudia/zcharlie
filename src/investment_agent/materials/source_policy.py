@@ -18,6 +18,7 @@ from typing import Any
 
 import yaml
 
+from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.domain.security import ControlledIdentity
 
@@ -106,7 +107,11 @@ def _report_dates_and_citations(value: object) -> tuple[set[date], bool, bool]:
             parsed_date = date.fromisoformat(observed) if isinstance(observed, str) else None
         except ValueError:
             parsed_date = None
-        if parsed_date is None or parsed_date.isoformat() != observed or parsed_date > date.today():
+        if (
+            parsed_date is None
+            or parsed_date.isoformat() != observed
+            or parsed_date > shanghai_today()
+        ):
             dates_valid = False
         else:
             dates.add(parsed_date)

@@ -167,33 +167,93 @@ async def test_retry_recovery_availability_cancel_preserve_business_identity(pub
         assert (await TaskService(session).get_task(task_id)).status == "cancelled"
 
 
-async def test_mixed_legacy_background_saturation_reserves_interactive(publication_db):
+async def test_non_agent_claims_ignore_agent_running_caps(publication_db):
+    """Research jobs do not consume the agent background cap, and agent work still runs."""
+
     kinds = [*AGENT_KINDS, "ifind_research"]
     native = await enqueue("agent_turn")
     async with session_scope() as session:
         repo = PipelineRunRepository(session)
         legacy = [
-            await repo.enqueue(
-                kind="ifind_research",
-                idempotency_key=str(uuid4()),
-                triggered_by="fixture",
-                available_at=NOW,
-            )
-            for _ in range(5)
+            (
+                await repo.enqueue(
+                    kind="ifind_research",
+                    idempotency_key=str(uuid4()),
+                    triggered_by="fixture",
+                    available_at=NOW,
+                )
+            )[0]
+            for _ in range(4)
         ]
-        for item, _ in legacy[:3]:
-            assert await repo.claim_next(
+        for item in legacy:
+            claimed = await repo.claim_next(
                 worker_id=str(uuid4()), kinds=kinds, run_id=item.id, now=NOW
             )
-        assert (
-            await repo.claim_next(
-                worker_id="no-more-background", kinds=kinds, run_id=legacy[3][0].id, now=NOW
-            )
-            is None
-        )
+            assert claimed is not None and claimed.id == item.id
         assert await repo.claim_next(
             worker_id="interactive", kinds=kinds, run_id=native[0], now=NOW
         )
+
+
+async def test_non_agent_running_rows_do_not_block_a_queued_snapshot(publication_db):
+    """Four running collection jobs must not veto a due market snapshot."""
+
+    kinds = [*AGENT_KINDS, "market_snapshot", "snapshot_backfill"]
+    async with session_scope() as session:
+        repo = PipelineRunRepository(session)
+        for index in range(4):
+            run, _ = await repo.enqueue(
+                kind="snapshot_backfill",
+                idempotency_key=f"running-backfill-{index}",
+                triggered_by="fixture",
+                available_at=NOW,
+            )
+            run.status = "running"
+            run.worker_id = f"collector-{index}"
+            run.heartbeat_at = NOW
+        snapshot, _ = await repo.enqueue(
+            kind="market_snapshot",
+            idempotency_key="due-snapshot",
+            triggered_by="fixture",
+            available_at=NOW,
+        )
+        snapshot_id = snapshot.id
+    async with session_scope() as session:
+        claimed = await PipelineRunRepository(session).claim_next(
+            worker_id="worker", kinds=kinds, now=NOW
+        )
+        assert claimed is not None
+        assert claimed.id == snapshot_id
+        assert claimed.kind == "market_snapshot"
+
+
+async def test_due_calendar_probe_is_visible_past_a_128_backfill_window(publication_db):
+    """A later id with an earlier due time is claimed ahead of 129 older backfills."""
+
+    kinds = [*AGENT_KINDS, "snapshot_backfill", "calendar_probe"]
+    async with session_scope() as session:
+        repo = PipelineRunRepository(session)
+        for index in range(129):
+            await repo.enqueue(
+                kind="snapshot_backfill",
+                idempotency_key=f"backfill-{index}",
+                triggered_by="fixture",
+                available_at=NOW,
+            )
+        probe, _ = await repo.enqueue(
+            kind="calendar_probe",
+            idempotency_key="calendar-probe",
+            triggered_by="fixture",
+            available_at=NOW - timedelta(hours=1),
+        )
+        probe_id = probe.id
+    async with session_scope() as session:
+        claimed = await PipelineRunRepository(session).claim_next(
+            worker_id="worker", kinds=kinds, now=NOW
+        )
+        assert claimed is not None
+        assert claimed.id == probe_id
+        assert claimed.kind == "calendar_probe"
 
 
 async def test_persisted_reduced_capacity_runtime_knobs(publication_db):

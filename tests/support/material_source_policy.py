@@ -1,7 +1,8 @@
 """Synthetic policy approval records for isolated tests only; never deployment evidence."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 
+from investment_agent.clock import shanghai_today
 from investment_agent.domain.security import ControlledIdentity
 
 
@@ -10,7 +11,7 @@ def synthetic_approved_source_policy(
 ) -> dict[str, object]:
     """Build an explicitly synthetic approval for one identity and adapter."""
 
-    today = date.today()
+    today = shanghai_today()
     return {
         source: {
             "licensing": {
