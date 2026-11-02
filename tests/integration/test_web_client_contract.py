@@ -293,7 +293,7 @@ def test_sparkline_component_and_mounts():
         assert marker in ui, marker
     market = (WEB_STATIC / "market.js").read_text(encoding="utf-8")
     assert "/market/bars?tickers=" in market
-    for module in ("watchlist.js", "candidates.js"):
+    for module in ("watchlist.js", "candidate_list.js"):
         source = (WEB_STATIC / module).read_text(encoding="utf-8")
         assert 'from "./market.js"' in source, module
         assert "loadSparkBars" in source, module
@@ -417,7 +417,7 @@ def test_combobox_component_and_mounts():
     assert "/stocks/search?q=" in combobox
     for marker in ('role: "listbox"', 'role: "option"', '"ArrowDown"', '"ArrowUp"', '"Enter"', '"Escape"', "DEBOUNCE_MS = 200"):
         assert marker in combobox, marker
-    for module in ("watchlist.js", "candidates.js"):
+    for module in ("watchlist.js", "candidate_list.js"):
         source = (WEB_STATIC / module).read_text(encoding="utf-8")
         assert 'from "./combobox.js"' in source, module
         assert "attachCombobox(" in source, module
@@ -656,7 +656,7 @@ def test_watchlist_metadata_autofill_ignores_superseded_requests():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js", "release.js", "refresh_state.js", "native_bridge.js", "shell.js", "agent.js"],
+    ["api.js", "app.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "candidate_shared.js", "candidate_list.js", "candidate_detail.js", "candidate_rule.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js", "release.js", "refresh_state.js", "native_bridge.js", "shell.js", "agent.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")
