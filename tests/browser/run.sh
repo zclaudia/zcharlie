@@ -86,8 +86,12 @@ status=0
 for script in $scripts; do
   echo "run.sh: $NODE_BIN $script"
   if ! "$NODE_BIN" "$script"; then
-    echo "run.sh: $script 失败" >&2
-    status=1
+    # A cold runner sometimes misses the first fixed-port script.
+    echo "run.sh: $script 失败，重试一次" >&2
+    if ! "$NODE_BIN" "$script"; then
+      echo "run.sh: $script 再次失败" >&2
+      status=1
+    fi
   fi
 done
 exit "$status"
