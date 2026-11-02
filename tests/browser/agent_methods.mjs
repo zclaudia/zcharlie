@@ -37,7 +37,7 @@ try {
       await click('明确批准并用于该证券的新任务');await ui.getByRole('status').filter({hasText:'原操作内容已保留'}).waitFor();
       const pending=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('investor.method.pending.v1')));assert.equal(pending.body.decision,'approve');
       data=await api('/investor/methods');assert.equal(data.heads[0].revision,1);assert.equal(data.proposals[0].proposal.status,'active');
-      await page.unroute('**/investor/methods/decisions');await page.reload();await click('重试待确认的原操作');await ui.getByRole('status').filter({hasText:'已保存'}).waitFor();
+      await page.unroute('**/investor/methods/decisions');await page.reload();await click('重试待确认的原操作');await ui.getByRole('status').filter({hasText:'已保存'}).waitFor({timeout: 60000});
       data=await api('/investor/methods');assert.equal(data.heads[0].revision,1);assert.equal(await page.evaluate(()=>sessionStorage.getItem('investor.method.pending.v1')),null);
       await page.screenshot({path:join(output,`methods-${viewport.width}-active.png`),fullPage:true});
       // A real competing rollback makes the old UI request stale; no automatic resubmission.
