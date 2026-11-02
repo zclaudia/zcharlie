@@ -596,7 +596,10 @@ try {
         };
       }, large.id);
       const preparedBefore = fitPosts;
-      await page.getByRole('button', {name: '生成账户适配检查'}).click();
+      const prepareSubmit = page.getByRole('button', {name: '生成账户适配检查'});
+      // The stock app bar can sit on top of this button at 390px and swallow the click.
+      await prepareSubmit.evaluate((node) => node.scrollIntoView({block: 'center', inline: 'nearest'}));
+      await prepareSubmit.click();
       await page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'}).waitFor();
       const prepared = await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`zc-investment-assessment-pending-fit-v1:${id}`)), large.id);
       assert.equal(prepared.phase, 'prepared');
