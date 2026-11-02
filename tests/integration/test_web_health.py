@@ -117,8 +117,9 @@ def test_health_js_renders_every_section_and_wires_the_overview() -> None:
         assert marker in source, marker
     assert re.search(r"\.style\b", source) is None, "no inline styles from JS"
     app = (STATIC / "app.js").read_text(encoding="utf-8")
-    assert "healthBucket" in app and "HEALTH_REGIONS" in app and "bootHealth()" in app
-    assert "warning.link" in app
+    overview = (STATIC / "overview.js").read_text(encoding="utf-8")
+    assert "HEALTH_REGIONS" in app and "bootHealth()" in app
+    assert "healthBucket" in overview and "warning.link" in overview
 
 
 def test_health_formatters() -> None:
