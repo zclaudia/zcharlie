@@ -166,6 +166,12 @@ async def main() -> None:
         raise RuntimeError("research-closure fixture refuses a non-empty directory")
     db_path = workdir / "research-closure.sqlite"
     database_url = f"sqlite+aiosqlite:///{db_path}"
+    # apply() refuses to write settings unless a Fernet key exists. CI and a
+    # clean checkout have no .env, so the fixture supplies an inert key and
+    # does not override one the operator already exported.
+    os.environ.setdefault(
+        "SETTINGS_ENCRYPTION_KEY", "gn5h_2YqNqrkikXITMskM8hqzNK-_JtyQnk4D7LZl48="
+    )
     os.environ.update(
         API_KEY=FIXTURE_KEY,
         DATA_DIR=str(workdir),

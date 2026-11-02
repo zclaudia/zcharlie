@@ -305,6 +305,10 @@ try {
     const financialFilter = page.locator('#candidate-ranking-content .ranking-view select[aria-label="财务状态筛选"]');
     await financialFilter.selectOption('blocked');
     await page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/candidates/rankings/${savedRanking.ranking_ref.id}`) && new URL(response.url()).searchParams.get('financial_status') === 'blocked');
+    await page.waitForFunction(() => {
+      const text = document.querySelector('#candidate-ranking-content .ranking-entries')?.innerText || '';
+      return text.length > 0 && !text.includes('正在读取排序条目');
+    });
     const filteredText = await page.locator('#candidate-ranking-content .ranking-entries').innerText();
     releaseDelayedPage();
     await page.waitForTimeout(200);
@@ -593,17 +597,24 @@ try {
       }, large.id);
       const preparedBefore = fitPosts;
       await page.getByRole('button', {name: '生成账户适配检查'}).click();
-      await page.getByRole('button', {name: '继续发送已准备操作'}).waitFor();
+      await page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'}).waitFor();
       const prepared = await page.evaluate((id) => JSON.parse(sessionStorage.getItem(`zc-investment-assessment-pending-fit-v1:${id}`)), large.id);
       assert.equal(prepared.phase, 'prepared');
       assert.equal(fitPosts, preparedBefore, 'second storage write failure must occur before POST');
       await page.reload();
       await page.waitForFunction(() => document.querySelector('#account-fit-content select[name=account_id]'));
       await page.locator('#account-fit-content select[name=account_id]').selectOption(large.id);
-      await page.getByRole('button', {name: '继续发送已准备操作'}).waitFor();
+      // Changing the account reloads context and replaces the result pane.
+      // Click only after that reload has put the prepared-send button back.
+      await page.waitForFunction(() => {
+        const root = document.querySelector('#account-fit-content');
+        if (!root || root.innerText.includes('正在读取此账户的精确版本')) return false;
+        return [...root.querySelectorAll('button')].some((node) => node.textContent === '继续发送已准备操作');
+      });
+      const retryButton = page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'});
       const retryRequest = fitPost(page);
       const retryResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
-      await page.getByRole('button', {name: '继续发送已准备操作'}).click();
+      await retryButton.click();
       const retriedRequest = await retryRequest;
       const retriedResponse = await retryResponse;
       assert.equal(retriedResponse.status(), 202);

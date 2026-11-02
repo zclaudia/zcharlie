@@ -22,7 +22,7 @@ try {
     await page.goto(base+'/app/agent?pane=drawer');await page.locator('[name=api_key]').fill('ag17-fixture-key');await page.getByRole('button',{name:'登录',exact:true}).click();await page.goto(base+'/app/agent?pane=drawer');
     await page.getByRole('button',{name:'公司档案',exact:true}).waitFor();
     await page.evaluate(task=>document.querySelector('#agent-workbench').dispatchEvent(new CustomEvent('agent:task',{detail:task})),fixture.task);
-    await page.getByRole('button',{name:new RegExp('研究过程 '+fixture.task.id)}).click();
+    await page.locator(`[data-task-id="${fixture.task.id}"]`).getByRole('button',{name:/查看研究过程/}).click();
     await page.locator(`[data-ref-id="${fixture.fact.id}"]`).first().click();
     await page.getByRole('button',{name:'查看原文片段',exact:true}).click();
     const excerpt=page.locator('[aria-label="原文片段"]');await excerpt.getByRole('button',{name:'下一页原文片段',exact:true}).waitFor();

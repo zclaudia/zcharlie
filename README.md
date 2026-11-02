@@ -450,12 +450,14 @@ uv run mypy src          # strict
 uv run pytest -q -m "not network"
 ```
 
-GitHub Actions（`.github/workflows/ci.yml`，push `main` 与 pull request）只跑上面四步：`uv sync --frozen`、ruff、`mypy src`、`pytest -q -m "not network"`。job 超时 45 分钟。`DATA_DIR` 写在测试步骤上（`${{ runner.temp }}`），不能写在 job 级 `env`。
+GitHub Actions（`.github/workflows/ci.yml`，push `main` 与 pull request）把上面四步拆成并行 job，并缓存 uv：`lint`、`types`、四片 pytest（`tests/unit` 与 `tests/integration`、仓库根 `tests/test_*.py` 都按文件名 a–m / n–z 切开）。整次等待时间是最慢的一片，不再是串行的约 30 分钟。`DATA_DIR` 只写在 pytest 步骤上（`${{ runner.temp }}`），不能写在 job 级 `env`。
 
-不在 CI 里：
+另两个并行 job，也在门禁里：
 
-- 浏览器回归 `tests/browser/run.sh`（需要本机 Playwright 与 Chromium，脚本串行；见脚本头注释）。
-- Android 客户端 `cd mobile && pnpm test`（vitest）。版本以 `mobile/package.json`、`mobile/src-tauri/tauri.conf.json` 与 `Cargo.toml` 的 `0.1.1` 为准。
+- `browser`：`tests/browser/run.sh`。CI 安装 Playwright 1.55.1 与 Chromium，脚本仍串行（各脚本占用固定本地端口）。
+- `mobile`：`cd mobile && pnpm install --frozen-lockfile && pnpm test`（vitest，不构建 APK）。版本以 `mobile/package.json`、`mobile/src-tauri/tauri.conf.json` 与 `Cargo.toml` 的 `0.1.1` 为准。
+
+不在 CI 里：Android APK 构建（`pnpm tauri:android:debug`）、`cargo test`、带 `network` 标记的 pytest。
 
 离线端到端 smoke（P1-F1，`tests/integration/test_funnel_e2e.py`，默认套件内，约 11 秒）：
 空库 `ia migrate up` 后经 worker 跑真实任务处理器——成分 / 行业（证监会 + 申万）同步、日线 / 财报 /

@@ -1,9 +1,8 @@
-# MVP quality gates (docs/product/mvp-completion-plan.md, work package A5).
+# Offline quality gates plus browser and mobile unit tests.
 #
-# The default test suite must stay offline and secret-free: fixtures are
-# sanitized, provider responses are mocked, and no real iFinD/LLM access is
-# required. Network-marked tests are explicitly deselected as a guard even
-# though none exist yet.
+# Wall clock is the slowest job. Python checks run in parallel: ruff, mypy,
+# and four pytest shards. Browser scripts stay serial (fixed local ports).
+# The runner context is only used in step env, never in job-level env.
 
 name: CI
 
@@ -16,43 +15,187 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  APP_ENV: dev
+  LOG_LEVEL: INFO
+
 jobs:
-  quality-gates:
+  lint:
     runs-on: ubuntu-latest
-    # pytest alone is about 19 minutes locally, before pip install and mypy.
-    timeout-minutes: 45
-    env:
-      APP_ENV: dev
-      LOG_LEVEL: INFO
-      # runner.temp is not a valid context in jobs.<job_id>.env (GitHub
-      # rejects the workflow before scheduling any job). DATA_DIR is set
-      # on the test step, where the runner context exists.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-          cache: pip
-
-      - name: Install project with dev dependencies
-        run: |
-          python -m pip install uv
-          uv sync --frozen --extra dev --python "$(command -v python)"
-
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
       - name: Lint (ruff)
         run: uv run ruff check .
 
+  types:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
       - name: Types (strict mypy)
         run: uv run mypy src
 
-      - name: Tests (offline, secret-free)
+  pytest-unit-a-m:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
+      - name: Unit tests a–m
         run: |
           mkdir -p "$DATA_DIR"
-          uv run pytest -q -m "not network"
+          uv run pytest -q -m "not network" tests/unit/test_[a-m]*.py
         env:
           DATA_DIR: ${{ runner.temp }}/zcharlie-data
-          # Inert placeholders so required Settings fields parse; nothing
-          # in the suite reads real credentials or calls real providers.
           API_KEY: ci-inert-api-key
           LLM_TIER3_API_KEY: ci-inert-tier3
+
+  pytest-unit-n-z:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
+      - name: Unit tests n–z
+        run: |
+          mkdir -p "$DATA_DIR"
+          uv run pytest -q -m "not network" tests/unit/test_[n-z]*.py
+        env:
+          DATA_DIR: ${{ runner.temp }}/zcharlie-data
+          API_KEY: ci-inert-api-key
+          LLM_TIER3_API_KEY: ci-inert-tier3
+
+  pytest-integration-a-m:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
+      - name: Integration and top-level tests a–m
+        run: |
+          mkdir -p "$DATA_DIR"
+          uv run pytest -q -m "not network" tests/integration/test_[a-m]*.py tests/test_[a-m]*.py
+        env:
+          DATA_DIR: ${{ runner.temp }}/zcharlie-data
+          API_KEY: ci-inert-api-key
+          LLM_TIER3_API_KEY: ci-inert-tier3
+
+  pytest-integration-n-z:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
+      - name: Integration and top-level tests n–z
+        run: |
+          mkdir -p "$DATA_DIR"
+          uv run pytest -q -m "not network" tests/integration/test_[n-z]*.py tests/test_[n-z]*.py
+        env:
+          DATA_DIR: ${{ runner.temp }}/zcharlie-data
+          API_KEY: ci-inert-api-key
+          LLM_TIER3_API_KEY: ci-inert-tier3
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install locked Python dependencies
+        run: uv sync --frozen --extra dev --python "$(command -v python)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Playwright Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/playwright"
+          cd "$RUNNER_TEMP/playwright"
+          npm init -y
+          npm install --silent playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Browser regression
+        run: tests/browser/run.sh
+        env:
+          PYTHONUNBUFFERED: "1"
+          AG17_NODE_MODULES: ${{ runner.temp }}/playwright/node_modules
+          API_KEY: ci-inert-api-key
+          LLM_TIER3_API_KEY: ci-inert-tier3
+          # Inert Fernet key so fixture servers can write settings. Not a
+          # credential for any real provider.
+          SETTINGS_ENCRYPTION_KEY: gn5h_2YqNqrkikXITMskM8hqzNK-_JtyQnk4D7LZl48=
+
+  mobile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+      - name: Mobile unit tests
+        working-directory: mobile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test

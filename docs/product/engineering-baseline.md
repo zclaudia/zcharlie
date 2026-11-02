@@ -167,7 +167,7 @@ uv run mypy src
 uv run pytest -q -m "not network"
 ```
 
-这四步是 GitHub Actions 的 `quality-gates`（超时 45 分钟）。`tests/browser/run.sh` 与 `cd mobile && pnpm test` 不在该门禁里。2026-10 文档里的 `pytest -q` 与 `mypy src/investment_agent` 以本节为准。
+GitHub Actions 把这四步拆成并行 job（ruff、mypy、四片 pytest），并另跑 `tests/browser/run.sh` 与 `cd mobile && pnpm test`。整次等待时间是最慢的一片。2026-10 文档里的 `pytest -q` 与 `mypy src/investment_agent` 以本节为准。Android APK 构建不在门禁里。
 
 测试层级：
 
