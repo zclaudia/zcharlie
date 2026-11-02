@@ -604,10 +604,17 @@ try {
       await page.reload();
       await page.waitForFunction(() => document.querySelector('#account-fit-content select[name=account_id]'));
       await page.locator('#account-fit-content select[name=account_id]').selectOption(large.id);
-      await page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'}).waitFor();
+      // Changing the account reloads context and replaces the result pane.
+      // Click only after that reload has put the prepared-send button back.
+      await page.waitForFunction(() => {
+        const root = document.querySelector('#account-fit-content');
+        if (!root || root.innerText.includes('正在读取此账户的精确版本')) return false;
+        return [...root.querySelectorAll('button')].some((node) => node.textContent === '继续发送已准备操作');
+      });
+      const retryButton = page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'});
       const retryRequest = fitPost(page);
       const retryResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
-      await page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'}).click();
+      await retryButton.click();
       const retriedRequest = await retryRequest;
       const retriedResponse = await retryResponse;
       assert.equal(retriedResponse.status(), 202);
