@@ -273,12 +273,15 @@ console.log(JSON.stringify({{ok:true}}));
 
 
 def test_renderer_consumes_only_versioned_read_models():
-    app = (WEB_STATIC / "app.js").read_text(encoding="utf-8")
+    pages = "".join(
+        (WEB_STATIC / name).read_text(encoding="utf-8")
+        for name in ("app.js", "overview.js", "runs_page.js", "stock_page.js")
+    )
     watchlist = (WEB_STATIC / "watchlist.js").read_text(encoding="utf-8")
     # Dashboard and per-stock history endpoints come from the templates'
     # data-endpoint attributes (see page contract tests above); the renderers
     # themselves only reference these endpoints directly.
-    assert "/research/runs" in app
+    assert "/research/runs" in pages
     for endpoint in ("/watchlist", "/watchlist/refresh"):
         assert endpoint in watchlist, endpoint
 
@@ -656,7 +659,7 @@ def test_watchlist_metadata_autofill_ignores_superseded_requests():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js", "release.js", "refresh_state.js", "native_bridge.js", "shell.js", "agent.js"],
+    ["api.js", "app.js", "page_widgets.js", "overview.js", "runs_page.js", "stock_page.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js", "release.js", "refresh_state.js", "native_bridge.js", "shell.js", "agent.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")
