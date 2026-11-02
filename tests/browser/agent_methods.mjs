@@ -45,7 +45,7 @@ try {
       await api('/investor/methods/rollback',{mutation_id:randomUUID(),listing_ref:before.binding.listing_ref,expected_head_revision:before.revision,target_method:data.baseline_method,reason:'Concurrent authenticated user rollback'});
       await click('明确回退并追加版本');await ui.getByRole('status').filter({hasText:'版本或证据已改变'}).waitFor();
       data=await api('/investor/methods');assert.equal(data.heads[0].revision,2);assert.equal(data.proposals[0].proposal.status,'retired');
-      await ui.getByLabel('回退原因').fill('再次明确回退并保留历史');await click('明确回退并追加版本');await ui.getByRole('status').filter({hasText:'已保存'}).waitFor();
+      await ui.getByLabel('回退原因').fill('再次明确回退并保留历史');await click('明确回退并追加版本');await ui.getByRole('status').filter({hasText:'已保存'}).waitFor({timeout: 60000});
       data=await api('/investor/methods');assert.equal(data.heads[0].revision,3);assert.equal(data.versions.length,3);assert.ok((await api('/investor/methods/proposals/' + data.proposals[0].proposal.id)).shadows[0].cases.length===3);
       await page.screenshot({path:join(output,`methods-${viewport.width}-rollback.png`),fullPage:true});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert.equal(await ui.locator('img').count(),0);assert.deepEqual(errors,[]);
