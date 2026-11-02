@@ -1,6 +1,6 @@
 # zcharlie Android 客户端
 
-应用版本 `0.1.1`，与 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 一致。`pnpm test` 只在本地跑，不在 GitHub Actions 的 `quality-gates` 里。
+应用版本 `0.1.1`，与 `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 一致。`pnpm test` 在 GitHub Actions 的 `mobile` job 里跑。APK 构建（`pnpm tauri:android:debug`）不在门禁里。
 
 ## 构建 Debug APK
 
