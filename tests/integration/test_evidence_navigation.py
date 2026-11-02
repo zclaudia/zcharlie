@@ -160,7 +160,7 @@ def test_invalid_citation_is_rejected_before_persistence():
 
 def test_client_contract_renders_evidence_navigation():
     source = pathlib.Path(
-        "src/investment_agent/web/static/app.js"
+        "src/investment_agent/web/static/stock_page.js"
     ).read_text(encoding="utf-8")
     assert "resolveEvidence" in source
     assert "引用失效" in source, "unresolved citations must be shown, never hidden"
