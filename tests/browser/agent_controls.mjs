@@ -82,7 +82,7 @@ try {
       await page.locator('#settings-save').click();
       await page.waitForFunction(() => document.querySelector('#settings-save-result').textContent.includes('已保存'));
       assert.deepEqual(Object.keys(patchBody.values).sort(), ['agent_api_key']);
-      assert.equal('expected_revision' in patchBody, false);
+      assert.equal(typeof patchBody.expected_revision, 'number');
       const after = await api('/settings');
       assert.equal(after.groups.flatMap(g => g.items).find(x => x.key === 'llm_tier3_model').value, legacyBefore);
       assert.equal(after.groups.flatMap(g => g.items).find(x => x.key === 'investor_agent_enabled').value, true);

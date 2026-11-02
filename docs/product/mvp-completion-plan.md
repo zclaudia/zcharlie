@@ -137,7 +137,7 @@ MVP-405 security + backup + release gate
 5. `pytest -q`，禁止真实网络和 secrets。
 6. 缓存 pip，但不缓存运行数据库或研究制品。
 
-2026-11 的 workflow：`uv sync --frozen --extra dev`，ruff、`mypy src` 与离线 pytest 并行（pytest 分三片），另有浏览器脚本和 `mobile` 的 `pnpm test`。`DATA_DIR` 在 pytest 步骤上。Android APK 构建不在门禁里。
+2026-11 的 workflow：`uv sync --frozen --extra dev`，ruff、`mypy src` 与离线 pytest 并行（pytest 分四片），另有浏览器脚本和 `mobile` 的 `pnpm test`。`DATA_DIR` 在 pytest 步骤上。Android APK 构建不在门禁里。
 
 验收：空 runner 一次通过；故意制造 lint、类型或 golden 差异时 CI 必须失败。
 

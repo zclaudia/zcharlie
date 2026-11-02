@@ -450,7 +450,7 @@ uv run mypy src          # strict
 uv run pytest -q -m "not network"
 ```
 
-GitHub Actions（`.github/workflows/ci.yml`，push `main` 与 pull request）把上面四步拆成并行 job，并缓存 uv：`lint`、`types`、三片 pytest（`tests/unit/test_[a-m]*`、`tests/unit/test_[n-z]*`、`tests/integration` 加仓库根的 `tests/test_*.py`）。整次等待时间是最慢的一片，不再是串行的约 30 分钟。`DATA_DIR` 只写在 pytest 步骤上（`${{ runner.temp }}`），不能写在 job 级 `env`。
+GitHub Actions（`.github/workflows/ci.yml`，push `main` 与 pull request）把上面四步拆成并行 job，并缓存 uv：`lint`、`types`、四片 pytest（`tests/unit` 与 `tests/integration`、仓库根 `tests/test_*.py` 都按文件名 a–m / n–z 切开）。整次等待时间是最慢的一片，不再是串行的约 30 分钟。`DATA_DIR` 只写在 pytest 步骤上（`${{ runner.temp }}`），不能写在 job 级 `env`。
 
 另两个并行 job，也在门禁里：
 
