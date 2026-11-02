@@ -802,7 +802,13 @@ export function bootSupplementalRules(root = document.querySelector("#supplement
   one(root, 'select[name="rule_type"]').addEventListener("change", () => setRuleTypeFields(root));
   one(root, 'select[name="selector_kind"]').addEventListener("change", () => setRuleTypeFields(root));
   one(root, 'select[name="category_kind"]').addEventListener("change", () => setRuleTypeFields(root));
-  refresh().catch((error) => showAlert(root, error.message, "error"));
+  // A conflict warning shown while booting (a receipt that must stay visible)
+  // must survive a background refresh failure.
+  refresh().catch((error) => {
+    const node = one(root, "#supplemental-alert");
+    if (node && !node.hidden && node.className.includes("conflict")) return;
+    showAlert(root, error.message, "error");
+  });
   setRuleTypeFields(root);
 }
 

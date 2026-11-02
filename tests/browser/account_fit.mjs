@@ -305,6 +305,10 @@ try {
     const financialFilter = page.locator('#candidate-ranking-content .ranking-view select[aria-label="财务状态筛选"]');
     await financialFilter.selectOption('blocked');
     await page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/candidates/rankings/${savedRanking.ranking_ref.id}`) && new URL(response.url()).searchParams.get('financial_status') === 'blocked');
+    await page.waitForFunction(() => {
+      const text = document.querySelector('#candidate-ranking-content .ranking-entries')?.innerText || '';
+      return text.length > 0 && !text.includes('正在读取排序条目');
+    });
     const filteredText = await page.locator('#candidate-ranking-content .ranking-entries').innerText();
     releaseDelayedPage();
     await page.waitForTimeout(200);
