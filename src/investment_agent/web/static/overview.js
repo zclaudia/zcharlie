@@ -3,7 +3,7 @@ import { healthBucket } from "./health.js";
 import { el, fmt, fmtNumber, statusBadge, table } from "./dom.js";
 import { formatDateTime, label } from "./format.js";
 import { stockIdent, thinBar } from "./ui.js";
-import { icon, isCompactViewport, priorityBadge, shortStamp } from "./page_widgets.js";
+import { PRIORITY_LABELS, icon, isCompactViewport, priorityBadge, shortStamp } from "./page_widgets.js";
 
 // ---- 今日概览 ---------------------------------------------------------
 

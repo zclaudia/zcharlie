@@ -49,7 +49,8 @@ export function shortStamp(value) {
 }
 
 // 只放不含交易含义的研究优先级文案（与后端 SUGGESTION_LABELS 对应）。
-const PRIORITY_LABELS = Object.freeze({
+// overview.js 的结论列表也直接取这里的文案，导出共用。
+export const PRIORITY_LABELS = Object.freeze({
   high_research_priority: ["高优先", "accent"],
   research_priority: ["中优先", "accent"],
   monitor: ["持续跟踪", ""],
