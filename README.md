@@ -326,7 +326,7 @@ ia snapshot backfill --universe CSI300 --status                                 
 （`POST /investor/methods/offline-shadow`）对包提案的 FunctionModel 输入含候选渲染指令、输出契约与
 冻结动作摘要，只许引用冻结样本里真实的 action id / output ref（越界被确定性代码拦截），结果仅是
 工程证据。候选包前瞻影子由用户显式发起（`POST /investor/methods/proposals/{id}/candidate-shadow`）：
-绑定候选包 receipt 的真实 worker 任务（预算沿用既有 daily / task cost 配置），工具白名单剥离发布与 portfolio 族，
+绑定候选包 receipt 的真实 worker 任务（额度沿用既有 token / 请求数 / 时间配置），工具白名单剥离发布与 portfolio 族，
 无发布 / 通知 / 账本 / 正式计划复用副作用，完成后经 `POST /investor/methods/candidate-shadow-results`
 按包级校验登记正反例；批量发起（`POST /investor/methods/proposals/{id}/candidate-shadow-batch`，
 一次 1–4 条不同 prompt、整批一个 mutation）与运营默认值（`method_candidate_shadow_min_positives`
@@ -412,15 +412,16 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
 被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
 `LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
 
-设置 → 大模型 → Provider 与模型可添加多个 OpenAI 兼容或 DeepSeek Provider，
+设置 → 模型 → Provider 与模型可添加多个 OpenAI 兼容或 DeepSeek Provider，
 每个 Provider 配置独立的地址和 API Key，并添加多个模型。模型可分别设置推理模式、
 超时及 Agent 输出能力；投资 Agent 与研究解释可分别选择目录中的模型，规则草拟沿用研究解释的选择。
-选择「沿用原配置」时继续读取原有 `agent_*` / `llm_tier3_*` 设置，无需迁移即可升级。
+用途分配选择「未选择（使用旧配置）」时继续读取原有 `agent_*` / `llm_tier3_*` 设置，无需迁移即可升级；
+旧的端点、密钥与能力参数统一收在「模型 → 旧配置（兼容）」，投资 Agent 页只管开关、额度和队列。
 模型选择在下个任务加载；正在使用的 Provider / 模型需先更改选择才能删除。
 目录和凭证通过现有 `SETTINGS_ENCRYPTION_KEY` 加密保存在 `llm_catalog` 运行时项，
 API 只返回目录、密钥状态与末四位提示；编辑时省略密钥会保留原值，清除需显式操作。
 目录使用稳定的 Provider / Model ID 和按 Agent 标识索引的 `bindings`，便于后续加入更多 Agent。
-切换 Agent 模型会改变配置指纹，计费价格须与新模型和新指纹重新核验。
+切换 Agent 模型会改变配置指纹；执行额度按 token、请求数、时间和工具调用数计算，不需要美元价格。
 
 交易日历基线路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），基线文件是
 `config/calendars/a_share.yaml`（未知年份 fail-closed；由双源核对生成，每年带

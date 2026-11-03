@@ -300,26 +300,6 @@ async def test_payload_noop_and_new_result_unread_same_notification(publication_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("quantity", ["unknown", "cny", "usd"])
-async def test_background_budget_and_verified_price_fail_closed(publication_db, quantity):
-    from investment_agent.investor.common import Mutation, Quantity
-    candidate, _, _, result = await saved()
-    selected = base(investor_agent_background_enabled=True)
-    async with session_scope() as session:
-        foundation = InvestorService(session)
-        mandate = await foundation.get_mandate("local_owner")
-        budget = Quantity(value=None, unit="USD", unknown_reason="Unspecified") if quantity == "unknown" else Quantity(value="1", unit="CNY" if quantity == "cny" else "USD")
-        auth = mandate.authorization.model_copy(update={"background_enabled": True, "exploration_scope_refs": mandate.scope_refs, "daily_budget": budget, "per_task_budget": budget})
-        await foundation.revise_mandate("local_owner", mandate.model_copy(update={"authorization": auth, "revision": 2}), Mutation(expected_revision=1, idempotency_key=uuid4()))
-        await PublicationService(session).restrict(result.recommendation_ref, reason="critical_counter_evidence:formal_review_required")
-        await MonitoringService(session, selected).maintain()
-        cycle = await session.scalar(select(ReviewCycle))
-        assert cycle.task_id is None and cycle.state == "blocked"
-        expected = {"unknown": "background_budget_unavailable", "cny": "verified_exchange_rate_unavailable", "usd": "background_price_unavailable"}[quantity]
-        assert expected in cycle.payload["pending_reason"]
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("result_kind", ["withdraw", "inconclusive"])
 async def test_default_worker_real_review_outcome_notification_and_terminal_rescan(publication_db, monkeypatch, result_kind):
     candidate, evidence, _, published = await saved()
@@ -355,7 +335,6 @@ async def test_default_worker_real_review_outcome_notification_and_terminal_resc
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fresh", [False, True])
 async def test_native_capture_receipt_old_snapshot_unknown_cannot_extend(publication_db, monkeypatch, fresh):
-    from decimal import Decimal
 
     from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
     from tests.support.publication import market_candidate
@@ -532,16 +511,14 @@ async def test_manual_reason_is_preserved_and_idempotency_payload_checked(public
 
 @pytest.mark.asyncio
 async def test_pause_existing_background_cycle_manual_gets_new_interactive_task(publication_db):
-    from investment_agent.agent.model import AgentModelConfig
-    from investment_agent.investor.common import Mutation, Quantity
+    from investment_agent.investor.common import Mutation
     from investment_agent.storage.models.agent import ExecutionGrantRow
     candidate, _, _, published = await saved()
-    selected = base(investor_agent_background_enabled=True, investor_agent_price_version="offline-verified", investor_agent_price_model="fixture-model", investor_agent_input_usd_per_million=Decimal("1"), investor_agent_output_usd_per_million=Decimal("1"))
-    selected = selected.model_copy(update={"investor_agent_price_config_version": AgentModelConfig.from_settings(selected, 0).version})
+    selected = base(investor_agent_background_enabled=True)
     async with session_scope() as session:
         foundation = InvestorService(session)
         mandate = await foundation.get_mandate("local_owner")
-        authorization = mandate.authorization.model_copy(update={"background_enabled": True, "exploration_scope_refs": mandate.scope_refs, "daily_budget": Quantity(value="10", unit="USD"), "per_task_budget": Quantity(value="1", unit="USD")})
+        authorization = mandate.authorization.model_copy(update={"background_enabled": True, "exploration_scope_refs": mandate.scope_refs})
         await foundation.revise_mandate("local_owner", mandate.model_copy(update={"revision": 2, "authorization": authorization}), Mutation(expected_revision=1, idempotency_key=uuid4()))
         await PublicationService(session).restrict(published.recommendation_ref, reason="critical_counter_evidence:formal_review_required")
         svc = MonitoringService(session, selected)

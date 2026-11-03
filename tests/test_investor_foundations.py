@@ -38,7 +38,6 @@ async def test_mandate_revisions_replay_conflict_and_immutable(db_session):
     revised = await svc.revise_mandate("local_owner", changed, mutation)
     assert await svc.revise_mandate("local_owner", changed, mutation) == revised
     assert await svc.get_mandate("local_owner", 1) == saved
-    assert (await svc.get_mandate("local_owner")).authorization.daily_budget.value is None
     with pytest.raises(InvestorError, match="revision changed"):
         await svc.revise_mandate(
             "local_owner", changed, mutation.model_copy(update={"idempotency_key": uuid4()})

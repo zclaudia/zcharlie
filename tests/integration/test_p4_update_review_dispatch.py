@@ -10,18 +10,17 @@ import pytest_asyncio
 from sqlalchemy import select
 
 from investment_agent.agent.execution import ExecutionGrant
-from investment_agent.agent.model import AgentModelConfig
 from investment_agent.agent.tasks import Task, TaskService
 from investment_agent.config import Settings
 from investment_agent.evidence.contracts import EvidenceRecord
-from investment_agent.investor.common import Mutation, ObjectRef, Quantity
+from investment_agent.investor.common import Mutation, ObjectRef
 from investment_agent.investor.contracts import ReviewEvent
 from investment_agent.investor.enums import StopReason
 from investment_agent.investor.foundations import InvestorService
 from investment_agent.investor.monitoring import MonitoringService
 from investment_agent.jobs.base import ClaimedJob
 from investment_agent.research.worker import ResearchWorker
-from investment_agent.settings.loader import load_settings, store_for
+from investment_agent.settings.loader import store_for
 from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models.agent import AgentTask, ExecutionGrantRow
 from investment_agent.storage.models.analysis import PipelineRun
@@ -88,16 +87,6 @@ async def _prepare_settings(*, priced: bool) -> Settings:
         store = store_for(session, settings)
         await store.claim_import()
         await store.apply(runtime, actor="p4-test")
-        if priced:
-            effective = await load_settings(session, base=settings)
-            model_config = AgentModelConfig.from_settings(effective, 0)
-            await store.apply({
-                "investor_agent_price_version": "p4-fixture-price-v1",
-                "investor_agent_price_model": effective.agent_model,
-                "investor_agent_price_config_version": model_config.version,
-                "investor_agent_input_usd_per_million": Decimal("1"),
-                "investor_agent_output_usd_per_million": Decimal("1"),
-            }, actor="p4-test")
     return settings
 
 
@@ -110,9 +99,6 @@ async def _set_background_authorization(
         auth = current.authorization.model_copy(update={
             "background_enabled": enabled,
             "exploration_scope_refs": (subject,),
-            "daily_budget": Quantity(value=budget, unit="USD"),
-            "per_task_budget": Quantity(value=budget, unit="USD"),
-            "review_daily_budget": Quantity(value=budget, unit="USD"),
         })
         await service.revise_mandate(
             "local_owner", current.model_copy(update={
@@ -330,7 +316,7 @@ async def _p2_handoff_for_member(member_sequence: int) -> int:
 
 
 @pytest.mark.asyncio
-async def test_local_result_with_case_needs_background_authorization_price_and_nonzero_budget(p4_update_db):
+async def test_local_result_with_case_needs_background_authorization(p4_update_db):
     _, _, subject, _ = await saved()
     listing_id = int(subject.id)
     member = await _member(listing_id=listing_id, context="company_research", key="no-auth")
@@ -391,38 +377,6 @@ async def test_blocked_unattempted_batch_retries_after_authorization_but_termina
     after = await _counts()
     assert after["tasks"] == terminal_counts["tasks"]
     assert after["grants"] == terminal_counts["grants"]
-
-
-@pytest.mark.asyncio
-async def test_authorized_local_result_without_verified_price_creates_no_task(p4_update_db):
-    _, _, subject, _ = await saved()
-    listing_id = int(subject.id)
-    await _set_background_authorization(subject=subject, budget=Decimal("5"))
-    member = await _member(listing_id=listing_id, context="company_research", key="no-price")
-    settings = await _prepare_settings(priced=False)
-    baseline = await _counts()
-    result = await _dispatch(listing_id=listing_id, member_sequence=member, settings=settings)
-    counts = await _counts()
-    assert result and result["state"] == "blocked"
-    assert "background_price_unavailable" in result["reason"], result
-    assert counts["tasks"] == baseline["tasks"]
-    assert counts["grants"] == baseline["grants"]
-
-
-@pytest.mark.asyncio
-async def test_authorized_zero_budget_local_result_does_not_create_paid_task(p4_update_db):
-    _, _, subject, _ = await saved()
-    listing_id = int(subject.id)
-    await _set_background_authorization(subject=subject, budget=Decimal("0"))
-    member = await _member(listing_id=listing_id, context="company_research", key="zero-budget")
-    settings = await _prepare_settings(priced=True)
-    baseline = await _counts()
-    result = await _dispatch(listing_id=listing_id, member_sequence=member, settings=settings)
-    counts = await _counts()
-    assert result and result["state"] == "blocked"
-    assert "budget" in result["reason"], result
-    assert counts["tasks"] == baseline["tasks"]
-    assert counts["grants"] == baseline["grants"]
 
 
 @pytest.mark.asyncio

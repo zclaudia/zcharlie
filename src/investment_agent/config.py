@@ -2,7 +2,6 @@
 
 import logging
 import re
-from decimal import Decimal
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit
@@ -35,13 +34,6 @@ class LLMTierConfig(BaseModel):
     """Reasoning toggle sent as ``thinking: {type: ...}`` (DeepSeek-style
     OpenAI-compatible extension). ``auto`` sends nothing, so endpoints that do
     not know the parameter are unaffected."""
-
-
-def validate_token_price(value: Decimal | None) -> Decimal | None:
-    exponent = value.normalize().as_tuple().exponent if value is not None else 0
-    if value is not None and (not isinstance(exponent, int) or value >= Decimal("100000000") or exponent < -8):
-        raise ValueError("verified token prices require at most eight decimal places and eight integer digits")
-    return value
 
 
 def validate_gateway_url(value: str) -> str:
@@ -84,18 +76,8 @@ class Settings(BaseSettings):
 
     # Independent Agent settings; empty endpoint/model/key is intentionally unconfigured.
     # Investor execution controls are separate from immutable model parameters.
-    @field_validator("investor_agent_input_usd_per_million", "investor_agent_output_usd_per_million")
-    @classmethod
-    def valid_token_price(cls, value: Decimal | None) -> Decimal | None:
-        return validate_token_price(value)
-
-    investor_agent_input_usd_per_million: Decimal | None = Field(default=None, ge=0)
-    investor_agent_output_usd_per_million: Decimal | None = Field(default=None, ge=0)
     investor_agent_task_tool_calls: int = Field(default=50, gt=0)
     investor_agent_daily_tool_calls: int = Field(default=200, gt=0)
-    investor_agent_price_config_version: str = ""
-    investor_agent_price_version: str = ""
-    investor_agent_price_model: str = ""
     portfolio_ledger_enabled: bool = False
     account_fit_enabled: bool = False
     candidate_ranking_enabled: bool = False

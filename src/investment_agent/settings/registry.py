@@ -26,7 +26,6 @@ timezone and cron checks. Crons are parsed the way the scheduler parses them
 """
 
 from dataclasses import dataclass
-from decimal import Decimal
 from typing import Any, Literal, get_args, get_origin
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -45,7 +44,6 @@ from investment_agent.config import (
     VerificationScheduleConfig,
     validate_gateway_identifier,
     validate_gateway_url,
-    validate_token_price,
 )
 
 ApplyMode = Literal["live", "next_job", "reschedule"]
@@ -201,18 +199,8 @@ class RuntimeSettings(BaseModel):
 
     # Independent Agent settings; empty endpoint/model/key is intentionally unconfigured.
     # Investor execution controls are separate from immutable model parameters.
-    @field_validator("investor_agent_input_usd_per_million", "investor_agent_output_usd_per_million")
-    @classmethod
-    def valid_token_price(cls, value: Decimal | None) -> Decimal | None:
-        return validate_token_price(value)
-
-    investor_agent_input_usd_per_million: Decimal | None = Field(default=None, ge=0)
-    investor_agent_output_usd_per_million: Decimal | None = Field(default=None, ge=0)
     investor_agent_task_tool_calls: int = Field(default=50, gt=0)
     investor_agent_daily_tool_calls: int = Field(default=200, gt=0)
-    investor_agent_price_config_version: str = ""
-    investor_agent_price_version: str = ""
-    investor_agent_price_model: str = ""
     disclosure_originals_enabled: bool = False
     materials_sec_refresh_enabled: bool = False
     materials_hk_refresh_enabled: bool = False
@@ -345,13 +333,8 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("agent_queue_interactive_capacity", "agent", "交互队列容量", "1–128；满时拒绝新任务，既有任务不重建。", "next_job"),
     _env("agent_queue_review_capacity", "agent", "复核队列容量", "1–96；后台账号按最近服务公平轮转。", "next_job"),
     _env("agent_queue_exploration_capacity", "agent", "探索队列容量", "1–32；探索最多一项同时运行。", "next_job"),
-    _env("investor_agent_input_usd_per_million", "agent", "每百万输入 token 美元价格", "部署者核验的美元价格；未知保持空，版本绑定计费模型。", "next_job"),
-    _env("investor_agent_output_usd_per_million", "agent", "每百万输出 token 美元价格", "部署者核验的美元价格；未知保持空，版本绑定计费模型。", "next_job"),
-    _env("investor_agent_price_model", "agent", "核验价格绑定模型", "必须与执行模型相同。", "next_job"),
-    _env("investor_agent_price_version", "agent", "核验价格版本", "部署者核验的美元价格；未知保持空，版本绑定计费模型。", "next_job"),
-    _env("investor_agent_task_tool_calls", "agent", "单任务工具调用上限", "独立执行额度/核验价格绑定。", "next_job"),
-    _env("investor_agent_daily_tool_calls", "agent", "每日工具调用上限", "独立执行额度/核验价格绑定。", "next_job"),
-    _env("investor_agent_price_config_version", "agent", "核验价格绑定模型配置指纹", "独立执行额度/核验价格绑定。", "next_job"),
+    _env("investor_agent_task_tool_calls", "agent", "单任务工具调用上限", "独立执行额度。", "next_job"),
+    _env("investor_agent_daily_tool_calls", "agent", "每日工具调用上限", "独立执行额度。", "next_job"),
     _env("disclosure_originals_enabled", "agent", "启用公告原件取证", "默认关闭；仅显式授权深圳CNInfo有界发现/获取，关闭仍可读历史。每次执行边界复查。", "next_job"),
     _env("portfolio_ledger_enabled", "agent", "启用真实账本录入", "A1b事实录入默认关闭；不执行交易。", "next_job"),
     _env("account_fit_enabled", "agent", "启用账户适配检查", "默认关闭；需同时启用真实账本入口，关闭时仍可读取历史结果。", "next_job"),

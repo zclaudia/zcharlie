@@ -11,15 +11,12 @@ from uuid import UUID, uuid5
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.agent.budget import BudgetService
 from investment_agent.agent.contracts import ContextBinding, Task
 from investment_agent.agent.execution import (
     ExecutionDeniedError,
     ExecutionGrant,
     admit,
-    cost_limits,
     live_policy,
-    purpose_limit,
 )
 from investment_agent.agent.research import registrations
 from investment_agent.agent.tasks import TERMINAL, TaskService
@@ -177,13 +174,7 @@ class MonitoringService:
                 if cycle.payload.get("supplemental_update_batch_id") else None),
             supplemental_update_batch_hash=cycle.payload.get("supplemental_update_batch_hash"))
         try:
-            settings = await live_policy(self.session, grant, self.base)
-            task_cap, daily_cap = await cost_limits(self.session, grant)
-            purpose_cap = await purpose_limit(self.session, grant)
-            if not interactive and any(cap == 0 for cap in (task_cap, daily_cap, purpose_cap)):
-                raise ExecutionDeniedError("review_budget_exhausted")
-            if not interactive and BudgetService.prices(settings) == (None, None):
-                raise ExecutionDeniedError("background_price_unavailable")
+            await live_policy(self.session, grant, self.base)
             now = datetime.now(UTC)
             task = await admit(self.session, base=self.base, input_key=f"review:{cycle.id}",
                 binding=ContextBinding(context_refs=refs, base_refs=(*refs, ObjectRef(kind="mandate", id=mandate.id, revision=mandate.revision)), as_of=now),

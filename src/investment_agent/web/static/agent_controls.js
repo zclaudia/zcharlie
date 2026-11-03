@@ -188,15 +188,11 @@ export function bootAgentControls() {
     await renderChosen();
     return {node: section, refs: () => [...selected.values()]};
   }
-  function quantity(node) {
-    return node.value.trim() ? {value: node.value.trim(), unit: 'USD', currency: 'USD', unknown_reason: null}
-      : {value: null, unit: 'USD', currency: 'USD', unknown_reason: '用户尚未明确金额'};
-  }
   function issueList(parent, title, values) {
     parent.append(el('h4', {}, title));
     const list = el('ul');
     for (const value of values) list.append(el('li', {}, value));
-    if (!values.length) list.append(el('li', {}, '本地配置未发现缺项；实际执行仍须检查当时对象、价格、范围与剩余额度。'));
+    if (!values.length) list.append(el('li', {}, '本地配置未发现缺项；实际执行仍须检查当时对象、范围与剩余额度。'));
     parent.append(list);
   }
   async function setup() {
@@ -211,13 +207,13 @@ export function bootAgentControls() {
       el('p', {}, `Agent ${readiness.enabled ? '已启用' : '关闭'}；运行后台开关${readiness.runtime_background_enabled ? '已启用' : '关闭'}；约定后台授权${readiness.mandate_background_enabled ? '已启用' : '关闭'}。`),
       el('p', {}, `当前输出模式：${readiness.output_mode}；JSON Object ${readiness.supports_json_object ? '声明支持' : '未声明支持'}；JSON Schema ${readiness.supports_json_schema ? '声明支持' : '未声明支持'}。能力声明须与实际端点验证一致。`),
       el('p', {}, `当前有效探索上限：${readiness.effective_max_leads} 条线索 / ${readiness.effective_max_new_tasks} 个新任务；由运行设置与约定取较小值。`),
-      el('p', {}, '配置保存与本地检查均不代表供应商网络验证。当前完整模型配置指纹（排除密钥）用于核验报价绑定：'));
+      el('p', {}, '配置保存与本地检查均不代表供应商网络验证。当前完整模型配置指纹（排除密钥）用于识别本次执行使用的模型配置：'));
     const fingerprint = input('当前模型配置指纹', readiness.model_config_fingerprint);
     fingerprint.readOnly = true;
     issueList(body, '交互配置与限制', readiness.interactive_issues);
     issueList(body, '后台复核配置与限制', readiness.review_issues);
     issueList(body, '后台探索配置与限制', readiness.exploration_issues);
-    body.append(el('p', {}, '后台需分别启用运行开关与投资约定授权。USD 每日共享总额与单任务全生命周期上限分别生效；探索与复核分账不互借。每批至多20条线索/3个新任务，与运行设置取较小值。'));
+    body.append(el('p', {}, '后台需分别启用运行开关与投资约定授权。执行只受请求数、token、时间和工具调用额度限制；每批至多20条线索/3个新任务，与运行设置取较小值。'));
     const goals = input('研究目标（每行一项）', (mandate?.goals || []).join('\n'), 'textarea');
     const unknowns = input('尚未知晓的信息（每行一项）',
       (mandate?.unknowns || ['资金用途、期限与组合信息尚未知晓']).join('\n'), 'textarea');
@@ -229,24 +225,15 @@ export function bootAgentControls() {
     background.checked = auth?.background_enabled || false;
     const backScope = await scopePicker('明确后台证券范围', auth?.exploration_scope_refs || [], token);
     if (token !== epoch) return;
-    const daily = input('USD 每日共享总额（空白明确未知）', auth?.daily_budget.value ?? '');
-    const task = input('USD 单任务全生命周期上限（空白明确未知）', auth?.per_task_budget.value ?? '');
-    const review = input('USD 复核日金额（空白未配置）', auth?.review_daily_budget?.value ?? '');
-    const explore = input('USD 探索日金额（空白关闭探索）', auth?.exploration_daily_budget?.value ?? '');
     const leads = input('每批线索上限（0–20）', auth?.max_leads_per_batch ?? 20, 'number');
     const tasks = input('每批新任务上限（0–3）', auth?.max_new_tasks_per_batch ?? 3, 'number');
     const preview = el('section');
     let editVersion = 0;
-    const fields = [goals, unknowns, constraints, scope.node, background, backScope.node, daily, task, review, explore, leads, tasks];
+    const fields = [goals, unknowns, constraints, scope.node, background, backScope.node, leads, tasks];
     for (const node of fields) node.addEventListener('input', () => {++editVersion;});
     body.append(preview);
     const reviewButton = button('审阅投资约定变更', () => load(async () => {
       const reviewedVersion = editVersion;
-      for (const node of [daily, task, review, explore]) {
-        if (node.value.trim() && (!/^\d+(?:\.\d+)?$/.test(node.value.trim()) || !Number.isFinite(Number(node.value)))) {
-          throw Error('USD 金额须为非负十进制数，未知请留空');
-        }
-      }
       const candidate = {
         ...(mandate || {id: randomUUID(), schema_version: 1,
           created_at: new Date().toISOString(), actor: 'user', origin_ref: null}),
@@ -255,9 +242,6 @@ export function bootAgentControls() {
         scope_refs: scope.refs(),
         authorization: {
           background_enabled: background.checked, exploration_scope_refs: backScope.refs(),
-          daily_budget: quantity(daily), per_task_budget: quantity(task),
-          review_daily_budget: review.value.trim() ? quantity(review) : null,
-          exploration_daily_budget: explore.value.trim() ? quantity(explore) : null,
           max_leads_per_batch: Number(leads.value), max_new_tasks_per_batch: Number(tasks.value),
           source_refs: auth?.source_refs || [],
         },
@@ -289,14 +273,11 @@ export function bootAgentControls() {
     const auth = candidate.authorization;
     const scope = await Promise.all(candidate.scope_refs.map(objectName));
     const back = await Promise.all(auth.exploration_scope_refs.map(objectName));
-    const amount = q => q?.value === null || !q ? '未知 / 未授权' : `${q.value} ${q.currency || q.unit}`;
     for (const text of [
       `投资约定版本：${candidate.revision}；研究目标：${candidate.goals.join('；') || '尚未明确'}`,
       `交互范围：${scope.join('；') || '尚未选择'}`,
       `明确约束：${candidate.hard_constraints.join('；') || '尚未明确'}；未知项：${candidate.unknowns.join('；') || '未记录'}`,
       `约定后台授权：${auth.background_enabled ? '允许' : '关闭'}；后台范围：${back.join('；') || '尚未选择'}`,
-      `每日共享总额：${amount(auth.daily_budget)}；单任务全生命周期：${amount(auth.per_task_budget)}`,
-      `复核日金额：${amount(auth.review_daily_budget)}；探索日金额：${amount(auth.exploration_daily_budget)}`,
       `每批至多 ${auth.max_leads_per_batch} 条线索 / ${auth.max_new_tasks_per_batch} 个新任务；仍与运行设置取较小值`,
     ]) parent.append(el('p', {}, text));
   }

@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import delete, text, update
+from sqlalchemy import text, update
 
 from investment_agent.agent.budget import BudgetService
 from investment_agent.agent.contracts import MessageInput, WaitRequirement
@@ -15,10 +15,7 @@ from investment_agent.agent.progress import task_progress
 from investment_agent.agent.research import ResearchProgress, save_progress
 from investment_agent.agent.tasks import TaskClaim, TaskService
 from investment_agent.config import Settings
-from investment_agent.investor.common import ObjectRef, Quantity
-from investment_agent.investor.contracts import Mandate, ResearchAuthorization
 from investment_agent.investor.enums import StopReason
-from investment_agent.investor.foundations import InvestorService
 from investment_agent.storage.database import engine_lifespan, session_scope
 from investment_agent.storage.models.agent import (
     AgentTask,
@@ -26,8 +23,6 @@ from investment_agent.storage.models.agent import (
     PublicTaskEvent,
 )
 from investment_agent.storage.models.base import Base
-from investment_agent.storage.models.investor import MandateHead
-from investment_agent.storage.models.reference import Company, Listing, Market
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
 
 STEPS = ("读取同口径历史现金流", "核对存货披露口径")
@@ -116,7 +111,6 @@ async def test_plan_states_extra_completed_and_replay(progress_db):
     before = await progress_for(receipt.task.id)
     assert before.plan is None and before.research_kind == "comparison"
     assert before.usage.cost.value is None and before.usage.cost.unknown_reason == "not settled"
-    assert before.limits.cost_usd is None and before.limits.cost_limit_reason == "unbounded"
     assert before.limits.model_requests == 20 and before.limits.tool_calls == 50
     assert before.limits.tokens == 100000 and before.limits.seconds == 600
     assert before.elapsed_seconds is not None and before.elapsed_unknown_reason is None
@@ -240,7 +234,7 @@ async def test_finish_only_matches_headroom_and_unknown_usage(progress_db, resea
     unknown = await progress_for(receipt.task.id)
     assert unknown.usage.input_tokens is None and unknown.usage.output_tokens is None
     assert unknown.usage.cost.value is None
-    assert unknown.usage.cost.unknown_reason == "price_or_usage_unknown"
+    assert unknown.usage.cost.unknown_reason == "cost_tracking_disabled"
 
     async with session_scope() as session:
         await TaskService(session).checkpoint(execution, checkpoint={}, terminal="failed",
@@ -248,36 +242,6 @@ async def test_finish_only_matches_headroom_and_unknown_usage(progress_db, resea
     terminal = await progress_for(receipt.task.id)
     assert terminal.limits.finish_only is False
     assert terminal.usage.input_tokens is None
-
-
-@pytest.mark.asyncio
-async def test_mandate_cost_projection_degrades_without_failure(progress_db):
-    async with session_scope() as session:
-        session.add(Market(code="SSE", name="Shanghai", timezone="Asia/Shanghai", currency="CNY"))
-        company = Company(canonical_name="公司甲")
-        session.add(company)
-        await session.flush()
-        listing = Listing(company_id=company.id, market_code="SSE", ticker="600001", is_primary=True)
-        session.add(listing)
-        await session.flush()
-        subject = ObjectRef(kind="listing", id=listing.id, revision=1)
-        unknown = Quantity(value=None, unit="USD", unknown_reason="not set")
-        await InvestorService(session).create_mandate("local_owner", Mandate(id=uuid4(),
-            revision=1, created_at=datetime.now(UTC), actor="user", origin_ref=None, goals=(),
-            scope_refs=(subject,), hard_constraints=(), unknowns=(), authorization=ResearchAuthorization(
-                daily_budget=unknown,
-                per_task_budget=Quantity(value=Decimal("1.00"), unit="USD"),
-                max_leads_per_batch=0, max_new_tasks_per_batch=0, source_refs=())), uuid4())
-    conversation = await new_conversation()
-    receipt = await submit(conversation)
-    view = await progress_for(receipt.task.id)
-    assert view.limits.cost_usd == Decimal("1.00") and view.limits.cost_limit_reason is None
-
-    async with session_scope() as session:
-        await session.execute(delete(MandateHead).where(MandateHead.owner_id == "local_owner"))
-    cleared = await progress_for(receipt.task.id)
-    assert cleared.limits.cost_usd is None
-    assert cleared.limits.cost_limit_reason == "mandate_unavailable"
 
 
 @pytest.mark.asyncio
@@ -300,7 +264,7 @@ async def test_progress_routes_snapshot_contract_and_missing_grant(api_client, m
     assert enriched["task"] == default["task"] and enriched["event_cursor"] == default["event_cursor"]
     assert enriched["messages"] == default["messages"]
     assert enriched["progress"]["plan"] is None
-    assert enriched["progress"]["limits"]["cost_limit_reason"] == "unbounded"
+    assert enriched["progress"]["limits"]["model_requests"] == 20
     progress = api_client.get(f"/agent/tasks/{task_id}/progress", headers=key).json()
     assert progress["task_id"] == task_id and progress["task_revision"] == default["task"]["revision"]
 

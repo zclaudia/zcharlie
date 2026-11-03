@@ -6,7 +6,7 @@ separate connections cannot both spend the same remaining allowance.
 """
 
 from datetime import UTC, datetime
-from decimal import ROUND_CEILING, Decimal
+from decimal import Decimal
 from typing import Literal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
@@ -19,8 +19,6 @@ from investment_agent.agent.execution import (
     ExecutionDeniedError,
     budget_purpose,
     check_boundary,
-    cost_limits,
-    purpose_limit,
 )
 from investment_agent.agent.tasks import TaskClaim, TaskService
 from investment_agent.config import Settings
@@ -42,8 +40,8 @@ class BudgetService:
         return (now or datetime.now(UTC)).astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
 
     async def check(self, claim: TaskClaim, *, extra_tokens: int = 0, reserve: bool = False,
-                    now: datetime | None = None, extra_cost: Decimal | None = None, extra_tools: int = 0) -> None:
-        grant, settings = await check_boundary(self.session, claim, self.base)
+                    now: datetime | None = None, extra_tools: int = 0) -> None:
+        _, settings = await check_boundary(self.session, claim, self.base)
         day = self.day(now)
         rows = (await self.session.scalars(select(BudgetEntry).where(
             BudgetEntry.owner_id == "local_owner",
@@ -66,19 +64,6 @@ class BudgetService:
             tokens(task) + extra_tokens > settings.investor_agent_task_tokens or
             tokens(daily) + extra_tokens > settings.investor_agent_daily_tokens):
             raise BudgetExceededError("budget_exhausted")
-
-        task_cap, daily_cap = await cost_limits(self.session, grant)
-        bucket = [r for r in daily if r.purpose == budget_purpose(grant)]
-        bucket_cap = await purpose_limit(self.session, grant)
-        for group, cap in ((task, task_cap), (daily, daily_cap), (bucket, bucket_cap)):
-            if cap is None:
-                continue
-            costs = [r.estimated_cost_usd if r.state in {"reserved", "sent"} else r.cost_usd for r in group]
-            if any(cost is None for cost in costs) or reserve and extra_cost is None:
-                raise BudgetExceededError("cost_unknown_reconciliation_required")
-            total = sum((cost for cost in costs if cost is not None), Decimal(0))
-            if total + (extra_cost or Decimal(0)) > cap:
-                raise BudgetExceededError("budget_exhausted")
 
     @staticmethod
     def headroom(research_kind: str, task: list[BudgetEntry], daily: list[BudgetEntry],
@@ -114,17 +99,6 @@ class BudgetService:
             [r for r in rows if r.task_id == str(claim.task_id)],
             [r for r in rows if r.day == self.day()], settings)
 
-    @staticmethod
-    def prices(settings: Settings) -> tuple[Decimal | None, Decimal | None]:
-        from investment_agent.agent.model import AgentModelConfig
-
-        if (settings.investor_agent_price_version and settings.investor_agent_price_model == settings.agent_model and
-            settings.investor_agent_price_config_version == AgentModelConfig.from_settings(settings, 0).version and
-            settings.investor_agent_input_usd_per_million is not None and
-            settings.investor_agent_output_usd_per_million is not None):
-            return settings.investor_agent_input_usd_per_million, settings.investor_agent_output_usd_per_million
-        return None, None
-
     async def reserve(self, claim: TaskClaim, *, estimated_tokens: int,
                       now: datetime | None = None, estimated_input: int | None = None, output_bound: int | None = None) -> UUID:
         if type(estimated_tokens) is not int or estimated_tokens <= 0:
@@ -135,21 +109,11 @@ class BudgetService:
         ):
             raise ValueError("input/output reservation split must match the total estimate")
         grant, settings = await check_boundary(self.session, claim, self.base)
-        input_price, output_price = self.prices(settings)
-        estimated_cost = None
-        if input_price is not None and output_price is not None:
-            # Direct callers may only have a total estimate: price it at the
-            # more expensive side rather than guessing a split.
-            estimated_cost = (Decimal(estimated_tokens) * max(input_price, output_price) if estimated_input is None or output_bound is None else
-                Decimal(estimated_input) * input_price + Decimal(output_bound) * output_price) / Decimal(1000000)
-        if estimated_cost is not None:
-            estimated_cost = estimated_cost.quantize(Decimal(".000000000001"), rounding=ROUND_CEILING)
-        await self.check(claim, extra_tokens=estimated_tokens, extra_cost=estimated_cost, reserve=True, now=now)
+        await self.check(claim, extra_tokens=estimated_tokens, reserve=True, now=now)
         reservation = BudgetEntry(id=str(uuid4()), task_id=str(claim.task_id),
             attempt_id=str(claim.attempt_id), owner_id="local_owner", day=self.day(now),
-            state="reserved", kind="model", purpose=budget_purpose(grant), calls=1, estimated_tokens=estimated_tokens, estimated_cost_usd=estimated_cost,
-            price_version=settings.investor_agent_price_version if estimated_cost is not None else None,
-            input_price=input_price, output_price=output_price,
+            state="reserved", kind="model", purpose=budget_purpose(grant), calls=1, estimated_tokens=estimated_tokens, estimated_cost_usd=None,
+            price_version=None, input_price=None, output_price=None,
             input_tokens=None, output_tokens=None, cost_usd=None, unknown_reason=None)
         self.session.add(reservation)
         await self.session.flush()
@@ -161,11 +125,6 @@ class BudgetService:
         row = await self.session.get(BudgetEntry, str(reservation), populate_existing=True)
         if row is None or row.attempt_id != str(claim.attempt_id) or row.state != "reserved":
             raise ExecutionDeniedError("invalid_request_reservation")
-        _, settings = await check_boundary(self.session, claim, self.base)
-        prices = self.prices(settings)
-        if (prices != (row.input_price, row.output_price) or
-            row.price_version is not None and settings.investor_agent_price_version != row.price_version):
-            raise ExecutionDeniedError("price_configuration_changed")
         row.state = "sent"
         await self.session.flush()
 
@@ -211,8 +170,6 @@ class BudgetService:
                 raise ValueError("invalid actual usage")
             row.state = "settled"
             row.input_tokens, row.output_tokens = provider_usage["input_tokens"], provider_usage["output_tokens"]
-            if row.input_price is not None and row.output_price is not None:
-                row.cost_usd = ((Decimal(row.input_tokens) * row.input_price + Decimal(row.output_tokens) * row.output_price) / Decimal(1000000)).quantize(Decimal(".000000000001"), rounding=ROUND_CEILING)
         await self.session.flush()
         await self._record_usage(row.task_id, row.attempt_id)
         await TaskService(self.session).append_event(UUID(row.task_id), UUID(row.attempt_id), "progress",
@@ -244,8 +201,6 @@ class BudgetService:
                 raise ValueError("invalid actual usage")
             row.state = "settled"
             row.input_tokens, row.output_tokens = usage["input_tokens"], usage["output_tokens"]
-            if row.input_price is not None and row.output_price is not None:
-                row.cost_usd = ((Decimal(row.input_tokens) * row.input_price + Decimal(row.output_tokens) * row.output_price) / Decimal(1000000)).quantize(Decimal(".000000000001"), rounding=ROUND_CEILING)
         await self.session.flush()
         return await self._record_usage(row.task_id, row.attempt_id)
 
@@ -261,7 +216,7 @@ class BudgetService:
                      output_tokens=None if unknown else sum(r.output_tokens or 0 for r in rows),
                      cost=Quantity(value=sum((cost for cost in costs if cost is not None), Decimal(0)) if known_cost else None,
                                    unit="currency", currency="USD",
-                                   unknown_reason=None if known_cost else "price_or_usage_unknown"))
+                                   unknown_reason=None if known_cost else "cost_tracking_disabled"))
 
     async def observe_tools(self, claim: TaskClaim, count: int) -> None:
         """Charge requested business-tool attempts before native validation/dispatch.
@@ -284,9 +239,9 @@ class BudgetService:
         assert saved is not None
         row = BudgetEntry(id=str(uuid4()), task_id=str(claim.task_id), attempt_id=str(claim.attempt_id),
             owner_id="local_owner", day=self.day(), state="settled", kind="tool", purpose=budget_purpose(ExecutionGrant.model_validate(saved.payload)), calls=count,
-            estimated_tokens=0, estimated_cost_usd=Decimal(0), price_version=None,
+            estimated_tokens=0, estimated_cost_usd=None, price_version=None,
             input_price=None, output_price=None, input_tokens=0, output_tokens=0,
-            cost_usd=Decimal(0), unknown_reason=None)
+            cost_usd=None, unknown_reason=None)
         self.session.add(row)
         await self.session.flush()
         await self._record_usage(str(claim.task_id), str(claim.attempt_id))

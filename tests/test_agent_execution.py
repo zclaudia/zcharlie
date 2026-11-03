@@ -2,7 +2,6 @@
 
 import asyncio
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
 from uuid import UUID, uuid4
 
 import httpx
@@ -20,7 +19,7 @@ from investment_agent.agent.executor import AgentExecutor, deliver_deferred_resu
 from investment_agent.agent.job import AgentJobHandler
 from investment_agent.agent.tasks import ReconciliationRequiredError, TaskService
 from investment_agent.agent.tools import ExecutionContext, ToolRegistration, TrustedTools
-from investment_agent.investor.common import ObjectRef, Quantity
+from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.contracts import Mandate, ResearchAuthorization
 from investment_agent.investor.enums import TaskStatus
 from investment_agent.research.worker import ResearchWorker, default_job_handlers
@@ -189,7 +188,6 @@ async def test_unknown_budget_entries_settle_through_trusted_reconciliation(exec
         fixed = await reconcile_budget(session, base=base, entry_id=UUID(row.id), action="settle",
             usage={"input_tokens": 12, "output_tokens": 8}, operator="ops", reason="provider console")
         assert fixed.state == "settled" and fixed.input_tokens == 12 and fixed.output_tokens == 8
-        assert fixed.cost_usd == Decimal("0.000028")
         await budget.check(claim)
         with pytest.raises(ValueError, match="only unknown"):
             await reconcile_budget(session, base=base, entry_id=UUID(row.id), action="release",
@@ -273,35 +271,6 @@ async def test_sent_rechecks_lowered_budget_after_reservation(execution_db):
         await BudgetService(session, base).settle(reservation, None, sent=False)
     async with session_scope() as session:
         assert (await TaskService(session).get_task(task.id)).usage.requests == 0
-
-
-async def test_verified_cost_atomic_caps_snapshot_and_price_identity(execution_db):
-    base = priced()
-    permission = grant(task_cost_usd=Decimal(".0001"), daily_cost_usd=Decimal(".0001"))
-    task, claim = await admitted(base, permission)
-    async with session_scope() as session:
-        reservation = await BudgetService(session, base).reserve(claim, estimated_tokens=50,
-                                                                estimated_input=30, output_bound=20)
-        await BudgetService(session, base).sent(claim, reservation)
-    # Settlement uses the reserved quote even if settings are subsequently changed.
-    changed = base.model_copy(update={"investor_agent_input_usd_per_million": Decimal(100)})
-    async with session_scope() as session:
-        actual = await BudgetService(session, changed).settle(reservation, {"input_tokens": 30, "output_tokens": 20}, sent=True)
-        assert actual.cost.value == Decimal(".000070")
-        with pytest.raises(BudgetExceededError):
-            await BudgetService(session, base).reserve(claim, estimated_tokens=40)
-    assert BudgetService.prices(base.model_copy(update={"agent_base_url": "https://other.invalid/v1"})) == (None, None)
-    assert BudgetService.prices(base.model_copy(update={"agent_provider": "deepseek"})) == (None, None)
-    async with session_scope() as session:
-        assert (await TaskService(session).get_task(task.id)).usage.cost.value == Decimal(".000070")
-
-
-async def test_money_cap_without_verified_price_stops_before_request(execution_db):
-    base = settings()
-    _, claim = await admitted(base, grant(task_cost_usd=Decimal(1)))
-    async with session_scope() as session:
-        with pytest.raises(BudgetExceededError, match="cost_unknown"):
-            await BudgetService(session, base).reserve(claim, estimated_tokens=50)
 
 
 async def test_native_deferred_private_history_resumes_across_executor_instances(execution_db):
@@ -498,12 +467,10 @@ async def seed_listing_scope(*, paused=False):
         case = InvestorCase(id=str(uuid4()), owner_id="local_owner", listing_id=listing.id, revision=1,
             payload={"status": "researching", "background_paused": paused}, source_refs=[])
         session.add(case)
-        budget = Quantity(value=Decimal(5), unit="currency", currency="USD")
         mandate = Mandate(id=uuid4(), revision=1, created_at=datetime.now(UTC), actor="user", origin_ref=None,
             goals=(), scope_refs=(ref,), hard_constraints=(), unknowns=(),
             authorization=ResearchAuthorization(background_enabled=True, exploration_scope_refs=(ref,),
-                daily_budget=budget, per_task_budget=budget, max_leads_per_batch=20,
-                max_new_tasks_per_batch=3, source_refs=()))
+                max_leads_per_batch=20, max_new_tasks_per_batch=3, source_refs=()))
         session.add(MandateHead(owner_id="local_owner", mandate_id=str(mandate.id), revision=1))
         session.add(MandateRevision(mandate_id=str(mandate.id), revision=1, owner_id="local_owner",
                                    payload=mandate.model_dump(mode="json")))
@@ -557,24 +524,15 @@ async def test_whole_watchlist_membership_and_permission_rechecked(execution_db)
             await check_boundary(session, limited, base, tool="refresh", watchlist=True)
 
 
-async def test_live_mandate_budget_unit_and_current_scope_are_enforced(execution_db):
+async def test_live_mandate_current_scope_is_enforced(execution_db):
     ref, _, mandate = await seed_listing_scope()
     base = priced()
     _, claim = await admitted(base, grant(mandate_id=mandate.id, scope_refs=(ref,)))
-    modified = mandate.model_copy(update={"revision": 2, "authorization": mandate.authorization.model_copy(update={
-        "per_task_budget": Quantity(value=1, unit="shares")})})
     async with session_scope() as session:
+        restricted = mandate.model_copy(update={"revision": 2, "scope_refs": ()})
         session.add(MandateRevision(mandate_id=str(mandate.id), revision=2, owner_id="local_owner",
-                                   payload=modified.model_dump(mode="json")))
-        await session.execute(update(MandateHead).values(revision=2))
-    async with session_scope() as session:
-        with pytest.raises(ExecutionDeniedError, match="budget_unit_invalid"):
-            await BudgetService(session, base).reserve(claim, estimated_tokens=10)
-    async with session_scope() as session:
-        restricted = modified.model_copy(update={"revision": 3, "scope_refs": ()})
-        session.add(MandateRevision(mandate_id=str(mandate.id), revision=3, owner_id="local_owner",
                                    payload=restricted.model_dump(mode="json")))
-        await session.execute(update(MandateHead).values(revision=3))
+        await session.execute(update(MandateHead).values(revision=2))
     async with session_scope() as session:
         with pytest.raises(ExecutionDeniedError, match="scope_revoked"):
             await check_boundary(session, claim, base)
@@ -676,26 +634,6 @@ async def test_default_worker_registers_agent_and_expires_waiting_without_affect
         assert (await TaskService(session).get_task(task.id)).status == TaskStatus.FAILED
 
 
-async def test_verified_small_cost_accumulates_without_six_decimal_rounding(execution_db):
-    base = priced().model_copy(update={"investor_agent_input_usd_per_million": Decimal("0.1"),
-                                      "investor_agent_output_usd_per_million": Decimal("0.1")})
-    task = await admitted(base, claim=False)
-    calls = []
-    def response(messages, info):
-        calls.append(1)
-        return ModelResponse([TextPart("invalid" if len(calls) == 1 else '{"summary":"fixed"}')],
-                             usage=RequestUsage(input_tokens=1, output_tokens=1))
-    await run_worker(base, FunctionModel(response))
-    async with session_scope() as session:
-        final = await TaskService(session).get_task(task.id)
-        assert final.usage.requests == 2
-        assert final.usage.cost.value == Decimal("0.0000004")
-        audit = await session.scalar(select(AgentModelRun))
-        assert audit.cost_usd == Decimal("0.0000004") and audit.cost_unknown_reason is None
-        receipts = (await session.scalars(select(BudgetEntry).where(BudgetEntry.kind == "model"))).all()
-        assert [r.cost_usd for r in receipts] == [Decimal("0.0000002"), Decimal("0.0000002")]
-
-
 async def test_cross_run_native_retry_cannot_reset_request_budget(execution_db):
     base = settings(investor_agent_task_requests=1)
     task = await admitted(base, grant(tool_names=("fetch",)), claim=False)
@@ -767,7 +705,6 @@ async def test_actual_failed_http_response_usage_is_charged_without_sdk_retry(ex
     async with session_scope() as session:
         final = await TaskService(session).get_task(task.id)
         assert final.status == TaskStatus.FAILED and final.usage.input_tokens == 20
-        assert final.usage.cost.value == Decimal(".000028")
         events = await TaskService(session).get_events(task.id)
         assert "PRIVATE" not in str(events) and "fixture-secret" not in str(events)
     assert calls == [1]
@@ -834,11 +771,11 @@ async def test_real_worker_retry_known_provider_failure_keeps_task_budget(execut
     async with session_scope() as session:
         actual = await TaskService(session).get_task(task.id)
         assert actual.status == TaskStatus.FAILED and actual.usage.requests == 2
-        assert actual.usage.input_tokens == 40 and actual.usage.cost.value == Decimal(".000056")
+        assert actual.usage.input_tokens == 40
         run = await session.scalar(select(PipelineRun))
         assert run.status == "success" and run.attempt_count == 2
         audits = (await session.scalars(select(AgentModelRun))).all()
-        assert len(audits) == 2 and sum(a.cost_usd for a in audits) == actual.usage.cost.value
+        assert len(audits) == 2
     assert calls == [1, 1]
 
 

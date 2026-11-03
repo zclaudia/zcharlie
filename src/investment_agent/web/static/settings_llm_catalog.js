@@ -16,7 +16,7 @@ export function catalogSelectionLabel(value, binding) {
   const ref = value?.bindings?.[binding];
   const provider = value?.providers?.find((p) => p.id === ref?.provider_id);
   const model = provider?.models?.find((m) => m.id === ref?.model_id);
-  return model ? `${provider.name} / ${model.name}` : "沿用原配置";
+  return model ? `${provider.name} / ${model.name}` : "使用旧配置";
 }
 
 export function catalogControl(value, encryptionReady) {
@@ -64,13 +64,13 @@ export function catalogControl(value, encryptionReady) {
 
   function renderBindings() {
     clear(bindings);
-    bindings.appendChild(el("h3", {}, "模型选择"));
-    const choices = [["", "沿用原配置"]];
+    bindings.appendChild(el("h3", {}, "用途分配"));
+    const choices = [["", "未选择（使用旧配置）"]];
     for (const provider of draft.providers) {
       for (const model of provider.models) choices.push([`${provider.id}/${model.id}`, `${provider.name || "新 Provider"} / ${model.name || model.model || "新模型"}`]);
     }
     // Unknown future agent bindings are retained when editing today's two consumers.
-    for (const [key, title] of [["agent", "投资 Agent 模型"], ["research", "研究解释与规则草拟模型"]]) {
+    for (const [key, title] of [["agent", "投资 Agent"], ["research", "研究解释与规则草拟"]]) {
       const ref = draft.bindings[key];
       const holder = {value: ref ? `${ref.provider_id}/${ref.model_id}` : ""};
       const control = field(bindings, title, holder, "value", {options: choices});
@@ -84,7 +84,7 @@ export function catalogControl(value, encryptionReady) {
         notify();
       });
     }
-    bindings.appendChild(el("p", {class: "faint"}, "Provider 或模型正在使用时，请先更改选择再删除。保存后从下个任务开始使用。"));
+    bindings.appendChild(el("p", {class: "faint"}, "未选择时继续使用「旧配置（兼容）」里的字段。Provider 或模型正在使用时，请先更改选择再删除。保存后从下个任务开始使用。"));
   }
 
   async function test(provider, model, button) {

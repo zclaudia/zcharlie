@@ -11,7 +11,6 @@ from investment_agent.investor.common import (
     DecimalValue,
     ObjectRef,
     OwnerId,
-    Quantity,
     Record,
     Text,
 )
@@ -118,13 +117,18 @@ class DimensionAssessment(Contract):
 class ResearchAuthorization(Contract):
     background_enabled: bool = False
     exploration_scope_refs: tuple[ObjectRef, ...] = ()
-    daily_budget: Quantity
-    exploration_daily_budget: Quantity | None = None
-    review_daily_budget: Quantity | None = None
-    per_task_budget: Quantity
     max_leads_per_batch: Annotated[int, Field(ge=0)]
     max_new_tasks_per_batch: Annotated[int, Field(ge=0)]
     source_refs: tuple[ObjectRef, ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def drop_legacy_usd_budgets(cls, value: object) -> object:
+        """Stored mandate revisions may still carry the removed USD fields."""
+        if isinstance(value, dict):
+            legacy = {"daily_budget", "per_task_budget", "review_daily_budget", "exploration_daily_budget"}
+            return {key: item for key, item in value.items() if key not in legacy}
+        return value
 
 
 class PortfolioConstraints(Contract):

@@ -93,9 +93,6 @@ try {
       const fixture = await api('/fixture/ag18', {});
       await page.goto(base + '/app/agent?tab=controls');
       await open('启用与投资约定');
-      await control.getByLabel('USD 每日共享总额（空白明确未知）').fill('2');
-      await control.getByLabel('USD 单任务全生命周期上限（空白明确未知）').fill('1');
-      await control.getByLabel('USD 复核日金额（空白未配置）').fill('0.8');
       await control.getByLabel('每批线索上限（0–20）').fill('20');
       await control.getByLabel('每批新任务上限（0–3）').fill('3');
       const scope = control.getByRole('group', {name: '明确交互证券范围'});
@@ -107,7 +104,6 @@ try {
       await confirmed();
       let mandate = await api('/investor/mandate');
       assert.equal(mandate.authorization.background_enabled, false);
-      assert.equal(mandate.authorization.exploration_daily_budget, null);
       assert.ok(mandate.scope_refs.some(r => r.id === 78));
       // A question is accepted while BOTH background switches are off.
       await agentTab(page, 'chat');

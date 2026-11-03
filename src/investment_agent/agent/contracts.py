@@ -10,7 +10,6 @@ from investment_agent.evidence.disclosures import DisclosureAccess
 from investment_agent.investor.common import (
     BusinessError,
     Contract,
-    DecimalValue,
     ObjectRef,
     Quantity,
     Record,
@@ -348,17 +347,7 @@ class TaskLimits(Contract):
     tool_calls: Annotated[int, Field(strict=True, ge=0)]
     tokens: Annotated[int, Field(strict=True, ge=0)]
     seconds: Annotated[float, Field(strict=True, gt=0)]
-    cost_usd: DecimalValue | None = None
-    cost_limit_reason: Text | None = None
     finish_only: bool = False
-
-    @model_validator(mode="after")
-    def cost_known_shape(self) -> "TaskLimits":
-        if self.cost_usd is not None and self.cost_limit_reason is not None:
-            raise ValueError("known cost caps cannot carry a reason")
-        if self.cost_usd is None and self.cost_limit_reason is None:
-            raise ValueError("missing cost caps require a stable reason")
-        return self
 
 
 class TaskProgress(Contract):

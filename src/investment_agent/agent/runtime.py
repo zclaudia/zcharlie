@@ -374,7 +374,7 @@ async def run_agent(
         framework_requests=usage.requests, http_attempts=None if injected else trace.attempts,
         http_responses=trace.responses, usage=usage_data,
         usage_unknown_reason=None if known else ("streaming_usage_not_observed" if any(r.get("streaming") for r in trace.responses) else "provider_usage_missing_or_incomplete"),
-        cost_usd=None, cost_unknown_reason="verified_price_unavailable",
+        cost_usd=None, cost_unknown_reason="cost_tracking_disabled",
     )
     session.add(row)
     await session.flush()

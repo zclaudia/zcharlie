@@ -460,16 +460,9 @@ async def publication_events(case_id: UUID, svc: Service,
     return [{"sequence": row.sequence, **row.payload} for row in (await svc.session.scalars(stmt)).all()]
 
 
-def _positive_usd(quantity: Any) -> bool:
-    return bool(quantity is not None and quantity.value is not None and quantity.value > 0
-        and quantity.unit in {"USD", "currency"} and quantity.currency in {None, "USD"}
-        and (quantity.unit == "USD" or quantity.currency == "USD"))
-
-
 @router.get("/readiness")
 async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstrap_settings)]) -> dict[str, Any]:
     """Read-only configuration diagnostics; no import, credential projection or network."""
-    from investment_agent.agent.budget import BudgetService
     from investment_agent.agent.model import AgentConfigurationError, AgentModelConfig
     from investment_agent.settings.loader import load_settings
 
@@ -486,8 +479,6 @@ async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstra
             config.validate_ready()
         except AgentConfigurationError as exc:
             issues.append(str(exc))
-    if BudgetService.prices(settings)[0] is None:
-        issues.append("价格未知：须核验 USD 输入/输出价格，并绑定报价版本、模型和完整配置指纹")
     if not settings.investor_agent_enabled:
         issues.append("Agent 未启用；历史仍可读取")
     try:
@@ -501,18 +492,13 @@ async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstra
     if not settings.investor_agent_background_enabled:
         background.append("运行设置后台开关未启用")
     if mandate is None:
-        # Existing interactive execution can run without a mandate using other
-        # bounded request/token/time limits. This diagnostic does not invent a USD cap.
-        interactive.append("尚未设置投资约定：交互金额上限未知，仍受请求/token/时间限额")
+        # Interactive execution can run without a mandate; request/token/time
+        # limits still apply.
+        interactive.append("尚未设置投资约定：交互范围与后台授权未明确，仍受请求/token/时间限额")
         background.append("尚无投资约定与后台授权")
         review, exploration = list(background), list(background)
     else:
         auth = mandate.authorization
-        for name, quantity in (("每日共享总额", auth.daily_budget), ("单任务全生命周期金额", auth.per_task_budget)):
-            if not _positive_usd(quantity):
-                message = f"{name}缺少已知正数 USD 上限；不推测汇率"
-                interactive.append(message)
-                background.append(message)
         if not mandate.scope_refs:
             interactive.append("尚未明确交互证券范围")
         if not auth.background_enabled:
@@ -520,15 +506,6 @@ async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstra
         if not auth.exploration_scope_refs:
             background.append("尚未明确后台证券范围")
         review, exploration = list(background), list(background)
-        if auth.review_daily_budget is None:
-            if auth.exploration_daily_budget is not None:
-                review.append("review_budget_unavailable：须独立设置复核日金额")
-            else:
-                review.append("复核日金额未单独配置：旧约定仅受共享总额，建议明确独立上限")
-        elif not _positive_usd(auth.review_daily_budget):
-            review.append("复核日金额缺少已知正数 USD 上限")
-        if not _positive_usd(auth.exploration_daily_budget):
-            exploration.append("探索未授权或额度不可用：须明确正数 USD 探索日金额")
         if min(auth.max_leads_per_batch, settings.investor_agent_max_leads_per_batch) == 0:
             exploration.append("当前线索上限为0，探索关闭")
         if min(auth.max_new_tasks_per_batch, settings.investor_agent_max_new_tasks_per_batch) == 0:

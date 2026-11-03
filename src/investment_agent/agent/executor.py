@@ -327,7 +327,7 @@ class AgentExecutor:
                         audit_row.cost_usd = sum((r.cost_usd for r in receipts if r.cost_usd is not None), Decimal(0))
                         audit_row.cost_unknown_reason = None
                     else:
-                        audit_row.cost_unknown_reason = "price_or_usage_unknown"
+                        audit_row.cost_unknown_reason = "cost_tracking_disabled"
             if error is not None:
                 if rejected_output is not None:
                     rejected, rejected_draft = rejected_output

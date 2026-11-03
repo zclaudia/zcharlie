@@ -207,7 +207,7 @@ console.log(JSON.stringify({
     )
     assert out["home"] == {"sectionId": None, "topicId": None}
     assert out["legacy"] == {"sectionId": "agent", "topicId": None}
-    assert out["model"] == {"sectionId": "agent", "topicId": "model"}
+    assert out["model"] == {"sectionId": "llm", "topicId": "catalog"}
     assert out["llm"] == {"sectionId": "llm", "topicId": None}
     assert out["catalog"] == {"sectionId": "llm", "topicId": "catalog"}
     assert out["cron"] == ["已停用", "工作日 15:10", "1 2 3 4 5"]

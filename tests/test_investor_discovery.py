@@ -1,7 +1,6 @@
 """AG16 finite shortlist, real native selection and purpose budget boundaries."""
 import asyncio
 from datetime import UTC, date, datetime, timedelta
-from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -10,14 +9,12 @@ from pydantic_ai.models.function import FunctionModel
 from pydantic_ai.usage import RequestUsage
 from sqlalchemy import func, select
 
-from investment_agent.agent.budget import BudgetExceededError, BudgetService
 from investment_agent.agent.contracts import ContextBinding, MessageInput
 from investment_agent.agent.conversations import ConversationCreate, ConversationService
 from investment_agent.agent.execution import ExecutionDeniedError, ExecutionGrant, admit
 from investment_agent.agent.executor import AgentExecutor
-from investment_agent.agent.model import AgentModelConfig
 from investment_agent.agent.tasks import TaskService
-from investment_agent.investor.common import Mutation, ObjectRef, Quantity
+from investment_agent.investor.common import Mutation, ObjectRef
 from investment_agent.investor.controls import CaseAction
 from investment_agent.investor.discovery import DiscoveryOutput, DiscoveryService, LeadDecision
 from investment_agent.investor.foundations import InvestorService
@@ -36,10 +33,7 @@ from tests.support.publication import publication_db as publication_db
 
 
 def priced(**overrides):
-    selected = base(investor_agent_background_enabled=True, investor_agent_price_version="verified-fixture",
-        investor_agent_price_model="fixture-model", investor_agent_input_usd_per_million=Decimal("1"),
-        investor_agent_output_usd_per_million=Decimal("1"), **overrides)
-    return selected.model_copy(update={"investor_agent_price_config_version": AgentModelConfig.from_settings(selected, 0).version})
+    return base(investor_agent_background_enabled=True, **overrides)
 
 
 async def setup(count=1, **auth_overrides):
@@ -56,9 +50,8 @@ async def setup(count=1, **auth_overrides):
             subjects.append(ObjectRef(kind="listing", id=listing.id, revision=1))
         foundation = InvestorService(session)
         mandate = await foundation.get_mandate("local_owner")
-        values = dict(background_enabled=True, exploration_scope_refs=tuple(subjects), daily_budget=Quantity(value="10", unit="USD"),
-            per_task_budget=Quantity(value="1", unit="USD"), exploration_daily_budget=Quantity(value="2", unit="USD"),
-            review_daily_budget=Quantity(value="3", unit="USD"), max_leads_per_batch=100, max_new_tasks_per_batch=100)
+        values = dict(background_enabled=True, exploration_scope_refs=tuple(subjects),
+            max_leads_per_batch=100, max_new_tasks_per_batch=100)
         values.update(auth_overrides)
         auth = mandate.authorization.model_copy(update=values)
         await foundation.revise_mandate("local_owner", mandate.model_copy(update={"revision": 2, "scope_refs": tuple(subjects), "authorization": auth}), Mutation(expected_revision=1, idempotency_key=uuid4()))
@@ -180,15 +173,6 @@ async def test_archive_pause_mixed_batch_does_not_poison_new_listing_or_move_pin
 
 
 @pytest.mark.asyncio
-async def test_missing_exploration_bucket_legacy_review_still_works(publication_db):
-    await setup(exploration_daily_budget=None,review_daily_budget=None)
-    async with session_scope() as session:
-        batch=await DiscoveryService(session,priced()).scan()
-        assert batch.state=="blocked" and batch.payload["pending_reason"]=="exploration_budget_unavailable"
-        assert batch.task_id is None
-
-
-@pytest.mark.asyncio
 async def test_two_workers_scan_merge_history_and_future_acquisition(publication_db):
     _,subjects=await setup(2)
     async with session_scope() as session:
@@ -226,34 +210,8 @@ async def claimed(subject,purpose,selected):
 
 
 @pytest.mark.asyncio
-async def test_atomic_two_worker_exploration_bucket_review_no_borrow_and_live_reduction(publication_db):
-    _,subjects=await setup(exploration_daily_budget=Quantity(value=".000150",unit="USD"),review_daily_budget=Quantity(value=".0002",unit="USD"))
-    selected=priced()
-    claims=[await claimed(subjects[0],"exploration",selected) for _ in range(2)]
-    async def reserve(claim):
-        try:
-            async with session_scope() as session:
-                return await BudgetService(session,selected).reserve(claim,estimated_tokens=100)
-        except BudgetExceededError:
-            return None
-    results=await asyncio.gather(*[reserve(claim) for claim in claims])
-    assert sum(result is not None for result in results)==1
-    review=await claimed(subjects[0],"review",selected)
-    async with session_scope() as session:
-        review_receipt=await BudgetService(session,selected).reserve(review,estimated_tokens=100)
-        assert review_receipt
-        mandate=await InvestorService(session).get_mandate("local_owner")
-        auth=mandate.authorization.model_copy(update={"review_daily_budget":Quantity(value=".00005",unit="USD")})
-        await InvestorService(session).revise_mandate("local_owner",mandate.model_copy(update={"revision":mandate.revision+1,"authorization":auth}),Mutation(expected_revision=mandate.revision,idempotency_key=uuid4()))
-    async with session_scope() as session:
-        with pytest.raises(BudgetExceededError):
-            await BudgetService(session,selected).sent(review,review_receipt)
-        assert {row.purpose for row in (await session.scalars(select(BudgetEntry))).all()}=={"review","exploration"}
-
-
-@pytest.mark.asyncio
 async def test_user_nomination_uses_existing_authenticated_direct_path_without_template(publication_db):
-    _,subjects=await setup(exploration_daily_budget=None)
+    _,subjects=await setup()
     selected=base(investor_agent_background_enabled=False)
     async with session_scope() as session:
         service=ConversationService(session,selected)

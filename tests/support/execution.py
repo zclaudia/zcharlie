@@ -1,7 +1,6 @@
 """Agent execution fixtures and constructors (moved from tests/test_agent_execution.py)."""
 
 from datetime import UTC, datetime
-from decimal import Decimal
 from uuid import uuid4
 
 import httpx
@@ -12,7 +11,6 @@ from investment_agent.agent.contracts import ContextBinding
 from investment_agent.agent.execution import ExecutionGrant, admit
 from investment_agent.agent.executor import AgentExecutor
 from investment_agent.agent.job import AgentJobHandler
-from investment_agent.agent.model import AgentModelConfig
 from investment_agent.agent.tasks import TaskService
 from investment_agent.config import Settings
 from investment_agent.research.worker import ResearchWorker
@@ -65,11 +63,8 @@ async def run_worker(base, model=None, *, tools=(), transport=None):
 
 
 def priced(**overrides):
-    base = settings(investor_agent_input_usd_per_million=Decimal(1),
-                    investor_agent_output_usd_per_million=Decimal(2),
-                    investor_agent_price_version="verified-fixture-v1",
-                    investor_agent_price_model="fixture-model", **overrides)
-    return base.model_copy(update={"investor_agent_price_config_version": AgentModelConfig.from_settings(base, 0).version})
+    # Kept as an alias for older fixtures; USD pricing no longer gates execution.
+    return settings(**overrides)
 
 
 class Value(BaseModel):

@@ -2,8 +2,14 @@
 async (page) => {
   const base = "http://127.0.0.1:19872";
   const check = (ok, message) => { if (!ok) throw Error(message); };
+  const saveAndWait = async () => {
+    await page.locator("#settings-save").click();
+    await page.locator("#settings-save-result").getByText("已保存 1 项：Provider 与模型目录。", {exact: true}).waitFor();
+    await page.waitForFunction(() => document.getElementById("settings-dirty-count")?.textContent === "没有未保存的修改");
+  };
   const errors = [];
   page.on("pageerror", (error) => errors.push(String(error)));
+  page.on("dialog", (dialog) => dialog.accept());
   await page.setViewportSize({width: 1440, height: 1000});
   await page.goto(`${base}/app/login`);
   await page.locator('[name="api_key"]').fill("fixture-app");
@@ -26,10 +32,9 @@ async (page) => {
       await item.getByLabel("模型标识", {exact: true}).fill(model);
     }
   }
-  await page.getByLabel("投资 Agent 模型", {exact: true}).selectOption({label: "主 Provider / 推理模型"});
-  await page.getByLabel("研究解释与规则草拟模型", {exact: true}).selectOption({label: "备用 Provider / 备用模型"});
-  await page.locator("#settings-save").click();
-  await page.locator("#settings-save-result").getByText("已保存 1 项：Provider 与模型目录。", {exact: true}).waitFor();
+  await page.getByLabel("投资 Agent", {exact: true}).selectOption({label: "主 Provider / 推理模型"});
+  await page.getByLabel("研究解释与规则草拟", {exact: true}).selectOption({label: "备用 Provider / 备用模型"});
+  await saveAndWait();
   await page.reload();
   await page.getByRole("button", {name: "添加 Provider", exact: true}).waitFor();
   check(await page.locator(".llm-provider").count() === 2, "Providers were not persisted");
@@ -41,12 +46,12 @@ async (page) => {
 
   // Credential omission survives ordinary edits and topic navigation.
   await primary.getByLabel("Provider 名称", {exact: true}).fill("已编辑 Provider");
-  await page.goto(`${base}/app/settings#agent/model`);
-  await page.getByRole("button", {name: "选择 Provider / Model", exact: true}).click();
+  await page.evaluate(() => { location.hash = "#llm/legacy"; });
+  await page.getByRole("button", {name: "测试连接", exact: true}).waitFor();
+  await page.evaluate(() => { location.hash = "#llm/catalog"; });
   await page.getByLabel("Provider 名称", {exact: true}).first().waitFor();
   check(await page.getByLabel("Provider 名称", {exact: true}).first().inputValue() === "已编辑 Provider", "Unsaved draft lost while navigating topics");
-  await page.locator("#settings-save").click();
-  await page.locator("#settings-save-result").getByText("已保存 1 项：Provider 与模型目录。", {exact: true}).waitFor();
+  await saveAndWait();
 
   const response = await page.request.get(`${base}/settings`, {headers: {"X-API-Key": "fixture-app"}});
   const saved = await response.json();
@@ -55,22 +60,21 @@ async (page) => {
 
   // Unused model removal persists; active selections remain intact.
   await primary.locator(".llm-model").first().getByRole("button", {name: "删除模型", exact: true}).click();
-  await page.locator("#settings-save").click();
-  await page.locator("#settings-save-result").getByText("已保存 1 项：Provider 与模型目录。", {exact: true}).waitFor();
+  await saveAndWait();
   check(await page.locator(".llm-model").count() === 2, "Unused model deletion failed");
 
-  await page.goto(`${base}/app/settings#agent/model`);
-  await page.locator("#settings-form").getByText("目录中的 Agent 模型：已编辑 Provider / 推理模型。", {exact: false}).waitFor();
-  await page.getByRole("button", {name: "选择 Provider / Model", exact: true}).click();
+  await page.evaluate(() => { location.hash = "#agent"; });
+  await page.locator("#settings-form").getByText("当前模型", {exact: true}).waitFor();
+  await page.locator("#settings-form").getByText("已编辑 Provider / 推理模型", {exact: false}).waitFor();
+  await page.evaluate(() => { location.hash = "#llm/catalog"; });
   await page.getByRole("button", {name: "添加 Provider", exact: true}).waitFor();
   await page.setViewportSize({width: 390, height: 844});
   check(!(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)), "Mobile page overflows horizontally");
-  await page.getByLabel("投资 Agent 模型", {exact: true}).selectOption({label: "备用 Provider / 备用模型"});
-  await page.locator("#settings-save").click();
-  await page.locator("#settings-save-result").getByText("已保存 1 项：Provider 与模型目录。", {exact: true}).waitFor();
+  await page.getByLabel("投资 Agent", {exact: true}).selectOption({label: "备用 Provider / 备用模型"});
+  await saveAndWait();
   await page.reload();
   await page.getByRole("button", {name: "添加 Provider", exact: true}).waitFor();
-  const select = page.getByLabel("投资 Agent 模型", {exact: true});
+  const select = page.getByLabel("投资 Agent", {exact: true});
   check(await select.locator("option:checked").innerText() === "备用 Provider / 备用模型", "Mobile model switch was not persisted");
   await page.screenshot({path: "/tmp/zcharlie-catalog-final-mobile.png", fullPage: true});
   await page.setViewportSize({width: 1440, height: 1000});

@@ -10,7 +10,6 @@ stable reasons instead of failing the projection.
 import logging
 import unicodedata
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -41,7 +40,6 @@ from investment_agent.agent.research import (
 from investment_agent.agent.tasks import COMPLETED_TASK_STATUSES, TERMINAL, TaskService
 from investment_agent.config import Settings
 from investment_agent.investor.common import ObjectRef
-from investment_agent.investor.contracts import Mandate
 from investment_agent.investor.enums import TaskStatus
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.investor.method_packages import MethodPackage, MethodStep
@@ -53,7 +51,6 @@ from investment_agent.storage.models.agent import (
     PublicTaskEvent,
     ToolAction,
 )
-from investment_agent.storage.models.investor import MandateHead, MandateRevision
 
 _log = logging.getLogger(__name__)
 
@@ -227,35 +224,6 @@ async def _plan_view(session: AsyncSession, task: Task, grant: ExecutionGrant) -
         method=method)
 
 
-async def _task_cost_limit(session: AsyncSession,
-                           grant: ExecutionGrant) -> tuple[Decimal | None, str | None]:
-    """Per-task USD cap for display; cost_limits' rules without its raises."""
-    cap = grant.task_cost_usd
-    if grant.mandate_id is None:
-        return (None, "unbounded") if cap is None else (cap, None)
-    head = await session.get(MandateHead, grant.owner)
-    if head is None or head.mandate_id != str(grant.mandate_id):
-        return None, "mandate_unavailable"
-    revision = await session.get(MandateRevision, (head.mandate_id, head.revision))
-    if revision is None:
-        return None, "mandate_unavailable"
-    quantity = Mandate.model_validate(revision.payload).authorization.per_task_budget
-    currency = quantity.currency
-    if quantity.unit in {"USD", "CNY", "HKD", "EUR"}:
-        if currency is not None and currency != quantity.unit:
-            return None, "authorization_budget_currency_invalid"
-        currency = quantity.unit
-    elif quantity.unit != "currency":
-        return None, "authorization_budget_unit_invalid"
-    if quantity.value is not None and currency != "USD":
-        return None, "verified_exchange_rate_unavailable"
-    if quantity.value is not None and quantity.value < 0:
-        return None, "authorization_budget_invalid"
-    if quantity.value is not None:
-        cap = min(cap, quantity.value) if cap is not None else quantity.value
-    return (cap, None) if cap is not None else (None, "unbounded")
-
-
 async def _elapsed(session: AsyncSession, task: Task,
                    now: datetime) -> tuple[int | None, str | None]:
     """Queuing and waiting count; terminal duration freezes at the final state."""
@@ -277,7 +245,6 @@ async def task_progress(session: AsyncSession, task_id: UUID, base: Settings) ->
     grant = ExecutionGrant.model_validate(saved.payload)
     settings = await load_settings(session, base=base)
     now = datetime.now(UTC)
-    cost_usd, cost_reason = await _task_cost_limit(session, grant)
     day = BudgetService.day()
     rows = (await session.scalars(select(BudgetEntry).where(
         BudgetEntry.owner_id == "local_owner", BudgetEntry.state != "released",
@@ -288,7 +255,7 @@ async def task_progress(session: AsyncSession, task_id: UUID, base: Settings) ->
     elapsed, elapsed_reason = await _elapsed(session, task, now)
     limits = TaskLimits(model_requests=settings.investor_agent_task_requests,
         tool_calls=settings.investor_agent_task_tool_calls, tokens=settings.investor_agent_task_tokens,
-        seconds=settings.investor_agent_task_seconds, cost_usd=cost_usd, cost_limit_reason=cost_reason,
+        seconds=settings.investor_agent_task_seconds,
         finish_only=False if task.status.value in TERMINAL else bool(headroom["finish_only"]))
     usage: Usage = task.usage
     return TaskProgress(task_id=task.id, task_revision=task.revision, research_kind=grant.research_kind,

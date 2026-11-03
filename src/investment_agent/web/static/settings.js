@@ -543,11 +543,20 @@ function groupNotices(group) {
     );
   }
   if (group.key === "llm") {
-    const key = group.items.find((item) => item.key === "llm_tier3_api_key");
-    if (key && key.decrypt_error) {
-      notices.push(el("p", { class: "notice notice-warn" }, `已保存的 API Key 无法解密：${key.decrypt_error}`));
-    } else if (key && !key.configured && !key.env_fallback) {
-      notices.push(el("p", { class: "notice notice-warn" }, "未配置大模型 API Key：研究解释与规则草拟会直接失败。"));
+    const catalog = state.data && state.data.llm_catalog;
+    const binding = catalog && catalog.bindings && catalog.bindings.research;
+    if (binding) {
+      const provider = (catalog.providers || []).find((item) => item.id === binding.provider_id);
+      if (provider && !provider.configured) {
+        notices.push(el("p", { class: "notice notice-warn" }, "所选研究解释模型的 Provider 尚未保存 API Key：研究解释与规则草拟会直接失败。"));
+      }
+    } else {
+      const key = group.items.find((item) => item.key === "llm_tier3_api_key");
+      if (key && key.decrypt_error) {
+        notices.push(el("p", { class: "notice notice-warn" }, `已保存的 API Key 无法解密：${key.decrypt_error}`));
+      } else if (key && !key.configured && !key.env_fallback) {
+        notices.push(el("p", { class: "notice notice-warn" }, "旧配置未设置研究解释 API Key：未选择目录模型时，研究解释与规则草拟会直接失败。"));
+      }
     }
   }
   if (group.key === "notifications") {
@@ -627,13 +636,12 @@ export const SETTINGS_SECTIONS = Object.freeze([
     navGroup: "研究",
     groups: ["agent"],
     title: "投资 Agent",
-    blurb: "模型、价格、开关分开保存。保存只更新配置，不代表供应商或研究质量已经验证。",
+    blurb: "只管运行：开关、额度和队列。模型端点、密钥和能力参数在「模型」里统一管理。",
     topicGroups: [
-      { label: "模型与计费", topicIds: ["model", "price"] },
-      { label: "能不能跑", topicIds: ["switches", "quota"] },
+      { label: "运行", topicIds: ["switches", "quota"] },
       { label: "不常改", topicIds: ["advanced"] },
     ],
-    links: [{ href: "/app/agent", title: "投资约定", detail: "金额上限、readiness 与当前配置指纹" }],
+    links: [{ href: "/app/agent", title: "投资约定", detail: "后台授权、readiness 与当前配置指纹" }],
     topics: [
       {
         id: "switches",
@@ -653,24 +661,6 @@ export const SETTINGS_SECTIONS = Object.freeze([
         ],
       },
       {
-        id: "model",
-        title: "模型",
-        note: "与解释模型独立。密钥加密保存，只写不读。",
-        keys: ["agent_provider", "agent_base_url", "agent_model", "agent_api_key", "agent_profile", "agent_profile_model", "agent_output_mode"],
-      },
-      {
-        id: "price",
-        title: "计费核验",
-        note: "价格未知就留空，计费保持停用。绑定模型必须和执行模型相同。",
-        keys: [
-          "investor_agent_input_usd_per_million",
-          "investor_agent_output_usd_per_million",
-          "investor_agent_price_model",
-          "investor_agent_price_version",
-          "investor_agent_price_config_version",
-        ],
-      },
-      {
         id: "quota",
         title: "额度",
         note: "仍与投资约定取较小值。每批上限不是产出目标。",
@@ -682,14 +672,10 @@ export const SETTINGS_SECTIONS = Object.freeze([
       },
       {
         id: "advanced",
-        title: "队列与端点",
+        title: "队列与方法影子",
         note: "队列满时拒绝新任务，不重建已有任务。",
         blocks: [
           blocks("队列", ["agent_queue_max_running", "agent_queue_interactive_capacity", "agent_queue_review_capacity", "agent_queue_exploration_capacity"]),
-          blocks("端点", [
-            "agent_credential_ref", "agent_supports_json_schema", "agent_supports_json_object", "agent_tool_choice_required",
-            "agent_thinking", "agent_timeout_seconds", "agent_temperature", "agent_max_tokens", "agent_retries",
-          ]),
           blocks("方法影子运营", ["method_candidate_shadow_min_positives", "method_candidate_shadow_max_per_proposal"]),
         ],
       },
@@ -699,18 +685,39 @@ export const SETTINGS_SECTIONS = Object.freeze([
     id: "llm",
     navGroup: "研究",
     groups: ["llm"],
-    title: "大模型",
-    blurb: "管理多个 Provider 和模型，分别为投资 Agent、研究解释选择模型。",
+    title: "模型",
+    blurb: "Provider、端点、密钥和模型能力参数只在这里管理；为投资 Agent 和研究解释选择使用的模型。",
+    topicGroups: [
+      { label: "使用", topicIds: ["catalog"] },
+      { label: "研究解释", topicIds: ["research"] },
+      { label: "兼容", topicIds: ["legacy"] },
+    ],
     topics: [{
       id: "catalog",
       title: "Provider 与模型",
-      note: "每个 Provider 共享接口地址与 API Key，可添加多个模型。选择沿用原配置时，继续使用原有设置。",
+      note: "每个 Provider 共享接口地址与 API Key，可添加多个模型。用途分配里「未选择」时，继续使用下方旧配置。",
       keys: ["llm_catalog"],
     }, {
-      id: "llm",
-      title: "原解释模型配置",
-      note: "目录中选择研究模型后，接口、模型、推理模式和超时使用所选模型的设置。规则草拟推理模式仍可单独覆盖。",
-      keys: ["llm_tier3_base_url", "llm_tier3_model", "llm_tier3_api_key", "llm_tier3_thinking", "llm_rule_draft_thinking", "llm_request_timeout_seconds"],
+      id: "research",
+      title: "规则草拟",
+      note: "选择目录模型后，规则草拟沿用该模型；这里只覆盖推理模式。auto = 沿用所选模型。",
+      keys: ["llm_rule_draft_thinking"],
+    }, {
+      id: "legacy",
+      title: "旧配置（兼容）",
+      note: "仅在用途分配选择「未选择（使用旧配置）」时生效；选择目录模型后，这里的值会被模型目录覆盖。",
+      blocks: [
+        blocks("旧 Agent 配置", [
+          "agent_provider", "agent_base_url", "agent_model", "agent_api_key", "agent_credential_ref",
+          "agent_profile", "agent_profile_model", "agent_output_mode",
+          "agent_supports_json_schema", "agent_supports_json_object", "agent_tool_choice_required",
+          "agent_thinking", "agent_timeout_seconds", "agent_temperature", "agent_max_tokens", "agent_retries",
+        ]),
+        blocks("旧研究解释配置", [
+          "llm_tier3_base_url", "llm_tier3_model", "llm_tier3_api_key", "llm_tier3_thinking",
+          "llm_request_timeout_seconds",
+        ]),
+      ],
     }],
   },
   {
@@ -848,6 +855,8 @@ export function settingsCatalogKeys() {
 export function parseSettingsHash(hash) {
   const raw = String(hash || "").replace(/^#/, "");
   if (raw === "agent-settings") return { sectionId: "agent", topicId: null };
+  // 旧深链：Agent 的模型字段已并入「模型」页，保留书签可用。
+  if (raw === "agent/model") return { sectionId: "llm", topicId: "catalog" };
   const [sectionId, topicId] = raw.split("/").filter(Boolean);
   return { sectionId: sectionId || null, topicId: topicId || null };
 }
@@ -873,6 +882,14 @@ function blankValue(value) {
   return value === null || value === undefined || value === "";
 }
 
+// 目录绑定优先；未选择绑定时才看旧的 agent_* 配置。
+function agentModelLabel(value) {
+  const catalog = value("llm_catalog");
+  return catalog?.bindings?.agent
+    ? catalogSelectionLabel(catalog, "agent")
+    : String(value("agent_model") || "").trim() || "未配置";
+}
+
 export function topicSummary(topic, read) {
   const value = (key) => read(key);
   switch (topic.id) {
@@ -881,18 +898,17 @@ export function topicSummary(topic, read) {
       const on = toggles.filter((key) => value(key) === true).length;
       return on === 0 ? "全部关闭" : `${on} 项开启`;
     }
-    case "model":
-      return value("llm_catalog")?.bindings?.agent ? catalogSelectionLabel(value("llm_catalog"), "agent") : String(value("agent_model") || "").trim() || "未填写";
     case "catalog":
       return `${value("llm_catalog")?.providers?.length || 0} 个 Provider`;
-    case "price":
-      return blankValue(value("investor_agent_input_usd_per_million")) ? "为空则停用" : "价格已填";
+    case "research":
+      if (value("llm_rule_draft_thinking") === "auto") return "沿用所选模型";
+      return value("llm_rule_draft_thinking") === "enabled" ? "强制开启推理" : "强制关闭推理";
+    case "legacy":
+      return "仅未选择目录模型时生效";
     case "quota":
       return `每批 ${value("investor_agent_max_leads_per_batch")} 条线索`;
     case "advanced":
       return `并发 ${value("agent_queue_max_running")}`;
-    case "llm":
-      return String(value("llm_tier3_model") || "").trim() || "未填模型";
     case "notify":
       return value("notification_external_enabled") ? "外部推送" : "仅站内";
     case "candidates":
@@ -926,16 +942,21 @@ export function sectionHome(section, read, lookup) {
   const value = (key) => read(key);
   const row = (key) => lookup(key);
   switch (section.id) {
-    case "agent": {
-      const model = value("llm_catalog")?.bindings?.agent ? catalogSelectionLabel(value("llm_catalog"), "agent") : String(value("agent_model") || "").trim();
-      const price = blankValue(value("investor_agent_input_usd_per_million")) ? "价格为空" : "价格已填";
-      return { value: value("investor_agent_enabled") === true ? "已开启" : "已关闭", detail: `${model || "模型未填"} · ${price}` };
-    }
-    case "llm":
+    case "agent":
       return {
-        value: `${value("llm_catalog")?.providers?.length || 0} 个 Provider`,
-        detail: value("llm_catalog")?.bindings?.research ? catalogSelectionLabel(value("llm_catalog"), "research") : row("llm_tier3_api_key")?.configured ? "原解释模型 Key 已设置" : "原解释模型 Key 未配置",
+        value: value("investor_agent_enabled") === true ? "已开启" : "已关闭",
+        detail: agentModelLabel(value),
       };
+    case "llm": {
+      const catalog = value("llm_catalog");
+      const research = catalog?.bindings?.research
+        ? catalogSelectionLabel(catalog, "research")
+        : row("llm_tier3_api_key")?.configured ? "旧配置 Key 已设置" : "旧配置 Key 未配置";
+      return {
+        value: `${catalog?.providers?.length || 0} 个 Provider`,
+        detail: `Agent：${agentModelLabel(value)} · 研究：${research}`,
+      };
+    }
     case "notify":
       return { value: value("notification_external_enabled") ? "外部推送" : "仅站内", detail: "只发新变化的状态和引用" };
     case "data":
@@ -1062,6 +1083,17 @@ function renderTopicList(section) {
   if (section.id === "schedule") {
     for (const notice of groupNotices({ key: "schedule", items: [] })) body.appendChild(notice);
   }
+  if (section.id === "agent") {
+    body.appendChild(el("h2", { class: "settings-kicker" }, "概览"));
+    const overview = el("div", { class: "list-group settings-jump-list" });
+    overview.appendChild(jumpRow({
+      title: "当前模型",
+      detail: "端点、密钥与能力参数在「模型」中管理",
+      value: agentModelLabel(readNow),
+      onClick: () => openPlace("llm", "catalog"),
+    }));
+    body.appendChild(overview);
+  }
   for (const group of groupedTopics(section)) {
     if (group.label) body.appendChild(el("h2", { class: "settings-kicker" }, group.label));
     const list = el("div", { class: "list-group settings-jump-list" });
@@ -1088,7 +1120,7 @@ function renderTopicList(section) {
 }
 
 function topicNoticeKey(topic) {
-  if (topic.id === "llm") return "llm";
+  if (topic.id === "legacy") return "llm";
   if (topic.id === "ifind") return "ifind";
   if (topic.id === "notify") return "notifications";
   if (topic.id === "gateway") return "gateway";
@@ -1121,11 +1153,8 @@ function renderTopic(topic, section) {
     body.appendChild(el("p", { class: "settings-apply" }, `生效：${label(APPLY_LABELS, apply)}。${label(APPLY_TITLES, apply)}`));
   }
   if (topic.note) body.appendChild(el("p", { class: "faint settings-note" }, topic.note));
-  if (section.id === "agent" && topic.id === "model") {
-    body.appendChild(el("p", {class: "notice"}, `目录中的 Agent 模型：${catalogSelectionLabel(state.data.llm_catalog, "agent")}。选择目录模型后，使用该模型的参数；下方保留原配置。`));
-    const choose = el("button", {type: "button", class: "btn btn-sm secondary"}, "选择 Provider / Model");
-    choose.addEventListener("click", () => openPlace("llm", "catalog"));
-    body.appendChild(choose);
+  if (section.id === "llm" && topic.id === "legacy") {
+    body.appendChild(el("p", {class: "notice notice-warn"}, "这些字段只在用途分配选择「未选择（使用旧配置）」时生效。选择目录模型后，这里的值会被模型目录覆盖。"));
   }
   const noticeKey = topicNoticeKey(topic);
   if (noticeKey) {
@@ -1143,7 +1172,8 @@ function renderTopic(topic, section) {
     }
     body.appendChild(list);
   }
-  if (topic.id === "llm" || topic.id === "ifind") root.appendChild(connectionTest(topic.id));
+  if (topic.id === "legacy") root.appendChild(connectionTest("llm"));
+  if (topic.id === "ifind") root.appendChild(connectionTest("ifind"));
   return root;
 }
 

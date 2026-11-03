@@ -14,14 +14,12 @@ from pydantic import Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from investment_agent.agent.budget import BudgetService
 from investment_agent.agent.contracts import ContextBinding
 from investment_agent.agent.execution import (
     ExecutionDeniedError,
     ExecutionGrant,
     admit,
     check_boundary,
-    cost_limits,
     live_policy,
 )
 from investment_agent.agent.executor import RunSpecification, TaskDisposition
@@ -181,10 +179,7 @@ class DiscoveryService:
         try:
             if len(leads) > limit:
                 raise ExecutionDeniedError("live_batch_limit_reduced")
-            settings = await live_policy(self.session, grant, self.base)
-            await cost_limits(self.session, grant)
-            if BudgetService.prices(settings) == (None, None):
-                raise ExecutionDeniedError("background_price_unavailable")
+            await live_policy(self.session, grant, self.base)
             task = await admit(self.session, base=self.base, input_key=f"discovery:{batch.id}",
                 binding=ContextBinding(context_refs=refs, base_refs=refs, as_of=datetime.now(UTC)), grant=grant, kind="agent_discovery")
         except ExecutionDeniedError as exc:
@@ -216,7 +211,6 @@ class DiscoveryService:
         ref = ObjectRef.model_validate(record["listing_ref"])
         probe = ExecutionGrant(mode="background", source="authorized_background", purpose="exploration", scope_refs=(ref,), mandate_id=mandate.id, prompt=record["question"])
         await live_policy(self.session, probe, self.base)
-        await cost_limits(self.session, probe)
         case = await InvestorService(self.session).create_case("local_owner", CreateCase(listing_ref=ref, question=record["question"],
             idempotency_key=uuid5(UUID(batch.id), record["id"])), trusted_actor="agent")
         refs = (ref, ObjectRef(kind="case", id=case.id, revision=case.revision))
@@ -224,10 +218,7 @@ class DiscoveryService:
             mandate_id=mandate.id, current_research=True, research_kind="company_research",
             tool_names=tuple(r.name for r in registrations()) + ("publish_recommendation", "extend_recommendation"),
             prompt="研究这个明确问题：" + record["question"] + "。入选理由与可信来源：" + json.dumps(record, ensure_ascii=False))
-        settings = await live_policy(self.session, grant, self.base)
-        await cost_limits(self.session, grant)
-        if BudgetService.prices(settings) == (None, None):
-            raise ExecutionDeniedError("background_price_unavailable")
+        await live_policy(self.session, grant, self.base)
         task = await admit(self.session, base=self.base, input_key=f"discovery-research:{record['id']}",
             binding=ContextBinding(context_refs=refs, base_refs=(*refs, ObjectRef(kind="mandate", id=mandate.id, revision=mandate.revision)), as_of=datetime.now(UTC)),
             grant=grant, kind="agent_research", parent_task_id=UUID(batch.task_id) if batch.task_id else None)

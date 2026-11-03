@@ -101,6 +101,7 @@ class ExecutionGrant(BaseModel):
     memory_valid_until: datetime | None = None
     mandate_id: UUID | None = None
     expires_at: datetime | None = None
+    # Deprecated: kept so grants saved before USD limits were removed still parse.
     task_cost_usd: Decimal | None = Field(default=None, ge=0)
     daily_cost_usd: Decimal | None = Field(default=None, ge=0)
     purpose: Literal["interactive", "review", "exploration"] | None = None
@@ -154,36 +155,6 @@ class ExecutionGrant(BaseModel):
 def budget_purpose(grant: ExecutionGrant) -> str:
     # Existing immutable review admissions retain their trusted classification.
     return grant.purpose or ("review" if grant.research_kind == "review" else "interactive")
-
-
-async def purpose_limit(session: AsyncSession, grant: ExecutionGrant) -> Decimal | None:
-    purpose = budget_purpose(grant)
-    if purpose == "interactive":
-        return None
-    if grant.mandate_id is None:
-        if purpose == "exploration":
-            raise ExecutionDeniedError("exploration_budget_unavailable")
-        return None
-    from investment_agent.investor.contracts import Mandate
-    head = await session.get(MandateHead, grant.owner, populate_existing=True)
-    if head is None or head.mandate_id != str(grant.mandate_id):
-        raise ExecutionDeniedError("mandate_unavailable")
-    row = await session.get(MandateRevision, (head.mandate_id, head.revision))
-    assert row is not None
-    auth = Mandate.model_validate(row.payload).authorization
-    quantity = auth.exploration_daily_budget if purpose == "exploration" else auth.review_daily_budget
-    # Legacy review remains within the existing total. Once exploration is
-    # configured, review requires its own explicit allowance and cannot borrow.
-    if quantity is None:
-        if purpose == "exploration" or auth.exploration_daily_budget is not None:
-            raise ExecutionDeniedError(purpose + "_budget_unavailable")
-        return None
-    if quantity.value is None:
-        raise ExecutionDeniedError(purpose + "_budget_unavailable")
-    currency = quantity.currency if quantity.unit == "currency" else quantity.unit
-    if currency != "USD" or quantity.unit not in {"currency", "USD"} or quantity.currency not in {None, "USD"} or quantity.value < 0:
-        raise ExecutionDeniedError("purpose_budget_requires_known_USD")
-    return quantity.value
 
 
 async def live_policy(
@@ -253,7 +224,6 @@ async def live_policy(
             raise ExecutionDeniedError("scope_archived")
         if grant.mode == "background" and case.payload.get("background_paused"):
             raise ExecutionDeniedError("background_paused")
-    await purpose_limit(session, grant)
     return settings
 
 
@@ -266,37 +236,6 @@ async def scope_identities(session: AsyncSession, refs: tuple[ObjectRef, ...], o
                 raise ExecutionDeniedError("scope_unavailable")
             identities.add(("listing", str(case.listing_id)))
     return identities
-
-
-async def cost_limits(session: AsyncSession, grant: ExecutionGrant) -> tuple[Decimal | None, Decimal | None]:
-    task, daily = grant.task_cost_usd, grant.daily_cost_usd
-    if grant.mandate_id is not None:
-        head = await session.get(MandateHead, grant.owner, populate_existing=True)
-        assert head is not None
-        revision = await session.get(MandateRevision, (head.mandate_id, head.revision))
-        assert revision is not None
-        from investment_agent.investor.contracts import Mandate
-        auth = Mandate.model_validate(revision.payload).authorization
-        caps = []
-        for quantity in (auth.per_task_budget, auth.daily_budget):
-            currency = quantity.currency
-            if quantity.unit in {"USD", "CNY", "HKD", "EUR"}:
-                if currency is not None and currency != quantity.unit:
-                    raise ExecutionDeniedError("authorization_budget_currency_invalid")
-                currency = quantity.unit
-            elif quantity.unit != "currency":
-                raise ExecutionDeniedError("authorization_budget_unit_invalid")
-            if quantity.value is not None and currency != "USD":
-                raise ExecutionDeniedError("verified_exchange_rate_unavailable")
-            if quantity.value is not None and quantity.value < 0:
-                raise ExecutionDeniedError("authorization_budget_invalid")
-            caps.append(quantity.value)
-        if grant.mode == "background" and any(cap is None for cap in caps):
-            raise ExecutionDeniedError("background_budget_unavailable")
-        task = min(cap for cap in (task, caps[0]) if cap is not None) if task is not None or caps[0] is not None else None
-        daily = min(cap for cap in (daily, caps[1]) if cap is not None) if daily is not None or caps[1] is not None else None
-    return task, daily
-
 
 
 async def admit(

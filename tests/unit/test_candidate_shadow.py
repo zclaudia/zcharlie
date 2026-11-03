@@ -45,7 +45,7 @@ from investment_agent.api.routes.methods import (
     _candidate_progress_replay,
     _offline_progress_replay,
 )
-from investment_agent.investor.common import ObjectRef, Quantity
+from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.foundations import InvestorError, InvestorService
 from investment_agent.investor.methods import (
     CANDIDATE_OUTPUT_CONTRACT,
@@ -301,25 +301,14 @@ async def shadow_ready_mandate(subject, *, exploration_scope=True):
     async with session_scope() as session:
         foundation = InvestorService(session)
         mandate = await foundation.get_mandate("local_owner")
-        budget = Quantity(value="5", unit="USD")
         auth = mandate.authorization.model_copy(update={
             "background_enabled": True,
-            "exploration_scope_refs": (subject,) if exploration_scope else (),
-            "daily_budget": budget, "per_task_budget": budget})
+            "exploration_scope_refs": (subject,) if exploration_scope else ()})
         await foundation.revise_mandate("local_owner", mandate.model_copy(update={"authorization": auth, "revision": mandate.revision + 1}), Mutation(expected_revision=mandate.revision, idempotency_key=uuid4()))
 
 
 def shadow_settings(**overrides):
-    """Background settings with the verified offline prices the existing
-    daily/task cost configuration requires for any real background run."""
-    from decimal import Decimal
-
-    from investment_agent.agent.model import AgentModelConfig
-
-    selected = base(investor_agent_background_enabled=True, investor_agent_price_version="offline-verified",
-        investor_agent_price_model="fixture-model", investor_agent_input_usd_per_million=Decimal("1"),
-        investor_agent_output_usd_per_million=Decimal("1"), **overrides)
-    return selected.model_copy(update={"investor_agent_price_config_version": AgentModelConfig.from_settings(selected, 0).version})
+    return base(investor_agent_background_enabled=True, **overrides)
 
 
 async def release_fixture_budget():
@@ -549,7 +538,7 @@ async def test_candidate_shadow_routes_wire_through_the_service(conversation_db,
     from investment_agent.api.app import create_app
 
     monkeypatch.setattr("investment_agent.web.routes.get_bootstrap_settings", lambda: shadow_settings())
-    app = create_app()
+    app = create_app(settings=shadow_settings())
     app.dependency_overrides[get_bootstrap_settings] = lambda: shadow_settings()
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver", headers={"X-API-Key": "fixture-app"}) as client:
         unknown = (await client.post(f"/investor/methods/proposals/{uuid4()}/candidate-shadow", json={"mutation_id": str(uuid4()), "prompt": "q", "expected": "pass"})).status_code

@@ -389,14 +389,12 @@ async def test_model_can_prepare_exact_proposal_but_cannot_self_approve(controls
 
 @pytest.mark.asyncio
 async def test_user_pause_live_background_only_and_mute_delivery_only(controls_db):
-    from investment_agent.investor.common import Quantity
     candidate, _, subject = await fixture()
     enabled = base().model_copy(update={"investor_agent_background_enabled": True})
     async with session_scope() as session:
         svc = UserControlService(session)
         mandate = await svc.get_mandate("local_owner")
-        budget = Quantity(value="5", unit="USD")
-        authorization = mandate.authorization.model_copy(update={"background_enabled": True, "exploration_scope_refs": (subject,), "per_task_budget": budget, "daily_budget": budget})
+        authorization = mandate.authorization.model_copy(update={"background_enabled": True, "exploration_scope_refs": (subject,)})
         revised = await execute(session, MandateAction(candidate=mandate.model_copy(update={"revision": 2, "authorization": authorization}), expected_revision=1))
         tasks = []
         for mode, source in (("background", "authorized_background"), ("interactive", "authenticated_message")):
@@ -455,10 +453,10 @@ async def test_inflight_memory_revocation_settles_model_cost_blocks_tools_and_pu
         final = await TaskService(session).get_task(task.id)
         assert final.status == TaskStatus.FAILED and final.usage.requests == 1 and final.usage.input_tokens == 20
         entry = await session.scalar(select(BudgetEntry))
-        assert entry.state == "settled" and entry.cost_usd > 0
+        assert entry.state == "settled" and entry.input_tokens == 20
         audit = await session.scalar(select(AgentModelRun))
         assert audit.usage == {"input_tokens": 20, "output_tokens": 4}
-        assert (await BudgetService(session, configured).usage(task.id)).cost.value > 0
+        assert (await BudgetService(session, configured).usage(task.id)).input_tokens == 20
         assert not calls
 
 
