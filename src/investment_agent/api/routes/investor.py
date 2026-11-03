@@ -467,18 +467,13 @@ async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstra
     from investment_agent.settings.loader import load_settings
 
     settings = await load_settings(svc.session, base=base)
-    config = AgentModelConfig.from_settings(settings, 0)
     issues: list[str] = []
-    for key, label in (("agent_base_url", "独立 Agent 端点"), ("agent_model", "独立 Agent 模型")):
-        if not config.values[key]:
-            issues.append(f"{label}未配置")
-    if not config.credential.get_secret_value():
-        issues.append("独立 Agent API Key 未配置或不可解密；在加密设置页修正")
-    if not issues:
-        try:
-            config.validate_ready()
-        except AgentConfigurationError as exc:
-            issues.append(str(exc))
+    config: AgentModelConfig | None = None
+    try:
+        config = AgentModelConfig.from_settings(settings, 0)
+        config.validate_ready()
+    except AgentConfigurationError as exc:
+        issues.append(str(exc))
     if not settings.investor_agent_enabled:
         issues.append("Agent 未启用；历史仍可读取")
     try:
@@ -514,7 +509,7 @@ async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstra
         "portfolio_ledger_enabled": settings.portfolio_ledger_enabled,
         "runtime_background_enabled": settings.investor_agent_background_enabled,
         "mandate_background_enabled": mandate.authorization.background_enabled if mandate else False,
-        "model_config_fingerprint": config.version, "network_verified": False,
+        "model_config_fingerprint": config.version if config else "", "network_verified": False,
         "local_configuration_issues": issues, "interactive_issues": interactive,
         "review_issues": review, "exploration_issues": exploration,
         "runtime_max_leads": settings.investor_agent_max_leads_per_batch,
@@ -523,9 +518,9 @@ async def readiness(svc: Service, base: Annotated[Settings, Depends(get_bootstra
             mandate.authorization.max_leads_per_batch) if mandate else 0,
         "effective_max_new_tasks": min(settings.investor_agent_max_new_tasks_per_batch,
             mandate.authorization.max_new_tasks_per_batch) if mandate else 0,
-        "output_mode": settings.agent_output_mode,
-        "supports_json_object": settings.agent_supports_json_object,
-        "supports_json_schema": settings.agent_supports_json_schema}
+        "output_mode": config.values["agent_output_mode"] if config else "",
+        "supports_json_object": bool(config.values["agent_supports_json_object"]) if config else False,
+        "supports_json_schema": bool(config.values["agent_supports_json_schema"]) if config else False}
 
 
 @router.get("/operations")

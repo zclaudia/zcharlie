@@ -402,26 +402,23 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
   `API_KEY`、`WEB_SESSION_SECRET`、`WEB_SESSION_TTL_MINUTES`（默认 720）、`WEB_COOKIE_SECURE`、
   `WEB_PUBLIC_ORIGIN`（远程部署见 [`docs/product/security-deployment.md`](docs/product/security-deployment.md)）、
   `SETTINGS_ENCRYPTION_KEY`（加密存库的 API key；与数据库分开保管，丢失后需重新填写密钥）。
-- **运行时层（数据库，`/app/settings` 或 `ia settings` 管理）**：LLM（地址、模型、key、推理开关、超时）、
-  iFinD 网关、采集节流、核对预算、候选过期 / 冷却天数，以及全部调度（cron、目标池、`hit_cap`、
-  `calibration_count`）。每项的范围、默认值与说明见设置页。修改无需重启：API 下一请求、
+- **运行时层（数据库，`/app/settings` 或 `ia settings` 管理）**：模型目录（Provider 端点与密钥、模型能力标签）、
+  各 Agent / 研究任务的模型槽位、iFinD 网关、采集节流、核对预算、候选过期 / 冷却天数，以及全部调度
+  （cron、目标池、`hit_cap`、`calibration_count`）。每项的范围、默认值与说明见设置页。修改无需重启：API 下一请求、
   worker 下一个任务、scheduler 60 秒内重新排期（不补跑错过的触发）。
 
 首次启动 api / worker / scheduler 时（需先 `ia migrate up`），`.env` 中显式写出的运行时项与
 `config/app.yaml` 的调度段会一次性导入数据库；此后以数据库为准，`.env` / `app.yaml` 里的这些值
 被忽略（日志 `settings.env_ignored` 列出差异）。`ia settings import --force` 可重新导入。
-`LLM_TIER3_API_KEY` 不再必填：未配置时首次调用 LLM 报错并提示去设置页填写。
+模型密钥只在设置页填写。未选择模型或 Provider 没有密钥时，第一次调用会明确失败，不会改用别的模型。
 
-设置 → 模型 → Provider 与模型可添加多个 OpenAI 兼容或 DeepSeek Provider，
-每个 Provider 配置独立的地址和 API Key，并添加多个模型。模型可分别设置推理模式、
-超时及 Agent 输出能力；投资 Agent 与研究解释可分别选择目录中的模型，规则草拟沿用研究解释的选择。
-用途分配选择「未选择（使用旧配置）」时继续读取原有 `agent_*` / `llm_tier3_*` 设置，无需迁移即可升级；
-旧的端点、密钥与能力参数统一收在「模型 → 旧配置（兼容）」，投资 Agent 页只管开关、额度和队列。
-模型选择在下个任务加载；正在使用的 Provider / 模型需先更改选择才能删除。
-目录和凭证通过现有 `SETTINGS_ENCRYPTION_KEY` 加密保存在 `llm_catalog` 运行时项，
+设置里「模型」只管理 Provider（接口地址、API Key）和模型（稳定引用 `provider/model`、能力标签如推理 / 工具、上下文长度、调用参数）。
+「Agent」下列出每一种 Agent；目前是「投资 Agent」，以后新增类型会自动多一项。投资 Agent 的主模型、思考模型，以及「规则草拟」「研究解释」，各自在自己的页面选择模型。
+槽位只保存模型引用，目录不知道谁在用它。引用的模型被删掉或停用时，页面显示「模型不可用」，运行时直接报错。
+`ia migrate up` 会把库里旧的 `agent_*` / `llm_tier3_*` 配置收成 Provider、模型和槽位，然后删除旧键。
+目录和凭证通过现有 `SETTINGS_ENCRYPTION_KEY` 加密保存在 `llm_catalog`；`model_slots` 只存引用。
 API 只返回目录、密钥状态与末四位提示；编辑时省略密钥会保留原值，清除需显式操作。
-目录使用稳定的 Provider / Model ID 和按 Agent 标识索引的 `bindings`，便于后续加入更多 Agent。
-切换 Agent 模型会改变配置指纹；执行额度按 token、请求数、时间和工具调用数计算，不需要美元价格。
+切换模型会改变配置指纹；执行额度按 token、请求数、时间和工具调用数计算。
 
 交易日历基线路径仍在 `config/app.yaml`（`scheduler.a_share_calendar_path`），基线文件是
 `config/calendars/a_share.yaml`（未知年份 fail-closed；由双源核对生成，每年带

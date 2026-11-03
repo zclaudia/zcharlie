@@ -17,6 +17,7 @@ from investment_agent.research.worker import ResearchWorker
 from investment_agent.storage.database import init_engine, session_scope
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
+from tests.support.llm_catalog import settings_from_legacy
 
 
 @pytest_asyncio.fixture
@@ -34,7 +35,7 @@ def settings(**overrides):
         investor_agent_enabled=True, investor_agent_task_tokens=100000,
         investor_agent_daily_tokens=500000, investor_agent_task_seconds=600)
     values.update(overrides)
-    return Settings(_env_file=None, **values)
+    return Settings(_env_file=None, **settings_from_legacy(**values))
 
 
 def grant(**overrides):

@@ -108,7 +108,16 @@ def base(**kw):
     # conservative estimate; the synthetic fixture flow sits near the default
     # task token cap, so give it headroom (real budget behaviour has its own
     # dedicated tests).
-    return Settings(_env_file=None, api_key="ci-inert-api-key", investor_agent_enabled=True, portfolio_ledger_enabled=True, investor_agent_task_seconds=600, investor_agent_task_tokens=400000, **kw)
+    from tests.support.llm_catalog import settings_from_legacy
+
+    values = dict(
+        api_key="ci-inert-api-key", investor_agent_enabled=True, portfolio_ledger_enabled=True,
+        investor_agent_task_seconds=600, investor_agent_task_tokens=400000,
+        agent_base_url="https://fixture.invalid/v1", agent_model="fixture",
+        agent_api_key="fixture-offline-key", agent_max_tokens=4096,
+    )
+    values.update(kw)
+    return Settings(_env_file=None, **settings_from_legacy(**values))
 
 
 class Rules:

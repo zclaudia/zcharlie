@@ -7,7 +7,7 @@ from typing import Literal, Self
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _log = logging.getLogger(__name__)
@@ -62,9 +62,6 @@ def validate_gateway_identifier(value: str) -> str:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_nested_delimiter="__", extra="ignore")
-    # Workers may reuse effective Settings as their next load's bootstrap.
-    # Retain the original env fallback keys separately from selected credentials.
-    _llm_legacy_credentials: dict[str, str] = PrivateAttr(default_factory=dict)
 
     app_env: Literal["dev", "prod"] = "dev"
     log_level: str = "INFO"
@@ -114,43 +111,15 @@ class Settings(BaseSettings):
     investor_agent_daily_tokens: int = Field(default=500000, gt=0)
     investor_agent_task_seconds: float = Field(default=600.0, gt=0)
 
-    agent_provider: AgentProvider = "openai"
-    agent_base_url: str = ""
-    agent_model: str = ""
-    agent_api_key: str = Field(default="", repr=False)
-    agent_credential_ref: Literal["agent_api_key"] = "agent_api_key"
-    agent_profile: AgentProfile = "openai"
-    agent_profile_model: str = ""
-    agent_output_mode: AgentOutputMode = "prompted"
-    agent_supports_json_schema: bool = False
-    agent_supports_json_object: bool = True
-    agent_tool_choice_required: bool = False
-    agent_thinking: ThinkingMode = "auto"
-    agent_timeout_seconds: float = Field(default=120.0, gt=0)
-    agent_temperature: float | None = Field(default=None, ge=0, le=2)
-    agent_max_tokens: int | None = Field(default=None, gt=0)
-    agent_retries: int = Field(default=1, ge=0, le=5)
-
     llm_catalog: str = Field(default="", repr=False)
+    # Consumer -> slot -> ``provider_id/model_id``. The catalog does not store this.
+    model_slots: str = ""
 
     @field_validator("llm_catalog")
     @classmethod
     def valid_llm_catalog(cls, value: str) -> str:
         from investment_agent.domain.llm_catalog import validate_catalog
         return validate_catalog(value)
-
-    # Tier 3: research explanation model (any OpenAI-compatible endpoint).
-    llm_tier3_base_url: str = "https://api.openai.com/v1"
-    # Runtime setting: once stored in the DB (settings UI / ``ia settings``)
-    # it may be dropped from env; an empty key fails at the first LLM call.
-    llm_tier3_api_key: str = ""
-    llm_tier3_model: str = "gpt-5"
-    llm_tier3_thinking: ThinkingMode = "auto"
-    # Rule drafting picks parameters within template ranges and is validated
-    # afterwards; reasoning tokens dominate its latency. ``auto`` = tier default.
-    llm_rule_draft_thinking: ThinkingMode = "auto"
-
-    llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
 
     # A-share research MVP data gateway.
     ifind_proxy_url: str = "http://127.0.0.1:7100"
@@ -285,29 +254,6 @@ class Settings(BaseSettings):
                     "APP_ENV=prod; forced to True (set it explicitly to silence this)"
                 )
         return self
-
-    @property
-    def llm_tier3(self) -> LLMTierConfig:
-        from investment_agent.domain.llm_catalog import catalog_settings_overrides, parse_catalog
-
-        selected = catalog_settings_overrides(parse_catalog(self.llm_catalog))
-        return LLMTierConfig(
-            base_url=selected.get("llm_tier3_base_url", self.llm_tier3_base_url),
-            api_key=selected.get("llm_tier3_api_key", self.llm_tier3_api_key),
-            model=selected.get("llm_tier3_model", self.llm_tier3_model),
-            timeout_seconds=selected.get("llm_request_timeout_seconds", self.llm_request_timeout_seconds),
-            thinking=selected.get("llm_tier3_thinking", self.llm_tier3_thinking),
-        )
-
-    @property
-    def llm_rule_draft(self) -> LLMTierConfig:
-        """Tier-3 config for rule drafting (its own thinking override)."""
-
-        config = self.llm_tier3
-        if self.llm_rule_draft_thinking == "auto":
-            return config
-        return config.model_copy(update={"thinking": self.llm_rule_draft_thinking})
-
 
 class SchedulerConfig(BaseModel):
     watchlist_refresh_cron: str | None = None

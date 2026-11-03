@@ -180,7 +180,7 @@ async def test_native_sdk_instruction_estimate_matches_priority_and_keeps_fallba
         async def sent(self, reservation): pass
         async def settle(self, reservation, usage, *, sent): pass
         async def observe_tools(self, count): pass
-    config = AgentModelConfig.from_settings(base(agent_base_url="https://fixture.invalid/v1", agent_model="fixture", agent_api_key="inert"), 0)
+    config = AgentModelConfig.from_settings(base(agent_base_url="https://fixture.invalid/v1", agent_model="fixture", agent_api_key="inert"), 0)  # catalog fixture
     trace = HTTPTrace()
     model, client = create_model(config, trace, transport=httpx.MockTransport(respond))
     guarded = _BudgetedModel(model, Lifecycle(), trace, False)

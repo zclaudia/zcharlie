@@ -8,7 +8,8 @@ import { clear, el, kvTable, table } from "./dom.js";
 import { formatDateTime, label } from "./format.js";
 import { localTime } from "./health.js";
 import { registerRefreshGuard } from "./refresh_state.js";
-import { catalogControl, catalogPayload, catalogSelectionLabel } from "./settings_llm_catalog.js";
+import { catalogControl, catalogPayload } from "./settings_llm_catalog.js";
+import { canonicalSlots, parseSlots, slotControl, slotStatus } from "./settings_model_slots.js";
 
 export const SETTINGS_REGIONS = new Set(["settings-form", "settings-history", "settings-bootstrap"]);
 
@@ -187,8 +188,7 @@ function sectionDirtyCount(section) {
 }
 
 function updateSavebar() {
-  const { topic } = placeTopic();
-  const count = topic ? topicDirtyKeys(topic).length : 0;
+  const count = dirtyCount();
   const counter = document.getElementById("settings-dirty-count");
   const save = document.getElementById("settings-save");
   const discard = document.getElementById("settings-discard");
@@ -224,6 +224,11 @@ function onEdit(key) {
   if (key === "llm_catalog") {
     const raw = node.read();
     if (raw === catalogPayload(state.data.llm_catalog)) state.edits.delete(key);
+    else state.edits.set(key, raw);
+    showIssues(key, []);
+  } else if (key === "model_slots") {
+    const raw = node.read();
+    if (canonicalSlots(raw) === canonicalSlots(item.value || "")) state.edits.delete(key);
     else state.edits.set(key, raw);
     showIssues(key, []);
   } else if (item.secret) {
@@ -453,24 +458,14 @@ function currentValue(key) {
 }
 
 function connectionTest(group) {
-  const config =
-    group === "llm"
-      ? {
-          path: "/settings/test/llm",
-          body: () => ({
-            use_legacy: true,
-            base_url: currentValue("llm_tier3_base_url"),
-            model: currentValue("llm_tier3_model"),
-            api_key: state.cleared.has("llm_tier3_api_key") ? null : state.edits.get("llm_tier3_api_key") || null,
-          }),
-        }
-      : {
-          path: "/settings/test/ifind",
-          body: () => ({
-            url: currentValue("ifind_proxy_url"),
-            api_key: state.cleared.has("ifind_proxy_api_key") ? null : state.edits.get("ifind_proxy_api_key") || null,
-          }),
-        };
+  const config = {
+    path: "/settings/test/ifind",
+    body: () => ({
+      url: currentValue("ifind_proxy_url"),
+      api_key: state.cleared.has("ifind_proxy_api_key") ? null : state.edits.get("ifind_proxy_api_key") || null,
+    }),
+  };
+  if (group !== "ifind") return el("div");
   const row = el("div", { class: "settings-test settings-foot" });
   const button = el("button", { type: "button", class: "btn btn-sm secondary" }, "测试连接");
   const result = el("span", { class: "settings-test-result", "aria-live": "polite" });
@@ -542,23 +537,6 @@ function groupNotices(group) {
       )
     );
   }
-  if (group.key === "llm") {
-    const catalog = state.data && state.data.llm_catalog;
-    const binding = catalog && catalog.bindings && catalog.bindings.research;
-    if (binding) {
-      const provider = (catalog.providers || []).find((item) => item.id === binding.provider_id);
-      if (provider && !provider.configured) {
-        notices.push(el("p", { class: "notice notice-warn" }, "所选研究解释模型的 Provider 尚未保存 API Key：研究解释与规则草拟会直接失败。"));
-      }
-    } else {
-      const key = group.items.find((item) => item.key === "llm_tier3_api_key");
-      if (key && key.decrypt_error) {
-        notices.push(el("p", { class: "notice notice-warn" }, `已保存的 API Key 无法解密：${key.decrypt_error}`));
-      } else if (key && !key.configured && !key.env_fallback) {
-        notices.push(el("p", { class: "notice notice-warn" }, "旧配置未设置研究解释 API Key：未选择目录模型时，研究解释与规则草拟会直接失败。"));
-      }
-    }
-  }
   if (group.key === "notifications") {
     notices.push(el("p", {class: "faint"}, "默认只在站内提醒。明确启用后，仅向你保存的 HTTPS 地址发送新变化的状态及引用；私有提示词和原文不会发送。关闭、静音或暂停会抑制尚未发送的提醒，恢复后不会补发历史提醒。"));
     notices.push(el("p", {class: "faint"}, "确认未知时，只有接收端保证 Idempotency-Key 去重才会重试同一份内容；不会重新研究或生成观点。"));
@@ -604,7 +582,7 @@ function renderEncryptionNotice(data) {
 
 // 目录 → 主题 → 字段。未列入的新配置落到该分组的「其他」，避免被藏起来。
 
-const NAV_GROUPS = ["研究", "数据", "运行", "系统", "其他"];
+const NAV_GROUPS = ["Agent", "研究", "数据", "运行", "系统", "其他"];
 const CRON_SUMMARIES = Object.freeze({
   "0 8 * * 1": "每周一 08:00",
   "0 8 * * *": "每天 08:00",
@@ -632,92 +610,16 @@ function job(id, title, note, keys) {
 
 export const SETTINGS_SECTIONS = Object.freeze([
   {
-    id: "agent",
-    navGroup: "研究",
-    groups: ["agent"],
-    title: "投资 Agent",
-    blurb: "只管运行：开关、额度和队列。模型端点、密钥和能力参数在「模型」里统一管理。",
-    topicGroups: [
-      { label: "运行", topicIds: ["switches", "quota"] },
-      { label: "不常改", topicIds: ["advanced"] },
-    ],
-    links: [{ href: "/app/agent", title: "投资约定", detail: "后台授权、readiness 与当前配置指纹" }],
-    topics: [
-      {
-        id: "switches",
-        title: "开关",
-        note: "后台研究和投资约定仍要各自明确打开；P4 本地更新与公告轮询默认关闭，轮询还要求来源授权。",
-        keys: [
-          "investor_agent_enabled",
-          "investor_agent_background_enabled",
-          "disclosure_originals_enabled",
-          "portfolio_ledger_enabled",
-          "account_fit_enabled",
-          "candidate_ranking_enabled",
-          "supplemental_rules_enabled",
-          "supplemental_updates_enabled",
-          "supplemental_disclosure_polling_enabled",
-          "portfolio_valuation_max_staleness_days",
-        ],
-      },
-      {
-        id: "quota",
-        title: "额度",
-        note: "仍与投资约定取较小值。每批上限不是产出目标。",
-        blocks: [
-          blocks("单任务", ["investor_agent_task_requests", "investor_agent_task_tokens", "investor_agent_task_seconds", "investor_agent_task_tool_calls"]),
-          blocks("每日", ["investor_agent_daily_requests", "investor_agent_daily_tokens", "investor_agent_daily_tool_calls"]),
-          blocks("每批", ["investor_agent_max_leads_per_batch", "investor_agent_max_new_tasks_per_batch"]),
-        ],
-      },
-      {
-        id: "advanced",
-        title: "队列与方法影子",
-        note: "队列满时拒绝新任务，不重建已有任务。",
-        blocks: [
-          blocks("队列", ["agent_queue_max_running", "agent_queue_interactive_capacity", "agent_queue_review_capacity", "agent_queue_exploration_capacity"]),
-          blocks("方法影子运营", ["method_candidate_shadow_min_positives", "method_candidate_shadow_max_per_proposal"]),
-        ],
-      },
-    ],
-  },
-  {
     id: "llm",
-    navGroup: "研究",
+    navGroup: "Agent",
     groups: ["llm"],
     title: "模型",
-    blurb: "Provider、端点、密钥和模型能力参数只在这里管理；为投资 Agent 和研究解释选择使用的模型。",
-    topicGroups: [
-      { label: "使用", topicIds: ["catalog"] },
-      { label: "研究解释", topicIds: ["research"] },
-      { label: "兼容", topicIds: ["legacy"] },
-    ],
+    blurb: "Provider、接口和密钥，以及模型的能力标签。这里不选择哪个 Agent 在使用它们。",
     topics: [{
       id: "catalog",
       title: "Provider 与模型",
-      note: "每个 Provider 共享接口地址与 API Key，可添加多个模型。用途分配里「未选择」时，继续使用下方旧配置。",
+      note: "每个模型有稳定引用 provider/model。能力标签决定它能出现在哪些槽位里。",
       keys: ["llm_catalog"],
-    }, {
-      id: "research",
-      title: "规则草拟",
-      note: "选择目录模型后，规则草拟沿用该模型；这里只覆盖推理模式。auto = 沿用所选模型。",
-      keys: ["llm_rule_draft_thinking"],
-    }, {
-      id: "legacy",
-      title: "旧配置（兼容）",
-      note: "仅在用途分配选择「未选择（使用旧配置）」时生效；选择目录模型后，这里的值会被模型目录覆盖。",
-      blocks: [
-        blocks("旧 Agent 配置", [
-          "agent_provider", "agent_base_url", "agent_model", "agent_api_key", "agent_credential_ref",
-          "agent_profile", "agent_profile_model", "agent_output_mode",
-          "agent_supports_json_schema", "agent_supports_json_object", "agent_tool_choice_required",
-          "agent_thinking", "agent_timeout_seconds", "agent_temperature", "agent_max_tokens", "agent_retries",
-        ]),
-        blocks("旧研究解释配置", [
-          "llm_tier3_base_url", "llm_tier3_model", "llm_tier3_api_key", "llm_tier3_thinking",
-          "llm_request_timeout_seconds",
-        ]),
-      ],
     }],
   },
   {
@@ -848,8 +750,41 @@ export function topicKeys(topic) {
   return topic.keys || [];
 }
 
-export function settingsCatalogKeys() {
-  return [...new Set(SETTINGS_SECTIONS.flatMap((section) => section.topics.flatMap((topic) => topicKeys(topic))))];
+export function consumerSection(consumer) {
+  return {
+    id: consumer.section_id,
+    navGroup: consumer.nav_group,
+    groups: consumer.id === "investor" ? ["agent"] : [],
+    title: consumer.title,
+    blurb: consumer.blurb,
+    consumerId: consumer.id,
+    slots: consumer.slots || [],
+    links: consumer.id === "investor" ? [{ href: "/app/agent", title: "投资约定", detail: "后台授权、readiness 与当前配置指纹" }] : undefined,
+    topicGroups: consumer.topic_groups || undefined,
+    topics: (consumer.topics || []).map((topic) => ({
+      ...topic,
+      consumerId: consumer.id,
+      slots: consumer.slots || [],
+      keys: [...(topic.keys || [])],
+      blocks: topic.blocks && topic.blocks.length ? topic.blocks.map((block) => ({ ...block, keys: [...block.keys] })) : undefined,
+    })),
+  };
+}
+
+export function sectionsFor(staticSections = SETTINGS_SECTIONS, consumers = []) {
+  const dynamic = (consumers || []).map(consumerSection);
+  const agents = dynamic.filter((section) => section.navGroup === "Agent");
+  const others = dynamic.filter((section) => section.navGroup !== "Agent");
+  const result = [...others];
+  for (const section of staticSections) {
+    result.push(section);
+    if (section.id === "llm") result.push(...agents);
+  }
+  return result;
+}
+
+export function settingsCatalogKeys(sections = SETTINGS_SECTIONS) {
+  return [...new Set(sections.flatMap((section) => section.topics.flatMap((topic) => topicKeys(topic))))];
 }
 
 export function parseSettingsHash(hash) {
@@ -882,16 +817,22 @@ function blankValue(value) {
   return value === null || value === undefined || value === "";
 }
 
-// 目录绑定优先；未选择绑定时才看旧的 agent_* 配置。
-function agentModelLabel(value) {
-  const catalog = value("llm_catalog");
-  return catalog?.bindings?.agent
-    ? catalogSelectionLabel(catalog, "agent")
-    : String(value("agent_model") || "").trim() || "未配置";
+function currentCatalog(read) {
+  const value = read("llm_catalog");
+  return value && typeof value === "object" ? value : {};
 }
 
 export function topicSummary(topic, read) {
   const value = (key) => read(key);
+  if (topic.kind === "slots") {
+    const slots = parseSlots(value("model_slots"));
+    const chosen = slots[topic.consumerId] || {};
+    const catalog = currentCatalog(read);
+    const views = (topic.slots || []).map((slot) => slotStatus(catalog, chosen[slot.id] || "", slot.required_capabilities));
+    if (views.some((item) => item.state === "unavailable")) return "模型不可用";
+    const selected = views.filter((item) => item.state === "ok").length;
+    return selected ? `已选 ${selected} 个模型` : "未选择";
+  }
   switch (topic.id) {
     case "switches": {
       const toggles = ["investor_agent_enabled", "investor_agent_background_enabled", "disclosure_originals_enabled", "portfolio_ledger_enabled", "account_fit_enabled", "candidate_ranking_enabled", "supplemental_rules_enabled", "supplemental_updates_enabled", "supplemental_disclosure_polling_enabled"];
@@ -900,11 +841,6 @@ export function topicSummary(topic, read) {
     }
     case "catalog":
       return `${value("llm_catalog")?.providers?.length || 0} 个 Provider`;
-    case "research":
-      if (value("llm_rule_draft_thinking") === "auto") return "沿用所选模型";
-      return value("llm_rule_draft_thinking") === "enabled" ? "强制开启推理" : "强制关闭推理";
-    case "legacy":
-      return "仅未选择目录模型时生效";
     case "quota":
       return `每批 ${value("investor_agent_max_leads_per_batch")} 条线索`;
     case "advanced":
@@ -938,23 +874,28 @@ export function topicSummary(topic, read) {
   }
 }
 
-export function sectionHome(section, read, lookup) {
+export function sectionHome(section, read) {
   const value = (key) => read(key);
-  const row = (key) => lookup(key);
-  switch (section.id) {
-    case "agent":
+  if (section.consumerId) {
+    const slots = parseSlots(value("model_slots"));
+    const chosen = slots[section.consumerId] || {};
+    const catalog = currentCatalog(read);
+    const main = (section.slots || [])[0];
+    const view = main ? slotStatus(catalog, chosen[main.id] || "", main.required_capabilities) : {label: "未选择"};
+    if (section.consumerId === "investor") {
       return {
         value: value("investor_agent_enabled") === true ? "已开启" : "已关闭",
-        detail: agentModelLabel(value),
+        detail: view.label,
       };
+    }
+    return {value: view.label, detail: section.blurb || ""};
+  }
+  switch (section.id) {
     case "llm": {
       const catalog = value("llm_catalog");
-      const research = catalog?.bindings?.research
-        ? catalogSelectionLabel(catalog, "research")
-        : row("llm_tier3_api_key")?.configured ? "旧配置 Key 已设置" : "旧配置 Key 未配置";
       return {
         value: `${catalog?.providers?.length || 0} 个 Provider`,
-        detail: `Agent：${agentModelLabel(value)} · 研究：${research}`,
+        detail: "端点、密钥和能力标签",
       };
     }
     case "notify":
@@ -978,7 +919,7 @@ export function sectionHome(section, read, lookup) {
 }
 
 function materializeSections() {
-  const sections = SETTINGS_SECTIONS.map((section) => ({
+  const sections = sectionsFor(SETTINGS_SECTIONS, state.data?.consumers || []).map((section) => ({
     ...section,
     topicGroups: section.topicGroups ? section.topicGroups.map((group) => ({ ...group, topicIds: [...group.topicIds] })) : undefined,
     topics: section.topics.map((topic) => ({
@@ -1017,6 +958,7 @@ function indexItems(data) {
 
 function readNow(key) {
   if (key === "llm_catalog") return state.raw.has(key) ? JSON.parse(state.raw.get(key)) : state.data?.llm_catalog;
+  if (key === "model_slots") return state.raw.has(key) ? state.raw.get(key) : currentValue(key);
   return currentValue(key);
 }
 
@@ -1083,16 +1025,9 @@ function renderTopicList(section) {
   if (section.id === "schedule") {
     for (const notice of groupNotices({ key: "schedule", items: [] })) body.appendChild(notice);
   }
-  if (section.id === "agent") {
-    body.appendChild(el("h2", { class: "settings-kicker" }, "概览"));
-    const overview = el("div", { class: "list-group settings-jump-list" });
-    overview.appendChild(jumpRow({
-      title: "当前模型",
-      detail: "端点、密钥与能力参数在「模型」中管理",
-      value: agentModelLabel(readNow),
-      onClick: () => openPlace("llm", "catalog"),
-    }));
-    body.appendChild(overview);
+  if (section.consumerId) {
+    const home = sectionHome(section, readNow);
+    body.appendChild(el("p", { class: "faint" }, home.detail === section.blurb ? "" : `当前：${home.detail}`));
   }
   for (const group of groupedTopics(section)) {
     if (group.label) body.appendChild(el("h2", { class: "settings-kicker" }, group.label));
@@ -1120,7 +1055,6 @@ function renderTopicList(section) {
 }
 
 function topicNoticeKey(topic) {
-  if (topic.id === "legacy") return "llm";
   if (topic.id === "ifind") return "ifind";
   if (topic.id === "notify") return "notifications";
   if (topic.id === "gateway") return "gateway";
@@ -1153,8 +1087,18 @@ function renderTopic(topic, section) {
     body.appendChild(el("p", { class: "settings-apply" }, `生效：${label(APPLY_LABELS, apply)}。${label(APPLY_TITLES, apply)}`));
   }
   if (topic.note) body.appendChild(el("p", { class: "faint settings-note" }, topic.note));
-  if (section.id === "llm" && topic.id === "legacy") {
-    body.appendChild(el("p", {class: "notice notice-warn"}, "这些字段只在用途分配选择「未选择（使用旧配置）」时生效。选择目录模型后，这里的值会被模型目录覆盖。"));
+  if (topic.kind === "slots") {
+    const catalog = readNow("llm_catalog");
+    const control = slotControl(readNow("model_slots"), catalog, {id: section.consumerId, title: section.title, slots: section.slots});
+    body.appendChild(control.root);
+    const node = {root, issues: el("ul"), control: control.control, read: control.read, setDirty(dirty) { root.classList.toggle("dirty", dirty); }};
+    state.nodes.set("model_slots", node);
+    node.setDirty(state.edits.has("model_slots"));
+    control.control.addEventListener("change", () => {
+      state.raw.set("model_slots", control.read());
+      onEdit("model_slots");
+    });
+    return root;
   }
   const noticeKey = topicNoticeKey(topic);
   if (noticeKey) {
@@ -1172,7 +1116,6 @@ function renderTopic(topic, section) {
     }
     body.appendChild(list);
   }
-  if (topic.id === "legacy") root.appendChild(connectionTest("llm"));
   if (topic.id === "ifind") root.appendChild(connectionTest("ifind"));
   return root;
 }
@@ -1454,8 +1397,7 @@ function setSaveResult(lines, kind) {
 }
 
 async function save(button) {
-  const { topic } = placeTopic();
-  const keys = topicDirtyKeys(topic);
+  const keys = [...state.edits.keys()];
   const invalid = keys.filter((key) => state.edits.get(key) === INVALID);
   if (!keys.length) return;
   if (invalid.length) {
@@ -1503,13 +1445,10 @@ async function save(button) {
 }
 
 function discard() {
-  const { topic } = placeTopic();
   state.nodes = new Map();
-  for (const key of topic ? topicKeys(topic) : []) {
-    state.edits.delete(key);
-    state.raw.delete(key);
-    state.cleared.delete(key);
-  }
+  state.edits.clear();
+  state.raw.clear();
+  state.cleared.clear();
   setSaveResult([], "");
   paint();
 }

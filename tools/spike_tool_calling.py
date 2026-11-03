@@ -471,9 +471,9 @@ def _load_config(model_override: str | None) -> LLMTierConfig:
                 file=sys.stderr,
             )
             settings = boot
-        if model_override:
-            settings = settings.model_copy(update={"llm_tier3_model": model_override})
-        return settings.llm_tier3
+        from investment_agent.settings.resolution import tier_config
+
+        return tier_config(settings, "research", "explain", model=model_override)
 
     return run_with_engine(boot.database_url, main)
 

@@ -26,11 +26,23 @@ from pydantic_ai.toolsets import AbstractToolset
 
 from investment_agent.config import Settings
 from investment_agent.domain.llm_catalog import ModelRef
-from investment_agent.settings.registry import ENV_KEYS, RuntimeSettings
+from investment_agent.settings.resolution import ModelUnavailableError, resolve_slot
+
+# Resolved invocation parameters. These are not settings keys.
+RESOLVED_KEYS = frozenset({
+    "agent_provider", "agent_base_url", "agent_model", "agent_profile", "agent_profile_model",
+    "agent_output_mode", "agent_supports_json_schema", "agent_supports_json_object",
+    "agent_tool_choice_required", "agent_thinking", "agent_timeout_seconds",
+    "agent_temperature", "agent_max_tokens", "agent_retries",
+})
 
 
 class AgentConfigurationError(ValueError):
     """Safe, actionable configuration error without endpoint or credential content."""
+
+
+class AgentModelUnavailableError(AgentConfigurationError):
+    """The investor slot points at a model that is missing or disabled."""
 
 
 class AgentModelConfig(BaseModel):
@@ -39,16 +51,16 @@ class AgentModelConfig(BaseModel):
     revision: int = Field(ge=0)
     values_json: str = Field(repr=False)
     selection: ModelRef | None = None
+    thinking_ref: str = ""
 
     @field_validator("values_json")
     @classmethod
     def _validate_values(cls, value: str) -> str:
         raw = json.loads(value)
-        expected = {k for k in ENV_KEYS if k.startswith("agent_") and k != "agent_api_key"}
-        if not isinstance(raw, dict) or set(raw) != expected:
+        if not isinstance(raw, dict) or set(raw) != RESOLVED_KEYS:
             raise ValueError("Agent configuration keys are incomplete or unsupported")
-        validated = RuntimeSettings.model_validate(raw).model_dump(mode="json", include=expected)
-        return json.dumps(validated, sort_keys=True, separators=(",", ":"))
+        # Shape only: these names are the resolved model, not stored settings.
+        return json.dumps({key: raw[key] for key in sorted(RESOLVED_KEYS)}, sort_keys=True, separators=(",", ":"))
 
     @property
     def values(self) -> dict[str, Any]:
@@ -57,28 +69,51 @@ class AgentModelConfig(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Settings, revision: int) -> AgentModelConfig:
-        from investment_agent.domain.llm_catalog import parse_catalog
-        from investment_agent.settings.llm_catalog import resolve_catalog_settings
+        from investment_agent.settings.agents import parse_model_slots
 
-        settings = resolve_catalog_settings(settings)
-        ref = parse_catalog(settings.llm_catalog).bindings.get("agent")
-        values = settings.model_dump(mode="json", include={
-            k for k in ENV_KEYS if k.startswith("agent_") and k != "agent_api_key"
-        })
-        return cls(revision=revision, values_json=json.dumps(values), credential=SecretStr(settings.agent_api_key),
-                   selection=ref)
+        slots = parse_model_slots(settings.model_slots).get("investor", {})
+        thinking_ref = slots.get("thinking") or ""
+        if thinking_ref:
+            try:
+                resolve_slot(settings, "investor", "thinking")
+            except ModelUnavailableError as exc:
+                raise AgentModelUnavailableError(str(exc)) from None
+        if not slots.get("main"):
+            values = {
+                "agent_provider": "openai", "agent_base_url": "", "agent_model": "",
+                "agent_profile": "openai", "agent_profile_model": "", "agent_output_mode": "prompted",
+                "agent_supports_json_schema": False, "agent_supports_json_object": True,
+                "agent_tool_choice_required": False, "agent_thinking": "auto",
+                "agent_timeout_seconds": 120.0, "agent_temperature": None, "agent_max_tokens": None,
+                "agent_retries": 1,
+            }
+            return cls(revision=revision, values_json=json.dumps(values), credential=SecretStr(""),
+                       selection=None, thinking_ref=thinking_ref)
+        try:
+            resolved = resolve_slot(settings, "investor", "main")
+        except ModelUnavailableError as exc:
+            raise AgentModelUnavailableError(str(exc)) from None
+        return cls(
+            revision=revision, values_json=json.dumps(resolved.agent_values()),
+            credential=SecretStr(resolved.provider.api_key or ""),
+            selection=resolved.selection, thinking_ref=thinking_ref,
+        )
 
     @property
     def version(self) -> str:
         body = json.dumps(self.values, sort_keys=True, separators=(",", ":"))
         if self.selection:
             body += json.dumps(self.selection.model_dump(), sort_keys=True, separators=(",", ":"))
+        if self.thinking_ref:
+            body += self.thinking_ref
         return hashlib.sha256(body.encode()).hexdigest()
 
     def validate_ready(self) -> None:
         v = self.values
-        if not v["agent_base_url"] or not v["agent_model"] or not self.credential.get_secret_value():
-            raise AgentConfigurationError("Agent model is unconfigured: set endpoint, model and agent_api_key")
+        if not v["agent_base_url"] or not v["agent_model"]:
+            raise AgentConfigurationError("投资 Agent / 主模型：未选择模型")
+        if not self.credential.get_secret_value():
+            raise AgentConfigurationError("投资 Agent / 主模型：未配置 API Key")
         url = urlsplit(v["agent_base_url"])
         if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password or url.query or url.fragment:
             raise AgentConfigurationError("Agent endpoint must be an HTTP(S) URL without credentials, query or fragment")
@@ -94,6 +129,8 @@ class AgentModelConfig(BaseModel):
         snapshot = {"revision": self.revision, "version": self.version, "values": values}
         if self.selection:
             snapshot["selection"] = self.selection.model_dump()
+        if self.thinking_ref:
+            snapshot["thinking_ref"] = self.thinking_ref
         return snapshot
 
     def profile(self) -> OpenAIModelProfile:

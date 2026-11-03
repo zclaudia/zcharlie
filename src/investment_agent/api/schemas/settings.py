@@ -73,6 +73,7 @@ class SettingsOut(BaseModel):
     groups: list[SettingGroupOut]
     bootstrap: list[BootstrapItemOut]
     llm_catalog: dict[str, Any] = Field(default_factory=dict)
+    consumers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SettingsPatchRequest(BaseModel):
@@ -103,7 +104,6 @@ class SettingsHistoryOut(BaseModel):
 
 
 class LlmTestRequest(BaseModel):
-    use_legacy: bool = False
     provider_id: str | None = Field(default=None, max_length=100)
     model_id: str | None = Field(default=None, max_length=100)
     base_url: str | None = Field(default=None, max_length=500)

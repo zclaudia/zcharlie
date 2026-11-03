@@ -50,6 +50,7 @@ from investment_agent.api.schemas.settings import (
 )
 from investment_agent.config import Settings
 from investment_agent.domain.llm_catalog import CatalogError, merge_catalog, parse_catalog
+from investment_agent.settings.agents import consumer_public
 from investment_agent.settings.crypto import EncryptionKeyError, SecretCipher, secret_hint
 from investment_agent.settings.loader import ensure_imported, load_settings, store_for
 from investment_agent.settings.registry import GROUPS, SPECS_BY_KEY, cron_timezone_key
@@ -189,6 +190,7 @@ async def settings_view(session: AsyncSession, settings: Settings) -> SettingsOu
         ],
         bootstrap=bootstrap_items(settings),
         llm_catalog=parse_catalog(catalog_value).public(),
+        consumers=consumer_public(),
     )
 
 
@@ -312,11 +314,8 @@ async def check_llm(
     """One tiny chat completion with the candidate endpoint / model / key."""
 
     async with session_scope() as session:
-        settings = await load_settings(session, base=settings, resolve_models=not body.use_legacy)
-    base_url = _pick(body.base_url, settings.llm_tier3_base_url)
-    model = _pick(body.model, settings.llm_tier3_model)
-    api_key = _pick(body.api_key, settings.llm_tier3_api_key)
-    thinking = body.thinking or settings.llm_tier3_thinking
+        settings = await load_settings(session, base=settings)
+    timeout_seconds = 120.0
     if body.provider_id is not None:
         catalog = parse_catalog(settings.llm_catalog)
         provider = next((p for p in catalog.providers if p.id == body.provider_id), None)
@@ -333,11 +332,20 @@ async def check_llm(
         saved_key = (provider.api_key or "") if provider else ""
         api_key = body.api_key.strip() if body.api_key is not None else saved_key
         thinking = body.thinking or (saved_model.thinking if saved_model else "auto")
+        if saved_model is not None:
+            timeout_seconds = saved_model.timeout_seconds
         if not model:
             raise HTTPException(status_code=422, detail="Choose a model to test")
+    else:
+        base_url = (body.base_url or "").strip()
+        model = (body.model or "").strip()
+        api_key = (body.api_key or "").strip()
+        thinking = body.thinking or "auto"
+        if not base_url or not model:
+            return ConnectionTestOut(ok=False, latency_ms=0, message="未配置 API Key，无法测试。")
     if not api_key:
         return ConnectionTestOut(ok=False, latency_ms=0, message="未配置 API Key，无法测试。")
-    timeout = min(TEST_TIMEOUT_SECONDS, settings.llm_request_timeout_seconds)
+    timeout = min(TEST_TIMEOUT_SECONDS, timeout_seconds)
     started = time.perf_counter()
     client = AsyncOpenAI(base_url=base_url, api_key=api_key, timeout=timeout, max_retries=0)
     try:

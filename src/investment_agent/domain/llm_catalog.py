@@ -1,7 +1,7 @@
-"""Shared provider/model catalog, encrypted by the runtime settings store.
+"""Provider and model catalog. It does not record which agent or task uses a model.
 
-Bindings use stable provider/model IDs so future agents can share this catalog.
-An absent binding retains the legacy configuration; a broken binding fails closed.
+A model is addressed by a stable ``model_ref`` of ``provider_id/model_id``.
+Callers that need a model keep that reference themselves.
 """
 
 from __future__ import annotations
@@ -10,6 +10,9 @@ from typing import Any, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+
+Capability = Literal["thinking", "tools", "json_schema", "json_object", "tool_choice"]
+CAPABILITIES: tuple[Capability, ...] = ("thinking", "tools", "json_schema", "json_object", "tool_choice")
 
 
 class CatalogError(ValueError):
@@ -24,6 +27,9 @@ class LLMModel(CatalogModel):
     id: str = Field(min_length=1, max_length=100, pattern=r"^[A-Za-z0-9._-]+$")
     name: str = Field(min_length=1, max_length=100)
     model: str = Field(min_length=1, max_length=200)
+    enabled: bool = True
+    capabilities: list[Capability] = Field(default_factory=list)
+    context_length: int | None = Field(default=None, gt=0, le=2_000_000)
     thinking: Literal["auto", "enabled", "disabled"] = "auto"
     timeout_seconds: float = Field(default=120, gt=0, le=3600)
     profile: Literal["openai", "deepseek"] = "openai"
@@ -37,7 +43,21 @@ class LLMModel(CatalogModel):
     retries: int = Field(default=1, ge=0, le=5)
 
     @model_validator(mode="after")
-    def output_capabilities(self) -> Self:
+    def capabilities_match_invocation(self) -> Self:
+        caps = set(self.capabilities)
+        if self.supports_json_object:
+            caps.add("json_object")
+        else:
+            caps.discard("json_object")
+        if self.supports_json_schema:
+            caps.add("json_schema")
+        else:
+            caps.discard("json_schema")
+        if self.tool_choice_required:
+            caps.add("tool_choice")
+        else:
+            caps.discard("tool_choice")
+        self.capabilities = [name for name in CAPABILITIES if name in caps]
         if self.output_mode == "native" and not self.supports_json_schema:
             raise ValueError("Native output requires JSON Schema support")
         if self.output_mode == "prompted" and not self.supports_json_object:
@@ -75,17 +95,18 @@ class ModelRef(CatalogModel):
     provider_id: str = Field(min_length=1, max_length=100)
     model_id: str = Field(min_length=1, max_length=100)
 
+    @property
+    def ref(self) -> str:
+        return model_ref(self.provider_id, self.model_id)
+
 
 class LLMCatalog(CatalogModel):
     providers: list[LLMProvider] = Field(default_factory=list, max_length=50)
-    bindings: dict[str, ModelRef] = Field(default_factory=dict, max_length=100)
 
     @model_validator(mode="after")
-    def valid_references(self) -> Self:
+    def unique_providers(self) -> Self:
         if len({provider.id for provider in self.providers}) != len(self.providers):
             raise ValueError("Provider IDs must be unique")
-        for ref in self.bindings.values():
-            self.resolve(ref)
         return self
 
     def resolve(self, ref: ModelRef) -> tuple[LLMProvider, LLMModel]:
@@ -94,7 +115,11 @@ class LLMCatalog(CatalogModel):
                 for model in provider.models:
                     if model.id == ref.model_id:
                         return provider, model
-        raise CatalogError("Selected provider/model is missing; change its binding before deleting it")
+        raise CatalogError("模型不可用")
+
+    def resolve_ref(self, ref: str) -> tuple[LLMProvider, LLMModel]:
+        provider_id, model_id = split_model_ref(ref)
+        return self.resolve(ModelRef(provider_id=provider_id, model_id=model_id))
 
     def public(self) -> dict[str, Any]:
         result = self.model_dump(mode="json", exclude={"providers": {"__all__": {"api_key"}}})
@@ -104,6 +129,17 @@ class LLMCatalog(CatalogModel):
             key = provider.api_key or ""
             item["hint"] = key[-4:] if len(key) >= 8 else ""
         return result
+
+
+def model_ref(provider_id: str, model_id: str) -> str:
+    return f"{provider_id}/{model_id}"
+
+
+def split_model_ref(ref: str) -> tuple[str, str]:
+    provider_id, sep, model_id = ref.partition("/")
+    if not sep or "/" in model_id or not provider_id or not model_id:
+        raise CatalogError("模型不可用")
+    return provider_id, model_id
 
 
 def parse_catalog(value: str) -> LLMCatalog:
@@ -130,24 +166,3 @@ def merge_catalog(candidate: str, current: str) -> str:
 
 def validate_catalog(value: str) -> str:
     return parse_catalog(value).model_dump_json() if value else ""
-
-
-def catalog_settings_overrides(catalog: LLMCatalog) -> dict[str, Any]:
-    """Map catalog bindings to consumer parameters without reading settings or secrets stores."""
-    update: dict[str, Any] = {}
-    for binding, ref in catalog.bindings.items():
-        if binding not in {"agent", "research"}:
-            continue
-        provider, model = catalog.resolve(ref)
-        if binding == "research":
-            update.update(llm_tier3_base_url=provider.base_url, llm_tier3_api_key=provider.api_key or "",
-                          llm_tier3_model=model.model, llm_tier3_thinking=model.thinking,
-                          llm_request_timeout_seconds=model.timeout_seconds)
-        else:
-            update.update(agent_provider=provider.kind, agent_base_url=provider.base_url,
-                          agent_api_key=provider.api_key or "", agent_model=model.model)
-            for key in ("profile", "profile_model", "output_mode", "supports_json_schema",
-                        "supports_json_object", "tool_choice_required", "thinking",
-                        "timeout_seconds", "temperature", "max_tokens", "retries"):
-                update[f"agent_{key}"] = getattr(model, key)
-    return update

@@ -76,12 +76,12 @@ def test_set_get_list_history(cli_db) -> None:
 
 
 def test_secret_set_from_hidden_prompt_is_never_printed(cli_db) -> None:
-    result = _invoke("set", "llm_tier3_api_key", "-", input=f"{SECRET}\n")
+    result = _invoke("set", "ifind_proxy_api_key", "-", input=f"{SECRET}\n")
     assert result.exit_code == 0, result.output
-    for args in (("get", "llm_tier3_api_key"), ("list",), ("history",)):
+    for args in (("get", "ifind_proxy_api_key"), ("list",), ("history",)):
         output = _invoke(*args).output
         assert SECRET not in output
-    assert "9876" in _invoke("get", "llm_tier3_api_key").output
+    assert "9876" in _invoke("get", "ifind_proxy_api_key").output
 
 
 def test_secret_set_without_key_is_refused(cli_db, monkeypatch) -> None:

@@ -74,13 +74,6 @@ def run_ifind_research(
 
     async def main() -> ResearchChainResult:
         settings = await load_settings(base=bootstrap)
-        if explanation_model:
-            from investment_agent.domain.llm_catalog import parse_catalog
-
-            catalog = parse_catalog(settings.llm_catalog)
-            catalog.bindings.pop("research", None)
-            settings = settings.model_copy(update={"llm_tier3_model": explanation_model,
-                                                    "llm_catalog": catalog.model_dump_json()})
         key = proxy_api_key or os.getenv("PROXY_API_KEY", "") or settings.ifind_proxy_api_key
         if not key:
             raise typer.BadParameter(
@@ -98,6 +91,7 @@ def run_ifind_research(
             as_of=date_option(as_of),
             output_root=output_root,
             idempotency_key=idempotency_key,
+            explanation_model=explanation_model,
         )
 
     try:

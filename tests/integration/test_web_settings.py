@@ -82,8 +82,10 @@ def test_app_boots_the_settings_module() -> None:
     assert 'from "./settings.js"' in source
     assert "bootSettings()" in source and "SETTINGS_REGIONS" in source
     settings = (STATIC / "settings.js").read_text(encoding="utf-8")
-    for endpoint in ("/settings", "/settings/history", "/settings/test/llm", "/settings/test/ifind"):
+    catalog = (STATIC / "settings_llm_catalog.js").read_text(encoding="utf-8")
+    for endpoint in ("/settings", "/settings/history", "/settings/test/ifind"):
         assert endpoint in settings, endpoint
+    assert "/settings/test/llm" in catalog
 
 
 def test_settings_helpers() -> None:
@@ -160,7 +162,10 @@ def test_page_input_hints_match_the_api(api_client: TestClient) -> None:
 def test_settings_catalog_covers_every_key(api_client: TestClient) -> None:
     body = api_client.get("/settings", headers=KEY).json()
     keys = {item["key"] for group in body["groups"] for item in group["items"]}
-    covered = set(_run_settings("console.log(JSON.stringify(s.settingsCatalogKeys()))"))
+    covered = set(_run_settings(
+        "const sections = s.sectionsFor(s.SETTINGS_SECTIONS, " + json.dumps(body["consumers"]) + ");\n"
+        "console.log(JSON.stringify(s.settingsCatalogKeys(sections)));"
+    ))
     assert keys == covered
 
 
@@ -175,7 +180,7 @@ Object.defineProperty(globalThis, 'crypto', {{configurable: true, value: {{
 }}}});
 globalThis.document = {{createElement: tag => new FakeNode(tag)}};
 const {{catalogControl}} = await import({json.dumps(catalog_uri)});
-const editor = catalogControl({{providers: [], bindings: {{}}}}, true);
+const editor = catalogControl({{providers: []}}, true);
 editor.root.dispatchEvent = () => true;
 editor.root.children.find(node => node.textContent === '添加 Provider').click();
 console.log(editor.read());
@@ -190,17 +195,20 @@ console.log(editor.read());
 def test_settings_navigation_helpers() -> None:
     out = _run_settings(
         """
+const sections = s.sectionsFor(s.SETTINGS_SECTIONS, [{
+  id: "investor", section_id: "agent", nav_group: "Agent", title: "投资 Agent", blurb: "",
+  slots: [], topics: [{id: "switches", title: "开关", keys: []}, {id: "quota", title: "额度", keys: []}], topic_groups: [],
+}]);
 console.log(JSON.stringify({
   home: s.resolveSettingsPlace(""),
-  legacy: s.resolveSettingsPlace("#agent-settings"),
-  model: s.resolveSettingsPlace("#agent/model"),
-  llm: s.resolveSettingsPlace("#llm"),
-  catalog: s.resolveSettingsPlace("#llm/catalog"),
+  legacy: s.resolveSettingsPlace("#agent-settings", sections),
+  model: s.resolveSettingsPlace("#agent/model", sections),
+  llm: s.resolveSettingsPlace("#llm", sections),
+  catalog: s.resolveSettingsPlace("#llm/catalog", sections),
   cron: [s.cronSummary(""), s.cronSummary("10 15 * * 1-5"), s.cronSummary("1 2 3 4 5")],
   agent: s.sectionHome(
-    s.SETTINGS_SECTIONS.find((section) => section.id === "agent"),
+    s.consumerSection({id: "investor", section_id: "agent", nav_group: "Agent", title: "投资 Agent", blurb: "", slots: [{id: "main", required_capabilities: ["tools"]}], topics: [], topic_groups: []}),
     () => false,
-    () => null,
   ),
 }));
 """
@@ -208,7 +216,7 @@ console.log(JSON.stringify({
     assert out["home"] == {"sectionId": None, "topicId": None}
     assert out["legacy"] == {"sectionId": "agent", "topicId": None}
     assert out["model"] == {"sectionId": "llm", "topicId": "catalog"}
-    assert out["llm"] == {"sectionId": "llm", "topicId": None}
+    assert out["llm"] == {"sectionId": "llm", "topicId": "catalog"}
     assert out["catalog"] == {"sectionId": "llm", "topicId": "catalog"}
     assert out["cron"] == ["已停用", "工作日 15:10", "1 2 3 4 5"]
     assert out["agent"]["value"] == "已关闭"

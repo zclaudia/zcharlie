@@ -7,7 +7,7 @@ UI; the bootstrap layer (``APP_ENV``, ``DATABASE_URL``, ``API_KEY``,
 Key naming scheme (flat, used by the DB rows, the API, the CLI and history):
 
 * env-sourced keys keep the ``Settings`` field name unchanged, e.g.
-  ``ifind_budget_per_5h`` / ``llm_tier3_api_key``;
+  ``ifind_budget_per_5h`` / ``llm_catalog``;
 * schedule keys are dotted ``schedule.<section>.<field>``, mirroring
   ``config/app.yaml``: ``schedule.screen.cron``, ``schedule.snapshot.universes``,
   ``schedule.verification.calibration_count``. The one rename is the
@@ -34,13 +34,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 from pydantic.fields import FieldInfo
 
 from investment_agent.config import (
-    AgentOutputMode,
-    AgentProfile,
-    AgentProvider,
     CandidateScheduleConfig,
     ScreenScheduleConfig,
     SnapshotScheduleConfig,
-    ThinkingMode,
     VerificationScheduleConfig,
     validate_gateway_identifier,
     validate_gateway_url,
@@ -52,9 +48,9 @@ ApplyMode = Literal["live", "next_job", "reschedule"]
 SettingSource = Literal["env", "app_yaml"]
 
 GROUPS: dict[str, str] = {
-    "agent": "投资 Agent 模型",
+    "agent": "投资 Agent",
     "notifications": "可选外部通知",
-    "llm": "大模型",
+    "llm": "模型",
     "ifind": "iFinD 代理",
     "collection": "数据采集",
     "verification": "iFinD 核验",
@@ -237,24 +233,8 @@ class RuntimeSettings(BaseModel):
     investor_agent_daily_tokens: int = Field(default=500000, gt=0)
     investor_agent_task_seconds: float = Field(default=600.0, gt=0)
 
-    agent_provider: AgentProvider = "openai"
-    agent_base_url: str = ""
-    agent_model: str = ""
-    agent_api_key: str = Field(default="", repr=False)
-    agent_credential_ref: Literal["agent_api_key"] = "agent_api_key"
-    agent_profile: AgentProfile = "openai"
-    agent_profile_model: str = ""
-    agent_output_mode: AgentOutputMode = "prompted"
-    agent_supports_json_schema: bool = False
-    agent_supports_json_object: bool = True
-    agent_tool_choice_required: bool = False
-    agent_thinking: ThinkingMode = "auto"
-    agent_timeout_seconds: float = Field(default=120.0, gt=0)
-    agent_temperature: float | None = Field(default=None, ge=0, le=2)
-    agent_max_tokens: int | None = Field(default=None, gt=0)
-    agent_retries: int = Field(default=1, ge=0, le=5)
-
     llm_catalog: str = Field(default="", repr=False)
+    model_slots: str = ""
 
     @field_validator("llm_catalog")
     @classmethod
@@ -262,12 +242,14 @@ class RuntimeSettings(BaseModel):
         from investment_agent.domain.llm_catalog import validate_catalog
         return validate_catalog(value)
 
-    llm_tier3_base_url: str = "https://api.openai.com/v1"
-    llm_tier3_model: str = "gpt-5"
-    llm_tier3_api_key: str = ""
-    llm_tier3_thinking: ThinkingMode = "auto"
-    llm_rule_draft_thinking: ThinkingMode = "auto"
-    llm_request_timeout_seconds: float = Field(default=120.0, gt=0)
+    @field_validator("model_slots")
+    @classmethod
+    def valid_model_slots(cls, value: str) -> str:
+        from investment_agent.settings.agents import SlotError, validate_model_slots
+        try:
+            return validate_model_slots(value)
+        except SlotError as exc:
+            raise ValueError(str(exc)) from None
 
     ifind_proxy_url: str = "http://127.0.0.1:7100"
     ifind_proxy_api_key: str = ""
@@ -347,7 +329,7 @@ SPECS: tuple[SettingSpec, ...] = (
         "收盘价超过该交易日数视为过期，不参与市值与 NAV；未知年份按受限原因处理。",
         "next_job",
     ),
-    _env("investor_agent_enabled", "agent", "启用 Investor Agent", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("investor_agent_enabled", "agent", "启用投资 Agent", "投资 Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("investor_agent_background_enabled", "agent", "启用后台研究", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("investor_agent_max_leads_per_batch", "agent", "每批探索线索上限", "最多20；仍受当前投资约定限制。", "next_job"),
     _env("investor_agent_max_new_tasks_per_batch", "agent", "每批新研究任务上限", "最多3；不是产出目标。", "next_job"),
@@ -356,22 +338,7 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("investor_agent_daily_requests", "agent", "每日请求上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("investor_agent_daily_tokens", "agent", "每日 token 上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("investor_agent_task_seconds", "agent", "单任务时间上限（秒）", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
-    _env("agent_provider", "agent", "Agent 供应商接口", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_base_url", "agent", "Agent 端点", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_model", "agent", "Agent 模型", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_api_key", "agent", "Agent API Key", "独立于旧解释模型；按现有机制加密存储，下次运行生效。", "next_job", secret=True),
-    _env("agent_credential_ref", "agent", "Agent 凭证引用", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_profile", "agent", "Agent 能力 profile", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_profile_model", "agent", "Profile 官方模型名", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_output_mode", "agent", "Agent 输出模式", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_supports_json_schema", "agent", "端点支持 JSON Schema", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_supports_json_object", "agent", "端点支持 JSON Object", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_tool_choice_required", "agent", "端点支持强制工具选择", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_thinking", "agent", "Agent 思考模式", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_timeout_seconds", "agent", "Agent 请求超时（秒）", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_temperature", "agent", "Agent temperature", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_max_tokens", "agent", "Agent 最大输出 token", "Agent 独立模型配置；下次运行生效。", "next_job"),
-    _env("agent_retries", "agent", "Agent 框架校验重试次数", "Agent 独立模型配置；下次运行生效。", "next_job"),
+    _env("model_slots", "agent", "模型槽位", "各使用者选择的模型引用（provider/model）。模型缺失或停用时显示为不可用，不会改用其他模型。", "next_job"),
     _env(
         "method_candidate_shadow_min_positives", "agent", "候选影子最小正例数",
         "包提案批准前需要的匹配成功正例前瞻影子数，≥1；只影响证据收集成本，不降低覆盖门槛。", "live",
@@ -384,22 +351,7 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("notification_webhook_url", "notifications", "HTTPS webhook 地址", "用户指定的公网 HTTPS 地址；加密保存，拒绝重定向、私网及环境导入。", "next_job", secret=True),
     _env("notification_webhook_token", "notifications", "Webhook Bearer 凭证", "加密保存；为空则不发送认证头。", "next_job", secret=True),
     _env("notification_webhook_idempotent", "notifications", "接收端保证幂等", "只有接收端保证 Idempotency-Key 去重时启用；否则确认未知后停止，不自动重试。", "next_job"),
-    _env("llm_catalog", "llm", "Provider 与模型目录", "多个 Provider 及其模型；Agent 和研究解释分别选择，下个任务生效。凭证加密保存，只写不读。", "next_job", secret=True),
-    _env("llm_tier3_base_url", "llm", "接口地址", "OpenAI 兼容接口的 base URL。", "next_job"),
-    _env("llm_tier3_model", "llm", "模型", "研究解释与规则草拟使用的模型名。", "next_job"),
-    _env("llm_tier3_api_key", "llm", "API Key", "加密保存，只写不读。", "next_job", secret=True),
-    _env(
-        "llm_tier3_thinking", "llm", "推理模式",
-        "auto = 不发送 thinking 参数；enabled / disabled 显式开关推理。", "next_job",
-    ),
-    _env(
-        "llm_rule_draft_thinking", "llm", "规则草拟推理模式",
-        "规则草拟单独的推理开关；auto = 沿用上一项。", "next_job",
-    ),
-    _env(
-        "llm_request_timeout_seconds", "llm", "请求超时（秒）",
-        "单次大模型请求的超时时间，须大于 0。", "next_job",
-    ),
+    _env("llm_catalog", "llm", "Provider 与模型目录", "多个 Provider 及其模型。每个模型有稳定引用 provider/model，并标明能力标签。这里不记录谁在使用它。凭证加密保存，只写不读。", "next_job", secret=True),
     _env("ifind_proxy_url", "ifind", "代理地址", "iFinD 数据代理的 URL。", "next_job"),
     _env(
         "ifind_proxy_api_key", "ifind", "代理 API Key", "加密保存，只写不读。", "next_job",

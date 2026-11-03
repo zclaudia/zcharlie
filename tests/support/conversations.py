@@ -12,6 +12,7 @@ from investment_agent.storage.database import engine_lifespan, session_scope
 from investment_agent.storage.models.agent import AgentTask
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository, RunLease
+from tests.support.llm_catalog import settings_from_legacy
 
 
 @pytest_asyncio.fixture
@@ -34,7 +35,7 @@ def base(**overrides):
         agent_model="fixture-model", agent_max_tokens=100, investor_agent_task_tokens=200000,
         investor_agent_daily_tokens=500000, investor_agent_task_seconds=600)
     values.update(overrides)
-    return Settings(_env_file=None, **values)
+    return Settings(_env_file=None, **settings_from_legacy(**values))
 
 
 def message(**overrides):

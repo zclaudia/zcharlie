@@ -99,7 +99,7 @@ def prepare(source: Path, output: Path, cutoff: datetime) -> None:
     after = source_stamp(source)
     if before != after:
         raise RuntimeError("source changed during capture; do not treat packet as verified snapshot")
-    report = {"schema": "ag20.materials.v1", "status": "materials_only; engineering does not sign semantic quality", "source": {"revision": revision, **before}, "isolated_revision": head, "source_unchanged": before == after, "independent_configuration_missing": ["agent_base_url", "agent_model", "agent_api_key"], "production_enabled": False, "background_enabled": False, "reverse_dcf_enabled": False, "companies": companies}
+    report = {"schema": "ag20.materials.v1", "status": "materials_only; engineering does not sign semantic quality", "source": {"revision": revision, **before}, "isolated_revision": head, "source_unchanged": before == after, "independent_configuration_missing": ["investor.main model_ref", "provider api key"], "production_enabled": False, "background_enabled": False, "reverse_dcf_enabled": False, "companies": companies}
     report["material_set_hash"] = digest(companies)
     (output / "materials.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     summary = ["# AG20 三公司真实资料包", "", "状态：资料包已冻结，尚无独立 Agent 研究结果、方向观点、真实调用成本或人工质量通过。", "", f"来源库 {revision} → 隔离库 {head}；原库 stat/hash 不变。材料集 `{report['material_set_hash']}`。", "", "|公司|报告期|取得截止|行情日期|旧解释版本|", "|---|---|---|---|---|"]
@@ -139,7 +139,33 @@ async def run_trial(directory: Path, config_file: Path, *, _test_model: Any = No
         raise ValueError("explicit independent endpoint/model required")
     if any(not key.startswith("agent_") or key == "agent_api_key" for key in raw):
         raise ValueError("config accepts independent agent_* fields only; key is environment-only")
-    settings = Settings(_env_file=None, app_env="dev", data_dir=directory, database_url=f"sqlite+aiosqlite:///{directory / 'trial.db'}", api_key="ag20-inert", llm_tier3_api_key="inert", **{**raw, "agent_api_key": os.environ.get("AG20_AGENT_API_KEY", ""), "agent_max_tokens": 4096, "agent_retries": validation_retries, "agent_timeout_seconds": 45}, investor_agent_enabled=True, investor_agent_background_enabled=False, investor_agent_task_requests=8, investor_agent_daily_requests=24, investor_agent_task_tokens=task_tokens, investor_agent_daily_tokens=3 * task_tokens, investor_agent_task_tool_calls=24, investor_agent_task_seconds=360)
+    catalog = {
+        "providers": [{
+            "id": "trial", "name": "Trial", "kind": raw.get("agent_provider", "openai"),
+            "base_url": raw["agent_base_url"], "api_key": os.environ.get("AG20_AGENT_API_KEY", ""),
+            "models": [{
+                "id": "main", "name": raw["agent_model"], "model": raw["agent_model"], "enabled": True,
+                "capabilities": ["tools", "json_object", "thinking"],
+                "thinking": raw.get("agent_thinking", "auto"), "timeout_seconds": 45,
+                "profile": raw.get("agent_profile", "openai"), "profile_model": raw.get("agent_profile_model", ""),
+                "output_mode": raw.get("agent_output_mode", "prompted"),
+                "supports_json_schema": bool(raw.get("agent_supports_json_schema", False)),
+                "supports_json_object": raw.get("agent_supports_json_object", True) is not False,
+                "tool_choice_required": bool(raw.get("agent_tool_choice_required", False)),
+                "temperature": raw.get("agent_temperature"), "max_tokens": 4096, "retries": validation_retries,
+            }],
+        }],
+    }
+    settings = Settings(
+        _env_file=None, app_env="dev", data_dir=directory,
+        database_url=f"sqlite+aiosqlite:///{directory / 'trial.db'}", api_key="ag20-inert",
+        llm_catalog=json.dumps(catalog),
+        model_slots=json.dumps({"investor": {"main": "trial/main", "thinking": "trial/main"}}),
+        investor_agent_enabled=True, investor_agent_background_enabled=False,
+        investor_agent_task_requests=8, investor_agent_daily_requests=24,
+        investor_agent_task_tokens=task_tokens, investor_agent_daily_tokens=3 * task_tokens,
+        investor_agent_task_tool_calls=24, investor_agent_task_seconds=360,
+    )
     config = AgentModelConfig.from_settings(settings, 0)
     config.validate_ready()
     packet = json.loads((directory / "materials.json").read_text())
@@ -221,10 +247,12 @@ async def run_trial(directory: Path, config_file: Path, *, _test_model: Any = No
                         raise ValueError("cumulative company time allowance exhausted")
                     remaining = {"requests": requests_left, "tokens": tokens_left, "tools": tools_left, "seconds": seconds_left, "total_used_requests": used_requests, "total_used_tokens": used_tokens}
                     settings = settings.model_copy(update={"investor_agent_task_requests": requests_left, "investor_agent_task_tokens": tokens_left, "investor_agent_task_tool_calls": tools_left, "investor_agent_task_seconds": seconds_left})
-                    values = {**{key: getattr(settings, key) for key in raw}, "agent_max_tokens": 4096, "agent_retries": validation_retries, "agent_timeout_seconds": 45, "investor_agent_task_seconds": seconds_left, "investor_agent_enabled": True, "investor_agent_background_enabled": False, "investor_agent_task_requests": requests_left, "investor_agent_task_tokens": tokens_left, "investor_agent_task_tool_calls": tools_left, "investor_agent_daily_requests": 24, "investor_agent_daily_tokens": 3 * task_tokens}
-                    if settings.settings_encryption_key:
-                        values["agent_api_key"] = settings.agent_api_key
-                    await store_for(session, settings).apply(values, actor="ag20-isolated-authorized-repair")
+                    await store_for(session, settings).apply({
+                        "investor_agent_task_seconds": seconds_left, "investor_agent_enabled": True,
+                        "investor_agent_background_enabled": False, "investor_agent_task_requests": requests_left,
+                        "investor_agent_task_tokens": tokens_left, "investor_agent_task_tool_calls": tools_left,
+                        "investor_agent_daily_requests": 24, "investor_agent_daily_tokens": 3 * task_tokens,
+                    }, actor="ag20-isolated-authorized-repair")
             async with session_scope() as session:
                 service = ConversationService(session, settings)
                 conversation = await service.create(ConversationCreate(title="AG20 " + company["identity"]["canonical_name"]))

@@ -169,6 +169,7 @@
     "rules -> portfolio",
     "rules -> providers",
     "rules -> scheduler",
+    "rules -> settings",
     "rules -> snapshots",
     "rules -> storage",
     "rules -> watchlist",

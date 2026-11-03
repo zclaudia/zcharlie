@@ -28,7 +28,7 @@ from investment_agent.settings.registry import (
 
 def test_specs_are_unique_and_complete() -> None:
     assert len(SPECS_BY_KEY) == len(SPECS)
-    assert set(SECRET_KEYS) == {"llm_catalog", "llm_tier3_api_key", "ifind_proxy_api_key", "agent_api_key", "notification_webhook_url", "notification_webhook_token", "gateway_credential"}
+    assert set(SECRET_KEYS) == {"llm_catalog", "ifind_proxy_api_key", "notification_webhook_url", "notification_webhook_token", "gateway_credential"}
     for spec in SPECS:
         assert spec.group in GROUPS
         assert spec.label and spec.help
@@ -51,8 +51,7 @@ def test_env_keys_mirror_settings_fields() -> None:
         mine, theirs = runtime_fields[key], Settings.model_fields[key]
         assert mine.annotation == theirs.annotation, key
         assert mine.metadata == theirs.metadata, key
-        if key != "llm_tier3_api_key":  # required in Settings, "" = unset here
-            assert mine.default == theirs.default, key
+        assert mine.default == theirs.default, key
     bootstrap = {
         "app_env", "log_level", "data_dir", "api_key", "database_url",
         "web_session_ttl_minutes", "web_session_secret", "web_cookie_secure",
@@ -83,7 +82,7 @@ def test_schedule_defaults_match_app_yaml_models() -> None:
         ("candidate_expiry_days", 366),
         ("ifind_budget_window_hours", 0),
         ("snapshot_completeness_threshold", 1.5),
-        ("llm_tier3_thinking", "sometimes"),
+        ("model_slots", "{"),
         ("schedule.screen.cron", "0 20 * * 9"),
         ("schedule.screen.cron", "not a cron"),
         ("schedule.watchlist.cron", "61 19 * * 1-5"),
