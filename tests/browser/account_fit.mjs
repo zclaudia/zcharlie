@@ -82,8 +82,20 @@ async function login(page) {
   await page.getByRole('button', {name: '登录', exact: true}).click();
 }
 
+function observed(promise) {
+  // A wait started before a click can reject while that click is still pending.
+  // Mark it handled so a timeout fails the awaited assertion instead of killing
+  // the process and leaving the fixture server bound to the port.
+  promise.catch(() => {});
+  return promise;
+}
+
 function fitPost(page) {
-  return page.waitForRequest((request) => request.method() === 'POST' && request.url().endsWith('/portfolio/fit-assessments'));
+  return observed(page.waitForRequest((request) => request.method() === 'POST' && request.url().endsWith('/portfolio/fit-assessments')));
+}
+
+function fitResponse(page) {
+  return observed(page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments')));
 }
 
 async function submitRanking(page, accountId) {
@@ -122,7 +134,7 @@ async function submitFit(page, {accountId, price, fee, rate, action = 'open'}, {
     if (value === null) await input.fill(''); else await input.fill(value);
   }
   const requestPromise = fitPost(page);
-  const responsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
+  const responsePromise = fitResponse(page);
   await page.locator('#account-fit-root').scrollIntoViewIfNeeded();
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   const submitButton = page.getByRole('button', {name: '生成账户适配检查'});
@@ -197,7 +209,7 @@ async function submitFitWithLostReceipt(page, {accountId, price, fee, rate}) {
   assert.deepEqual(uncertain.body, firstBody, 'the uncertain request must retain its exact body');
 
   const retryRequest = fitPost(page);
-  const retryResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
+  const retryResponse = fitResponse(page);
   await page.getByRole('button', {name: '用相同操作 ID 重试确认'}).click();
   const request = await retryRequest;
   const response = await retryResponse;
@@ -615,8 +627,10 @@ try {
         return [...root.querySelectorAll('button')].some((node) => node.textContent === '继续发送已准备操作');
       });
       const retryButton = page.locator('#account-fit-content').getByRole('button', {name: '继续发送已准备操作'});
+      // At 390px the sticky app bar covers this control when it sits at the top of the result pane.
+      await retryButton.evaluate((node) => node.scrollIntoView({block: 'center', inline: 'nearest'}));
       const retryRequest = fitPost(page);
-      const retryResponse = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
+      const retryResponse = fitResponse(page);
       await retryButton.click();
       const retriedRequest = await retryRequest;
       const retriedResponse = await retryResponse;
@@ -650,7 +664,7 @@ try {
       const held = await acceptedResponseReady;
       const delayedBody = (await delayedRequest).postDataJSON();
       await page.locator('#account-fit-content [name=fixed_fee]').fill('11');
-      const delayedResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith('/portfolio/fit-assessments'));
+      const delayedResponsePromise = fitResponse(page);
       releaseReceipt();
       const delayedResponse = await delayedResponsePromise;
       assert.equal(delayedResponse.status(), 202);
