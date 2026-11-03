@@ -128,16 +128,23 @@ async def main():
     db = target / 'portfolio.db'
     if await asyncio.to_thread(db.exists):
         raise RuntimeError('fixture refuses existing DB')
+    from tests.support.llm_catalog import settings_from_legacy
+    model_env = settings_from_legacy(
+        agent_api_key='inert', agent_base_url='https://fixture.invalid/v1', agent_model='fixture',
+        agent_max_tokens=100,
+    )
     os.environ.update(API_KEY='ag24-fixture-key', LLM_TIER3_API_KEY='inert', DATA_DIR=str(target),
         DATABASE_URL=f'sqlite+aiosqlite:///{db}', INVESTOR_AGENT_ENABLED='true',
         PORTFOLIO_LEDGER_ENABLED='false' if os.environ.get('AG24_DISABLED') == 'true' else 'true',
-        AGENT_API_KEY='inert', AGENT_BASE_URL='https://fixture.invalid/v1', AGENT_MODEL='fixture',
-        INVESTOR_AGENT_TASK_TOKENS='300000', INVESTOR_AGENT_DAILY_TOKENS='1500000')
+        INVESTOR_AGENT_TASK_TOKENS='300000', INVESTOR_AGENT_DAILY_TOKENS='1500000',
+        LLM_CATALOG=model_env['llm_catalog'], MODEL_SLOTS=model_env['model_slots'])
     Settings.model_config['env_file'] = None
-    settings = Settings(_env_file=None, api_key='ag24-fixture-key', investor_agent_enabled=True,
+    from tests.support.llm_catalog import settings_from_legacy
+    settings = Settings(_env_file=None, **settings_from_legacy(
+        api_key='ag24-fixture-key', investor_agent_enabled=True,
         portfolio_ledger_enabled=os.environ.get('AG24_DISABLED') != 'true', agent_api_key='inert',
         agent_base_url='https://fixture.invalid/v1', agent_model='fixture', agent_max_tokens=100,
-        investor_agent_task_tokens=300000, investor_agent_daily_tokens=1500000)
+        investor_agent_task_tokens=300000, investor_agent_daily_tokens=1500000))
     engine = init_engine(os.environ['DATABASE_URL'])
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

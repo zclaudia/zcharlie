@@ -1,35 +1,43 @@
-// Shared Provider/Model editor. Credentials are never returned by the API.
+// Provider / model editor. Credentials are never returned by the API.
+// This page does not record which agent or task uses a model.
 import { post } from "./api.js";
 import { clear, el } from "./dom.js";
 import { randomUUID } from "./uuid.js";
 
+const CAPABILITIES = [
+  ["thinking", "推理"],
+  ["tools", "工具调用"],
+  ["json_object", "JSON Object"],
+  ["json_schema", "JSON Schema"],
+  ["tool_choice", "强制工具选择"],
+];
+
 export function catalogPayload(value) {
   const copy = structuredClone(value);
+  delete copy.bindings;
   for (const provider of copy.providers || []) {
     delete provider.configured;
     delete provider.hint;
+    for (const model of provider.models || []) {
+      model.supports_json_object = (model.capabilities || []).includes("json_object");
+      model.supports_json_schema = (model.capabilities || []).includes("json_schema");
+      model.tool_choice_required = (model.capabilities || []).includes("tool_choice");
+    }
   }
   return JSON.stringify(copy);
 }
 
-export function catalogSelectionLabel(value, binding) {
-  const ref = value?.bindings?.[binding];
-  const provider = value?.providers?.find((p) => p.id === ref?.provider_id);
-  const model = provider?.models?.find((m) => m.id === ref?.model_id);
-  return model ? `${provider.name} / ${model.name}` : "使用旧配置";
-}
-
 export function catalogControl(value, encryptionReady) {
-  const draft = structuredClone(value || {providers: [], bindings: {}});
+  const draft = structuredClone(value || {providers: []});
+  delete draft.bindings;
   const root = el("fieldset", {id: "setting-llm_catalog", class: "llm-catalog", disabled: !encryptionReady});
   root.appendChild(el("legend", {class: "visually-hidden"}, "Provider 与模型目录"));
   const status = el("p", {class: "notice", "aria-live": "polite", hidden: true});
   const providers = el("div", {class: "llm-provider-list"});
-  const bindings = el("div", {class: "llm-bindings"});
   const notify = () => root.dispatchEvent(new Event("change", {bubbles: true}));
   const id = randomUUID;
 
-  function field(parent, label, object, key, {type = "text", options, placeholder, refresh = false} = {}) {
+  function field(parent, label, object, key, {type = "text", options, placeholder} = {}) {
     const fieldId = `llm-field-${id()}`;
     const wrap = el("div", {class: "llm-field"});
     wrap.appendChild(el("label", {for: fieldId}, label));
@@ -43,7 +51,6 @@ export function catalogControl(value, encryptionReady) {
     control.addEventListener(options || type === "checkbox" ? "change" : "input", () => {
       object[key] = type === "checkbox" ? control.checked : type === "number"
         ? (control.value === "" ? null : Number(control.value)) : control.value;
-      if (refresh) renderBindings();
       notify();
     });
     wrap.appendChild(control);
@@ -51,40 +58,10 @@ export function catalogControl(value, encryptionReady) {
     return control;
   }
 
-  function inUse(provider, model) {
-    return Object.values(draft.bindings).some((ref) => ref.provider_id === provider.id && (!model || ref.model_id === model.id));
-  }
-
-  function removeButton(label, used, remove) {
-    const button = el("button", {type: "button", class: "btn btn-sm btn-danger-ghost", disabled: used,
-      title: used ? "请先更改上方正在使用此模型的选择" : undefined}, label);
-    button.addEventListener("click", () => {remove(); renderProviders(); renderBindings(); notify();});
+  function removeButton(label, remove) {
+    const button = el("button", {type: "button", class: "btn btn-sm btn-danger-ghost"}, label);
+    button.addEventListener("click", () => {remove(); renderProviders(); notify();});
     return button;
-  }
-
-  function renderBindings() {
-    clear(bindings);
-    bindings.appendChild(el("h3", {}, "用途分配"));
-    const choices = [["", "未选择（使用旧配置）"]];
-    for (const provider of draft.providers) {
-      for (const model of provider.models) choices.push([`${provider.id}/${model.id}`, `${provider.name || "新 Provider"} / ${model.name || model.model || "新模型"}`]);
-    }
-    // Unknown future agent bindings are retained when editing today's two consumers.
-    for (const [key, title] of [["agent", "投资 Agent"], ["research", "研究解释与规则草拟"]]) {
-      const ref = draft.bindings[key];
-      const holder = {value: ref ? `${ref.provider_id}/${ref.model_id}` : ""};
-      const control = field(bindings, title, holder, "value", {options: choices});
-      control.addEventListener("change", () => {
-        if (!control.value) delete draft.bindings[key];
-        else {
-          const [provider_id, model_id] = control.value.split("/");
-          draft.bindings[key] = {provider_id, model_id};
-        }
-        renderProviders();
-        notify();
-      });
-    }
-    bindings.appendChild(el("p", {class: "faint"}, "未选择时继续使用「旧配置（兼容）」里的字段。Provider 或模型正在使用时，请先更改选择再删除。保存后从下个任务开始使用。"));
   }
 
   async function test(provider, model, button) {
@@ -102,19 +79,44 @@ export function catalogControl(value, encryptionReady) {
     } finally { button.disabled = false; }
   }
 
+  function capabilityFields(model, parent) {
+    const wrap = el("div", {class: "llm-capabilities"});
+    wrap.appendChild(el("span", {class: "llm-field-label"}, "能力标签"));
+    const caps = new Set(model.capabilities || []);
+    for (const [name, label] of CAPABILITIES) {
+      const fieldId = `llm-cap-${id()}`;
+      const labelNode = el("label", {class: "llm-cap", for: fieldId});
+      const box = el("input", {id: fieldId, type: "checkbox"});
+      box.checked = caps.has(name);
+      box.addEventListener("change", () => {
+        const next = new Set(model.capabilities || []);
+        if (box.checked) next.add(name);
+        else next.delete(name);
+        model.capabilities = CAPABILITIES.map(([item]) => item).filter((item) => next.has(item));
+        model.supports_json_object = next.has("json_object");
+        model.supports_json_schema = next.has("json_schema");
+        model.tool_choice_required = next.has("tool_choice");
+        notify();
+      });
+      labelNode.append(box, el("span", {}, label));
+      wrap.appendChild(labelNode);
+    }
+    parent.appendChild(wrap);
+  }
+
   function renderProviders() {
     clear(providers);
-    if (!draft.providers.length) providers.appendChild(el("p", {class: "notice"}, "尚未添加 Provider。现有模型配置仍可继续使用。"));
+    if (!draft.providers.length) providers.appendChild(el("p", {class: "notice"}, "尚未添加 Provider。"));
     for (const provider of draft.providers) {
       const card = el("section", {class: "llm-provider"});
       const head = el("div", {class: "llm-card-head"});
       head.appendChild(el("h3", {}, provider.name || "新 Provider"));
-      head.appendChild(removeButton("删除 Provider", inUse(provider), () => {
-        draft.providers = draft.providers.filter((p) => p !== provider);
+      head.appendChild(removeButton("删除 Provider", () => {
+        draft.providers = draft.providers.filter((item) => item !== provider);
       }));
       card.appendChild(head);
       const fields = el("div", {class: "llm-field-grid"});
-      field(fields, "Provider 名称", provider, "name", {refresh: true});
+      field(fields, "Provider 名称", provider, "name");
       field(fields, "接口类型", provider, "kind", {options: [["openai", "OpenAI 兼容"], ["deepseek", "DeepSeek"]]});
       field(fields, "接口地址", provider, "base_url", {type: "url", placeholder: "填写接口的完整 URL"});
       const key = field(fields, "API Key", provider, "api_key", {type: "password", placeholder: provider.configured ? `已设置 ···${provider.hint || ""}；留空不修改` : "输入 API Key"});
@@ -129,56 +131,60 @@ export function catalogControl(value, encryptionReady) {
       for (const model of provider.models) {
         const box = el("div", {class: "llm-model"});
         const grid = el("div", {class: "llm-field-grid"});
-        field(grid, "模型显示名称", model, "name", {refresh: true});
-        field(grid, "模型标识", model, "model", {placeholder: "接口接受的模型名", refresh: true});
-        field(grid, "推理模式", model, "thinking", {options: [["auto", "默认"], ["enabled", "开启"], ["disabled", "关闭"]]});
-        field(grid, "请求超时（秒）", model, "timeout_seconds", {type: "number"});
+        field(grid, "模型显示名称", model, "name");
+        field(grid, "模型标识", model, "model", {placeholder: "接口接受的模型名"});
+        field(grid, "上下文长度", model, "context_length", {type: "number"});
+        field(grid, "启用", model, "enabled", {type: "checkbox"});
         box.appendChild(grid);
+        capabilityFields(model, box);
         const advanced = el("details");
-        advanced.appendChild(el("summary", {}, "Agent 模型能力与参数"));
+        advanced.appendChild(el("summary", {}, "调用参数"));
         const extra = el("div", {class: "llm-field-grid"});
+        field(extra, "推理请求", model, "thinking", {options: [["auto", "不发送"], ["enabled", "开启"], ["disabled", "关闭"]]});
+        field(extra, "请求超时（秒）", model, "timeout_seconds", {type: "number"});
         field(extra, "能力 Profile", model, "profile", {options: [["openai", "OpenAI"], ["deepseek", "DeepSeek"]]});
         field(extra, "Profile 官方模型名（可选）", model, "profile_model");
         field(extra, "输出模式", model, "output_mode", {options: [["prompted", "JSON Object"], ["tool", "工具调用"], ["native", "JSON Schema"]]});
-        field(extra, "支持 JSON Object", model, "supports_json_object", {type: "checkbox"});
-        field(extra, "支持 JSON Schema", model, "supports_json_schema", {type: "checkbox"});
-        field(extra, "支持强制工具选择", model, "tool_choice_required", {type: "checkbox"});
         field(extra, "Temperature（可选）", model, "temperature", {type: "number"});
         field(extra, "最大输出 Token（可选）", model, "max_tokens", {type: "number"});
         field(extra, "校验重试次数", model, "retries", {type: "number"});
         advanced.appendChild(extra);
         box.appendChild(advanced);
+        const ref = el("p", {class: "faint"}, `引用 ${provider.id}/${model.id}`);
+        box.appendChild(ref);
         const actions = el("div", {class: "llm-card-head"});
         const testButton = el("button", {type: "button", class: "btn btn-sm secondary"}, "测试此模型");
         testButton.addEventListener("click", () => test(provider, model, testButton));
         actions.appendChild(testButton);
-        actions.appendChild(removeButton("删除模型", inUse(provider, model), () => {
-          provider.models = provider.models.filter((m) => m !== model);
+        actions.appendChild(removeButton("删除模型", () => {
+          provider.models = provider.models.filter((item) => item !== model);
         }));
         box.appendChild(actions);
         card.appendChild(box);
       }
       const addModel = el("button", {type: "button", class: "btn btn-sm secondary"}, "添加模型");
       addModel.addEventListener("click", () => {
-        provider.models.push({id: id(), name: "", model: "", thinking: "auto", timeout_seconds: 120,
-          profile: provider.kind, profile_model: "", output_mode: "prompted", supports_json_schema: false,
-          supports_json_object: true, tool_choice_required: false, temperature: null, max_tokens: null, retries: 1});
-        renderProviders(); renderBindings(); notify();
+        provider.models.push({
+          id: id(), name: "", model: "", enabled: true, capabilities: ["json_object"], context_length: null,
+          thinking: "auto", timeout_seconds: 120, profile: provider.kind, profile_model: "",
+          output_mode: "prompted", supports_json_schema: false, supports_json_object: true,
+          tool_choice_required: false, temperature: null, max_tokens: null, retries: 1,
+        });
+        renderProviders(); notify();
       });
       card.appendChild(addModel);
       providers.appendChild(card);
     }
   }
 
-  root.appendChild(bindings);
   root.appendChild(providers);
   const addProvider = el("button", {type: "button", class: "btn btn-sm secondary"}, "添加 Provider");
   addProvider.addEventListener("click", () => {
     draft.providers.push({id: id(), name: "", kind: "openai", base_url: "", api_key: null, models: []});
-    renderProviders(); renderBindings(); notify();
+    renderProviders(); notify();
   });
   root.appendChild(addProvider);
   root.appendChild(status);
-  renderProviders(); renderBindings();
+  renderProviders();
   return {control: root, root, read: () => catalogPayload(draft)};
 }

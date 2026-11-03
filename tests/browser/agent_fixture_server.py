@@ -1,9 +1,12 @@
 """Isolated AG17 browser fixture. Never launch against an existing database."""
 import asyncio
 import os
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import uvicorn
 from fastapi import Depends
@@ -45,9 +48,14 @@ async def main():
     db = target / "browser.db"
     if db.exists():
         raise RuntimeError("fixture refuses existing database")
+    from tests.support.llm_catalog import settings_from_legacy
+    model_env = settings_from_legacy(
+        agent_api_key="inert", agent_base_url="https://fixture.invalid/v1", agent_model="fixture",
+        agent_max_tokens=100,
+    )
     os.environ.update(API_KEY="ag17-fixture-key", LLM_TIER3_API_KEY="inert", DATA_DIR=str(target),
         DATABASE_URL=f"sqlite+aiosqlite:///{db}", INVESTOR_AGENT_ENABLED="true",
-        AGENT_API_KEY="inert", AGENT_BASE_URL="https://fixture.invalid/v1", AGENT_MODEL="fixture")
+        LLM_CATALOG=model_env["llm_catalog"], MODEL_SLOTS=model_env["model_slots"])
     Settings.model_config["env_file"] = None
     engine = init_engine(os.environ["DATABASE_URL"])
     async with engine.begin() as conn:
@@ -63,9 +71,11 @@ async def main():
         from cryptography.fernet import Fernet
         os.environ["INVESTOR_AGENT_ENABLED"] = "false"
         os.environ["SETTINGS_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
-    base = Settings(_env_file=None, api_key="ag17-fixture-key", investor_agent_enabled=os.environ.get("AG19_FIXTURE") != "true",
+    base = Settings(_env_file=None, **settings_from_legacy(
+        api_key="ag17-fixture-key", investor_agent_enabled=os.environ.get("AG19_FIXTURE") != "true",
         agent_api_key="inert", agent_base_url="https://fixture.invalid/v1", agent_model="fixture",
-        agent_max_tokens=100, investor_agent_task_tokens=100000, investor_agent_daily_tokens=500000)
+        agent_max_tokens=100, investor_agent_task_tokens=100000, investor_agent_daily_tokens=500000,
+        llm_catalog=os.environ["LLM_CATALOG"], model_slots=os.environ["MODEL_SLOTS"]))
 
     async def complete(session, execution, outcome):
         await ConversationService(session, base).save_assistant(execution,

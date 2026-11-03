@@ -1019,6 +1019,7 @@ async def _explain_score(
     settings: Settings,
     run_id: int,
     score_item: dict[str, Any],
+    explanation_model: str | None = None,
 ) -> ResearchExplanation:
     schema = ResearchExplanation.model_json_schema()
     schema["$defs"]["EvidenceClaim"]["properties"]["supporting_fields"]["items"]["enum"] = (
@@ -1034,9 +1035,11 @@ async def _explain_score(
     for attempt in range(EXPLANATION_ATTEMPTS):
         try:
             async with session_scope() as session:
+                from investment_agent.settings.resolution import tier_config
+
                 client = OpenAICompatibleClient(
                     tier_name="tier3",
-                    config=settings.llm_tier3,
+                    config=tier_config(settings, "research", "explain", model=explanation_model),
                     session=session,
                 )
                 result = await client.complete(
@@ -1247,6 +1250,7 @@ async def run_ifind_research_chain(
     claimed_run_id: int | None = None,
     source_mode: str = "ifind",
     industry_peer_context: dict[str, object] | None = None,
+    explanation_model: str | None = None,
 ) -> ResearchChainResult:
     """Run and persist the complete data -> score -> explanation vertical slice.
 
@@ -1448,6 +1452,7 @@ async def run_ifind_research_chain(
                 settings=settings,
                 run_id=run_id,
                 score_item=score_item,
+                explanation_model=explanation_model,
             )
         except Exception as exc:
             from investment_agent.research.retry_policy import (

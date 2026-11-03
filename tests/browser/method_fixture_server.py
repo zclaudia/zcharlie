@@ -26,7 +26,9 @@ from investment_agent.storage.models.base import Base
 async def main() -> None:
     folder = Path(os.environ['AG30_FIXTURE_DIR'])
     url = f"sqlite+aiosqlite:///{folder / 'fixture.db'}"
-    os.environ.update(DATABASE_URL=url, DATA_DIR=str(folder), API_KEY='fixture-app', INVESTOR_AGENT_ENABLED='true', AGENT_API_KEY='inert', AGENT_BASE_URL='https://fixture.invalid/v1', AGENT_MODEL='fixture', AGENT_MAX_TOKENS='100', INVESTOR_AGENT_TASK_TOKENS='100000', INVESTOR_AGENT_DAILY_TOKENS='500000', INVESTOR_AGENT_TASK_SECONDS='600', APP_CONFIG_PATH=str(folder / 'absent.yaml'))
+    from tests.support.conversations import base as conversation_settings
+    template = conversation_settings()
+    os.environ.update(DATABASE_URL=url, DATA_DIR=str(folder), API_KEY='fixture-app', INVESTOR_AGENT_ENABLED='true', INVESTOR_AGENT_TASK_TOKENS='100000', INVESTOR_AGENT_DAILY_TOKENS='500000', INVESTOR_AGENT_TASK_SECONDS='600', APP_CONFIG_PATH=str(folder / 'absent.yaml'), LLM_CATALOG=template.llm_catalog, MODEL_SLOTS=template.model_slots)
     Settings.model_config['env_file'] = None
     async with engine_lifespan(url) as engine:
         async with engine.begin() as connection:

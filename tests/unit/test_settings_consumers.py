@@ -192,9 +192,12 @@ def test_llm_key_may_be_absent_from_env_but_fails_clearly_at_use(monkeypatch) ->
 
     monkeypatch.delenv("LLM_TIER3_API_KEY", raising=False)
     settings = Settings(_env_file=None, api_key="test")  # type: ignore[call-arg]
-    assert settings.llm_tier3_api_key == ""
-    with pytest.raises(LLMNotConfiguredError, match="llm_tier3_api_key"):
-        OpenAICompatibleClient(tier_name="tier3", config=settings.llm_tier3, session=None)  # type: ignore[arg-type]
+    from investment_agent.settings.resolution import ModelUnavailableError
+    with pytest.raises(ModelUnavailableError, match="未选择模型"):
+        from investment_agent.settings.resolution import tier_config
+        tier_config(settings, "rule_draft", "main")
+    with pytest.raises(LLMNotConfiguredError, match="API key"):
+        OpenAICompatibleClient(tier_name="tier3", config=LLMTierConfig(base_url="http://llm", api_key="", model="m"), session=None)  # type: ignore[arg-type]
     config = LLMTierConfig(base_url="http://llm", api_key="k", model="m")
     OpenAICompatibleClient(tier_name="tier3", config=config, session=None)  # type: ignore[arg-type]
 

@@ -33,7 +33,7 @@ def _settings(**values: object) -> Settings:
     return Settings(  # type: ignore[call-arg]
         _env_file=None,
         api_key="x" * 32,
-        llm_tier3_api_key=values.pop("llm_tier3_api_key", "env-llm-key"),
+        ifind_proxy_api_key=values.pop("ifind_proxy_api_key", "env-llm-key"),
         settings_encryption_key=values.pop("settings_encryption_key", KEY),
         **values,
     )
@@ -145,26 +145,26 @@ async def test_load_falls_back_to_default_for_a_stored_value_now_invalid(db_sess
 
 async def test_secret_encrypted_at_rest_and_masked_everywhere(db_session) -> None:
     store = SettingsStore(db_session, encryption_key=KEY)
-    assert await store.apply({"llm_tier3_api_key": SECRET}, actor="ui") == ["llm_tier3_api_key"]
-    assert (await store.load()).llm_tier3_api_key == SECRET
+    assert await store.apply({"ifind_proxy_api_key": SECRET}, actor="ui") == ["ifind_proxy_api_key"]
+    assert (await store.load()).ifind_proxy_api_key == SECRET
 
     raw = (await db_session.execute(text("SELECT * FROM app_setting"))).all()
     changes = (await db_session.execute(text("SELECT * FROM app_setting_change"))).all()
     assert SECRET not in repr(raw) + repr(changes)
-    row = await db_session.get(AppSetting, "llm_tier3_api_key")
+    row = await db_session.get(AppSetting, "ifind_proxy_api_key")
     assert row.value_json is None and row.secret_hint == "1234"
 
     (change,) = await store.history()
     assert (change.old_value_json, change.new_value_json) == (None, "***1234")
     described = {item["key"]: item for item in await store.describe()}
-    item = described["llm_tier3_api_key"]
+    item = described["ifind_proxy_api_key"]
     assert "value" not in item
     assert (item["configured"], item["hint"], item["decrypt_error"]) == (True, "1234", None)
 
     # Empty string clears; no key needed for that.
     cleared = SettingsStore(db_session)
-    assert await cleared.apply({"llm_tier3_api_key": ""}, actor="ui") == ["llm_tier3_api_key"]
-    assert (await cleared.load()).llm_tier3_api_key == ""
+    assert await cleared.apply({"ifind_proxy_api_key": ""}, actor="ui") == ["ifind_proxy_api_key"]
+    assert (await cleared.load()).ifind_proxy_api_key == ""
     assert (await cleared.history())[0].new_value_json is None
 
 
@@ -180,27 +180,27 @@ async def test_secret_write_without_key_fails_cleanly(db_session) -> None:
 @pytest.mark.parametrize("read_key", ["", Fernet.generate_key().decode()])
 async def test_unreadable_secret_resolves_empty_and_keeps_others(db_session, read_key) -> None:
     await SettingsStore(db_session, encryption_key=KEY).apply(
-        {"llm_tier3_api_key": SECRET, "candidate_expiry_days": 21}, actor="ui"
+        {"ifind_proxy_api_key": SECRET, "candidate_expiry_days": 21}, actor="ui"
     )
     store = SettingsStore(db_session, encryption_key=read_key)
     with capture_logs() as logs:
         runtime = await store.load()
-    assert runtime.llm_tier3_api_key == ""
+    assert runtime.ifind_proxy_api_key == ""
     assert runtime.candidate_expiry_days == 21
     assert any(entry["event"] == "settings.secret_unreadable" for entry in logs)
     described = {item["key"]: item for item in await store.describe()}
-    assert described["llm_tier3_api_key"]["configured"] is True
-    assert described["llm_tier3_api_key"]["decrypt_error"]
+    assert described["ifind_proxy_api_key"]["configured"] is True
+    assert described["ifind_proxy_api_key"]["decrypt_error"]
 
 
 async def test_rewriting_an_unreadable_secret_with_a_new_key(db_session) -> None:
     await SettingsStore(db_session, encryption_key=KEY).apply(
-        {"llm_tier3_api_key": SECRET}, actor="ui"
+        {"ifind_proxy_api_key": SECRET}, actor="ui"
     )
     new_key = Fernet.generate_key().decode()
     store = SettingsStore(db_session, encryption_key=new_key)
-    assert await store.apply({"llm_tier3_api_key": SECRET}, actor="ui") == ["llm_tier3_api_key"]
-    assert (await store.load()).llm_tier3_api_key == SECRET
+    assert await store.apply({"ifind_proxy_api_key": SECRET}, actor="ui") == ["ifind_proxy_api_key"]
+    assert (await store.load()).ifind_proxy_api_key == SECRET
 
 
 # --- import / loader ----------------------------------------------------------------
@@ -216,7 +216,7 @@ def test_env_import_values_are_explicit_only(monkeypatch) -> None:
     _bootstrap_env(monkeypatch)
     monkeypatch.setenv("CANDIDATE_EXPIRY_DAYS", "21")
     values = env_import_values(_settings())
-    assert values == {"candidate_expiry_days": 21, "llm_tier3_api_key": "env-llm-key"}
+    assert values == {"candidate_expiry_days": 21, "ifind_proxy_api_key": "env-llm-key"}
 
 
 def test_yaml_import_values(tmp_path) -> None:
@@ -266,13 +266,13 @@ async def test_ensure_imported_once_and_force(db_session, tmp_path, monkeypatch)
 
     imported = await ensure_imported(db_session, settings, yaml_path)
     assert imported is not None
-    assert {"ifind_budget_per_5h", "llm_tier3_api_key", "schedule.watchlist.cron"} <= set(
+    assert {"ifind_budget_per_5h", "ifind_proxy_api_key", "schedule.watchlist.cron"} <= set(
         imported
     )
     store = SettingsStore(db_session, encryption_key=KEY)
     runtime = await store.load()
     assert runtime.ifind_budget_per_5h == 120
-    assert runtime.llm_tier3_api_key == "env-llm-key"
+    assert runtime.ifind_proxy_api_key == "env-llm-key"
     assert runtime.schedule.watchlist.cron == "30 19 * * 1-5"
     assert runtime.candidate_expiry_days == 14  # not set in env: not imported
     assert await db_session.get(AppSetting, "candidate_expiry_days") is None
@@ -307,11 +307,11 @@ async def test_import_without_key_skips_secrets_and_loader_keeps_env(
         imported = await ensure_imported(db_session, settings, tmp_path / "none.yaml")
     assert imported == ["candidate_expiry_days"]
     assert any(entry["event"] == "settings.import_skipped_secrets" for entry in logs)
-    assert await db_session.get(AppSetting, "llm_tier3_api_key") is None
+    assert await db_session.get(AppSetting, "ifind_proxy_api_key") is None
 
     effective = await load_settings(db_session, base=settings)
     assert effective.candidate_expiry_days == 21
-    assert effective.llm_tier3_api_key == "env-llm-key"  # no stored row: env fallback
+    assert effective.ifind_proxy_api_key == "env-llm-key"  # no stored row: env fallback
 
 
 async def test_load_settings_overlay(db_session, tmp_path, monkeypatch) -> None:
@@ -324,13 +324,13 @@ async def test_load_settings_overlay(db_session, tmp_path, monkeypatch) -> None:
     await ensure_imported(db_session, base, tmp_path / "none.yaml")
     store = SettingsStore(db_session, encryption_key=KEY)
     await store.apply(
-        {"candidate_expiry_days": 7, "ifind_proxy_api_key": "", "llm_tier3_model": "m2"},
+        {"candidate_expiry_days": 7, "ifind_proxy_api_key": "", "model_slots": "{\"research\":{\"explain\":\"primary/fast\"}}"},
         actor="ui",
     )
     effective = await load_settings(db_session, base=base)
     assert effective.candidate_expiry_days == 7
     assert effective.ifind_proxy_api_key == ""  # cleared in the DB wins over env
-    assert effective.llm_tier3.model == "m2"
+    assert "primary/fast" in effective.model_slots
     assert effective.api_key == base.api_key  # bootstrap layer untouched
     assert effective.database_url == base.database_url
 

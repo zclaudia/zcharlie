@@ -23,6 +23,7 @@ from investment_agent.config import Settings
 from investment_agent.settings.loader import ensure_imported, load_agent_model_config, load_settings
 from investment_agent.settings.store import SettingsStore
 from investment_agent.storage.models.agent import AgentModelRun
+from tests.support.llm_catalog import settings_from_legacy
 
 
 class Answer(BaseModel):
@@ -30,9 +31,10 @@ class Answer(BaseModel):
 
 
 def config(**changes):
-    return AgentModelConfig.from_settings(Settings(_env_file=None, api_key="fixture-app-key",
-        agent_base_url="https://fixture.invalid/v1", agent_model="deepseek-flash",
-        agent_api_key="fixture-agent-secret", **changes), revision=7)
+    values = dict(api_key="fixture-app-key", agent_base_url="https://fixture.invalid/v1",
+                  agent_model="deepseek-flash", agent_api_key="fixture-agent-secret")
+    values.update(changes)
+    return AgentModelConfig.from_settings(Settings(_env_file=None, **settings_from_legacy(**values)), revision=7)
 
 
 async def test_native_tool_roundtrip_history_and_audit(db_session):
@@ -160,10 +162,15 @@ async def test_request_guard_blocks_before_network_and_limits_stop_loop(db_sessi
 
 async def test_configuration_unconfigured_native_profile_and_immutability():
     blank = AgentModelConfig.from_settings(Settings(_env_file=None, api_key="fixture"), 0)
-    with pytest.raises(AgentConfigurationError, match="unconfigured"):
+    with pytest.raises(AgentConfigurationError, match="未选择模型"):
         blank.validate_ready()
+    invalid = config()
+    values = invalid.values
+    values["agent_output_mode"] = "native"
+    values["agent_supports_json_schema"] = False
+    invalid = AgentModelConfig(revision=invalid.revision, values_json=json.dumps(values), credential=invalid.credential)
     with pytest.raises(AgentConfigurationError, match="json_schema"):
-        config(agent_output_mode="native").validate_ready()
+        invalid.validate_ready()
     cfg = config(agent_profile="deepseek", agent_profile_model="deepseek-v4-pro")
     assert cfg.profile()["openai_chat_send_back_thinking_parts"] == "field"
     assert cfg.profile()["supports_json_schema_output"] is False
@@ -178,20 +185,19 @@ async def test_configuration_unconfigured_native_profile_and_immutability():
 
 async def test_encrypted_loader_isolation(db_session, tmp_path):
     base = Settings(_env_file=None, api_key="fixture", settings_encryption_key=Fernet.generate_key().decode(),
-        llm_tier3_api_key="old-explanation-secret", llm_tier3_model="old-model")
+                    **settings_from_legacy(agent_model="deepseek-v4-pro", agent_base_url="https://fixture.invalid/v1",
+                                           agent_api_key="fixture-agent-secret"))
     await ensure_imported(db_session, base, tmp_path / "absent.yaml")
-    old = (await load_settings(db_session, base=base)).llm_tier3
     store = SettingsStore(db_session, encryption_key=base.settings_encryption_key)
-    await store.apply({"agent_model": "deepseek-v4-pro", "agent_base_url": "https://fixture.invalid/v1", "agent_api_key": "fixture-agent-secret"}, actor="test", note="AG07")
     cfg = await load_agent_model_config(db_session, base=base)
     cfg.validate_ready()
     assert cfg.revision == await store.revision()
     assert cfg.credential.get_secret_value() == "fixture-agent-secret"
-    assert (await load_settings(db_session, base=base)).llm_tier3 == old
+    assert cfg.values["agent_model"] == "deepseek-v4-pro"
     from investment_agent.storage.models.app_settings import AppSetting, AppSettingChange
-    secret = await db_session.get(AppSetting, "agent_api_key")
+    secret = await db_session.get(AppSetting, "llm_catalog")
     assert secret.value_json is None and "fixture-agent-secret" not in secret.ciphertext
-    changes = (await db_session.scalars(select(AppSettingChange).where(AppSettingChange.key == "agent_api_key"))).all()
+    changes = (await db_session.scalars(select(AppSettingChange).where(AppSettingChange.key == "llm_catalog"))).all()
     assert "fixture-agent-secret" not in repr([c.new_value_json for c in changes])
 
 
@@ -267,12 +273,23 @@ async def test_configuration_revision_recheck_refreshes_existing_rows(tmp_path, 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    base = Settings(_env_file=None, api_key="fixture")
+    catalog = {
+        "providers": [{
+            "id": "fixture", "name": "Fixture", "kind": "openai",
+            "base_url": "https://fixture.invalid/v1", "api_key": "fixture-agent-secret",
+            "models": [
+                {"id": "first", "name": "First", "model": "first", "capabilities": ["tools", "json_object"]},
+                {"id": "second", "name": "Second", "model": "second", "capabilities": ["tools", "json_object"]},
+            ],
+        }],
+    }
+    base = Settings(_env_file=None, api_key="fixture", llm_catalog=json.dumps(catalog),
+                    model_slots=json.dumps({"investor": {"main": "fixture/first"}}))
     try:
         async with sessions() as writer:
             store = SettingsStore(writer)
             await store.claim_import()
-            await store.apply({"agent_model": "first"}, actor="test")
+            await store.apply({"model_slots": json.dumps({"investor": {"main": "fixture/first"}})}, actor="test")
             await writer.commit()
         async with sessions() as reader:
             # Populate the identity map with an old row before a concurrent update.
@@ -286,7 +303,8 @@ async def test_configuration_revision_recheck_refreshes_existing_rows(tmp_path, 
                 loads += 1
                 if loads == 1:
                     async with sessions() as writer:
-                        await SettingsStore(writer).apply({"agent_model": "second"}, actor="test")
+                        await SettingsStore(writer).apply(
+                            {"model_slots": json.dumps({"investor": {"main": "fixture/second"}})}, actor="test")
                         await writer.commit()
                 return effective
 

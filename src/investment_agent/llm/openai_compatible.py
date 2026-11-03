@@ -28,8 +28,7 @@ class OpenAICompatibleClient:
     ) -> None:
         if not config.api_key.strip():
             raise LLMNotConfiguredError(
-                f"LLM {tier_name} API key is not configured: set llm_tier3_api_key in the "
-                "settings page (大模型 -> API Key) or with `ia settings set llm_tier3_api_key`"
+                f"LLM {tier_name} API key is not configured: open 设置 → 模型 and set the provider key"
             )
         self.tier_name = tier_name
         self._config = config

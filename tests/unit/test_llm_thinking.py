@@ -28,13 +28,14 @@ def test_extra_body_only_when_configured() -> None:
     assert thinking_extra_body(_tier("enabled")) == {"thinking": {"type": "enabled"}}
 
 
-def test_rule_draft_override_inherits_or_replaces_the_tier_mode() -> None:
-    assert _settings().llm_rule_draft.thinking == "auto"
-    assert _settings(llm_tier3_thinking="disabled").llm_rule_draft.thinking == "disabled"
-    settings = _settings(llm_tier3_thinking="enabled", llm_rule_draft_thinking="disabled")
-    assert settings.llm_tier3.thinking == "enabled"
-    assert settings.llm_rule_draft.thinking == "disabled"
-    assert settings.llm_rule_draft.model == settings.llm_tier3.model
+def test_rule_draft_uses_its_own_slot() -> None:
+    import json
+
+    from investment_agent.settings.resolution import tier_config
+    from tests.support.llm_catalog import catalog_values, slot_values
+    settings = _settings(llm_catalog=json.dumps(catalog_values()), model_slots=json.dumps(slot_values()))
+    assert tier_config(settings, "rule_draft", "main").model == "deepseek-chat"
+    assert tier_config(settings, "research", "explain").thinking == "disabled"
 
 
 @pytest.mark.parametrize(("mode", "expected"), [("auto", None), ("disabled", {"type": "disabled"})])

@@ -133,8 +133,8 @@ async def main() -> None:
         CANDIDATE_RANKING_ENABLED="true",
     )
     Settings.model_config["env_file"] = None
-    settings = Settings(
-        _env_file=None,
+    from tests.support.llm_catalog import settings_from_legacy
+    settings = Settings(_env_file=None, **settings_from_legacy(
         api_key=FIXTURE_KEY,
         database_url=database_url,
         data_dir=workdir,
@@ -147,7 +147,7 @@ async def main() -> None:
         agent_model="fixture",
         investor_agent_task_tokens=10000,
         investor_agent_daily_tokens=100000,
-    )
+    ))
     engine = init_engine(database_url)
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)

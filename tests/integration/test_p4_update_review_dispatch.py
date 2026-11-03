@@ -81,7 +81,7 @@ async def _prepare_settings(*, priced: bool) -> Settings:
         "investor_agent_background_enabled": True,
         "supplemental_rules_enabled": True,
         "supplemental_updates_enabled": True,
-        "agent_model": settings.agent_model,
+        "model_slots": settings.model_slots,
     }
     async with session_scope() as session:
         store = store_for(session, settings)

@@ -37,12 +37,13 @@ async def progress_db(tmp_path):
 
 
 def base(**overrides):
+    from tests.support.llm_catalog import settings_from_legacy
     values = dict(api_key="fixture-app", investor_agent_enabled=True,
         agent_api_key="fixture-model-key", agent_base_url="https://fixture.invalid/v1",
         agent_model="fixture-model", agent_max_tokens=100, investor_agent_task_tokens=100000,
         investor_agent_daily_tokens=500000, investor_agent_task_seconds=600)
     values.update(overrides)
-    return Settings(_env_file=None, **values)
+    return Settings(_env_file=None, **settings_from_legacy(**values))
 
 
 def message(**overrides):

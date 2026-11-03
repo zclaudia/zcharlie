@@ -92,32 +92,26 @@ async def _overlay(session: AsyncSession, base: Settings) -> Settings:
         for key in ENV_KEYS
         if key not in SECRET_KEYS or key in state.stored_keys
     }
-    for key, credential in base._llm_legacy_credentials.items():
-        if key not in state.stored_keys:
-            update[key] = credential
     # Validated by RuntimeSettings with the same bounds as Settings.
     return base.model_copy(update=update)
 
 
 async def load_settings(
-    session: AsyncSession | None = None, *, base: Settings | None = None, resolve_models: bool = True
+    session: AsyncSession | None = None, *, base: Settings | None = None
 ) -> Settings:
     """``Settings`` with the runtime fields taken from the DB.
 
     ``base`` is the bootstrap ``Settings`` (read from env when omitted).
     Without ``session`` a short ``session_scope()`` is opened (the engine
-    must be initialized).
+    must be initialized). Model slots are not rewritten onto other keys:
+    callers resolve ``slot -> model_ref -> provider`` themselves.
     """
-
-    from investment_agent.settings.llm_catalog import resolve_catalog_settings
 
     bootstrap = base if base is not None else Settings()  # type: ignore[call-arg]
     if session is not None:
-        effective = await _overlay(session, bootstrap)
-    else:
-        async with session_scope() as own:
-            effective = await _overlay(own, bootstrap)
-    return resolve_catalog_settings(effective) if resolve_models else effective
+        return await _overlay(session, bootstrap)
+    async with session_scope() as own:
+        return await _overlay(own, bootstrap)
 
 
 def env_import_values(settings: Settings) -> dict[str, Any]:

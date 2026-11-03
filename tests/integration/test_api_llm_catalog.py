@@ -47,18 +47,21 @@ def test_catalog_read_update_and_delete_preserve_secrets(client):
     renamed = save(client, value)
     assert renamed.status_code == 200
     assert renamed.json()["settings"]["llm_catalog"]["providers"][0]["configured"] is True
-    # Referenced provider/model removals must not silently change the Agent.
+    # The catalog does not know which slot uses a provider, so deletion is allowed.
+    # A slot that still names it becomes unavailable instead of being rewritten.
     value["providers"].pop(0)
-    rejected = save(client, value)
-    assert rejected.status_code == 422
-    assert rejected.json()["detail"]["issues"][0]["key"] == "llm_catalog"
-    assert len(client.get("/settings", headers=AUTH).json()["llm_catalog"]["providers"]) == 2
-    del value["bindings"]["agent"]
-    assert save(client, value).status_code == 200
+    removed = save(client, value)
+    assert removed.status_code == 200, removed.text
+    assert len(client.get("/settings", headers=AUTH).json()["llm_catalog"]["providers"]) == 1
 
 
 def test_binding_changes_reach_readiness_with_safe_selection_snapshot(client):
+    import json
+
+    from tests.support.llm_catalog import slot_values
     assert save(client, catalog_values()).status_code == 200
+    saved = client.patch("/settings", headers=AUTH, json={"values": {"model_slots": json.dumps(slot_values())}})
+    assert saved.status_code == 200, saved.text
     response = client.get("/investor/readiness", headers=AUTH)
     assert response.status_code == 200, response.text
     assert not any("未配置" in issue for issue in response.json()["interactive_issues"] if "模型" in issue or "端点" in issue or "API Key" in issue)
@@ -137,19 +140,9 @@ def test_stale_editor_cannot_overwrite_provider_changes(client):
     assert len(client.get("/settings", headers=AUTH).json()["llm_catalog"]["providers"]) == 2
 
 
-@respx.mock
-def test_legacy_probe_does_not_send_selected_providers_key_to_legacy_endpoint(client):
-    client.patch("/settings", headers=AUTH, json={"values": {
-        "llm_tier3_base_url": "https://legacy.invalid/v1", "llm_tier3_model": "legacy",
-        "llm_tier3_api_key": "legacy-fixture-key",
+def test_removed_legacy_keys_are_rejected(client):
+    rejected = client.patch("/settings", headers=AUTH, json={"values": {
+        "llm_tier3_api_key": "legacy-fixture-key", "agent_model": "legacy",
     }})
-    assert save(client, catalog_values()).status_code == 200
-
-    def respond(request):
-        assert request.headers["authorization"] == "Bearer legacy-fixture-key"
-        assert json.loads(request.content)["model"] == "legacy"
-        return httpx.Response(401, json={"error": {"message": "inert test endpoint"}})
-
-    route = respx.post("https://legacy.invalid/v1/chat/completions").mock(side_effect=respond)
-    probe = client.post("/settings/test/llm", headers=AUTH, json={"use_legacy": True})
-    assert probe.status_code == 200 and route.called
+    assert rejected.status_code == 422
+    assert "legacy-fixture-key" not in rejected.text

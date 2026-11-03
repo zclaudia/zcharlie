@@ -11,22 +11,18 @@ def test_settings_loads_env_with_defaults(monkeypatch, tmp_path):
     s = Settings(_env_file=None)  # type: ignore[call-arg]
     assert s.app_env == "dev"
     assert s.api_key == "test-key"
-    assert s.llm_tier3.model == "deepseek-v4-flash"
+    assert "llm_tier3_model" not in Settings.model_fields
+    assert s.model_slots == ""
     assert s.ifind_proxy_url == "http://127.0.0.1:7100"
 
 
 def test_settings_propagate_llm_request_timeout():
+    from investment_agent.config import LLMTierConfig
     from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        api_key="t",
-        llm_tier3_api_key="t",
-        llm_request_timeout_seconds=33.0,
-    )
-    assert settings.llm_tier3.timeout_seconds == 33.0
+    config = LLMTierConfig(base_url="http://llm", api_key="t", model="m", timeout_seconds=33.0)
     client = OpenAICompatibleClient(
-        tier_name="tier3", config=settings.llm_tier3, session=None  # type: ignore[arg-type]
+        tier_name="tier3", config=config, session=None  # type: ignore[arg-type]
     )
     assert client._client.timeout == 33.0
 

@@ -124,6 +124,15 @@ def _smoke_env(tmp_path: Path, db_path: Path, stub: StubIfindProxy, api_port: in
             # deterministic scoring must survive with a partial outcome.
             # (An unreachable LLM would be a transient error and be retried.)
             "LLM_TIER3_BASE_URL": f"http://127.0.0.1:{stub.port}/v1",
+            "LLM_CATALOG": json.dumps({
+                "providers": [{
+                    "id": "stub", "name": "Stub", "kind": "openai",
+                    "base_url": f"http://127.0.0.1:{stub.port}/v1", "api_key": "stub",
+                    "models": [{"id": "main", "name": "gpt-5", "model": "gpt-5", "enabled": True,
+                                "capabilities": ["json_object"], "supports_json_object": True}],
+                }],
+            }),
+            "MODEL_SLOTS": json.dumps({"research": {"explain": "stub/main"}, "rule_draft": {"main": "stub/main"}}),
             "IFIND_PROXY_URL": f"http://127.0.0.1:{stub.port}",
             "IFIND_PROXY_API_KEY": "stub-proxy-key",
         }

@@ -120,8 +120,10 @@ def system_prompt() -> str:
 
 def default_client_factory(settings: Settings) -> ClientFactory:
     def build(session: AsyncSession) -> LLMClient:
+        from investment_agent.settings.resolution import tier_config
+
         return OpenAICompatibleClient(
-            tier_name="tier3", config=settings.llm_rule_draft, session=session
+            tier_name="tier3", config=tier_config(settings, "rule_draft", "main"), session=session,
         )
 
     return build

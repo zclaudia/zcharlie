@@ -254,6 +254,20 @@ def funnel_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Settings:
         "LLM_TIER3_API_KEY": "stub-key",
         "LLM_TIER3_BASE_URL": LLM_BASE_URL,
         "LLM_TIER3_MODEL": "stub-model",
+        "LLM_CATALOG": json.dumps({
+            "providers": [{
+                "id": "stub", "name": "Stub", "kind": "openai", "base_url": LLM_BASE_URL,
+                "api_key": "stub-key",
+                "models": [{"id": "main", "name": "stub-model", "model": "stub-model", "enabled": True,
+                            "capabilities": ["json_object", "tools"], "thinking": "auto",
+                            "timeout_seconds": 120, "supports_json_object": True}],
+            }],
+        }),
+        "MODEL_SLOTS": json.dumps({
+            "rule_draft": {"main": "stub/main"},
+            "research": {"explain": "stub/main"},
+            "investor": {"main": "stub/main"},
+        }),
         "IFIND_PROXY_URL": "http://ifind-proxy.invalid",
         "IFIND_PROXY_API_KEY": "stub-proxy-key",
         "IFIND_BUDGET_PER_5H": "12",

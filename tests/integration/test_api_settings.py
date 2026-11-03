@@ -84,10 +84,10 @@ def test_get_settings_shape(client) -> None:
         "type": "int", "nullable": False, "min": 1, "min_exclusive": False,
         "max": 365, "max_exclusive": False,
     }
-    assert items["llm_tier3_thinking"]["input"]["options"] == ["auto", "enabled", "disabled"]
+    assert items["investor_agent_enabled"]["label"] == "启用投资 Agent"
     assert items["schedule.screen.universes"]["input"]["type"] == "multi"
     assert "CSI300" in items["schedule.screen.universes"]["input"]["options"]
-    assert items["llm_request_timeout_seconds"]["input"]["min_exclusive"] is True
+    assert items["ifind_budget_window_hours"]["input"]["min_exclusive"] is True
 
     # These switches only control operations. They do not imply licensing or
     # technical acceptance, which are independently evaluated per source.
@@ -95,11 +95,9 @@ def test_get_settings_shape(client) -> None:
         assert items[key]["value"] is False and items[key]["default"] is False
         assert "许可" in items[key]["help"] and "技术验收" in items[key]["help"]
 
-    secret = items["llm_tier3_api_key"]
+    secret = items["llm_catalog"]
     assert "value" not in secret and "default" not in secret
     assert secret["configured"] is False
-    # The test env sets LLM_TIER3_API_KEY (not importable without the master key).
-    assert secret["env_fallback"] is True
 
     cron = items["schedule.screen.cron"]
     assert cron["timezone"] == "Asia/Shanghai"
@@ -211,11 +209,11 @@ def test_secret_without_master_key_is_409(client) -> None:
 
 async def test_secret_is_never_returned(client, encryption_key) -> None:
     response = client.patch(
-        "/settings", json={"values": {"llm_tier3_api_key": SECRET}}, headers=KEY
+        "/settings", json={"values": {"ifind_proxy_api_key": SECRET}}, headers=KEY
     )
     assert response.status_code == 200
     assert SECRET not in response.text
-    item = _items(response.json()["settings"])["llm_tier3_api_key"]
+    item = _items(response.json()["settings"])["ifind_proxy_api_key"]
     assert (item["configured"], item["hint"]) == (True, "9876")
     assert "value" not in item and "env_fallback" not in item
     assert response.json()["settings"]["encryption_key_configured"] is True
@@ -227,8 +225,8 @@ async def test_secret_is_never_returned(client, encryption_key) -> None:
         changes = (await session.execute(text("SELECT * FROM app_setting_change"))).all()
     assert SECRET not in repr(rows) + repr(changes)
 
-    cleared = client.patch("/settings", json={"values": {"llm_tier3_api_key": ""}}, headers=KEY)
-    assert _items(cleared.json()["settings"])["llm_tier3_api_key"]["configured"] is False
+    cleared = client.patch("/settings", json={"values": {"ifind_proxy_api_key": ""}}, headers=KEY)
+    assert _items(cleared.json()["settings"])["ifind_proxy_api_key"]["configured"] is False
 
 
 # ---- connection tests --------------------------------------------------------
@@ -261,18 +259,17 @@ def test_llm_test_uses_candidates_and_never_echoes_the_key(client) -> None:
 
 
 @respx.mock
-def test_llm_test_falls_back_to_the_effective_key_and_reports_errors(client) -> None:
+def test_llm_test_does_not_borrow_an_unrelated_key(client) -> None:
     route = respx.post("https://llm.example/v1/chat/completions").mock(
         return_value=httpx.Response(401, json={"error": {"message": "bad key x"}})
     )
     response = client.post(
-        "/settings/test/llm", json={"base_url": "https://llm.example/v1", "api_key": ""},
+        "/settings/test/llm", json={"base_url": "https://llm.example/v1", "model": "m", "api_key": ""},
         headers=KEY,
     )
     body = response.json()
-    assert body["ok"] is False and "401" in body["message"]
-    # LLM_TIER3_API_KEY=x from the test env (the effective value).
-    assert route.calls.last.request.headers["authorization"] == "Bearer x"
+    assert body["ok"] is False and "API Key" in body["message"]
+    assert route.called is False
 
 
 def test_llm_test_without_any_key(client, monkeypatch) -> None:
@@ -322,20 +319,14 @@ def test_ifind_test_without_key(client) -> None:
 
 
 def test_agent_settings_api_isolated_encrypted_and_validated(client, encryption_key):
-    before = _items(client.get("/settings", headers=KEY).json())
     response = client.patch("/settings", headers=KEY, json={"values": {
-        "agent_provider": "openai", "agent_model": "deepseek-v4-pro",
-        "agent_base_url": "https://fixture.invalid/v1", "agent_api_key": SECRET,
-        "agent_output_mode": "prompted", "agent_tool_choice_required": False,
-        "agent_profile": "deepseek", "agent_profile_model": "deepseek-v4-pro",
+        "investor_agent_enabled": True,
+        "model_slots": "{\"investor\":{\"main\":\"primary/reason\"}}",
     }})
     assert response.status_code == 200
     items = _items(response.json()["settings"])
-    assert items["agent_model"]["value"] == "deepseek-v4-pro"
-    assert items["agent_api_key"]["configured"] and "value" not in items["agent_api_key"]
-    assert items["agent_tool_choice_required"]["input"]["type"] == "text"
-    assert items["llm_tier3_model"] == before["llm_tier3_model"]
-    assert SECRET not in response.text
-    assert SECRET not in client.get("/settings/history", headers=KEY).text
-    for invalid in [{"agent_provider": "silent-fallback"}, {"agent_retries": -1}, {"agent_credential_ref": "llm_tier3_api_key"}]:
+    assert items["investor_agent_enabled"]["value"] is True
+    assert items["model_slots"]["value"]
+    assert "primary/reason" in items["model_slots"]["value"]
+    for invalid in [{"model_slots": "{"}, {"agent_model": "removed"}, {"llm_tier3_api_key": SECRET}]:
         assert client.patch("/settings", headers=KEY, json={"values": invalid}).status_code == 422

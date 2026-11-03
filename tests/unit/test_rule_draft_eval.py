@@ -253,6 +253,18 @@ def draft_db(tmp_path, monkeypatch) -> dict[str, RuleTemplate]:
         "LLM_TIER3_API_KEY": "stub-key",
         "LLM_TIER3_BASE_URL": BASE_URL,
         "LLM_TIER3_MODEL": "stub-model",
+        "LLM_CATALOG": json.dumps({
+            "providers": [{
+                "id": "stub", "name": "Stub", "kind": "openai", "base_url": BASE_URL, "api_key": "stub-key",
+                "models": [{"id": "main", "name": "stub-model", "model": "stub-model", "enabled": True,
+                            "capabilities": ["json_object", "tools"], "thinking": "auto", "timeout_seconds": 120,
+                            "supports_json_object": True}],
+            }],
+        }),
+        "MODEL_SLOTS": json.dumps({
+            "rule_draft": {"main": "stub/main"}, "research": {"explain": "stub/main"},
+            "investor": {"main": "stub/main"},
+        }),
         "DATA_DIR": str(tmp_path),
         "DATABASE_URL": url,
         "COLUMNS": "200",

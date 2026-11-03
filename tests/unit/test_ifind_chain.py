@@ -130,11 +130,8 @@ async def test_successful_idempotent_run_replays_persisted_snapshot(
         await run_repository.mark_success(run.id)
         run_id = run.id
 
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        api_key="test",
-        llm_tier3_api_key="test",
-    )
+    from tests.support.llm_catalog import settings_from_legacy
+    settings = Settings(_env_file=None, **settings_from_legacy(api_key="test", llm_tier3_api_key="test"))
     result = await run_ifind_research_chain(
         settings=settings,
         proxy_url="http://should-not-be-called.invalid",
@@ -180,11 +177,8 @@ async def test_explanation_failure_persists_partial_deterministic_result(
 
     monkeypatch.setattr(ifind_chain, "fetch_canonical_bundle", fake_fetch)
     monkeypatch.setattr(ifind_chain, "_explain_score", fail_explanation)
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        api_key="test",
-        llm_tier3_api_key="test",
-    )
+    from tests.support.llm_catalog import settings_from_legacy
+    settings = Settings(_env_file=None, **settings_from_legacy(api_key="test", llm_tier3_api_key="test"))
 
     with pytest.raises(ResearchPartialError) as exc_info:
         await run_ifind_research_chain(
@@ -271,11 +265,8 @@ async def test_explain_score_retries_once_on_schema_error(monkeypatch):
 
     monkeypatch.setattr(ifind_chain, "OpenAICompatibleClient", FakeClient)
     monkeypatch.setattr(ifind_chain, "session_scope", fake_scope)
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        api_key="test",
-        llm_tier3_api_key="test",
-    )
+    from tests.support.llm_catalog import settings_from_legacy
+    settings = Settings(_env_file=None, **settings_from_legacy(api_key="test", llm_tier3_api_key="test"))
 
     explanation = await ifind_chain._explain_score(
         settings=settings,
@@ -310,11 +301,8 @@ def explanation_client(monkeypatch):
 
     monkeypatch.setattr(ifind_chain, "OpenAICompatibleClient", FakeClient)
     monkeypatch.setattr(ifind_chain, "session_scope", fake_scope)
-    settings = Settings(  # type: ignore[call-arg]
-        _env_file=None,
-        api_key="test",
-        llm_tier3_api_key="test",
-    )
+    from tests.support.llm_catalog import settings_from_legacy
+    settings = Settings(_env_file=None, **settings_from_legacy(api_key="test", llm_tier3_api_key="test"))
     return replies, calls, settings
 
 
