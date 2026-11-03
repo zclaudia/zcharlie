@@ -161,7 +161,18 @@ class MonitoringService:
             cycle.state = "stopped"
             cycle.payload = {**cycle.payload, "pending_reason": "scope_archived"}
             return None
-        mandate = await InvestorService(self.session).get_mandate("local_owner")
+        try:
+            mandate = await InvestorService(self.session).get_mandate("local_owner")
+        except InvestorError as exc:
+            if exc.detail.code != "not_found":
+                raise
+            # A pending/blocked cycle is rechecked on the next maintenance pass;
+            # never let a missing mandate abort the whole worker loop.
+            cycle.state = "blocked"
+            cycle.payload = {**cycle.payload, "pending_reason": "mandate_unavailable",
+                             "dispatch_checked_at": datetime.now(UTC).isoformat()}
+            await self.session.flush()
+            return None
         refs = (case.listing_ref, ObjectRef(kind="case", id=case.id, revision=case.revision))
         if interactive and cycle.payload.get("supplemental_update_batch_id"):
             raise ExecutionDeniedError("supplemental_update_review_requires_background")

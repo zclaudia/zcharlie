@@ -61,6 +61,24 @@ async def test_repeat_scan_calendar_and_restriction_are_not_self_triggering(publ
 
 
 @pytest.mark.asyncio
+async def test_missing_mandate_blocks_cycle_without_aborting_maintenance(publication_db):
+    from sqlalchemy import delete
+
+    from investment_agent.storage.models.investor import MandateHead
+
+    _, _, _, result = await saved()
+    async with session_scope() as session:
+        await PublicationService(session).restrict(
+            result.recommendation_ref, reason="critical_counter_evidence:formal_review_required",
+        )
+        await session.execute(delete(MandateHead).where(MandateHead.owner_id == "local_owner"))
+        await MonitoringService(session, base()).maintain()
+        cycle = await session.scalar(select(ReviewCycle))
+        assert cycle.state == "blocked"
+        assert cycle.payload["pending_reason"] == "mandate_unavailable"
+
+
+@pytest.mark.asyncio
 async def test_calendar_exact_boundary_and_no_daily_replay(publication_db):
     candidate, _, _, result = await saved()
     async with session_scope() as session:
