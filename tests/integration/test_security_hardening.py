@@ -328,6 +328,8 @@ def test_templates_have_no_inline_script_or_style(api_client):
         "/app/candidates",
         "/app/candidates/1",
         "/app/settings",
+        "/app/data-sources",
+        "/app/industry-groups",
         "/app/login",
     ):
         html = api_client.get(path).text

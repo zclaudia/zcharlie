@@ -26,7 +26,6 @@ import re
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import date
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
@@ -385,6 +384,17 @@ def load_field_sources(path: Path | str | None = None) -> FieldSourceRegistry:
     return parse_field_sources(yaml.safe_load(target.read_text(encoding="utf-8")))
 
 
-@lru_cache(maxsize=1)
 def default_field_sources() -> FieldSourceRegistry:
-    return load_field_sources()
+    """The effective registry: the DB document once imported, else this file.
+
+    Backed by the revision-keyed process cache of
+    :mod:`investment_agent.config_docs.loader` (config-docs-plan §4.4):
+    primed at start-up, refreshed wherever the worker / scheduler re-check
+    the settings revision, and — with a cold cache (CLI, tests) — parsed from
+    the baseline file below, exactly the pre-DB behaviour. The import is
+    function-level to keep the two modules' import graphs acyclic.
+    """
+
+    from investment_agent.config_docs.loader import field_sources_registry
+
+    return field_sources_registry()

@@ -1348,16 +1348,144 @@ async function loadCalendar() {
   }
 }
 
+// ---- 行业目录卡片（申万 2021 代码表再生成，WP5；页面上第二个会写文件的操作） ----
+
+const SHENWAN_ENDPOINT = "/health/shenwan-directory";
+const SHENWAN_POLL_MS = 4000;
+const SHENWAN_POLL_TRIES = 30;
+const SHENWAN_SOURCE_LABELS = Object.freeze({ data_dir: "数据目录副本", baseline: "仓库基线" });
+
+function shenwanActions(status, reload) {
+  const row = el("div", { class: "calendar-actions" });
+  const messages = el("div", { class: "calendar-messages" });
+  const say = (text, kind = "notice") => {
+    clear(messages);
+    messages.appendChild(el("p", { class: kind }, text));
+  };
+  const busy = (button, value) => {
+    button.disabled = value;
+    button.setAttribute("aria-busy", value ? "true" : "false");
+  };
+
+  const button = el("button", { type: "button", class: "btn btn-sm secondary" }, "刷新行业目录");
+  button.disabled = !status.writable;
+  if (!status.writable) button.title = "数据目录不可写，无法刷新";
+
+  button.addEventListener("click", async () => {
+    busy(button, true);
+    say("已排队刷新（swsresearch.com 官方代码表）…");
+    let queued;
+    try {
+      queued = await post("/health/shenwan-directory/refresh", {});
+    } catch (error) {
+      busy(button, false);
+      say(error.message || "排队失败。", "notice notice-error");
+      return;
+    }
+    const deadline = Date.now() + SHENWAN_POLL_MS * SHENWAN_POLL_TRIES;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, SHENWAN_POLL_MS));
+      let latest = null;
+      try {
+        latest = await get(SHENWAN_ENDPOINT);
+      } catch {
+        continue;
+      }
+      const refresh = latest && latest.last_refresh;
+      if (refresh && refresh.run_id >= queued.run_id && !["queued", "running"].includes(refresh.status)) {
+        busy(button, false);
+        await reload();
+        return;
+      }
+    }
+    busy(button, false);
+    say("刷新仍在进行（worker 可能没在运行）；稍后刷新本页查看结果。", "notice");
+  });
+
+  row.appendChild(button);
+  return { row, messages };
+}
+
+function renderShenwan(card, status, reload) {
+  clear(card);
+  const source = label(SHENWAN_SOURCE_LABELS, status.source);
+  const refresh = status.last_refresh;
+  const gaps = refresh && refresh.coverage_ok === false;
+  const badge = refresh
+    ? gaps
+      ? el("span", { class: "badge warn dot" }, "分组映射待补")
+      : refresh.status === "success"
+        ? el("span", { class: "badge accent dot" }, "已刷新")
+        : statusChip(refresh.status)
+    : el("span", { class: "badge dot hollow" }, "从未刷新");
+  const lead = el("div", { class: "health-cal-lead" });
+  lead.appendChild(badge);
+  card.appendChild(lead);
+  card.appendChild(
+    facts([
+      ["当前版本", status.version],
+      ["采集日", fmt(status.captured_on)],
+      ["一级 / 二级 / 三级", `${status.level1} / ${status.level2} / ${status.level3}`],
+      ["生效来源", source],
+    ])
+  );
+  card.appendChild(
+    el(
+      "p",
+      { class: "small muted health-cal-note" },
+      `生效文件 ${status.path}（${source}）· 基线 ${status.baseline}。` +
+        "刷新只写数据目录副本，仓库基线不变；一级 / 二级代码变化时请到「行业分组」页补映射。"
+    )
+  );
+  if (refresh) {
+    card.appendChild(
+      el(
+        "p",
+        { class: "small muted" },
+        `上次刷新：#${refresh.run_id} ${label(RUN_STATUS_LABELS, refresh.status)}` +
+          `${refresh.finished_at ? `（${formatDateTime(refresh.finished_at)}）` : ""}` +
+          `${refresh.summary ? ` · ${refresh.summary}` : ""}`
+      )
+    );
+  }
+  const actions = shenwanActions(status, reload);
+  card.appendChild(actions.row);
+  card.appendChild(actions.messages);
+  setSummary("shenwan", `版本 ${status.version} · ${source}`);
+}
+
+async function loadShenwan() {
+  const card = document.getElementById("shenwan-card");
+  if (!card) return;
+  document.getElementById("health-shenwan")?.removeAttribute("hidden");
+  const reload = () => loadShenwan();
+  try {
+    const status = await get(SHENWAN_ENDPOINT);
+    renderShenwan(card, status, reload);
+  } catch (error) {
+    clear(card);
+    card.appendChild(
+      el(
+        "p",
+        { class: "notice notice-error" },
+        error instanceof ApiError ? error.message : "行业目录状态加载失败。"
+      )
+    );
+  }
+}
+
 export function bootHealth() {
   const region = document.getElementById("data-health");
   if (region) initFolds();
   if (region) loadHealth(region);
   loadCalendar();
+  loadShenwan();
   const refresh = document.getElementById("health-refresh");
   if (refresh && region) {
     refresh.addEventListener("click", () => {
       loadHealth(region);
       loadCalendar();
+      loadShenwan();
     });
   }
 }

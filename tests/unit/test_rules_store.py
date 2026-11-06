@@ -1,4 +1,4 @@
-"""P1-C4: rule store - template sync/versioning and instance lifecycle."""
+"""P1-C4: rule store - template baseline sync / authoring and instance lifecycle."""
 
 from __future__ import annotations
 
@@ -26,36 +26,96 @@ def _template(**overrides: object):
     return parse_template(template_data(**overrides), context=CONTEXT)
 
 
-async def test_template_sync_is_idempotent_and_versions_by_hash(db_session) -> None:
+async def test_template_sync_imports_missing_ids_only(db_session) -> None:
+    """CD5/CD6: a file only seeds an empty store; it never appends over one."""
     store = RuleStore(db_session, context=CONTEXT)
     first = await store.sync_templates([(None, _template())])
     assert [(o.template_id, o.version, o.action) for o in first] == [("quality_test", 1, "created")]
     again = await store.sync_templates([(None, _template())])
     assert [(o.version, o.action) for o in again] == [(1, "unchanged")]
 
+    # A changed file does not become a version: the store wins, the drift is
+    # surfaced through file_status (baseline_changed) instead.
     changed = template_data()
     changed["params"]["roe_min"] = 0.18
-    outcome = await store.sync_templates([(None, parse_template(changed, context=CONTEXT))])
-    assert [(o.version, o.action) for o in outcome] == [(2, "new_version")]
+    skipped = await store.sync_templates([(None, parse_template(changed, context=CONTEXT))])
+    assert [(o.version, o.action) for o in skipped] == [(1, "skipped")]
 
     records = await store.template_records("quality_test")
-    assert [record.version for record in records] == [1, 2]
-    # v1 is untouched; each version keeps its own content and hash.
+    assert [record.version for record in records] == [1]
     v1 = template_from_record(records[0])
     assert v1.params["roe_min"] == 0.15
     assert records[0].hash == canonical_hash(_template())
     assert "version" not in records[0].definition
     latest = await store.latest_templates()
-    assert [(t.id, t.version, t.params["roe_min"]) for t in latest] == [("quality_test", 2, 0.18)]
+    assert [(t.id, t.version, t.params["roe_min"]) for t in latest] == [("quality_test", 1, 0.15)]
     assert (await store.template_by_ref("quality_test@1")) == v1
-    assert (await store.template_by_ref("quality_test")).version == 2  # type: ignore[union-attr]
+    assert (await store.template_by_ref("quality_test")).version == 1  # type: ignore[union-attr]
     assert await store.template_by_ref("quality_test@9") is None
 
-    # Reverting the file content is a new version too (history is append-only).
-    reverted = await store.sync_templates([(None, _template())])
-    assert [(o.version, o.action) for o in reverted] == [(3, "new_version")]
+
+async def test_file_sync_never_overwrites_a_db_authored_version(db_session) -> None:
+    """The DB authoring seat (create_version) wins: a later file sync - even
+    with the old file content - never replaces or shadows the authored
+    current version (CD6)."""
+    store = RuleStore(db_session, context=CONTEXT)
+    await store.sync_templates([(None, _template())])
+
+    authored = template_data()
+    authored["params"]["roe_min"] = 0.2
+    record, action = await store.create_version(
+        parse_template(authored, context=CONTEXT), actor="web", note="收紧 ROE 下限"
+    )
+    assert (record.version, action) == (2, "new_version")
+    assert (record.created_by, record.note) == ("web", "收紧 ROE 下限")
+
+    # The unchanged file (still v1 content) must not resurrect itself.
+    stale = await store.sync_templates([(None, _template())])
+    assert [(o.version, o.action) for o in stale] == [(2, "skipped")]
+    # Nor may an edited file append a version.
+    edited = template_data()
+    edited["params"]["roe_min"] = 0.25
+    also_skipped = await store.sync_templates([(None, parse_template(edited, context=CONTEXT))])
+    assert [(o.version, o.action) for o in also_skipped] == [(2, "skipped")]
+
+    records = await store.template_records("quality_test")
+    assert [r.version for r in records] == [1, 2]
+    current = await store.latest_template_record("quality_test")
+    assert current is not None and current.version == 2  # type: ignore[union-attr]
+    assert template_from_record(current).params["roe_min"] == 0.2  # type: ignore[arg-type]
+    assert current.created_by == "web"  # type: ignore[union-attr]
+
+    # The old version is untouched; re-authoring identical content is a no-op.
+    unchanged, action = await store.create_version(
+        parse_template(authored, context=CONTEXT), actor="api", note="重复提交"
+    )
+    assert (unchanged.version, action) == (2, "unchanged")
     count = len(list((await db_session.execute(select(RuleTemplateRecord))).scalars()))
-    assert count == 3
+    assert count == 2
+
+
+async def test_activate_restores_an_old_version_as_the_next_one(db_session) -> None:
+    """Activation is append-only rollback: the old content becomes max(version)."""
+    store = RuleStore(db_session, context=CONTEXT)
+    await store.sync_templates([(None, _template())])
+    edited = template_data()
+    edited["params"]["roe_min"] = 0.2
+    await store.create_version(parse_template(edited, context=CONTEXT), actor="web", note="调整")
+
+    activated, action = await store.activate_template(
+        "quality_test", 1, actor="web", note="回滚到 v1"
+    )
+    assert (activated.version, action) == (3, "new_version")
+    assert activated.hash == canonical_hash(_template())
+    assert (activated.created_by, activated.note) == ("web", "回滚到 v1")
+    latest = await store.latest_templates()
+    assert latest[0].version == 3 and latest[0].params["roe_min"] == 0.15
+
+    # Activating the current version is a no-op.
+    same, action = await store.activate_template("quality_test", 3, actor="web", note="再激活")
+    assert (same.version, action) == (3, "unchanged")
+    with pytest.raises(RuleStoreError):
+        await store.activate_template("quality_test", 9, actor="web", note="nope")
 
 
 async def test_sync_rejects_invalid_template(db_session) -> None:
@@ -63,6 +123,10 @@ async def test_sync_rejects_invalid_template(db_session) -> None:
     with pytest.raises(RuleValidationError) as info:
         await RuleStore(db_session, context=CONTEXT).sync_templates([(None, bad)])
     assert info.value.codes == {"unknown_industry_group"}
+    # The authoring seat runs the same validation.
+    with pytest.raises(RuleValidationError) as authored:
+        await RuleStore(db_session, context=CONTEXT).create_version(bad, actor="web", note="x")
+    assert authored.value.codes == {"unknown_industry_group"}
 
 
 async def _ready(db_session) -> RuleStore:

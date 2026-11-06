@@ -12,6 +12,8 @@ from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.industry_groups import (
     FLAG_INDUSTRY_FALLBACK,
     OTHER_GROUP,
+    CoverageMember,
+    check_industry_groups_coverage,
     default_industry_groups,
     parse_industry_groups,
     usable_sw_code,
@@ -51,12 +53,23 @@ def test_every_csi300_shenwan_level1_and_override_is_mapped():
     directory = default_shenwan_directory()
     codes = _csi300_current_codes()
     level1 = {level_codes(code)[0] for code in codes.values()}
-    unmapped = sorted(code for code in level1 if code not in mapping.shenwan.level1)
-    assert not unmapped, f"Shenwan level-1 industries without a group: {unmapped}"
     assert len(level1) == 26
-    # every override names a real 2021 code, and every CSI 300 member resolves via Shenwan
-    for code in mapping.shenwan.overrides:
-        assert directory.get(code) is not None, code
+    # the shared coverage check (§4.5): level-1 defaults of the whole directory,
+    # overrides naming real 2021 codes, every member resolving via Shenwan.
+    coverage = check_industry_groups_coverage(
+        mapping,
+        directory=directory,
+        members=[
+            CoverageMember(
+                ticker=ticker,
+                sw_code=usable_sw_code(code, date(2021, 7, 30), None, directory),
+            )
+            for ticker, code in codes.items()
+        ],
+    )
+    assert coverage.missing_level1_defaults == ()
+    assert coverage.invalid_overrides == ()
+    assert coverage.ok
     for ticker, code in codes.items():
         match = mapping.resolve_classification(
             sw_code=usable_sw_code(code, date(2021, 7, 30), None, directory),

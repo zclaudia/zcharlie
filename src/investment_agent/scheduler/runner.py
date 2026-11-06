@@ -22,11 +22,13 @@ from apscheduler.triggers.cron import CronTrigger
 from investment_agent.config import (
     AppYamlConfig,
     CandidateScheduleConfig,
+    SchedulerConfig,
     ScreenScheduleConfig,
     Settings,
     SnapshotScheduleConfig,
     VerificationScheduleConfig,
 )
+from investment_agent.config_docs import loader as config_docs
 from investment_agent.liveness import liveness
 from investment_agent.logging import configure_logging
 from investment_agent.research.watchlist_refresh import enqueue_watchlist_refresh
@@ -340,6 +342,41 @@ async def run_screen_schedule_job(
     return created
 
 
+async def run_review_panel_batch_job(
+    *, calendar_path: str, timezone: str = "Asia/Shanghai", today: date | None = None
+) -> int | None:
+    """One fire of the weekly multi-perspective review batch (design §8, §10.2).
+
+    The job itself is a bounded, idempotent batch keyed by the local fire date;
+    the runtime flags (``review_panel_enabled`` / ``review_panel_schedule_enabled``)
+    are checked inside. Returns the number of created rounds, ``None`` on error.
+    """
+
+    from investment_agent.review_panel.triggering import run_scheduled_review_batch
+
+    local_today = today or datetime.now(ZoneInfo(timezone)).date()
+    try:
+        calendar = load_trading_calendar(resolved_calendar_path(calendar_path))
+        settings = await load_settings()
+        async with session_scope() as session:
+            outcome = await run_scheduled_review_batch(
+                session, settings, batch_date=local_today, calendar=calendar
+            )
+    except Exception:
+        log.exception(
+            "scheduler.review_batch.failed", today=local_today.isoformat()
+        )
+        return None
+    log.info(
+        "scheduler.review_batch.finished",
+        today=local_today.isoformat(),
+        created_rounds=outcome.created,
+        skipped=outcome.skipped,
+        stopped_reason=outcome.stopped_reason,
+    )
+    return outcome.created
+
+
 async def run_portfolio_valuation_job() -> int | None:
     """Queue today's deterministic valuation for every portfolio account (WP6).
 
@@ -504,6 +541,12 @@ def _screen_trigger(cfg: ScreenScheduleConfig | None) -> CronTrigger | None:
     if cfg is None or cfg.cron is None:
         return None
     return _parse_cron(cfg.cron, timezone=cfg.timezone)
+
+
+def _review_batch_trigger(cfg: SchedulerConfig | None) -> CronTrigger | None:
+    if cfg is None or cfg.review_batch_cron is None:
+        return None
+    return _parse_cron(cfg.review_batch_cron, timezone=cfg.review_batch_timezone)
 
 
 def _snapshot_triggers(cfg: SnapshotScheduleConfig) -> dict[SnapshotScheduleJob, CronTrigger]:
@@ -706,6 +749,19 @@ def add_jobs(sched: AsyncIOScheduler, app_config: AppYamlConfig) -> list[str]:
             replace_existing=True,
             **_JOB_DEFAULTS,
         )
+    review_batch_trigger = _review_batch_trigger(scheduler_cfg)
+    if review_batch_trigger is not None:
+        sched.add_job(
+            run_review_panel_batch_job,
+            trigger=review_batch_trigger,
+            kwargs={
+                "calendar_path": scheduler_cfg.a_share_calendar_path,
+                "timezone": scheduler_cfg.review_batch_timezone,
+            },
+            id="review_panel_batch",
+            replace_existing=True,
+            **_JOB_DEFAULTS,
+        )
     verification_cfg = app_config.verification
     for name, trigger in _verification_triggers(verification_cfg).items():
         assert verification_cfg is not None
@@ -775,6 +831,10 @@ async def watch_settings(
                     from investment_agent.investor.discovery import DiscoveryService
                     await DiscoveryService(session, settings).scan()
             current = await _read_revision(settings)
+            # Config documents piggyback on the same poll (CD4): a saved
+            # config-doc write bumps the settings revision above, and this
+            # per-kind revision check reloads only the changed documents.
+            await config_docs.refresh_if_changed()
             if current == revision:
                 continue
             async with session_scope() as session:
@@ -829,6 +889,25 @@ async def _startup_screen_check(app_config: AppYamlConfig, now: datetime) -> boo
     return True
 
 
+async def _startup_review_batch_check(app_config: AppYamlConfig, now: datetime) -> bool:
+    """Catch up the weekly review batch if its fire time already passed (idempotent)."""
+
+    cfg = app_config.scheduler
+    trigger = _review_batch_trigger(cfg)
+    if trigger is None:
+        return False
+    today = fired_today(now=now, trigger=trigger)
+    if today is None:
+        return False
+    log.info("scheduler.review_batch.catch_up", today=today.isoformat())
+    await run_review_panel_batch_job(
+        calendar_path=cfg.a_share_calendar_path,
+        timezone=cfg.review_batch_timezone,
+        today=today,
+    )
+    return True
+
+
 async def _startup_zone_detection_check(app_config: AppYamlConfig, now: datetime) -> bool:
     """Catch up today's zone detection if its fire time already passed (WP8)."""
 
@@ -860,6 +939,10 @@ async def _run_scheduler(
     config_path = Path(app_config_path)
     async with session_scope() as session:
         await ensure_imported(session, settings, config_path)
+    # Config documents: one-time baseline import + cache priming (logs its own
+    # failures; the baseline-file fallback keeps the process serving reads).
+    async with session_scope() as session:
+        await config_docs.ensure_imported(session)
     async with session_scope() as session:
         cfg, revision = await load_app_config(session, settings, config_path)
     sched = build_scheduler(settings=settings, app_config=cfg)
@@ -876,6 +959,7 @@ async def _run_scheduler(
     await _startup_snapshot_check(cfg, started_at)
     await _startup_portfolio_valuation_check(cfg, started_at)
     await _startup_zone_detection_check(cfg, started_at)
+    await _startup_review_batch_check(cfg, started_at)
     await _startup_screen_check(cfg, started_at)
     await run_supplemental_update_dispatch()
     if _candidate_trigger(cfg.candidates) is not None:

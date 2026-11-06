@@ -29,6 +29,11 @@ Earnings events (mrd-intake C1 / C2): ``earnings_event`` collects Eastmoney
 user's pools, and 主营构成 (``part="segments"``) of the user's pools only
 (per-stock calls); scheduled every trading day at 19:00 inside the
 disclosure-season months (segments once a week).
+
+Shenwan directory (config-docs-plan §3.2 / WP5): ``shenwan_directory_refresh``
+regenerates the Shenwan 2021 code directory from the official code table and
+writes the runtime copy under ``DATA_DIR`` (never the repository baseline);
+triggered from the health page, never scheduled.
 """
 
 from __future__ import annotations
@@ -55,6 +60,7 @@ DIVIDEND_SNAPSHOT = "dividend_snapshot"
 CLOSE_QUOTE = "close_quote"
 EARNINGS_EVENT = "earnings_event"
 CALENDAR_PROBE = "calendar_probe"
+SHENWAN_DIRECTORY_REFRESH = "shenwan_directory_refresh"
 STOCK_BOOTSTRAP = "stock_bootstrap"
 SNAPSHOT_KINDS: tuple[str, ...] = (
     UNIVERSE_SYNC,
@@ -66,6 +72,7 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     CLOSE_QUOTE,
     EARNINGS_EVENT,
     CALENDAR_PROBE,
+    SHENWAN_DIRECTORY_REFRESH,
     STOCK_BOOTSTRAP,
 )
 
@@ -355,6 +362,22 @@ class CalendarProbePayload(_Payload):
     force: bool = False
 
 
+class ShenwanRefreshPayload(_Payload):
+    """One refresh of the Shenwan 2021 code directory (config-docs-plan §3.2 / WP5).
+
+    Enqueued from the health page (``POST /health/shenwan-directory/refresh``).
+    The worker fetches Shenwan's official code table, validates the rendered
+    YAML through the loader (CD3), writes **only** the runtime copy under
+    ``DATA_DIR`` and reports the industry-groups coverage of the new
+    directory (unmapped codes become an ``action_required`` notification).
+    The repository baseline file stays CLI-only
+    (``tools/refresh_shenwan_directory.py --write``).
+    """
+
+    as_of: date
+    """The day the refresh was requested (the idempotency slot: one run a day)."""
+
+
 class StockBootstrapPayload(_Payload):
     """Initial free-source history and company data for a manually selected stock."""
 
@@ -372,6 +395,7 @@ SnapshotPayload = (
     | CloseQuotePayload
     | EarningsEventPayload
     | CalendarProbePayload
+    | ShenwanRefreshPayload
     | StockBootstrapPayload
 )
 
@@ -385,6 +409,7 @@ PAYLOAD_MODELS: dict[str, type[_Payload]] = {
     CLOSE_QUOTE: CloseQuotePayload,
     EARNINGS_EVENT: EarningsEventPayload,
     CALENDAR_PROBE: CalendarProbePayload,
+    SHENWAN_DIRECTORY_REFRESH: ShenwanRefreshPayload,
     STOCK_BOOTSTRAP: StockBootstrapPayload,
 }
 
@@ -404,6 +429,8 @@ def idempotency_key(payload: SnapshotPayload) -> str:
         return f"{kind}:{payload.ticker}:{payload.as_of.isoformat()}"
     if isinstance(payload, CalendarProbePayload):
         return f"{kind}:{payload.year}:{payload.as_of.isoformat()}"
+    if isinstance(payload, ShenwanRefreshPayload):
+        return f"{kind}:{payload.as_of.isoformat()}"
     if isinstance(payload, UniverseSyncPayload):
         return f"{kind}:{payload.universe_code}:{payload.as_of.isoformat()}"
     if isinstance(payload, IndustrySyncPayload):

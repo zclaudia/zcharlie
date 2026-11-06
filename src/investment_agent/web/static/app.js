@@ -11,6 +11,8 @@ import { bootAgentControls } from "./agent_controls.js";
 import { bootAgentViews } from "./agent_views.js";
 import { SETTINGS_REGIONS, bootSettings } from "./settings.js";
 import { table } from "./dom.js";
+import { DATA_SOURCE_REGIONS, bootDataSources } from "./data-sources.js";
+import { INDUSTRY_GROUP_REGIONS, bootIndustryGroups } from "./industry-groups.js";
 import { bootAgent } from "./agent.js";
 import { bootAgentPortfolio } from "./agent_portfolio.js";
 import { bootFinancials } from "./financials.js";
@@ -42,6 +44,8 @@ function boot() {
   for (const region of document.querySelectorAll(".data-region[data-endpoint]")) {
     const id = region.id;
     if (CANDIDATE_REGIONS.has(id) || TEMPLATE_REGIONS.has(id) || HEALTH_REGIONS.has(id) || SETTINGS_REGIONS.has(id)) continue;
+    if (DATA_SOURCE_REGIONS.has(id)) continue;
+    if (INDUSTRY_GROUP_REGIONS.has(id)) continue;
     if (WATCHLIST_REGIONS.has(id)) continue;
     if (PORTFOLIO_REGIONS.has(id)) continue;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
@@ -80,6 +84,8 @@ function boot() {
   bootTemplates();
   bootHealth();
   bootSettings();
+  bootDataSources();
+  bootIndustryGroups();
   bootFinancials();
   bootSupplementalRules();
   bootSupplementalItems();

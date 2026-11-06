@@ -31,7 +31,9 @@ pytestmark = pytest.mark.usefixtures("screen_db")
 
 
 def test_screen_run_opens_candidates_and_queues_drafts() -> None:
-    payload = ScreenRunPayload(universe_code="CSI300", as_of=AS_OF)
+    # The screen seeds its templates with the explicit opt-in sync (the
+    # default is off: the store is authored in the UI, CD5/CD6).
+    payload = ScreenRunPayload(universe_code="CSI300", as_of=AS_OF, sync_templates=True)
 
     async def scenario() -> None:
         run_id = await _run_job(payload)
@@ -71,7 +73,9 @@ def test_screen_run_opens_candidates_and_queues_drafts() -> None:
 
 def test_expiry_job_and_schedule() -> None:
     async def scenario() -> None:
-        run_id = await _run_job(ScreenRunPayload(universe_code="CSI300", as_of=AS_OF))
+        run_id = await _run_job(
+            ScreenRunPayload(universe_code="CSI300", as_of=AS_OF, sync_templates=True)
+        )
         assert run_id
         async with session_scope() as session:
             candidate = (await session.execute(select(CandidateRecord))).scalar_one()

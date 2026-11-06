@@ -24,7 +24,8 @@ def test_empty_database_upgrade_adds_no_model_rows(tmp_path, monkeypatch):
     config = _config(database, monkeypatch)
     command.upgrade(config, "head")
     with sqlite3.connect(database) as connection:
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("057",)
+        head = ScriptDirectory(str(ROOT / "alembic")).get_current_head()
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == (head,)
         rows = connection.execute("SELECT key FROM app_setting").fetchall()
     assert rows == []
     command.downgrade(config, "056")

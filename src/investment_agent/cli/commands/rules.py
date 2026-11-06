@@ -75,7 +75,13 @@ async def _stored_template(ref: str) -> RuleTemplate | None:
 def sync(
     directory: Path = typer.Option(DEFAULT_TEMPLATES_DIR, "--dir", help=_DIR_HELP),  # noqa: B008
 ) -> None:
-    """Load every template file and store a new version for changed content."""
+    """Import template files into the rule store (first import only).
+
+    The rule store is authored in the /app/templates UI (or the API); this
+    only seeds template ids that have no stored versions yet. A file that
+    differs from the stored versions is reported as skipped — files never
+    overwrite the store; use the template page's 从基线导入 to pull one in.
+    """
 
     try:
         templates = load_templates(directory)

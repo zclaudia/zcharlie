@@ -180,7 +180,55 @@ RESEARCH = ConsumerSpec(
     ),
 )
 
-CONSUMERS: tuple[ConsumerSpec, ...] = (INVESTOR, RULE_DRAFT, RESEARCH)
+REVIEW_PANEL = ConsumerSpec(
+    id="review_panel",
+    kind="agent",
+    title="多视角评审",
+    blurb="同一时点让多个视角和模型各自分析，再算出一致与分歧。席位在「评审组」里配置，不使用固定模型槽位。",
+    nav_group="Agent",
+    section_id="review_panel",
+    slots=(),
+    topic_groups=(
+        ("评审组", ("panels",)),
+        ("运行", ("switches", "quota")),
+    ),
+    topics=(
+        TopicSpec(
+            "panels", "评审组",
+            "每个席位是一个视角加一个模型引用。评审组的席位可增删，模型不可用时不会改用其他模型。",
+            keys=("review_panels",), kind="fields",
+        ),
+        TopicSpec(
+            "switches", "开关",
+            "功能总开关默认关闭；自动触发和定期批量需要分别打开。",
+            keys=(
+                "review_panel_enabled",
+                "review_panel_auto_enabled",
+                "review_panel_schedule_enabled",
+            ),
+        ),
+        TopicSpec(
+            "quota", "额度",
+            "创建轮次前整轮预留，不足时不创建；单席运行超限时保留已有输出并标记为部分完成。",
+            blocks=_blocks(
+                ("单席", (
+                    "review_panel_seat_requests", "review_panel_seat_tool_calls",
+                    "review_panel_seat_tokens",
+                )),
+                ("每日", (
+                    "review_panel_daily_rounds", "review_panel_daily_tokens",
+                )),
+                ("批量与冷却", (
+                    "review_panel_batch_max_rounds",
+                    "review_panel_auto_cooldown_trading_days",
+                    "review_panel_max_running_seats",
+                )),
+            ),
+        ),
+    ),
+)
+
+CONSUMERS: tuple[ConsumerSpec, ...] = (INVESTOR, RULE_DRAFT, RESEARCH, REVIEW_PANEL)
 CONSUMERS_BY_ID: dict[str, ConsumerSpec] = {spec.id: spec for spec in CONSUMERS}
 AGENT_TYPES: tuple[ConsumerSpec, ...] = tuple(spec for spec in CONSUMERS if spec.kind == "agent")
 

@@ -26,6 +26,12 @@
       <button type="button" aria-pressed="false" data-watch-filter="disabled">已停用 <span class="c" data-filter-count="disabled"></span></button>
     </div>
     <input type="search" id="watchlist-filter-text" class="wl-search" placeholder="筛选股票" aria-label="按名称、代码或行业筛选" autocomplete="off">
+    <label class="wl-sort-label" for="watchlist-sort">排序</label>
+    <select id="watchlist-sort" class="wl-sort" aria-label="观察池排序">
+      <option value="default">默认</option>
+      <option value="divergence">评审分歧</option>
+      <option value="reviewed">最近评审</option>
+    </select>
     <span id="watchlist-count" class="faint wl-count" aria-live="polite"></span>
   </div>
   <div class="chip-scroll only-mobile" role="group" aria-label="筛选观察池">

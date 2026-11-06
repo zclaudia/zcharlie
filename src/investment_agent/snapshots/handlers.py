@@ -17,7 +17,7 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import structlog
 
@@ -71,6 +71,7 @@ from investment_agent.snapshots.jobs import (
     FINANCIAL_SNAPSHOT,
     INDUSTRY_SYNC,
     MARKET_SNAPSHOT,
+    SHENWAN_DIRECTORY_REFRESH,
     SNAPSHOT_BACKFILL,
     SNAPSHOT_KINDS,
     STOCK_BOOTSTRAP,
@@ -82,6 +83,7 @@ from investment_agent.snapshots.jobs import (
     FinancialSnapshotPayload,
     IndustrySyncPayload,
     MarketSnapshotPayload,
+    ShenwanRefreshPayload,
     SnapshotBackfillPayload,
     StockBootstrapPayload,
     UniverseSyncPayload,
@@ -299,6 +301,22 @@ class SnapshotJobHandler(BaseJobHandler):
                     "partial", metadata, f"industry systems failed: {', '.join(map(str, failed))}"
                 )
             return _Result("success", metadata)
+        if self.kind == SHENWAN_DIRECTORY_REFRESH:
+            from investment_agent.providers.shenwan_refresh import DirectoryClient
+            from investment_agent.snapshots.shenwan_refresh import collect_shenwan_refresh
+
+            refresh = await collect_shenwan_refresh(
+                ShenwanRefreshPayload.model_validate(request),
+                # The runtime factory's type only promises the history call
+                # (industry sync); the AkShare client it builds also serves
+                # the official code table this kind fetches.
+                client=cast(DirectoryClient, self.runtime.shenwan_factory()),
+                data_dir=self.runtime.settings.data_dir,
+                notifier=self.runtime.file_notifier(),
+                run_id=job.run_id,
+                today=self.runtime.clock().astimezone(SHANGHAI_TZ).date(),
+            )
+            return _Result(refresh.status, refresh.metadata, refresh.summary)
         if self.kind == SNAPSHOT_BACKFILL:
             backfill_payload = SnapshotBackfillPayload.model_validate(request)
             outcome = await run_backfill_part(

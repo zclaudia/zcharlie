@@ -17,6 +17,11 @@ scheduler:
   # valuation. Idempotent per (scope, date, trigger); no LLM.
   zone_detection_cron: "20 0 * * *"
   zone_detection_timezone: Asia/Shanghai
+  # Weekly multi-perspective review batch (design §8): Saturday early
+  # morning, one bounded batch per fire. The feature flags in
+  # 「多视角评审」decide whether it creates rounds.
+  review_batch_cron: "0 6 * * 6"
+  review_batch_timezone: Asia/Shanghai
   a_share_calendar_path: config/calendars/a_share.yaml
 
 # PIT snapshot collection (P1-A5, P1-A7). The scheduler only enqueues; the

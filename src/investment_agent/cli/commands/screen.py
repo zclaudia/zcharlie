@@ -30,7 +30,13 @@ def run(
     ),
     hit_cap: int = typer.Option(20, min=1, max=500, help="Hits kept per template"),
     sync: bool = typer.Option(
-        True, "--sync/--no-sync", help="Sync config/rule_templates into the rule store first"
+        False,
+        "--sync/--no-sync",
+        help=(
+            "Import config/rule_templates into the rule store first (off by default: "
+            "templates are authored in the /app/templates UI and files only seed an "
+            "empty store; stored versions are never overwritten from files)"
+        ),
     ),
 ) -> None:
     """Enqueue a screen_run for one universe and date."""

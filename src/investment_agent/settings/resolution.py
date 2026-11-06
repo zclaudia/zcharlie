@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from investment_agent.config import LLMTierConfig, Settings
@@ -59,29 +60,54 @@ class ResolvedModel:
         }
 
 
-def _fail(consumer_id: str, slot_id: str, reason: str) -> ModelUnavailableError:
-    consumer = CONSUMERS_BY_ID[consumer_id]
-    slot = slot_spec(consumer_id, slot_id)
-    return ModelUnavailableError(f"{consumer.title} / {slot.label}：{reason}")
+def _resolve_ref(
+    settings: Settings,
+    model_ref: str,
+    *,
+    required: Iterable[str],
+    label: str,
+) -> ResolvedModel:
+    """Resolve one reference; unset, missing, disabled or weak models fail."""
+
+    if not model_ref:
+        raise ModelUnavailableError(f"{label}：未选择模型")
+    try:
+        provider, model = parse_catalog(settings.llm_catalog).resolve_ref(model_ref)
+    except CatalogError:
+        raise ModelUnavailableError(f"{label}：模型不可用") from None
+    if not model.enabled:
+        raise ModelUnavailableError(f"{label}：模型不可用")
+    if not set(required) <= set(model.capabilities):
+        raise ModelUnavailableError(f"{label}：模型不可用")
+    return ResolvedModel(ref=model_ref, provider=provider, model=model)
+
+
+def resolve_model_ref(
+    settings: Settings,
+    model_ref: str,
+    *,
+    required: Iterable[str],
+    label: str,
+) -> ResolvedModel:
+    """Resolve an explicit ``provider/model`` reference, never substituting another.
+
+    Used by variable-length model consumers such as review seats, which have no
+    fixed slot in ``model_slots``. The rules and messages match
+    :func:`resolve_slot`: missing -> "未选择模型", otherwise unavailable.
+    """
+
+    return _resolve_ref(settings, model_ref, required=required, label=label)
 
 
 def resolve_slot(settings: Settings, consumer_id: str, slot_id: str) -> ResolvedModel:
     """Return the model bound to a consumer slot. Nothing else is substituted."""
 
-    slot_spec(consumer_id, slot_id)
+    slot = slot_spec(consumer_id, slot_id)
     ref = parse_model_slots(settings.model_slots).get(consumer_id, {}).get(slot_id, "")
-    if not ref:
-        raise _fail(consumer_id, slot_id, "未选择模型")
-    try:
-        provider, model = parse_catalog(settings.llm_catalog).resolve_ref(ref)
-    except CatalogError:
-        raise _fail(consumer_id, slot_id, "模型不可用") from None
-    if not model.enabled:
-        raise _fail(consumer_id, slot_id, "模型不可用")
-    required = set(slot_spec(consumer_id, slot_id).required_capabilities)
-    if not required <= set(model.capabilities):
-        raise _fail(consumer_id, slot_id, "模型不可用")
-    return ResolvedModel(ref=ref, provider=provider, model=model)
+    label = f"{CONSUMERS_BY_ID[consumer_id].title} / {slot.label}"
+    return _resolve_ref(
+        settings, ref, required=slot.required_capabilities, label=label
+    )
 
 
 def tier_config(

@@ -270,6 +270,8 @@ def app_config_from(schedule: ScheduleSettings, *, calendar: str) -> AppYamlConf
             portfolio_valuation_timezone=schedule.portfolio.timezone,
             zone_detection_cron=schedule.zone_detection.cron,
             zone_detection_timezone=schedule.zone_detection.timezone,
+            review_batch_cron=schedule.review_batch.cron,
+            review_batch_timezone=schedule.review_batch.timezone,
             a_share_calendar_path=calendar,
         ),
         snapshot=schedule.snapshot,
@@ -300,11 +302,17 @@ async def import_and_load(
     """Process start-up: run the one-time import, then load settings and revision.
 
     The import commits in its own session; the read is one transaction, so
-    the returned settings match the returned revision.
+    the returned settings match the returned revision. The config documents'
+    one-time baseline import and cache priming run here too (worker start-up):
+    ``config_docs.ensure_imported`` logs its own failures and never breaks a
+    worker on an unmigrated schema.
     """
+
+    from investment_agent.config_docs import loader as config_docs
 
     async with session_scope() as session:
         await ensure_imported(session, settings, app_yaml_path)
+        await config_docs.ensure_imported(session)
     async with session_scope() as session:
         revision = await store_for(session, settings).revision()
         return await load_settings(session, base=settings), revision

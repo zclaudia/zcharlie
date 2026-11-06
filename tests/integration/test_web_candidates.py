@@ -179,8 +179,12 @@ def test_ui_has_no_trading_language_or_scores() -> None:
     # The holding-pool page (portfolio.js / portfolio.html) is the ledger's user
     # entry surface: it stores confirmed past facts (买入/卖出 wording is the
     # user's own record of what already happened) and never submits an order.
+    # review_panel.js renders multi-model review opinions, whose contract
+    # (docs/product/multi-model-review-design.md §5.3) allows conditional trade
+    # wording labelled 未经发布校验; they are not formal recommendations and
+    # never enter the actionable-opinion view or submit orders.
     for name, text in texts.items():
-        if name in {"agent.js", "agent_views.js", "agent_portfolio.js", "agent.html", "portfolio.js", "portfolio.html"}:
+        if name in {"agent.js", "agent_views.js", "agent_portfolio.js", "agent.html", "portfolio.js", "portfolio.html", "review_panel.js"}:
             continue
         for word in TRADING_WORDS:
             assert word not in text, (name, word)

@@ -1,9 +1,15 @@
 """Rule store (P1-C4): versioned templates and instances (funnel design 5.5).
 
-Templates: :meth:`RuleStore.sync_templates` upserts validated template files.
-The latest stored version of a template id is compared by content hash; a
-different hash inserts ``version + 1`` (the stored version is never
-modified), an equal hash is a no-op - so sync is idempotent.
+Templates: the latest stored version of a template id is its *current*
+version (``max(version)``); rows are immutable. The database is the authoring
+seat (config-docs-plan CD6): :meth:`RuleStore.create_version` appends the next
+version for changed content after the sync-time validation, recording actor
+and note. :meth:`RuleStore.sync_templates` is the *baseline* import of
+``config/rule_templates`` (CD5): it only inserts a template id that has no
+stored versions yet — a changed file never appends a version over a
+DB-authored one; the drift shows in ``file_status`` and is pulled in through
+the explicit 从基线导入 endpoint. Activating an older version re-stores its
+content as the next version (append-only rollback, CD6).
 
 Instances: ``draft -> active -> retired``. :meth:`RuleStore.create_draft`
 and :meth:`RuleStore.edit` always insert a new version (per listing and
@@ -39,7 +45,9 @@ from investment_agent.rules.validation import (
 from investment_agent.storage.models.rules import RuleInstanceRecord, RuleTemplateRecord
 from investment_agent.storage.repositories.listing import ListingRepository
 
-SyncAction = Literal["created", "new_version", "unchanged"]
+SyncAction = Literal["created", "unchanged", "skipped"]
+"""``skipped``: the file differs from the store but the store wins (CD5/CD6)."""
+VersionAction = Literal["created", "new_version", "unchanged"]
 
 
 class RuleStoreError(ValueError):
@@ -93,7 +101,15 @@ class RuleStore:
     async def sync_templates(
         self, templates: Sequence[tuple[Path | None, RuleTemplate]]
     ) -> list[TemplateSyncOutcome]:
-        """Insert new template versions for changed content; sorted by id."""
+        """Baseline import of template files (CD5): insert only missing ids.
+
+        A template id that already has stored versions is never re-written
+        from a file — the DB is the source of truth. A file whose content
+        matches the current version is ``unchanged``; a file that differs
+        (a DB-authored version is current, or the file was edited) is
+        ``skipped`` with no write: the drift surfaces through ``file_status``
+        and is imported explicitly via the 从基线导入 endpoint.
+        """
 
         outcomes: list[TemplateSyncOutcome] = []
         for path, template in sorted(templates, key=lambda item: item[1].id):
@@ -101,36 +117,87 @@ class RuleStore:
             if issues:
                 raise RuleValidationError(issues, source=str(path) if path else template.id)
             digest = canonical_hash(template)
-            latest = await self.latest_template_record(template.id)
             source = str(path) if path is not None else None
-            if latest is not None and latest.hash == digest:
+            latest = await self.latest_template_record(template.id)
+            if latest is not None:
                 outcomes.append(
-                    TemplateSyncOutcome(template.id, latest.version, "unchanged", digest, source)
+                    TemplateSyncOutcome(
+                        template.id,
+                        latest.version,
+                        "unchanged" if latest.hash == digest else "skipped",
+                        latest.hash,
+                        source,
+                    )
                 )
                 continue
-            version = 1 if latest is None else latest.version + 1
-            self.session.add(
-                RuleTemplateRecord(
-                    id=template.id,
-                    version=version,
-                    name=template.name,
-                    definition=canonical_definition(template, include_lifecycle=False),
-                    hash=digest,
-                    calibration_status=template.calibration_status,
-                    source_path=source,
-                )
-            )
-            await self.session.flush()
+            record, _action = await self.create_version(template, source_path=source)
+            # No stored versions exist in this branch, so the action is "created".
             outcomes.append(
-                TemplateSyncOutcome(
-                    template.id,
-                    version,
-                    "created" if latest is None else "new_version",
-                    digest,
-                    source,
-                )
+                TemplateSyncOutcome(template.id, record.version, "created", record.hash, source)
             )
         return outcomes
+
+    async def create_version(
+        self,
+        template: RuleTemplate,
+        *,
+        actor: str | None = None,
+        note: str | None = None,
+        source_path: str | None = None,
+    ) -> tuple[RuleTemplateRecord, VersionAction]:
+        """Validate ``template`` and append it as the next immutable version.
+
+        The same validation as sync time runs first (semantic checks over the
+        factor registry and the DB industry groups); an equal content hash to
+        the current version is a no-op returning that version
+        (``unchanged``). Authored versions carry ``actor`` / ``note`` (CD7).
+        """
+
+        issues = check_template(template, self.context)
+        if issues:
+            raise RuleValidationError(issues, source=template.id)
+        digest = canonical_hash(template)
+        latest = await self.latest_template_record(template.id)
+        if latest is not None and latest.hash == digest:
+            return latest, "unchanged"
+        version = 1 if latest is None else latest.version + 1
+        record = RuleTemplateRecord(
+            id=template.id,
+            version=version,
+            name=template.name,
+            definition=canonical_definition(template, include_lifecycle=False),
+            hash=digest,
+            calibration_status=template.calibration_status,
+            source_path=source_path,
+            created_by=actor,
+            note=note,
+        )
+        self.session.add(record)
+        await self.session.flush()
+        return record, ("created" if latest is None else "new_version")
+
+    async def activate_template(
+        self, template_id: str, version: int, *, actor: str | None = None, note: str | None = None
+    ) -> tuple[RuleTemplateRecord, VersionAction]:
+        """Make ``version`` the current version by re-storing it (CD6).
+
+        "Current" is ``max(version)``, so activation is append-only rollback:
+        the target version's content becomes the next version row with the
+        activation's actor / note. Activating the current version is a no-op
+        returning it (``unchanged``). The re-stored content is validated
+        again, so a version whose industry groups were since removed cannot
+        be re-activated.
+        """
+
+        target = await self.session.get(RuleTemplateRecord, (template_id, version))
+        if target is None:
+            raise RuleStoreError(f"no template {template_id}@{version}")
+        latest = await self.latest_template_record(template_id)
+        if latest is not None and latest.version == version:
+            return latest, "unchanged"
+        return await self.create_version(
+            template_from_record(target), actor=actor, note=note
+        )
 
     async def latest_template_record(self, template_id: str) -> RuleTemplateRecord | None:
         stmt = (

@@ -2,8 +2,10 @@
 
 One run = one universe on one ``as_of``:
 
-1. optionally sync ``config/rule_templates`` into the rule store (idempotent;
-   a changed file becomes a new template version before it is used);
+1. optionally import ``config/rule_templates`` into the rule store as the
+   first-time baseline (``sync_templates``; off by default — the store is
+   authored in the UI / API, a file never appends over a stored version, so
+   this only seeds an empty store);
 2. load the latest version of every stored template;
 3. for every universe member on ``as_of``: build the point-in-time view
    (:func:`investment_agent.factors.view_db.load_snapshot_view`, baostock
@@ -73,7 +75,8 @@ class ScreenRunPayload(BaseModel):
 
     universe_code: IndexCode
     as_of: date
-    sync_templates: bool = True
+    sync_templates: bool = False
+    """Opt-in first-import of the template files (an empty store only)."""
     hit_cap: int = Field(default=DEFAULT_HIT_CAP, ge=1, le=500)
 
 
@@ -213,8 +216,8 @@ async def execute_screen_run(
     templates_dir: Path | None = None,
     candidate_policy: CandidatePolicy | None = None,
 ) -> dict[str, Any]:
-    """Sync templates (optional), screen the universe, persist, then create
-    candidates from the hits; returns metadata."""
+    """Import the template baseline if requested (off by default), screen the
+    universe, persist, then create candidates from the hits; returns metadata."""
 
     if payload.sync_templates:
         files = load_templates(templates_dir)

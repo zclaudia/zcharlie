@@ -1,3 +1,8 @@
+# This file is the FIRST-IMPORT BASELINE of the field-source registry: on
+# first start it is copied into the database and then managed at
+# /app/data-sources; later edits here are ignored (logged as baseline drift).
+# See docs/product/config-docs-plan.md.
+#
 # Field source registry (P1-A12, decision D6 rev 2; docs/product/p1-plan.md 2.3).
 #
 # One entry per canonical factor-layer field (the B1 split names: never the

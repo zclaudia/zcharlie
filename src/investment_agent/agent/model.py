@@ -45,6 +45,41 @@ class AgentModelUnavailableError(AgentConfigurationError):
     """The investor slot points at a model that is missing or disabled."""
 
 
+def validate_agent_values(
+    values: dict[str, Any], *, label: str = "投资 Agent / 主模型"
+) -> None:
+    """Validate resolved invocation values without opening a client."""
+
+    if not values["agent_base_url"] or not values["agent_model"]:
+        raise AgentConfigurationError(f"{label}：未选择模型")
+    url = urlsplit(values["agent_base_url"])
+    if (
+        url.scheme not in {"http", "https"}
+        or not url.hostname
+        or url.username
+        or url.password
+        or url.query
+        or url.fragment
+    ):
+        raise AgentConfigurationError(
+            "Agent endpoint must be an HTTP(S) URL without credentials, query or fragment"
+        )
+    if (
+        values["agent_output_mode"] == "native"
+        and not values["agent_supports_json_schema"]
+    ):
+        raise AgentConfigurationError(
+            "Native output requires explicitly verified json_schema support"
+        )
+    if (
+        values["agent_output_mode"] == "prompted"
+        and not values["agent_supports_json_object"]
+    ):
+        raise AgentConfigurationError(
+            "Prompted output requires explicitly verified json_object support"
+        )
+
+
 class AgentModelConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -108,19 +143,35 @@ class AgentModelConfig(BaseModel):
             body += self.thinking_ref
         return hashlib.sha256(body.encode()).hexdigest()
 
+    @classmethod
+    def from_values(
+        cls,
+        values: dict[str, Any],
+        *,
+        credential: str,
+        selection: ModelRef | None = None,
+    ) -> AgentModelConfig:
+        """Build a config from already-resolved invocation values.
+
+        Used by variable-length consumers (review seats) that resolve their own
+        ``provider/model`` reference; the investor slots keep using
+        :meth:`from_settings`.
+        """
+
+        ordered = {key: values[key] for key in sorted(RESOLVED_KEYS)}
+        return cls(
+            revision=0,
+            values_json=json.dumps(
+                ordered, sort_keys=True, separators=(",", ":")
+            ),
+            credential=SecretStr(credential),
+            selection=selection,
+        )
+
     def validate_ready(self) -> None:
-        v = self.values
-        if not v["agent_base_url"] or not v["agent_model"]:
-            raise AgentConfigurationError("投资 Agent / 主模型：未选择模型")
+        validate_agent_values(self.values)
         if not self.credential.get_secret_value():
             raise AgentConfigurationError("投资 Agent / 主模型：未配置 API Key")
-        url = urlsplit(v["agent_base_url"])
-        if url.scheme not in {"http", "https"} or not url.hostname or url.username or url.password or url.query or url.fragment:
-            raise AgentConfigurationError("Agent endpoint must be an HTTP(S) URL without credentials, query or fragment")
-        if v["agent_output_mode"] == "native" and not v["agent_supports_json_schema"]:
-            raise AgentConfigurationError("Native output requires explicitly verified json_schema support")
-        if v["agent_output_mode"] == "prompted" and not v["agent_supports_json_object"]:
-            raise AgentConfigurationError("Prompted output requires explicitly verified json_object support")
 
     def snapshot(self) -> dict[str, Any]:
         # Never expose a potentially credential-bearing endpoint in audit/public data.
@@ -209,10 +260,64 @@ def build_agent(
                  model_settings=settings, retries=v["agent_retries"])
 
 
+def _openai_client(
+    values: dict[str, Any],
+    credential: str,
+    trace: HTTPTrace,
+    transport: httpx.AsyncBaseTransport | None,
+) -> AsyncOpenAI:
+    http = httpx.AsyncClient(
+        transport=transport,
+        timeout=values["agent_timeout_seconds"],
+        event_hooks={"request": [trace.request], "response": [trace.response]},
+    )
+    return AsyncOpenAI(
+        base_url=values["agent_base_url"],
+        api_key=credential,
+        http_client=http,
+        max_retries=0,
+    )
+
+
+def _model_from_config(
+    config: AgentModelConfig, trace: HTTPTrace, transport: httpx.AsyncBaseTransport | None
+) -> tuple[OpenAIChatModel, AsyncOpenAI]:
+    v = config.values
+    client = _openai_client(
+        v, config.credential.get_secret_value(), trace, transport
+    )
+    provider = (
+        DeepSeekProvider(openai_client=client)
+        if v["agent_provider"] == "deepseek"
+        else OpenAIProvider(openai_client=client)
+    )
+    return (
+        OpenAIChatModel(v["agent_model"], provider=provider, profile=config.profile()),
+        client,
+    )
+
+
+def model_from_values(
+    values: dict[str, Any],
+    *,
+    credential: str,
+    trace: HTTPTrace,
+    transport: httpx.AsyncBaseTransport | None = None,
+    label: str = "模型",
+) -> tuple[OpenAIChatModel, AsyncOpenAI]:
+    """Build a native model from resolved ``agent_values()`` (no fallback).
+
+    The review-seat runner resolves its own ``provider/model`` reference and
+    calls this builder; the investor path keeps :func:`create_model`.
+    """
+
+    validate_agent_values(values, label=label)
+    if not credential:
+        raise AgentConfigurationError(f"{label}：未配置 API Key")
+    config = AgentModelConfig.from_values(values, credential=credential)
+    return _model_from_config(config, trace, transport)
+
+
 def create_model(config: AgentModelConfig, trace: HTTPTrace, *, transport: httpx.AsyncBaseTransport | None = None) -> tuple[OpenAIChatModel, AsyncOpenAI]:
     config.validate_ready()
-    v = config.values
-    http = httpx.AsyncClient(transport=transport, timeout=v["agent_timeout_seconds"], event_hooks={"request": [trace.request], "response": [trace.response]})
-    client = AsyncOpenAI(base_url=v["agent_base_url"], api_key=config.credential.get_secret_value(), http_client=http, max_retries=0)
-    provider = DeepSeekProvider(openai_client=client) if v["agent_provider"] == "deepseek" else OpenAIProvider(openai_client=client)
-    return OpenAIChatModel(v["agent_model"], provider=provider, profile=config.profile()), client
+    return _model_from_config(config, trace, transport)

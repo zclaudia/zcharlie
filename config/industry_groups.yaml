@@ -1,3 +1,8 @@
+# This file is the FIRST-IMPORT BASELINE of the industry-group mapping: on
+# first start it is copied into the database and then managed at
+# /app/industry-groups; later edits here are ignored (logged as baseline
+# drift). See docs/product/config-docs-plan.md.
+#
 # Industry -> industry group (P1-B3, decision D7).
 #
 # Factor applicability and rule-template applicability reference these groups

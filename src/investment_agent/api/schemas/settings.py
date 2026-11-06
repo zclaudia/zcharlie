@@ -74,6 +74,10 @@ class SettingsOut(BaseModel):
     bootstrap: list[BootstrapItemOut]
     llm_catalog: dict[str, Any] = Field(default_factory=dict)
     consumers: list[dict[str, Any]] = Field(default_factory=list)
+    review_lenses: list[dict[str, Any]] = Field(default_factory=list)
+    """Selectable review lenses (id / version / ref / name / focus). The
+    ``review_panels`` editor renders these as its lens dropdown; lenses are a
+    separate config document, not a runtime setting."""
 
 
 class SettingsPatchRequest(BaseModel):

@@ -63,7 +63,9 @@ function closeOverlay() {
 // ---- 筛选 -----------------------------------------------------------------
 
 let loadedItems = [];
-const view = { filter: "all", text: "" };
+const view = { filter: "all", text: "", sort: "default" };
+
+const REVIEW_DIVERGENCE_LABELS = Object.freeze({ low: "低", medium: "中", high: "大" });
 
 function hasScore(item) {
   return !!(item.latest_research && typeof item.latest_research.investment_score === "number");
@@ -85,11 +87,29 @@ function matchesText(item, text) {
   return haystack.includes(text.toLowerCase());
 }
 
+function reviewScore(item) {
+  const badge = item.latest_review;
+  return badge && typeof badge.divergence_score === "number" ? badge.divergence_score : -1;
+}
+
+function reviewTime(item) {
+  const badge = item.latest_review;
+  const stamp = badge && badge.completed_at ? Date.parse(badge.completed_at) : NaN;
+  return Number.isFinite(stamp) ? stamp : -1;
+}
+
 function visibleItems() {
   const test = FILTERS[view.filter] || FILTERS.all;
-  return loadedItems
+  const items = loadedItems
     .filter((item) => test(item) && matchesText(item, view.text))
     .sort((a, b) => Number(b.enabled) - Number(a.enabled));
+  // 排序是附加选项：默认保持启用优先；分歧/最近评审把有评审记录的排前面。
+  if (view.sort === "divergence") {
+    items.sort((a, b) => reviewScore(b) - reviewScore(a) || Number(b.enabled) - Number(a.enabled));
+  } else if (view.sort === "reviewed") {
+    items.sort((a, b) => reviewTime(b) - reviewTime(a) || Number(b.enabled) - Number(a.enabled));
+  }
+  return items;
 }
 
 function syncFilterUi() {
@@ -127,6 +147,36 @@ function wireFilters() {
 }
 
 // ---- 列表与规则状态 -------------------------------------------------------
+
+// 观察池评审标记：只显示席位数与分歧强度，点击进入单股页评审卡片。
+function reviewBadge(item, { link = false } = {}) {
+  const badge = item.latest_review;
+  if (!badge || !badge.round_id) return null;
+  const level = badge.divergence_level || "low";
+  const text = `${badge.seat_count} 席 · 分歧${REVIEW_DIVERGENCE_LABELS[level] || level}`;
+  const node = el(
+    link ? "a" : "span",
+    {
+      class: `wl-review wl-review-${level}`,
+      title: `最新评审 #${badge.round_id}${badge.completed_at ? ` · ${shortTime(badge.completed_at)}` : ""}`,
+    },
+    text
+  );
+  if (link) {
+    node.setAttribute("href", `/app/stocks/${encodeURIComponent(item.ticker)}#stock-review`);
+  }
+  return node;
+}
+
+function wireSort() {
+  const select = document.querySelector("#watchlist-sort");
+  if (!select) return;
+  select.value = view.sort;
+  select.addEventListener("change", () => {
+    view.sort = select.value;
+    renderCurrent();
+  });
+}
 
 function stockCell(ticker, name) {
   const cell = el("td", { class: "stock-cell" });
@@ -279,6 +329,8 @@ function watchlistRow(region, item, dropUp) {
   const tr = el("tr", { class: item.enabled ? undefined : "row-disabled" });
   const stock = stockCell(item.ticker, item.name);
   if (!item.enabled) stock.appendChild(el("span", { class: "badge" }, "已停用"));
+  const review = reviewBadge(item, { link: true });
+  if (review) stock.appendChild(review);
   tr.appendChild(stock);
 
   const spark = el("td", { class: "spark-cell" });
@@ -365,6 +417,8 @@ function mobileRow(region, item) {
   main.appendChild(small);
   const note = item.enabled ? attentionNote(item) : null;
   if (note) small.appendChild(el("span", { class: "warn-text" }, ` · ${note}`));
+  const review = reviewBadge(item);
+  if (review) small.appendChild(review);
   row.appendChild(main);
   row.appendChild(sparkSlot(item.ticker, "wl-spark"));
   const score = el("div", { class: "wl-score" });
@@ -1003,6 +1057,7 @@ export function bootWatchlist() {
   const proxy = document.querySelector("#watchlist-refresh-proxy");
   if (proxy && refreshAll) proxy.addEventListener("click", () => refreshAll.click());
   wireFilters();
+  wireSort();
   wireMenuDismiss();
   if (typeof globalThis.matchMedia === "function") {
     const query = globalThis.matchMedia(MOBILE_QUERY);

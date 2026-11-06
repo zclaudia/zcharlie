@@ -16,6 +16,8 @@
   "methods": {"group": "规则与方法", "label": "研究方法"},
   "runs": {"group": "系统", "label": "运行中心"},
   "health": {"group": "系统", "label": "数据健康"},
+  "data_sources": {"group": "系统", "label": "数据源"},
+  "industry_groups": {"group": "系统", "label": "行业分组"},
   "settings": {"group": "系统", "label": "设置"},
 } -%}
 {%- macro nav_link(key, href, text) -%}
@@ -85,6 +87,8 @@
           <span class="nav-label">系统</span>
           {{ nav_link("runs", "/app/runs", "运行中心") }}
           {{ nav_link("health", "/app/health", "数据健康") }}
+          {{ nav_link("data_sources", "/app/data-sources", "数据源") }}
+          {{ nav_link("industry_groups", "/app/industry-groups", "行业分组") }}
           {{ nav_link("settings", "/app/settings", "设置") }}
         </div>
       </nav>
@@ -163,6 +167,8 @@
       {{ more_link("templates", "/app/templates", "模板") }}
       {{ more_link("supplemental_rules", "/app/supplemental-rules", "补充事项") }}
       {{ more_link("methods", "/app/methods", "研究方法") }}
+      {{ more_link("data_sources", "/app/data-sources", "数据源") }}
+      {{ more_link("industry_groups", "/app/industry-groups", "行业分组") }}
       {{ more_link("settings", "/app/settings", "设置") }}
       <button type="button" class="more-item" data-theme-toggle>{{ icon("moon", "ico ico-moon", 22) }}{{ icon("sun", "ico ico-sun", 22) }}<span>外观</span></button>
     </div>
@@ -203,6 +209,8 @@
       <a class="palette-item" role="option" href="/app/methods" data-palette-page data-k="研究方法 yjff methods">{{ icon("methods", "ico", 16) }}<span>研究方法</span></a>
       <a class="palette-item" role="option" href="/app/runs" data-palette-page data-k="运行中心 yxzx runs">{{ icon("runs", "ico", 16) }}<span>运行中心</span></a>
       <a class="palette-item" role="option" href="/app/health" data-palette-page data-k="数据健康 sjjk health">{{ icon("health", "ico", 16) }}<span>数据健康</span></a>
+      <a class="palette-item" role="option" href="/app/data-sources" data-palette-page data-k="数据源 sjy data sources 字段来源 来源于">{{ icon("datasource", "ico", 16) }}<span>数据源</span></a>
+      <a class="palette-item" role="option" href="/app/industry-groups" data-palette-page data-k="行业分组 hyfz industry groups 行业映射 分组">{{ icon("industry_groups", "ico", 16) }}<span>行业分组</span></a>
       <a class="palette-item" role="option" href="/app/settings" data-palette-page data-k="设置 sz settings">{{ icon("settings", "ico", 16) }}<span>设置</span></a>
       </div>
     </div>

@@ -14,7 +14,7 @@ from tools.hk208_release_check import _report_target
 from investment_agent.domain.security import DEFAULT_PILOT_LIST_PATH, load_pilot_identities
 from investment_agent.materials.bootstrap import initialize_pilot
 from investment_agent.materials.publication_prepare import prepare_material_publication
-from investment_agent.materials.release_audit import audit_release
+from investment_agent.materials.release_audit import _migration_heads, audit_release
 from investment_agent.materials.reviewed_import import import_reviewed_annual
 from investment_agent.storage.database import engine_lifespan, session_scope
 from investment_agent.storage.models import Base
@@ -32,7 +32,11 @@ async def _valid_package(tmp_path: Path) -> tuple[Path, Path]:
             await connection.run_sync(Base.metadata.create_all)
         with sqlite3.connect(database) as connection:
             connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
-            connection.execute("INSERT INTO alembic_version VALUES ('057')")
+            # The audit compares the package's stamp against the live chain
+            # head, so the fixture stamps whatever the current head is.
+            connection.execute(
+                "INSERT INTO alembic_version VALUES (?)", (_migration_heads()[0],)
+            )
         async with session_scope() as session:
             setup = await initialize_pilot(session, identities)
             report = await import_reviewed_annual(

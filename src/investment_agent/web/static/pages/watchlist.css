@@ -8,8 +8,25 @@
 
 .wl-filters .toolbar { margin: 0 0 var(--sp-3); }
 .wl-search { width: 14rem; flex: none; height: 30px; padding-top: 0; padding-bottom: 0; }
+.wl-sort-label { flex: none; color: var(--ink-3); font-size: var(--fs-sm); }
+.wl-sort { width: auto; min-width: 6.5rem; height: 30px; padding-top: 0; padding-bottom: 0; }
 .wl-count { margin-left: auto; white-space: nowrap; }
 .wl-filters .chip-scroll { margin-bottom: var(--sp-3); }
+
+/* 最新一轮多视角评审：只显示席位数与分歧强度，点击进入单股页评审卡片。 */
+.wl-review {
+  display: inline-flex; align-items: center; margin-top: 3px; padding: 1px 7px;
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface-2); color: var(--ink-2);
+  font-size: var(--fs-xs); font-weight: 500; text-decoration: none; white-space: nowrap;
+}
+.wl-review:hover { border-color: var(--line-2); color: var(--ink); text-decoration: none; }
+.wl-review-medium { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn-ink); }
+.wl-review-high { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn-ink); font-weight: 600; }
+.wl-main small .wl-review { margin: 0 0 0 6px; }
+@media (max-width: 56rem) {
+  .wl-sort-label, .wl-sort { display: none; }
+}
 
 /* ---- 桌面表格 ---------------------------------------------------------------- */
 

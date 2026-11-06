@@ -28,7 +28,7 @@ def register_bars(server: MCPServer, ctx: ServerContext) -> None:
         """The last ``days`` uncorrected daily closes known now (oldest first),
         baostock first and the Tencent 15:10 close for days baostock lacks."""
 
-        from investment_agent.api.views import BARS_ADJUST, BARS_PROVIDER, load_bars
+        from investment_agent.api.views import BARS_ADJUST, bars_provider, load_bars
 
         as_of = datetime.now(UTC)
         async with ctx.session() as session:
@@ -38,7 +38,7 @@ def register_bars(server: MCPServer, ctx: ServerContext) -> None:
             {
                 "ticker": ticker,
                 "as_of": as_of,
-                "provider": BARS_PROVIDER,
+                "provider": bars_provider(),
                 "adjust": BARS_ADJUST,
                 "count": len(rows),
                 "bars": [

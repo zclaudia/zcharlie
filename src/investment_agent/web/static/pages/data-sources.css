@@ -1,0 +1,135 @@
+/* pages/data-sources.css — 数据源（UI v2，config-docs-plan §4.6 标签 A + 标签 B）
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css.
+   标签 A：表单按 table 分组为堆叠表格（手机由 .stack-table 自动堆叠），证据面（口径 / 校准 /
+   合理性 / 近似 / 公式）只读；高级编辑是全文档 YAML 折叠区。
+   标签 B：每来源一卡（许可 / 技术验收审批表单），公司范围用 chip 编辑，验收报告为
+   日期 + 引用的行编辑器。 */
+
+.ds-tabs { margin-bottom: var(--sp-4); }
+.ds-panel > * + * { margin-top: var(--sp-3); }
+.ds-panel > .card { margin-bottom: 0; }
+.ds-meta { font-size: 12.5px; }
+.ds-drift-link { margin-left: var(--sp-2); vertical-align: middle; }
+
+/* ---- 字段表 ---------------------------------------------------------------- */
+
+.ds-fields-region { padding: 0 16px 12px; }
+.ds-group-title { margin: var(--sp-4) 0 var(--sp-2); }
+.ds-groups .table-wrap { overflow-x: auto; }
+.ds-groups table { width: 100%; min-width: 46rem; }
+/* 手机（≤ 40rem）由 app.css 的 .stack-table 堆叠为卡片，取消表格最小宽度。 */
+@media (max-width: 40rem) {
+  .ds-groups table { min-width: 0; }
+}
+.ds-groups th { padding: 8px 10px; font-size: 12px; color: var(--ink-3); text-align: left; white-space: nowrap; }
+.ds-groups td { padding: 12px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+.ds-groups tr.dirty > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.ds-groups tr.dirty > td { background: var(--surface-2); }
+
+.ds-field-cell { min-width: 16rem; }
+.ds-field-name { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ds-field-name b { font-size: 13.5px; }
+.ds-definition { margin: 4px 0 0; font-size: 12.5px; max-width: 34rem; overflow-wrap: anywhere; }
+.ds-chips { margin-top: 8px; }
+.ds-chip-details { display: inline-block; }
+.ds-chip-summary { cursor: pointer; list-style: none; }
+.ds-chip-summary::-webkit-details-marker { display: none; }
+.ds-chip-summary::marker { content: ""; }
+.ds-chip-details[open] .ds-chip-summary { margin-bottom: 6px; }
+.ds-calibration-list { margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); font-size: 12.5px; max-width: 34rem; }
+.ds-calibration-list li + li { margin-top: 8px; }
+.ds-calibration-list li { overflow-wrap: anywhere; }
+
+.ds-edit-cell { min-width: 8rem; }
+.ds-edit-cell select, .ds-fallback-add { max-width: 100%; }
+.ds-fallback-cell { min-width: 15rem; }
+.ds-fallback-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ds-fallback-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.ds-fallback-item { min-width: 4.5rem; font-size: 12.5px; }
+.ds-fallback-add { margin-top: 6px; max-width: 12rem; font-size: 12.5px; }
+.ds-tolerance-cell { min-width: 6.5rem; }
+.ds-tolerance { width: 6.5rem; font-variant-numeric: tabular-nums; }
+.ds-key-cell { text-align: center; }
+
+/* ---- 高级编辑 ---------------------------------------------------------------- */
+
+.ds-advanced { border-top: 1px solid var(--line); background: var(--surface-2); }
+.ds-advanced > summary { padding: 12px 16px; cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.ds-advanced-body { padding: 0 16px 16px; }
+.ds-advanced-body > .faint { margin: 0 0 var(--sp-2); }
+#ds-yaml {
+  width: 100%; min-height: 22rem; box-sizing: border-box; margin: 0;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6;
+  white-space: pre; overflow: auto; resize: vertical;
+}
+
+/* ---- 保存条（共享 .action-bar） ---------------------------------------------- */
+
+.ds-savebar #ds-save-result:empty { display: none; }
+.ds-savebar #ds-save-result { margin-top: var(--sp-2); }
+.ds-savebar #ds-save-result .notice { margin: 0; }
+.ds-savebar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.ds-savebar-row input { flex: 1 1 12rem; min-width: 0; }
+@media (max-width: 55.99rem) {
+  .ds-savebar-row input { flex: 1 1 100%; order: -1; }
+  .ds-savebar-row .settings-dirty-count { flex: 1 1 auto; }
+}
+
+/* ---- 差异视图（漂移横幅 / 基线导入 / 历史摘要共用） --------------------------- */
+
+.ds-diff-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ds-diff-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-md); font-size: 12.5px; overflow-wrap: anywhere; }
+.ds-diff-changed { border-left: 3px solid var(--line-2); }
+.ds-diff-added { border-left: 3px solid var(--accent); }
+.ds-diff-removed { border-left: 3px solid var(--warn); }
+
+/* ---- 历史抽屉 ---------------------------------------------------------------- */
+
+.ds-history-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.ds-history-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: 13px; }
+.ds-history-note { color: var(--ink-2); flex: 1 1 12rem; }
+.ds-history-body { margin-top: 6px; }
+.ds-history-body > .faint { margin: 0; font-size: 12.5px; }
+.ds-history-details > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.ds-history-details .ds-diff-list { margin-top: 6px; }
+.ds-baseline-foot { align-items: center; }
+.ds-baseline-foot input { flex: 1 1 auto; }
+
+/* ---- 标签 B：来源信任策略（每来源一卡） -------------------------------------- */
+
+.dsp-sources-region { padding: 0 16px 16px; }
+.dsp-sources { display: grid; gap: var(--sp-3); }
+.dsp-source-card { border: 1px solid var(--line); border-radius: var(--r-md); }
+.dsp-source-card.dirty { box-shadow: inset 3px 0 0 var(--accent); }
+.dsp-source-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 12px 16px 0; }
+.dsp-source-title { margin: 0; font-size: 13.5px; }
+.dsp-source-body { display: grid; gap: var(--sp-3); padding: 8px 16px 16px; }
+.dsp-section-title { margin: 0; }
+.dsp-grid { display: grid; grid-template-columns: minmax(9rem, 14rem) 1fr; gap: 10px 16px; align-items: start; }
+.dsp-grid > label { font-size: 12.5px; color: var(--ink-3); padding-top: 6px; }
+.dsp-grid .dsp-wide { grid-column: 1 / -1; }
+@media (max-width: 40rem) {
+  .dsp-grid { grid-template-columns: 1fr; }
+  .dsp-grid > label { padding-top: 0; }
+}
+.dsp-status, .dsp-citation, .dsp-adapter, .dsp-report-citation { width: 100%; box-sizing: border-box; }
+.dsp-citation, .dsp-adapter, .dsp-report-citation { font-family: var(--font-mono); font-size: 12.5px; }
+
+/* 公司范围 chip 编辑器（添加 / 移除，空 = 未授权任何公司）。 */
+.dsp-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.dsp-key-list { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+.dsp-key-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2); }
+.dsp-key-chip .mono { font-size: 12.5px; }
+.dsp-key-chip .btn { padding: 0 6px; }
+.dsp-key-add { display: flex; gap: 6px; flex: 1 1 10rem; min-width: 0; }
+.dsp-key-add input { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 12.5px; }
+
+/* 验收报告：observed_on + citation 行编辑器（至少三条有引用的报告才可能通过验收）。 */
+.dsp-reports { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.dsp-report { display: grid; grid-template-columns: 10rem 1fr auto; gap: 8px; align-items: center; }
+.dsp-report input[type="date"] { font-variant-numeric: tabular-nums; }
+@media (max-width: 40rem) {
+  .dsp-report { grid-template-columns: 1fr; }
+}
+.dsp-report-empty { color: var(--ink-3); font-size: 12.5px; }

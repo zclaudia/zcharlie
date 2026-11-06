@@ -31,7 +31,8 @@ from tests.support.screen_job import (
 
 
 def test_screen_run_job_persists_results_and_summary(screen_db) -> None:
-    payload = ScreenRunPayload(universe_code="CSI300", as_of=AS_OF)
+    # The explicit opt-in sync seeds an empty store (the default is off).
+    payload = ScreenRunPayload(universe_code="CSI300", as_of=AS_OF, sync_templates=True)
 
     async def scenario() -> None:
         run_id = await _run_job(payload)
@@ -90,6 +91,51 @@ def test_screen_job_fails_without_templates(screen_db, monkeypatch) -> None:
     asyncio.run(scenario())
 
 
+def test_screen_run_does_not_sync_templates_by_default(screen_db) -> None:
+    """CD5/CD6: the store is authored in the UI - a screen run must not import
+    template files unless --sync explicitly opts in; when it does, it only
+    seeds ids that have no stored versions."""
+
+    async def scenario() -> None:
+        # Default payload: no import, the empty store fails the run.
+        assert ScreenRunPayload(universe_code="CSI300", as_of=AS_OF).sync_templates is False
+        run_id = await _run_job(ScreenRunPayload(universe_code="CSI300", as_of=AS_OF))
+        async with session_scope() as session:
+            run = await session.get(PipelineRun, run_id)
+            assert run is not None and run.error_summary == "RuntimeError"
+            assert (await session.execute(select(RuleTemplateRecord))).scalars().first() is None
+
+        # Opt-in import seeds the store once; the run succeeds.
+        payload = ScreenRunPayload(
+            universe_code="CSI300", as_of=date(2026, 10, 1), sync_templates=True
+        )
+        run_id = await _run_job(payload)
+        async with session_scope() as session:
+            run = await session.get(PipelineRun, run_id)
+            assert run is not None and run.status == "success", run.error_summary if run else None
+            versions = list((await session.execute(select(RuleTemplateRecord))).scalars())
+            assert [v.version for v in versions] == [1]
+
+    asyncio.run(scenario())
+
+
+def test_cli_screen_run_requires_sync_flag_to_import(screen_db) -> None:
+    from investment_agent.cli.main import app
+
+    runner = CliRunner()
+    # Without --sync the default run does not import the template files.
+    result = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30", "--now"])
+    assert result.exit_code == 0, result.output
+    assert "Error: RuntimeError" in result.output
+    # The opt-in flag seeds the empty store (first-import semantics).
+    seeded = runner.invoke(app, ["screen", "run", "--as-of", "2026-10-01", "--sync", "--now"])
+    assert seeded.exit_code == 0, seeded.output
+    assert "job_test@1" in seeded.output
+    # And once versions exist, even --sync never overwrites them (store wins).
+    again = runner.invoke(app, ["screen", "run", "--as-of", "2026-10-02", "--sync", "--now"])
+    assert again.exit_code == 0, again.output
+
+
 def test_worker_serves_screen_run_by_default() -> None:
     settings = Settings(api_key="x" * 32, llm_tier3_api_key="x")  # type: ignore[call-arg]
     kinds = [handler.kind for handler in default_job_handlers(settings)]
@@ -134,13 +180,13 @@ def test_cli_screen_run_now_and_show(screen_db) -> None:
     from investment_agent.cli.main import app
 
     runner = CliRunner()
-    result = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30", "--now"])
+    result = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30", "--sync", "--now"])
     assert result.exit_code == 0, result.output
     assert "finished: status=success" in result.output
     assert "job_test@1" in result.output
-    again = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30"])
+    again = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30", "--sync"])
     assert "Existing" in again.output
-    rerun = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30", "--rerun"])
+    rerun = runner.invoke(app, ["screen", "run", "--as-of", "2026-09-30", "--sync", "--rerun"])
     assert "Queued" in rerun.output
 
     shown = runner.invoke(app, ["screen", "show", "1", "--reasons"])

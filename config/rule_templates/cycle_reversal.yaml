@@ -1,3 +1,8 @@
+# First-import baseline of the rule store (config-docs-plan CD5/CD6): after
+# `ia rules sync` seeds an empty store the DB is authoritative and these files
+# are never re-imported silently - later versions are authored at
+# /app/templates (从基线导入 pulls a file back in explicitly).
+#
 # 周期反转 (cycle reversal) - template v2 (user review P1-F2, 2026-10-07);
 # format v3 (2026-10-09): strategy notes, condition labels and parameter
 # labels moved out of comments into fields.

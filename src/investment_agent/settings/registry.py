@@ -134,6 +134,7 @@ class CronSchedule(BaseModel):
 WatchlistSchedule = CronSchedule
 PortfolioValuationSchedule = CronSchedule
 ZoneDetectionSchedule = CronSchedule
+ReviewBatchSchedule = CronSchedule
 
 
 class SnapshotSchedule(SnapshotScheduleConfig):
@@ -182,6 +183,7 @@ class ScheduleSettings(BaseModel):
     watchlist: WatchlistSchedule = Field(default_factory=WatchlistSchedule)
     portfolio: PortfolioValuationSchedule = Field(default_factory=PortfolioValuationSchedule)
     zone_detection: ZoneDetectionSchedule = Field(default_factory=ZoneDetectionSchedule)
+    review_batch: ReviewBatchSchedule = Field(default_factory=ReviewBatchSchedule)
     snapshot: SnapshotSchedule = Field(default_factory=SnapshotSchedule)
     screen: ScreenSchedule = Field(default_factory=ScreenSchedule)
     candidates: CandidateSchedule = Field(default_factory=CandidateSchedule)
@@ -235,6 +237,34 @@ class RuntimeSettings(BaseModel):
 
     llm_catalog: str = Field(default="", repr=False)
     model_slots: str = ""
+
+    # Multi-perspective review. Seats are a variable-length list inside
+    # ``review_panels`` rather than fixed model slots.
+    review_panel_enabled: bool = False
+    review_panel_auto_enabled: bool = False
+    review_panel_schedule_enabled: bool = False
+    review_panel_seat_requests: int = Field(default=8, gt=0, le=100)
+    review_panel_seat_tool_calls: int = Field(default=12, gt=0, le=200)
+    review_panel_seat_tokens: int = Field(default=60000, gt=0, le=2_000_000)
+    review_panel_daily_rounds: int = Field(default=20, ge=0, le=200)
+    review_panel_daily_tokens: int = Field(default=1_500_000, gt=0, le=100_000_000)
+    review_panel_batch_max_rounds: int = Field(default=10, ge=0, le=50)
+    review_panel_auto_cooldown_trading_days: int = Field(default=3, ge=0, le=30)
+    review_panel_max_running_seats: int = Field(default=2, ge=1, le=24)
+    review_panels: str = ""
+
+    @field_validator("review_panels")
+    @classmethod
+    def valid_review_panels(cls, value: str) -> str:
+        from investment_agent.review_panel.panels import (
+            ReviewPanelError,
+            validate_review_panels,
+        )
+
+        try:
+            return validate_review_panels(value)
+        except ReviewPanelError as exc:
+            raise ValueError(str(exc)) from None
 
     @field_validator("llm_catalog")
     @classmethod
@@ -339,6 +369,18 @@ SPECS: tuple[SettingSpec, ...] = (
     _env("investor_agent_daily_tokens", "agent", "每日 token 上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("investor_agent_task_seconds", "agent", "单任务时间上限（秒）", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("model_slots", "agent", "模型槽位", "各使用者选择的模型引用（provider/model）。模型缺失或停用时显示为不可用，不会改用其他模型。", "next_job"),
+    _env("review_panels", "agent", "评审组配置", "JSON：默认评审组与各评审组的席位（视角 + provider/model）；为空表示尚未配置。", "next_job"),
+    _env("review_panel_enabled", "agent", "启用多视角评审", "默认关闭；关闭时不创建新轮次，历史轮次仍可查看。", "next_job"),
+    _env("review_panel_auto_enabled", "agent", "启用数据变化自动评审", "默认关闭；需总开关同时打开，并受同股冷却与每日额度约束。", "next_job"),
+    _env("review_panel_schedule_enabled", "agent", "启用定期批量评审", "默认关闭；需总开关同时打开，按交易日历每周批量运行。", "next_job"),
+    _env("review_panel_seat_requests", "agent", "单席请求上限", "每个席位一次运行最多发出的模型请求数，超过后保留已有输出并标记为部分完成。", "next_job"),
+    _env("review_panel_seat_tool_calls", "agent", "单席工具调用上限", "每个席位一次运行最多调用的只读工具次数。", "next_job"),
+    _env("review_panel_seat_tokens", "agent", "单席 token 上限", "每个席位一次运行的 token 上限；价格未知的模型照常执行该上限。", "next_job"),
+    _env("review_panel_daily_rounds", "agent", "每日轮次上限", "每天最多创建的评审轮次数，0 表示不限制；额度按整轮预留。", "next_job"),
+    _env("review_panel_daily_tokens", "agent", "每日 token 上限", "每天评审可预留的 token 总量，创建轮次前整轮检查和预留。", "next_job"),
+    _env("review_panel_batch_max_rounds", "agent", "每批最多轮次", "定期批量单次最多创建的轮次数，0 表示不运行批量。", "next_job"),
+    _env("review_panel_auto_cooldown_trading_days", "agent", "自动触发同股冷却（交易日）", "数据变化触发的同一股票在多少个交易日内不再自动创建新轮次。", "next_job"),
+    _env("review_panel_max_running_seats", "agent", "同时运行席位数上限", "限制评审席位的并发数，避免批量评审挤占交互任务。", "next_job"),
     _env(
         "method_candidate_shadow_min_positives", "agent", "候选影子最小正例数",
         "包提案批准前需要的匹配成功正例前瞻影子数，≥1；只影响证据收集成本，不降低覆盖门槛。", "live",
@@ -436,6 +478,14 @@ SPECS: tuple[SettingSpec, ...] = (
     _yaml(
         "schedule.watchlist.cron", "观察池刷新 cron", _CRON_HELP,
         ("scheduler", "watchlist_refresh_cron"),
+    ),
+    _yaml(
+        "schedule.review_batch.cron", "多视角评审批量 cron", _CRON_HELP,
+        ("scheduler", "review_batch_cron"),
+    ),
+    _yaml(
+        "schedule.review_batch.timezone", "多视角评审批量时区",
+        "IANA 时区名，如 Asia/Shanghai。", ("scheduler", "review_batch_timezone"),
     ),
     _yaml(
         "schedule.watchlist.timezone", "观察池刷新时区", "IANA 时区名，如 Asia/Shanghai。",

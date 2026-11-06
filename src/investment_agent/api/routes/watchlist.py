@@ -22,7 +22,7 @@ from investment_agent.api.schemas.admin import (
     WatchlistRuleRejectRequest,
     WatchlistUpdate,
 )
-from investment_agent.api.views import watchlist_item_out
+from investment_agent.api.views import watchlist_item_out, watchlist_review_badges
 from investment_agent.clock import shanghai_today
 from investment_agent.config import Settings
 from investment_agent.domain.a_share import parse_a_share_ticker
@@ -60,7 +60,15 @@ router = APIRouter(
 async def list_watchlist() -> list[WatchlistItemOut]:
     async with session_scope() as session:
         items = await WatchlistRepository(session).list_all()
-        return [await watchlist_item_out(session, item) for item in items]
+        badges = await watchlist_review_badges(
+            session, [item.listing_id for item in items]
+        )
+        return [
+            await watchlist_item_out(
+                session, item, review=badges.get(item.listing_id)
+            )
+            for item in items
+        ]
 
 
 @router.post("", response_model=WatchlistItemOut, status_code=201)

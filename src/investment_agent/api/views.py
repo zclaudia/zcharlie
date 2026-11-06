@@ -23,11 +23,12 @@ the MCP server) must not pull in route modules.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.api.schemas.admin import (
@@ -47,6 +48,7 @@ from investment_agent.api.schemas.candidates import (
     ScreenResultOut,
     SegmentOut,
 )
+from investment_agent.api.schemas.review_panel import WatchlistReviewBadgeOut
 from investment_agent.candidates.lifecycle import (
     context_with_industry_name,
     effective_draft,
@@ -55,6 +57,7 @@ from investment_agent.candidates.lifecycle import (
 )
 from investment_agent.clock import shanghai_today, today_in
 from investment_agent.config import Settings
+from investment_agent.config_docs.loader import field_sources_registry
 from investment_agent.directory_search import snapshot_universes
 from investment_agent.domain.a_share import format_listing_ticker, parse_a_share_ticker
 from investment_agent.domain.time import (
@@ -64,7 +67,7 @@ from investment_agent.domain.time import (
     optional_utc as _optional_utc,
 )
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
-from investment_agent.factors.field_sources import default_field_sources, market_precedence
+from investment_agent.factors.field_sources import market_precedence
 from investment_agent.rules.drafting import load_stock_context
 from investment_agent.rules.screen import evaluate_zone_conditions
 from investment_agent.rules.store import instance_from_record, template_from_record
@@ -85,6 +88,7 @@ from investment_agent.storage.models.pit_snapshot import (
     MarketSnapshot,
 )
 from investment_agent.storage.models.reference import Company, Listing
+from investment_agent.storage.models.review_panel import ReviewComparisonRecord
 from investment_agent.storage.models.rules import (
     RuleInstanceRecord,
     RuleTemplateRecord,
@@ -100,6 +104,7 @@ from investment_agent.storage.repositories.research_snapshot import (
     ResearchSnapshotRepository,
     score_item_from_payload,
 )
+from investment_agent.storage.repositories.review_panel import ReviewPanelRepository
 from investment_agent.watchlist.drafts import rule_snapshot
 
 log = structlog.get_logger(__name__)
@@ -109,9 +114,24 @@ log = structlog.get_logger(__name__)
 # Market bars (GET /market/{ticker}/bars and the MCP get_bars tool)
 # --------------------------------------------------------------------------- #
 
-BARS_PROVIDERS: tuple[str, ...] = market_precedence(default_field_sources())
-"""Provider precedence of the series (``baostock`` first, then ``tencent``)."""
-BARS_PROVIDER = ",".join(BARS_PROVIDERS)
+def bars_providers() -> tuple[str, ...]:
+    """Provider precedence of the series (``baostock`` first, then ``tencent``).
+
+    Backed by the field-sources config document through the revision-aware
+    loader (config-docs-plan §4.4), so a saved change applies to the next
+    read without a restart. The old import-time ``BARS_PROVIDERS`` constant
+    could not see saved edits.
+    """
+
+    return market_precedence(field_sources_registry())
+
+
+def bars_provider() -> str:
+    """The precedence as the responses' ``provider`` field (comma-joined)."""
+
+    return ",".join(bars_providers())
+
+
 BARS_ADJUST = "none"
 # Trading days make up roughly 68% of calendar days; the lookback window is
 # generous so ``days`` trading days always fit, then the tail is sliced.
@@ -134,7 +154,7 @@ async def load_bars(
         end,
         as_of,
         adjust=BARS_ADJUST,
-        provider=BARS_PROVIDERS,
+        provider=bars_providers(),
     )
     return rows[-days:]
 
@@ -435,7 +455,72 @@ async def candidate_detail_out(session: AsyncSession, candidate: CandidateRecord
 # --------------------------------------------------------------------------- #
 
 
-async def watchlist_item_out(session: AsyncSession, item: WatchlistItem) -> WatchlistItemOut:
+async def watchlist_review_badges(
+    session: AsyncSession, listing_ids: Sequence[int]
+) -> dict[int, WatchlistReviewBadgeOut]:
+    """Latest completed review round per listing, for watchlist badges.
+
+    One round query plus one comparison query; seat counts come from the
+    frozen panel snapshot. Review opinions are never part of a badge, so the
+    MCP ``list_watchlist`` tool (which does not call this helper) cannot
+    expose them.
+    """
+
+    ids = [listing_id for listing_id in listing_ids if listing_id]
+    rounds = await ReviewPanelRepository(session).latest_rounds_for_stocks(
+        ids, completed_only=True
+    )
+    if not rounds:
+        return {}
+    comparisons: dict[int, dict[str, Any]] = {}
+    rows = (
+        await session.execute(
+            select(ReviewComparisonRecord)
+            .where(ReviewComparisonRecord.round_id.in_([row.id for row in rounds.values()]))
+            .order_by(
+                ReviewComparisonRecord.created_at.desc(),
+                ReviewComparisonRecord.id.desc(),
+            )
+        )
+    ).scalars()
+    for row in rows:
+        comparisons.setdefault(row.round_id, row.result_json)
+
+    badges: dict[int, WatchlistReviewBadgeOut] = {}
+    for listing_id, round_row in rounds.items():
+        result = comparisons.get(round_row.id)
+        if result is None:
+            continue
+        snapshot = round_row.panel_snapshot if isinstance(round_row.panel_snapshot, dict) else {}
+        seats = snapshot.get("seats")
+        stance = result.get("stance_distribution")
+        badges[listing_id] = WatchlistReviewBadgeOut(
+            round_id=round_row.id,
+            seat_count=len(seats) if isinstance(seats, list) else 0,
+            divergence_level=str(result.get("divergence_level") or "low"),
+            divergence_score=int(result.get("divergence_score") or 0),
+            stance_distribution={
+                str(key): int(count)
+                for key, count in stance.items()
+                if isinstance(count, int) and not isinstance(count, bool)
+            }
+            if isinstance(stance, dict)
+            else {},
+            completed_at=(
+                _as_utc(round_row.completed_at)
+                if round_row.completed_at is not None
+                else None
+            ),
+        )
+    return badges
+
+
+async def watchlist_item_out(
+    session: AsyncSession,
+    item: WatchlistItem,
+    *,
+    review: WatchlistReviewBadgeOut | None = None,
+) -> WatchlistItemOut:
     """One watchlist row with its company name and newest research summary
     (shared by ``GET /watchlist`` and the MCP ``list_watchlist`` tool)."""
 
@@ -479,6 +564,7 @@ async def watchlist_item_out(session: AsyncSession, item: WatchlistItem) -> Watc
         last_refresh_error=item.last_refresh_error,
         last_research_run_id=item.last_research_run_id,
         latest_research=latest,
+        latest_review=review,
         rule=WatchlistRuleOut.model_validate(await rule_snapshot(session, item)),
     )
 

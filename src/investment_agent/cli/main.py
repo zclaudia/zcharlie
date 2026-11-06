@@ -5,6 +5,7 @@ import typer
 from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import api as api_cmd
 from investment_agent.cli.commands import bank_rollover as bank_rollover_cmd
+from investment_agent.cli.commands import config_docs as config_docs_cmd
 from investment_agent.cli.commands import materials as materials_cmd
 from investment_agent.cli.commands import mcp as mcp_cmd
 from investment_agent.cli.commands import methods as methods_cmd
@@ -34,6 +35,11 @@ app.add_typer(rules_cmd.app, name="rules", help="Rule templates and instances")
 app.add_typer(screen_cmd.app, name="screen", help="Weekly template screen")
 app.add_typer(verify_cmd.app, name="verify", help="iFinD on-demand verification (P1-A13)")
 app.add_typer(settings_cmd.app, name="settings", help="Runtime settings stored in the database")
+app.add_typer(
+    config_docs_cmd.app,
+    name="config-docs",
+    help="DB-managed config documents (list, show, import, history)",
+)
 app.add_typer(
     methods_cmd.app,
     name="methods",

@@ -8,11 +8,14 @@ import pytest
 from investment_agent.factors.industry_groups import (
     FINANCIAL_GROUPS,
     OTHER_GROUP,
+    CoverageMember,
+    check_industry_groups_coverage,
     default_industry_groups,
     industry_group_for,
     parse_industry_groups,
 )
 from investment_agent.providers.baostock_reference import parse_csrc_industry
+from investment_agent.providers.shenwan_directory import default_shenwan_directory
 
 CSI300_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "factors" / "csi300_industry_2026-10-05.json"
@@ -26,19 +29,28 @@ def _csi300_members() -> list[dict[str, str]]:
     return members
 
 
-def test_every_csi300_csrc_code_is_mapped_explicitly():
-    mapping = default_industry_groups()
-    unmapped: dict[str, list[str]] = {}
-    codes: set[str] = set()
+def _csi300_coverage_members() -> list[CoverageMember]:
+    """The fixture snapshot as coverage input (the endpoint feeds the DB universe)."""
+
+    result: list[CoverageMember] = []
     for member in _csi300_members():
         code, name = parse_csrc_industry(member["industry"])
         assert code is not None, member
-        codes.add(code)
-        match = mapping.resolve(code, name)
-        if match.matched_by != "code":
-            unmapped.setdefault(code, []).append(member["name"])
-    assert not unmapped, f"CSRC codes without an explicit industry group: {unmapped}"
-    assert len(codes) == 41
+        ticker = f"{member['code'][3:]}.{member['code'][:2].upper()}"
+        result.append(CoverageMember(ticker=ticker, csrc_code=code, csrc_name=name))
+    return result
+
+
+def test_every_csi300_csrc_code_is_mapped_explicitly():
+    coverage = check_industry_groups_coverage(
+        default_industry_groups(),
+        directory=default_shenwan_directory(),
+        members=_csi300_coverage_members(),
+    )
+    assert coverage.unmapped_csrc == (), [(gap.code, gap.tickers) for gap in coverage.unmapped_csrc]
+    assert coverage.csrc_code_count == 41
+    assert coverage.member_count == 300
+    assert "覆盖完整" in coverage.summary
 
 
 def test_config_is_versioned_and_groups_are_known():

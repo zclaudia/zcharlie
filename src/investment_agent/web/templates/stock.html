@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/stock.css') }}"><link rel="stylesheet" href="{{ static_url('pages/account_fit.css') }}">{% if not financial %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/stock.css') }}"><link rel="stylesheet" href="{{ static_url('pages/account_fit.css') }}"><link rel="stylesheet" href="{{ static_url('pages/review_panel.css') }}">{% if not financial %}
 <link rel="stylesheet" href="{{ static_url('pages/supplemental_rules.css') }}">
 <link rel="stylesheet" href="{{ static_url('industry_peers.css') }}">{% endif %}{% endblock %}
 {% block mobile_back %}<a href="/app/watchlist">观察池</a>{% endblock %}
@@ -311,6 +311,7 @@
       <a href="#stock-scores">评分</a>
       <a href="#stock-metrics">关键指标</a>
       <a href="#stock-ai">AI 解释</a>
+      <a href="#stock-review">多视角评审</a>
       <a href="#peer-context-section">同行参照</a>
       <a href="#stock-history-card">历史 <span class="c" data-tab-count="history"></span></a>
     </nav>
@@ -324,7 +325,8 @@
       </div>
       <div id="stock-spark" class="spark-host" data-ticker="{{ ticker }}"></div>
     </section>
-    <section id="stock-detail" class="data-region"></section>
+    <section id="stock-detail" class="data-region"
+             data-listing-id="{{ listing_id or '' }}" data-ticker="{{ ticker }}"></section>
     <section class="card card--flush stock-history-card" id="stock-history-card">
       <div class="card-head card-head--rule"><h2>历史快照</h2></div>
       <div id="stock-history" class="data-region"

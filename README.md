@@ -36,8 +36,8 @@ ia migrate up
 ia api serve          # 默认 127.0.0.1:8000；远程/Docker 需显式 --host 0.0.0.0
 ia worker start --kinds agent_turn,agent_research,agent_review,agent_discovery
                       # 对话与 Agent 维护、外部通知投递（只此一个进程）
-ia worker start --kinds account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
-                      # 快照、筛选、核对、日历等；调试可用 --once
+ia worker start --kinds account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,shenwan_directory_refresh,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
+                      # 快照、筛选、核对、日历、行业目录刷新等；调试可用 --once
 ia scheduler start    # A 股日终观察池刷新（Asia/Shanghai，版本化交易日历）
 
 # 5. 打开 Web UI 登录
@@ -66,7 +66,8 @@ freshness、Agent 解释（引用可点击定位证据）与"自上次以来的�
 数据健康页 `/app/health`（P1-E2，导航"数据健康"）：快照积累进度"快照积累 X / 8 周"（阶段退出指标）、
 日线 / 财报 / 分红新鲜度与覆盖率、各采集任务最近一次完整率（缺失按 failed / stopped / quota / no_data /
 pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同步、历史回补进度、iFinD 预算与核对队列、
-字段冲突、逾期财报，以及提醒列表。只读，不触发采集。
+字段冲突、逾期财报，以及提醒列表。页面以只读为主：「交易日历」卡片的「检查更新 / 应用候选」
+与「行业目录」卡片的「刷新行业目录」（申万代码表再生成）是仅有的行动入口。
 
 - **积累口径**：目标池（`snapshot.universes` 第一个）的实时 `market_snapshot` 运行（baostock，
   `success` / `partial` 且采到至少一只；回补不算）按交易日所在 ISO 周统计；同一交易日取最好的一次。
@@ -91,7 +92,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `ia snapshot` | `sync-universe`、`sync-industry`、`collect-market`、`collect-financial`、`backfill`、`status` | 时点快照采集（见下节） |
 | `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>`、`draft --ticker --template [--as-of] [--now]` | 规则模板 / 实例校验与版本库、LLM 规则起草（见“规则与筛选”） |
 | `ia methods` | `validate <file>`、`sync [--dir]`、`list`、`show <key[@ver]>`、`status [--channel]`、`activate-global --package <key@ver> --expected-revision <n> --reason <text>` | 方法包：校验 / 导入 / 查看 / 全局启用（不移动 per-listing head，见“方法包”） |
-| `ia screen` | `run [--universe] [--as-of] [--now] [--rerun]`、`show <run_id> [--reasons]` | 周频模板筛选 |
+| `ia screen` | `run [--universe] [--as-of] [--now] [--rerun] [--sync]`、`show <run_id> [--reasons]` | 周频模板筛选（`--sync` 默认关闭：仅空库补种模板） |
 | `ia verify` | `status`、`request --ticker [--trigger] [--fields] [--period]`、`run [--now]` | iFinD 按需核对队列与预算（见“iFinD 按需核对”） |
 | `ia research` | `snapshot <ticker> [--as-of] [--industry]`、`ifind <ticker> --industry --report-year` | 单股同步研究：免费源快照（日常，无 iFinD 调用）/ iFinD 深度研究（计入预算）；制品同 API 路径 |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |
@@ -112,6 +113,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `market_snapshot` | `ia snapshot collect-market [--provider baostock\|ifind] [--scope universe\|watchlist] [--universe CSI300] [--date]` | 交易日 18:30 | 增量日线：不复权 `none`（估值）+ 后复权 `backward`（收益），不存前复权；baostock 行附 `pe_ttm`、`pb_mrq`、`ps_ttm`、`turnover`、`trade_status`、`is_st` |
 | `financial_snapshot` | `ia snapshot collect-financial --period 2026-06-30 [--provider] [--scope] [--universe] [--as-of]` | 每周六 09:00 + 4/30、8/31、10/31 后首个交易日 19:00 | 最近已过法定截止期的报告期 + 披露季进行中的报告期，只采该数据源尚无该期的标的；截止日后顺带逾期检测 |
 | `calendar_probe` | —（健康页「交易日历」卡片的「检查更新」按钮，或 `python tools/refresh_trading_calendar.py` 手动核对） | 每周一 08:00，仅日历到期前 60 天内 | 双源核对下一年交易日历：一致时写 `data/calendar_candidates/a_share-<年>.yaml` 并发 `info` 通知，分歧时 `action_required` 且不写文件；卡片上点「应用候选」一键生效 |
+| `shenwan_directory_refresh` | —（健康页「行业目录」卡片的「刷新行业目录」按钮） | —（不调度；幂等键每天至多入队一次） | 从申万官网再生成 2021 代码表，只写 `DATA_DIR/shenwan/shenwan_2021.yaml` 运行时副本（不动仓库基线），随后按当前行业分组映射检查覆盖率，出现未映射代码时 `action_required` 并列出代码 |
 
 - **baostock（目标池）**：一次运行只登录一次，调用经进程级锁串行，无需令牌桶。每只股票每个序列从该数据源最后一个
   交易日 +1 增量取到 `--date`（无历史的从当日开始，深度历史由回补负责）。停牌日（`trade_status=0`，
@@ -146,15 +148,21 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
   一个系统终止失败不影响另一个（运行以 `partial` 结束，元数据 `failed_systems`）。
 - **申万代码对照表**：`config/shenwan_2021.yaml`（511 个代码 → 名称、层级、上级），由
   `tools/refresh_shenwan_directory.py` 从申万官网的 `SwClassCode_2021.xls`（同域名、同证书处理，一次请求）
-  生成并提交；建议每月或出现 `shenwan_codes_unresolved` 日志时运行。不带 `--write` 只打印与已提交文件的差异，
+  生成并提交；建议每月或出现 `shenwan_codes_unresolved` 日志时刷新（入口见本条末）。不带 `--write` 只打印与已提交文件的差异，
   `--write` 覆盖文件，需人工审阅后提交（不会自动提交）。`--cross-check` 另按原计划用乐咕乐股
   `sw_index_*_info` + 每个三级行业的 `sw_index_third_cons` 反推核对名称与交易所后缀（乐咕乐股限流严：
   连续请求会 429，随后数分钟 504；`--limit N` 抽样、`--cache DIR` 断点续跑）。同步时对照表里没有的 2021 年后
   代码以代码作名称写入并记日志；2021-07-30 之前已结束的区间、以及 2021 年前退市股票仍挂着的旧代码，是旧版
-  （申万 2014 及更早）代码，按代码存名称，不参与行业组映射。
-- **行业组（P1-B3）**：`config/industry_groups.yaml` 先按 `as_of` 当时的申万 2021 分类映射（一级默认、二 / 三级覆盖，
-  `matched_by` = `sw_l1` / `sw_l2` / `sw_l3`），没有可用申万代码时退回证监会表并给因子值加 `industry_fallback`
-  标记，两者都没有时为 `other`（`matched_by=fallback`）。因子 `inputs_ref.industry` 记录所用体系、代码与匹配方式。
+  （申万 2014 及更早）代码，按代码存名称，不参与行业组映射。日常刷新走健康页「行业目录」卡片的
+  「刷新行业目录」按钮（上面 `shenwan_directory_refresh` 任务）；仓库基线的更新仍用本工具 `--write`
+  并人工审阅后提交。
+- **行业组（P1-B3）**：行业分组映射自 config-docs 起在 `/app/industry-groups` 页面管理
+  （`config/industry_groups.yaml` 是首次导入基线）：分组定义 + CSRC 码映射表 + 申万覆写，保存即生效、
+  自动推进 `version`，「覆盖率检查」按当前沪深 300 成分校验（未映射高亮）；被模板 `applicable_groups`
+  引用的分组不可移除，已存快照保留当时的分组不变。解析顺序不变：先按 `as_of` 当时的申万 2021 分类映射
+  （一级默认、二 / 三级覆盖，`matched_by` = `sw_l1` / `sw_l2` / `sw_l3`），没有可用申万代码时退回证监会表
+  并给因子值加 `industry_fallback` 标记，两者都没有时为 `other`（`matched_by=fallback`）。
+  因子 `inputs_ref.industry` 记录所用体系、代码与匹配方式。
 - **申万证书**：`swsresearch.com` 下发的证书链缺中间证书，默认校验失败。只对该域名补全：仓库附带
   `src/investment_agent/providers/certs/swsresearch-intermediate.pem`（DigiCert「GeoTrust G2 TLS CN RSA4096
   SHA256 2022 CA1」，有效期至 2032-12-14），调用期间仅替换 AkShare 相关模块里的 `requests`，
@@ -195,7 +203,12 @@ ia snapshot backfill --provider akshare [--with-cash-flow] [--dry-run|--status] 
 
 ### 字段来源登记表（P1-A12）
 
-`config/field_sources.yaml` 为每个因子层字段登记 `primary`、`fallback`、口径、容差（默认 2%）、是否关键字段与按数据源的
+登记表自 config-docs 起以数据库为准，在 `/app/data-sources` 页（标签「字段来源优先级」）管理：
+调度面（`primary` / `fallback` 顺序 / `tolerance` / `key`）按字段表单编辑，保存后下个任务生效
+（API 读取即时）；口径 `definition`、校准与 `sanity` 是研究审计证据，页面只读；另有全文档
+「高级编辑」（保存跑完整解析校验）。`config/field_sources.yaml` 是首次导入基线。
+
+登记内容：每个因子层字段的 `primary`、`fallback`、口径、容差（默认 2%）、是否关键字段与按数据源的
 `sanity` 规则；iFinD 不得为主 / 备来源（只做核对）。目标池视图按「iFinD 已核对值 > 主来源 > 备用来源」逐字段取值：
 例如 baostock `debt_ratio` < 0.02（缩小 100 倍缺陷）被拒并改用东财，因子带 `provider_fallback`；无备用值时为缺失并带
 `suspect_provider_value`。每个取值在 `FactorValue.inputs_ref` 中带 `provider` 与核对状态
@@ -287,11 +300,16 @@ ia snapshot backfill --universe CSI300 --status                                 
   （入库时仍拆成 `params` / `param_ranges` / `param_meta`）。`ia rules validate <file>`
   离线校验（未知因子、op/值类型、自由文本、参数越界、区间名、行业组，错误一次性汇总；
   另含编写检查：缺 `thesis` / `falsification` 报 `doc_missing`，条件或参数缺 `label` 报 `label_missing`，
-  周筛选的运行时加载不做编写检查），
-  `ia rules sync` 按内容哈希入库（`rule_template`，内容变化即升版本，旧版本不改）。
+  周筛选的运行时加载不做编写检查）。
+  规则库以数据库为准：`config/rule_templates/*.yaml` 是首次导入基线（空库上 `ia rules sync` 种子一次，
+  之后文件永不覆盖已存版本）；日常修改在 `/app/templates` 详情页「编辑新版本」——保存即写入下一
+  不可变版本并立即生效，「校验」先 dry-run 出逐项问题，「激活」把历史版本设为当前（append-only 回滚），
+  每个版本带 actor 与必填变更说明；文件与当前版本不一致时列表标「基线漂移」，需要文件内容时显式
+  「从基线导入」。
 - 规则实例（`rule_instance`）：`draft → active → retired`，每次修改生成新版本，批准时退役上一 active 版本。
-- 周筛选任务 `screen_run`（每周日 20:00，设置页「调度 · 筛选」）：先同步模板，再对目标池按时点计算因子、
+- 周筛选任务 `screen_run`（每周日 20:00，设置页「调度 · 筛选」）：对目标池按时点计算因子、
   运行全部模板的 `screen` 条件，结果写入 `screen_result`（命中 / 截断 / 未命中 / 跳过 / 剔除，附结构化理由）。
+  模板不再自动从文件同步（`ia screen run` 的 `--sync` 默认关闭，仅补种空库，脚本化调用如依赖旧行为需显式加 `--sync`）。
   ST 与逾期未披露标的全局剔除；每模板默认最多 20 个命中，按"阈值内距离"强度排序。
   `ia screen run --as-of 2026-09-30 --now` 当场执行，`ia screen show <run_id> --reasons` 查看理由。
 - 规则起草（P1-C5，任务 `rule_draft`，由候选生命周期按 `rule_draft:{candidate_id}:{template}@{ver}` 投递）：
@@ -370,6 +388,10 @@ ia snapshot backfill --universe CSI300 --status                                 
 | `POST /research/listings/{listing_id}/refresh` | 入队一次（幂等去重）港美资料采集运行；未知 listing 404、被拒请求 422，响应给出 `online_refresh_enabled`（首期默认关闭，见 [`docs/product/hk-us-expansion.md`](docs/product/hk-us-expansion.md)） |
 | `GET /dashboard/today` | 今日概览聚合（运行中/失败/partial/待复核/重要变化 + `candidates` 候选计数 + `data_health` 计数；`warnings` 含日历与数据健康提醒） |
 | `GET /health/data` | 数据健康聚合（只读）：`accumulation`、`freshness`、`universes`、`industry`、`collections`、`backfill`、`verification`、`overdue`、`warnings` |
+| `GET /health/shenwan-directory`、`POST /health/shenwan-directory/refresh` | 行业目录卡片：生效目录（`DATA_DIR` 副本优先于仓库基线）、版本与代码量、最近一次刷新结果 / 入队一次刷新任务（每天至多一次） |
+| `GET/PATCH /config-docs[/{kind}]`、`GET /config-docs/{kind}/history`、`POST /config-docs/{kind}/baseline-import` | 配置文档（`field_sources` / `source_policy` / `industry_groups`）：读取（含基线对比）/ 保存（解析即校验、必填变更说明、409 冲突）/ 全量历史 / 从基线导入 |
+| `POST /config-docs/industry-groups/coverage-check` | 行业分组覆盖率检查（对当前文档或提交的草稿文档） |
+| `GET /rule-templates[/{id}]`、`POST /rule-templates/{id}/validate\|versions\|activate\|baseline-import` | 模板版本读取与作者席：校验 dry-run / 保存下一不可变版本 / 激活（回滚）/ 从基线导入 |
 | `GET /calendar/status`、`POST /calendar/check`、`POST /calendar/apply` | 交易日历（`/app/health` 卡片的三个动作）：状态含生效文件与仓库基线、覆盖范围、已审年份（每年带 `verified_by` / `verified_on`）、候选、是否可写、上次核对结果；`check` 入队一次双源核对（`force=true`，跳过 60 天窗口）；`apply` 把候选写入 `DATA_DIR/calendars/a_share.yaml` 并删除候选（只允许*新增*年份，改写或缺少已审年份返回 409） |
 | `GET/POST/PATCH/DELETE /watchlist`、`POST /watchlist/refresh` | 观察池管理与隔离型批量刷新；`POST` 可带 `template_id` 自动起草观察规则；`DELETE` 必填 `{reason}`（决策日志 `remove_watch`） |
 | `POST /watchlist/{id}/rule/draft`、`/approve`、`/edit`、`/reject`、`GET /watchlist/template-suggestion` | 观察池规则起草 / 批准 / 改参数（新草稿版本）/ 驳回（必填理由）；手动添加时的模板推荐（失败返回空，条目存为 `needs_template`）。观察条目状态见 `GET /watchlist` 的 `rule` 块（`state`、`request`、`draft`/`active`，规则与候选按 listing + candidate scope 共享） |
@@ -406,6 +428,21 @@ Claude Desktop 配置片段与边界说明见 [`docs/product/operations.md`](doc
   各 Agent / 研究任务的模型槽位、iFinD 网关、采集节流、核对预算、候选过期 / 冷却天数，以及全部调度
   （cron、目标池、`hit_cap`、`calibration_count`）。每项的范围、默认值与说明见设置页。修改无需重启：API 下一请求、
   worker 下一个任务、scheduler 60 秒内重新排期（不补跑错过的触发）。
+
+整文件配置（**配置文档**，设计见 [`docs/product/config-docs-plan.md`](docs/product/config-docs-plan.md)）
+同样以数据库为准，各有专属页面——「改文件 + 提交 + 重启三个进程」不再是流程：
+
+- `/app/data-sources`：标签「字段来源优先级」（`config/field_sources.yaml`，保存后下个任务生效）与
+  「来源信任策略」（`config/research_material/source_policy.yaml`，港美来源许可与技术验收审批表单）；
+- `/app/industry-groups`：行业分组映射（`config/industry_groups.yaml`，保存即生效，见「快照采集」行业组条目）；
+- `/app/templates`：规则模板起草 / 激活 / 从基线导入（见「规则与筛选」）；
+- `/app/health` 的「行业目录」卡片：申万代码表再生成（只写 `DATA_DIR/shenwan/` 副本）。
+
+三个 YAML 与 `config/rule_templates/*.yaml` 都是**首次导入基线**：首次启动导入一次（模板是空库上
+`ia rules sync`），此后数据库为唯一真相；再改基线文件只在下次启动打 `config_docs.baseline_drift`
+warning（模板页显示「基线漂移」），数据库不会被覆盖，需要文件内容时在页面显式「从基线导入」（展示 diff）。
+写入沿用设置的 revision 传播（无需重启），每个写操作留 actor + 必填变更说明与全量历史；
+研究运行元数据记录所用 field_sources 文档指纹（版本 + 哈希）。
 
 首次启动 api / worker / scheduler 时（需先 `ia migrate up`），`.env` 中显式写出的运行时项与
 `config/app.yaml` 的调度段会一次性导入数据库；此后以数据库为准，`.env` / `app.yaml` 里的这些值

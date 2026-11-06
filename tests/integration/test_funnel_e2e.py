@@ -486,7 +486,9 @@ async def _resolve_reason(session: Any, listing_id: int, ref: Any) -> list[str]:
 
 
 async def _screen(funnel: Funnel) -> tuple[int, str]:
-    payload = ScreenRunPayload(universe_code=UNIVERSE, as_of=AS_OF)
+    # A fresh store has no template versions: seed them like a deployment's
+    # one-time `ia rules sync` (screen no longer force-syncs by default).
+    payload = ScreenRunPayload(universe_code=UNIVERSE, as_of=AS_OF, sync_templates=True)
     async with session_scope() as session:
         run, created = await enqueue_screen_run(session, payload, triggered_by="e2e")
         run_id = run.id

@@ -1,6 +1,7 @@
 # P1 运维手册
 
-状态：Current（2026-10-07，对应 P1 代码完成；迁移 `019`）
+状态：Current（2026-10-07 建立，对应 P1 代码完成；2026-11-01 增补配置文档化——
+config-docs 迁移 `057`/`058`，迁移 head 随版本演进见 `alembic/versions/`）
 
 适用范围：目标池采集、因子、筛选、候选、观察池研究与 iFinD 核对的日常运行。
 设计依据见 [`funnel-design.md`](funnel-design.md)，任务与决策见 [`p1-plan.md`](p1-plan.md)。
@@ -18,8 +19,9 @@
 | 业绩预告、预约披露时间、主营构成 | AkShare（东财） | `earnings_forecast` / `disclosure_schedule` / `business_segment`，只作事实与通知，不进因子 |
 | 按需核对 | iFinD（经 ifind-proxy） | 只在晋级、冲突、缺失、复核、每周抽样时调用；5 小时窗口预算默认 150 次 |
 
-字段的主 / 备来源与容差登记在 `config/field_sources.yaml`；取值顺序为
-已核对值 > 主来源 > 备用来源，iFinD 核对发现冲突时以 iFinD 为准。
+字段的主 / 备来源与容差登记在配置文档 `field_sources`（`/app/data-sources` 标签
+「字段来源优先级」管理，保存后下个任务生效；`config/field_sources.yaml` 是首次导入基线）；
+取值顺序为已核对值 > 主来源 > 备用来源，iFinD 核对发现冲突时以 iFinD 为准。
 
 ## 2. 首次部署
 
@@ -27,6 +29,10 @@
    - `API_KEY`（生产环境 ≥ 32 字符）；
    - `SETTINGS_ENCRYPTION_KEY`（加密数据库中的 API key；与数据库备份分开保管）。
 2. 迁移：`ia migrate up`（必须在启动 api 之前，否则日志出现 `settings.import_failed`）。
+   含配置文档化的迁移 `057`（`config_document` / `config_document_change`）与 `058`
+   （`rule_template.created_by` / `note`）。这两个迁移之前先启动新代码也不会坏：配置文档
+   读取回落基线文件、日志给 `ia migrate up` 提示（`config_docs.startup_failed`），但部署顺序
+   保持先迁移（`tools/deploy.sh` 已自带）。
    启动后在 `/app/settings` 填写并「测试连接」：
    - iFinD 网关地址与 key（与 ifind-proxy 的 `PROXY_API_KEY` 一致）；
    - LLM 地址 / 模型 / key（规则起草与解释，默认模型 deepseek-v4-flash）。
@@ -41,7 +47,8 @@
 
    本机实测：baostock 部分约 3 小时 15 分（439 只，含 139 只历史调出股）；分红约 15 分钟；
    东财按期汇总约 4 分钟；东财单股现金流量表约 2.5 小时。
-4. 同步规则模板：`ia rules sync`（筛选任务每次运行前也会自动同步）。
+4. 同步规则模板（首次导入，空库种子一次）：`ia rules sync`。之后规则库以数据库为准，
+   修改走 `/app/templates`（见第 6 节）；筛选任务不再自动从文件同步。
 5. 启动四个常驻进程：`ia api serve`、`ia worker start --kinds agent_turn,agent_research,agent_review,agent_discovery`（对话与 Agent 维护）、`ia worker start` 的采集进程（除 `agent_*` 外的全部 kind，见 `docker-compose.yml` 的 `worker`）、`ia scheduler start`。只起一个不带 `--kinds` 的 worker 仍然合法，它会同时认领两边并独自做维护和通知投递。
 
 ### 2.1 Docker 一键部署 / 回滚
@@ -128,6 +135,9 @@ tools/deploy-remote.sh rollback
     新鲜度区块同时显示 baostock 日线与腾讯收盘快照的最新日期；`market_stale` 仍只看 baostock。
   - 「上游调用」：每个免费数据源（baostock / AkShare）最近 24 小时的调用 / 失败 / 熔断拒绝次数与熔断状态，
     来自 `provider_call` 台账（见 4.1）。
+  - 「行业目录」卡片：当前生效的申万 2021 目录（`DATA_DIR/shenwan/` 副本优先于仓库基线）、
+    版本 / 代码量 / 最近一次刷新结果与目标目录可写性；「刷新行业目录」入队一次再生成任务
+    （幂等键每天至多一次，见第 6 节）。
   - 警告级别 warn / error 同时显示在首页。
 
 ### 4.1 上游熔断与调用台账
@@ -161,6 +171,9 @@ tools/deploy-remote.sh rollback
 | 规则草稿一直「起草中」 | 设置页未配置 LLM key 或 worker 未运行 | 在设置页填写并测试连接（worker 下个任务生效）；候选页可点「重新起草」 |
 | 回补中断 | 进程退出或网络错误 | 用**相同的 `--as-of`** 重跑同一命令，已完成部分自动跳过 |
 | 运行卡在 running | 进程被杀 | worker 启动与运行中会定期回收超过心跳超时的任务 |
+| 启动日志 `config_docs.baseline_drift` warning | 首次导入后又改过基线 YAML（或数据库文档已在页面改过，与文件自然不一致） | 无需处理，数据库是唯一真相、文件被忽略；确实想要文件内容时到对应页面（`/app/data-sources` 或 `/app/industry-groups`）显式「从基线导入」（展示 diff、需填写说明） |
+| 日志 `config_docs.startup_failed`（提示 `ia migrate up`） | 配置文档表还没迁（057 之前先起了新代码） | 跑 `ia migrate up` 后重启进程即可；期间读取回落基线文件，行为与旧版一致 |
+| 「刷新行业目录」后的通知列出未映射代码 | 新申万目录与行业分组映射有缺口（一 / 二级调整） | 到 `/app/industry-groups` 补映射并用「覆盖率检查」验证；已存研究 / 筛选快照的行业分组不变，只有之后的计算用新映射 |
 
 ## 6. 年度 / 不定期维护
 
@@ -186,11 +199,32 @@ tools/deploy-remote.sh rollback
   只打印差异（有漂移返回 1，可作巡检）。到期前 60 天健康页与调度日志会提醒，
   未知年份的交易日门控任务会停止（fail-closed）。
   备份范围含 `DATA_DIR/calendars/`（见 `backup-and-recovery.md`）。
-- **申万代码表**：`python tools/refresh_shenwan_directory.py` 查看差异，确认后加 `--write` 并提交。
+- **配置文档（field_sources / source_policy / industry_groups）**：以数据库为准，
+  `/app/data-sources`（标签「字段来源优先级」/「来源信任策略」）与 `/app/industry-groups` 管理；
+  `config/field_sources.yaml`、`config/research_material/source_policy.yaml`、
+  `config/industry_groups.yaml` 都是首次导入基线。改文件 + 重启不再生效：再改基线文件只在
+  下次启动打 `config_docs.baseline_drift` warning，数据库不被覆盖；恢复手段是页面上的
+  「从基线导入」（展示 diff、必填说明，作为一条带 actor 的变更留痕）。保存即时校验
+  （各文件自己的解析器），写操作沿用设置的 revision 传播（API 读取即时、worker 下个任务、
+  scheduler 60 秒内），并递增设置 revision——部署后无需重启任何进程。
+  行业分组保存即生效且自动推进 `version`；被模板 `applicable_groups` 引用的分组不能移除
+  （422 提示先起草引用新分组的模板版本）；已存研究 / 筛选快照保留当时的分组（PIT 不变式）。
+- **申万代码表**：日常刷新入口是 `/app/health`「行业目录」卡片的「刷新行业目录」按钮——
+  任务 `shenwan_directory_refresh` 从申万官网再生成 2021 代码表，只写运行时副本
+  `DATA_DIR/shenwan/shenwan_2021.yaml`（原子替换，不动仓库基线；读取方按文件 mtime 感知，
+  无需重启；幂等键每天至多入队一次）。刷新后按当前行业分组映射检查覆盖率：有未映射代码发
+  `action_required` 并列出代码（处理见第 5 节），干净则 `info` 报新版本与代码量。
+  仓库基线 `config/shenwan_2021.yaml` 的更新仍走 CLI：`python tools/refresh_shenwan_directory.py`
+  查看差异，确认后加 `--write` 并人工审阅提交。
 - **申万官网证书**：`src/investment_agent/providers/certs/swsresearch-intermediate.pem` 文件头写有刷新步骤；
   证书校验失败时申万同步会终止并提示更新证书。
-- **规则模板**：修改 `config/rule_templates/*.yaml` 后运行 `ia rules validate <file>`，下次筛选自动同步为新版本；
-  已生效的个股规则不会被自动改写。模板阈值变更须先回测（P3）。
+- **规则模板**：在 `/app/templates` 详情页「编辑新版本」起草（结构化字段 + screen 段 YAML，
+  可先「校验」dry-run 出逐项问题），保存即写入下一不可变版本并立即生效；「激活」把历史版本
+  设为当前（append-only 回滚）；每个版本带 actor 与必填变更说明（迁移 `058`）。
+  `config/rule_templates/*.yaml` 是首次导入基线（空库上 `ia rules sync` 种子一次，之后文件
+  永不覆盖库内版本）：文件与当前版本不一致时列表标「基线漂移」，需要文件内容时显式
+  「从基线导入」。脚本化注意：`ia screen run` 的 `--sync` 默认已改为关闭，依赖旧行为的
+  脚本需显式加 `--sync`。已生效的个股规则不会被自动改写。模板阈值变更须先回测（P3）。
 - **测试 fixture 重录**：`tools/capture_baostock_fixtures.py`、`tools/capture_golden_fixtures.py`。
 
 ## 7. MCP 只读接入（D5）

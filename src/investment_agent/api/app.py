@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from investment_agent.api.routes import health
 from investment_agent.api.throttle import AuthFailureThrottle
 from investment_agent.config import Settings
+from investment_agent.config_docs import loader as config_docs
 from investment_agent.gateway.manager import GatewayManager
 from investment_agent.logging import configure_logging
 from investment_agent.settings.loader import ensure_imported
@@ -50,6 +51,12 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
                 await ensure_imported(session, settings)
         except Exception:
             log.exception("settings.import_failed", hint="run `ia migrate up`")
+        # Config documents (field sources, later kinds): same one-time baseline
+        # import, then the cache behind the sync config readers is primed.
+        # ``config_docs.ensure_imported`` logs its own failures, so a missing
+        # migration keeps the baseline-file fallback serving reads.
+        async with session_scope() as session:
+            await config_docs.ensure_imported(session)
         # Mobile gateway link: follows the gateway_* runtime settings, idle when disabled.
         gateway = GatewayManager(_app, base=settings)
         _app.state.gateway = gateway
@@ -227,12 +234,16 @@ def _register_protected_routes(app: FastAPI) -> None:
         portfolio,
         research,
         research_materials,
+        review_panel,
         rule_templates,
         stocks,
         supplemental_rules,
         supplemental_updates,
         verification,
         watchlist,
+    )
+    from investment_agent.api.routes import (
+        config_docs as config_docs_routes,
     )
     from investment_agent.api.routes import (
         settings as settings_routes,
@@ -260,10 +271,12 @@ def _register_protected_routes(app: FastAPI) -> None:
     app.include_router(stocks.router)
     app.include_router(industry_peers.router)
     app.include_router(industries.router)
+    app.include_router(review_panel.router)
     app.include_router(watchlist.router)
     app.include_router(admin.router)
     app.include_router(verification.router)
     app.include_router(settings_routes.router)
+    app.include_router(config_docs_routes.router)
     app.include_router(rule_templates.router)
     for router in candidates.routers:
         app.include_router(router)

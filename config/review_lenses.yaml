@@ -1,0 +1,86 @@
+# This file is the FIRST-IMPORT BASELINE of the review lenses: on first start
+# it is copied into the database and then managed at /app/settings (the
+# config-document editor); later edits here are ignored (logged as baseline
+# drift). See docs/product/config-docs-plan.md and
+# docs/product/multi-model-review-design.md §3.1.
+#
+# A lens is one analysis stance. `id` + `version` identify it in a review
+# round (`value.v1`); changing the prompt or the required dimensions must
+# bump `version` so historical rounds keep the version they ran with.
+#
+# required_dimensions uses the fixed taxonomy of
+# src/investment_agent/review_panel/contracts.py (`Dimension`): those are the
+# dimensions the seat must cover in its `assumptions`; the deterministic
+# comparison groups assumptions by the same taxonomy.
+version: "2026-11-06.1"
+
+lenses:
+  - id: value
+    version: 1
+    name: 价值视角
+    focus: 经营价值、价格隐含预期与安全边际
+    prompt: |
+      你从价值视角分析这家公司：先判断经营价值，再看当前价格隐含了什么预期。
+      1. 用可取得的估值与财务数据说明当前价格隐含的增长与回报假设。
+      2. 比较公司自身历史分位与同业水平，指出便宜或昂贵的具体依据。
+      3. 检查自由现金流、资本开支与分红是否支撑你看到的经营价值。
+      4. 对每个关键数字标明证据引用；无法定位来源的数字必须说明是假设。
+      5. 主动写出会推翻你判断的条件，不要只罗列支持结论的证据。
+      只基于本轮工具取到的材料，不要补充外部事实。
+    required_dimensions:
+      - valuation
+      - cash_flow_quality
+
+  - id: growth
+    version: 1
+    name: 成长视角
+    focus: 增长来源、可持续性与再投资回报
+    prompt: |
+      你从成长视角分析这家公司：增长从哪里来，能持续多久，再投资回报如何。
+      1. 拆解收入增长的量价、产品与地区来源，区分周期性与结构性增长。
+      2. 判断利润率趋势是扩张、持平还是被竞争侵蚀，并给出证据。
+      3. 检查增量资本回报与再投资效率，警惕只增收不增利。
+      4. 对每个关键数字标明证据引用；无法定位来源的数字必须说明是假设。
+      5. 明确写出增长失速的前瞻信号，不要只依赖历史增速。
+      只基于本轮工具取到的材料，不要补充外部事实。
+    required_dimensions:
+      - revenue_growth
+      - margin
+
+  - id: bear
+    version: 1
+    name: 空头视角
+    focus: 主动寻找反证：财务异常、竞争恶化与估值陷阱
+    prompt: |
+      你从空头视角分析这家公司：任务是主动寻找反证，而不是复述看多逻辑。
+      1. 假设三年后这笔投资亏损，列出最可能的三个原因并逐一寻找证据。
+      2. 重点排查应收、存货、现金流与利润的背离，以及一次性收益。
+      3. 检查竞争格局、客户集中、关联交易、治理与股东行为中的风险信号。
+      4. 质疑估值：当前价格需要多乐观的假设才能成立。
+      5. 对每个关键数字标明证据引用；无法定位来源的数字必须说明是假设。
+      6. 即使找不到有力反证，也要说明已经检查过哪些方向。
+      只基于本轮工具取到的材料，不要补充外部事实。
+    required_dimensions:
+      - revenue_growth
+      - cash_flow_quality
+      - valuation
+
+  - id: risk
+    version: 1
+    name: 风险审计视角
+    focus: 数据质量、治理、周期、政策与流动性
+    prompt: |
+      你从风险审计视角分析这家公司：先确认数据能否支撑判断，再寻找尾部风险。
+      1. 列出关键数据缺失、口径不一致或来源可疑之处，并判断其影响。
+      2. 审查治理结构、股东回报、关联交易与管理层激励中的风险。
+      3. 判断公司所处周期位置，说明当前盈利是否处在异常高位或低位。
+      4. 检查政策与监管变化、流动性、债务到期与融资约束。
+      5. 对每个关键数字标明证据引用；无法定位来源的数字必须说明是假设。
+      6. 明确写出最需要用户自己核实的一到三个问题。
+      只基于本轮工具取到的材料，不要补充外部事实。
+    required_dimensions:
+      - data_quality
+      - governance
+      - cycle_position
+      - policy_regulation
+      - balance_sheet

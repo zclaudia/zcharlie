@@ -23,6 +23,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from investment_agent.config import Settings
+from investment_agent.config_docs.loader import document_fingerprint
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.ifind_view import ifind_research_view
 from investment_agent.factors.metrics import MIN_ONE_YEAR_SESSIONS, ONE_YEAR_WINDOW_DAYS
@@ -1325,6 +1326,14 @@ async def run_ifind_research_chain(
             await run_repository.mark_running(run.id, stage="fetching")
         else:
             await run_repository.set_stage(run.id, "fetching")
+        # Reproducibility / audit (config-docs-plan §4.8): persist which
+        # field_sources document this run resolves fields against, before any
+        # factor reads it. Fenced by the claim's lease like every update above
+        # and survives a later failure (recorded at run start, not completion).
+        await run_repository.record_metadata(
+            run.id,
+            {"field_sources": document_fingerprint("field_sources")},
+        )
         run_id = run.id
         attempt_count = run.attempt_count
 

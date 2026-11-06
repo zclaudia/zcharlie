@@ -1,0 +1,88 @@
+/* pages/industry-groups.css — 行业分组（UI v2，config-docs-plan §4.6 WP3）
+   Loaded after app.css through {% block page_css %}. Shared tokens/components live in
+   app.css. 分组定义 / 映射表 / 申万三段编辑区 + 覆盖率检查；保存条复用 .action-bar。 */
+
+.ig-meta { font-size: 12.5px; }
+.ig-drift-link { margin-left: var(--sp-2); vertical-align: middle; }
+.ig-coverage-card { margin-top: var(--sp-3); }
+
+/* ---- 编辑区 ------------------------------------------------------------------ */
+
+.ig-form-region { padding: 0 16px 12px; }
+.ig-editor > * + * { margin-top: var(--sp-2); }
+.ig-section-title { margin: var(--sp-4) 0 var(--sp-2); }
+.ig-section-note { margin: 0 0 var(--sp-2); font-size: 12.5px; max-width: 46rem; }
+.ig-editor .table-wrap { overflow-x: auto; }
+.ig-editor table { width: 100%; min-width: 34rem; }
+.ig-editor th { padding: 8px 10px; font-size: 12px; color: var(--ink-3); text-align: left; white-space: nowrap; }
+.ig-editor td { padding: 10px; border-top: 1px solid var(--line); vertical-align: top; }
+.ig-editor tr.dirty > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.ig-editor tr.dirty > td { background: var(--surface-2); }
+@media (max-width: 40rem) {
+  .ig-editor table { min-width: 0; }
+}
+
+.ig-group-id { font-weight: 600; font-size: 13px; }
+.ig-desc { width: 100%; max-width: 34rem; box-sizing: border-box; }
+.ig-ref-cell, .ig-level-cell { font-size: 12.5px; white-space: nowrap; }
+.ig-check-cell { width: 2.5rem; }
+.ig-code-cell { font-weight: 600; font-size: 13px; }
+.ig-edit-cell { min-width: 9rem; }
+.ig-edit-cell select { max-width: 100%; }
+.ig-action-cell { text-align: right; white-space: nowrap; }
+
+/* ---- 工具条 / 批量 / 添加行 ---------------------------------------------------- */
+
+.ig-toolbar, .ig-bulk-bar, .ig-add-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); }
+.ig-search { flex: 0 1 11rem; min-width: 0; }
+.ig-add-row input[type="text"] { flex: 0 1 11rem; min-width: 0; }
+.ig-add-row .ig-add-desc { flex: 1 1 12rem; }
+.ig-bulk-bar .faint { font-size: 12.5px; }
+.ig-editor .issue-list { margin: var(--sp-2) 0 0; }
+
+/* ---- 覆盖率检查 ---------------------------------------------------------------- */
+
+.ig-coverage-region { padding: 0 16px 12px; }
+.ig-coverage-box > .notice { margin: 0 0 var(--sp-2); }
+.ig-coverage-sub { margin: var(--sp-3) 0 var(--sp-2); font-size: 13px; }
+.ig-gap-list { display: grid; gap: 6px; }
+.ig-gap { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: 6px 10px; border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: var(--r-md); font-size: 12.5px; }
+.ig-gap-level1 { border-left-color: var(--line-2); }
+.ig-gap-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; flex: 1 1 14rem; }
+.ig-gap-head .faint { overflow-wrap: anywhere; }
+
+/* ---- 保存条（共享 .action-bar） ---------------------------------------------- */
+
+.ig-savebar #ig-save-result:empty { display: none; }
+.ig-savebar #ig-save-result { margin-top: var(--sp-2); }
+.ig-savebar #ig-save-result .notice { margin: 0; }
+.ig-savebar-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.ig-savebar-row input { flex: 1 1 12rem; min-width: 0; }
+@media (max-width: 55.99rem) {
+  .ig-savebar-row input { flex: 1 1 100%; order: -1; }
+  .ig-savebar-row .settings-dirty-count { flex: 1 1 auto; }
+}
+
+/* ---- 差异视图（漂移横幅 / 基线导入 / 历史摘要共用） --------------------------- */
+
+.ig-diff-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ig-diff-item { padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--r-md); font-size: 12.5px; overflow-wrap: anywhere; }
+.ig-diff-item.ig-diff-group-removed, .ig-diff-item.ig-diff-code-removed,
+.ig-diff-item.ig-diff-level1-removed, .ig-diff-item.ig-diff-override-removed { border-left: 3px solid var(--warn); }
+.ig-diff-item.ig-diff-group-added, .ig-diff-item.ig-diff-code-added,
+.ig-diff-item.ig-diff-level1-added, .ig-diff-item.ig-diff-override-added { border-left: 3px solid var(--accent); }
+.ig-diff-item.ig-diff-doc, .ig-diff-item.ig-diff-group-changed, .ig-diff-item.ig-diff-code-changed,
+.ig-diff-item.ig-diff-level1-changed, .ig-diff-item.ig-diff-override-changed,
+.ig-diff-item.ig-diff-legacy-rules { border-left: 3px solid var(--line-2); }
+
+/* ---- 历史抽屉 ---------------------------------------------------------------- */
+
+.ig-history-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.ig-history-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: 13px; }
+.ig-history-note { color: var(--ink-2); flex: 1 1 12rem; }
+.ig-history-body { margin-top: 6px; }
+.ig-history-body > .faint { margin: 0; font-size: 12.5px; }
+.ig-history-details > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); }
+.ig-history-details .ig-diff-list { margin-top: 6px; }
+.ig-baseline-foot { align-items: center; }
+.ig-baseline-foot input { flex: 1 1 auto; }

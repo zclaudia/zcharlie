@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/industry-groups.css') }}">{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>行业分组</h1>
+  <p class="muted">行业 → 分组的映射（CSRC 大类码 + 申万 2021）。保存后立即生效；已入库的快照与规则结果保持当时的分组。</p>
+</header>
+<div id="ig-drift" class="notice notice-warn" hidden></div>
+<section class="card card--flush ig-doc-card">
+  <div class="card-head card-head--rule">
+    <h2>行业分组映射</h2>
+    <span id="ig-meta" class="faint ig-meta"></span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm" id="ig-history-open" aria-controls="ig-history-drawer">历史</button>
+    <button type="button" class="btn btn-sm btn-danger-ghost" id="ig-baseline-open" aria-controls="ig-baseline-drawer">从基线导入</button>
+  </div>
+  <div id="ig-form" class="data-region ig-form-region"
+       data-endpoint="/config-docs/industry_groups"
+       aria-live="polite">
+    <p class="notice notice-loading" data-state="loading">正在加载…</p>
+  </div>
+</section>
+<section class="card card--flush ig-coverage-card">
+  <div class="card-head card-head--rule">
+    <h2>覆盖率检查</h2>
+    <span class="faint">沪深300 成分全覆盖 · 申万一级有默认 · 覆写引用目录内代码</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm" id="ig-coverage-run">检查当前文档</button>
+  </div>
+  <div id="ig-coverage" class="ig-coverage-region" aria-live="polite"></div>
+</section>
+<section id="ig-savebar" class="action-bar ig-savebar" aria-live="polite" hidden>
+  <div class="ig-savebar-row">
+    <span id="ig-dirty-count" class="settings-dirty-count">没有未保存的修改</span>
+    <input id="ig-note" maxlength="500" placeholder="变更说明（必填）" aria-label="变更说明（必填）" required>
+    <button type="button" id="ig-discard" class="btn" disabled>放弃</button>
+    <button type="button" id="ig-save" class="btn btn-primary primary" disabled>保存</button>
+  </div>
+  <div id="ig-save-result" class="issues"></div>
+</section>
+<aside class="drawer" id="ig-history-drawer" role="dialog" aria-modal="true" aria-labelledby="ig-history-title">
+  <div class="drawer-head">
+    <h2 id="ig-history-title">变更历史</h2>
+    <span class="sub">最新在前 · 全文档留痕</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm btn-ghost" data-overlay-close>关闭</button>
+  </div>
+  <div class="drawer-body">
+    <div id="ig-history" class="data-region"
+         data-endpoint="/config-docs/industry_groups/history?limit=50"
+         data-empty-text="还没有变更记录。"
+         aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </div>
+</aside>
+<aside class="drawer" id="ig-baseline-drawer" role="dialog" aria-modal="true" aria-labelledby="ig-baseline-title">
+  <div class="drawer-head">
+    <h2 id="ig-baseline-title">基线对比与导入</h2>
+    <span class="sub">基线文件与当前文档的差异</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm btn-ghost" data-overlay-close>关闭</button>
+  </div>
+  <div class="drawer-body">
+    <div id="ig-baseline-diff" class="data-region" aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </div>
+  <div class="drawer-foot ig-baseline-foot">
+    <input id="ig-baseline-note" maxlength="500" placeholder="导入说明（必填）" aria-label="导入说明（必填）">
+    <button type="button" class="btn btn-danger-ghost" id="ig-baseline-import">用基线覆盖当前文档</button>
+  </div>
+</aside>
+{% endblock %}

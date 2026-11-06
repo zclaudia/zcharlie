@@ -10,6 +10,12 @@ import { localTime } from "./health.js";
 import { registerRefreshGuard } from "./refresh_state.js";
 import { catalogControl, catalogPayload } from "./settings_llm_catalog.js";
 import { canonicalSlots, parseSlots, slotControl, slotStatus } from "./settings_model_slots.js";
+import {
+  canonicalReviewPanels,
+  parseReviewPanels,
+  reviewPanelSummary,
+  reviewPanelsControl,
+} from "./settings_review_panels.js";
 
 export const SETTINGS_REGIONS = new Set(["settings-form", "settings-history", "settings-bootstrap"]);
 
@@ -231,6 +237,17 @@ function onEdit(key) {
     if (canonicalSlots(raw) === canonicalSlots(item.value || "")) state.edits.delete(key);
     else state.edits.set(key, raw);
     showIssues(key, []);
+  } else if (key === "review_panels") {
+    const errors = node.validate ? node.validate() : [];
+    if (errors.length) {
+      state.edits.set(key, INVALID);
+      showIssues(key, errors);
+    } else {
+      const raw = node.read();
+      if (canonicalReviewPanels(raw) === canonicalReviewPanels(item.value || "")) state.edits.delete(key);
+      else state.edits.set(key, raw);
+      showIssues(key, []);
+    }
   } else if (item.secret) {
     const raw = node.read();
     if (state.cleared.has(key)) state.edits.set(key, "");
@@ -372,6 +389,10 @@ function controlFor(item, encryptionReady) {
     }
     return catalogControl(value, encryptionReady && !item.decrypt_error);
   }
+  if (item.key === "review_panels") {
+    const value = state.raw.has(item.key) ? state.raw.get(item.key) : item.value || "";
+    return reviewPanelsControl(value, state.data.llm_catalog || {}, state.data.review_lenses || []);
+  }
   if (item.secret) return secretControl(item, encryptionReady);
   if (typeof item.default === "boolean") {
     const control = el("input", {id: inputId(item.key), type: "checkbox"});
@@ -429,6 +450,7 @@ function settingRow(item, encryptionReady) {
     issues,
     control: control.control,
     read: control.read,
+    validate: control.validate,
     setDirty(dirty) {
       root.classList.toggle("dirty", dirty);
       if (isCron) {
@@ -596,6 +618,7 @@ const CRON_SUMMARIES = Object.freeze({
   "0 7 * * *": "每天 07:00",
   "*/30 * * * *": "每 30 分钟",
   "0 21 * * 0": "周日 21:00",
+  "0 6 * * 6": "周六 06:00",
 });
 const SNAPSHOT_TZ = "schedule.snapshot.timezone";
 const VERIFY_TZ = "schedule.verification.timezone";
@@ -704,6 +727,7 @@ export const SETTINGS_SECTIONS = Object.freeze([
       job("watchlist", "观察池刷新", "留空即停用。", ["schedule.watchlist.cron", "schedule.watchlist.timezone"]),
       job("portfolio", "持仓估值", "留空即停用。", ["schedule.portfolio.cron", "schedule.portfolio.timezone"]),
       job("zone", "区间检测", "留空即停用。", ["schedule.zone_detection.cron", "schedule.zone_detection.timezone"]),
+      job("review-batch", "多视角评审批量", "每周一次；功能开关在「多视角评审」里。", ["schedule.review_batch.cron", "schedule.review_batch.timezone"]),
       job("expiry", "候选过期扫描", "每次筛选开始时也会扫一次。", ["schedule.candidates.expiry_sweep_cron", "schedule.candidates.timezone"]),
       job("universe", "成分股同步", "按 cron 触发。", ["schedule.snapshot.universe_sync_cron", SNAPSHOT_TZ]),
       job("industry", "行业同步", "仅在每月首个交易日执行。", ["schedule.snapshot.industry_sync_cron", SNAPSHOT_TZ]),
@@ -835,14 +859,18 @@ export function topicSummary(topic, read) {
   }
   switch (topic.id) {
     case "switches": {
-      const toggles = ["investor_agent_enabled", "investor_agent_background_enabled", "disclosure_originals_enabled", "portfolio_ledger_enabled", "account_fit_enabled", "candidate_ranking_enabled", "supplemental_rules_enabled", "supplemental_updates_enabled", "supplemental_disclosure_polling_enabled"];
+      const toggles = topicKeys(topic).filter((key) => typeof value(key) === "boolean");
       const on = toggles.filter((key) => value(key) === true).length;
       return on === 0 ? "全部关闭" : `${on} 项开启`;
     }
+    case "panels":
+      return reviewPanelSummary(value("review_panels"), currentCatalog(read));
     case "catalog":
       return `${value("llm_catalog")?.providers?.length || 0} 个 Provider`;
     case "quota":
-      return `每批 ${value("investor_agent_max_leads_per_batch")} 条线索`;
+      return topicKeys(topic).includes("review_panel_daily_rounds")
+        ? `每日 ${value("review_panel_daily_rounds")} 轮`
+        : `每批 ${value("investor_agent_max_leads_per_batch")} 条线索`;
     case "advanced":
       return `并发 ${value("agent_queue_max_running")}`;
     case "notify":
@@ -886,6 +914,12 @@ export function sectionHome(section, read) {
       return {
         value: value("investor_agent_enabled") === true ? "已开启" : "已关闭",
         detail: view.label,
+      };
+    }
+    if (section.consumerId === "review_panel") {
+      return {
+        value: reviewPanelSummary(value("review_panels"), catalog),
+        detail: value("review_panel_enabled") === true ? "已开启" : "已关闭",
       };
     }
     return {value: view.label, detail: section.blurb || ""};
@@ -958,7 +992,9 @@ function indexItems(data) {
 
 function readNow(key) {
   if (key === "llm_catalog") return state.raw.has(key) ? JSON.parse(state.raw.get(key)) : state.data?.llm_catalog;
-  if (key === "model_slots") return state.raw.has(key) ? state.raw.get(key) : currentValue(key);
+  if (key === "model_slots" || key === "review_panels") {
+    return state.raw.has(key) ? state.raw.get(key) : currentValue(key);
+  }
   return currentValue(key);
 }
 

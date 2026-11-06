@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 import httpx
@@ -316,6 +317,48 @@ def test_ifind_test_without_key(client) -> None:
         "/settings/test/ifind", json={"url": "http://proxy.example"}, headers=KEY
     ).json()
     assert body["ok"] is False and "API Key" in body["message"]
+
+
+def test_review_panels_round_trip_and_lens_options(client) -> None:
+    from investment_agent.review_panel.panels import validate_review_panels
+
+    body = client.get("/settings", headers=KEY).json()
+    lenses = {lens["id"] for lens in body["review_lenses"]}
+    assert {"value", "growth", "bear", "risk"} <= lenses
+    assert all(lens["ref"].endswith(f".v{lens['version']}") for lens in body["review_lenses"])
+
+    document = json.dumps(
+        {
+            "panels": {
+                "default": {
+                    "seats": [
+                        {"model_ref": "primary/fast", "seat_id": "bear", "lens_id": "bear"},
+                        {"seat_id": "value", "lens_id": "value", "model_ref": "primary/reason"},
+                    ],
+                    "name": "默认评审组",
+                }
+            },
+            "default_panel": "default",
+        },
+        ensure_ascii=False,
+    )
+    response = client.patch(
+        "/settings", json={"values": {"review_panels": document}}, headers=KEY
+    )
+    assert response.status_code == 200, response.text
+    item = _items(response.json()["settings"])["review_panels"]
+    assert item["value"] == validate_review_panels(document)
+    assert json.loads(item["value"])["panels"]["default"]["seats"][0]["seat_id"] == "bear"
+
+    invalid = json.dumps(
+        {"default_panel": "missing", "panels": {"default": {"name": "n", "seats": []}}}
+    )
+    rejected = client.patch(
+        "/settings", json={"values": {"review_panels": invalid}}, headers=KEY
+    )
+    assert rejected.status_code == 422
+    details = rejected.json()["detail"]["issues"]
+    assert [issue["key"] for issue in details] == ["review_panels"]
 
 
 def test_agent_settings_api_isolated_encrypted_and_validated(client, encryption_key):

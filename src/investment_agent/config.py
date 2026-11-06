@@ -115,6 +115,20 @@ class Settings(BaseSettings):
     # Consumer -> slot -> ``provider_id/model_id``. The catalog does not store this.
     model_slots: str = ""
 
+    # Multi-perspective review (defaults mirror ``settings.registry``).
+    review_panel_enabled: bool = False
+    review_panel_auto_enabled: bool = False
+    review_panel_schedule_enabled: bool = False
+    review_panel_seat_requests: int = Field(default=8, gt=0, le=100)
+    review_panel_seat_tool_calls: int = Field(default=12, gt=0, le=200)
+    review_panel_seat_tokens: int = Field(default=60000, gt=0, le=2_000_000)
+    review_panel_daily_rounds: int = Field(default=20, ge=0, le=200)
+    review_panel_daily_tokens: int = Field(default=1_500_000, gt=0, le=100_000_000)
+    review_panel_batch_max_rounds: int = Field(default=10, ge=0, le=50)
+    review_panel_auto_cooldown_trading_days: int = Field(default=3, ge=0, le=30)
+    review_panel_max_running_seats: int = Field(default=2, ge=1, le=24)
+    review_panels: str = ""
+
     @field_validator("llm_catalog")
     @classmethod
     def valid_llm_catalog(cls, value: str) -> str:
@@ -264,6 +278,11 @@ class SchedulerConfig(BaseModel):
     # current when the holding zones are compared.
     zone_detection_cron: str | None = None
     zone_detection_timezone: str = "Asia/Shanghai"
+    # Weekly multi-perspective review batch (design §8): Saturday early
+    # morning Asia/Shanghai. The runtime flags inside the job decide whether a
+    # fire creates rounds; ``None`` (the code default) registers no job.
+    review_batch_cron: str | None = None
+    review_batch_timezone: str = "Asia/Shanghai"
     a_share_calendar_path: str = "config/calendars/a_share.yaml"
 
 

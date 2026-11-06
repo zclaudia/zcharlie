@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/data-sources.css') }}">{% endblock %}
+{% block content %}
+<header class="page-head">
+  <h1>数据源</h1>
+  <p class="muted">字段取值的来源顺序与容差；港美来源的许可与技术验收审批。保存后下个任务生效；口径与校准证据只读。</p>
+</header>
+{#- 标签栏：A 字段来源优先级（WP1）；B 来源信任策略（WP2，config-docs-plan §4.6）。-#}
+<div class="seg ds-tabs" id="ds-tabs" role="tablist" aria-label="数据源配置">
+  <button type="button" role="tab" id="ds-tab-fields" class="on" aria-selected="true" aria-controls="ds-panel-fields">字段来源优先级</button>
+  <button type="button" role="tab" id="ds-tab-policy" aria-selected="false" aria-controls="ds-panel-policy">来源信任策略</button>
+</div>
+<section id="ds-panel-fields" class="ds-panel" role="tabpanel" aria-labelledby="ds-tab-fields">
+  <div id="ds-drift" class="notice notice-warn" hidden></div>
+  <section class="card card--flush ds-doc-card">
+    <div class="card-head card-head--rule">
+      <h2>字段来源优先级</h2>
+      <span id="ds-meta" class="faint ds-meta"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sm" id="ds-history-open" aria-controls="ds-history-drawer">历史</button>
+      <button type="button" class="btn btn-sm btn-danger-ghost" id="ds-baseline-open" aria-controls="ds-baseline-drawer">从基线导入</button>
+    </div>
+    <div id="ds-form" class="data-region ds-fields-region"
+         data-endpoint="/config-docs/field_sources"
+         aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+    <details id="ds-advanced" class="ds-advanced" hidden>
+      <summary>高级编辑（全文档 YAML）</summary>
+      <div class="ds-advanced-body">
+        <p class="faint">编辑的是整个文档（含口径、校准等证据字段）。保存前会做完整解析校验；手写的注释与字段顺序不会保留。</p>
+        <label class="visually-hidden" for="ds-yaml">全文档 YAML</label>
+        <textarea id="ds-yaml" class="mono" rows="20" spellcheck="false" autocomplete="off" aria-describedby="ds-yaml-issues"></textarea>
+        <ul id="ds-yaml-issues" class="issue-list setting-issues issues"></ul>
+      </div>
+    </details>
+  </section>
+  <section id="ds-savebar" class="action-bar ds-savebar" aria-live="polite" hidden>
+    <div class="ds-savebar-row">
+      <span id="ds-dirty-count" class="settings-dirty-count">没有未保存的修改</span>
+      <input id="ds-note" maxlength="500" placeholder="变更说明（必填）" aria-label="变更说明（必填）" required>
+      <button type="button" id="ds-discard" class="btn" disabled>放弃</button>
+      <button type="button" id="ds-save" class="btn btn-primary primary" disabled>保存</button>
+    </div>
+    <div id="ds-save-result" class="issues"></div>
+  </section>
+</section>
+<section id="ds-panel-policy" class="ds-panel" role="tabpanel" aria-labelledby="ds-tab-policy" hidden>
+  <div id="dsp-drift" class="notice notice-warn" hidden></div>
+  <section class="card card--flush ds-doc-card">
+    <div class="card-head card-head--rule">
+      <h2>来源信任策略</h2>
+      <span id="dsp-meta" class="faint ds-meta"></span>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-sm" id="dsp-history-open" aria-controls="ds-history-drawer">历史</button>
+      <button type="button" class="btn btn-sm btn-danger-ghost" id="dsp-baseline-open" aria-controls="ds-baseline-drawer">从基线导入</button>
+    </div>
+    <div id="dsp-form" class="data-region dsp-sources-region"
+         data-endpoint="/config-docs/source_policy"
+         aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </section>
+  <section id="dsp-savebar" class="action-bar ds-savebar" aria-live="polite" hidden>
+    <div class="ds-savebar-row">
+      <span id="dsp-dirty-count" class="settings-dirty-count">没有未保存的修改</span>
+      <input id="dsp-note" maxlength="500" placeholder="变更说明（必填）" aria-label="变更说明（必填）" required>
+      <button type="button" id="dsp-discard" class="btn" disabled>放弃</button>
+      <button type="button" id="dsp-save" class="btn btn-primary primary" disabled>保存</button>
+    </div>
+    <div id="dsp-save-result" class="issues"></div>
+  </section>
+</section>
+<aside class="drawer" id="ds-history-drawer" role="dialog" aria-modal="true" aria-labelledby="ds-history-title">
+  <div class="drawer-head">
+    <h2 id="ds-history-title">变更历史</h2>
+    <span class="sub">最新在前 · 全文档留痕</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm btn-ghost" data-overlay-close>关闭</button>
+  </div>
+  <div class="drawer-body">
+    <div id="ds-history" class="data-region"
+         data-endpoint="/config-docs/field_sources/history?limit=50"
+         data-empty-text="还没有变更记录。"
+         aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </div>
+</aside>
+<aside class="drawer" id="ds-baseline-drawer" role="dialog" aria-modal="true" aria-labelledby="ds-baseline-title">
+  <div class="drawer-head">
+    <h2 id="ds-baseline-title">基线对比与导入</h2>
+    <span class="sub">基线文件与当前文档的差异</span>
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-sm btn-ghost" data-overlay-close>关闭</button>
+  </div>
+  <div class="drawer-body">
+    <div id="ds-baseline-diff" class="data-region" aria-live="polite">
+      <p class="notice notice-loading" data-state="loading">正在加载…</p>
+    </div>
+  </div>
+  <div class="drawer-foot ds-baseline-foot">
+    <input id="ds-baseline-note" maxlength="500" placeholder="导入说明（必填）" aria-label="导入说明（必填）">
+    <button type="button" class="btn btn-danger-ghost" id="ds-baseline-import">用基线覆盖当前文档</button>
+  </div>
+</aside>
+{% endblock %}

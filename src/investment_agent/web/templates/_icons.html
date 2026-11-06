@@ -33,6 +33,8 @@
   "cal": '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   "arrow": '<path d="M5 12h14M13 6l6 6-6 6"/>',
   "candle": '<path d="M7 4v3M7 15v5M17 3v5M17 15v6"/><rect x="5" y="7" width="4" height="8" rx="1"/><rect x="15" y="8" width="4" height="7" rx="1"/>',
+  "datasource": '<ellipse cx="12" cy="5.5" rx="8" ry="2.8"/><path d="M4 5.5v13c0 1.5 3.6 2.8 8 2.8s8-1.3 8-2.8v-13"/><path d="M4 12c0 1.5 3.6 2.8 8 2.8s8-1.3 8-2.8"/>',
+  "industry_groups": '<circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><path d="M8.2 8.4 19 15.6M8.2 15.6 19 8.4"/><circle cx="19" cy="12" r="2.5"/>',
 } -%}
 {%- macro icon(name, cls="ico", size=16) -%}
 <svg class="{{ cls }}" viewBox="0 0 24 24" width="{{ size }}" height="{{ size }}" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">{{ ICONS[name]|safe }}</svg>

@@ -10,7 +10,7 @@ shows today's close the same afternoon.
 embedded Android console pays a full gateway round trip per request, and a
 candidate or watch list used to issue one ``/{ticker}/bars`` call per row.
 
-``load_bars`` / ``BARS_PROVIDER`` / ``BARS_ADJUST`` now live in
+``load_bars`` / ``bars_provider()`` / ``BARS_ADJUST`` now live in
 :mod:`investment_agent.api.views` (shared with the MCP ``get_bars`` tool) and
 are re-exported here for existing importers.
 """
@@ -30,7 +30,7 @@ from investment_agent.api.schemas.market import (
 )
 from investment_agent.api.views import (
     BARS_ADJUST,  # noqa: F401  (re-export; the MCP get_bars tool imports it from api.views too)
-    BARS_PROVIDER,
+    bars_provider,
     load_bars,
 )
 from investment_agent.storage.database import session_scope
@@ -85,7 +85,7 @@ async def market_bars_batch(
             rows = await load_bars(session, listing.id, days, as_of=as_of)
             bars = [MarketBar(trade_date=row.trade_date, close=float(row.close)) for row in rows]
             items.append(MarketBarsBatchItem(ticker=ticker, found=True, bars=bars))
-    return MarketBarsBatchOut(provider=BARS_PROVIDER, as_of=as_of, days=days, items=items)
+    return MarketBarsBatchOut(provider=bars_provider(), as_of=as_of, days=days, items=items)
 
 
 @router.get("/{ticker}/bars", response_model=MarketBarsOut)
@@ -111,4 +111,4 @@ async def market_bars(
             )
         rows = await load_bars(session, listing.id, days, as_of=as_of)
     bars = [MarketBar(trade_date=row.trade_date, close=float(row.close)) for row in rows]
-    return MarketBarsOut(ticker=normalized, provider=BARS_PROVIDER, as_of=as_of, bars=bars)
+    return MarketBarsOut(ticker=normalized, provider=bars_provider(), as_of=as_of, bars=bars)

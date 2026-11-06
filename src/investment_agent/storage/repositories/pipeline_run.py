@@ -368,6 +368,55 @@ class PipelineRunRepository(Repository[PipelineRun]):
                 (failed if exhausted else requeued).append(run_id)
         return requeued, failed
 
+    async def defer_running(
+        self,
+        run_id: int,
+        *,
+        available_at: datetime,
+        lease: RunLease | None = None,
+    ) -> bool:
+        """Release a claimed run without consuming a retry attempt.
+
+        Used by handlers with their own admission cap (review seats): the run
+        goes back to ``queued`` and becomes claimable again at
+        ``available_at``; the claim's attempt increment is undone so repeated
+        capacity deferrals cannot exhaust the retry budget. Fenced by the
+        lease exactly like the other running-only transitions.
+        """
+
+        lease = lease or current_lease(run_id)
+        values: dict[str, Any] = {
+            "status": "queued",
+            "stage": "queued",
+            "available_at": available_at,
+            "claimed_at": None,
+            "worker_id": None,
+            "heartbeat_at": None,
+            "finished_at": None,
+            "error_summary": None,
+        }
+        statement = (
+            update(PipelineRun)
+            .where(*self._running_criteria(run_id, lease))
+            .values(
+                **values,
+                attempt_count=PipelineRun.attempt_count - 1,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        result = await self.session.execute(statement)
+        assert isinstance(result, CursorResult)
+        if result.rowcount == 0:
+            return False
+        cached = self.session.sync_session.identity_map.get(
+            identity_key(PipelineRun, run_id)
+        )
+        if cached is not None:
+            for key, value in values.items():
+                set_committed_value(cached, key, value)
+            set_committed_value(cached, "attempt_count", max(cached.attempt_count - 1, 0))
+        return True
+
     async def mark_running(self, run_id: int, *, stage: str) -> None:
         run = await self._required(run_id)
         run.status = "running"

@@ -156,6 +156,27 @@ async def _ensure_imported(settings: Settings) -> None:
         await ensure_imported(session, settings)
 
 
+def review_lens_options() -> list[dict[str, Any]]:
+    """Selectable review lenses for the panel editor; empty on a broken document."""
+
+    try:
+        from investment_agent.review_panel.lenses import load_review_lenses
+
+        return [
+            {
+                "id": lens.id,
+                "version": lens.version,
+                "ref": lens.ref,
+                "name": lens.name,
+                "focus": lens.focus,
+            }
+            for lens in load_review_lenses().lenses
+        ]
+    except Exception:
+        log.warning("settings.review_lenses_unavailable", exc_info=True)
+        return []
+
+
 async def settings_view(session: AsyncSession, settings: Settings) -> SettingsOut:
     store = store_for(session, settings)
     described = await store.describe()
@@ -191,6 +212,7 @@ async def settings_view(session: AsyncSession, settings: Settings) -> SettingsOu
         bootstrap=bootstrap_items(settings),
         llm_catalog=parse_catalog(catalog_value).public(),
         consumers=consumer_public(),
+        review_lenses=review_lens_options(),
     )
 
 

@@ -1,3 +1,8 @@
+# This file is the FIRST-IMPORT BASELINE of the source policy: on first start
+# it is copied into the database and then managed at /app/data-sources (tab
+# "来源信任策略"); later edits here are ignored (logged as baseline drift).
+# See docs/product/config-docs-plan.md.
+#
 schema_version: 1
 revision: hkus-source-policy-1
 # This file is a versioned, controlled approval record. Runtime settings cannot

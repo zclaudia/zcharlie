@@ -192,6 +192,88 @@ console.log(editor.read());
     assert out["providers"][0]["api_key"] is None
 
 
+def test_review_panel_editor_serializes_the_server_shape() -> None:
+    uri = (STATIC / "settings_review_panels.js").resolve().as_uri()
+    catalog = {
+        "providers": [
+            {
+                "id": "primary",
+                "name": "Primary",
+                "models": [
+                    {
+                        "id": "fast",
+                        "name": "Fast",
+                        "model": "fast",
+                        "enabled": True,
+                        "capabilities": ["tools", "json_object"],
+                    },
+                    {
+                        "id": "nojson",
+                        "name": "NoJson",
+                        "model": "nojson",
+                        "enabled": True,
+                        "capabilities": ["tools"],
+                    },
+                ],
+            }
+        ]
+    }
+    lenses = [
+        {"id": "value", "version": 1, "ref": "value.v1", "name": "价值视角"},
+        {"id": "bear", "version": 1, "ref": "bear.v1", "name": "空头视角"},
+    ]
+    from tests.integration.test_web_client_contract import FAKE_DOM
+
+    out = _run_settings(
+        FAKE_DOM + f"""
+globalThis.document = {{createElement: (tag) => new FakeNode(tag)}};
+const rp = await import({json.dumps(uri)});
+const document = {{
+  panels: {{
+    default: {{
+      name: "默认评审组",
+      seats: [
+        {{seat_id: "bear", lens_id: "bear", model_ref: "primary/fast"}},
+        {{seat_id: "value", lens_id: "value", model_ref: "primary/nojson"}},
+      ],
+    }},
+  }},
+  default_panel: "default",
+}};
+const catalog = {json.dumps(catalog)};
+const lenses = {json.dumps(lenses, ensure_ascii=False)};
+const editor = rp.reviewPanelsControl(document, catalog, lenses);
+console.log(JSON.stringify({{
+  canonical: rp.canonicalReviewPanels(document),
+  control: editor.read(),
+  errors: rp.validateReviewPanels(document),
+  invalid: rp.validateReviewPanels({{
+    default_panel: "missing",
+    panels: {{default: {{name: "", seats: []}}}},
+  }}),
+  summary: rp.reviewPanelSummary(document, catalog),
+  empty: rp.canonicalReviewPanels(""),
+  seatStatus: rp.reviewSeatModelStatus(catalog, "primary/nojson"),
+}}));
+"""
+    )
+    expected = (
+        '{"default_panel":"default","panels":{"default":{"name":"默认评审组","seats":['
+        '{"lens_id":"bear","model_ref":"primary/fast","seat_id":"bear"},'
+        '{"lens_id":"value","model_ref":"primary/nojson","seat_id":"value"}]}}}'
+    )
+    assert out["canonical"] == expected
+    assert out["control"] == expected
+    assert out["errors"] == []
+    assert out["empty"] == ""
+    assert out["seatStatus"]["state"] == "unavailable"
+    assert "模型不可用" in out["summary"]
+    invalid = " ".join(out["invalid"])
+    assert "默认评审组不存在" in invalid
+    assert "名称不能为空" in invalid
+    assert "1–6" in invalid
+
+
 def test_settings_navigation_helpers() -> None:
     out = _run_settings(
         """

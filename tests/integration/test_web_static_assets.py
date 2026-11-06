@@ -63,7 +63,7 @@ def test_bad_versioned_paths_are_not_found(api_client, path):
 
 def test_rendered_pages_link_only_versioned_assets(api_client):
     _login(api_client)
-    for path in ("/app", "/app/candidates", "/app/agent", "/app/settings", "/app/login"):
+    for path in ("/app", "/app/candidates", "/app/agent", "/app/settings", "/app/data-sources", "/app/industry-groups", "/app/login"):
         html = api_client.get(path).text
         links = re.findall(r'(?:src|href)="(/app/static/[^"]+)"', html)
         assert links, path

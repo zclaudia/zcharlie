@@ -7,8 +7,15 @@ import pytest
 from investment_agent.api.routes import rule_templates as routes
 from investment_agent.rules.store import RuleStore
 from investment_agent.rules.templates import load_templates
+from investment_agent.rules.validation import parse_template
 from investment_agent.storage.database import session_scope
-from tests.unit._candidate_support import seed_promotable, seed_template
+from tests.unit._candidate_support import (
+    seed_promotable,
+    seed_template,
+)
+from tests.unit._candidate_support import (
+    template_data as cand_template_data,
+)
 
 KEY = {"X-API-Key": "secret"}
 
@@ -22,7 +29,12 @@ async def test_list_and_detail(api_client) -> None:
     ids = await seed_promotable()
     assert ids["candidate_id"]
     async with session_scope() as session:
-        await seed_template(session, description="changed")  # a second version
+        # A DB-authored second version (files only seed; CD6).
+        await RuleStore(session).create_version(
+            parse_template(cand_template_data(description="changed")),
+            actor="web",
+            note="update description",
+        )
 
     items = api_client.get("/rule-templates", headers=KEY).json()
     assert [item["id"] for item in items] == ["cand_test"]
@@ -71,18 +83,37 @@ async def test_config_templates_are_synced_after_a_sync(api_client) -> None:
 
 
 @pytest.mark.parametrize(
-    ("hashes", "invalid", "expected"),
+    ("files", "expected"),
     [
-        ({"cand_test": "other"}, set(), "pending_sync"),
-        ({}, {"cand_test"}, "file_invalid"),
-        ({}, set(), "file_missing"),
+        # CD6: a file that differs from the current version is drift, not a
+        # pending import; the stored version it matches is surfaced (which).
+        ({"cand_test": ("other", None)}, "baseline_changed"),
+        ({"cand_test": ("", "load error")}, "file_invalid"),
+        ({}, "file_missing"),
     ],
 )
-async def test_file_status(api_client, monkeypatch, hashes, invalid, expected) -> None:
+async def test_file_status(api_client, monkeypatch, files, expected) -> None:
     async with session_scope() as session:
         await seed_template(session)
-    monkeypatch.setattr(routes, "_file_hashes", lambda: (hashes, invalid))
-    assert api_client.get("/rule-templates", headers=KEY).json()[0]["file_status"] == expected
+        # A DB-authored v2 is the current version (the file still holds v1).
+        await RuleStore(session).create_version(
+            parse_template(cand_template_data(description="changed")),
+            actor="web",
+            note="v2",
+        )
+    monkeypatch.setattr(routes, "_baseline_files", lambda: files)
+    items = api_client.get("/rule-templates", headers=KEY).json()
+    assert items[0]["file_status"] == expected
+    # The file matching v1's hash names that version even though v2 is current.
+    if expected == "baseline_changed":
+        versions = api_client.get("/rule-templates/cand_test", headers=KEY).json()["versions"]
+        v1_hash = versions[-1]["hash"]  # newest first; the last row is v1
+        monkeypatch.setattr(routes, "_baseline_files", lambda: {"cand_test": (v1_hash, None)})
+        items = api_client.get("/rule-templates", headers=KEY).json()
+        assert items[0]["file_status"] == "baseline_changed"
+        assert items[0]["baseline_version"] == 1
+    else:
+        assert items[0]["baseline_version"] is None
     detail = api_client.get("/rule-templates/cand_test", headers=KEY).json()
     assert detail["file_status"] == expected
 

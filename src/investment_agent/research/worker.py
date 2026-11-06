@@ -79,6 +79,9 @@ MAX_LOOP_BACKOFF_SECONDS = 60.0
 _MAINTENANCE_RESET_KINDS = frozenset(
     ("agent_turn", "agent_research", "agent_review", "agent_discovery")
 )
+# Review seats run on the agent worker (they are LLM calls with an interactive
+# cost profile) but enqueue no follower jobs, so they do not reset maintenance.
+_AGENT_WORKER_EXTRA_KINDS = frozenset({"review_seat"})
 
 
 async def wake_supplemental_updates(session: AsyncSession, *, settings: Settings) -> bool:
@@ -235,6 +238,19 @@ class IfindResearchHandler(BaseJobHandler):
                 run_id=job.run_id,
                 worker_id=job.lease.worker_id,
             )
+        try:
+            await _trigger_change_review(
+                settings=self.settings,
+                run_id=job.run_id,
+                listing_id=job.listing_id,
+            )
+        except Exception:
+            # A review is an add-on: never fail or retry the research run for it.
+            log.exception(
+                "research.worker.review_trigger_failed",
+                run_id=job.run_id,
+                worker_id=job.lease.worker_id,
+            )
 
 
 def default_job_handlers(
@@ -247,6 +263,7 @@ def default_job_handlers(
     from investment_agent.industry_peers.jobs import PeerCollectHandler
     from investment_agent.portfolio.suitability_jobs import AccountFitHandler
     from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
+    from investment_agent.review_panel.job import ReviewSeatHandler
     from investment_agent.rules.zone_jobs import ZoneDetectionHandler
     from investment_agent.supplemental_rules.disclosure_updates import DisclosurePollingHandler
     from investment_agent.supplemental_rules.jobs import SupplementalRuleHandler
@@ -264,6 +281,7 @@ def default_job_handlers(
         MaterialCollectionHandler(settings=settings),
         ScreenRunHandler(candidate_policy=CandidatePolicy.from_settings(settings)),
         RuleDraftHandler(settings=settings),
+        ReviewSeatHandler(settings=settings),
         IfindVerifyHandler(settings),
         PortfolioValuationHandler(
             settings=settings,
@@ -283,8 +301,17 @@ def partition_worker_kinds(settings: Settings) -> tuple[tuple[str, ...], tuple[s
     """
 
     registered = tuple(handler.kind for handler in default_job_handlers(settings))
-    agent = tuple(kind for kind in registered if kind in _MAINTENANCE_RESET_KINDS)
-    collection = tuple(kind for kind in registered if kind not in _MAINTENANCE_RESET_KINDS)
+    agent = tuple(
+        kind
+        for kind in registered
+        if kind in _MAINTENANCE_RESET_KINDS or kind in _AGENT_WORKER_EXTRA_KINDS
+    )
+    collection = tuple(
+        kind
+        for kind in registered
+        if kind not in _MAINTENANCE_RESET_KINDS
+        and kind not in _AGENT_WORKER_EXTRA_KINDS
+    )
     return agent, collection
 
 
@@ -393,6 +420,11 @@ class ResearchWorker:
         settings = await load_settings(session, base=self._base_settings)
         self.handlers = self._registry(default_job_handlers(settings, runner=self.runner))
         self.settings = settings
+        # Config documents bump the same revision (CD4): reload any whose own
+        # revision moved so the sync config readers see the next job's values.
+        from investment_agent.config_docs import loader as config_docs
+
+        await config_docs.refresh_if_changed(session)
         log.info(
             "worker.settings_reloaded",
             worker_id=self.worker_id,
@@ -643,6 +675,34 @@ async def _sync_watchlist_refresh(*, run_id: int, listing_id: int) -> None:
             status=run.status,
             refreshed_at=run.finished_at or datetime.now(UTC),
             error=run.error_summary,
+        )
+
+
+async def _trigger_change_review(
+    *, settings: Settings, run_id: int, listing_id: int | None
+) -> None:
+    """Fire the change-triggered review, if any (design §8).
+
+    ``trigger_change_review`` swallows ``RoundRejected`` itself; this wrapper
+    only supplies a session and the effective trading calendar. The caller
+    keeps its own error boundary so a review never fails the research run.
+    """
+
+    if listing_id is None:
+        return
+    from investment_agent.review_panel.triggering import (
+        load_effective_calendar,
+        trigger_change_review,
+    )
+
+    calendar = load_effective_calendar()
+    async with session_scope() as session:
+        await trigger_change_review(
+            session,
+            settings,
+            listing_id=listing_id,
+            run_id=run_id,
+            calendar=calendar,
         )
 
 

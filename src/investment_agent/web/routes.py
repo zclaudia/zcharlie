@@ -637,6 +637,22 @@ async def template_page(request: Request, template_id: str) -> HTMLResponse:
     )
 
 
+@router.get("/data-sources", response_class=HTMLResponse)
+async def data_sources_page(request: Request) -> HTMLResponse:
+    """Config documents for data sources (config-docs-plan §4.6): Tab A 字段来源优先级."""
+
+    return _render("data-sources.html", request, page_title="数据源", active_nav="data_sources")
+
+
+@router.get("/industry-groups", response_class=HTMLResponse)
+async def industry_groups_page(request: Request) -> HTMLResponse:
+    """Industry group mapping editor (config-docs-plan §4.6, WP3): live apply."""
+
+    return _render(
+        "industry-groups.html", request, page_title="行业分组", active_nav="industry_groups"
+    )
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return _render("settings.html", request, page_title="设置", active_nav="settings")

@@ -1,12 +1,17 @@
+import hashlib
 import json
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 from investment_agent.config import Settings
+from investment_agent.config_docs import loader as config_docs_loader
+from investment_agent.config_docs import registry as config_docs_registry
 from investment_agent.factors.metrics import parse_number, return_stats
 from investment_agent.research import ifind_chain
 from investment_agent.research.ifind_chain import (
@@ -84,6 +89,77 @@ def test_retry_attempt_uses_isolated_artifact_directory(tmp_path):
         run_id=42,
         attempt_count=2,
     ) == tmp_path / "42" / "attempt-2"
+
+
+async def test_run_start_persists_the_field_sources_document_fingerprint(
+    db_session,
+    tmp_path,
+    monkeypatch,
+):
+    del db_session  # initializes the shared in-memory engine and schema
+    document = {
+        "version": "fingerprint-test-1",
+        "default_tolerance": 0.02,
+        "fields": {
+            "close": {
+                "table": "market",
+                "primary": "baostock",
+                "fallback": ["tencent"],
+                "definition": "收盘价（元）",
+                "tolerance": 0.001,
+                "key": True,
+            },
+        },
+    }
+    baseline = tmp_path / "field_sources.yaml"
+    baseline.write_text(yaml.safe_dump(document, allow_unicode=True), encoding="utf-8")
+    specs = tuple(
+        replace(spec, baseline=baseline) if spec.kind == "field_sources" else spec
+        for spec in config_docs_registry.KINDS
+    )
+    monkeypatch.setattr(config_docs_registry, "KINDS", specs)
+    monkeypatch.setattr(
+        config_docs_registry, "KINDS_BY_KIND", {spec.kind: spec for spec in specs}
+    )
+    config_docs_loader.invalidate()  # the cold cache reads the tmp baseline
+
+    async def fail_fetch(*_args: object, **_kwargs: object) -> CanonicalBundle:
+        raise RuntimeError("provider unreachable")
+
+    monkeypatch.setattr(ifind_chain, "fetch_canonical_bundle", fail_fetch)
+    settings = Settings(  # type: ignore[call-arg]
+        _env_file=None,
+        api_key="test",
+        llm_tier3_api_key="test",
+    )
+
+    with pytest.raises(RuntimeError, match="provider unreachable"):
+        await run_ifind_research_chain(
+            settings=settings,
+            proxy_url="http://unused.invalid",
+            proxy_api_key="unused",
+            ticker="600406.SH",
+            industry="电力设备",
+            report_year=2025,
+            as_of=date(2026, 10, 5),
+            output_root=tmp_path / "research-runs",
+        )
+
+    config_docs_loader.invalidate()  # drop the tmp baseline for later tests
+    canonical = json.dumps(
+        document, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
+    expected = {
+        "version": "fingerprint-test-1",
+        "hash": hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12],
+    }
+    async with session_scope() as session:
+        (run,) = await PipelineRunRepository(session).latest_by_kind("ifind_research")
+
+    # The run failed, yet the fingerprint recorded at run start is persisted
+    # with the run (config-docs-plan §4.8), not only logged.
+    assert run.status == "failed"
+    assert run.metadata_json["field_sources"] == expected
 
 
 async def test_successful_idempotent_run_replays_persisted_snapshot(

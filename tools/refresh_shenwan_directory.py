@@ -7,11 +7,16 @@ Run it about monthly, or when ``industry_sync`` logs ``shenwan_codes_unresolved`
    one request) -> code, name, level, parent;
 3. reports current 2021-era codes missing from the table.
 
-Without ``--write`` it only prints the diff against the committed file
-(added / removed / renamed codes). With ``--write`` it rewrites the file;
+The fetch + validation live in
+:mod:`investment_agent.providers.shenwan_refresh` (shared with the
+``shenwan_directory_refresh`` job of the 数据健康 page, which writes only the
+``DATA_DIR`` copy); this tool remains the maintainer path to the *repository
+baseline*. Without ``--write`` it only prints the diff against the committed
+file (added / removed / renamed codes). With ``--write`` it rewrites the file;
 review and commit it yourself (nothing is committed automatically). If a
-level-1/2 code appears or changes, update ``config/industry_groups.yaml``
-(the coverage tests fail until it is mapped) and bump its version.
+level-1/2 code appears or changes, update the industry-groups mapping - now a
+DB config document edited at ``/app/industry-groups``; the refresh job's
+coverage report (and the page's 覆盖率检查) list the unmapped codes.
 
 ``--cross-check`` additionally rebuilds the directory the slow way planned in
 p1-plan 2.2 (legulegu ``sw_index_*_info`` + one ``sw_index_third_cons`` per
@@ -60,6 +65,9 @@ from investment_agent.providers.shenwan_directory import (  # noqa: E402
     ShenwanDirectory,
     dump_shenwan_directory,
     load_shenwan_directory,
+)
+from investment_agent.providers.shenwan_refresh import (  # noqa: E402
+    fetch_shenwan_directory,
 )
 
 FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "shenwan"
@@ -258,7 +266,8 @@ async def main(args: argparse.Namespace) -> int:
     )
     history = await client.fetch_industry_history()
     print(f"history: {len(history.changes)} tickers, skipped {list(history.skipped_symbols)}")
-    directory = await client.fetch_code_directory()
+    # Thin wrapper: the fetch + round-trip validation live in src (WP5).
+    directory = await fetch_shenwan_directory(client)
     print(
         f"directory: L1 {len(directory.codes(1))}, L2 {len(directory.codes(2))}, "
         f"L3 {len(directory.codes(3))}; codes assigned since 2021-07-30 without a name: "

@@ -25,6 +25,7 @@ import { aiStamp, ring, thinBar } from "./ui.js";
 import { loadBars } from "./market.js";
 import { PRICE_RANGES, mountPriceChart } from "./pricechart.js";
 import { icon, isCompactViewport } from "./page_widgets.js";
+import { mountReviewCard } from "./review_panel.js";
 
 // ---- 单股详情 ---------------------------------------------------------
 
@@ -571,6 +572,16 @@ export function loadStockSpark() {
   });
 }
 
+// 多视角评审卡片：放在 AI 解释之后，由 review_panel.js 自行加载轮次。
+function mountStockReview(detailRegion) {
+  const listingId = Number(detailRegion.dataset.listingId || 0);
+  if (!listingId) return;
+  mountReviewCard(detailRegion, {
+    listingId,
+    ticker: detailRegion.dataset.ticker || "",
+  });
+}
+
 export async function loadStockDetail(detailRegion, latestSnapshot) {
   loadStockSpark();
   if (!latestSnapshot) {
@@ -598,6 +609,7 @@ export async function loadStockDetail(detailRegion, latestSnapshot) {
       detailRegion.appendChild(
         el("p", { class: "notice notice-warn" }, "运行尚未产生确定性评分。")
       );
+      mountStockReview(detailRegion);
       return;
     }
     const meta = detail.result.score.metadata;
@@ -611,6 +623,7 @@ export async function loadStockDetail(detailRegion, latestSnapshot) {
     });
     detailRegion.appendChild(inspector);
     detailRegion.appendChild(explanationCard(detail, scoreItem, detailRegion));
+    mountStockReview(detailRegion);
     detailRegion.appendChild(qualityCard(scoreItem));
     const changesRegion = document.querySelector("#stock-changes");
     if (changesRegion) await loadStockChanges(changesRegion, detail.run_id);

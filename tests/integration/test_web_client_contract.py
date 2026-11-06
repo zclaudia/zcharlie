@@ -205,6 +205,8 @@ def test_every_page_carries_states_disclaimer_and_noscript(api_client):
         "/app/candidates/1",
         "/app/health",
         "/app/settings",
+        "/app/data-sources",
+        "/app/industry-groups",
     ]
     for path in pages:
         html = api_client.get(path).text
@@ -659,7 +661,7 @@ def test_watchlist_metadata_autofill_ignores_superseded_requests():
 
 @pytest.mark.parametrize(
     "module",
-    ["api.js", "app.js", "page_widgets.js", "overview.js", "runs_page.js", "stock_page.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "candidate_shared.js", "candidate_list.js", "candidate_detail.js", "candidate_rule.js", "health.js", "settings.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js", "release.js", "refresh_state.js", "native_bridge.js", "shell.js", "agent.js"],
+    ["api.js", "app.js", "page_widgets.js", "overview.js", "runs_page.js", "stock_page.js", "dom.js", "market.js", "watchlist.js", "financials.js", "format.js", "research_format.js", "ui.js", "candidates.js", "candidate_shared.js", "candidate_list.js", "candidate_detail.js", "candidate_rule.js", "health.js", "settings.js", "data-sources.js", "industry-groups.js", "combobox.js", "methods.js", "industry_peers.js", "industries.js", "account_fit.js", "candidate_ranking.js", "release.js", "refresh_state.js", "native_bridge.js", "shell.js", "agent.js"],
 )
 def test_shipped_js_modules_parse(module: str):
     node = shutil.which("node")

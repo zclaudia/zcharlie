@@ -67,6 +67,29 @@ def test_build_scheduler_registers_a_share_watchlist_job(
     assert str(jobs["watchlist_refresh"].trigger.timezone) == "Asia/Shanghai"
 
 
+def test_build_scheduler_registers_the_review_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("API_KEY", "x")
+    monkeypatch.setenv("LLM_TIER3_API_KEY", "x")
+    settings = Settings(_env_file=None)  # type: ignore[call-arg]
+    cfg = AppYamlConfig(
+        scheduler=SchedulerConfig(
+            watchlist_refresh_cron="30 19 * * 1-5",
+            review_batch_cron="0 6 * * 6",
+            review_batch_timezone="Asia/Shanghai",
+        ),
+    )
+
+    sched = build_scheduler(settings=settings, app_config=cfg)
+    job = sched.get_job("review_panel_batch")
+
+    assert job is not None
+    assert job.kwargs["timezone"] == "Asia/Shanghai"
+    assert job.kwargs["calendar_path"] == "config/calendars/a_share.yaml"
+    assert str(job.trigger.timezone) == "Asia/Shanghai"
+
+
 @pytest.mark.asyncio
 async def test_scheduled_watchlist_refresh_skips_holiday_and_is_idempotent(
     db_session,

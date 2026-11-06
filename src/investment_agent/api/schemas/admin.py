@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from investment_agent.api.schemas.review_panel import WatchlistReviewBadgeOut
+
 # Ticker shape: A-share codes (600519.SH) plus plain alphanumeric symbols;
 # validated after upper-casing.
 TICKER_PATTERN = r"^[A-Za-z0-9]{1,10}(?:[.\-][A-Za-z0-9]{1,4})?$"
@@ -127,6 +129,8 @@ class WatchlistItemOut(BaseModel):
     last_refresh_error: str | None
     last_research_run_id: int | None
     latest_research: WatchlistLatestResearch | None = None
+    latest_review: WatchlistReviewBadgeOut | None = None
+    """Latest completed multi-perspective review round (badge only, no opinions)."""
     rule: WatchlistRuleOut | None = None
 
 

@@ -109,6 +109,26 @@ def test_health_page_has_the_calendar_card(api_client) -> None:
         assert marker in source, marker
 
 
+def test_health_page_has_the_shenwan_directory_card(api_client) -> None:
+    """The card is the click-path that replaces the host CLI for directory refreshes."""
+
+    _login(api_client)
+    html = api_client.get("/app/health").text
+    assert 'id="health-shenwan"' in html
+    assert 'id="shenwan-card"' in html
+    source = (STATIC / "health.js").read_text(encoding="utf-8")
+    for marker in (
+        '"/health/shenwan-directory"',
+        '"/health/shenwan-directory/refresh"',
+        "刷新行业目录",
+        "行业目录",
+        "loadShenwan",
+        "数据目录副本",
+        "仓库基线",
+    ):
+        assert marker in source, marker
+
+
 def test_health_js_renders_every_section_and_wires_the_overview() -> None:
     source = (STATIC / "health.js").read_text(encoding="utf-8")
     for section in SECTIONS:

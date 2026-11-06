@@ -1,8 +1,11 @@
 """Fail-closed policy evaluation for controlled research-material sources.
 
-Licensing and technical approval are read from a versioned, controlled YAML
-record, independently of runtime operational settings. ``approvals`` exists
-for explicit test injection and controlled offline evaluation only.
+Licensing and technical approval are read from a versioned, controlled
+approval record, independently of runtime operational settings. The record is
+a config document (config-docs-plan §3.1 kind ``source_policy``): the DB row
+once imported, the repo baseline file otherwise — see :func:`load_source_policy`.
+``approvals`` exists for explicit test injection and controlled offline
+evaluation only.
 """
 
 from __future__ import annotations
@@ -61,13 +64,89 @@ class SourceDecision:
 
 
 def load_source_policy() -> Mapping[str, Any]:
-    """Read the controlled approval record without consulting runtime settings."""
+    """The approval record every reader serves: the DB document, else the file.
 
+    Backed by the revision-keyed process cache of
+    :mod:`investment_agent.config_docs.loader` (config-docs-plan §4.4): primed
+    at start-up, refreshed wherever the worker / scheduler re-check the
+    settings revision, and — with a cold cache (CLI, tests) — served from the
+    baseline file below, exactly the pre-DB behaviour. A UI edit of the
+    document therefore flows into every subsequent decision (and its
+    ``revision@digest`` audit label) without a restart. The import is
+    function-level to keep the two packages' import graphs acyclic.
+
+    Fail-closed: when config_docs cannot answer and the file cannot be read,
+    the policy reads as empty and every decision carries
+    ``invalid_policy_schema`` / ``unknown_source``.
+    """
+
+    try:
+        from investment_agent.config_docs.loader import config_doc
+
+        document = config_doc("source_policy")
+    except Exception:  # any failure must fail closed, never raise
+        document = None
+    if isinstance(document, Mapping):
+        return document
     try:
         value = yaml.safe_load(DEFAULT_SOURCE_POLICY_PATH.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError):
         return {}
     return value if isinstance(value, Mapping) else {}
+
+
+def parse_source_policy(document: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Structurally validate the whole approval record (config-docs CD3 parse).
+
+    Only shape is checked — licensing / acceptance stay runtime gates of
+    :func:`evaluate_source_policy`. Returns the document unchanged; raises
+    ``ValueError`` naming the offending path so the settings API can surface
+    it as a 422.
+    """
+
+    valid, _ = _policy_metadata(document)
+    if not valid:
+        raise ValueError(
+            "source policy: schema_version must be 1, revision a slug, sources a mapping"
+        )
+    for source, entry in document["sources"].items():
+        where = f"source_policy.sources.{source}"
+        if not isinstance(entry, Mapping):
+            raise ValueError(f"{where}: expected a licensing / technical_acceptance mapping")
+        for section in ("licensing", "technical_acceptance"):
+            row = entry.get(section)
+            if not isinstance(row, Mapping):
+                raise ValueError(f"{where}.{section}: expected a mapping")
+            if not isinstance(row.get("status"), str):
+                raise ValueError(f"{where}.{section}.status: expected a string")
+            keys = row.get("company_keys")
+            if not isinstance(keys, list) or not all(isinstance(k, str) for k in keys):
+                raise ValueError(f"{where}.{section}.company_keys: expected a list of strings")
+        licensing = entry["licensing"]
+        if not isinstance(licensing.get("citation"), str):
+            raise ValueError(f"{where}.licensing.citation: expected a string")
+        technical = entry["technical_acceptance"]
+        if not isinstance(technical.get("adapter_version"), str):
+            raise ValueError(f"{where}.technical_acceptance.adapter_version: expected a string")
+        reports = technical.get("reports")
+        if not isinstance(reports, list):
+            raise ValueError(f"{where}.technical_acceptance.reports: expected a list")
+        for i, report in enumerate(reports):
+            row = report if isinstance(report, Mapping) else None
+            observed = row.get("observed_on") if row is not None else None
+            try:
+                date_ok = (
+                    isinstance(observed, str)
+                    and date.fromisoformat(observed).isoformat() == observed
+                )
+            except ValueError:
+                date_ok = False
+            if row is None or not date_ok or not isinstance(row.get("citation"), str):
+                raise ValueError(
+                    f"{where}.technical_acceptance.reports[{i}]: "
+                    "needs observed_on (ISO date) and citation"
+                )
+    return document
 
 
 def _policy_metadata(root: Mapping[str, Any]) -> tuple[bool, str]:
@@ -84,6 +163,19 @@ def _policy_metadata(root: Mapping[str, Any]) -> tuple[bool, str]:
     digest = hashlib.sha256(serialized.encode("utf-8")).hexdigest()[:16]
     label = revision if isinstance(revision, str) else "invalid"
     return valid, f"{label}@{digest}"
+
+
+def source_policy_revision_label() -> str:
+    """The ``revision@digest`` audit label of the effective document (§4.8).
+
+    The same label :class:`SourceDecision` carries as ``policy_revision``:
+    derived by :func:`_policy_metadata` from the document readers actually
+    serve (the DB-backed config document, baseline fallback), so a policy
+    edited in the UI changes the label of every subsequent audit record that
+    names it. Audit producers consume this instead of hashing a file.
+    """
+
+    return _policy_metadata(load_source_policy())[1]
 
 
 def _mapping(value: object) -> Mapping[str, Any]:

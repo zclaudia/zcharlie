@@ -51,6 +51,10 @@ class RuleTemplateRecord(Base):
     hash: Mapped[str] = mapped_column(String(64), nullable=False)
     calibration_status: Mapped[str] = mapped_column(String(16), nullable=False)
     source_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    """Who wrote this version (``api`` / ``web``); NULL = the file baseline."""
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """Mandatory change note of an authored version (CD7); NULL = file baseline."""
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

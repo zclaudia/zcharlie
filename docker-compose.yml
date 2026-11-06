@@ -86,7 +86,7 @@ services:
       - worker
       - start
       - --kinds
-      - agent_turn,agent_research,agent_review,agent_discovery
+      - agent_turn,agent_research,agent_review,agent_discovery,review_seat
     environment:
       LIVENESS_FILE: /tmp/worker-agent.alive
     depends_on:
@@ -105,7 +105,7 @@ services:
       - worker
       - start
       - --kinds
-      - account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
+      - account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,shenwan_directory_refresh,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
     environment:
       LIVENESS_FILE: /tmp/worker.alive
     depends_on:

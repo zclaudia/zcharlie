@@ -26,9 +26,9 @@ CSRC resolution order for one classification ``(code, name)``:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from datetime import date
-from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
@@ -245,12 +245,162 @@ def load_industry_groups(path: Path | str | None = None) -> IndustryGroupMap:
     return parse_industry_groups(yaml.safe_load(target.read_text(encoding="utf-8")))
 
 
-@lru_cache(maxsize=1)
 def default_industry_groups() -> IndustryGroupMap:
-    return load_industry_groups()
+    """The effective mapping: the DB document once imported, else this file.
+
+    Backed by the revision-keyed process cache of
+    :mod:`investment_agent.config_docs.loader` (config-docs-plan §4.4, the
+    WP1 pattern of ``factors.field_sources.default_field_sources``): primed at
+    start-up, refreshed wherever the worker / scheduler re-check the settings
+    revision, and — with a cold cache (CLI, tests) — parsed from the baseline
+    file below, exactly the pre-DB behaviour (which is why the
+    ``lru_cache`` is gone: a config write must be visible to the next read,
+    the ``live`` apply mode of §3.1). The import is function-level to keep the
+    two modules' import graphs acyclic (loader -> registry -> this module).
+    """
+
+    from investment_agent.config_docs.loader import industry_groups_map
+
+    return industry_groups_map()
 
 
 def industry_group_for(code: str | None, name: str | None = None) -> str:
     """Industry group of a CSRC classification; ``other`` when unmapped."""
 
     return default_industry_groups().group_for(code, name)
+
+
+# --------------------------------------------------------------------------- #
+# Coverage check (config-docs-plan §4.5, WP3)
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class CoverageMember:
+    """One universe member's current classifications, the coverage input.
+
+    ``sw_code`` is the member's Shenwan 2021 code as of the check date,
+    already vetted with :func:`usable_sw_code` by whoever collected the
+    member (an unusable code is ``None`` and only the CSRC side is checked).
+    """
+
+    ticker: str
+    csrc_code: str | None = None
+    csrc_name: str | None = None
+    sw_code: str | None = None
+
+
+@dataclass(frozen=True)
+class CoverageGap:
+    """One uncovered code: what the UI highlights and quick-assigns."""
+
+    code: str
+    name: str | None = None
+    tickers: tuple[str, ...] = ()
+    """Universe members carrying the code (empty for directory-level gaps)."""
+
+    def describe(self) -> dict[str, object]:
+        return {
+            "code": self.code,
+            "name": self.name,
+            "tickers": list(self.tickers),
+        }
+
+
+@dataclass(frozen=True)
+class IndustryGroupsCoverage:
+    """The result of :func:`check_industry_groups_coverage` (§4.5 / §6)."""
+
+    ok: bool
+    unmapped_csrc: tuple[CoverageGap, ...]
+    """CSRC codes of universe members without an explicit ``codes`` entry."""
+
+    missing_level1_defaults: tuple[CoverageGap, ...]
+    """Shenwan 2021 level-1 codes of the directory without a ``level1`` default."""
+
+    invalid_overrides: tuple[CoverageGap, ...]
+    """``shenwan.overrides`` codes the directory does not list."""
+
+    member_count: int
+    csrc_code_count: int
+    summary: str
+    """One Chinese line for the UI (检查结果摘要)."""
+
+    def describe(self) -> dict[str, object]:
+        return {
+            "ok": self.ok,
+            "unmapped_csrc": [gap.describe() for gap in self.unmapped_csrc],
+            "missing_level1_defaults": [gap.describe() for gap in self.missing_level1_defaults],
+            "invalid_overrides": [gap.describe() for gap in self.invalid_overrides],
+            "member_count": self.member_count,
+            "csrc_code_count": self.csrc_code_count,
+            "summary": self.summary,
+        }
+
+
+def check_industry_groups_coverage(
+    mapping: IndustryGroupMap, *, directory: ShenwanDirectory, members: Iterable[CoverageMember]
+) -> IndustryGroupsCoverage:
+    """The coverage contract the factor tests assert, as one reusable check.
+
+    Ported from ``test_factor_industry_groups.py`` /
+    ``test_factor_industry_groups_sw.py`` (config-docs-plan §6): every CSRC
+    code of the given universe members must be mapped explicitly
+    (``matched_by == "code"``; the legacy-name table is not enough), every
+    Shenwan 2021 level-1 code of the directory must have a default, and every
+    override must name a code of the directory. ``other`` counts as an
+    explicit mapping. Pure over its three inputs — the endpoint feeds it the
+    DB universe, the tests the fixture snapshot.
+    """
+
+    member_list = list(members)
+    unmapped: dict[str, CoverageGap] = {}
+    code_count: set[str] = set()
+    for member in member_list:
+        if member.csrc_code is None and member.csrc_name is None:
+            continue
+        code_count.add(member.csrc_code or "")
+        match = mapping.resolve(member.csrc_code, member.csrc_name)
+        if match.matched_by == "code":
+            continue
+        gap = unmapped.get(match.code or member.csrc_code or member.csrc_name or member.ticker)
+        if gap is None:
+            gap = CoverageGap(
+                code=match.code or member.csrc_code or member.csrc_name or member.ticker,
+                name=member.csrc_name,
+                tickers=(member.ticker,),
+            )
+            unmapped[gap.code] = gap
+        else:
+            gap = replace(gap, tickers=tuple(sorted(set(gap.tickers) | {member.ticker})))
+        unmapped[gap.code] = gap
+
+    shenwan = mapping.shenwan
+    level1_known = shenwan.level1 if shenwan is not None else {}
+    missing_level1 = tuple(
+        CoverageGap(code=code, name=directory.name_of(code))
+        for code in sorted(set(directory.codes(1)) - set(level1_known))
+    )
+    invalid_overrides = tuple(
+        CoverageGap(code=code)
+        for code in sorted(shenwan.overrides if shenwan else {})
+        if directory.get(code) is None
+    )
+    unmapped_csrc = tuple(unmapped[code] for code in sorted(unmapped))
+    ok = not (unmapped_csrc or missing_level1 or invalid_overrides)
+    parts = [
+        f"成分 {len(member_list)} 只、CSRC 大类码 {len(code_count)} 个"
+        + ("全部显式映射" if not unmapped_csrc else f"{len(unmapped_csrc)} 个未显式映射"),
+        f"申万一级默认{'齐全' if not missing_level1 else f'缺 {len(missing_level1)} 个'}",
+        f"覆写{'全部有效' if not invalid_overrides else f'{len(invalid_overrides)} 个无效'}",
+    ]
+    summary = f"覆盖{'完整' if ok else '不完整'}：" + "，".join(parts) + "。"
+    return IndustryGroupsCoverage(
+        ok=ok,
+        unmapped_csrc=unmapped_csrc,
+        missing_level1_defaults=missing_level1,
+        invalid_overrides=invalid_overrides,
+        member_count=len(member_list),
+        csrc_code_count=len(code_count),
+        summary=summary,
+    )
