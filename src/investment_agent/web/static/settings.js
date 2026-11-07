@@ -108,7 +108,7 @@ export function parseSettingInput(meta, raw) {
   const text = String(raw ?? "").trim();
   if (type === "cron") {
     if (!text) return meta.nullable ? { value: null } : { error: "必填" };
-    if (text.split(/\s+/).length !== 5) return { error: "cron 须为 5 段：分 时 日 月 周" };
+    if (text.split(/\s+/).length !== 5) return { error: "cron 须为 5 段：minute hour day month weekday" };
     return { value: text };
   }
   if ((type === "url" || type === "timezone") && !text) return { error: "必填" };
@@ -423,6 +423,7 @@ function settingRow(item, encryptionReady) {
   const root = el("div", { class: `setting set-row${isSwitch ? " is-switch" : ""}${item.key === "llm_catalog" ? " is-catalog" : ""}`, "data-key": item.key });
   const left = el("div", { class: "set-k" });
   left.appendChild(el("label", { for: inputId(item.key), class: "setting-label" }, item.label));
+  left.appendChild(el("code", { class: "setting-key faint mono" }, item.key));
   left.appendChild(el("p", { class: "setting-help faint" }, item.help));
   const meta = el("p", { class: "setting-meta faint" }, metaLine(item));
   left.appendChild(meta);
@@ -568,7 +569,7 @@ function groupNotices(group) {
       el(
         "p",
         { class: "faint" },
-        "cron 为标准 5 段（分 时 日 月 周），留空 = 停用该任务。星期请写 sun / mon / … / sat 名称，数字 0 和 7 都表示周日。"
+        "cron 为标准 5 段（minute hour day month weekday），留空 = 停用该任务。星期请写 sun / mon / … / sat，数字 0 和 7 都表示周日；例如 30 19 * * 1-5。"
       )
     );
   }
@@ -866,7 +867,7 @@ export function topicSummary(topic, read) {
     case "panels":
       return reviewPanelSummary(value("review_panels"), currentCatalog(read));
     case "catalog":
-      return `${value("llm_catalog")?.providers?.length || 0} 个 Provider`;
+      return `Providers: ${value("llm_catalog")?.providers?.length || 0}`;
     case "quota":
       return topicKeys(topic).includes("review_panel_daily_rounds")
         ? `每日 ${value("review_panel_daily_rounds")} 轮`
@@ -928,7 +929,7 @@ export function sectionHome(section, read) {
     case "llm": {
       const catalog = value("llm_catalog");
       return {
-        value: `${catalog?.providers?.length || 0} 个 Provider`,
+        value: `Providers: ${catalog?.providers?.length || 0}`,
         detail: "端点、密钥和能力标签",
       };
     }

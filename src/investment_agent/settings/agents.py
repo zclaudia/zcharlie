@@ -105,6 +105,8 @@ INVESTOR = ConsumerSpec(
                 "supplemental_rules_enabled",
                 "supplemental_updates_enabled",
                 "supplemental_disclosure_polling_enabled",
+                "research_quality_enabled",
+                "research_quality_execution_enabled",
                 "portfolio_valuation_max_staleness_days",
             ),
         ),

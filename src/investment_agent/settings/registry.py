@@ -340,7 +340,7 @@ def _yaml(key: str, label: str, help: str, yaml_path: tuple[str, str]) -> Settin
     return SettingSpec(key, "schedule", label, help, "reschedule", "app_yaml", yaml_path=yaml_path)
 
 
-_CRON_HELP = "标准 5 段 crontab（分 时 日 月 周），留空 = 停用；星期建议写 sun / mon 名称。"
+_CRON_HELP = "标准 5 段 crontab（minute hour day month weekday），留空 = 停用；星期建议写 sun / mon，例如 30 19 * * 1-5。"
 
 SPECS: tuple[SettingSpec, ...] = (
     _env("agent_queue_max_running", "agent", "Agent 最大并发", "本机持久队列共享上限 1–4；单 worker 仍依次执行。", "next_job"),

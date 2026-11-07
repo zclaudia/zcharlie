@@ -116,9 +116,9 @@ export function catalogControl(value, encryptionReady) {
       }));
       card.appendChild(head);
       const fields = el("div", {class: "llm-field-grid"});
-      field(fields, "Provider 名称", provider, "name");
-      field(fields, "接口类型", provider, "kind", {options: [["openai", "OpenAI 兼容"], ["deepseek", "DeepSeek"]]});
-      field(fields, "接口地址", provider, "base_url", {type: "url", placeholder: "填写接口的完整 URL"});
+      field(fields, "Provider name", provider, "name");
+      field(fields, "Provider type", provider, "kind", {options: [["openai", "OpenAI 兼容"], ["deepseek", "DeepSeek"]]});
+      field(fields, "Base URL", provider, "base_url", {type: "url", placeholder: "完整 URL，例如 https://api.example.com/v1"});
       const key = field(fields, "API Key", provider, "api_key", {type: "password", placeholder: provider.configured ? `已设置 ···${provider.hint || ""}；留空不修改` : "输入 API Key"});
       key.addEventListener("input", () => {if (!key.value) provider.api_key = null; notify();});
       card.appendChild(fields);
@@ -132,7 +132,7 @@ export function catalogControl(value, encryptionReady) {
         const box = el("div", {class: "llm-model"});
         const grid = el("div", {class: "llm-field-grid"});
         field(grid, "模型显示名称", model, "name");
-        field(grid, "模型标识", model, "model", {placeholder: "接口接受的模型名"});
+        field(grid, "Model ID", model, "model", {placeholder: "API 接受的模型名"});
         field(grid, "上下文长度", model, "context_length", {type: "number"});
         field(grid, "启用", model, "enabled", {type: "checkbox"});
         box.appendChild(grid);
@@ -142,11 +142,11 @@ export function catalogControl(value, encryptionReady) {
         const extra = el("div", {class: "llm-field-grid"});
         field(extra, "推理请求", model, "thinking", {options: [["auto", "不发送"], ["enabled", "开启"], ["disabled", "关闭"]]});
         field(extra, "请求超时（秒）", model, "timeout_seconds", {type: "number"});
-        field(extra, "能力 Profile", model, "profile", {options: [["openai", "OpenAI"], ["deepseek", "DeepSeek"]]});
-        field(extra, "Profile 官方模型名（可选）", model, "profile_model");
-        field(extra, "输出模式", model, "output_mode", {options: [["prompted", "JSON Object"], ["tool", "工具调用"], ["native", "JSON Schema"]]});
+        field(extra, "Capability profile", model, "profile", {options: [["openai", "OpenAI"], ["deepseek", "DeepSeek"]]});
+        field(extra, "Official model name (optional)", model, "profile_model");
+        field(extra, "输出模式", model, "output_mode", {options: [["prompted", "JSON Object"], ["tool", "Tool call"], ["native", "JSON Schema"]]});
         field(extra, "Temperature（可选）", model, "temperature", {type: "number"});
-        field(extra, "最大输出 Token（可选）", model, "max_tokens", {type: "number"});
+        field(extra, "Max output tokens (optional)", model, "max_tokens", {type: "number"});
         field(extra, "校验重试次数", model, "retries", {type: "number"});
         advanced.appendChild(extra);
         box.appendChild(advanced);

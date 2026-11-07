@@ -23,14 +23,14 @@ async (page) => {
   ]) {
     await page.getByRole("button", {name: "添加 Provider", exact: true}).click();
     const card = page.locator(".llm-provider").last();
-    await card.getByLabel("Provider 名称", {exact: true}).fill(name);
-    await card.getByLabel("接口地址", {exact: true}).fill(endpoint);
+    await card.getByLabel("Provider name", {exact: true}).fill(name);
+    await card.getByLabel("Base URL", {exact: true}).fill(endpoint);
     await card.getByLabel("API Key", {exact: true}).fill(key);
     for (const [display, model] of models) {
       await card.getByRole("button", {name: "添加模型", exact: true}).click();
       const item = card.locator(".llm-model").last();
       await item.getByLabel("模型显示名称", {exact: true}).fill(display);
-      await item.getByLabel("模型标识", {exact: true}).fill(model);
+      await item.getByLabel("Model ID", {exact: true}).fill(model);
       if (display === "推理模型") await item.getByLabel("推理", {exact: true}).check();
       if (display !== "备用模型") await item.getByLabel("工具调用", {exact: true}).check();
     }
@@ -44,12 +44,12 @@ async (page) => {
   check(await primary.getByLabel("API Key", {exact: true}).inputValue() === "", "Credential echoed into DOM");
   check(await primary.getByRole("button", {name: "删除 Provider", exact: true}).isEnabled(), "Provider deletion is blocked by a consumer");
 
-  await primary.getByLabel("Provider 名称", {exact: true}).fill("已编辑 Provider");
+  await primary.getByLabel("Provider name", {exact: true}).fill("已编辑 Provider");
   await page.evaluate(() => { location.hash = "#agent"; });
   await page.getByRole("button", {name: /模型/}).first().waitFor();
   await page.evaluate(() => { location.hash = "#llm/catalog"; });
-  await page.getByLabel("Provider 名称", {exact: true}).first().waitFor();
-  check(await page.getByLabel("Provider 名称", {exact: true}).first().inputValue() === "已编辑 Provider", "Unsaved draft lost while navigating topics");
+  await page.getByLabel("Provider name", {exact: true}).first().waitFor();
+  check(await page.getByLabel("Provider name", {exact: true}).first().inputValue() === "已编辑 Provider", "Unsaved draft lost while navigating topics");
   await saveAndWait("Provider 与模型目录");
 
   const response = await page.request.get(`${base}/settings`, {headers: {"X-API-Key": "fixture-app"}});
