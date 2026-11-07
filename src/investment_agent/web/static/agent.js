@@ -4,6 +4,7 @@ import { randomUUID } from "./uuid.js";
 import { get, post, FETCH_MARKER_HEADERS } from "./api.js";
 import { el } from "./dom.js";
 import { renderAnswer } from "./agent_answer.js";
+import { bootResearchEntry } from "./research_entry.js";
 import { formatDate, formatDateTime } from "./format.js";
 import { registerRefreshGuard } from "./refresh_state.js";
 import { supportsNative, missingNativeCommand, disableNativeCommand } from "./native_bridge.js";
@@ -40,6 +41,7 @@ const PORTFOLIO_KINDS = new Set(["portfolio_snapshot","portfolio_plan"]);
 export function bootAgent() {
   const root = document.querySelector("#agent-workbench");
   if (!root) return;
+  bootResearchEntry();
   const $ = (id) => root.querySelector(`#agent-${id}`);
   let saved;
   try { saved = JSON.parse(sessionStorage.getItem(KEY) || "{}"); } catch { saved = {}; }

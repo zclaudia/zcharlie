@@ -17,7 +17,7 @@ from investment_agent.evidence.documents import (
     save_candidates,
     stage,
 )
-from investment_agent.investor.common import ObjectRef
+from investment_agent.investor.common import ObjectRef, OwnerId
 from investment_agent.storage.models.agent import ToolAction
 
 
@@ -29,7 +29,7 @@ async def scope(session: AsyncSession, business: BaseModel) -> tuple[ObjectRef, 
 
 async def permission(
     session: AsyncSession, context: ExecutionContext, name: str, request: OriginalRequest
-) -> None:
+) -> OwnerId:
     grant, settings = await check_boundary(
         session,
         context.claim,
@@ -48,7 +48,7 @@ async def permission(
         or matching[0].cutoff != request.as_of
     ):
         raise ExecutionDeniedError("exact_original_parse_permission_required")
-    payload, body = await stage(session, request)
+    payload, body = await stage(session, request, owner=grant.owner)
     if len(body) > matching[0].max_bytes_per_response:
         raise ExecutionDeniedError("original_parse_size_not_authorized")
     actions = (
@@ -69,6 +69,7 @@ async def permission(
     )
     if len(used) + (0 if existing else 1) > matching[0].max_parses:
         raise ExecutionDeniedError("original_parse_count_exhausted")
+    return grant.owner
 
 
 class DocumentExternal:
@@ -81,14 +82,14 @@ class DocumentExternal:
     async def send(self, operation_id: UUID, parameters: BaseModel) -> dict[str, Any]:
         assert self.context is not None and isinstance(parameters, OriginalRequest)
         async with self.context.sessions() as session:
-            await permission(session, self.context, self.name, parameters)
-            payload, body = await stage(session, parameters)
+            owner = await permission(session, self.context, self.name, parameters)
+            payload, body = await stage(session, parameters, owner=owner)
         # No physical read transaction or writer reservation during subprocess.
         parsed = await parse_staged(body, payload["mime"], page_start=parameters.page_start, page_count=parameters.page_count)
         async with self.context.sessions() as session:
-            await permission(session, self.context, self.name, parameters)
+            owner = await permission(session, self.context, self.name, parameters)
             result = (
-                await save_candidates(session, payload, body, parsed, parameters)
+                await save_candidates(session, payload, body, parsed, parameters, owner=owner)
                 if self.name == "parse_disclosure_original"
                 else readback(payload, parsed, parameters)
             )

@@ -25,7 +25,7 @@ from investment_agent.evidence.disclosures import DisclosureService
 from investment_agent.evidence.original_parser import VERSION, parse_original
 from investment_agent.evidence.queries import SnapshotQueryService
 from investment_agent.evidence.snapshots import UNITS, digest
-from investment_agent.investor.common import Contract, ObjectRef, Quantity
+from investment_agent.investor.common import Contract, ObjectRef, OwnerId, Quantity
 from investment_agent.storage.models.disclosure import DisclosureOriginal
 from investment_agent.storage.models.evidence import SavedEvidence
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
@@ -332,10 +332,19 @@ async def save_candidates(
     body: bytes,
     parsed: dict[str, Any],
     request: OriginalRequest,
+    *,
+    owner: OwnerId = "local_owner",
 ) -> dict[str, Any]:
     # Re-read exact owner/PIT/hash identity after parsing, inside the short final
     # transaction; the native boundary checks cancellation/settings separately.
-    current, exact = await stage(session, request)
+    # Owner is supplied by the live execution grant, never by parsed content.
+    # Refresh the persistent row even if a prior read populated the identity map.
+    original = await session.scalar(select(DisclosureOriginal).where(
+        DisclosureOriginal.id == str(request.original_id), DisclosureOriginal.owner_id == owner,
+    ).execution_options(populate_existing=True, autoflush=False))
+    if owner != "local_owner" or original is None:
+        raise DisclosureError("original_not_found")
+    current, exact = await stage(session, request, owner=owner)
     if (
         current != payload
         or exact != body
@@ -360,7 +369,7 @@ async def save_candidates(
             }
         ),
     )
-    manifest = await session.get(SavedEvidence, (str(manifest_id), 1))
+    manifest = await _owned_saved_evidence(session, manifest_id, owner)
     if manifest is None:
         now = datetime.now(UTC)
         text = json.dumps(
@@ -395,11 +404,12 @@ async def save_candidates(
             .values(
                 id=str(manifest_id),
                 revision=1,
-                owner_id="local_owner",
+                owner_id=owner,
                 payload=saved_manifest.model_dump(mode="json"),
             )
             .on_conflict_do_nothing()
         )
+        await _owned_saved_evidence(session, manifest_id, owner)
     result["parse_artifact_ref"] = ObjectRef(
         kind="evidence", id=manifest_id, revision=1
     ).model_dump(mode="json")
@@ -430,11 +440,12 @@ async def save_candidates(
                 acquired_at=datetime.fromisoformat(payload["acquired_at"]), available_from=now,
                 verification="candidate", conflict="none", text=text,
             )
+            await _owned_saved_evidence(session, evidence_id, owner)
             await session.execute(insert(SavedEvidence).values(
-                id=str(evidence_id), revision=1, owner_id="local_owner",
+                id=str(evidence_id), revision=1, owner_id=owner,
                 payload=record.model_dump(mode="json")
             ).on_conflict_do_nothing())
-            saved = await session.get(SavedEvidence, (str(evidence_id), 1))
+            saved = await _owned_saved_evidence(session, evidence_id, owner)
             assert saved is not None
             readable_after = max(readable_after, datetime.fromisoformat(saved.payload["available_from"]))
             result["text_refs"].append(ObjectRef(kind="evidence", id=evidence_id, revision=1).model_dump(mode="json"))
@@ -474,7 +485,7 @@ async def save_candidates(
         crosschecks = tuple(c.source_ref for c in agreeing) if verified else ()
         fragment = row["fragment"]
         corrections, correction_fragment = (
-            await verified_corrections(session, payload, parsed, row, request.as_of)
+            await verified_corrections(session, payload, parsed, row, request.as_of, owner=owner)
             if verified
             else ((), None)
         )
@@ -494,7 +505,7 @@ async def save_candidates(
             }
         )
         evidence_id = uuid5(NAMESPACE_URL, identity)
-        existing = await session.get(SavedEvidence, (str(evidence_id), 1))
+        existing = await _owned_saved_evidence(session, evidence_id, owner)
         if existing is None:
             now = datetime.now(UTC)
             record = EvidenceRecord(
@@ -547,12 +558,12 @@ async def save_candidates(
                 .values(
                     id=str(evidence_id),
                     revision=1,
-                    owner_id="local_owner",
+                    owner_id=owner,
                     payload=record.model_dump(mode="json"),
                 )
                 .on_conflict_do_nothing()
             )
-            existing = await session.get(SavedEvidence, (str(evidence_id), 1))
+            existing = await _owned_saved_evidence(session, evidence_id, owner)
         assert existing is not None
         saved_record = EvidenceRecord.model_validate(existing.payload)
         readable_after = max(
@@ -580,6 +591,17 @@ async def save_candidates(
     return result
 
 
+async def _owned_saved_evidence(
+    session: AsyncSession, evidence_id: UUID, owner: OwnerId,
+) -> SavedEvidence | None:
+    saved = await session.scalar(select(SavedEvidence).where(
+        SavedEvidence.id == str(evidence_id), SavedEvidence.revision == 1,
+    ).execution_options(populate_existing=True, autoflush=False))
+    if saved is not None and saved.owner_id != owner:
+        raise DisclosureError("original_scope_mismatch")
+    return saved
+
+
 def fact_identity(record: EvidenceRecord) -> tuple[Any, ...] | None:
     provenance = record.document_provenance
     if provenance is None or record.period is None or record.value is None:
@@ -600,6 +622,8 @@ async def verified_corrections(
     parsed: dict[str, Any],
     row: dict[str, Any],
     cutoff: datetime,
+    *,
+    owner: OwnerId = "local_owner",
 ) -> tuple[tuple[ObjectRef, ...], dict[str, Any] | None]:
     """Narrow explicit issuer statement + exact original and verified fact join.
 
@@ -619,7 +643,7 @@ async def verified_corrections(
     targets = (
         await session.scalars(
             select(DisclosureOriginal).where(
-                DisclosureOriginal.owner_id == "local_owner",
+                DisclosureOriginal.owner_id == owner,
                 DisclosureOriginal.payload["listing_id"].as_integer() == payload["listing_id"],
                 DisclosureOriginal.payload["disclosure_id"].as_string() == statements[0][0],
             )
@@ -634,7 +658,7 @@ async def verified_corrections(
             await session.scalars(
                 select(SavedEvidence)
                 .where(
-                    SavedEvidence.owner_id == "local_owner",
+                    SavedEvidence.owner_id == owner,
                     SavedEvidence.payload["subject_ref"]["id"].as_integer()
                     == payload["listing_id"],
                     SavedEvidence.payload["source_ref"]["field_path"].as_string()
@@ -670,7 +694,7 @@ async def verified_corrections(
             if (
                 len(declarations) == 1
                 and target_record is not None
-                and target_record.owner_id == "local_owner"
+                and target_record.owner_id == owner
                 and material.get("original_hash") == target_record.content_hash
             ):
                 targets.append(target_record)
@@ -684,11 +708,11 @@ async def verified_corrections(
         >= datetime.fromisoformat(payload["first_published_at"])
     ):
         return (), None
-    await DisclosureService(session).read(UUID(target.id), cutoff)
+    await DisclosureService(session, owner).read(UUID(target.id), cutoff)
     saved = (
         await session.scalars(
             select(SavedEvidence).where(
-                SavedEvidence.owner_id == "local_owner",
+                SavedEvidence.owner_id == owner,
                 SavedEvidence.payload["source_ref"]["id"].as_string() == target.id,
             )
         )

@@ -11,6 +11,7 @@ is the daily candidate expiry sweep: a few row updates, run in-process.
 """
 
 import asyncio
+from contextlib import suppress
 from datetime import date, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -61,6 +62,7 @@ from investment_agent.storage.database import engine_lifespan, session_scope
 log = structlog.get_logger(__name__)
 
 SETTINGS_POLL_SECONDS = 60.0
+EVENT_DISPATCH_SECONDS = 30.0
 
 # A job that misses its fire time (process busy, host asleep, short restart)
 # still runs if the scheduler notices within this window; queued misfires of
@@ -483,6 +485,45 @@ def _candidate_trigger(cfg: CandidateScheduleConfig | None) -> CronTrigger | Non
     return _parse_cron(cfg.expiry_sweep_cron, timezone=cfg.timezone)
 
 
+async def run_simulation_dispatch() -> int | None:
+    """Only enqueue active experiment wakes; all collection/model work is queued."""
+    from investment_agent.simulation.jobs import wake_active_experiments
+
+    try:
+        async with session_scope() as session:
+            return await wake_active_experiments(session)
+    except Exception:
+        log.exception("scheduler.simulation.dispatch_failed")
+        return None
+
+
+async def run_research_events_dispatch() -> int | None:
+    """Only enqueue local mechanical work; feature writers have separate gates."""
+    from investment_agent.research_events.maintenance import (
+        enqueue_maintenance_tick,
+        get_maintenance_bindings,
+    )
+
+    bindings = get_maintenance_bindings()
+    if not bindings.consumers and not bindings.wakeups:
+        return None
+    async with session_scope() as session:
+        run, _ = await enqueue_maintenance_tick(session, bindings=bindings)
+        return run.id if run is not None else None
+
+
+async def run_research_events_dispatch_loop(*, poll_seconds: float = EVENT_DISPATCH_SECONDS) -> None:
+    """Independent of watch_settings, whose research scans may take longer."""
+    if poll_seconds <= 0:
+        raise ValueError("event dispatch interval must be positive")
+    while True:
+        try:
+            await run_research_events_dispatch()
+        except Exception:
+            log.exception("scheduler.research_events.dispatch_failed")
+        await asyncio.sleep(poll_seconds)
+
+
 async def run_verification_dispatch() -> int | None:
     """One dispatcher fire: enqueue an ``ifind_verify`` run when requests are due."""
 
@@ -824,6 +865,7 @@ async def watch_settings(
             # when both gates are currently enabled. No cron job changes the
             # default scheduler inventory.
             await run_supplemental_update_dispatch()
+            await run_simulation_dispatch()
             from investment_agent.investor.monitoring import MonitoringService
             if settings.investor_agent_enabled:
                 async with session_scope() as session:
@@ -962,9 +1004,11 @@ async def _run_scheduler(
     await _startup_review_batch_check(cfg, started_at)
     await _startup_screen_check(cfg, started_at)
     await run_supplemental_update_dispatch()
+    await run_simulation_dispatch()
     if _candidate_trigger(cfg.candidates) is not None:
         await run_candidate_expiry_job()
     await _startup_verification_check(cfg, started_at)
+    event_dispatch = asyncio.create_task(run_research_events_dispatch_loop(), name="research-events-dispatch")
     try:
         await watch_settings(
             sched, settings, config_path, revision=revision, poll_seconds=poll_seconds
@@ -972,3 +1016,7 @@ async def _run_scheduler(
     except (KeyboardInterrupt, asyncio.CancelledError):
         log.info("scheduler.stopping")
         sched.shutdown(wait=False)
+    finally:
+        event_dispatch.cancel()
+        with suppress(asyncio.CancelledError):
+            await event_dispatch

@@ -137,6 +137,8 @@ class NumericResolver:
     async def calculation(self, ref: ObjectRef, *, require_fresh: bool = True) -> CalculationRecord:
         result = await self.evidence.get_calculation("local_owner", ref.model_copy(update={"field_path": None}), self.as_of)
         record = result.data
+        if record is not None and record.method in {"portfolio_stress", "decision_fact_check"}:
+            raise InvestorError("invalid_reference", "Study calculations are not formal company evidence")
         if result.status != "ok" or record is None or not record.applicable or any(error not in {"short_history", "approx", "full"} for error in record.errors) or any(flag in {"stale_price", "report_overdue", "unresolved_conflict", "unverified_fcfe", "missing_inputs"} for flag in record.quality):
             raise InvestorError("invalid_reference", "Calculation status or input quality is not publishable")
         if not record.fact_refs:

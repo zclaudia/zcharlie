@@ -81,7 +81,7 @@ _MAINTENANCE_RESET_KINDS = frozenset(
 )
 # Review seats run on the agent worker (they are LLM calls with an interactive
 # cost profile) but enqueue no follower jobs, so they do not reset maintenance.
-_AGENT_WORKER_EXTRA_KINDS = frozenset({"review_seat"})
+_AGENT_WORKER_EXTRA_KINDS = frozenset({"review_seat", "simulation_decide", "simulation_review"})
 
 
 async def wake_supplemental_updates(session: AsyncSession, *, settings: Settings) -> bool:
@@ -256,7 +256,7 @@ class IfindResearchHandler(BaseJobHandler):
 def default_job_handlers(
     settings: Settings, *, runner: ResearchRunner = run_ifind_research_chain
 ) -> list[JobHandler]:
-    """Every job kind a worker serves unless restricted with ``kinds``."""
+    """Ordinary work; the event maintenance kind requires an isolated worker."""
 
     from investment_agent.agent.job import agent_job_handlers
     from investment_agent.candidates.ranking_jobs import CandidateRankingHandler
@@ -265,12 +265,14 @@ def default_job_handlers(
     from investment_agent.portfolio.valuation_jobs import PortfolioValuationHandler
     from investment_agent.review_panel.job import ReviewSeatHandler
     from investment_agent.rules.zone_jobs import ZoneDetectionHandler
+    from investment_agent.simulation.jobs import simulation_job_handlers
     from investment_agent.supplemental_rules.disclosure_updates import DisclosurePollingHandler
     from investment_agent.supplemental_rules.jobs import SupplementalRuleHandler
     from investment_agent.supplemental_rules.update_jobs import SupplementalUpdateHandler
 
     return [
         *agent_job_handlers(settings),
+        *simulation_job_handlers(settings),
         AccountFitHandler(settings=settings),
         CandidateRankingHandler(settings=settings),
         SupplementalRuleHandler(settings=settings),
@@ -290,6 +292,24 @@ def default_job_handlers(
         ZoneDetectionHandler(settings=settings, calendar_path=_calendar_path()),
         PeerCollectHandler(settings=settings),
     ]
+
+
+def _configured_job_handlers(
+    settings: Settings, *, runner: ResearchRunner, kinds: Collection[str] | None,
+) -> list[JobHandler]:
+    kind = "research_events_maintenance"
+    if kinds is not None and kind in kinds:
+        if set(kinds) != {kind}:
+            raise ValueError("event maintenance kind must run alone in a dedicated worker")
+        from investment_agent.research_events.maintenance import (
+            ResearchEventMaintenanceHandler,
+            get_maintenance_bindings,
+        )
+
+        return [ResearchEventMaintenanceHandler(
+            session_factory=session_scope, bindings_factory=get_maintenance_bindings,
+        )]
+    return default_job_handlers(settings, runner=runner)
 
 
 def partition_worker_kinds(settings: Settings) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -374,7 +394,7 @@ class ResearchWorker:
         self._settings_revision = settings_revision
         self._maintenance_at = 0.0  # monotonic due time; 0.0 = immediately due
         self.handlers: dict[str, JobHandler] = self._registry(
-            handlers if handlers is not None else default_job_handlers(settings, runner=runner)
+            handlers if handlers is not None else _configured_job_handlers(settings, runner=runner, kinds=kinds)
         )
 
     def _registry(self, handlers: Sequence[JobHandler]) -> dict[str, JobHandler]:
@@ -418,7 +438,7 @@ class ResearchWorker:
             self._settings_revision = revision
             return False
         settings = await load_settings(session, base=self._base_settings)
-        self.handlers = self._registry(default_job_handlers(settings, runner=self.runner))
+        self.handlers = self._registry(_configured_job_handlers(settings, runner=self.runner, kinds=self._kinds))
         self.settings = settings
         # Config documents bump the same revision (CD4): reload any whose own
         # revision moved so the sync config readers see the next job's values.

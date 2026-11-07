@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
-{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/agent.css') }}">{% endblock %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/agent.css') }}"><link rel="stylesheet" href="{{ static_url('pages/research_entry.css') }}">{% endblock %}
 {% block content %}
 <div id="agent-workbench" class="agent-workbench" data-tab="chat" data-pane="chat" data-drawer="open">
   <h1 class="sr-only">AI</h1>
@@ -38,6 +38,7 @@
       </header>
       <div id="agent-updates" class="ai-updates" aria-live="polite"></div>
       <p id="agent-notice" class="ai-notice" role="status" aria-live="polite" hidden></p>
+      {% include "_research_entry.html" %}
       <div id="agent-messages" class="ai-thread" aria-live="polite"></div>
 
       <div class="ai-compose-wrap">

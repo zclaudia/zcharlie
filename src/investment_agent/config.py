@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     materials_hk_refresh_enabled: bool = False
     investor_agent_enabled: bool = False
     investor_agent_background_enabled: bool = False
+    research_quality_enabled: bool = False
+    research_quality_execution_enabled: bool = False
     agent_queue_max_running: int = Field(default=4, ge=1, le=4)
     agent_queue_interactive_capacity: int = Field(default=128, ge=1, le=128)
     agent_queue_review_capacity: int = Field(default=96, ge=1, le=96)

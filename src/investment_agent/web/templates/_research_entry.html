@@ -1,0 +1,27 @@
+<details id="research-entry" class="research-entry">
+  <summary>开始一次研究</summary>
+  <div class="research-entry-body">
+    <p>选择已有证券，先看材料和缺口，再决定是否运行完整公司研究。</p>
+    <form data-entry-search-form autocomplete="off">
+      <label>证券名称或代码 <input data-entry-search maxlength="32" required placeholder="例如：招商银行"></label>
+      <button type="submit">查找证券</button>
+    </form>
+    <div data-entry-matches aria-live="polite"></div>
+    <p data-entry-identity>尚未选择证券</p>
+    <label>研究问题模板
+      <select data-entry-template>
+        <option value="company_research">商业驱动是什么</option>
+        <option value="cash_flow">现金流为何背离</option>
+        <option value="counter_evidence">主要反证是什么</option>
+      </select>
+    </label>
+    <label>本次问题 <textarea data-entry-question rows="3" maxlength="20000">这家公司的主要商业驱动是什么？请列明可核对证据、反证与缺口。</textarea></label>
+    <button type="button" data-entry-preflight>先看材料与缺口</button>
+    <p data-entry-notice role="status" aria-live="polite"></p>
+    <section data-entry-coverage aria-label="材料预检" hidden></section>
+    <label class="research-entry-consent"><input type="checkbox" data-entry-consent>明确选择完整公司研究（company_research），使用当前模型和原任务额度</label>
+    <button type="button" class="primary" data-entry-submit disabled>开始完整公司研究</button>
+    <button type="button" data-entry-retry hidden>确认原消息是否送达</button>
+    <section data-entry-result aria-label="原任务结果" hidden></section>
+  </div>
+</details>

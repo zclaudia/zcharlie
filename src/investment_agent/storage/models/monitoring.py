@@ -1,7 +1,7 @@
 """Durable monitor receipts, review cycles and in-app notification projection."""
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, CheckConstraint, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from investment_agent.storage.models.base import Base
@@ -16,10 +16,14 @@ class MonitorReceipt(Base):
 
 class ReviewCycle(Base):
     __tablename__ = "investor_review_cycle"
+    __table_args__ = (
+        CheckConstraint("cycle_event_revision >= 0", name="ck_review_cycle_event_revision"),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     case_id: Mapped[str] = mapped_column(ForeignKey("investor_case.id"), index=True)
     task_id: Mapped[str | None] = mapped_column(ForeignKey("agent_task.id"), nullable=True, unique=True)
     state: Mapped[str] = mapped_column(String(24), index=True)
+    cycle_event_revision: Mapped[int] = mapped_column(default=0, server_default="0")
     payload: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 

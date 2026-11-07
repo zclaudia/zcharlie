@@ -1,0 +1,80 @@
+{
+  "namespace_name": "investment-agent/research-domain-event/v1",
+  "namespace": "30d5fd64-e30f-553b-930e-291bbad453ea",
+  "algorithm": "sha256(UTF-8 canonical JSON); uuid5(namespace, canonical([owner,type,{kind,id},revision]))",
+  "vectors": [
+    {
+      "name": "object_order",
+      "inputs": [
+        {
+          "b": 2,
+          "a": "中文"
+        },
+        {
+          "a": "中文",
+          "b": 2
+        }
+      ],
+      "normalized": {
+        "a": "中文",
+        "b": 2
+      },
+      "canonical": "{\"a\":\"中文\",\"b\":2}",
+      "sha256": "257880e3654c372ee4dd773481c8ec19c1a0afe4d9d41078817518c4bd2aecc8"
+    },
+    {
+      "name": "typed_decimal_utc",
+      "typed_inputs": [
+        {
+          "amount": "1.00",
+          "ratio": "-0.0",
+          "at": "2026-11-07T17:30:00+08:00"
+        },
+        {
+          "amount": "1",
+          "ratio": "0",
+          "at": "2026-11-07T09:30:00Z"
+        }
+      ],
+      "typed_fields": {
+        "amount": "Decimal",
+        "ratio": "Decimal",
+        "at": "UTC datetime"
+      },
+      "normalized": {
+        "amount": "1",
+        "ratio": "0",
+        "at": "2026-11-07T09:30:00Z"
+      },
+      "canonical": "{\"amount\":\"1\",\"at\":\"2026-11-07T09:30:00Z\",\"ratio\":\"0\"}",
+      "sha256": "565925416120b0d72dea89b691d1880bfb294e315f345b007be0794076a81a75"
+    },
+    {
+      "name": "strings_stay_strings",
+      "inputs": [
+        {
+          "code": "1.00"
+        }
+      ],
+      "normalized": {
+        "code": "1.00"
+      },
+      "canonical": "{\"code\":\"1.00\"}",
+      "sha256": "0ca99ccac24a423404ac2116ed1cc35661fae9218378a93e9527f9e9a50d7e92"
+    }
+  ],
+  "event_identity_example": {
+    "source_identity": "{\"id\":381,\"kind\":\"review_round\"}",
+    "key": "[\"local_owner\",\"review_panel.finalized\",{\"id\":381,\"kind\":\"review_round\"},1]",
+    "event_id": "6600523a-fe14-57b9-80ca-2318a5910df8"
+  },
+  "reject": [
+    "float and bool at Decimal input",
+    "NaN",
+    "Infinity",
+    "naive datetime",
+    "unknown kind",
+    "numeric-string or bool at int ID",
+    "excessive Decimal exponent before expansion"
+  ]
+}

@@ -1,0 +1,188 @@
+{
+  "synthetic": true,
+  "create_stress": {
+    "method": "POST",
+    "path": "/portfolio/stress-studies",
+    "request": {
+      "operation_id": "00000000-0000-0000-0000-000000000321",
+      "account_id": "00000000-0000-0000-0000-0000000000c8",
+      "expected_account_revision": 12,
+      "snapshot_ref": {
+        "kind": "portfolio_snapshot",
+        "id": "00000000-0000-0000-0000-0000000000c9",
+        "revision": 12
+      },
+      "valuation_ref": {
+        "kind": "portfolio_valuation",
+        "id": "00000000-0000-0000-0000-000000000322",
+        "revision": 1
+      },
+      "alternatives": [],
+      "shocks": [
+        {
+          "name": "市场与银行压力",
+          "global": "-0.2",
+          "industries": [
+            {
+              "system": "csrc",
+              "code": "J66",
+              "shock": "-0.3"
+            }
+          ],
+          "listings": []
+        }
+      ],
+      "thresholds": {
+        "maximum_loss_cny": "100000",
+        "maximum_loss_ratio": "0.25"
+      }
+    },
+    "status": 201,
+    "response": {
+      "study_ref": {
+        "kind": "portfolio_stress",
+        "id": "00000000-0000-0000-0000-0000000000cb",
+        "revision": 1
+      },
+      "run_id": 81,
+      "result_id": "00000000-0000-0000-0000-0000000000cc",
+      "input_hash": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  },
+  "partial_result": {
+    "state": "partial",
+    "study_ref": {
+      "kind": "portfolio_stress",
+      "id": "00000000-0000-0000-0000-0000000000cb",
+      "revision": 1
+    },
+    "run_id": 81,
+    "calculation_ref": {
+      "kind": "calculation",
+      "id": "00000000-0000-0000-0000-0000000000cc",
+      "revision": 1
+    },
+    "results": {
+      "known_securities_loss": {
+        "value": "24000",
+        "unit": "CNY",
+        "currency": "CNY",
+        "unknown_reason": null
+      },
+      "total_loss": {
+        "value": null,
+        "unit": "CNY",
+        "currency": "CNY",
+        "unknown_reason": "cash_missing"
+      }
+    },
+    "quality": [
+      "cash_missing"
+    ],
+    "version_refs": [
+      {
+        "kind": "portfolio_snapshot",
+        "id": "00000000-0000-0000-0000-0000000000c9",
+        "revision": 12
+      },
+      {
+        "kind": "portfolio_valuation",
+        "id": "00000000-0000-0000-0000-000000000322",
+        "revision": 1
+      }
+    ],
+    "current_basis_changed": false
+  },
+  "create_observation": {
+    "method": "POST",
+    "path": "/investor/decision-observations",
+    "request": {
+      "operation_id": "00000000-0000-0000-0000-000000000323",
+      "observation_id": "00000000-0000-0000-0000-00000000012c",
+      "account_id": "00000000-0000-0000-0000-0000000000c8",
+      "expected_revision": 0,
+      "expected_control_revision": 0,
+      "expected_account_revision": 12,
+      "expected_binding_head_revision": 0,
+      "decision_ref": {
+        "kind": "decision",
+        "id": "00000000-0000-0000-0000-00000000012d",
+        "revision": 1
+      },
+      "stress_ref": {
+        "kind": "portfolio_stress",
+        "id": "00000000-0000-0000-0000-0000000000cb",
+        "revision": 1
+      },
+      "predicates": [
+        {
+          "id": "sold",
+          "type": "linked_trade_quantity",
+          "listing_ref": {
+            "kind": "listing",
+            "id": 18,
+            "revision": 1
+          },
+          "direction": "sell",
+          "operator": "ge",
+          "threshold": "100",
+          "unit": "shares"
+        }
+      ],
+      "deadline": {
+        "type": "fixed_date",
+        "date": "2026-11-12",
+        "timezone": "Asia/Shanghai",
+        "non_trading_day": "next_trading_day"
+      },
+      "authorization": {
+        "local_auto_check": true,
+        "expires_at": "2026-11-20T15:59:59.999999Z",
+        "scope": "registered_predicates_local_only"
+      },
+      "note": "核对指定卖出事实"
+    },
+    "status": 201,
+    "response": {
+      "observation_ref": {
+        "kind": "decision_observation",
+        "id": "00000000-0000-0000-0000-00000000012c",
+        "revision": 1
+      },
+      "control_revision": 1,
+      "permission_epoch": 1,
+      "binding_head_revision": 0,
+      "state": "scheduled",
+      "registered_at": "2026-11-07T04:00:00Z",
+      "registered_after_decision": true,
+      "due_at": "2026-11-12T15:59:59.999999Z",
+      "not_before": "2026-11-13T12:00:00Z",
+      "calendar": {
+        "id": "fixture-a-share-2026",
+        "content_hash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "authorization": {
+        "local_auto_check": true,
+        "expires_at": "2026-11-20T15:59:59.999999Z"
+      },
+      "input_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "bindings_completeness": "unconfirmed",
+      "predicate_ids": [
+        "sold"
+      ]
+    }
+  },
+  "allocate": {
+    "operation_id": "00000000-0000-0000-0000-000000000324",
+    "action": "allocate",
+    "account_id": "00000000-0000-0000-0000-0000000000c8",
+    "expected_control_revision": 1,
+    "expected_account_revision": 12,
+    "expected_binding_head_revision": 0,
+    "event_id": "00000000-0000-0000-0000-000000000325",
+    "event_revision": 12,
+    "fact_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "allocation_quantity": "100",
+    "reason": "这笔已确认卖出对应原决定"
+  }
+}

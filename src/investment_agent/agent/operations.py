@@ -2,8 +2,9 @@
 
 The cursor is durable and protected by a short SQLite writer reservation. Slots
 are 3 interactive : 1 review : 1 exploration, with empty-slot lending. Only
-agent jobs enter this scheduler. Non-agent work is claimed separately, oldest
-due first, and does not consume these running caps. Within a class, least
+agent jobs enter this scheduler. Simulation model jobs keep their own
+lifecycle and admission, but count toward global running caps. Other non-agent
+work is claimed separately, oldest due first. Within a class, least
 recently served account/case wins, then immutable enqueue order. Retries never
 reset the cursor, task identity or lifetime budget.
 """
@@ -150,7 +151,8 @@ async def choose(
 
     Non-agent kinds are ignored. A None result must not stop the caller from
     claiming a due snapshot, screen, or calendar job. Running caps count agent
-    jobs only, across workers.
+    jobs and simulation model jobs, across workers. Simulation admission uses
+    this same cursor reservation; it never enters the agent task lifecycle.
     """
 
     agent_kinds = [item for item in kinds if item in AGENT_KINDS]
@@ -175,7 +177,7 @@ async def choose(
             .where(
                 PipelineRun.status == "running",
                 PipelineRun.worker_id.is_not(None),
-                PipelineRun.kind.in_(AGENT_KINDS),
+                PipelineRun.kind.in_((*AGENT_KINDS, "simulation_decide", "simulation_review")),
             )
             .limit(MAX_CONCURRENCY)
         )

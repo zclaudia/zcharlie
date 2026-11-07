@@ -1,0 +1,164 @@
+{
+  "synthetic": true,
+  "cases": [
+    {
+      "name": "review_source_string_id",
+      "base_event": "review_panel.finalized",
+      "replace": {
+        "source_ref": {
+          "kind": "review_round",
+          "id": "381",
+          "revision": 1
+        }
+      },
+      "rejected_by": "schema"
+    },
+    {
+      "name": "review_source_bool_id",
+      "base_event": "review_panel.finalized",
+      "replace": {
+        "source_ref": {
+          "kind": "review_round",
+          "id": true,
+          "revision": 1
+        }
+      },
+      "rejected_by": "strict DTO/schema"
+    },
+    {
+      "name": "mixed_subject",
+      "base_event": "source.invalidated",
+      "replace_payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18,
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        }
+      },
+      "rejected_by": "schema"
+    },
+    {
+      "name": "source_revision_mismatch",
+      "base_event": "review_panel.finalized",
+      "replace": {
+        "source_revision": 2
+      },
+      "rejected_by": "cross-field validator"
+    },
+    {
+      "name": "unregistered_topic",
+      "base_event": "topic.observation_changed",
+      "replace": {},
+      "rejected_by": "publish resolver registry"
+    },
+    {
+      "name": "comparison_round_mismatch",
+      "base_event": "review_panel.finalized",
+      "replace_payload": {
+        "comparison_ref": {
+          "kind": "review_comparison",
+          "id": 453,
+          "revision": 1
+        }
+      },
+      "rejected_by": "persistent resolver parent relation"
+    },
+    {
+      "name": "candidate_is_not_correction",
+      "base_event": "source.invalidated",
+      "replace": {},
+      "rejected_by": "persistent resolver verification/correction refs"
+    },
+    {
+      "name": "empty_invalidated",
+      "base_event": "source.invalidated",
+      "replace_payload": {
+        "invalidated_refs": []
+      },
+      "rejected_by": "schema"
+    },
+    {
+      "name": "untrusted_withdrawn_reason",
+      "base_event": "source.invalidated",
+      "replace_payload": {
+        "reason": "source_withdrawn"
+      },
+      "rejected_by": "schema"
+    },
+    {
+      "name": "wrong_replacement",
+      "base_event": "source.invalidated",
+      "replace_payload": {
+        "replacement_refs": [
+          {
+            "kind": "evidence",
+            "id": "00000000-0000-0000-0000-0000000000c7",
+            "revision": 1
+          }
+        ]
+      },
+      "rejected_by": "persistent resolver source equality"
+    },
+    {
+      "name": "source_field_path",
+      "base_event": "source.invalidated",
+      "replace": {
+        "source_ref": {
+          "kind": "evidence",
+          "id": "00000000-0000-0000-0000-000000000069",
+          "revision": 1,
+          "field_path": "value"
+        }
+      },
+      "rejected_by": "schema"
+    },
+    {
+      "name": "quality_ref_financial_path",
+      "base_event": "source.invalidated",
+      "replace_payload": {
+        "replacement_refs": [
+          {
+            "kind": "quality_result",
+            "id": "00000000-0000-0000-0000-000000000190",
+            "revision": 1
+          }
+        ]
+      },
+      "rejected_by": "schema"
+    },
+    {
+      "name": "naive_timestamp",
+      "base_event": "source.invalidated",
+      "replace": {
+        "occurred_at": "2026-11-07T09:30:00"
+      },
+      "rejected_by": "schema/UTC validator"
+    },
+    {
+      "name": "backfill_without_manifest",
+      "base_event": "review_panel.finalized",
+      "replace_payload": {
+        "backfill": true
+      },
+      "rejected_by": "cross-field validator"
+    },
+    {
+      "name": "same_source_different_payload",
+      "base_event": "review_panel.finalized",
+      "replace_payload": {
+        "notify_reasons": [
+          "stance_flip"
+        ]
+      },
+      "rejected_by": "repository source hash conflict"
+    },
+    {
+      "name": "arbitrary_payload_extra",
+      "base_event": "source.invalidated",
+      "replace_payload": {
+        "raw_document": "private text"
+      },
+      "rejected_by": "schema"
+    }
+  ]
+}

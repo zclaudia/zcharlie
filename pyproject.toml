@@ -81,7 +81,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 "investment_agent.industry_peers" = ["data/*"]
 "investment_agent.providers" = ["certs/*.pem"]
-"investment_agent.web" = ["templates/*.html", "static/*.css", "static/*.js", "static/brand/*.png"]
+"investment_agent.web" = ["templates/*.html", "static/*.css", "static/*.js", "static/pages/*.css", "static/brand/*.png"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

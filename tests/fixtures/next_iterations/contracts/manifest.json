@@ -1,0 +1,40 @@
+{
+  "contract_version": "next-iterations/1",
+  "task": "BASE-02",
+  "status": "frozen_specification_not_implementation",
+  "synthetic": true,
+  "files": [
+    "bank.json",
+    "canonical.vectors.json",
+    "errors.json",
+    "events.invalid.json",
+    "events.schema.json",
+    "events.valid.json",
+    "g0.json",
+    "inbox.json",
+    "portfolio.json",
+    "projection-cursor.json",
+    "quality.json"
+  ],
+  "domain_modules_required_to_parse_schema": [],
+  "validation_layers": [
+    "closed JSON schema/DTO",
+    "cross-field typed normalization and equality",
+    "registered same-session persistent owner/subject/source resolver",
+    "database uniqueness/CAS/transaction"
+  ],
+  "note": "Examples do not prove existence, eligibility, financial truth, production data import or event publication.",
+  "sha256": {
+    "bank.json": "013cf8739dc0dbb376f6503052503d4e5686b6f3af051bcdca99111edfc7b097",
+    "canonical.vectors.json": "4038b2c0ec7bed6efd1bb2e2092de0985943343faf85e4058782b8c1826ae902",
+    "errors.json": "32cb298c2259af136b5695976e477ca5a365e542e2c748c7ef9f9022f33a8bfc",
+    "events.invalid.json": "5e8f6637fd82301862620e3083f6d98a7936dab4c8165524ac277153ceebb2e4",
+    "events.schema.json": "2da067ba426c792fa1185289e2524690fc43943ae2f4d136fe9a0d881d2bf67d",
+    "events.valid.json": "c5ec993a7976f5c911e0d3459e6f4afe2c975d2cbd111a5d10651408f56657d7",
+    "g0.json": "efa418e19387142fe2e8a208f83c4c7f59e59d3be7b00e5adeff0887314efd6b",
+    "inbox.json": "c6d9f7fbfa4a70d949f11a31e3de95264f726e42126d4e43401dd7051ec9b2e3",
+    "portfolio.json": "c75247020afd30fdd29eb5af46844a1f2ad3ce7fc62dea0dc1ebad86625b899c",
+    "projection-cursor.json": "5473ed2a5075f25920c72885f3458463d6537a5e5e069a0ed83f4b6e962d9971",
+    "quality.json": "e3837dfae6a675b1de595a66c34d1e284d1643c23245fab5d04805038cf022ac"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "python": "3.13.5",
+  "sqlite": "3.53.2",
+  "node": "v22.23.2",
+  "ruff": "0.16.10",
+  "mypy": "2.4.0",
+  "alembic_head": "061",
+  "usable_commands": [
+    ".venv/bin/python -m pytest",
+    ".venv/bin/python -m alembic",
+    ".venv/bin/python -m ruff",
+    ".venv/bin/python -m mypy",
+    "node"
+  ],
+  "console_script_shebang": "stale original checkout path; use python -m",
+  "available_modules": [
+    "pytest",
+    "ruff",
+    "mypy",
+    "httpx",
+    "pydantic_ai"
+  ],
+  "missing_build_modules": [
+    "setuptools",
+    "wheel"
+  ],
+  "frontend_existing_modules": [
+    "jsdom",
+    "vitest",
+    "typescript"
+  ],
+  "application_tests_run": false,
+  "notes": [
+    "Build backend availability must be resolved for PK-02 without upgrading application dependencies.",
+    "No real E2E, providers, credentials or production DB used."
+  ]
+}

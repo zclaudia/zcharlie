@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "local_official_report_gold_sample",
+  "synthetic": false,
+  "source": {
+    "path": "research/industry-data-validation/evidence/run-02/raw/official/600036.SH_2025.pdf",
+    "bytes": 32081947,
+    "sha256": "abe612a273468072b176dd51ea460c1e1596f8ca729cbc6db3fa28ba9a57ea79",
+    "pdf_pages": 350,
+    "issuer": "招商银行股份有限公司",
+    "ticker": "600036.SH",
+    "report_title": "招商银行股份有限公司2025年度报告",
+    "disclosure_id": "1225047590",
+    "url": "https://static.cninfo.com.cn/finalpage/2026-03-28/1225047590.PDF",
+    "original_ref": null,
+    "original_ref_reason": "not_imported_into_owner_scoped_originals",
+    "metadata_path": "research/industry-data-validation/evidence/run-02/derived/filings/600036.SH.json",
+    "integrity_manifest_path": "research/industry-data-validation/evidence/run-02/manifest.json",
+    "http_metadata_path": "research/industry-data-validation/evidence/run-02/raw/http/5e7d77b2b21d06d5d151e79ae9579019a50d80927d5e572bf383a3dbfb51e58f.meta.json",
+    "published_at": null,
+    "published_date": "2026-03-28",
+    "published_precision": "date",
+    "published_timezone": "Asia/Shanghai",
+    "published_basis": "CNINFO stored announcementTime and adjunctUrl date; exact public instant unknown",
+    "acquired_at": "2026-10-11T15:10:33.840106+00:00",
+    "acquired_precision": "timestamp",
+    "acquired_basis": "stored HTTP fetched_at_utc; records this fetch, not an inferred first-ever acquisition",
+    "checked_at": "2026-11-06T18:29:12+00:00",
+    "review_actor": "codex-local-pdf-review",
+    "verification": "local_pdf_text_checked",
+    "rule_version": "bank-topic-fixture/1"
+  },
+  "scope": {
+    "accounting_standard": "CAS",
+    "reporting_scope": "consolidated",
+    "currency": "CNY",
+    "period": {
+      "start": "2025-01-01",
+      "end": "2025-12-31",
+      "basis": "period_to_date/annual"
+    },
+    "baseline_period": {
+      "start": "2024-01-01",
+      "end": "2024-12-31",
+      "basis": "period_to_date/annual"
+    },
+    "comparison_basis": "FY2024 comparison columns in the same FY2025 report"
+  },
+  "extraction": {
+    "method": "bank_page_text: pypdf plus bundled Adobe-GB1-UCS2 for undeclared Identity-H ToUnicode",
+    "excerpt_canonicalization": "collapse Unicode whitespace with str.split and join using one ASCII space; SHA256 of UTF-8",
+    "pdf_pages_one_based": true,
+    "bbox": null,
+    "visual_render_review": false
+  },
+  "locators": {
+    "annual_table": {
+      "pdf_page": 22,
+      "printed_page": "21",
+      "excerpt": "3.2.5 净利息收入 报告期内，本集团净利息收入 2,155.93 亿元，同比增长 2.04%。 下表列出所示期间本集团资产负债项目平均余额、利息收入 ／ 利息支出及平均收益 ／ 成本率情况。 2025 年 2024 年 （人民币百万元，百分比除外） 平均余额 利息收入 平均 收益率% 平均余额 利息收入 平均 收益率% 生息资产 贷款和垫款 6,994,961 233,547 3.34 6,666,187 260,573 3.91 投资 3,244,024 91,477 2.82 2,757,151 84,924 3.08 存放中央银行款项 541,000 8,864 1.64 580,940 9,698 1.67 存拆放同业和其他金融机构款项 778,083 17,463 2.24 681,863 19,076 2.80 合计 11,558,068 351,351 3.04 10,686,141 374,271 3.50 （人民币百万元，百分比除外） 平均余额 利息支出 平均 成本率% 平均余额 利息支出 平均 成本率% 计息负债 客户存款 9,202,500 107,869 1.17 8,515,666 130,824 1.54 同业存拆放及其他 1,265,266 20,001 1.58 959,111 20,086 2.09 应付债券 168,539 5,383 3.19 252,448 7,656 3.03 向中央银行借款 140,140 2,505 1.79 207,453 4,428 2.13 合计 10,776,445 135,758 1.26 9,934,678 162,994 1.64 净利息收入 ／ 215,593 ／ ／ 211,277 ／ 净利差 ／ ／ 1.78 ／ ／ 1.86 净利息收益率 ／ ／ 1.87 ／ ／ 1.98",
+      "excerpt_sha256": "7dd6c1df28910fcf9b7fc7a2ed41be6379994264cfcb56c63be8863117daf355"
+    },
+    "decomposition_table": {
+      "pdf_page": 23,
+      "printed_page": "22",
+      "excerpt": "下表列出所示期间本集团由于规模变化和利率变化导致利息收入和利息支出变化的分布情况。规模变化以平均余 额变化来衡量，利率变化以平均利率变化来衡量，由规模变化和利率变化共同引起的利息收支变化，计入规模变 化对利息收支变化的影响金额。 2025 年对比2024 年 增 （减） 因素 （人民币百万元） 规模 利率 增 （减） 净值 生息资产 贷款和垫款 10,971 (37,997) (27,026) 投资 13,722 (7,169) 6,553 存放中央银行款项 (660) (174) (834) 存拆放同业和其他金融机构款项 2,205 (3,818) (1,613) 利息收入变动 26,238 (49,158) (22,920) 计息负债 客户存款 8,553 (31,508) (22,955) 同业存拆放及其他 4,782 (4,867) (85) 应付债券 (2,677) 404 (2,273) 向中央银行借款 (1,218) (705) (1,923) 利息支出变动 9,440 (36,676) (27,236) 净利息收入变动 16,798 (12,482) 4,316",
+      "excerpt_sha256": "9a217663c3b34cdc7e469d034fde1e379286e367ec9d3fe91e201cc5c9128fe4"
+    },
+    "group_definition": {
+      "pdf_page": 3,
+      "printed_page": "2",
+      "excerpt": "本集团 ： 招商银行及其子公司",
+      "excerpt_sha256": "6ede235b954bb7b697173dfc33f6e5b74b59457c44ccb17437d52f6c2517d271"
+    },
+    "accounting_period": {
+      "pdf_page": 143,
+      "printed_page": "142",
+      "excerpt": "2. 财务报表编制基础 本集团执行中华人民共和国财政部 （以下简称 “财政部”)颁布并生效的企业会计准则及相关规定 （以下简称 “企 业会计准则”)。 此外，本集团还按照 《公开发行证券的公司信息披露编报规则第15号 － 财务报告的一般规定 （2023年修订） 》 和 中国证监会发布的相关规定披露有关财务信息。 本集团以持续经营为基础编制财务报表。 3. 重要会计政策和会计估计 本集团根据业务经营特点确定具体会计政策及会计估计，具体参见相关附注。 本集团根据自身所处的具体环境，从财务报表项目的性质和金额两方面判断财务信息的重要性。在判断项目性质 的重要性时，本集团主要考虑该项目在性质上是否属于日常活动、是否显著影响本集团的财务状况、经营成果和 现金流量等因素 ； 在判断项目金额大小的重要性时，本集团考虑该项目金额占总资产、总负债、股东权益、营业 收入、营业成本、净利润等相关项目金额的比重。 (1) 遵循企业会计准则的声明 本财务报表符合财政部颁布并生效的企业会计准则要求，真实、完整地反映了本行 2025年12月31日的合并财务 状况和公司财务状况、2025年度的合并经营成果和公司经营成果及合并现金流量和公司现金流量。 (2) 会计期间 会计年度自公历1 月1日起至12月 31日止。",
+      "excerpt_sha256": "b0cd538099d11c9d2a7cc20af70a6f06858d038540406487e16dc1ab7a7bb14b"
+    }
+  },
+  "decomposition_rule": "由规模变化和利率变化共同引起的利息收支变化，计入规模变化对利息收支变化的影响金额。",
+  "runtime_import_status": "fixture_only; local path is not a runtime original reference"
+}

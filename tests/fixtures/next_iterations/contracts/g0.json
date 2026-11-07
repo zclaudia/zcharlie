@@ -1,0 +1,66 @@
+{
+  "synthetic": true,
+  "preflight": {
+    "method": "POST",
+    "path": "/investor/research-entry/preflight",
+    "request": {
+      "listing_ref": {
+        "kind": "listing",
+        "id": 18,
+        "revision": 1
+      },
+      "template_key": "company_research",
+      "question": "年度利润变化有哪些可核对的证据？"
+    },
+    "status": 200,
+    "response": {
+      "listing_ref": {
+        "kind": "listing",
+        "id": 18,
+        "revision": 1
+      },
+      "template_key": "company_research",
+      "question": "年度利润变化有哪些可核对的证据？",
+      "material_refs": [
+        {
+          "kind": "financial_snapshot",
+          "id": 23,
+          "revision": 1
+        }
+      ],
+      "coverage": "partial",
+      "gaps": [
+        {
+          "code": "verified_evidence_missing",
+          "field": "evidence"
+        }
+      ],
+      "method": {
+        "method_ref": {
+          "kind": "method",
+          "id": "00000000-0000-0000-0000-000000000901",
+          "revision": 1
+        },
+        "binding_schema_version": 1,
+        "availability": "available"
+      },
+      "model": {
+        "availability": "available",
+        "policy": "authorized_investor_model"
+      },
+      "preflight_at": "2026-11-07T09:30:00Z"
+    }
+  },
+  "submit": {
+    "path": "/agent/conversations/{id}/messages",
+    "idempotency_field": "client_message_id",
+    "request_contract": "existing MessageInput"
+  },
+  "guarantees": [
+    "read_only",
+    "no Task or budget",
+    "no source network",
+    "snapshot candidates do not imply verified evidence",
+    "no guarantee later admission completes"
+  ]
+}

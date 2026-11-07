@@ -57,6 +57,7 @@ INVESTOR_ERROR_STATUS: dict[str, int] = {
     "not_found": 404,
     "invalid_reference": 422,
     "writes_disabled": 403,
+    "feature_disabled": 503,
     "snapshot_required": 422,
     "account_capacity_exceeded": 422,
     "holding_presence_unknown": 422,

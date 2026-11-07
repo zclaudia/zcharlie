@@ -2,7 +2,8 @@
 # start, verify). Plain `docker compose up -d` also works and keeps the order:
 # migrate (one-shot) -> api -> worker-agent + worker + scheduler once the api
 # is healthy. `worker-agent` serves only agent_* and owns maintenance plus
-# external notification delivery. `worker` serves every other kind.
+# external notification delivery. `worker` serves ordinary collection jobs;
+# `worker-events` only applies local durable event projections.
 #
 # Shared by every service:
 # - code (src/, alembic/) ships in the image; only data is writable. On Linux
@@ -86,7 +87,7 @@ services:
       - worker
       - start
       - --kinds
-      - agent_turn,agent_research,agent_review,agent_discovery,review_seat
+      - agent_turn,agent_research,agent_review,agent_discovery,simulation_decide,simulation_review,review_seat
     environment:
       LIVENESS_FILE: /tmp/worker-agent.alive
     depends_on:
@@ -105,9 +106,23 @@ services:
       - worker
       - start
       - --kinds
-      - account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,shenwan_directory_refresh,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
+      - simulation_cycle,account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,shenwan_directory_refresh,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
     environment:
       LIVENESS_FILE: /tmp/worker.alive
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+    healthcheck: *liveness-check
+    restart: unless-stopped
+
+  worker-events:
+    <<: *app
+    container_name: investment-agent-worker-events
+    command: ["ia", "worker", "start", "--kinds", "research_events_maintenance"]
+    environment:
+      LIVENESS_FILE: /tmp/worker-events.alive
     depends_on:
       migrate:
         condition: service_completed_successfully

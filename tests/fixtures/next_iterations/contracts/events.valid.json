@@ -1,0 +1,594 @@
+{
+  "contract_version": "next-iterations/1",
+  "synthetic": true,
+  "namespace": "30d5fd64-e30f-553b-930e-291bbad453ea",
+  "events": [
+    {
+      "event_id": "4fa5d6c7-b20f-527f-93f7-4deebb9eea57",
+      "event_type": "research_change.recorded",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "research_change_set",
+        "id": 42,
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "f58ec606c5b4708914472fb756ab6ffa82e042427b8451bd5fffa712bae2fcc3",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "run_ref": {
+          "kind": "pipeline_run",
+          "id": 80,
+          "revision": 1,
+          "field_path": null
+        },
+        "current_snapshot_id": 55,
+        "previous_snapshot_id": 54,
+        "baseline": false,
+        "has_meaningful_changes": true,
+        "source_changed": false,
+        "postprocess_eligibility": null,
+        "backfill": false,
+        "manifest_hash": null
+      }
+    },
+    {
+      "event_id": "6600523a-fe14-57b9-80ca-2318a5910df8",
+      "event_type": "review_panel.finalized",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "review_round",
+        "id": 381,
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "d1ef568fe12021e6310aa3edeae62971c5691114beee93ccfda1fd069235f86a",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "comparison_ref": {
+          "kind": "review_comparison",
+          "id": 452,
+          "revision": 1
+        },
+        "algorithm_version": "v1",
+        "notify_reasons": [
+          "high_divergence"
+        ],
+        "backfill": false,
+        "manifest_hash": null
+      }
+    },
+    {
+      "event_id": "8241a837-bed5-5e98-8d48-e1c5c78de5d5",
+      "event_type": "review_cycle.changed",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "review_cycle",
+        "id": "00000000-0000-0000-0000-000000000065",
+        "revision": 2
+      },
+      "source_revision": 2,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "09151918d6712ffc0be148dca46daed6fc195637aeebfb28c20cde1a65841c6c",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "case_ref": {
+          "kind": "case",
+          "id": "00000000-0000-0000-0000-000000000066",
+          "revision": 3,
+          "field_path": null
+        },
+        "case_episode": 1,
+        "phase": "merged",
+        "state": "pending",
+        "task_ref": null,
+        "reason_codes": [
+          "supplemental_update"
+        ],
+        "exact_source_refs": [
+          {
+            "kind": "research_change_set",
+            "id": 42,
+            "revision": 1
+          }
+        ],
+        "backfill": false,
+        "manifest_hash": null
+      }
+    },
+    {
+      "event_id": "9cf56abd-dc52-5170-b13e-07dd788a08c1",
+      "event_type": "recommendation.validity_changed",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "recommendation_event",
+        "id": "00000000-0000-0000-0000-000000000067",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "e4f301f4df0e10eaada0a9f68c2667546458b8fdc72c77e743fa2d8626c0fc19",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "recommendation_ref": {
+          "kind": "recommendation",
+          "id": "00000000-0000-0000-0000-000000000068",
+          "revision": 1,
+          "field_path": null
+        },
+        "case_ref": {
+          "kind": "case",
+          "id": "00000000-0000-0000-0000-000000000066",
+          "revision": 3,
+          "field_path": null
+        },
+        "validity": "withdrawn",
+        "replacement_ref": null,
+        "review_ref": null,
+        "exact_source_refs": [],
+        "backfill": false,
+        "manifest_hash": null
+      }
+    },
+    {
+      "event_id": "1c1b3267-e3c3-52ec-88e0-972ff5d9de92",
+      "event_type": "case.control_changed",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "case",
+        "id": "00000000-0000-0000-0000-000000000066",
+        "revision": 4
+      },
+      "source_revision": 4,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "cbfeb3ebecd7ea0d9908155074e70f6bd4810d36c4b901385a8a58842dac17e7",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "case_ref": {
+          "kind": "case",
+          "id": "00000000-0000-0000-0000-000000000066",
+          "revision": 4,
+          "field_path": null
+        },
+        "case_episode": 1,
+        "action": "mute",
+        "backfill": false,
+        "manifest_hash": null
+      }
+    },
+    {
+      "event_id": "cca83733-a54c-508d-ac6e-901e6fa9b89c",
+      "event_type": "source.invalidated",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "evidence",
+        "id": "00000000-0000-0000-0000-000000000069",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "99c9d135fe73b8ae03cbc15f53674157924eedbbd288b5455daf4751f9793373",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "reason": "source_corrected",
+        "invalidated_refs": [
+          {
+            "kind": "evidence",
+            "id": "00000000-0000-0000-0000-00000000006a",
+            "revision": 1,
+            "field_path": null
+          }
+        ],
+        "replacement_refs": [
+          {
+            "kind": "evidence",
+            "id": "00000000-0000-0000-0000-000000000069",
+            "revision": 1,
+            "field_path": null
+          }
+        ]
+      }
+    },
+    {
+      "event_id": "98f7ce5e-a3c8-52b7-ac66-523a17e4cb2a",
+      "event_type": "topic.observation_changed",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "topic_check",
+        "id": "00000000-0000-0000-0000-00000000006b",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2027-04-30T16:00:00Z",
+      "recorded_at": "2027-04-30T16:00:01Z",
+      "schema_version": 1,
+      "payload_hash": "942086c584ac2e950c20ea17395882a9cdee05ca0d27ead83e88913719c5eefe",
+      "payload": {
+        "subject": {
+          "kind": "listing",
+          "listing_id": 18
+        },
+        "topic_ref": {
+          "kind": "topic_revision",
+          "id": "00000000-0000-0000-0000-00000000006c",
+          "revision": 1,
+          "field_path": null
+        },
+        "condition_ref": {
+          "kind": "topic_condition",
+          "id": "00000000-0000-0000-0000-00000000006d",
+          "revision": 2,
+          "field_path": null
+        },
+        "check_ref": {
+          "kind": "topic_check",
+          "id": "00000000-0000-0000-0000-00000000006b",
+          "revision": 1,
+          "field_path": null
+        },
+        "prior_check_ref": null,
+        "target_period": {
+          "start": "2026-01-01",
+          "end": "2026-12-31",
+          "basis": "period_to_date/annual"
+        },
+        "baseline_period": {
+          "start": "2025-01-01",
+          "end": "2025-12-31",
+          "basis": "period_to_date/annual"
+        },
+        "scope": "consolidated",
+        "scope_changed": false,
+        "outcome": "insufficient_evidence",
+        "changed_reasons": [
+          "no_new_comparable_report"
+        ],
+        "exact_source_refs": []
+      }
+    },
+    {
+      "event_id": "008398a6-d964-5779-a84f-08f3aa24ec79",
+      "event_type": "portfolio_stress.completed",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "calculation",
+        "id": "00000000-0000-0000-0000-0000000000ca",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "57cacb1a2c59829b8d1eb7d7aabba649d8e479f3dce5c22fe760f60def0fd134",
+      "payload": {
+        "subject": {
+          "kind": "account",
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        },
+        "version_refs": [
+          {
+            "kind": "portfolio_snapshot",
+            "id": "00000000-0000-0000-0000-0000000000c9",
+            "revision": 12,
+            "field_path": null
+          }
+        ],
+        "quality": [],
+        "safe_summary": "本地结构化事实核对",
+        "detail_url": "/app/portfolio/stress",
+        "study_ref": {
+          "kind": "portfolio_stress",
+          "id": "00000000-0000-0000-0000-0000000000cb",
+          "revision": 1,
+          "field_path": null
+        },
+        "calculation_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-0000000000ca",
+          "revision": 1,
+          "field_path": null
+        }
+      }
+    },
+    {
+      "event_id": "6f364ec1-3af3-5c2c-824d-99a21f09c0e6",
+      "event_type": "portfolio_stress.partial",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "calculation",
+        "id": "00000000-0000-0000-0000-0000000000cc",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-07T09:30:00Z",
+      "recorded_at": "2026-11-07T09:30:01Z",
+      "schema_version": 1,
+      "payload_hash": "47cbec86f22f302d1f4209a03cb8a794b23546b485c69adb5e7ec6b83d059f92",
+      "payload": {
+        "subject": {
+          "kind": "account",
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        },
+        "version_refs": [
+          {
+            "kind": "portfolio_snapshot",
+            "id": "00000000-0000-0000-0000-0000000000c9",
+            "revision": 12,
+            "field_path": null
+          }
+        ],
+        "quality": [
+          "cash_missing"
+        ],
+        "safe_summary": "本地结构化事实核对",
+        "detail_url": "/app/portfolio/stress",
+        "study_ref": {
+          "kind": "portfolio_stress",
+          "id": "00000000-0000-0000-0000-0000000000cb",
+          "revision": 1,
+          "field_path": null
+        },
+        "calculation_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-0000000000cc",
+          "revision": 1,
+          "field_path": null
+        }
+      }
+    },
+    {
+      "event_id": "82cabf7b-8826-5f3f-8326-3d7188233d36",
+      "event_type": "decision_observation.due",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "decision_observation",
+        "id": "00000000-0000-0000-0000-00000000012c",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-12T15:59:59.999999Z",
+      "recorded_at": "2026-11-13T12:00:01Z",
+      "schema_version": 1,
+      "payload_hash": "4e18a371753411933b1932dee0f86673587b7f54b0746d98748205e458794e27",
+      "payload": {
+        "subject": {
+          "kind": "account",
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        },
+        "version_refs": [
+          {
+            "kind": "portfolio_snapshot",
+            "id": "00000000-0000-0000-0000-0000000000c9",
+            "revision": 12,
+            "field_path": null
+          }
+        ],
+        "quality": [],
+        "safe_summary": "本地结构化事实核对",
+        "detail_url": "/app/portfolio/stress",
+        "observation_ref": {
+          "kind": "decision_observation",
+          "id": "00000000-0000-0000-0000-00000000012c",
+          "revision": 1,
+          "field_path": null
+        },
+        "decision_ref": {
+          "kind": "decision",
+          "id": "00000000-0000-0000-0000-00000000012d",
+          "revision": 1,
+          "field_path": null
+        },
+        "registered_at": "2026-11-07T04:00:00Z",
+        "due_at": "2026-11-12T15:59:59.999999Z",
+        "not_before": "2026-11-13T12:00:00Z"
+      }
+    },
+    {
+      "event_id": "23ba9917-e425-5b94-a078-d473bd3acf8c",
+      "event_type": "decision_fact_check.completed",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "calculation",
+        "id": "00000000-0000-0000-0000-00000000012e",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-13T12:00:00Z",
+      "recorded_at": "2026-11-13T12:00:01Z",
+      "schema_version": 1,
+      "payload_hash": "100e3204ad3210d0c30bd8aa62b85d1dfac672019e18fb4c7146767c1e3eab1f",
+      "payload": {
+        "subject": {
+          "kind": "account",
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        },
+        "version_refs": [
+          {
+            "kind": "portfolio_snapshot",
+            "id": "00000000-0000-0000-0000-0000000000c9",
+            "revision": 12,
+            "field_path": null
+          }
+        ],
+        "quality": [],
+        "safe_summary": "本地结构化事实核对",
+        "detail_url": "/app/portfolio/stress",
+        "observation_ref": {
+          "kind": "decision_observation",
+          "id": "00000000-0000-0000-0000-00000000012c",
+          "revision": 1,
+          "field_path": null
+        },
+        "decision_ref": {
+          "kind": "decision",
+          "id": "00000000-0000-0000-0000-00000000012d",
+          "revision": 1,
+          "field_path": null
+        },
+        "calculation_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-00000000012e",
+          "revision": 1,
+          "field_path": null
+        },
+        "previous_check_ref": null,
+        "registered_at": "2026-11-07T04:00:00Z",
+        "due_at": "2026-11-12T15:59:59.999999Z",
+        "outcome": "met"
+      }
+    },
+    {
+      "event_id": "c1dfd4cf-f28a-5867-9724-74b61939354d",
+      "event_type": "decision_fact_check.partial",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "calculation",
+        "id": "00000000-0000-0000-0000-00000000012f",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-13T12:00:00Z",
+      "recorded_at": "2026-11-13T12:00:01Z",
+      "schema_version": 1,
+      "payload_hash": "8111c0d9f554320d73097a75b2281cd1282b3039ecfd772a901a225fa85e5884",
+      "payload": {
+        "subject": {
+          "kind": "account",
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        },
+        "version_refs": [
+          {
+            "kind": "portfolio_snapshot",
+            "id": "00000000-0000-0000-0000-0000000000c9",
+            "revision": 12,
+            "field_path": null
+          }
+        ],
+        "quality": [
+          "evidence_missing"
+        ],
+        "safe_summary": "本地结构化事实核对",
+        "detail_url": "/app/portfolio/stress",
+        "observation_ref": {
+          "kind": "decision_observation",
+          "id": "00000000-0000-0000-0000-00000000012c",
+          "revision": 1,
+          "field_path": null
+        },
+        "decision_ref": {
+          "kind": "decision",
+          "id": "00000000-0000-0000-0000-00000000012d",
+          "revision": 1,
+          "field_path": null
+        },
+        "calculation_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-00000000012f",
+          "revision": 1,
+          "field_path": null
+        },
+        "previous_check_ref": null,
+        "registered_at": "2026-11-07T04:00:00Z",
+        "due_at": "2026-11-12T15:59:59.999999Z",
+        "outcome": "unknown"
+      }
+    },
+    {
+      "event_id": "b6847810-9a4e-57f0-9148-d5fc7e3a1d06",
+      "event_type": "decision_fact_check.superseded",
+      "owner_id": "local_owner",
+      "source_ref": {
+        "kind": "calculation",
+        "id": "00000000-0000-0000-0000-000000000130",
+        "revision": 1
+      },
+      "source_revision": 1,
+      "occurred_at": "2026-11-13T12:00:00Z",
+      "recorded_at": "2026-11-13T12:00:01Z",
+      "schema_version": 1,
+      "payload_hash": "5f55e41a1668b79e2b2772a8db5f6fbbd337814c8848fb22f5ebce62b135456c",
+      "payload": {
+        "subject": {
+          "kind": "account",
+          "account_id": "00000000-0000-0000-0000-0000000000c8"
+        },
+        "version_refs": [
+          {
+            "kind": "portfolio_snapshot",
+            "id": "00000000-0000-0000-0000-0000000000c9",
+            "revision": 12,
+            "field_path": null
+          }
+        ],
+        "quality": [],
+        "safe_summary": "本地结构化事实核对",
+        "detail_url": "/app/portfolio/stress",
+        "observation_ref": {
+          "kind": "decision_observation",
+          "id": "00000000-0000-0000-0000-00000000012c",
+          "revision": 1,
+          "field_path": null
+        },
+        "decision_ref": {
+          "kind": "decision",
+          "id": "00000000-0000-0000-0000-00000000012d",
+          "revision": 1,
+          "field_path": null
+        },
+        "calculation_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-000000000130",
+          "revision": 1,
+          "field_path": null
+        },
+        "previous_check_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-00000000012f",
+          "revision": 1,
+          "field_path": null
+        },
+        "registered_at": "2026-11-07T04:00:00Z",
+        "due_at": "2026-11-12T15:59:59.999999Z",
+        "outcome": "met",
+        "superseded_ref": {
+          "kind": "calculation",
+          "id": "00000000-0000-0000-0000-00000000012f",
+          "revision": 1,
+          "field_path": null
+        }
+      }
+    }
+  ]
+}

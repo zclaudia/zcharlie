@@ -211,6 +211,8 @@ class RuntimeSettings(BaseModel):
     portfolio_valuation_max_staleness_days: int = Field(default=5, ge=0, le=30)
     investor_agent_enabled: bool = False
     investor_agent_background_enabled: bool = False
+    research_quality_enabled: bool = False
+    research_quality_execution_enabled: bool = False
     agent_queue_max_running: int = Field(default=4, ge=1, le=4)
     agent_queue_interactive_capacity: int = Field(default=128, ge=1, le=128)
     agent_queue_review_capacity: int = Field(default=96, ge=1, le=96)
@@ -361,6 +363,8 @@ SPECS: tuple[SettingSpec, ...] = (
     ),
     _env("investor_agent_enabled", "agent", "启用投资 Agent", "投资 Agent 执行控制；每个边界重新检查。", "next_job"),
     _env("investor_agent_background_enabled", "agent", "启用后台研究", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),
+    _env("research_quality_enabled", "agent", "启用研究质量对照", "默认关闭；控制新建与新写入，关闭后授权历史和操作收据仍可读取。", "live"),
+    _env("research_quality_execution_enabled", "agent", "允许研究对照执行", "默认关闭；执行还须通过原任务授权和预算，关闭后停止新发送，保留机械结算。", "live"),
     _env("investor_agent_max_leads_per_batch", "agent", "每批探索线索上限", "最多20；仍受当前投资约定限制。", "next_job"),
     _env("investor_agent_max_new_tasks_per_batch", "agent", "每批新研究任务上限", "最多3；不是产出目标。", "next_job"),
     _env("investor_agent_task_requests", "agent", "单任务请求上限", "Investor Agent 执行控制；每个边界重新检查。", "next_job"),

@@ -1,0 +1,297 @@
+{
+  "head": "1f62fa4ac3dd22be5ef65550ae6ac0444098b313",
+  "captured_at": "2026-11-07",
+  "preexisting_changes": [
+    {
+      "status": " M",
+      "path": "README.md",
+      "sha256": "f3f5a0d61821e51ccf1a89609808f41d8ed626834f730ecdd762f03eaeff5d48"
+    },
+    {
+      "status": " M",
+      "path": "docker-compose.yml",
+      "sha256": "d32f473d684aa77fc6a749955eb73a691c638a88933bb09686050ad4cc693529"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/agent/operations.py",
+      "sha256": "255520bdab71c6d18a1587b7e18bf63a2a116e1042aaab5e134749fe40fb1fdb"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/api/app.py",
+      "sha256": "a9b25a193de1004c5b56648d707366d7bc62b08b46f3908947325785edd24eac"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/research/worker.py",
+      "sha256": "7dca1713c6d06bed17c74fa5b4155363a8f866cbbe2ded949aef31fe844ff343"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/scheduler/runner.py",
+      "sha256": "f9810413958b456398f4307e2881dbbc546a5079920c456c92a0fe5366105e5d"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/storage/models/__init__.py",
+      "sha256": "a25dc8a7ed6b343f7c3c99ebfde4857f960712fbeabc676553a5ca2b87a73db5"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/web/routes.py",
+      "sha256": "e27a669f9dd76e931f89b39434e74875c8ba644159cfe6154dc454cdbbc8c6b3"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/web/templates/_icons.html",
+      "sha256": "7b2ee42f4ad603c3afb03e15caecb74873d7ae5a1428a487e0a184ac281c32b7"
+    },
+    {
+      "status": " M",
+      "path": "src/investment_agent/web/templates/base.html",
+      "sha256": "044dd01cd8aff26605fb289767c5dccb7fc3e972c4318600a0217d4897bfa557"
+    },
+    {
+      "status": " M",
+      "path": "tests/unit/test_worker_idle_and_split.py",
+      "sha256": "5373ab635f1f501103239065b1ea8d3d0fb0e30a0e48c165bb865e9eb2f76ee5"
+    },
+    {
+      "status": "??",
+      "path": "alembic/versions/061_simulation.py",
+      "sha256": "fed493be36d91fa908505ae1edfb5ae45a5855853869e072b1a84170f877cf33"
+    },
+    {
+      "status": "??",
+      "path": "docs/product/paper-trading-arena-design.md",
+      "sha256": "5301174121765a0f35c2ece934418983134f3b4af581a19ed807ed2c6c1b436d"
+    },
+    {
+      "status": "??",
+      "path": "docs/product/paper-trading-arena-operations.md",
+      "sha256": "4daf6efb9fc62b18f1261e4df30b0cf32f9ce5127d1d023cba0103a9c7313e03"
+    },
+    {
+      "status": "??",
+      "path": "docs/product/plans/paper-trading-arena-implementation.md",
+      "sha256": "9b584684eefcc898f0c2100923b493ed086a23ab8116e9c41e7ec8b58c078123"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/api/routes/simulation.py",
+      "sha256": "0861183c0417c61778c9b178fe52fd6cb87fa524234723fba26e249b360b0474"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/api/schemas/simulation.py",
+      "sha256": "baba4c0ac88f6c343dbf1a282b0dff3359ded9a8750526b1a971a2e4923ea28c"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/__init__.py",
+      "sha256": "b743404dc3307fcbfd648b926253b1e32b3b44a01e0445fb78b3e012ba0781b6"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/artifacts.py",
+      "sha256": "f90fcad48dbea7d2eca06c119a79c173053be8cdbe4e8a95708d3d9e05ced2f3"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/baselines.py",
+      "sha256": "485e4147151eca0de50527821cfca53aee5d1bc6e8d4988a6b3918f7b306a1a8"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/budget.py",
+      "sha256": "377f578721eecc8f9cc67f1ec3bcf10ee314cb7083bf69d156aba4f3b0d7a89c"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/context.py",
+      "sha256": "d086789704ddbbbaee95c6d470b5654ef794a7e46ce4cde0b1e853c4baa701c9"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/contracts.py",
+      "sha256": "24edd32e213539296003851f4ab06254c77129e9fd93fb1be9d49decf054d68e"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/data.py",
+      "sha256": "80e2662248bfb04c25eed6cb5adf08e8df0cc1b352d480f037c315c2431c939f"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/errors.py",
+      "sha256": "ce067a90967eb1b11c35f929961e58718f620fc47b825b2c5eeef785be48c6b5"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/execution.py",
+      "sha256": "15d58e53e0339c4d753b1fb15df637f42ba380137c90a30079d1349f5dd22ebc"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/jobs.py",
+      "sha256": "a8647d7de8ed1a107143c18423367fffafa247c88af9e8e553efcd67463ffe33"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/ledger.py",
+      "sha256": "4b9f59d86c50586d651114d7b019fad71770b7d142570d68147c8c4762961edb"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/metrics.py",
+      "sha256": "8319c79e42846d60981d3fa564ecb92ab116a93e6614f321f243a28c4b1bee3d"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/reviews.py",
+      "sha256": "216f5cfc9e17c527c755bb339fa4485971f9176cf65a40d36d0811d0de1a4641"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/risk.py",
+      "sha256": "10421cc86cc87601357da07ad60cdd9cb87c04403d738ede0eebde8a93f2859c"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/runtime.py",
+      "sha256": "a2965a6bfd53cf5173f17c966e9299addfd3485d7c8132ac2831454f679a4b78"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/simulation/service.py",
+      "sha256": "5791aa5300b4527da579512ec5f81936667da975a82607e4deca7487136438c7"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/storage/models/simulation.py",
+      "sha256": "823d509f62619cfd3b9a487bd4a8e2fd7d934278c919da8a0985d1b0effe2bf6"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/web/static/simulations.css",
+      "sha256": "591dafe6a41c67667ec21710b1c6cce3f25259696c09fd4bf84349e7b6942338"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/web/static/simulations.js",
+      "sha256": "7d5daf91d8a50c9d17c3d36d652d5574ed15de99abd7aafe0a86d8bbeb025c27"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/web/templates/simulations.html",
+      "sha256": "57d3ad0a53f6a4e571c2ca7411c16ede6208d8e79b7fd309f0da679dd1bd45e4"
+    },
+    {
+      "status": "??",
+      "path": "src/investment_agent/web/templates/simulations_detail.html",
+      "sha256": "4b4a23bd50351dc911e5e18e61a69c96ceae23f5b1e7718657f2ff8353f99b94"
+    },
+    {
+      "status": "??",
+      "path": "tests/browser/simulations_fixture_server.py",
+      "sha256": "25e2d5b5b411d9336fa8a3adc1cfe6f194d950103a420672b7a87ab93a5af4f6"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/__init__.py",
+      "sha256": "9e663059d9dae03a3b2942245aff13466a0aa740e70b413467c68d1797a5dac1"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/conftest.py",
+      "sha256": "a7387c37ec14a0a786542fb67058d2905d08553513a37e7aed010d47833316d6"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_api.py",
+      "sha256": "3442b180c7ef369ed08ae420ddfe47b5244936d2357356923e4da4c2ffed0e47"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_artifacts.py",
+      "sha256": "02de90d1ef59689d658ae9d8c400e98ef77cfa08c973685cead095d41544ff2d"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_baselines.py",
+      "sha256": "486f735fa556954be4e0b5c31fbc4cfd068c37f0fbc10d236ee729799337a690"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_budget.py",
+      "sha256": "3299ccfa1a1c3e98b2adcd86db53e29b227719e7de1ce657688212b591085d8f"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_context.py",
+      "sha256": "6feea84700cbfb7aa424eff756095b5c46c7734956746b07a5ad11a81598c668"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_contracts.py",
+      "sha256": "8ade639217e11a684a31b624270bba3d6912673453da8999c0dfc63232b4fdb2"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_data.py",
+      "sha256": "e5f793df51e5fdad8828419b195278f3f9ba2bcdc2812667aa61259e82e1e05e"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_execution.py",
+      "sha256": "aacab9ca9c1b47f39f93e3d4f92fea702c95c4fa48c67a6a25b715a87c4f3d35"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_jobs.py",
+      "sha256": "d919cb2728fb4d5f403370fd3682ca7eade1093d9e73a4bfacc29ae3d9fdea83"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_ledger.py",
+      "sha256": "12e3c6315bae13288363577ed966a51f364d04bc9eea0840587211ca1f4a5e6e"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_metrics.py",
+      "sha256": "1e874d9f85f24c59d07a4b58686b16a28973a28b0aba6a0f117e1d423f805c4b"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_reviews.py",
+      "sha256": "4e589ca67fca1b577b4a67f70e54cd2c4c7660c0ec3afad199f0b191d8ab2bac"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_risk.py",
+      "sha256": "8d56815350e5b7364f8dc8e21744f405c8c854404e87350dcc17d46d1853ef2a"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_runtime.py",
+      "sha256": "b6a0aa5f43c0d4b91fc5fe18d92879853cb15d0d77b096fa2dfb0eeaec4aee48"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_service.py",
+      "sha256": "671993f2312438c4d59aa842adbb84ebdd15288907f2a4fee4146cf7139f587d"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_storage.py",
+      "sha256": "5a7deeaa6d581e81a05cc8ee65a7a3cc46e97c8ea567a6b98b070d1c1207314f"
+    },
+    {
+      "status": "??",
+      "path": "tests/simulation/test_web.py",
+      "sha256": "b534654058c8a278fe96b221badbb0b6278d1f8042319409549e377bb08f33d1"
+    }
+  ],
+  "scope": "existing working tree changes outside this plan; preserve in every task diff"
+}

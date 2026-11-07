@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('simulations.css') }}">{% endblock %}
+{% block mobile_back %}<a href="/app/simulations" class="icon-btn" aria-label="返回模拟实验">{{ icon("chevl", "ico", 22) }}</a>{% endblock %}
+{% block content %}
+<div id="simulations-workbench" data-view="detail" data-experiment-id="{{ simulation_id }}">
+  <header class="page-head sim-head"><div><a class="small muted" href="/app/simulations">模拟实验 /</a><h1 id="sim-title">实验详情</h1><p class="muted" id="sim-subtitle">正在读取冻结配置与账户…</p></div><div class="page-actions"><button type="button" class="btn" id="sim-refresh">{{ icon("refresh") }}刷新</button><button type="button" class="btn" id="sim-export">{{ icon("file") }}导出</button></div></header>
+  <div id="sim-message" role="status" aria-live="polite"></div>
+  <div id="sim-pending" class="notice notice-warn" hidden><p id="sim-pending-text">上次请求尚未确认，重试会使用原正文与幂等键。</p><button type="button" class="btn btn-sm" id="sim-retry-write">重试原请求</button></div>
+  <section class="card sim-controls" aria-label="实验操作"><div id="sim-state"><span class="badge">正在加载</span></div><div class="sim-action-group">
+    <button type="button" class="btn btn-primary" data-sim-action="start" disabled>启动实验</button><button type="button" class="btn" data-sim-action="pause" disabled>暂停</button><button type="button" class="btn" data-sim-action="end" disabled>结束实验</button><button type="button" class="btn" data-sim-action="run-now" disabled>推进运行</button><button type="button" class="btn" data-sim-action="data-refresh" disabled>采集实验数据</button>
+  </div><p class="small muted" id="sim-runtime-hint">启动后按冻结规则与预算自动运行；日线成交在交易时段结束、资料确认后结算。</p></section>
+  <div class="sim-filters"><label>查看参赛者<select id="sim-participant-filter"><option value="">全部参赛者与基准</option></select></label><label>查看轮次<select id="sim-round-filter"><option value="">全部轮次</option></select></label></div>
+  <p class="small muted">账户与净值按赛季展示；轮次筛选作用于决策、订单、成交和复盘。</p>
+  <nav class="sim-tabs" role="tablist" aria-label="实验详情">
+    {% for key, label in [('overview', '净值与排名'), ('accounts', '账户与持仓'), ('decisions', '决策与证据'), ('execution', '订单与成交'), ('reviews', '复盘与成本'), ('data', '资料与运行')] %}
+    <button type="button" role="tab" id="sim-tab-{{ key }}" aria-controls="sim-panel-{{ key }}" aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}" data-sim-tab="{{ key }}">{{ label }}</button>
+    {% endfor %}
+  </nav>
+  <section id="sim-panel-overview" role="tabpanel" aria-labelledby="sim-tab-overview" class="sim-panel">
+    <div id="sim-kpis" class="sim-kpis"></div><section class="card"><h2>账户净值</h2><p class="small muted">净值包含交易费用与已入账权益。资料不完整的区间保留缺口；精确金额见下表。</p><div id="sim-nav-chart" class="sim-chart"></div><div id="sim-chart-legend" class="sim-legend"></div></section>
+    <section class="card"><h2>同窗口排名</h2><p id="sim-ranking-window" class="small muted"></p><div id="sim-leaderboard"></div></section>
+    <details class="card"><summary>查看每日精确净值</summary><div id="sim-nav-table"></div></details>
+  </section>
+  <section id="sim-panel-accounts" role="tabpanel" aria-labelledby="sim-tab-accounts" class="sim-panel" hidden><div id="sim-accounts" class="sim-account-grid"></div></section>
+  <section id="sim-panel-decisions" role="tabpanel" aria-labelledby="sim-tab-decisions" class="sim-panel" hidden><p class="small muted">保留原始理由、反证与当时资料引用；超时或故障显示为未提交。</p><div id="sim-decisions" class="sim-record-list"></div></section>
+  <section id="sim-panel-execution" role="tabpanel" aria-labelledby="sim-tab-execution" class="sim-panel" hidden><section class="card"><h2>锁定订单</h2><div id="sim-orders"></div></section><section class="card"><h2>模拟成交</h2><p class="small muted">经济发生时间与系统确认时间分别保存。</p><div id="sim-fills"></div></section></section>
+  <section id="sim-panel-reviews" role="tabpanel" aria-labelledby="sim-tab-reviews" class="sim-panel" hidden><section class="card"><h2>观察与复盘</h2><div id="sim-reviews" class="sim-record-list"></div></section><section class="card"><h2>模型调用成本</h2><p class="small muted">预留、已结算与未知调用分别记录。预留金额不等于实际账单。</p><div id="sim-costs"></div></section></section>
+  <section id="sim-panel-data" role="tabpanel" aria-labelledby="sim-tab-data" class="sim-panel" hidden>
+    <section class="card"><h2>资料就绪情况</h2><form id="sim-availability-form" class="sim-search"><label>核对交易日<input type="date" name="trade_date" required></label><button type="submit" class="btn">检查资料</button></form><div id="sim-availability" aria-live="polite"></div></section>
+    <section class="card"><h2>轮次与冻结资料</h2><div id="sim-rounds" class="sim-record-list"></div></section>
+    <details class="card"><summary>导入已核对的交易规则证据</summary><p class="muted small">行情采集不会自动证明涨跌停、交易单位与公司行动覆盖。请按已核对来源填写逐证券、逐交易日证据。</p>
+      <form id="sim-evidence-form" class="sim-form"><div class="sim-fields">
+        <label>证券<select name="listing_id" required></select></label><label>交易日<input type="date" name="trade_date" required></label>
+        <label>上市日期<input type="date" name="ipo_date" required></label><label>交易所<select name="exchange"><option value="SSE">上海证券交易所</option><option value="SZSE">深圳证券交易所</option></select></label>
+        <label>参考价<input name="reference_price" inputmode="decimal" required></label><label>涨停价格<input name="upper_limit" inputmode="decimal" required></label><label>跌停价格<input name="lower_limit" inputmode="decimal" required></label>
+        <label>最小价格变动<input name="tick_size" value="0.01" inputmode="decimal" required></label><label>买入交易单位（股）<input name="lot_size" type="number" min="1" step="1" value="100" required></label>
+        <label>规则版本<input name="rule_version" readonly required></label><label>规则来源引用<input name="rule_source" required maxlength="160" placeholder="例如 exchange:reviewed-rule-2026"></label><label>证据归档引用<input name="source_ref" required maxlength="160" placeholder="例如 archive:600519-2026-11-09"></label>
+        <label>来源公开时间（北京时间）<input name="published_at" type="datetime-local" required></label><label>系统取得时间（北京时间）<input name="captured_at" type="datetime-local" required></label>
+        <label class="sim-wide">相关公司行动引用（每行一个，可空）<textarea name="corporate_action_refs" rows="2"></textarea></label>
+      </div><div class="sim-checks"><label><input type="checkbox" name="is_st">当日属于 ST 证券</label><label><input type="checkbox" name="ordinary_limit_session" required>已确认属于普通涨跌幅限制交易日</label><label><input type="checkbox" name="rule_verified" required>交易规则及价格已核对</label><label><input type="checkbox" name="corporate_actions_complete" required>该日公司行动覆盖完整</label></div><button type="submit" class="btn btn-primary">导入交易证据</button></form>
+    </details>
+    <details class="card"><summary>冻结配置与版本</summary><div id="sim-config"></div></details>
+  </section>
+</div>
+<script type="module" src="{{ static_url('simulations.js') }}"></script>
+{% endblock %}

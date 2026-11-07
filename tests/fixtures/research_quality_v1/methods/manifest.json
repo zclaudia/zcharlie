@@ -1,0 +1,23 @@
+{
+  "default_head_changed": false,
+  "execution_compatibility": "pending_QT003",
+  "packages": [
+    {
+      "arm": "baseline",
+      "authoring_path": "config/methods/company-research.v1.yaml",
+      "content_hash": "fd880dbafe566a0b1965a7aac029c5c967109b2b853556212992d95fbd6be63e",
+      "definition_path": "baseline.json",
+      "package_key": "company-research",
+      "sha256": "6cddd126be2f3c0645d74fc26d92c157d0d6240f257d342a489d9c162a6db9df"
+    },
+    {
+      "arm": "candidate",
+      "authoring_path": "config/methods/company-research.c1-counter-analysis.yaml",
+      "content_hash": "9c522f374aeb428d893f1437c8a0120cf1a94d858611325c7e7f2f8909b538a4",
+      "definition_path": "candidate.json",
+      "package_key": "company-research-c1-counter-analysis",
+      "sha256": "087e8a6519ead833be8d0a21f03d12c6c16d6714dd74475aeb9eba37720ecb29"
+    }
+  ],
+  "synthetic": true
+}

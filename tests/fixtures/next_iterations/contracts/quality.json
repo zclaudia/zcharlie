@@ -1,0 +1,119 @@
+{
+  "synthetic": true,
+  "create": {
+    "method": "POST",
+    "path": "/investor/methods/quality-experiments",
+    "request": {
+      "schema_version": 1,
+      "mutation_id": "00000000-0000-0000-0000-000000000191",
+      "case_ref": {
+        "kind": "quality_case",
+        "id": "00000000-0000-0000-0000-000000000192",
+        "revision": 1
+      },
+      "proposal_id": "00000000-0000-0000-0000-000000000193",
+      "expected_proposal_revision": 4,
+      "repeat_count": 1,
+      "limits": {
+        "max_requests": 8,
+        "max_tokens": 160000
+      },
+      "rubric_version": "research-quality.v1"
+    },
+    "status": 201,
+    "response": {
+      "schema_version": 1,
+      "experiment_id": "00000000-0000-0000-0000-000000000194",
+      "revision": 1,
+      "state": "draft",
+      "execution_started": false,
+      "preflight": {
+        "status": "pending",
+        "errors": []
+      },
+      "model_policy": "same_authorized_investor_model",
+      "limits": {
+        "max_requests": 8,
+        "max_tokens": 160000
+      },
+      "trial_plan": {
+        "arms": [
+          "baseline",
+          "candidate"
+        ],
+        "repeat_count": 1,
+        "planned_trials": 2
+      },
+      "links": {
+        "self": "/investor/methods/quality-experiments/00000000-0000-0000-0000-000000000194"
+      }
+    }
+  },
+  "mutation_lookup": {
+    "method": "GET",
+    "path": "/investor/methods/quality-mutations/00000000-0000-0000-0000-000000000191",
+    "status": 200,
+    "response": {
+      "schema_version": 1,
+      "mutation_id": "00000000-0000-0000-0000-000000000191",
+      "operation": "create_experiment",
+      "experiment_id": "00000000-0000-0000-0000-000000000194",
+      "result_refs": [],
+      "response_status": 201,
+      "response": {
+        "schema_version": 1,
+        "experiment_id": "00000000-0000-0000-0000-000000000194",
+        "revision": 1,
+        "state": "draft",
+        "execution_started": false,
+        "preflight": {
+          "status": "pending",
+          "errors": []
+        },
+        "model_policy": "same_authorized_investor_model",
+        "limits": {
+          "max_requests": 8,
+          "max_tokens": 160000
+        },
+        "trial_plan": {
+          "arms": [
+            "baseline",
+            "candidate"
+          ],
+          "repeat_count": 1,
+          "planned_trials": 2
+        },
+        "links": {
+          "self": "/investor/methods/quality-experiments/00000000-0000-0000-0000-000000000194"
+        }
+      },
+      "committed_at": "2026-11-07T09:30:00Z"
+    }
+  },
+  "mutation_not_observed": {
+    "status": 404,
+    "response": {
+      "detail": {
+        "code": "not_found",
+        "message": "未找到可访问的已提交收据",
+        "field_errors": [],
+        "retryable": false,
+        "current_refs": []
+      }
+    },
+    "client_behavior": "Keep original mutation_id/body; 404 does not prove no in-flight request."
+  },
+  "seal": {
+    "mutation_id": "00000000-0000-0000-0000-000000000195",
+    "expected_revision": 1
+  },
+  "start": {
+    "mutation_id": "00000000-0000-0000-0000-000000000196",
+    "expected_revision": 2,
+    "spec_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "cancel": {
+    "mutation_id": "00000000-0000-0000-0000-000000000197",
+    "expected_revision": 3
+  }
+}

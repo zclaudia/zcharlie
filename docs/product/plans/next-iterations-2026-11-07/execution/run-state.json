@@ -1,0 +1,56 @@
+{
+  "status": "in_progress",
+  "started_at": "2026-11-07",
+  "controller": "/root",
+  "mode": "native_sol",
+  "excluded": [
+    "real_e2e",
+    "production_enablement",
+    "real_provider_calls"
+  ],
+  "baseline": "execution/evidence/baseline.json",
+  "active_assignments": [
+    {
+      "agent": "/root/implement_shared_contracts",
+      "tasks": [
+        "PT-007",
+        "PT-008",
+        "PT-009"
+      ],
+      "scope": "frozen AG22 sources, prices and per-path csrc industry; approved minimal FrozenPath contract extension"
+    },
+    {
+      "agent": "/root/implement_research_entry",
+      "tasks": [
+        "QT-009 migration cross-author review"
+      ],
+      "scope": "read-only root QT007 guards/settings/migration review; prior QT008 storage completed"
+    },
+    {
+      "agent": "/root/implement_bank_fixture",
+      "tasks": [
+        "EV-10",
+        "EV-11",
+        "EV-12 after fixes"
+      ],
+      "scope": "independent event fault tests/review/acceptance; business files read-only"
+    },
+    {
+      "agent": "/root",
+      "tasks": [
+        "QT-008/009 consolidation",
+        "BT-014/015/016",
+        "shared integration"
+      ],
+      "scope": "shared hotspots; current single migration head065"
+    }
+  ],
+  "prepared_assignments": [],
+  "shared_hotspots_owner": "/root",
+  "notes": [
+    "Retain all pre-existing simulation work.",
+    "Use .venv/bin/python -m tools because old console-script shebangs are stale.",
+    "Do not mark task done based only on worker report.",
+    "External concurrent simulation files changed since baseline; preserve latest files. Migration061 remained unchanged at last check. Do not claim all baseline hashes retained."
+  ]
+}

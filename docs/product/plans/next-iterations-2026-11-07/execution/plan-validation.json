@@ -1,0 +1,20 @@
+{
+  "status": "passed",
+  "scope": "plan_static_validation_only",
+  "task_count": 241,
+  "estimated_person_days": 180.75,
+  "id_unique": true,
+  "dependency_targets_exist": true,
+  "dependency_graph_acyclic": true,
+  "all_tasks_reach_final_acceptance": true,
+  "g0_bank_static_s1_independent_of_events": true,
+  "quality_source_consumer_has_producer_dependency": true,
+  "all_task_statuses": "planned",
+  "local_links_checked": 43,
+  "json_code_blocks_checked": 15,
+  "task_index_json_parsed": true,
+  "whitespace_check": "passed",
+  "application_tests_run": false,
+  "real_e2e_run": false,
+  "issues": []
+}

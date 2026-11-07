@@ -1,0 +1,42 @@
+{
+  "synthetic": true,
+  "initial": {
+    "consumer": "research_inbox.v1",
+    "scanned_sequence": 0,
+    "revision": 1,
+    "active_generation": "00000000-0000-0000-0000-0000000001f4",
+    "rebuild_state": null
+  },
+  "rebuilding": {
+    "consumer": "research_inbox.v1",
+    "scanned_sequence": 70,
+    "revision": 4,
+    "active_generation": "00000000-0000-0000-0000-0000000001f4",
+    "rebuild_state": {
+      "candidate_generation": "00000000-0000-0000-0000-0000000001f5",
+      "domain_watermark": 70,
+      "journal_watermark": 80,
+      "last_replayed_sequence": 75,
+      "state": "catching_up"
+    }
+  },
+  "switch": {
+    "expected_revision": 4,
+    "require_no_inflight_manifest": true,
+    "next": {
+      "consumer": "research_inbox.v1",
+      "scanned_sequence": 70,
+      "revision": 5,
+      "active_generation": "00000000-0000-0000-0000-0000000001f5",
+      "rebuild_state": null
+    }
+  },
+  "other_consumer": {
+    "consumer": "watchlist_sync.v1",
+    "scanned_sequence": 70,
+    "revision": 2,
+    "active_generation": null,
+    "rebuild_state": null
+  },
+  "rebuild_state_schema_ref": "events.schema.json#/$defs/RebuildState"
+}

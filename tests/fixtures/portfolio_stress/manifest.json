@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "production_data": false,
+  "generation": "Original local save/get services; frozen clock, deterministic UUIDs, synthetic source/rule seams",
+  "entries": [
+    {
+      "path": "ag22_v2/complete.json",
+      "sha256": "b43de46b406846df108ece69066f9d0eeb11fb9839b16c52ce97bc662e57a217",
+      "content_hash": "fc94a0066d4d54dc7c3b55c2d2418361f6b29c2df93b7bdbc751efaf50270121",
+      "calculation_input_hash": "0a1b8ba41ada5db5457627c20551200fbcdb7e567796d5b00aeec92e272445dd",
+      "method_version": "ag22-v2"
+    },
+    {
+      "path": "ag22_v2/legacy_v1.json",
+      "sha256": "70940cf2d0881047e2e8d347260cb5b97deb26dbbf5d760483fcf212597fa562",
+      "content_hash": "8879aab7fa3fe6aa51f13221ac7edbbc04eece038bc7ac1cc69f4c916d5d3022",
+      "calculation_input_hash": "36938a06f95932743d79aac27df3b195b5ffbb5143af04935336ca68bbf87eac",
+      "method_version": "ag22-v1"
+    }
+  ],
+  "saved_fields": [
+    "request",
+    "snapshot",
+    "mandate",
+    "sources",
+    "valuation",
+    "scenarios",
+    "result_paths",
+    "trusted_rules",
+    "price_basis_at",
+    "fact_as_of"
+  ],
+  "coverage": [
+    "valuation price differs from snapshot",
+    "no_action",
+    "fee already in cash",
+    "new holding exact price ref",
+    "unknown fee remains null"
+  ],
+  "unsupported": [
+    "ag22-v1 as same-basis stress alternative",
+    "unknown method_version",
+    "cross-account or cross-valuation paths"
+  ],
+  "not_yet_fixture_verified": [
+    "published plan option adapter (PT-007)",
+    "real account/provider material",
+    "real E2E"
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "contract_version": "next-iterations/1",
+  "status_by_code": {
+    "writes_disabled": 403,
+    "quality_scope_forbidden": 403,
+    "inbox_access_denied": 403,
+    "not_found": 404,
+    "revision_conflict": 409,
+    "idempotency_conflict": 409,
+    "stale_revision": 409,
+    "idempotency_payload_mismatch": 409,
+    "spec_changed": 409,
+    "source_stale": 409,
+    "idempotency_mismatch": 409,
+    "source_conflict": 409,
+    "basis_changed": 409,
+    "cursor_expired": 410,
+    "invalid_reference": 422,
+    "invalid_cursor": 422,
+    "invalid_action": 422,
+    "envelope_incomplete": 422,
+    "method_capability_unavailable": 422,
+    "invalid_assessment": 422,
+    "unsupported_scope": 422,
+    "invalid_dsl": 422,
+    "unit_mismatch": 422,
+    "incomplete_dependencies": 422,
+    "unsupported_basis": 422,
+    "calendar_unavailable": 422,
+    "invalid_parameter": 422,
+    "invalid_binding": 422,
+    "feature_disabled": 503,
+    "model_unavailable": 503,
+    "dependency_unavailable": 503,
+    "projection_unavailable": 503,
+    "review_unavailable": 503,
+    "event_delivery_unavailable": 503
+  },
+  "examples": [
+    {
+      "status": 503,
+      "response": {
+        "detail": {
+          "code": "feature_disabled",
+          "message": "功能未启用",
+          "field_errors": [],
+          "retryable": false,
+          "current_refs": []
+        }
+      }
+    },
+    {
+      "status": 409,
+      "response": {
+        "detail": {
+          "code": "stale_revision",
+          "message": "实验版本已变化",
+          "field_errors": [
+            {
+              "field": "expected_revision",
+              "message": "当前版本为3，请刷新"
+            }
+          ],
+          "retryable": false,
+          "current_refs": []
+        }
+      }
+    }
+  ],
+  "auth_status": "401 and existing auth/source/429 dependencies remain unchanged; these are not domain BusinessError remappings",
+  "fallback_status": 409
+}

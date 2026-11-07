@@ -148,4 +148,4 @@ def test_compose_workers_cover_every_kind_once() -> None:
     assert collection_command[4].split(",") == list(collection)
     assert set(agent).isdisjoint(collection)
     # Review seats also run on the agent worker but are not an agent task kind.
-    assert set(agent) == set(AGENT_KINDS) | {"review_seat"}
+    assert set(agent) == set(AGENT_KINDS) | {"review_seat", "simulation_decide", "simulation_review"}

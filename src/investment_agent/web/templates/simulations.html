@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block page_css %}<link rel="stylesheet" href="{{ static_url('simulations.css') }}">{% endblock %}
+{% block content %}
+<div id="simulations-workbench" data-view="list">
+  <header class="page-head sim-head">
+    <div><h1>模拟实验</h1><p class="muted">同一份资料、独立虚拟账户，观察模型的决策与结果。</p></div>
+    <div class="page-actions"><button type="button" class="btn" id="sim-refresh">{{ icon("refresh") }}刷新</button><a class="btn btn-primary" href="#sim-create" id="sim-create-open">{{ icon("plus") }}创建实验</a></div>
+  </header>
+  <div id="sim-message" role="status" aria-live="polite"></div>
+  <div id="sim-pending" class="notice notice-warn" hidden><p id="sim-pending-text">上次请求尚未确认，重试会使用原正文与幂等键。</p><button type="button" class="btn btn-sm" id="sim-retry-write">重试原请求</button></div>
+  <section aria-labelledby="sim-list-title"><h2 id="sim-list-title" class="visually-hidden">已有实验</h2><div id="sim-list" class="sim-experiment-grid" aria-live="polite"><p class="notice notice-loading">正在加载实验…</p></div></section>
+
+  <details class="card sim-create-card" id="sim-create">
+    <summary>创建一个新实验</summary>
+    <p class="muted">现金与等权买入持有基准自动加入；所有账户使用相同起始资金和执行规则。</p>
+    <p class="notice" id="sim-options-status">正在读取可用模型与交易日历…</p>
+    <form id="sim-create-form" class="sim-form">
+      <fieldset><legend>1 · 实验与资金</legend><div class="sim-fields">
+        <label class="sim-wide">实验名称<input name="name" maxlength="100" required placeholder="例如：主板价值观察 · 12 周"></label>
+        <label>每账户虚拟资金（元）<input name="initial_cash" value="1000000" inputmode="decimal" required pattern="[0-9]+(\.[0-9]+)?"></label>
+        <label>调仓频率<select name="rebalance_frequency"><option value="weekly">每周</option><option value="daily">每日</option></select></label>
+        <label>开始日期<input type="date" name="start_date" required></label><label>结束日期<input type="date" name="end_date" required></label>
+        <label class="sim-wide">比较模式<select name="mode"><option value="model_comparison">比较模型 · 固定研究方法与预算规则</option><option value="combined">自由配置比较 · 独立配置参赛预算</option></select></label>
+      </div></fieldset>
+      <fieldset><legend>2 · 股票池</legend>
+        <p class="small muted">选择已保存的沪深主板普通 A 股；逐日规则与公司行动覆盖将在运行前检查。</p>
+        <div class="sim-search"><label for="sim-stock-query" class="visually-hidden">搜索本地股票</label><input id="sim-stock-query" placeholder="输入代码或公司名称" autocomplete="off"><button type="button" class="btn" id="sim-stock-search">搜索股票</button></div>
+        <div id="sim-stock-results" class="sim-search-results" aria-live="polite"></div>
+        <div id="sim-selected-stocks" class="sim-chips" aria-label="已选股票"></div><p id="sim-stock-count" class="small muted">尚未选择股票</p>
+      </fieldset>
+      <fieldset><legend>3 · 参赛模型与预算</legend>
+        <p class="small muted">每名参赛者拥有独立账户。模型费用以美元计量，单独展示；未知价格按保守金额预留，不能当作已付费用。</p>
+        <div id="sim-agent-rows" class="sim-agent-rows"></div><button type="button" class="btn btn-sm" id="sim-agent-add">{{ icon("plus") }}增加参赛者</button>
+      </fieldset>
+      <details class="sim-advanced"><summary>交易规则与成本假设</summary><p class="small muted">以下是本实验的费用假设。真实可用交易规则仍须逐日提供已核对证据；撮合采用下一交易日开盘价格代理。</p><div class="sim-fields">
+        <label>佣金率（比例）<input name="commission_rate" value="0.0003" inputmode="decimal" required></label><label>最低佣金（元）<input name="minimum_commission" value="5" inputmode="decimal" required></label>
+        <label>卖出税率（比例）<input name="sell_tax_rate" value="0.0005" inputmode="decimal" required></label><label>过户费率（比例）<input name="transfer_rate" value="0" inputmode="decimal" required></label>
+        <label>不利滑点（比例）<input name="slippage_rate" value="0.001" inputmode="decimal" required></label><label>单股仓位上限（比例）<input name="max_position_weight" value="1" inputmode="decimal" required></label>
+        <label>历史成交额容量上限（比例）<input name="max_historical_turnover_ratio" value="0.01" inputmode="decimal" required></label>
+      </div></details>
+      <p class="notice">创建后先核对冻结配置。启动实验后，系统会在参赛者预算内自动决策并记录模拟订单。</p>
+      <div class="sim-form-actions"><button type="submit" class="btn btn-primary" id="sim-create-submit" data-allowed="false" disabled>创建实验</button></div>
+    </form>
+  </details>
+</div>
+<script type="module" src="{{ static_url('simulations.js') }}"></script>
+{% endblock %}

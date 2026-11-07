@@ -1,0 +1,53 @@
+# Synthetic quality-comparison candidate C1. Importing does not activate it.
+# Actual proposal eligibility, original admission and frozen-tool compatibility
+# are a separate QT-003 gate. No default head or existing package is changed.
+schema_version: 1
+package_key: company-research-c1-counter-analysis
+description: "C1反证加强候选：保留现行三步骤，仅要求两个反向假设及一个既有已核验反证引用；不增加采集、计算或同业能力。具体准入与方法验证继续由既有流程执行，本文件不授权或启用方法。"
+applicable_kinds:
+  - company_research
+  - review
+discipline:
+  require_two_counter_hypotheses: true
+  require_verified_counter_evidence: true
+  require_explicit_stop_decision: false
+steps:
+  - id: falsifiable_plan
+    title: Falsifiable research plan
+    instruction_kind: falsifiable_plan
+    blocking: true
+    required_outputs:
+      - type: plan
+        require_completion_criteria: true
+        require_stop_conditions: true
+      - type: hypotheses
+        min_count: 1
+  - id: counter_analysis
+    title: Counter-evidence analysis
+    instruction_kind: counter_analysis
+    blocking: true
+    required_outputs:
+      - type: hypotheses
+        min_count: 2
+      - type: counter_refs
+        min_count: 1
+        verified_only: true
+  - id: dimension_assessment
+    title: Seven-dimension assessment
+    instruction_kind: dimension_assessment
+    blocking: true
+    required_outputs:
+      - type: dimension
+        dimension: business_demand
+      - type: dimension
+        dimension: competition_durability
+      - type: dimension
+        dimension: financial_cash
+      - type: dimension
+        dimension: balance_sheet_allocation
+      - type: dimension
+        dimension: price_expectations
+      - type: dimension
+        dimension: downside_counter_case
+      - type: dimension
+        dimension: portfolio_alternatives

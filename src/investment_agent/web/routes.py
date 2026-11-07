@@ -510,6 +510,19 @@ async def portfolio_page(request: Request) -> HTMLResponse:
     return _render("portfolio.html", request, page_title="持仓池", active_nav="portfolio")
 
 
+@router.get("/simulations", response_class=HTMLResponse)
+async def simulations_page(request: Request) -> HTMLResponse:
+    return _render("simulations.html", request, page_title="模拟实验", active_nav="simulations")
+
+
+@router.get("/simulations/{experiment_id}", response_class=HTMLResponse)
+async def simulation_page(request: Request, experiment_id: str) -> HTMLResponse:
+    if not re.fullmatch(r"[A-Za-z0-9._:-]{1,160}", experiment_id):
+        raise HTTPException(400, "模拟实验标识无效")
+    return _render("simulations_detail.html", request, page_title="模拟实验详情",
+                   active_nav="simulations", simulation_id=experiment_id)
+
+
 @router.get("/industries", response_class=HTMLResponse)
 async def industries_page(request: Request) -> HTMLResponse:
     return _render("industries.html", request, page_title="行业年度研究", active_nav="industries")

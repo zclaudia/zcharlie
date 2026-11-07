@@ -5,11 +5,13 @@
 单用户、研究辅助型的个人投资研究系统：持续收集自选 A 股的证据、计算可复现的
 确定性评分、发现"上次以来的变化"，并把 Agent 解释严格限制在已审计字段上。
 
-**研究辅助，非投资建议。** 没有下单、模拟盘、自动调仓或任何券商连接路径。
+**研究辅助，非投资建议。** 支持独立虚拟账户的模拟交易和多 Agent 比较；真实交易由用户执行，没有券商连接路径。
 
 个人投资 Agent 已在本仓库交付：自主研究、候选发现、买卖与仓位意见、持续复核和复盘走独立契约（`agent/`、`investor/`、方法包、持仓账本与 `/app` 工作台）。真实交易仍由用户决定和执行，没有券商连接。设计与验收见[产品设计](docs/product/investor-agent-design.md)和[技术设计](docs/product/investor-agent-architecture.md)。港美在线刷新默认关闭。本 README 其余内容描述当前已交付能力。
 
 完整专题：[研究与运营](docs/product/investor-agent-research-policy.md)、[领域契约与交互](docs/product/investor-agent-contracts.md)、[估值计算](docs/product/investor-agent-valuation.md)、[方法包契约设计](docs/product/investor-agent-method-packages.md)（M1–M4 已实现）。
+
+模拟实验入口 `/app/simulations`：固定股票池与规则，多模型独立决策，现金和等权基准、日线模拟成交、净值比较与成熟复盘。当前创建入口采用固定内置方法，不开放自定义方法编辑；真实浏览器交互验收仍待完成。成交需要完整行情和可信逐日交易证据；缺失时明确等待，不推测涨跌停或公司行动。见[使用与运行](docs/product/paper-trading-arena-operations.md)、[开源参考与设计](docs/product/paper-trading-arena-design.md)、[任务与独立审查记录](docs/product/plans/paper-trading-arena-implementation.md)。
 
 - 数据链路：`时点快照（baostock + 东财，iFinD 核对值优先）/ ifind-proxy → canonical(ifind-canonical.v1) → 确定性内核(评分 v1.3) → Agent 解释 → 持久化`
 - 长任务：数据库队列 + 独立 worker，支持幂等、原子认领、心跳、孤儿恢复与有限重试
@@ -34,11 +36,11 @@ ia migrate up
 
 # 4. 常驻进程：API、两个 worker、scheduler
 ia api serve          # 默认 127.0.0.1:8000；远程/Docker 需显式 --host 0.0.0.0
-ia worker start --kinds agent_turn,agent_research,agent_review,agent_discovery
+ia worker start --kinds agent_turn,agent_research,agent_review,agent_discovery,simulation_decide,simulation_review,review_seat
                       # 对话与 Agent 维护、外部通知投递（只此一个进程）
-ia worker start --kinds account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,shenwan_directory_refresh,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
+ia worker start --kinds simulation_cycle,account_fit_evaluate,candidate_rank,supplemental_rule_evaluate,supplemental_update_process,supplemental_disclosure_poll,ifind_research,universe_sync,industry_sync,market_snapshot,financial_snapshot,snapshot_backfill,dividend_snapshot,close_quote,earnings_event,calendar_probe,shenwan_directory_refresh,stock_bootstrap,material_collection,screen_run,rule_draft,ifind_verify,portfolio_valuation,zone_detection,industry_peer_collect
                       # 快照、筛选、核对、日历、行业目录刷新等；调试可用 --once
-ia scheduler start    # A 股日终观察池刷新（Asia/Shanghai，版本化交易日历）
+ia scheduler start    # A 股日终刷新及模拟实验唤醒（约每 60 秒检查，Asia/Shanghai）
 
 # 5. 打开 Web UI 登录
 open http://127.0.0.1:8000/app

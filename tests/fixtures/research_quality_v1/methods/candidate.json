@@ -1,0 +1,168 @@
+{
+  "applicable_kinds": [
+    "company_research",
+    "review"
+  ],
+  "description": "C1反证加强候选：保留现行三步骤，仅要求两个反向假设及一个既有已核验反证引用；不增加采集、计算或同业能力。具体准入与方法验证继续由既有流程执行，本文件不授权或启用方法。",
+  "dimensions": [
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "business_demand",
+      "minimum_status": "missing",
+      "schema_version": 1
+    },
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "competition_durability",
+      "minimum_status": "missing",
+      "schema_version": 1
+    },
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "financial_cash",
+      "minimum_status": "missing",
+      "schema_version": 1
+    },
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "balance_sheet_allocation",
+      "minimum_status": "missing",
+      "schema_version": 1
+    },
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "price_expectations",
+      "minimum_status": "missing",
+      "schema_version": 1
+    },
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "downside_counter_case",
+      "minimum_status": "missing",
+      "schema_version": 1
+    },
+    {
+      "allow_missing": false,
+      "allow_not_applicable": true,
+      "dimension": "portfolio_alternatives",
+      "minimum_status": "missing",
+      "schema_version": 1
+    }
+  ],
+  "discipline": {
+    "require_explicit_stop_decision": false,
+    "require_two_counter_hypotheses": true,
+    "require_verified_counter_evidence": true,
+    "schema_version": 1
+  },
+  "package_key": "company-research-c1-counter-analysis",
+  "schema_version": 1,
+  "steps": [
+    {
+      "allow_missing": false,
+      "blocking": true,
+      "depends_on": [],
+      "id": "falsifiable_plan",
+      "instruction_kind": "falsifiable_plan",
+      "required_capabilities": [],
+      "required_outputs": [
+        {
+          "require_completion_criteria": true,
+          "require_stop_conditions": true,
+          "schema_version": 1,
+          "type": "plan"
+        },
+        {
+          "min_count": 1,
+          "schema_version": 1,
+          "type": "hypotheses"
+        }
+      ],
+      "schema_version": 1,
+      "title": "Falsifiable research plan"
+    },
+    {
+      "allow_missing": false,
+      "blocking": true,
+      "depends_on": [],
+      "id": "counter_analysis",
+      "instruction_kind": "counter_analysis",
+      "required_capabilities": [],
+      "required_outputs": [
+        {
+          "min_count": 2,
+          "schema_version": 1,
+          "type": "hypotheses"
+        },
+        {
+          "min_count": 1,
+          "schema_version": 1,
+          "type": "counter_refs",
+          "verified_only": true
+        }
+      ],
+      "schema_version": 1,
+      "title": "Counter-evidence analysis"
+    },
+    {
+      "allow_missing": false,
+      "blocking": true,
+      "depends_on": [],
+      "id": "dimension_assessment",
+      "instruction_kind": "dimension_assessment",
+      "required_capabilities": [],
+      "required_outputs": [
+        {
+          "dimension": "business_demand",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        },
+        {
+          "dimension": "competition_durability",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        },
+        {
+          "dimension": "financial_cash",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        },
+        {
+          "dimension": "balance_sheet_allocation",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        },
+        {
+          "dimension": "price_expectations",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        },
+        {
+          "dimension": "downside_counter_case",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        },
+        {
+          "dimension": "portfolio_alternatives",
+          "minimum_status": "missing",
+          "schema_version": 1,
+          "type": "dimension"
+        }
+      ],
+      "schema_version": 1,
+      "title": "Seven-dimension assessment"
+    }
+  ]
+}

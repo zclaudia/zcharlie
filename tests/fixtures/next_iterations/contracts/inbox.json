@@ -1,0 +1,103 @@
+{
+  "synthetic": true,
+  "contribution": {
+    "owner_id": "local_owner",
+    "subject": {
+      "kind": "listing",
+      "listing_id": 18
+    },
+    "event_ref": {
+      "event_id": "6600523a-fe14-57b9-80ca-2318a5910df8",
+      "sequence": 57
+    },
+    "exact_source_refs": [
+      {
+        "kind": "review_round",
+        "id": 381,
+        "revision": 1
+      },
+      {
+        "kind": "review_comparison",
+        "id": 452,
+        "revision": 1
+      }
+    ],
+    "materiality": "attention",
+    "reason_code": "review_divergence",
+    "evidence_status": "current",
+    "display_text": "多视角评审出现分歧",
+    "case_ref": null,
+    "episode": null,
+    "claim_ref": null,
+    "monitor_condition_ref": null,
+    "topic_ref": null,
+    "decision_ref": null,
+    "reviewed_relation_ref": null,
+    "replaces_refs": []
+  },
+  "action": {
+    "method": "POST",
+    "path": "/investor/inbox/00000000-0000-0000-0000-000000000258/actions",
+    "request": {
+      "request_id": "00000000-0000-0000-0000-000000000259",
+      "expected_revision": 4,
+      "action": "snooze",
+      "until": "2026-11-09T01:00:00Z",
+      "reason": "等待核对"
+    },
+    "status": 200,
+    "response": {
+      "request_id": "00000000-0000-0000-0000-000000000259",
+      "replayed": false,
+      "item": {
+        "id": "00000000-0000-0000-0000-000000000258",
+        "revision": 5,
+        "state": "snoozed",
+        "snoozed_until": "2026-11-09T01:00:00Z"
+      },
+      "changes_cursor": "opaque-fixture-g1-58",
+      "operation_status": "committed"
+    }
+  },
+  "operation_lookup": {
+    "method": "GET",
+    "path": "/investor/inbox/operations/00000000-0000-0000-0000-000000000259",
+    "status": 200,
+    "response_ref": "action.response"
+  },
+  "account_contribution": {
+    "owner_id": "local_owner",
+    "subject": {
+      "kind": "account",
+      "account_id": "00000000-0000-0000-0000-0000000000c8"
+    },
+    "event_ref": {
+      "event_id": "82cabf7b-8826-5f3f-8326-3d7188233d36",
+      "sequence": 60
+    },
+    "exact_source_refs": [
+      {
+        "kind": "decision_observation",
+        "id": "00000000-0000-0000-0000-00000000012c",
+        "revision": 1
+      },
+      {
+        "kind": "decision",
+        "id": "00000000-0000-0000-0000-00000000012d",
+        "revision": 1
+      }
+    ],
+    "materiality": "attention",
+    "reason_code": "decision_observation_due",
+    "evidence_status": "current",
+    "display_text": "到期事实待核对",
+    "case_ref": null,
+    "episode": null,
+    "allowed_actions": [
+      "read",
+      "snooze",
+      "view_decision",
+      "view_check"
+    ]
+  }
+}

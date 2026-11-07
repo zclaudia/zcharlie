@@ -1,0 +1,1859 @@
+{
+  "account": {
+    "currency": "CNY",
+    "current_snapshot_id": null,
+    "id": "00000000-0000-0000-0000-0000000000c8",
+    "name": "Synthetic fixture account",
+    "revision": 0
+  },
+  "calculation": {
+    "actor": "portfolio_calculator",
+    "applicable": true,
+    "as_of": "2026-11-06T09:30:00Z",
+    "assumption_refs": [],
+    "assumptions": [
+      {
+        "name": "scenario_1_action_0_quantity",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": null,
+          "unit": "shares",
+          "unknown_reason": null,
+          "value": "10"
+        }
+      },
+      {
+        "name": "scenario_1_action_0_execution_price",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY/share",
+          "unknown_reason": null,
+          "value": "12"
+        }
+      },
+      {
+        "name": "scenario_1_action_0_fixed_fee",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "1"
+        }
+      },
+      {
+        "name": "scenario_1_action_0_fee_rate",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": null,
+          "unit": "ratio",
+          "unknown_reason": null,
+          "value": "0"
+        }
+      },
+      {
+        "name": "scenario_2_action_0_quantity",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": null,
+          "unit": "shares",
+          "unknown_reason": null,
+          "value": "5"
+        }
+      },
+      {
+        "name": "scenario_2_action_0_execution_price",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY/share",
+          "unknown_reason": null,
+          "value": "5"
+        }
+      },
+      {
+        "name": "scenario_2_action_0_fixed_fee",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "2"
+        }
+      },
+      {
+        "name": "scenario_2_action_0_fee_rate",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": null,
+          "unit": "ratio",
+          "unknown_reason": null,
+          "value": "0"
+        }
+      },
+      {
+        "name": "scenario_3_action_0_quantity",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": null,
+          "unit": "shares",
+          "unknown_reason": null,
+          "value": "1"
+        }
+      },
+      {
+        "name": "scenario_3_action_0_execution_price",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY/share",
+          "unknown_reason": null,
+          "value": "12"
+        }
+      },
+      {
+        "name": "scenario_3_action_0_fee_rate",
+        "provenance": "user_scenario",
+        "rationale": "synthetic user scenario",
+        "source_ref": null,
+        "value": {
+          "currency": null,
+          "unit": "ratio",
+          "unknown_reason": null,
+          "value": "0"
+        }
+      }
+    ],
+    "created_at": "2026-11-07T09:30:00Z",
+    "details": {
+      "constraint_authority": "exact_mandate_version_and_separate_scenario_assumptions",
+      "currency": "CNY",
+      "fact_as_of": "2026-11-05T09:30:00+00:00",
+      "mandate": {
+        "actor": "user",
+        "authorization": {
+          "background_enabled": false,
+          "exploration_scope_refs": [],
+          "max_leads_per_batch": 0,
+          "max_new_tasks_per_batch": 0,
+          "source_refs": []
+        },
+        "created_at": "2026-11-07T09:30:00Z",
+        "goals": [],
+        "hard_constraints": [],
+        "id": "00000000-0000-0000-0000-0000000000cb",
+        "origin_ref": null,
+        "portfolio_constraints": {
+          "account_id": "00000000-0000-0000-0000-0000000000c8",
+          "currency": "CNY",
+          "max_sector_weight": "0.9",
+          "max_single_weight": "0.8",
+          "minimum_cash": "0",
+          "minimum_cash_weight": null
+        },
+        "revision": 1,
+        "schema_version": 1,
+        "scope_refs": [
+          {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          }
+        ],
+        "unknowns": []
+      },
+      "mutually_exclusive": true,
+      "price_basis_at": "2026-11-06T09:30:00+00:00",
+      "ratio_precision": 40,
+      "request": {
+        "account_id": "00000000-0000-0000-0000-0000000000c8",
+        "constraints": null,
+        "industry_system": "CSRC",
+        "mandate_ref": {
+          "field_path": null,
+          "id": "00000000-0000-0000-0000-0000000000cb",
+          "kind": "mandate",
+          "revision": 1
+        },
+        "max_price_age_days": 7,
+        "operation_id": "00000000-0000-0000-0000-0000000000d0",
+        "prices": [
+          {
+            "listing_ref": {
+              "field_path": null,
+              "id": 19,
+              "kind": "listing",
+              "revision": 1
+            },
+            "price_ref": {
+              "field_path": null,
+              "id": 3,
+              "kind": "market_snapshot",
+              "revision": 1
+            }
+          }
+        ],
+        "rules": [],
+        "scenarios": [
+          {
+            "actions": [
+              {
+                "assumption_source": "synthetic user scenario",
+                "budget": null,
+                "direction": "sell",
+                "execution_price": "12",
+                "fee_rate": "0",
+                "fixed_fee": "1",
+                "listing_ref": {
+                  "field_path": null,
+                  "id": 18,
+                  "kind": "listing",
+                  "revision": 1
+                },
+                "nature": "user_scenario",
+                "quantity": "10"
+              }
+            ],
+            "name": "sell_with_fee"
+          },
+          {
+            "actions": [
+              {
+                "assumption_source": "synthetic user scenario",
+                "budget": null,
+                "direction": "buy",
+                "execution_price": "5",
+                "fee_rate": "0",
+                "fixed_fee": "2",
+                "listing_ref": {
+                  "field_path": null,
+                  "id": 19,
+                  "kind": "listing",
+                  "revision": 1
+                },
+                "nature": "user_scenario",
+                "quantity": "5"
+              }
+            ],
+            "name": "new_holding"
+          },
+          {
+            "actions": [
+              {
+                "assumption_source": "synthetic user scenario",
+                "budget": null,
+                "direction": "sell",
+                "execution_price": "12",
+                "fee_rate": "0",
+                "fixed_fee": null,
+                "listing_ref": {
+                  "field_path": null,
+                  "id": 18,
+                  "kind": "listing",
+                  "revision": 1
+                },
+                "nature": "user_scenario",
+                "quantity": "1"
+              }
+            ],
+            "name": "missing_fee"
+          }
+        ],
+        "snapshot_ref": {
+          "field_path": null,
+          "id": "00000000-0000-0000-0000-0000000000ca",
+          "kind": "portfolio_snapshot",
+          "revision": 1
+        },
+        "valuation_ref": {
+          "field_path": null,
+          "id": "00000000-0000-0000-0000-0000000000cc",
+          "kind": "portfolio_valuation",
+          "revision": 1
+        }
+      },
+      "result_paths": [
+        {
+          "field_path": "results.scenario_0_cash",
+          "metric": "cash",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_cash_upper_bound",
+          "metric": "cash_upper_bound",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_nav",
+          "metric": "nav",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_fees",
+          "metric": "fees",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_holding_0_quantity",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_holding_0_market_value",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "market_value",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_holding_0_weight",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_0_sector_0_weight",
+          "metric": "sector_weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 0,
+          "scenario_name": "no_action",
+          "scenario_status": "ok",
+          "sector_code": "J66"
+        },
+        {
+          "field_path": "results.scenario_1_cash",
+          "metric": "cash",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_cash_upper_bound",
+          "metric": "cash_upper_bound",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_nav",
+          "metric": "nav",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_fees",
+          "metric": "fees",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_holding_0_quantity",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_holding_0_market_value",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "market_value",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_holding_0_weight",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_1_action_0_quantity",
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": true,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_1_action_0_gross",
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "gross",
+          "publication_ready": true,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_1_action_0_fee",
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "fee",
+          "publication_ready": true,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_1_sector_0_weight",
+          "metric": "sector_weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 1,
+          "scenario_name": "sell_with_fee",
+          "scenario_status": "ok",
+          "sector_code": "J66"
+        },
+        {
+          "field_path": "results.scenario_2_cash",
+          "metric": "cash",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_cash_upper_bound",
+          "metric": "cash_upper_bound",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_nav",
+          "metric": "nav",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_fees",
+          "metric": "fees",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_holding_0_quantity",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_holding_0_market_value",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "market_value",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_holding_0_weight",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_holding_1_quantity",
+          "holding_index": 1,
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_holding_1_market_value",
+          "holding_index": 1,
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "market_value",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_holding_1_weight",
+          "holding_index": 1,
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_2_action_0_quantity",
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": true,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_2_action_0_gross",
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "gross",
+          "publication_ready": true,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_2_action_0_fee",
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "fee",
+          "publication_ready": true,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok"
+        },
+        {
+          "field_path": "results.scenario_2_sector_0_weight",
+          "metric": "sector_weight",
+          "publication_ready": true,
+          "role": "calculation_output",
+          "scenario_index": 2,
+          "scenario_name": "new_holding",
+          "scenario_status": "ok",
+          "sector_code": "J66"
+        },
+        {
+          "field_path": "results.scenario_3_cash_upper_bound",
+          "metric": "cash_upper_bound",
+          "publication_ready": false,
+          "role": "calculation_output",
+          "scenario_index": 3,
+          "scenario_name": "missing_fee",
+          "scenario_status": "needs_data"
+        },
+        {
+          "field_path": "results.scenario_3_holding_0_quantity",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": false,
+          "role": "calculation_output",
+          "scenario_index": 3,
+          "scenario_name": "missing_fee",
+          "scenario_status": "needs_data"
+        },
+        {
+          "field_path": "results.scenario_3_holding_0_market_value",
+          "holding_index": 0,
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "market_value",
+          "publication_ready": false,
+          "role": "calculation_output",
+          "scenario_index": 3,
+          "scenario_name": "missing_fee",
+          "scenario_status": "needs_data"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_3_action_0_quantity",
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "quantity",
+          "publication_ready": false,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 3,
+          "scenario_name": "missing_fee",
+          "scenario_status": "needs_data"
+        },
+        {
+          "action_index": 0,
+          "field_path": "results.scenario_3_action_0_gross",
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "metric": "gross",
+          "publication_ready": false,
+          "quantity_authority": "verified_rule_simulation",
+          "role": "calculation_output",
+          "scenario_index": 3,
+          "scenario_name": "missing_fee",
+          "scenario_status": "needs_data"
+        }
+      ],
+      "scenarios": [
+        {
+          "actions": [],
+          "cash": "1000",
+          "cash_upper_bound": "1000",
+          "checks": {
+            "cash_nonnegative": "pass"
+          },
+          "fees": "0",
+          "holdings": [
+            {
+              "listing_ref": {
+                "field_path": null,
+                "id": 18,
+                "kind": "listing",
+                "revision": 1
+              },
+              "market_value": "1200.000000",
+              "quantity": "100",
+              "weight": "0.5454545454545454545454545454545454545455"
+            }
+          ],
+          "mandate_checks": {
+            "max_sector_weight": "pass",
+            "max_single_weight": "pass",
+            "minimum_cash": "pass"
+          },
+          "name": "no_action",
+          "nav": "2200.000000",
+          "publication_ready": true,
+          "sector_coverage": "complete",
+          "sector_weights": {
+            "J66": "0.5454545454545454545454545454545454545455"
+          },
+          "status": "ok",
+          "unknowns": [],
+          "violations": []
+        },
+        {
+          "actions": [
+            {
+              "execution_price": "12",
+              "fee": "1",
+              "gross": "120",
+              "listing_ref": {
+                "field_path": null,
+                "id": 18,
+                "kind": "listing",
+                "revision": 1
+              },
+              "quantity": "10",
+              "quantity_authority": "verified_rule_simulation",
+              "requested_quantity": "10",
+              "rule_source": {
+                "available_from": "2026-10-06T09:30:00Z",
+                "market_code": "SSE",
+                "rule": {
+                  "buy_increment": "1",
+                  "buy_minimum": "1",
+                  "full_odd_lot_sell": true,
+                  "listing_ref": {
+                    "field_path": null,
+                    "id": 18,
+                    "kind": "listing",
+                    "revision": 1
+                  },
+                  "nature": "user_scenario",
+                  "sell_increment": "1",
+                  "sell_minimum": "1",
+                  "source": "synthetic local rule; not exchange certification",
+                  "version": "synthetic-rule-v1"
+                },
+                "source_version": "fixture-v1",
+                "trusted_source": "synthetic test seam; no provider call",
+                "valid_from": "2026-01-01",
+                "valid_to": null,
+                "verification": "verified"
+              }
+            }
+          ],
+          "cash": "1119",
+          "cash_upper_bound": "1119",
+          "checks": {
+            "cash_nonnegative": "pass"
+          },
+          "fees": "1",
+          "holdings": [
+            {
+              "listing_ref": {
+                "field_path": null,
+                "id": 18,
+                "kind": "listing",
+                "revision": 1
+              },
+              "market_value": "1080.000000",
+              "quantity": "90",
+              "weight": "0.4911323328785811732605729877216916780355"
+            }
+          ],
+          "mandate_checks": {
+            "max_sector_weight": "pass",
+            "max_single_weight": "pass",
+            "minimum_cash": "pass"
+          },
+          "name": "sell_with_fee",
+          "nav": "2199.000000",
+          "publication_ready": true,
+          "sector_coverage": "complete",
+          "sector_weights": {
+            "J66": "0.4911323328785811732605729877216916780355"
+          },
+          "status": "ok",
+          "unknowns": [],
+          "violations": []
+        },
+        {
+          "actions": [
+            {
+              "execution_price": "5",
+              "fee": "2",
+              "gross": "25",
+              "listing_ref": {
+                "field_path": null,
+                "id": 19,
+                "kind": "listing",
+                "revision": 1
+              },
+              "quantity": "5",
+              "quantity_authority": "verified_rule_simulation",
+              "requested_quantity": "5",
+              "rule_source": {
+                "available_from": "2026-10-06T09:30:00Z",
+                "market_code": "SSE",
+                "rule": {
+                  "buy_increment": "1",
+                  "buy_minimum": "1",
+                  "full_odd_lot_sell": true,
+                  "listing_ref": {
+                    "field_path": null,
+                    "id": 19,
+                    "kind": "listing",
+                    "revision": 1
+                  },
+                  "nature": "user_scenario",
+                  "sell_increment": "1",
+                  "sell_minimum": "1",
+                  "source": "synthetic local rule; not exchange certification",
+                  "version": "synthetic-rule-v1"
+                },
+                "source_version": "fixture-v1",
+                "trusted_source": "synthetic test seam; no provider call",
+                "valid_from": "2026-01-01",
+                "valid_to": null,
+                "verification": "verified"
+              }
+            }
+          ],
+          "cash": "973",
+          "cash_upper_bound": "973",
+          "checks": {
+            "cash_nonnegative": "pass"
+          },
+          "fees": "2",
+          "holdings": [
+            {
+              "listing_ref": {
+                "field_path": null,
+                "id": 18,
+                "kind": "listing",
+                "revision": 1
+              },
+              "market_value": "1200.000000",
+              "quantity": "100",
+              "weight": "0.5459508644222020018198362147406733393995"
+            },
+            {
+              "listing_ref": {
+                "field_path": null,
+                "id": 19,
+                "kind": "listing",
+                "revision": 1
+              },
+              "market_value": "25.000000",
+              "quantity": "5",
+              "weight": "0.01137397634212920837124658780709736123749"
+            }
+          ],
+          "mandate_checks": {
+            "max_sector_weight": "pass",
+            "max_single_weight": "pass",
+            "minimum_cash": "pass"
+          },
+          "name": "new_holding",
+          "nav": "2198.000000",
+          "publication_ready": true,
+          "sector_coverage": "complete",
+          "sector_weights": {
+            "J66": "0.5573248407643312101910828025477707006369"
+          },
+          "status": "ok",
+          "unknowns": [],
+          "violations": []
+        },
+        {
+          "actions": [
+            {
+              "execution_price": "12",
+              "fee": null,
+              "gross": "12",
+              "listing_ref": {
+                "field_path": null,
+                "id": 18,
+                "kind": "listing",
+                "revision": 1
+              },
+              "quantity": "1",
+              "quantity_authority": "verified_rule_simulation",
+              "requested_quantity": "1",
+              "rule_source": {
+                "available_from": "2026-10-06T09:30:00Z",
+                "market_code": "SSE",
+                "rule": {
+                  "buy_increment": "1",
+                  "buy_minimum": "1",
+                  "full_odd_lot_sell": true,
+                  "listing_ref": {
+                    "field_path": null,
+                    "id": 18,
+                    "kind": "listing",
+                    "revision": 1
+                  },
+                  "nature": "user_scenario",
+                  "sell_increment": "1",
+                  "sell_minimum": "1",
+                  "source": "synthetic local rule; not exchange certification",
+                  "version": "synthetic-rule-v1"
+                },
+                "source_version": "fixture-v1",
+                "trusted_source": "synthetic test seam; no provider call",
+                "valid_from": "2026-01-01",
+                "valid_to": null,
+                "verification": "verified"
+              }
+            }
+          ],
+          "cash": null,
+          "cash_upper_bound": "1012",
+          "checks": {
+            "cash_nonnegative": "unknown"
+          },
+          "fees": null,
+          "holdings": [
+            {
+              "listing_ref": {
+                "field_path": null,
+                "id": 18,
+                "kind": "listing",
+                "revision": 1
+              },
+              "market_value": "1188.000000",
+              "quantity": "99",
+              "weight": null
+            }
+          ],
+          "mandate_checks": {
+            "max_sector_weight": "unknown",
+            "max_single_weight": "unknown",
+            "minimum_cash": "unknown"
+          },
+          "name": "missing_fee",
+          "nav": null,
+          "publication_ready": false,
+          "sector_coverage": "complete",
+          "sector_weights": {
+            "J66": null
+          },
+          "status": "needs_data",
+          "unknowns": [
+            "action.0.fee_missing",
+            "complete_nav_missing",
+            "mandate_constraint_unknown:max_sector_weight",
+            "mandate_constraint_unknown:max_single_weight",
+            "mandate_constraint_unknown:minimum_cash"
+          ],
+          "violations": []
+        }
+      ],
+      "snapshot": {
+        "account_id": "00000000-0000-0000-0000-0000000000c8",
+        "asset_scope": "synthetic local test account only",
+        "cash_subtotal": "1000",
+        "conflicts": [],
+        "cost_method_version": "weighted_average_remaining_v1",
+        "cost_unknowns": [],
+        "coverage": "complete",
+        "currency": "CNY",
+        "dividends": [],
+        "excluded_prior_event_ids": [],
+        "fact_as_of": "2026-11-05T09:30:00Z",
+        "historical_unknowns": [],
+        "holdings": [
+          {
+            "average_cost": "8",
+            "confirmed_quantity": "100",
+            "cost_unknown_reason": null,
+            "listing_ref": {
+              "field_path": null,
+              "id": 18,
+              "kind": "listing",
+              "revision": 1
+            },
+            "market_value": "1000.000000",
+            "opened_on": null,
+            "price": "10.000000",
+            "price_date": "2026-11-05",
+            "price_ref": {
+              "field_path": null,
+              "id": 1,
+              "kind": "market_snapshot",
+              "revision": 1
+            },
+            "quantity_subtotal": "100",
+            "remaining_cost": "800",
+            "weight": "0.5"
+          }
+        ],
+        "id": "00000000-0000-0000-0000-0000000000ca",
+        "known_cash": "1000",
+        "known_subtotal": "2000.000000",
+        "price_coverage": "complete",
+        "realized": [],
+        "reconciliations": [],
+        "recorded_at": "2026-11-05T09:30:00Z",
+        "reference": {
+          "field_path": null,
+          "id": "00000000-0000-0000-0000-0000000000ca",
+          "kind": "portfolio_snapshot",
+          "revision": 1
+        },
+        "returns": null,
+        "revision": 1,
+        "source_event_ids": [
+          "00000000-0000-0000-0000-0000000000c9"
+        ],
+        "total_assets": "2000.000000",
+        "unknowns": [],
+        "valuation_at": "2026-11-05T09:30:00Z"
+      },
+      "sources": [
+        {
+          "captured_at": "2026-11-06T09:30:00",
+          "industry": {
+            "captured_at": "2026-11-05T09:30:00",
+            "code": "J66",
+            "id": 1,
+            "source": "synthetic-offline",
+            "system": "CSRC",
+            "valid_from": "2026-01-01",
+            "valid_to": null
+          },
+          "listing_ref": {
+            "field_path": null,
+            "id": 18,
+            "kind": "listing",
+            "revision": 1
+          },
+          "price": "12.000000",
+          "price_date": "2026-11-06",
+          "price_ref": {
+            "field_path": null,
+            "id": 2,
+            "kind": "market_snapshot",
+            "revision": 1
+          },
+          "provider": "synthetic-offline"
+        },
+        {
+          "captured_at": "2026-11-06T09:30:00",
+          "industry": {
+            "captured_at": "2026-11-05T09:30:00",
+            "code": "J66",
+            "id": 3,
+            "source": "synthetic-offline",
+            "system": "CSRC",
+            "valid_from": "2026-01-01",
+            "valid_to": null
+          },
+          "listing_ref": {
+            "field_path": null,
+            "id": 19,
+            "kind": "listing",
+            "revision": 1
+          },
+          "price": "5.000000",
+          "price_date": "2026-11-06",
+          "price_ref": {
+            "field_path": null,
+            "id": 3,
+            "kind": "market_snapshot",
+            "revision": 1
+          },
+          "provider": "synthetic-offline"
+        }
+      ],
+      "trusted_rules": {
+        "18": {
+          "available_from": "2026-10-06T09:30:00Z",
+          "market_code": "SSE",
+          "rule": {
+            "buy_increment": "1",
+            "buy_minimum": "1",
+            "full_odd_lot_sell": true,
+            "listing_ref": {
+              "field_path": null,
+              "id": 18,
+              "kind": "listing",
+              "revision": 1
+            },
+            "nature": "user_scenario",
+            "sell_increment": "1",
+            "sell_minimum": "1",
+            "source": "synthetic local rule; not exchange certification",
+            "version": "synthetic-rule-v1"
+          },
+          "source_version": "fixture-v1",
+          "trusted_source": "synthetic test seam; no provider call",
+          "valid_from": "2026-01-01",
+          "valid_to": null,
+          "verification": "verified"
+        },
+        "19": {
+          "available_from": "2026-10-06T09:30:00Z",
+          "market_code": "SSE",
+          "rule": {
+            "buy_increment": "1",
+            "buy_minimum": "1",
+            "full_odd_lot_sell": true,
+            "listing_ref": {
+              "field_path": null,
+              "id": 19,
+              "kind": "listing",
+              "revision": 1
+            },
+            "nature": "user_scenario",
+            "sell_increment": "1",
+            "sell_minimum": "1",
+            "source": "synthetic local rule; not exchange certification",
+            "version": "synthetic-rule-v1"
+          },
+          "source_version": "fixture-v1",
+          "trusted_source": "synthetic test seam; no provider call",
+          "valid_from": "2026-01-01",
+          "valid_to": null,
+          "verification": "verified"
+        }
+      },
+      "valuation": {
+        "algorithm_version": "daily_valuation_v1",
+        "input_digest": "0327d9aeb9e4ac9d12112f5e1af09370fe9b80b46891a515e494d2cf9227bd2c",
+        "knowledge_cutoff": "2026-11-06T09:30:00+00:00",
+        "ref": {
+          "field_path": null,
+          "id": "00000000-0000-0000-0000-0000000000cc",
+          "kind": "portfolio_valuation",
+          "revision": 1
+        },
+        "valuation_date": "2026-11-06"
+      }
+    },
+    "errors": [],
+    "fact_refs": [
+      {
+        "field_path": null,
+        "id": "00000000-0000-0000-0000-0000000000ca",
+        "kind": "portfolio_snapshot",
+        "revision": 1
+      },
+      {
+        "field_path": null,
+        "id": "00000000-0000-0000-0000-0000000000cc",
+        "kind": "portfolio_valuation",
+        "revision": 1
+      },
+      {
+        "field_path": null,
+        "id": "00000000-0000-0000-0000-0000000000cb",
+        "kind": "mandate",
+        "revision": 1
+      }
+    ],
+    "id": "00000000-0000-0000-0000-0000000000d0",
+    "input_hash": "0a1b8ba41ada5db5457627c20551200fbcdb7e567796d5b00aeec92e272445dd",
+    "method": "portfolio_scenarios",
+    "method_version": "ag22-v2",
+    "origin_ref": {
+      "field_path": null,
+      "id": "00000000-0000-0000-0000-0000000000ca",
+      "kind": "portfolio_snapshot",
+      "revision": 1
+    },
+    "quality": [
+      "action.0.fee_missing",
+      "complete_nav_missing",
+      "mandate_constraint_unknown:max_sector_weight",
+      "mandate_constraint_unknown:max_single_weight",
+      "mandate_constraint_unknown:minimum_cash"
+    ],
+    "results": {
+      "scenario_0_cash": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1000"
+      },
+      "scenario_0_cash_upper_bound": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1000"
+      },
+      "scenario_0_fees": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "0"
+      },
+      "scenario_0_holding_0_market_value": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1200.000000"
+      },
+      "scenario_0_holding_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "100"
+      },
+      "scenario_0_holding_0_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.5454545454545454545454545454545454545455"
+      },
+      "scenario_0_nav": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "2200.000000"
+      },
+      "scenario_0_sector_0_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.5454545454545454545454545454545454545455"
+      },
+      "scenario_1_action_0_fee": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1"
+      },
+      "scenario_1_action_0_gross": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "120"
+      },
+      "scenario_1_action_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "10"
+      },
+      "scenario_1_cash": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1119"
+      },
+      "scenario_1_cash_upper_bound": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1119"
+      },
+      "scenario_1_fees": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1"
+      },
+      "scenario_1_holding_0_market_value": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1080.000000"
+      },
+      "scenario_1_holding_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "90"
+      },
+      "scenario_1_holding_0_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.4911323328785811732605729877216916780355"
+      },
+      "scenario_1_nav": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "2199.000000"
+      },
+      "scenario_1_sector_0_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.4911323328785811732605729877216916780355"
+      },
+      "scenario_2_action_0_fee": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "2"
+      },
+      "scenario_2_action_0_gross": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "25"
+      },
+      "scenario_2_action_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "5"
+      },
+      "scenario_2_cash": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "973"
+      },
+      "scenario_2_cash_upper_bound": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "973"
+      },
+      "scenario_2_fees": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "2"
+      },
+      "scenario_2_holding_0_market_value": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1200.000000"
+      },
+      "scenario_2_holding_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "100"
+      },
+      "scenario_2_holding_0_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.5459508644222020018198362147406733393995"
+      },
+      "scenario_2_holding_1_market_value": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "25.000000"
+      },
+      "scenario_2_holding_1_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "5"
+      },
+      "scenario_2_holding_1_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.01137397634212920837124658780709736123749"
+      },
+      "scenario_2_nav": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "2198.000000"
+      },
+      "scenario_2_sector_0_weight": {
+        "currency": null,
+        "unit": "ratio",
+        "unknown_reason": null,
+        "value": "0.5573248407643312101910828025477707006369"
+      },
+      "scenario_3_action_0_gross": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "12"
+      },
+      "scenario_3_action_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "1"
+      },
+      "scenario_3_cash_upper_bound": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1012"
+      },
+      "scenario_3_holding_0_market_value": {
+        "currency": "CNY",
+        "unit": "CNY",
+        "unknown_reason": null,
+        "value": "1188.000000"
+      },
+      "scenario_3_holding_0_quantity": {
+        "currency": null,
+        "unit": "shares",
+        "unknown_reason": null,
+        "value": "99"
+      }
+    },
+    "revision": 1,
+    "schema_version": 1,
+    "status": "ok"
+  },
+  "created_via": [
+    "PortfolioService.create_account/append/snapshot",
+    "InvestorService.create_mandate",
+    "ValuationService.ensure/get",
+    "PortfolioCalculationService.save/get"
+  ],
+  "event": {
+    "id": "00000000-0000-0000-0000-0000000000c9",
+    "recorded_at": "2026-11-05T09:30:00Z",
+    "request": {
+      "account_id": "00000000-0000-0000-0000-0000000000c8",
+      "batch_id": null,
+      "expected_revision": 0,
+      "fact": {
+        "asset_scope": "synthetic local test account only",
+        "cash": "1000",
+        "coverage": "complete",
+        "currency": "CNY",
+        "holdings": [
+          {
+            "average_cost": "8",
+            "listing_ref": {
+              "field_path": null,
+              "id": 18,
+              "kind": "listing",
+              "revision": 1
+            },
+            "opened_on": null,
+            "quantity": "100"
+          }
+        ],
+        "kind": "opening_balance",
+        "occurred_at": "2026-11-05T09:30:00Z",
+        "prior_history": "included_in_confirmed_balance",
+        "source": "synthetic confirmed statement",
+        "unexplained_difference": null,
+        "user_confirmed": true
+      },
+      "idempotency_key": "00000000-0000-0000-0000-0000000000cd",
+      "row_id": null
+    },
+    "revision": 1
+  },
+  "mandate": {
+    "actor": "user",
+    "authorization": {
+      "background_enabled": false,
+      "exploration_scope_refs": [],
+      "max_leads_per_batch": 0,
+      "max_new_tasks_per_batch": 0,
+      "source_refs": []
+    },
+    "created_at": "2026-11-07T09:30:00Z",
+    "goals": [],
+    "hard_constraints": [],
+    "id": "00000000-0000-0000-0000-0000000000cb",
+    "origin_ref": null,
+    "portfolio_constraints": {
+      "account_id": "00000000-0000-0000-0000-0000000000c8",
+      "currency": "CNY",
+      "max_sector_weight": "0.9",
+      "max_single_weight": "0.8",
+      "minimum_cash": "0",
+      "minimum_cash_weight": null
+    },
+    "revision": 1,
+    "schema_version": 1,
+    "scope_refs": [
+      {
+        "field_path": null,
+        "id": 18,
+        "kind": "listing",
+        "revision": 1
+      },
+      {
+        "field_path": null,
+        "id": 19,
+        "kind": "listing",
+        "revision": 1
+      }
+    ],
+    "unknowns": []
+  },
+  "owner_id": "local_owner",
+  "request": {
+    "account_id": "00000000-0000-0000-0000-0000000000c8",
+    "constraints": null,
+    "industry_system": "CSRC",
+    "mandate_ref": {
+      "field_path": null,
+      "id": "00000000-0000-0000-0000-0000000000cb",
+      "kind": "mandate",
+      "revision": 1
+    },
+    "max_price_age_days": 7,
+    "operation_id": "00000000-0000-0000-0000-0000000000d0",
+    "prices": [
+      {
+        "listing_ref": {
+          "field_path": null,
+          "id": 19,
+          "kind": "listing",
+          "revision": 1
+        },
+        "price_ref": {
+          "field_path": null,
+          "id": 3,
+          "kind": "market_snapshot",
+          "revision": 1
+        }
+      }
+    ],
+    "rules": [],
+    "scenarios": [
+      {
+        "actions": [
+          {
+            "assumption_source": "synthetic user scenario",
+            "budget": null,
+            "direction": "sell",
+            "execution_price": "12",
+            "fee_rate": "0",
+            "fixed_fee": "1",
+            "listing_ref": {
+              "field_path": null,
+              "id": 18,
+              "kind": "listing",
+              "revision": 1
+            },
+            "nature": "user_scenario",
+            "quantity": "10"
+          }
+        ],
+        "name": "sell_with_fee"
+      },
+      {
+        "actions": [
+          {
+            "assumption_source": "synthetic user scenario",
+            "budget": null,
+            "direction": "buy",
+            "execution_price": "5",
+            "fee_rate": "0",
+            "fixed_fee": "2",
+            "listing_ref": {
+              "field_path": null,
+              "id": 19,
+              "kind": "listing",
+              "revision": 1
+            },
+            "nature": "user_scenario",
+            "quantity": "5"
+          }
+        ],
+        "name": "new_holding"
+      },
+      {
+        "actions": [
+          {
+            "assumption_source": "synthetic user scenario",
+            "budget": null,
+            "direction": "sell",
+            "execution_price": "12",
+            "fee_rate": "0",
+            "fixed_fee": null,
+            "listing_ref": {
+              "field_path": null,
+              "id": 18,
+              "kind": "listing",
+              "revision": 1
+            },
+            "nature": "user_scenario",
+            "quantity": "1"
+          }
+        ],
+        "name": "missing_fee"
+      }
+    ],
+    "snapshot_ref": {
+      "field_path": null,
+      "id": "00000000-0000-0000-0000-0000000000ca",
+      "kind": "portfolio_snapshot",
+      "revision": 1
+    },
+    "valuation_ref": {
+      "field_path": null,
+      "id": "00000000-0000-0000-0000-0000000000cc",
+      "kind": "portfolio_valuation",
+      "revision": 1
+    }
+  },
+  "snapshot": {
+    "account_id": "00000000-0000-0000-0000-0000000000c8",
+    "asset_scope": "synthetic local test account only",
+    "cash_subtotal": "1000",
+    "conflicts": [],
+    "cost_method_version": "weighted_average_remaining_v1",
+    "cost_unknowns": [],
+    "coverage": "complete",
+    "currency": "CNY",
+    "dividends": [],
+    "excluded_prior_event_ids": [],
+    "fact_as_of": "2026-11-05T09:30:00Z",
+    "historical_unknowns": [],
+    "holdings": [
+      {
+        "average_cost": "8",
+        "confirmed_quantity": "100",
+        "cost_unknown_reason": null,
+        "listing_ref": {
+          "field_path": null,
+          "id": 18,
+          "kind": "listing",
+          "revision": 1
+        },
+        "market_value": "1000.000000",
+        "opened_on": null,
+        "price": "10.000000",
+        "price_date": "2026-11-05",
+        "price_ref": {
+          "field_path": null,
+          "id": 1,
+          "kind": "market_snapshot",
+          "revision": 1
+        },
+        "quantity_subtotal": "100",
+        "remaining_cost": "800",
+        "weight": "0.5"
+      }
+    ],
+    "id": "00000000-0000-0000-0000-0000000000ca",
+    "known_cash": "1000",
+    "known_subtotal": "2000.000000",
+    "price_coverage": "complete",
+    "realized": [],
+    "reconciliations": [],
+    "recorded_at": "2026-11-05T09:30:00Z",
+    "reference": {
+      "field_path": null,
+      "id": "00000000-0000-0000-0000-0000000000ca",
+      "kind": "portfolio_snapshot",
+      "revision": 1
+    },
+    "returns": null,
+    "revision": 1,
+    "source_event_ids": [
+      "00000000-0000-0000-0000-0000000000c9"
+    ],
+    "total_assets": "2000.000000",
+    "unknowns": [],
+    "valuation_at": "2026-11-05T09:30:00Z"
+  },
+  "synthetic": true,
+  "valuation": {
+    "account_id": "00000000-0000-0000-0000-0000000000c8",
+    "algorithm_version": "daily_valuation_v1",
+    "coverage": "complete",
+    "created_at": "2026-11-07T09:30:00Z",
+    "currency": "CNY",
+    "holdings": [
+      {
+        "average_cost": "8",
+        "cost_unknown_reason": null,
+        "floating_pnl": "400.000000",
+        "gain_vs_cost": "0.500000",
+        "holding_days": null,
+        "listing_ref": {
+          "field_path": null,
+          "id": 18,
+          "kind": "listing",
+          "revision": 1
+        },
+        "market_value": "1200.000000",
+        "opened_on": null,
+        "price": "12.000000",
+        "price_date": "2026-11-06",
+        "price_ref": {
+          "field_path": null,
+          "id": 2,
+          "kind": "market_snapshot",
+          "revision": 1
+        },
+        "price_unknown_reason": null,
+        "quantity": "100",
+        "remaining_cost": "800",
+        "weight": "0.5454545454545454545454545454545454545455"
+      }
+    ],
+    "id": "00000000-0000-0000-0000-0000000000cc",
+    "input_digest": "0327d9aeb9e4ac9d12112f5e1af09370fe9b80b46891a515e494d2cf9227bd2c",
+    "knowledge_cutoff": "2026-11-06T09:30:00Z",
+    "known_cash": "1000",
+    "ledger_revision": 1,
+    "market_value_subtotal": "1200.000000",
+    "reference": {
+      "field_path": null,
+      "id": "00000000-0000-0000-0000-0000000000cc",
+      "kind": "portfolio_valuation",
+      "revision": 1
+    },
+    "snapshot_id": "00000000-0000-0000-0000-0000000000ca",
+    "total_assets": "2200.000000",
+    "unknowns": [],
+    "valuation_date": "2026-11-06",
+    "weight_available": true
+  }
+}

@@ -1,0 +1,546 @@
+{
+  "case_ref": {
+    "id": "e8e11355-b0fd-5b65-a792-e184c042fb4b",
+    "kind": "quality_case",
+    "revision": 1
+  },
+  "category": "prior_failure",
+  "company_key": "synthetic-b",
+  "company_name": "合成乙公司",
+  "cutoff": "2026-11-07T09:30:00Z",
+  "execution_status": "not_run",
+  "expected": {
+    "behavior": "revisit_prior_failure",
+    "directional_conclusion_allowed": false,
+    "expected_gaps": [
+      "qualitative_driver_original_missing"
+    ],
+    "must_not": [
+      "不能把合成资料当真实公司事实",
+      "不能把预期写成已完成研究",
+      "不能虚构清单外来源或正式发布",
+      "失败与不足仍保留planned分母"
+    ],
+    "preserves_failure_denominator": true,
+    "required_counter_refs": [
+      {
+        "field_path": null,
+        "id": "3663c6a4-1e9b-5578-b01f-088a899ad636",
+        "kind": "evidence",
+        "revision": 1
+      }
+    ]
+  },
+  "id": "synthetic-b.prior_failure",
+  "listing_ref": {
+    "field_path": null,
+    "id": 180002,
+    "kind": "listing",
+    "revision": 1
+  },
+  "material_mode": "observed_materials",
+  "material_refs": [
+    {
+      "field_path": null,
+      "id": "a2a2760b-58f4-537f-9c83-60948707b539",
+      "kind": "evidence",
+      "revision": 1
+    },
+    {
+      "field_path": null,
+      "id": "21546a95-d32c-5692-919a-f6f1fcf507e4",
+      "kind": "evidence",
+      "revision": 1
+    },
+    {
+      "field_path": null,
+      "id": "6b269013-8521-536f-baf8-de13e5474e63",
+      "kind": "evidence",
+      "revision": 1
+    },
+    {
+      "field_path": null,
+      "id": "9a5cb5da-985e-5e1a-a340-c478c91b81ba",
+      "kind": "evidence",
+      "revision": 1
+    },
+    {
+      "field_path": null,
+      "id": "ae203eee-3604-518d-a54a-c7ef6a444141",
+      "kind": "evidence",
+      "revision": 1
+    },
+    {
+      "field_path": null,
+      "id": "3663c6a4-1e9b-5578-b01f-088a899ad636",
+      "kind": "evidence",
+      "revision": 1
+    }
+  ],
+  "materials": [
+    {
+      "evidence": {
+        "acquired_at": "2026-11-05T08:00:00Z",
+        "actor": "snapshot_adapter",
+        "available_from": "2025-03-31T16:00:00Z",
+        "conflict": "none",
+        "content_hash": "949ab026fc2bbd15e29f35df2667e1b68bff8adf111d1c2bf9e882473646e8fd",
+        "correction_refs": [],
+        "created_at": "2026-11-05T08:00:00Z",
+        "date_precision": null,
+        "document_provenance": null,
+        "id": "a2a2760b-58f4-537f-9c83-60948707b539",
+        "locator": "fields.revenue_main",
+        "origin_ref": null,
+        "period": {
+          "basis": "period_to_date/annual",
+          "end": "2024-12-31",
+          "start": "2024-01-01"
+        },
+        "published_at": "2025-03-31T16:00:00Z",
+        "revision": 1,
+        "schema_version": 1,
+        "source_kind": "snapshot",
+        "source_ref": {
+          "field_path": "fields.revenue_main",
+          "id": 18010060,
+          "kind": "financial_snapshot",
+          "revision": 2
+        },
+        "subject_ref": {
+          "field_path": null,
+          "id": 180002,
+          "kind": "listing",
+          "revision": 1
+        },
+        "text": "availability=actual; date precision; registry=2026-10-30.1",
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "1000"
+        },
+        "verification": "verified"
+      },
+      "evidence_hash": "92582e6818fb7c385d6de0c754bcf85e9c98791ae382e49357216a7edf5484b0",
+      "evidence_ref": {
+        "field_path": null,
+        "id": "a2a2760b-58f4-537f-9c83-60948707b539",
+        "kind": "evidence",
+        "revision": 1
+      },
+      "reference_status": "unpersisted_synthetic_recipe",
+      "snapshot": {
+        "availability": "actual",
+        "available_from": "2025-04-01",
+        "captured_at": "2026-11-05T08:00:00Z",
+        "fields": {
+          "net_profit_parent": 100,
+          "operating_cash_flow": 100,
+          "revenue_main": 1000,
+          "verification": {
+            "net_profit_parent": "verified",
+            "operating_cash_flow": "verified",
+            "revenue_main": "verified"
+          }
+        },
+        "id": 18010060,
+        "is_backfill": false,
+        "listing_id": 180002,
+        "period_kind": "annual",
+        "provider": "akshare",
+        "report_period": "2024-12-31",
+        "version": 2
+      }
+    },
+    {
+      "evidence": {
+        "acquired_at": "2026-11-05T08:00:00Z",
+        "actor": "snapshot_adapter",
+        "available_from": "2025-03-31T16:00:00Z",
+        "conflict": "none",
+        "content_hash": "1dbccfccd8107471f67b1fb380aeb5174c86a8b61de2fcfca1e2bbda66b024e3",
+        "correction_refs": [],
+        "created_at": "2026-11-05T08:00:00Z",
+        "date_precision": null,
+        "document_provenance": null,
+        "id": "21546a95-d32c-5692-919a-f6f1fcf507e4",
+        "locator": "fields.net_profit_parent",
+        "origin_ref": null,
+        "period": {
+          "basis": "period_to_date/annual",
+          "end": "2024-12-31",
+          "start": "2024-01-01"
+        },
+        "published_at": "2025-03-31T16:00:00Z",
+        "revision": 1,
+        "schema_version": 1,
+        "source_kind": "snapshot",
+        "source_ref": {
+          "field_path": "fields.net_profit_parent",
+          "id": 18010060,
+          "kind": "financial_snapshot",
+          "revision": 2
+        },
+        "subject_ref": {
+          "field_path": null,
+          "id": 180002,
+          "kind": "listing",
+          "revision": 1
+        },
+        "text": "availability=actual; date precision; registry=2026-10-30.1",
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "100"
+        },
+        "verification": "verified"
+      },
+      "evidence_hash": "c9f49f6d4bb091b417f343c45d083e4c35c753d539a616aab3d46f426f8eea47",
+      "evidence_ref": {
+        "field_path": null,
+        "id": "21546a95-d32c-5692-919a-f6f1fcf507e4",
+        "kind": "evidence",
+        "revision": 1
+      },
+      "reference_status": "unpersisted_synthetic_recipe",
+      "snapshot": {
+        "availability": "actual",
+        "available_from": "2025-04-01",
+        "captured_at": "2026-11-05T08:00:00Z",
+        "fields": {
+          "net_profit_parent": 100,
+          "operating_cash_flow": 100,
+          "revenue_main": 1000,
+          "verification": {
+            "net_profit_parent": "verified",
+            "operating_cash_flow": "verified",
+            "revenue_main": "verified"
+          }
+        },
+        "id": 18010060,
+        "is_backfill": false,
+        "listing_id": 180002,
+        "period_kind": "annual",
+        "provider": "akshare",
+        "report_period": "2024-12-31",
+        "version": 2
+      }
+    },
+    {
+      "evidence": {
+        "acquired_at": "2026-11-05T08:00:00Z",
+        "actor": "snapshot_adapter",
+        "available_from": "2025-03-31T16:00:00Z",
+        "conflict": "none",
+        "content_hash": "44facc7981427c01c00c1920582a5665b29bda7fd3a7de2070b1bd4249771062",
+        "correction_refs": [],
+        "created_at": "2026-11-05T08:00:00Z",
+        "date_precision": null,
+        "document_provenance": null,
+        "id": "6b269013-8521-536f-baf8-de13e5474e63",
+        "locator": "fields.operating_cash_flow",
+        "origin_ref": null,
+        "period": {
+          "basis": "period_to_date/annual",
+          "end": "2024-12-31",
+          "start": "2024-01-01"
+        },
+        "published_at": "2025-03-31T16:00:00Z",
+        "revision": 1,
+        "schema_version": 1,
+        "source_kind": "snapshot",
+        "source_ref": {
+          "field_path": "fields.operating_cash_flow",
+          "id": 18010060,
+          "kind": "financial_snapshot",
+          "revision": 2
+        },
+        "subject_ref": {
+          "field_path": null,
+          "id": 180002,
+          "kind": "listing",
+          "revision": 1
+        },
+        "text": "availability=actual; date precision; registry=2026-10-30.1",
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "100"
+        },
+        "verification": "verified"
+      },
+      "evidence_hash": "9ca0ace0a0fbac9be4c060e5a0ffec9268fa0a49c9ca971b83d58759d6c40086",
+      "evidence_ref": {
+        "field_path": null,
+        "id": "6b269013-8521-536f-baf8-de13e5474e63",
+        "kind": "evidence",
+        "revision": 1
+      },
+      "reference_status": "unpersisted_synthetic_recipe",
+      "snapshot": {
+        "availability": "actual",
+        "available_from": "2025-04-01",
+        "captured_at": "2026-11-05T08:00:00Z",
+        "fields": {
+          "net_profit_parent": 100,
+          "operating_cash_flow": 100,
+          "revenue_main": 1000,
+          "verification": {
+            "net_profit_parent": "verified",
+            "operating_cash_flow": "verified",
+            "revenue_main": "verified"
+          }
+        },
+        "id": 18010060,
+        "is_backfill": false,
+        "listing_id": 180002,
+        "period_kind": "annual",
+        "provider": "akshare",
+        "report_period": "2024-12-31",
+        "version": 2
+      }
+    },
+    {
+      "evidence": {
+        "acquired_at": "2026-11-06T08:00:00Z",
+        "actor": "snapshot_adapter",
+        "available_from": "2026-03-31T16:00:00Z",
+        "conflict": "none",
+        "content_hash": "4be05407dda059b7e79dae73c2d920c2cb58b82c02b47579344b3c0d7f028120",
+        "correction_refs": [],
+        "created_at": "2026-11-06T08:00:00Z",
+        "date_precision": null,
+        "document_provenance": null,
+        "id": "9a5cb5da-985e-5e1a-a340-c478c91b81ba",
+        "locator": "fields.revenue_main",
+        "origin_ref": null,
+        "period": {
+          "basis": "period_to_date/annual",
+          "end": "2025-12-31",
+          "start": "2025-01-01"
+        },
+        "published_at": "2026-03-31T16:00:00Z",
+        "revision": 1,
+        "schema_version": 1,
+        "source_kind": "snapshot",
+        "source_ref": {
+          "field_path": "fields.revenue_main",
+          "id": 18010061,
+          "kind": "financial_snapshot",
+          "revision": 2
+        },
+        "subject_ref": {
+          "field_path": null,
+          "id": 180002,
+          "kind": "listing",
+          "revision": 1
+        },
+        "text": "availability=actual; date precision; registry=2026-10-30.1",
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "1200"
+        },
+        "verification": "verified"
+      },
+      "evidence_hash": "060c97177dc4f3273f972fd94a166878380fe111f359084c794b706e6aeb3da4",
+      "evidence_ref": {
+        "field_path": null,
+        "id": "9a5cb5da-985e-5e1a-a340-c478c91b81ba",
+        "kind": "evidence",
+        "revision": 1
+      },
+      "reference_status": "unpersisted_synthetic_recipe",
+      "snapshot": {
+        "availability": "actual",
+        "available_from": "2026-04-01",
+        "captured_at": "2026-11-06T08:00:00Z",
+        "fields": {
+          "net_profit_parent": 80,
+          "operating_cash_flow": 60,
+          "revenue_main": 1200,
+          "verification": {
+            "net_profit_parent": "verified",
+            "operating_cash_flow": "verified",
+            "revenue_main": "verified"
+          }
+        },
+        "id": 18010061,
+        "is_backfill": false,
+        "listing_id": 180002,
+        "period_kind": "annual",
+        "provider": "akshare",
+        "report_period": "2025-12-31",
+        "version": 2
+      }
+    },
+    {
+      "evidence": {
+        "acquired_at": "2026-11-06T08:00:00Z",
+        "actor": "snapshot_adapter",
+        "available_from": "2026-03-31T16:00:00Z",
+        "conflict": "none",
+        "content_hash": "140b7406e93ae428db69d651a0735a806ec9acfe08db0b37474b4ab0f4a678e2",
+        "correction_refs": [],
+        "created_at": "2026-11-06T08:00:00Z",
+        "date_precision": null,
+        "document_provenance": null,
+        "id": "ae203eee-3604-518d-a54a-c7ef6a444141",
+        "locator": "fields.net_profit_parent",
+        "origin_ref": null,
+        "period": {
+          "basis": "period_to_date/annual",
+          "end": "2025-12-31",
+          "start": "2025-01-01"
+        },
+        "published_at": "2026-03-31T16:00:00Z",
+        "revision": 1,
+        "schema_version": 1,
+        "source_kind": "snapshot",
+        "source_ref": {
+          "field_path": "fields.net_profit_parent",
+          "id": 18010061,
+          "kind": "financial_snapshot",
+          "revision": 2
+        },
+        "subject_ref": {
+          "field_path": null,
+          "id": 180002,
+          "kind": "listing",
+          "revision": 1
+        },
+        "text": "availability=actual; date precision; registry=2026-10-30.1",
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "80"
+        },
+        "verification": "verified"
+      },
+      "evidence_hash": "4f4524f106d7adfa210e606a94579485b58d8a054530a2a5897bb518f2cd0416",
+      "evidence_ref": {
+        "field_path": null,
+        "id": "ae203eee-3604-518d-a54a-c7ef6a444141",
+        "kind": "evidence",
+        "revision": 1
+      },
+      "reference_status": "unpersisted_synthetic_recipe",
+      "snapshot": {
+        "availability": "actual",
+        "available_from": "2026-04-01",
+        "captured_at": "2026-11-06T08:00:00Z",
+        "fields": {
+          "net_profit_parent": 80,
+          "operating_cash_flow": 60,
+          "revenue_main": 1200,
+          "verification": {
+            "net_profit_parent": "verified",
+            "operating_cash_flow": "verified",
+            "revenue_main": "verified"
+          }
+        },
+        "id": 18010061,
+        "is_backfill": false,
+        "listing_id": 180002,
+        "period_kind": "annual",
+        "provider": "akshare",
+        "report_period": "2025-12-31",
+        "version": 2
+      }
+    },
+    {
+      "evidence": {
+        "acquired_at": "2026-11-06T08:00:00Z",
+        "actor": "snapshot_adapter",
+        "available_from": "2026-03-31T16:00:00Z",
+        "conflict": "none",
+        "content_hash": "e532024e8e22e5822f1fa3c44e568b98036ede55eab1d7409f8755242cb1741b",
+        "correction_refs": [],
+        "created_at": "2026-11-06T08:00:00Z",
+        "date_precision": null,
+        "document_provenance": null,
+        "id": "3663c6a4-1e9b-5578-b01f-088a899ad636",
+        "locator": "fields.operating_cash_flow",
+        "origin_ref": null,
+        "period": {
+          "basis": "period_to_date/annual",
+          "end": "2025-12-31",
+          "start": "2025-01-01"
+        },
+        "published_at": "2026-03-31T16:00:00Z",
+        "revision": 1,
+        "schema_version": 1,
+        "source_kind": "snapshot",
+        "source_ref": {
+          "field_path": "fields.operating_cash_flow",
+          "id": 18010061,
+          "kind": "financial_snapshot",
+          "revision": 2
+        },
+        "subject_ref": {
+          "field_path": null,
+          "id": 180002,
+          "kind": "listing",
+          "revision": 1
+        },
+        "text": "availability=actual; date precision; registry=2026-10-30.1",
+        "value": {
+          "currency": "CNY",
+          "unit": "CNY",
+          "unknown_reason": null,
+          "value": "60"
+        },
+        "verification": "verified"
+      },
+      "evidence_hash": "59c378307a834dd8e7b40d8d52eaa20a2b093715f2135e9401724b40918d66a0",
+      "evidence_ref": {
+        "field_path": null,
+        "id": "3663c6a4-1e9b-5578-b01f-088a899ad636",
+        "kind": "evidence",
+        "revision": 1
+      },
+      "reference_status": "unpersisted_synthetic_recipe",
+      "snapshot": {
+        "availability": "actual",
+        "available_from": "2026-04-01",
+        "captured_at": "2026-11-06T08:00:00Z",
+        "fields": {
+          "net_profit_parent": 80,
+          "operating_cash_flow": 60,
+          "revenue_main": 1200,
+          "verification": {
+            "net_profit_parent": "verified",
+            "operating_cash_flow": "verified",
+            "revenue_main": "verified"
+          }
+        },
+        "id": 18010061,
+        "is_backfill": false,
+        "listing_id": 180002,
+        "period_kind": "annual",
+        "provider": "akshare",
+        "report_period": "2025-12-31",
+        "version": 2
+      }
+    }
+  ],
+  "prior_failure": {
+    "kind": "failure_recipe_only",
+    "note": "合成的既往失败情境，不是已发生真实任务或成功结果。",
+    "reason": "budget_exhausted",
+    "synthetic": true,
+    "task_ref": null
+  },
+  "question": "此前预算耗尽的研究还缺什么？使用相同材料重新检查替代解释，并保留失败背景。",
+  "reference_status": "fixture_only_not_persisted",
+  "repeat_count": 1,
+  "schema_version": 1,
+  "split": "holdout",
+  "synthetic": true,
+  "ticker": "600002.SH"
+}

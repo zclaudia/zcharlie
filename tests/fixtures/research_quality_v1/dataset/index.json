@@ -1,0 +1,270 @@
+{
+  "cases": [
+    {
+      "case_ref": {
+        "id": "182732cc-46ad-5623-b291-79cb011ed138",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "normal",
+      "content_hash": "8c51c7b3262f6ac31de4cdfcd7c5e11fdfc5c5437ecb10e843ceaa6045dea5de",
+      "id": "synthetic-a.normal",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180001,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-a.normal.json",
+      "repeat_count": 1,
+      "sha256": "7881b81045833d8cdb93278c9dc3275d82b85dd7e247c1c1254d81ebdd9502ab",
+      "split": "development"
+    },
+    {
+      "case_ref": {
+        "id": "c4b45ad2-7a68-55f6-8b39-2d6ad878c973",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "prior_failure",
+      "content_hash": "cc8d2b2e110b791bcdc4d4ae9e3049c227129b4df742fa7ebf75bdc4c25be319",
+      "id": "synthetic-a.prior_failure",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180001,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-a.prior_failure.json",
+      "repeat_count": 1,
+      "sha256": "840056f823deb2c2410b90968ae88f8cc2c2b74e01458311484d3bb1679340db",
+      "split": "development"
+    },
+    {
+      "case_ref": {
+        "id": "f7dece33-b965-50de-9849-3354abb9c97b",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "insufficient",
+      "content_hash": "2bc274400a29e160e0f2f3ca37f7d8779a69be42b9a9170ad245a4215264d3dc",
+      "id": "synthetic-a.insufficient",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180001,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-a.insufficient.json",
+      "repeat_count": 1,
+      "sha256": "e9a3e2b56d4b366128eb211cde918ab6c885682c0be301c76c4156787318fae8",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "73113c0d-67b8-5e10-8e9b-24c6183a1ba3",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "counterexample",
+      "content_hash": "34c3e23f59a0ab89fb0a18cc892c5d6521c2d0fd8d1d414a13b61e0297ece696",
+      "id": "synthetic-a.counterexample",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180001,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-a.counterexample.json",
+      "repeat_count": 1,
+      "sha256": "5d0461b516af0997e73c3f287d2e358ef3c440115718fc8f0465c8098b90850f",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "b955083f-3be0-5a62-8cbd-43b5066d7802",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "normal",
+      "content_hash": "37bff9d8569a7e6f4952ebcb6dd5efbd1e7b7a29ae88615bd08ec3f980289e4e",
+      "id": "synthetic-b.normal",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180002,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-b.normal.json",
+      "repeat_count": 1,
+      "sha256": "70b11bb833550ace8adca1fc869ac87384bc443c3954d0e1324d5a117b08ae1f",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "e8e11355-b0fd-5b65-a792-e184c042fb4b",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "prior_failure",
+      "content_hash": "4ef21531f5ee6a752c3bbc5f1a179e083713db0a4521de4b9eaa649d7808625c",
+      "id": "synthetic-b.prior_failure",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180002,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-b.prior_failure.json",
+      "repeat_count": 1,
+      "sha256": "1bcf75e4c51c4613c0ea9e87efcbe4a8c0c7d9ece4b59540223eb82491b2fac0",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "3a65f073-a6f1-54e0-b1f2-1fb946097dda",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "insufficient",
+      "content_hash": "9d8a1a59352ae5633d7886de81d419426832d0ec1d92b36895b44b7b9e96021e",
+      "id": "synthetic-b.insufficient",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180002,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-b.insufficient.json",
+      "repeat_count": 1,
+      "sha256": "cef6e9a3f7914a3c894ce0e60db8376594503ca145311bdaae4f672f75f03a9d",
+      "split": "development"
+    },
+    {
+      "case_ref": {
+        "id": "2277548f-31b8-5bf5-9042-559fb70875ce",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "counterexample",
+      "content_hash": "90e32d9410b4e6a8942e55e078b0d3f19b9d14f619b5e82c656a01493e4c2a5a",
+      "id": "synthetic-b.counterexample",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180002,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-b.counterexample.json",
+      "repeat_count": 1,
+      "sha256": "01e50916ad5d1092a27a3d1046ada03397d235dfc225b44904c621722a9666a6",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "cd288500-bc31-515b-8b28-ce3f2d7b7d27",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "normal",
+      "content_hash": "69a85118950d0480d5c441dad42a9e496019df35337a67283a999940bc5853e5",
+      "id": "synthetic-c.normal",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180003,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-c.normal.json",
+      "repeat_count": 1,
+      "sha256": "11e1f3d0e2fcd2fea6583449eb903fb94e9533f997a716319558627b4aed3c74",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "aa99c039-9971-5bc0-ab4a-1f92075ad489",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "prior_failure",
+      "content_hash": "af15e57c1288a1f13665fa387af9c2b6790d3e8facc0fcec5f62e35ab1c1a3ba",
+      "id": "synthetic-c.prior_failure",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180003,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-c.prior_failure.json",
+      "repeat_count": 1,
+      "sha256": "0ae546e2c86a5dcc1b8aa5af30702c15345fbba60864b4460bd846c45336aec4",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "ec2b1b66-2175-585e-9560-738a8fa958e6",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "insufficient",
+      "content_hash": "d6f5b270d4e694142dc2ff8768af437f2af417d2e8c5c3c794d23394debd49f8",
+      "id": "synthetic-c.insufficient",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180003,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-c.insufficient.json",
+      "repeat_count": 1,
+      "sha256": "ef3d6c36cc0020996c4cd4705f9b03a91896ff4874572da2c44fa38ae8e94b9b",
+      "split": "holdout"
+    },
+    {
+      "case_ref": {
+        "id": "7d6bb1d7-9666-5a4a-adb6-da770693c36c",
+        "kind": "quality_case",
+        "revision": 1
+      },
+      "category": "counterexample",
+      "content_hash": "b139ed2722d72b0875de8faba93d7963c4952fb3fe4e853e368b28a01132a751",
+      "id": "synthetic-c.counterexample",
+      "listing_ref": {
+        "field_path": null,
+        "id": 180003,
+        "kind": "listing",
+        "revision": 1
+      },
+      "material_mode": "observed_materials",
+      "path": "synthetic-c.counterexample.json",
+      "repeat_count": 1,
+      "sha256": "e4fa03e50df1e65c39db7c95ee905ffcf459b032febfb35686aa68083f51d4d8",
+      "split": "development"
+    }
+  ],
+  "dataset_hash": "44b0bfef53cc7ede22eb23556b9dfc1976993126ff6896c54cbc5c2a782fc5c1",
+  "dataset_version": "research-quality.synthetic.v1.1",
+  "development_hash": "124a2c70b01cdf08ffedab1a363d1ca10484370608a56dd0566e6a741da4fb1d",
+  "holdout_hash": "2a03514b42e1ec7f21bcac4d816979154f3627e27f093574663dc40e681bbae2",
+  "holdout_use_count": 0,
+  "limitations": [
+    "所有公司、失败背景与材料均为合成fixture，不是生产原件或真实研究。",
+    "预期不是已取得的模型输出、人工评分或研究成功。",
+    "QT-003原提案/准入/取证/结算兼容门槛仍pending。"
+  ],
+  "schema_version": 1,
+  "status": "synthetic_offline_not_evaluated",
+  "synthetic": true,
+  "usage_tracking": "fixture initial value only; durable usage/contamination tracking is a later service task"
+}

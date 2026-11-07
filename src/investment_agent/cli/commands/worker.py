@@ -37,7 +37,7 @@ def start(
         None,
         help=(
             "Comma-separated job kinds to serve (e.g. ifind_research,market_snapshot); "
-            "default: all registered kinds"
+            "default: ordinary kinds. research_events_maintenance must run alone"
         ),
         show_default=False,
     ),
@@ -63,6 +63,6 @@ def start(
     try:
         run_with_engine(settings.database_url, serve)
     except ValueError as exc:
-        if "no handler registered" in str(exc):
+        if "no handler registered" in str(exc) or "event maintenance kind must run alone" in str(exc):
             raise typer.BadParameter(str(exc), param_hint="--kinds") from exc
         raise

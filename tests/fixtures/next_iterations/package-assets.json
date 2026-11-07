@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "path_base": "investment_agent/web/",
+  "scopes": {
+    "core": ["templates/base.html", "static/api.js", "static/pages/agent.css"],
+    "g0": ["templates/_research_entry.html", "static/research_entry.js", "static/pages/research_entry.css"],
+    "quality": ["templates/research_quality.html", "templates/_quality_assessment.html", "templates/_quality_report.html", "static/research_quality.js", "static/quality_assessment.js", "static/quality_report.js", "static/pages/research_quality.css"],
+    "inbox": ["templates/inbox.html", "static/research_inbox.js", "static/research_inbox_list.js", "static/research_inbox_detail.js", "static/pages/inbox.css"],
+    "bank": ["templates/bank_topic.html", "static/bank_topics.js", "static/bank_topics.css"],
+    "stress": ["templates/portfolio_stress.html", "static/portfolio_stress.js", "static/portfolio_stress_form.js", "static/portfolio_stress_results.js", "static/pages/portfolio_stress.css"],
+    "decisions": ["templates/decision_observations.html", "static/decision_observations.js", "static/decision_observation_form.js", "static/decision_observation_results.js", "static/pages/decision_observations.css"]
+  }
+}

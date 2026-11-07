@@ -1,0 +1,132 @@
+{
+  "synthetic": true,
+  "create": {
+    "method": "POST",
+    "path": "/bank-topics",
+    "request": {
+      "schema_version": 1,
+      "idempotency_key": "00000000-0000-0000-0000-0000000002bd",
+      "template_key": "bank_nii_sustainability_v1",
+      "ticker": "600036.SH",
+      "period": {
+        "start": "2025-01-01",
+        "end": "2025-12-31",
+        "basis": "period_to_date/annual"
+      },
+      "baseline_period": {
+        "start": "2024-01-01",
+        "end": "2024-12-31",
+        "basis": "period_to_date/annual"
+      },
+      "reporting_scope": "consolidated",
+      "accounting_standard": "CAS",
+      "currency": "CNY"
+    },
+    "status": 201,
+    "response": {
+      "schema_version": 1,
+      "case_ref": {
+        "kind": "topic_case",
+        "id": "00000000-0000-0000-0000-0000000002be",
+        "revision": 1
+      },
+      "head_ref": {
+        "kind": "topic_revision",
+        "id": "00000000-0000-0000-0000-00000000006c",
+        "revision": 1
+      },
+      "state": "draft",
+      "coverage": "partial",
+      "gaps": [
+        {
+          "code": "needs_reviewed_nii_decomposition",
+          "field_path": "decomposition"
+        }
+      ],
+      "control_revision": 1
+    }
+  },
+  "condition": {
+    "request": {
+      "schema_version": 1,
+      "idempotency_key": "00000000-0000-0000-0000-0000000002bf",
+      "expected_revision": 1,
+      "topic_revision_ref": {
+        "kind": "topic_revision",
+        "id": "00000000-0000-0000-0000-00000000006c",
+        "revision": 1
+      },
+      "activate": true,
+      "dsl_version": "bank-condition/1",
+      "predicate": {
+        "kind": "all",
+        "conditions": [
+          {
+            "metric": "nii_yoy",
+            "operator": "gt",
+            "threshold": "0",
+            "unit": "fraction"
+          },
+          {
+            "metric": "nii_scale_covers_rate",
+            "operator": "eq",
+            "threshold": true,
+            "unit": "boolean"
+          }
+        ]
+      },
+      "target_selector": "next_comparable_annual",
+      "review_due_at": "2027-04-30T15:59:59Z",
+      "expires_at": "2027-06-30T15:59:59Z",
+      "timezone": "Asia/Shanghai"
+    },
+    "status": 201,
+    "response": {
+      "condition_ref": {
+        "kind": "topic_condition",
+        "id": "00000000-0000-0000-0000-00000000006d",
+        "revision": 1
+      },
+      "case_ref": {
+        "kind": "topic_case",
+        "id": "00000000-0000-0000-0000-0000000002be",
+        "revision": 2
+      },
+      "head_ref": {
+        "kind": "topic_revision",
+        "id": "00000000-0000-0000-0000-0000000002c0",
+        "revision": 1
+      },
+      "control_revision": 1,
+      "state": "active"
+    }
+  },
+  "check": {
+    "schema_version": 1,
+    "check_ref": {
+      "kind": "topic_check",
+      "id": "00000000-0000-0000-0000-00000000006b",
+      "revision": 1
+    },
+    "condition_ref": {
+      "kind": "topic_condition",
+      "id": "00000000-0000-0000-0000-00000000006d",
+      "revision": 1
+    },
+    "outcome": "insufficient_evidence",
+    "coverage": "partial",
+    "values": {
+      "nii_yoy": null,
+      "nii_scale_covers_rate": null
+    },
+    "unknown_reasons": [
+      {
+        "metric": "nii_yoy",
+        "code": "no_new_comparable_report"
+      }
+    ],
+    "as_of": "2027-04-30T16:00:00Z",
+    "execution_manifest_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "semantic_input_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}
