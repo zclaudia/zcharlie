@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "600028",
       "name": "中国石化",
       "strategy_type": "cycle_reversal",
@@ -316,7 +316,8 @@
         "negative": [],
         "risk": [
           "风险等级为 medium",
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "部分概念因子没有数据来源，已标记为未评估且不参与加权"
         ]
       },
       "peer_comparison": {
@@ -390,7 +391,7 @@
             "relative_position": "insufficient_peer_data"
           },
           "investment_score": {
-            "target": 39.43,
+            "target": 20.67,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -408,8 +409,8 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "中国石化 当前评分 39.43，研究工作流标签为 低优先级，风险等级 medium，估值水平 fair。",
-          "investment_score": 39.43,
+          "text": "中国石化 当前评分 20.67，研究工作流标签为 低优先级，风险等级 medium，估值水平 fair。",
+          "investment_score": 20.67,
           "suggestion": "low_priority",
           "suggestion_label": "低优先级",
           "risk_level": "medium",
@@ -476,6 +477,11 @@
           {
             "source": "evidence_summary.risk",
             "text": "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "部分概念因子没有数据来源，已标记为未评估且不参与加权",
             "field": "risk"
           },
           {
@@ -562,6 +568,11 @@
             "field": "risk"
           },
           {
+            "source": "evidence_summary.risk",
+            "text": "部分概念因子没有数据来源，已标记为未评估且不参与加权",
+            "field": "risk"
+          },
+          {
             "source": "score",
             "text": "风险等级为 medium",
             "field": "risk_level",
@@ -587,12 +598,12 @@
           "stance_label": "偏谨慎",
           "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为偏谨慎。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 0,
-          "opposition_count": 6,
+          "opposition_count": 7,
           "review_required": true
         }
       },
-      "investment_score": 39.43,
-      "business_score": 39.43,
+      "investment_score": 20.67,
+      "business_score": 20.67,
       "research_confidence_score": 92.0,
       "research_confidence_label": "高",
       "freshness": {
@@ -651,9 +662,9 @@
         "financial_data": "2026-10-05T15:22:51.860358Z"
       },
       "factor_scores": {
-        "cycle_position": 83.2,
-        "cost_advantage": 0.0,
-        "resource_reserve": 0.0,
+        "cycle_position": null,
+        "roe_proxy": 0.0,
+        "profit_growth_proxy": 0.0,
         "balance_sheet_quality": 46.48,
         "valuation_level": 75.0
       },
@@ -661,25 +672,25 @@
       "missing_factors": [],
       "key_metrics": {
         "market_cap": 637372450028.16,
+        "latest_price": 5.28,
         "pe": 20.1527,
         "pb": 0.769,
-        "dividend_yield": null,
-        "roe": 0.038551,
-        "debt_ratio": 0.540841,
-        "revenue_growth_3y": -0.056876,
-        "net_profit_growth_3y": -0.217157,
-        "max_drawdown_1y": 0.416,
-        "latest_price": 5.28,
         "ps": 0.2294,
+        "dividend_yield": null,
         "return_1y": 0.027237,
         "volatility_1y": 0.290349,
         "revenue": 2783583000000.0,
         "net_profit": 31809000000.0,
         "gross_margin": 0.15886,
         "net_margin": 0.012664,
+        "roe": 0.038551,
         "roe_stability": 0.731875,
+        "debt_ratio": 0.540841,
         "operating_cash_flow": 162496000000.0,
-        "free_cash_flow": 28871000000.0
+        "free_cash_flow": 28871000000.0,
+        "revenue_growth_3y": -0.056876,
+        "net_profit_growth_3y": -0.217157,
+        "max_drawdown_1y": 0.416
       },
       "missing_fields": [
         "dividend_yield"

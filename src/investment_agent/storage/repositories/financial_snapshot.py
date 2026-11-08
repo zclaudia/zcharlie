@@ -1,6 +1,6 @@
 """Immutable, versioned financial-report snapshots with availability dates."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import date, datetime
 
 from sqlalchemy import func, or_, select
@@ -12,6 +12,49 @@ from investment_agent.storage.models.pit_snapshot import (
 )
 from investment_agent.storage.repositories.base import Repository
 from investment_agent.storage.repositories.pit import end_of_business_day_utc, to_utc
+
+
+def restatement_visible_from(fields: Mapping[str, object]) -> date | None:
+    """Earliest date the row's stored (latest) figures can be shown.
+
+    Eastmoney serves the latest restated values. Captures written before the
+    A7 point-in-time fix stored ``restated=True`` but kept the original
+    disclosure date in ``available_from``. The collector's own evidence remains
+    in ``fields``: ``update_date`` (cash-flow restatement) or ``notice_date``
+    (the summaries' latest notice). Readers use it as a lower bound so such
+    legacy rows do not leak across a historical ``as_of``.
+
+    Rows without ``restated=True`` or without either date return ``None`` and
+    keep their stored availability unchanged.
+    """
+
+    if fields.get("restated") is not True:
+        return None
+    for key in ("update_date", "notice_date"):
+        value = fields.get(key)
+        if isinstance(value, datetime):
+            return value.date()
+        if isinstance(value, date):
+            return value
+        if isinstance(value, str) and value:
+            try:
+                return date.fromisoformat(value[:10])
+            except ValueError:
+                continue
+    return None
+
+
+def effective_available_from(
+    fields: Mapping[str, object], available_from: date | None
+) -> date | None:
+    """Stored ``available_from``, corrected up to any restatement visible date."""
+
+    restated_from = restatement_visible_from(fields)
+    if restated_from is None:
+        return available_from
+    if available_from is None:
+        return restated_from
+    return max(available_from, restated_from)
 
 
 class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
@@ -81,6 +124,11 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
         are eligible regardless of ``captured_at`` unless ``include_backfill``
         is false. Among eligible rows the latest report period wins, then the
         highest version. ``provider`` restricts the choice to one source.
+
+        A pre-A7 restated row may still carry the original ``pubDate`` in
+        ``available_from``; :func:`effective_available_from` moves its visible
+        date forward to the restatement evidence stored in ``fields`` before a
+        row is returned.
         """
 
         cutoff = end_of_business_day_utc(as_of)
@@ -102,9 +150,12 @@ class FinancialSnapshotRepository(Repository[FinancialSnapshot]):
                 FinancialSnapshot.report_period.desc(),
                 FinancialSnapshot.version.desc(),
             )
-            .limit(1)
         )
-        return (await self.session.execute(stmt)).scalar_one_or_none()
+        for row in (await self.session.execute(stmt)).scalars():
+            effective = effective_available_from(row.fields, row.available_from)
+            if effective is not None and effective <= as_of:
+                return row
+        return None
 
     async def total_shares_as_of(
         self, listing_id: int, as_of: date, *, provider: str = "baostock"

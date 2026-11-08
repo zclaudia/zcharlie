@@ -48,6 +48,13 @@ def test_missing_and_latest_version_are_not_added_or_zero_filled():
     assert result["fcfe"]["verified_available"] is None
 
 
+def test_amount_audit_reports_the_effective_date_of_a_legacy_restated_row():
+    row = period(2024)
+    row.fields.update({"restated": True, "notice_date": "2026-04-17"})
+    result = amount_audit([row], (2024,))
+    assert result["evidence"][0]["available_from"] == "2026-04-17"
+
+
 def test_ratio_snapshots_are_not_amount_coverage():
     row = period(2025, provider="baostock")
     row.fields = {"cfo_to_np": 2, "net_profit": 100, "free_cash_flow": 180}
@@ -122,7 +129,11 @@ async def test_session_pit_visibility_and_explicit_pool(db_session):
     backfilled.is_backfill = True
     unknown = period(2022)
     unknown.availability = "unknown"
-    for row in (visible, future_public, future_capture, backfilled, unknown):
+    # Pre-fix legacy row: restated figures stored under the original pubDate,
+    # but the restatement itself is not visible yet on AS_OF.
+    legacy_restated = period(2021)
+    legacy_restated.fields.update({"restated": True, "notice_date": "2027-01-01"})
+    for row in (visible, future_public, future_capture, backfilled, unknown, legacy_restated):
         row.listing_id = listing.id
         db_session.add(row)
     await db_session.flush()

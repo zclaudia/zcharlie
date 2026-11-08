@@ -101,6 +101,7 @@ from investment_agent.storage.models.evidence import SavedEvidence
 from investment_agent.storage.models.peer import PeerAnnualSnapshot, PeerCohortSnapshot
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
 from investment_agent.storage.models.reference import Company
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.listing import ListingRepository
 
 SERVICE_SCHEMA_VERSION = 1
@@ -356,7 +357,11 @@ async def _latest_local_annual_period(
     day = as_of.date()
     periods: set[date] = set()
     financial = await session.execute(
-        select(FinancialSnapshot.report_period).where(
+        select(
+            FinancialSnapshot.report_period,
+            FinancialSnapshot.available_from,
+            FinancialSnapshot.fields,
+        ).where(
             FinancialSnapshot.listing_id == listing_id,
             FinancialSnapshot.period_kind == "annual",
             FinancialSnapshot.availability == "actual",
@@ -365,7 +370,10 @@ async def _latest_local_annual_period(
             FinancialSnapshot.captured_at < as_of,
         )
     )
-    periods.update(row[0] for row in financial.all())
+    for report_period, available_from, fields in financial.all():
+        effective = effective_available_from(fields, available_from)
+        if effective is not None and effective <= day:
+            periods.add(report_period)
     schedule = await session.execute(
         select(DisclosureScheduleRecord.report_period).where(
             DisclosureScheduleRecord.listing_id == listing_id,

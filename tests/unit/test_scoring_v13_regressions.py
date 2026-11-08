@@ -217,12 +217,16 @@ def test_negative_book_value_and_revenue_yield_no_multiple():
 @pytest.mark.parametrize(
     ("pe", "pb", "expected"),
     [
-        (-5.0, 1.0, "expensive"),  # loss-making: PE ignored, never cheap
-        (10.0, -1.0, "expensive"),  # negative equity: PB ignored
+        # v1.4: one unknown leg makes the bucket unknown; no 100/10 placeholder.
+        (-5.0, 1.0, "unknown"),
+        (10.0, -1.0, "unknown"),
+        (10.0, None, "unknown"),
+        (None, 1.5, "unknown"),
         (-5.0, -1.0, "unknown"),
         (0.0, 0.0, "unknown"),
         (10.0, 1.5, "cheap"),
         (25.0, 3.0, "fair"),
+        (40.0, 6.0, "expensive"),
     ],
 )
 def test_valuation_level_never_treats_non_positive_multiples_as_cheap(pe, pb, expected):
@@ -249,7 +253,7 @@ def test_loss_making_company_end_to_end_is_not_cheap_and_needs_review(tmp_path: 
     }
     item = _score_bundle(_canonicalize(_results(**loss)), tmp_path)
 
-    assert item["scoring_version"] == SCORING_VERSION == "v1.3"
+    assert item["scoring_version"] == SCORING_VERSION == "v1.4"
     assert item["key_metrics"]["pe"] is None
     assert item["valuation_level"] != "cheap"
     assert item["needs_agent_review"] is True
@@ -515,9 +519,14 @@ def test_missing_factor_is_recorded_and_lowers_confidence():
     assert item["selected_model"] == full["selected_model"] == "banking"
     assert item["missing_factors"] == ["shareholder_return"]
     assert item["factor_scores"]["shareholder_return"] is None
-    assert item["factor_coverage"] == 0.75
+    # v1.4 removed the fixed capital-structure review (weight 10), so the
+    # evaluated weight is 90 and a missing shareholder_return is 65/90.
+    assert item["factor_coverage"] == pytest.approx(65 / 90, abs=0.0001)
     assert full["factor_coverage"] == 1.0 and full["missing_factors"] == []
     assert item["research_confidence_score"] < full["research_confidence_score"]
+    # 0.7222 < 0.75: v1.4 does not publish a score below the coverage floor.
+    assert item["investment_score"] is None
+    assert item["score_suppression_reason"] == "factor_coverage_below_minimum"
     # The missing factor is excluded rather than scored as a neutral 50.
     present = {k: v for k, v in item["factor_scores"].items() if v is not None}
     assert "shareholder_return" not in present
@@ -560,7 +569,10 @@ def test_newly_listed_company_without_base_period_does_not_crash(tmp_path: Path)
     assert ("return_1y", "short_price_history") in _flags(market)
 
     item = _score_bundle(bundle, tmp_path)
-    assert item["investment_score"] is not None
+    # v1.4: the missing growth/stability factors leave coverage below 0.75,
+    # so no investment score is published instead of scoring a partial model.
+    assert item["investment_score"] is None
+    assert item["score_suppression_reason"] == "factor_coverage_below_minimum"
     assert item["missing_factors"], "growth/stability factors must be excluded, not imputed"
     assert item["needs_agent_review"] is True
 

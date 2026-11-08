@@ -138,6 +138,34 @@ async def test_financial_public_date_and_system_capture_both_enforced(db_session
     ]["revenue"] == 20
 
 
+async def test_legacy_restated_financial_is_dated_from_its_restatement(db_session):
+    listing_id = await seed(db_session)
+    repo = FinancialSnapshotRepository(db_session)
+    await repo.insert(
+        listing_id=listing_id,
+        report_period=date(2025, 12, 31),
+        period_kind="annual",
+        # Pre-fix artifact: restated values under the original pubDate.
+        fields={"revenue": 30, "restated": True, "notice_date": "2026-11-01"},
+        provider="akshare",
+        captured_at=CUTOFF - timedelta(hours=1),
+        availability="actual",
+        available_from=date(2026, 4, 30),
+    )
+    frozen = await build_common_manifest(
+        db_session,
+        listing_ids=[listing_id],
+        observation_date=DAY,
+        cutoff=CUTOFF,
+        archive=lambda h, p: h,
+    )
+    assert frozen.manifest.complete
+    financial = next(
+        fact for fact in frozen.payload()["facts"] if fact["ref"].startswith("financial")
+    )
+    assert financial["data"]["available_from"] == "2026-11-01"
+
+
 async def test_future_evidence_analysis_and_mutated_manifest_rejected(db_session):
     listing_id = await seed(db_session)
     payload = {"fact": "record"}

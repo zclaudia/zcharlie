@@ -202,3 +202,104 @@ async def test_instance_draft_is_validated_against_its_template_version(db_sessi
         RuleInstance.model_validate(instance_data(scope="holding", params={}, zones={}))
     )
     assert holding.version == 1
+
+
+async def test_defaults_only_llm_draft_cannot_store_an_override(db_session) -> None:
+    """Defense in depth for review P1-8: an LLM row marked ``defaults_only``
+    may not carry numeric overrides even if a caller built one."""
+
+    import json
+
+    store = await _ready(db_session)
+    rationale = json.dumps({"schema": "rule_draft.v2", "override_policy": "defaults_only"})
+    with pytest.raises(RuleStoreError):
+        await store.create_draft(
+            RuleInstance.model_validate(
+                instance_data(
+                    params={"pe_pct_max": 0.25},
+                    drafted_by="llm:stub-model",
+                    draft_rationale=rationale,
+                )
+            )
+        )
+    # The same shape without the policy marker (legacy / manual rows) stores.
+    legacy = await store.create_draft(
+        RuleInstance.model_validate(
+            instance_data(
+                params={"pe_pct_max": 0.25},
+                drafted_by="llm:legacy",
+                draft_rationale="plain text rationale",
+            )
+        )
+    )
+    assert legacy.status == "draft"
+    # A human edit of an LLM draft keeps the rationale but is a deliberate
+    # action; it is not blocked by the draft-time policy.
+    edited = await store.edit(
+        legacy.id,
+        RuleInstance.model_validate(
+            instance_data(
+                params={"pe_pct_max": 0.2},
+                drafted_by="user",
+                draft_rationale=rationale,
+            )
+        ),
+    )
+    assert edited.status == "draft"
+
+
+async def test_defaults_only_draft_without_overrides_stores(db_session) -> None:
+    import json
+
+    store = await _ready(db_session)
+    rationale = json.dumps({"override_policy": "defaults_only"})
+    draft = await store.create_draft(
+        RuleInstance.model_validate(
+            instance_data(
+                params={}, drafted_by="llm:stub-model", draft_rationale=rationale
+            )
+        )
+    )
+    assert draft.status == "draft" and instance_from_record(draft).params == {}
+    # The human approve gate is unchanged: a stored draft is still not active.
+    assert await store.active_instance(draft.listing_id, "candidate") is None
+    await store.approve(draft.id, approved_by="user", now=T0)
+    assert await store.active_instance(draft.listing_id, "candidate") is not None
+
+
+async def test_existing_active_instance_is_never_rewritten(db_session) -> None:
+    """The policy applies to new LLM drafts; stored active rows keep their
+    definition (no retroactive normalization of a previously approved rule)."""
+
+    import json
+
+    store = await _ready(db_session)
+    legacy = await store.create_draft(
+        RuleInstance.model_validate(
+            instance_data(
+                params={"pe_pct_max": 0.25},
+                drafted_by="llm:legacy",
+                draft_rationale=json.dumps({"schema": "rule_draft.v1"}),
+            )
+        )
+    )
+    active = await store.approve(legacy.id, approved_by="user", now=T0)
+    before = dict(active.definition)
+
+    # A new defaults-only draft cannot store an override, and approving it
+    # (the normal lifecycle) leaves the old row's own definition untouched.
+    newer = await store.create_draft(
+        RuleInstance.model_validate(
+            instance_data(
+                params={},
+                drafted_by="llm:stub-model",
+                draft_rationale=json.dumps({"override_policy": "defaults_only"}),
+            )
+        ),
+        now=T0,
+    )
+    await store.approve(newer.id, approved_by="user", now=T0)
+    retired = await store.get_instance(legacy.id)
+    assert retired is not None
+    assert (retired.status, retired.definition) == ("retired", before)
+    assert instance_from_record(retired).params == {"pe_pct_max": 0.25}

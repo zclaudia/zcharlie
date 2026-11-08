@@ -20,6 +20,7 @@ An instance is validated against the exact template version it names.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -83,6 +84,32 @@ def instance_from_record(record: RuleInstanceRecord) -> RuleInstance:
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def _refuse_defaults_only_overrides(instance: RuleInstance) -> None:
+    """An LLM ``defaults_only`` draft may not store a numeric override.
+
+    The policy lives in ``draft_rationale`` (JSON) rather than the instance
+    definition, so it is read leniently: a non-JSON rationale (manual drafts)
+    or a missing key means "no policy" and passes. Only ``llm:``-authored rows
+    are checked: a human edit keeps the LLM rationale but is a separate,
+    deliberate action (``drafted_by`` becomes the user), and must not be
+    blocked by the draft-time policy.
+    """
+
+    if not instance.params or not instance.drafted_by.startswith("llm:"):
+        return
+    try:
+        rationale = json.loads(instance.draft_rationale or "{}")
+    except ValueError:
+        return
+    if not isinstance(rationale, dict):
+        return
+    if rationale.get("override_policy") == "defaults_only":
+        raise RuleStoreError(
+            f"defaults_only draft {instance.symbol}/{instance.scope} may not carry "
+            f"numeric overrides: {sorted(instance.params)}"
+        )
 
 
 class RuleStore:
@@ -285,12 +312,19 @@ class RuleStore:
 
         Lifecycle fields of ``instance`` (version, status, approvals) are
         ignored. Earlier drafts of the same listing and scope are retired.
+
+        ``defaults_only`` drafts (``draft_rationale.override_policy``, written
+        by the LLM path when no calibration evidence exists) may not carry
+        numeric overrides; a caller that built one anyway is refused rather
+        than stored. Human-authored and legacy rows have no policy field and
+        are unaffected.
         """
 
         template = await self._template_for(instance)
         issues = check_instance(instance, template, self.context)
         if issues:
             raise RuleValidationError(issues, source=f"{instance.symbol}/{instance.scope}")
+        _refuse_defaults_only_overrides(instance)
         listing = await ListingRepository(self.session).get_a_share_listing(instance.symbol)
         if listing is None:
             raise RuleStoreError(f"no listing for {instance.symbol}")

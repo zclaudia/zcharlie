@@ -41,12 +41,73 @@ function reasonText(code) {
     candidate_sources_changed: "候选来源已变化",
     source_policy_changed: "来源策略已变化",
     trade_assumptions_changed: "情景假设已变化",
+    portfolio_context_changed: "组合上下文设置已变化",
+    single_name_limit_reached: "已达或超过单票预算",
+    sector_limit_reached: "已达或超过行业预算",
+    sector_unknown: "候选行业分类未知",
+    sector_coverage_incomplete: "持仓行业分类覆盖不足",
+    holding_weight_unavailable: "持仓权重不可用",
+    nav_unavailable: "账户净值不可用",
+    nav_or_cash_unavailable: "现金或净值不可用",
+    average_amount_below_threshold: "20 日均成交额低于阈值",
+    amount_history_incomplete: "20 日均成交额历史不足",
+    average_amount_missing: "20 日均成交额缺失",
+    free_float_market_cap_below_threshold: "自由流通市值低于阈值",
+    free_float_market_cap_missing: "自由流通市值缺少流通股本",
+    free_float_shares_missing: "缺少流通股本，未用总股本代替",
+    free_float_shares_invalid: "流通股本数据无效",
+    liquidity_not_assessed: "流动性未评估",
+    liquidity_threshold_not_configured: "流动性阈值未配置",
+    market_observation_missing: "缺少行情观测",
+    candidate_is_not_a_trade: "单只候选不是一笔交易",
+    applies_to_account_scenario: "现金约束适用于账户或情景层",
   };
   if (String(code).startsWith("mandate_constraint_unknown:")) return "账户约定未设置此项财务限制";
   if (String(code).startsWith("mandate_constraint_violation:")) return "超过账户约定的财务限制";
   if (String(code).startsWith("sector_coverage_missing:")) return "持仓行业分类覆盖不足";
   if (String(code).startsWith("valuation_price_missing:")) return "持仓估值价格缺失";
   return known[code] || String(code).replaceAll("_", " ");
+}
+
+const CONTEXT_LABELS = {
+  eligible: "组合约束：未见已知超限",
+  unverified: "组合约束：证据不足",
+  not_assessed: "组合约束：未评估",
+  constrained: "组合约束：已知超限",
+};
+const BUDGET_LABELS = { single_name: "单票", sector: "行业", cash: "现金" };
+const BUDGET_STATES = {
+  within_budget: "在预算内",
+  at_or_over_budget: "已达或超预算",
+  unknown: "未知",
+  not_configured: "未配置",
+  not_applicable: "不适用于单只候选",
+};
+
+function renderPortfolioContext(entry) {
+  const context = entry.portfolio_context;
+  if (!context) return null;
+  const box = el("details", { class: "ranking-portfolio-context" });
+  box.appendChild(el("summary", {}, CONTEXT_LABELS[context.state] || "组合约束：未评估"));
+  const budget = context.budget;
+  if (budget) {
+    for (const key of ["single_name", "sector", "cash"]) {
+      const check = budget[key];
+      if (!check) continue;
+      const reasons = (check.reason_codes || []).map(reasonText).join("、");
+      box.appendChild(el("p", { class: "faint" }, `${BUDGET_LABELS[key]}：${BUDGET_STATES[check.state] || check.state}${reasons ? `（${reasons}）` : ""}`));
+    }
+    if (budget.basis === "current_portfolio_exposure") box.appendChild(el("p", { class: "faint" }, "基于账户当前冻结暴露，不是本次委托的数量或金额。"));
+  }
+  const liquidity = context.liquidity;
+  if (liquidity) {
+    const average = liquidity.average_amount_20d?.value ?? "缺失";
+    const freeFloat = liquidity.free_float_market_cap?.value ?? "MISSING";
+    box.appendChild(el("p", { class: "faint" }, `流动性：${liquidity.state}；20日均成交额 ${average}；自由流通市值 ${freeFloat}${liquidity.calibration_status === "uncalibrated" ? "（阈值未校准）" : ""}`));
+  }
+  const reasons = (context.reason_codes || []).map(reasonText).join("、");
+  if (reasons) box.appendChild(el("p", { class: "faint" }, `组合上下文：${reasons}`));
+  return box;
 }
 
 function buildPurposeBinding(context, state, purposeId, reason) {
@@ -99,6 +160,8 @@ function renderRankingPage(region, response, tokenIsCurrent) {
           row.appendChild(el("p", { class: "faint" }, `检查：${reasons || "未说明"} · ${check.state || "unknown"}`));
         }
         if (entry.execution_error) row.appendChild(el("p", { class: "notice notice-warn" }, entry.execution_error));
+        const portfolioContext = renderPortfolioContext(entry);
+        if (portfolioContext) row.appendChild(portfolioContext);
         const sourceDetails = el("details");
         sourceDetails.appendChild(el("summary", {}, "查看来源与检查项"));
         sourceDetails.addEventListener("toggle", async () => {

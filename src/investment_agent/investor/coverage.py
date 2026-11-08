@@ -24,6 +24,7 @@ from investment_agent.factors.valuation import (
 )
 from investment_agent.factors.view_db import load_snapshot_view
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.pit import end_of_business_day_utc
 from investment_agent.storage.repositories.universe import UniverseRepository
 
@@ -81,7 +82,8 @@ def amount_audit(rows: list[FinancialSnapshot], years: tuple[int, ...]) -> dict[
         evidence.append({
             "id": row.id, "version": row.version, "provider": row.provider,
             "report_period": row.report_period.isoformat(), "period_kind": row.period_kind,
-            "availability": row.availability, "available_from": str(row.available_from),
+            "availability": row.availability,
+            "available_from": str(effective_available_from(row.fields, row.available_from)),
             "captured_at": row.captured_at.isoformat(), "is_backfill": row.is_backfill,
             "raw_ref": row.raw_ref, "amounts_cny": values,
             "source_values": row.fields.get("source_values", {}),
@@ -125,13 +127,21 @@ async def audit_session(session: AsyncSession, *, universe: str, as_of: date) ->
             "unit": "CNY", "primary_reason": cap_reasons[0] if cap_reasons else "available",
             "reasons": cap_reasons,
         }
-        financials = list((await session.execute(select(FinancialSnapshot).where(
-            FinancialSnapshot.listing_id == member.listing_id,
-            FinancialSnapshot.available_from <= as_of,
-            FinancialSnapshot.availability != "unknown",
-            FinancialSnapshot.report_period <= as_of,
-            (FinancialSnapshot.captured_at < cutoff) | FinancialSnapshot.is_backfill.is_(True),
-        ))).scalars())
+        financials = [
+            row
+            for row in (await session.execute(select(FinancialSnapshot).where(
+                FinancialSnapshot.listing_id == member.listing_id,
+                FinancialSnapshot.available_from <= as_of,
+                FinancialSnapshot.availability != "unknown",
+                FinancialSnapshot.report_period <= as_of,
+                (FinancialSnapshot.captured_at < cutoff) | FinancialSnapshot.is_backfill.is_(True),
+            ))).scalars()
+            if (
+                (effective := effective_available_from(row.fields, row.available_from))
+                is not None
+                and effective <= as_of
+            )
+        ]
         rows.append({
             "listing_id": member.listing_id, "ticker": member.ticker,
             "market_cap": market,

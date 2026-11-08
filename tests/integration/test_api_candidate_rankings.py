@@ -510,3 +510,93 @@ async def test_http_rejects_unbounded_fee_and_excessive_source_exclusion(
             )
             == 0
         )
+
+
+@pytest.mark.asyncio
+async def test_http_rejects_an_unknown_portfolio_context_filter(
+    api_client: Any, ranking_enabled: None, tmp_path: Path
+) -> None:
+    """The optional display filter is validated at the HTTP boundary."""
+    response = api_client.get(
+        "/candidates/rankings/00000000-0000-0000-0000-000000000001",
+        params={"account_id": str(ACCOUNT_ID), "portfolio_context": "bogus"},
+        headers=KEY,
+    )
+    assert response.status_code == 422
+    assert "portfolio_context" in response.text
+
+
+@pytest.mark.asyncio
+async def test_http_portfolio_context_is_optional_and_explicitly_visible(
+    api_client: Any, ranking_enabled: None, tmp_path: Path
+) -> None:
+    """A context-mode request persists display annotations; legacy stays clean."""
+    from investment_agent.candidates.portfolio_context import (
+        CandidatePortfolioContextRequest,
+        LiquidityPolicy,
+    )
+
+    # ``_request`` persists the account fixtures, including listing rows.
+    base_request = await _request((600000, 600001))
+    await _seed_screen_run((600000, 600001))
+
+    # Research-only default: no context annotation in entries.
+    legacy = _post_ranking(api_client, base_request)
+    await _run_worker(int(legacy["run_ref"]["id"]), tmp_path)
+    async with session_scope() as session:
+        run = await session.get(PipelineRun, int(legacy["run_ref"]["id"]))
+        assert run is not None
+        ranking_ref = ObjectRef.model_validate(run.metadata_json["ranking_ref"])
+        stored = await InvestmentAssessmentRepository(session).read_ranking(
+            "local_owner", ranking_ref
+        )
+        assert stored is not None
+        assert all(entry.portfolio_context is None for entry in stored.entries)
+
+    # Context mode: mandate budget + uncalibrated liquidity threshold.
+    context_request = base_request.model_copy(
+        update={
+            "operation_id": uuid4(),
+            "portfolio_context": CandidatePortfolioContextRequest(
+                include_mandate_budget=True,
+                liquidity=LiquidityPolicy(
+                    assumption_source="synthetic_uncalibrated",
+                    min_average_amount_20d=Decimal("100000000"),
+                ),
+            ),
+        }
+    )
+    accepted = _post_ranking(api_client, context_request)
+    await _run_worker(int(accepted["run_ref"]["id"]), tmp_path)
+    async with session_scope() as session:
+        run = await session.get(PipelineRun, int(accepted["run_ref"]["id"]))
+        assert run is not None and run.status == "success"
+        ranking_ref = ObjectRef.model_validate(run.metadata_json["ranking_ref"])
+        stored = await InvestmentAssessmentRepository(session).read_ranking(
+            "local_owner", ranking_ref
+        )
+        assert stored is not None
+        for entry in stored.entries:
+            context = entry.portfolio_context
+            assert context is not None
+            assert context.budget is not None
+            assert context.budget.basis == "current_portfolio_exposure"
+            # No market bars in this world: the threshold cannot be met.
+            assert context.liquidity is not None
+            assert context.liquidity.state == "missing"
+            assert context.liquidity.calibration_status == "uncalibrated"
+
+    response = api_client.get(
+        f"/candidates/rankings/{ranking_ref.id}",
+        headers=KEY,
+        params={"account_id": str(ACCOUNT_ID), "portfolio_context": "unverified"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["count"] == 2
+    empty = api_client.get(
+        f"/candidates/rankings/{ranking_ref.id}",
+        headers=KEY,
+        params={"account_id": str(ACCOUNT_ID), "portfolio_context": "eligible"},
+    )
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["count"] == 0

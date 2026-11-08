@@ -22,9 +22,11 @@ from investment_agent.research_kernel.scoring_models import (
     factor_scores_for_model,
     metric,
     model_fit_score,
+    proxy_factors,
     ranked_strategies,
     score_ratio,
     select_scoring_model,
+    unevaluated_factors,
     valuation_factor_score,
     valuation_level,
     weighted_score,
@@ -34,6 +36,7 @@ __all__ = [
     "SCORING_VERSION",
     "clamp",
     "metric",
+    "research_rank_key",
     "score_pool",
     "score_ratio",
     "score_stock",
@@ -41,8 +44,10 @@ __all__ = [
     "weighted_score",
 ]
 
-SCORING_VERSION = "v1.3"
-SCHEMA_VERSION = "v2.2"
+SCORING_VERSION = "v1.4"
+# v2.3 adds output fields only: ``unevaluated_factors``, ``proxy_factors``,
+# ``quality_signals`` and ``score_suppression_reason``.
+SCHEMA_VERSION = "v2.3"
 # Market data age is measured in exchange trading sessions, not calendar days:
 # a quote from the last session before a weekend or holiday is still current.
 DEFAULT_MAX_MARKET_AGE_TRADING_DAYS = 1
@@ -173,7 +178,6 @@ def factor_scores_for(
     pe = metric(market, "pe")
     pb = metric(market, "pb")
     dividend_yield = metric(market, "dividend_yield")
-    max_drawdown = metric(market, "max_drawdown_1y")
     roe = metric(financial, "roe")
     roe_stability = metric(financial, "roe_stability")
     debt_ratio = metric(financial, "debt_ratio")
@@ -203,36 +207,38 @@ def factor_scores_for(
         return factors, weights
 
     if strategy_type == "quality_growth":
+        # v1.4 merges the duplicate pairs: revenue_growth_3y used to carry
+        # 45% under two names (industry_space + revenue_growth) and ROE 40%
+        # under two names (competitive_advantage + roe_level). Each input now
+        # enters exactly once, under a name that says it is a proxy.
         weights = {
-            "industry_space": 25,
-            "competitive_advantage": 25,
-            "revenue_growth": 20,
-            "roe_level": 15,
+            "growth_proxy": 45,
+            "profitability_proxy": 40,
             "cash_flow_quality": 10,
             "valuation_level": 5,
         }
         factors = {
-            "industry_space": score_ratio(revenue_growth, 0.0, 0.40),
-            "competitive_advantage": score_ratio(roe, 0.05, 0.25),
-            "revenue_growth": score_ratio(revenue_growth, 0.0, 0.40),
-            "roe_level": score_ratio(roe, 0.05, 0.25),
+            "growth_proxy": score_ratio(revenue_growth, 0.0, 0.40),
+            "profitability_proxy": score_ratio(roe, 0.05, 0.25),
             "cash_flow_quality": _cash_flow_factor(free_cash_flow),
             "valuation_level": valuation_score,
         }
         return factors, weights
 
     if strategy_type == "cycle_reversal":
+        # cycle_position is not scored in v1.4: a one-year drawdown alone is
+        # neither validated as a reversal signal nor safe to invert. It stays
+        # visible as unevaluated until a calibrated cycle-position input exists.
         weights = {
-            "cycle_position": 30,
-            "cost_advantage": 25,
-            "resource_reserve": 20,
+            "roe_proxy": 25,
+            "profit_growth_proxy": 20,
             "balance_sheet_quality": 15,
             "valuation_level": 10,
         }
         factors = {
-            "cycle_position": score_ratio(max_drawdown, 0.0, 0.50),
-            "cost_advantage": score_ratio(roe, 0.05, 0.22),
-            "resource_reserve": score_ratio(profit_growth, -0.10, 0.30),
+            "cycle_position": None,
+            "roe_proxy": score_ratio(roe, 0.05, 0.22),
+            "profit_growth_proxy": score_ratio(profit_growth, -0.10, 0.30),
             "balance_sheet_quality": score_ratio(debt_ratio, 0.30, 0.75, inverse=True),
             "valuation_level": valuation_score,
         }
@@ -259,19 +265,21 @@ def factor_scores_for(
         }
         return factors, weights
 
+    # Every scored factor is a financial-ratio proxy; the names state the
+    # actual input instead of borrowing TAM / barrier / team vocabulary. Team
+    # quality has no evidence source and is not scored (v1.3 used a fixed 50).
     weights = {
-        "tam_potential": 30,
-        "technical_barrier": 25,
-        "team_quality": 20,
-        "commercialization_path": 15,
-        "cash_reserve": 10,
+        "revenue_growth_proxy": 30,
+        "roe_proxy": 25,
+        "profit_growth_proxy": 15,
+        "debt_ratio_proxy": 10,
     }
     factors = {
-        "tam_potential": score_ratio(revenue_growth, 0.0, 0.50),
-        "technical_barrier": score_ratio(roe, -0.10, 0.20),
-        "team_quality": 50.0,
-        "commercialization_path": score_ratio(profit_growth, -0.20, 0.40),
-        "cash_reserve": score_ratio(debt_ratio, 0.20, 0.80, inverse=True),
+        "revenue_growth_proxy": score_ratio(revenue_growth, 0.0, 0.50),
+        "roe_proxy": score_ratio(roe, -0.10, 0.20),
+        "team_quality": None,
+        "profit_growth_proxy": score_ratio(profit_growth, -0.20, 0.40),
+        "debt_ratio_proxy": score_ratio(debt_ratio, 0.20, 0.80, inverse=True),
     }
     return factors, weights
 
@@ -325,6 +333,81 @@ def collect_provider_conflicts(
                 str(field): dict(conflict) for field, conflict in payload_conflicts.items()
             }
     return conflicts
+
+
+# Provenance signals that are already present in the scoring input lower
+# confidence once per signal kind. These are review/confidence multipliers,
+# not discounts on ``investment_score`` (scoring v1.4).
+PROVENANCE_CONFIDENCE_MULTIPLIERS: dict[str, float] = {
+    "provider_conflict": 0.9,
+    "restated": 0.9,
+    "unverified": 0.95,
+}
+
+
+def collect_quality_signals(
+    stock: dict[str, Any], market: dict[str, Any], financial: dict[str, Any]
+) -> list[dict[str, str]]:
+    """Provenance review signals already carried by the scoring input.
+
+    Sources are the row itself, ``field_sources`` metadata (AkShare/Eastmoney
+    restatement flags and PIT verification) and ``quality_flags``. Only signals
+    that are actually present are returned; nothing is inferred. The
+    ``restated`` PIT availability rule itself is owned by the factor layer.
+    """
+
+    signals: list[dict[str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+
+    def add(payload: str, field: str, flag: str) -> None:
+        key = (payload, field, flag)
+        if key not in seen:
+            seen.add(key)
+            signals.append({"payload": payload, "field": field, "flag": flag})
+
+    for payload, row in (
+        ("stock", stock),
+        ("market_data", market),
+        ("financial_data", financial),
+    ):
+        if row.get("restated") is True:
+            add(payload, "restated", "restated")
+        verification = str(row.get("verification") or "")
+        if verification == "unverified":
+            add(payload, "verification", "unverified")
+        elif verification == "conflict":
+            add(payload, "verification", "provider_conflict")
+        for field, source in dict(row.get("field_sources") or {}).items():
+            if not isinstance(source, dict):
+                continue
+            if source.get("restated") is True:
+                add(payload, str(field), "restated")
+            source_verification = str(source.get("verification") or "")
+            if source_verification == "unverified":
+                add(payload, str(field), "unverified")
+            elif source_verification == "conflict":
+                add(payload, str(field), "provider_conflict")
+        for flag in row.get("quality_flags") or []:
+            name = str(flag.get("flag") or "").lower()
+            field = str(flag.get("field") or "unknown")
+            if name == "restated":
+                add(payload, field, "restated")
+            elif name == "unverified":
+                add(payload, field, "unverified")
+            elif name in {"provider_conflict", "cross_source_conflict"}:
+                add(payload, field, "provider_conflict")
+        for field in row.get("provider_conflicts") or {}:
+            add(payload, str(field), "provider_conflict")
+    return signals
+
+
+def quality_signal_confidence_multiplier(signals: list[dict[str, str]]) -> float:
+    kinds = {str(signal.get("flag")) for signal in signals}
+    multiplier = 1.0
+    for kind, factor in PROVENANCE_CONFIDENCE_MULTIPLIERS.items():
+        if kind in kinds:
+            multiplier *= factor
+    return max(0.0, min(1.0, multiplier))
 
 
 def data_quality_score(missing: list[str]) -> float:
@@ -502,11 +585,15 @@ def research_confidence_score(
     quality: float,
     freshness: dict[str, dict[str, Any]],
     coverage: float = 1.0,
+    *,
+    quality_flag_multiplier: float = 1.0,
 ) -> float:
     """Confidence in the research result, 0-100.
 
     ``coverage`` is the share of model weight backed by data; missing factors
     scale confidence by ``0.5 + 0.5 * coverage`` (full coverage keeps it).
+    ``quality_flag_multiplier`` carries provenance signals already present in
+    the input (see ``PROVENANCE_CONFIDENCE_MULTIPLIERS``).
     """
 
     freshness_multiplier = 1.0
@@ -517,7 +604,11 @@ def research_confidence_score(
     if freshness["stock"]["is_stale"]:
         freshness_multiplier *= 0.9
     coverage_multiplier = 0.5 + 0.5 * max(0.0, min(1.0, coverage))
-    return round(quality * freshness_multiplier * coverage_multiplier * 100, 2)
+    provenance_multiplier = max(0.0, min(1.0, quality_flag_multiplier))
+    return round(
+        quality * freshness_multiplier * coverage_multiplier * provenance_multiplier * 100,
+        2,
+    )
 
 
 def provider_unavailable_fields(*rows: dict[str, Any]) -> list[str]:
@@ -622,8 +713,18 @@ def score_stock(
         factors, weights = factor_scores_for_model(selected_model, market, financial)
     else:
         factors, weights = factor_scores_for(primary_strategy, market, financial)
+    unevaluated = unevaluated_factors(factors, weights)
+    proxies = proxy_factors(factors)
     score = weighted_score(factors, weights)
     coverage, missing_factors = factor_coverage(factors, weights)
+    score_suppression_reason: str | None = None
+    if score is None:
+        score_suppression_reason = "no_factor_data"
+    elif coverage < MIN_FACTOR_COVERAGE:
+        # v1.4: below the conservative coverage floor no total is published.
+        # No uncalibrated coverage multiplier is applied to the score itself.
+        score = None
+        score_suppression_reason = "factor_coverage_below_minimum"
     raw_missing = collect_missing_fields(stock, market, financial)
     applicable_missing, _ = split_missing_fields_by_applicability(
         raw_missing,
@@ -635,6 +736,7 @@ def score_stock(
     model_fit_quality_flags = list(fit["quality_flags"])
     provider_quality_flags = collect_quality_flags(stock, market, financial)
     provider_conflicts = collect_provider_conflicts(stock, market, financial)
+    quality_signals = collect_quality_signals(stock, market, financial)
     combined_quality_flags = provider_quality_flags + model_fit_quality_flags
     warnings = collect_warnings(stock, market, financial)
     quality = data_quality_score(applicable_missing)
@@ -657,7 +759,12 @@ def score_stock(
         }
         for key in stale_payloads
     ]
-    confidence = research_confidence_score(quality, freshness, coverage)
+    confidence = research_confidence_score(
+        quality,
+        freshness,
+        coverage,
+        quality_flag_multiplier=quality_signal_confidence_multiplier(quality_signals),
+    )
     pe = metric(market, "pe")
     pb = metric(market, "pb")
     market_cap = resolved_market_cap(stock, market)
@@ -683,6 +790,7 @@ def score_stock(
         or row_requires_review(market, non_blocking_fields)
         or row_requires_review(financial, non_blocking_fields)
         or bool(provider_conflicts)
+        or bool(quality_signals)
         or quality < 0.85
         or bool(stale_payloads)
         or score is None
@@ -712,12 +820,29 @@ def score_stock(
         evidence_summary["risk"].append("存在模型不适用字段，已从数据质量扣分中剔除")
     if provider_quality_flags or provider_conflicts:
         evidence_summary["risk"].append("存在上游数据质量标记，需结合字段来源与提供方冲突复核")
+    provenance_signals = [
+        signal
+        for signal in quality_signals
+        if signal["flag"] in {"provider_conflict", "restated", "unverified"}
+    ]
+    if provenance_signals:
+        evidence_summary["risk"].append(
+            "存在提供方冲突、重述或未核验的数据，已下调研究置信度并需要复核"
+        )
     if stale_payloads:
         evidence_summary["risk"].append("存在超过时效门槛的数据，当前结论需要复核")
     if missing_factors:
         evidence_summary["risk"].append(
             f"{len(missing_factors)} 个评分因子缺少输入数据，已从加权中剔除"
             f"（因子覆盖率 {coverage:.0%}）"
+        )
+    if unevaluated:
+        evidence_summary["risk"].append(
+            "部分概念因子没有数据来源，已标记为未评估且不参与加权"
+        )
+    if score_suppression_reason == "factor_coverage_below_minimum":
+        evidence_summary["risk"].append(
+            f"因子覆盖率 {coverage:.0%} 低于 {MIN_FACTOR_COVERAGE:.0%}，不发布投资分"
         )
 
     return {
@@ -746,9 +871,11 @@ def score_stock(
         "quality_flags": combined_quality_flags + freshness_flags + coverage_flags,
         "field_sources": collect_field_sources(stock, market, financial),
         "provider_conflicts": provider_conflicts,
+        "quality_signals": quality_signals,
         "company_profile": profile,
         "investment_score": score,
         "business_score": score,
+        "score_suppression_reason": score_suppression_reason,
         "research_confidence_score": confidence,
         "research_confidence_label": "高"
         if confidence >= 85
@@ -775,6 +902,8 @@ def score_stock(
         },
         "factor_coverage": coverage,
         "missing_factors": missing_factors,
+        "unevaluated_factors": unevaluated,
+        "proxy_factors": proxies,
         "provider_unavailable_fields": unavailable_fields,
         "key_metrics": {
             # Expose every canonical numeric metric, not just a display subset:
@@ -821,6 +950,25 @@ def _report_year(row: Any) -> int | None:
 
 def index_by_symbol(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {str(item["symbol"]): item for item in payload.get("items", [])}
+
+
+def research_rank_key(item: dict[str, Any]) -> tuple[bool, float, bool, float]:
+    """Deterministic research-pool ordering for descending sort.
+
+    ``investment_score`` stays the primary key; ``None`` sorts last. Items that
+    need review and lower research confidence only break ties between equal
+    scores. This is the research-pool order only; the candidate rules/ranking
+    chain is unchanged.
+    """
+
+    score = item.get("investment_score")
+    confidence = item.get("research_confidence_score")
+    return (
+        score is not None,
+        float(score) if score is not None else 0.0,
+        not bool(item.get("needs_agent_review")),
+        float(confidence) if confidence is not None else 0.0,
+    )
 
 
 def score_pool(
@@ -873,13 +1021,7 @@ def score_pool(
         )
         items.append(score_stock(stock, market, financial, freshness=freshness))
 
-    items.sort(
-        key=lambda item: (
-            item["investment_score"] is not None,
-            item["investment_score"] or 0.0,
-        ),
-        reverse=True,
-    )
+    items.sort(key=research_rank_key, reverse=True)
     return {
         "metadata": {
             "pool": pool_name,

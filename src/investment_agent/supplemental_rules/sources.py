@@ -48,6 +48,7 @@ from investment_agent.storage.models.pit_snapshot import (
     ReportOverdue,
 )
 from investment_agent.storage.models.reference import Company, Listing
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 
 MAX_SOURCE_ROWS = 10_000
 """Per-subject read ceiling. Overflow is diagnostic and cannot imply absence."""
@@ -122,6 +123,15 @@ def _row_visible_at(row: Any, cutoff: datetime, kind: str, diagnostics: list[str
     if updated_at is not None and _utc(updated_at) > cutoff:
         diagnostics.append(f"{kind}_row_mutated_after_cutoff:{row.id}")
         return False
+    if kind == "financial" and isinstance(row, FinancialSnapshot):
+        # Legacy pre-A7 rows may still carry the original pubDate while the
+        # stored figures are restated. Freeze only when the restatement itself
+        # was visible at the cutoff.
+        effective = effective_available_from(row.fields, row.available_from)
+        if effective is None or _date_available_at(effective) > cutoff:
+            # Not yet public at this cutoff: an ordinary not-yet-visible row,
+            # not a source-coverage gap.
+            return False
     return True
 
 
@@ -243,13 +253,13 @@ async def read_snapshot_rows(
             time_precision="timestamp") for r in markets
     ])
     for r in financial:
-        eligible_at = _date_available_at(r.available_from)
-        if eligible_at > cutoff:
+        effective = effective_available_from(r.fields, r.available_from)
+        if effective is None or _date_available_at(effective) > cutoff:
             continue
         manifest.append(_manifest_row("financial_snapshot", r,
             ("id", "listing_id", "report_period", "period_kind", "available_from", "availability",
              "fields", "provider", "captured_at", "raw_ref", "is_backfill", "version"),
-            time_precision="date", available_from=r.available_from))
+            time_precision="date", available_from=effective))
     manifest.extend([
         _manifest_row("dividend_event", r,
             ("id", "listing_id", "ex_date", "record_date", "pay_date", "announce_date",
@@ -312,7 +322,9 @@ def build_strict_snapshot_view(
             continue
         # Date-only source timestamp is conservatively visible only after the
         # stated Shanghai date ended; never coerce it to a midnight instant.
-        if _date_available_at(financial_row.available_from) > cutoff:
+        # A legacy restated row is visible only from its restatement date.
+        effective = effective_available_from(financial_row.fields, financial_row.available_from)
+        if effective is None or _date_available_at(effective) > cutoff:
             continue
         part = financial_row.fields.get("part") if isinstance(financial_row.fields, dict) else None
         key = (financial_row.report_period, financial_row.provider, str(part or ""))

@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import yaml
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
-from investment_agent.factors.field_resolution import ProviderFields, resolve_period_fields
+from investment_agent.factors.field_resolution import (
+    ProviderFields,
+    factor_fields,
+    provider_fields_from_rows,
+    resolve_period_fields,
+)
 from investment_agent.factors.field_sources import (
     DEFAULT_FIELD_SOURCES_PATH,
     FREE_PROVIDERS,
@@ -314,6 +320,40 @@ def test_baostock_operating_cash_flow_is_an_approx_fallback():
     )
     assert fields["operating_cash_flow"] == 120.0
     assert sources["operating_cash_flow"].verification == "unverified"
+
+
+def test_restated_metadata_is_a_diagnostic_not_a_factor_field():
+    stored = {
+        "part": "summary",
+        "net_profit_parent": 50.0,
+        "revenue_total": 200.0,
+        "total_shares": 10.0,
+        "restated": True,
+        "restated_basis": "notice_after_baostock_pub_date",
+    }
+    row = SimpleNamespace(
+        id=7, version=1, captured_at=datetime(2026, 10, 7, tzinfo=UTC), fields=stored
+    )
+    candidate = provider_fields_from_rows("akshare", [row])
+    assert candidate.restated is True
+    assert candidate.restated_basis == "notice_after_baostock_pub_date"
+
+    # The boolean never enters the numeric field map.
+    numeric = factor_fields("akshare", stored)
+    assert numeric == {"net_profit_parent": 50.0, "revenue_total": 200.0, "total_shares": 10.0}
+
+    # ``total_shares`` takes its registered baostock source; the restated
+    # Eastmoney row supplies net_profit_parent to the derived EPS.
+    baostock = ProviderFields("baostock", {"total_shares": 10.0}, "b:1")
+    fields, sources = resolve_period_fields([baostock, candidate], anchor="baostock")
+    assert fields["net_profit_parent"] == 50.0
+    resolution = sources["net_profit_parent"]
+    assert resolution.restated is True
+    assert resolution.restated_basis == "notice_after_baostock_pub_date"
+    assert resolution.describe()["restated"] is True
+    # Derived fields inherit the diagnostic from their inputs.
+    assert fields["eps_basic_fy"] == 5.0
+    assert sources["eps_basic_fy"].restated is True
 
 
 def test_derived_per_share_fields():

@@ -11,6 +11,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.candidates.lifecycle import CandidatePolicy
+from investment_agent.candidates.portfolio_context import (
+    CandidatePortfolioContext,
+    build_candidate_portfolio_contexts,
+    load_liquidity_observations,
+)
 from investment_agent.candidates.ranking import (
     FinancialStatus,
     RankingCursorError,
@@ -37,6 +42,7 @@ from investment_agent.candidates.ranking_sources import (
     resolve_source_runs,
 )
 from investment_agent.config import Settings
+from investment_agent.domain.time import as_utc
 from investment_agent.investor.common import Contract, ObjectRef
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, JobOutcome
@@ -133,6 +139,40 @@ async def _rule_projections(
     return projections
 
 
+async def _portfolio_contexts(
+    request: RankingRequest,
+    frozen: FrozenAccountInputs,
+    manifest: SourceManifest,
+    *,
+    as_of: datetime,
+) -> dict[int, CandidatePortfolioContext] | None:
+    """Optional P1 portfolio annotation; ``None`` keeps the research-only mode.
+
+    The mandate limits come from the same frozen inputs the account-fit step
+    uses.  Liquidity evidence is read read-only at the frozen ``as_of``; a
+    missing/insufficient series stays visible in the assessment and never
+    silently passes.
+    """
+    context_request = request.portfolio_context
+    if context_request is None:
+        return None
+    listing_refs = tuple(member.listing_ref for member in manifest.members)
+    observations = None
+    if context_request.liquidity is not None:
+        # The manifest as_of is the frozen knowledge time; use it for market
+        # evidence so a later bar cannot enter a frozen snapshot.
+        async with session_scope() as session:
+            observations = await load_liquidity_observations(
+                session, listing_refs, as_of=as_utc(as_of)
+            )
+    return build_candidate_portfolio_contexts(
+        frozen=frozen,
+        listing_refs=listing_refs,
+        request=context_request,
+        observations=observations,
+    )
+
+
 def _validated_source_manifest(payload: dict[str, Any]) -> SourceManifest:
     manifest = SourceManifest.model_validate(payload["source_manifest"])
     if payload.get("source_manifest_hash") != manifest.manifest_hash:
@@ -216,6 +256,8 @@ def _ranking_change_reasons(
         reasons.add("source_policy_changed")
     if previous_request.trade_assumptions != request.trade_assumptions:
         reasons.add("trade_assumptions_changed")
+    if previous_request.portfolio_context != request.portfolio_context:
+        reasons.add("portfolio_context_changed")
     return tuple(sorted(reasons))
 
 
@@ -499,6 +541,9 @@ class CandidateRankingHandler(BaseJobHandler):
                 self.settings,
                 tuple(member.listing_ref for member in manifest.members),
             )
+            portfolio_contexts = await _portfolio_contexts(
+                request, frozen, manifest, as_of=manifest.as_of
+            )
             entries = build_ranking_entries(
                 manifest,
                 ranking_ref=ranking_ref,
@@ -510,6 +555,7 @@ class CandidateRankingHandler(BaseJobHandler):
                 },
                 failed_items=failed_items,
                 rule_projections=rule_projections,
+                portfolio_contexts=portfolio_contexts,
             )
             now = datetime.now(UTC)
             current_status, current_reasons = await _ranking_current_state(
@@ -682,6 +728,8 @@ async def read_ranking_view(
     limit: int = 50,
     bucket: Literal["incomplete", "blocked", "ready", "limited"] | None = None,
     financial_status: FinancialStatus | None = None,
+    portfolio_context: Literal["eligible", "unverified", "not_assessed", "constrained"]
+    | None = None,
     cursor: str | None = None,
     settings: Settings | None = None,
     rules: TradingRuleResolver | None = None,
@@ -698,6 +746,7 @@ async def read_ranking_view(
             limit=limit,
             bucket_filter=bucket,
             financial_status_filter=financial_status,
+            portfolio_context_filter=portfolio_context,
             cursor=cursor,
         )
     except RankingCursorError as exc:

@@ -1,13 +1,13 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "freshness_policy": {
       "as_of": "2026-10-05T15:34:37.318806+00:00",
       "max_market_age_trading_days": 1,
@@ -19,8 +19,8 @@
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "688019",
       "name": "安集科技",
       "market": "SH",
@@ -334,6 +334,7 @@
         }
       },
       "provider_conflicts": {},
+      "quality_signals": [],
       "company_profile": {
         "sector_type": "general",
         "sector_label": "通用",
@@ -346,8 +347,9 @@
         ],
         "peer_group_hints": []
       },
-      "investment_score": 77.22,
-      "business_score": 77.22,
+      "investment_score": 84.02,
+      "business_score": 84.02,
+      "score_suppression_reason": null,
       "research_confidence_score": 92.0,
       "research_confidence_label": "高",
       "freshness": {
@@ -394,38 +396,47 @@
         "financial_data": "2026-10-05T15:34:37.318806Z"
       },
       "factor_scores": {
-        "tam_potential": 64.98,
-        "technical_barrier": 100.0,
-        "team_quality": 50.0,
-        "commercialization_path": 95.84,
-        "cash_reserve": 83.47
+        "revenue_growth_proxy": 64.98,
+        "roe_proxy": 100.0,
+        "team_quality": null,
+        "profit_growth_proxy": 95.84,
+        "debt_ratio_proxy": 83.47
       },
       "factor_coverage": 1.0,
       "missing_factors": [],
+      "unevaluated_factors": {
+        "team_quality": "no_evidence_source"
+      },
+      "proxy_factors": [
+        "debt_ratio_proxy",
+        "profit_growth_proxy",
+        "revenue_growth_proxy",
+        "roe_proxy"
+      ],
       "provider_unavailable_fields": [
         "dividend_yield"
       ],
       "key_metrics": {
         "market_cap": 48183230573.0,
+        "latest_price": 211.0,
         "pe": 45.279,
         "pb": 10.1136,
-        "dividend_yield": null,
-        "roe": 0.251496,
-        "debt_ratio": 0.299197,
-        "revenue_growth_3y": 0.324893,
-        "net_profit_growth_3y": 0.375018,
-        "max_drawdown_1y": 0.38645,
-        "latest_price": 211.0,
         "ps": 14.2027,
+        "dividend_yield": null,
         "return_1y": 0.197367,
         "volatility_1y": 0.656457,
         "revenue": 2504217940.48,
         "net_profit": 783648337.86,
         "gross_margin": 0.567237,
         "net_margin": 0.312931,
+        "roe": 0.251496,
         "roe_stability": 0.942629,
+        "debt_ratio": 0.299197,
         "operating_cash_flow": 439774055.91,
-        "free_cash_flow": 84394209.18
+        "free_cash_flow": 84394209.18,
+        "revenue_growth_3y": 0.324893,
+        "net_profit_growth_3y": 0.375018,
+        "max_drawdown_1y": 0.38645
       },
       "missing_fields": [
         "dividend_yield"
@@ -452,7 +463,8 @@
         ],
         "risk": [
           "风险等级为 medium_high",
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "部分概念因子没有数据来源，已标记为未评估且不参与加权"
         ]
       }
     }

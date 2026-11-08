@@ -2,7 +2,8 @@
 
 import asyncio
 from dataclasses import replace
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal, localcontext
 from uuid import uuid4
 
 import pytest
@@ -21,7 +22,7 @@ from investment_agent.investor.foundations import InvestorError
 from investment_agent.storage.database import engine_lifespan, session_scope
 from investment_agent.storage.models.base import Base
 from investment_agent.storage.models.evidence import SavedCalculation, SavedEvidence
-from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
+from investment_agent.storage.models.pit_snapshot import FinancialSnapshot, MarketSnapshot
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
@@ -226,7 +227,6 @@ async def test_percentile_matches_a_hand_computed_oracle(db_session):
     count(value <= 10) / valid_sessions = (100 + 1) / 260 = 0.388462.
     """
     listing = await ListingRepository(db_session).ensure_a_share_listing("600519.SH", company_name="Fictional fixture")
-    repository = MarketSnapshotRepository(db_session)
     end = date(2026, 9, 30)
     count = 260
 
@@ -237,6 +237,7 @@ async def test_percentile_matches_a_hand_computed_oracle(db_session):
             return D(12)
         return D(10)
 
+    repository = MarketSnapshotRepository(db_session)
     for index in range(count):
         await repository.insert(listing_id=listing.id, trade_date=end - timedelta(days=count - 1 - index),
             open=D(10), high=D(10), low=D(10), close=D(10), volume=D(100),
@@ -463,3 +464,296 @@ async def test_dupont_service_known_answer_overdue_and_replay(db_session):
         report_period=date(2025, 12, 31), deadline=date(2026, 4, 30),
         detected_on=date(2026, 5, 1), provider="fixture")
     assert (await service.dupont("local_owner", request, uuid4()))["status"] == "stale_inputs"
+
+
+async def test_dupont_ignores_pre_fix_restated_row_before_its_restatement(db_session):
+    """The dupont direct query applies the same read-side legacy gate."""
+
+    listing = await ListingRepository(db_session).ensure_a_share_listing(
+        "600519.SH", company_name="Fictional fixture"
+    )
+    db_session.add(FinancialSnapshot(
+        listing_id=listing.id, report_period=date(2025, 12, 31), period_kind="annual",
+        provider="akshare", version=1, availability="actual",
+        available_from=date(2026, 4, 1),  # pre-fix artifact: original pubDate
+        captured_at=datetime(2026, 1, 1, tzinfo=UTC), is_backfill=False,
+        fields={"part": "summary", "net_profit_parent": 12.0, "revenue_total": 100.0,
+                "total_assets": 200.0, "total_equity": 80.0,
+                "notice_date": "2026-06-01", "restated": True,
+                "restated_basis": "notice_after_baostock_pub_date"},
+        raw_ref="fixture-only"))
+    await db_session.flush()
+    service = ValuationService(db_session)
+    before = await service.dupont(
+        "local_owner",
+        DuPontRequest(ticker="600519.SH", as_of=datetime(2026, 5, 1, 9, tzinfo=UTC)),
+        uuid4(),
+    )
+    assert before["status"] == "missing_inputs"
+    after = await service.dupont(
+        "local_owner",
+        DuPontRequest(ticker="600519.SH", as_of=datetime(2026, 6, 2, 9, tzinfo=UTC)),
+        uuid4(),
+    )
+    assert after["status"] == "ok"
+
+
+# --------------------------------------------------------------------------- #
+# P1 review item 11 (2026-11-07): solver/service boundaries not covered above.
+# Expected values below come from an independent local bisection oracle at 60
+# decimal digits, never from the implementation under test.
+# --------------------------------------------------------------------------- #
+
+
+def _oracle_value(base: str, growth: Decimal, rate: str | Decimal,
+                  terminal: str | Decimal) -> Decimal:
+    """Independent five-year + Gordon value; mirrors the documented formula only."""
+
+    with localcontext() as context:
+        context.prec = 60
+        base_d, growth_d, rate_d, terminal_d = D(base), D(growth), D(rate), D(terminal)
+        cash, discount, interim = base_d, D(1), D(0)
+        for _ in range(5):
+            cash *= 1 + growth_d
+            discount *= 1 + rate_d
+            interim += cash / discount
+        return interim + cash * (1 + terminal_d) / (rate_d - terminal_d) / discount
+
+
+def _oracle_growth(market: str, base: str, rate: str | Decimal,
+                   terminal: str | Decimal) -> Decimal:
+    """Independent bisection on the same documented interval."""
+
+    with localcontext() as context:
+        context.prec = 60
+        low, high, target = D("-0.95"), D(1), D(market)
+        for _ in range(200):
+            middle = (low + high) / 2
+            if _oracle_value(base, middle, rate, terminal) < target:
+                low = middle
+            else:
+                high = middle
+        return low
+
+
+def test_solver_keeps_growth_inside_the_documented_endpoints():
+    # Equality at an endpoint is a last-digit artifact of the 40-digit context,
+    # so probe one relative epsilon inside/outside instead of equality. Inside
+    # is solved, outside is refused; the interval is never widened.
+    lower = _oracle_value("8.2", D("-0.95"), ".09", ".02")
+    upper = _oracle_value("8.2", D("1"), ".09", ".02")
+    for endpoint, edge, inside_sign in (("-0.95", lower, 1), ("1", upper, -1)):
+        inside = solve(edge * (1 + inside_sign * D("1e-12")), D("8.2"), D(".09"), D(".02"))
+        assert inside.status == Status.OK, (endpoint, inside.reason)
+        assert inside.growth is not None and inside.growth.is_finite()
+        assert D("-0.95") <= inside.growth <= D(1)
+        assert abs(inside.growth - D(endpoint)) <= D("1e-7")
+        assert inside.terminal_pv_fraction is not None
+        assert 0 <= inside.terminal_pv_fraction <= 1
+        outside = solve(edge * (1 - inside_sign * D("1e-12")), D("8.2"), D(".09"), D(".02"))
+        assert outside.status == Status.OUTSIDE_SEARCH_RANGE, (endpoint, outside.reason)
+        assert outside.reason == ("below_search_range" if endpoint == "-0.95" else "above_search_range")
+        assert outside.growth is None and outside.terminal_pv_fraction is None
+
+
+@pytest.mark.parametrize("terminal", [".09", ".10", ".20", "1", "-0.0001"])
+def test_solver_rejects_terminal_growth_at_or_above_rate_and_negative(terminal):
+    # documented constraint: 0 <= gT < r; equality is not "just converged".
+    result = solve(D(212.4), D("8.2"), D(".09"), D(terminal))
+    assert result.status == Status.CALCULATION_ERROR
+    assert result.reason == "invalid_parameters"
+    assert result.growth is None and result.terminal_pv_fraction is None
+
+
+def test_solver_near_singular_g_to_rate_minus_matches_oracle_and_fails_closed():
+    # r - g = 1e-3 / 1e-6 still has a finite solution; the oracle confirms it.
+    for delta in ("1e-3", "1e-6"):
+        rate = D(".09")
+        terminal = rate - D(delta)
+        result = solve(D(212.4), D("8.2"), rate, terminal)
+        expected = _oracle_growth("212.4", "8.2", rate, terminal)
+        assert result.status == Status.OK, (delta, result.reason)
+        assert result.growth is not None and result.growth.is_finite()
+        assert abs(result.growth - expected) <= D("1e-7")
+        assert result.terminal_pv_fraction is not None
+        assert 0 <= result.terminal_pv_fraction <= 1
+    # As g -> r- the Gordon term dwarfs the interim cash flows: the lowest
+    # supported h already exceeds the market value, so the method refuses
+    # rather than expanding the search interval or returning a huge number.
+    for delta in ("1e-9", "1e-12"):
+        terminal = D(".09") - D(delta)
+        result = solve(D(212.4), D("8.2"), D(".09"), terminal)
+        assert result.status == Status.OUTSIDE_SEARCH_RANGE
+        assert result.reason == "below_search_range"
+        assert result.growth is None
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_rejects_terminal_growth_at_or_above_rate(db_session):
+    request, qualified, _ = await seed(db_session)
+    service = ValuationService(db_session, FixtureQualification(qualified))
+    equal = request.model_copy(update={"terminal_growth": assumption("terminal_growth", "0.09")})
+    output = await service.reverse_dcf("local_owner", equal, uuid4())
+    assert output["status"] == "calculation_error" and output["result"] is None
+    assert output["calculation"]["errors"] == ["invalid_parameters"]
+    cells = {(cell["basis"], cell["rate"]): cell for cell in output["calculation"]["details"]["scenarios"]}
+    # Only the cell where r > gT shares the terminal growth and can solve.
+    assert cells[("median", "0.09")]["status"] == "calculation_error"
+    assert cells[("median", "0.08")]["status"] == "calculation_error"
+    assert cells[("median", "0.10")]["status"] == "ok"
+    assert cells[("median", "0.09")]["growth"] is None
+    above = request.model_copy(update={"terminal_growth": assumption("terminal_growth", "0.10")})
+    output = await service.reverse_dcf("local_owner", above, uuid4())
+    assert output["status"] == "calculation_error" and output["result"] is None
+    assert all(cell["growth"] is None for cell in output["calculation"]["details"]["scenarios"])
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_near_singular_cell_is_not_backfilled(db_session):
+    request, qualified, _ = await seed(db_session)
+    near = request.model_copy(update={"terminal_growth": assumption("terminal_growth", "0.089999")})
+    output = await ValuationService(db_session, FixtureQualification(qualified)).reverse_dcf(
+        "local_owner", near, uuid4())
+    # Not a status failure: the main cell solves, one sensitivity cell does not.
+    assert output["status"] == "ok" and output["result"] is not None
+    cells = {(cell["basis"], cell["rate"]): cell for cell in output["calculation"]["details"]["scenarios"]}
+    main = cells[("median", "0.09")]
+    expected = _oracle_growth("212.4", "8.2", ".09", "0.089999")
+    assert main["status"] == "ok" and abs(D(main["growth"]) - expected) <= D("1e-7")
+    assert 0 <= D(main["terminal_pv_fraction"]) <= 1
+    assert cells[("median", "0.08")]["status"] == "calculation_error"
+    assert cells[("median", "0.08")]["growth"] is None
+    # The failed cell is absent, never filled from a neighbour.
+    assert "median_1_growth" not in output["result"]
+    assert "median_0_growth" in output["result"] and "median_2_growth" in output["result"]
+    for cell in cells.values():
+        if cell["growth"] is not None:
+            assert D("-0.95") <= D(cell["growth"]) <= D(1)
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_search_range_at_documented_growth_endpoints(db_session):
+    request, qualified, _ = await seed(db_session)
+
+    async def run(market: str) -> dict:
+        seeded, qualification, _ = await seed(db_session, market=market)
+        return await ValuationService(db_session, FixtureQualification(qualification)).reverse_dcf(
+            "local_owner", seeded, uuid4())
+
+    # V(-0.95) = 0.3942549...; V(1.00) = 2841.8361... for base 8.2, r 9%, gT 2%.
+    inside_low = await run("0.3943")
+    assert inside_low["status"] == "ok"
+    main = {(c["basis"], c["rate"]): c for c in inside_low["calculation"]["details"]["scenarios"]}[("median", "0.09")]
+    assert D("-0.95") <= D(main["growth"]) < D("-0.9499")
+    outside_low = await run("0.39425")
+    assert outside_low["status"] == "outside_search_range" and outside_low["result"] is None
+    assert outside_low["calculation"]["errors"] == ["below_search_range"]
+    inside_high = await run("2841.8")
+    assert inside_high["status"] == "ok"
+    main = {(c["basis"], c["rate"]): c for c in inside_high["calculation"]["details"]["scenarios"]}[("median", "0.09")]
+    assert D("0.9999") < D(main["growth"]) <= D("1")
+    outside_high = await run("2841.9")
+    assert outside_high["status"] == "outside_search_range" and outside_high["result"] is None
+    assert outside_high["calculation"]["errors"] == ["above_search_range"]
+    for output, rate in ((outside_low, "0.09"), (outside_high, "0.09")):
+        cells = {(cell["basis"], cell["rate"]): cell for cell in output["calculation"]["details"]["scenarios"]}
+        assert cells[("median", rate)]["growth"] is None
+        assert cells[("median", rate)]["status"] == "outside_search_range"
+        # No failed cell borrows a number from a solvable neighbour.
+        for cell in cells.values():
+            assert cell["status"] == "ok" or cell["growth"] is None
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_nonpositive_and_extreme_fcfe_never_produce_numbers(db_session):
+    async def run(**kwargs) -> dict:
+        seeded, qualification, _ = await seed(db_session, **kwargs)
+        return await ValuationService(db_session, FixtureQualification(qualification)).reverse_dcf(
+            "local_owner", seeded, uuid4())
+
+    zero = await run(amounts=("0", "2", "3"))
+    assert zero["status"] == "not_applicable" and zero["result"] is None
+    assert "non_positive_fcfe" in zero["calculation"]["errors"]
+    assert len(zero["calculation"]["details"]["scenarios"]) == 6
+    assert all(cell["growth"] is None for cell in zero["calculation"]["details"]["scenarios"])
+    # The 3x stability cut is inclusive at exactly 3 and rejects 3.01.
+    exactly_three = await run(amounts=("1", "2", "3"), market="0.5")
+    assert exactly_three["status"] == "ok"
+    assert "fcfe_max_min_exceeds_three" not in exactly_three["calculation"]["errors"]
+    just_over = await run(amounts=("1", "2", "3.01"), market="0.5")
+    assert just_over["status"] == "not_applicable" and just_over["result"] is None
+    assert "fcfe_max_min_exceeds_three" in just_over["calculation"]["errors"]
+    for amounts in (("1e40", "2e40", "3e40"), ("0.0001", "0.0002", "0.0003")):
+        extreme = await run(amounts=amounts)
+        assert extreme["status"] == "outside_search_range" and extreme["result"] is None
+        assert extreme["calculation"]["errors"] in (["below_search_range"], ["above_search_range"])
+        assert all(cell["growth"] is None for cell in extreme["calculation"]["details"]["scenarios"])
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_nonpositive_equity_value(db_session):
+    for market in ("0", "-5"):
+        request, qualified, _ = await seed(db_session, market=market)
+        output = await ValuationService(db_session, FixtureQualification(qualified)).reverse_dcf(
+            "local_owner", request, uuid4())
+        assert output["status"] == "not_applicable" and output["result"] is None
+        assert "non_positive_equity_value" in output["calculation"]["errors"]
+        assert all(cell["growth"] is None for cell in output["calculation"]["details"]["scenarios"])
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_missing_equity_value_is_missing_inputs(db_session):
+    request, qualified, _ = await seed(db_session)
+    absent = ObjectRef(kind="evidence", id=uuid4(), revision=1)
+    missing_request = request.model_copy(update={"equity_value_ref": absent})
+    output = await ValuationService(
+        db_session, FixtureQualification(replace(qualified, equity_value_ref=absent))).reverse_dcf(
+        "local_owner", missing_request, uuid4())
+    assert output["status"] == "missing_inputs" and output["result"] is None
+    assert any(str(absent.id) in error for error in output["calculation"]["errors"])
+    assert "non_positive_equity_value" not in output["calculation"]["errors"]
+    assert all(cell["growth"] is None for cell in output["calculation"]["details"]["scenarios"])
+
+
+@pytest.mark.asyncio
+async def test_reverse_dcf_missing_equity_with_negative_fcfe_is_missing_inputs(db_session):
+    """Regression: a missing equity value must not grade an annual FCFE as equity.
+
+    The guard once read the first amount in request order, so a missing equity
+    record shifted a negative first-year FCFE into ``non_positive_equity_value``
+    and downgraded the status to ``not_applicable``.
+    """
+    request, qualified, _ = await seed(db_session, amounts=("-1", "2", "3"))
+    absent = ObjectRef(kind="evidence", id=uuid4(), revision=1)
+    missing_request = request.model_copy(update={"equity_value_ref": absent})
+    output = await ValuationService(db_session, FixtureQualification(
+        replace(qualified, equity_value_ref=absent))).reverse_dcf("local_owner", missing_request, uuid4())
+    assert output["status"] == "missing_inputs" and output["result"] is None
+    assert "non_positive_equity_value" not in output["calculation"]["errors"]
+    assert all(cell["growth"] is None for cell in output["calculation"]["details"]["scenarios"])
+
+
+@pytest.mark.asyncio
+async def test_percentile_ignores_backward_adjusted_and_other_provider_series(db_session):
+    """除权/复权: the percentile contract reads raw (adjust=none) baostock bars only."""
+
+    listing, rows = await seed_bars(db_session)
+    service = ValuationService(db_session)
+    request = PercentileRequest(ticker="600519.SH", as_of=AS_OF, metric="pe")
+    baseline = await service.percentile("local_owner", request, uuid4())
+    # A backward-adjusted (后复权) series with the same trade dates but extreme
+    # ratios must never enter the raw distribution or the current value.
+    for row in rows:
+        db_session.add(MarketSnapshot(**{
+            "listing_id": listing.id, "trade_date": row.trade_date,
+            "open": D(1), "high": D(1), "low": D(1), "close": D(1), "volume": D(1),
+            "pe_ttm": D(9999), "pb_mrq": D(9999), "adjust": "backward",
+            "provider": "baostock", "captured_at": AS_OF - timedelta(days=1),
+            "version": 1, "is_backfill": False}))
+    await db_session.flush()
+    output = await service.percentile("local_owner", request, uuid4())
+    assert output["status"] == "ok"
+    assert output["result"] == baseline["result"]
+    assert {item["adjust"] for item in output["calculation"]["details"]["inputs"]} == {"none"}
+    assert output["calculation"]["details"]["current_price"] == "10"
+    assert output["calculation"]["details"]["factor"]["inputs_ref"]["current"] != 9999

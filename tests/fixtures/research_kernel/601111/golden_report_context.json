@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "601111",
       "name": "中国国航",
       "strategy_type": "quality_growth",
@@ -115,6 +115,12 @@
           "flag": "derived_field",
           "message": "revenue_growth_3y was derived from iFinD source fields",
           "provider": "ifind",
+          "severity": "info"
+        },
+        {
+          "field": "valuation_level",
+          "flag": "factor_missing",
+          "message": "factor valuation_level has no input data and was excluded from the score",
           "severity": "info"
         }
       ],
@@ -313,12 +319,11 @@
       "provider_conflicts": {},
       "evidence_summary": {
         "positive": [],
-        "negative": [
-          "估值水平偏贵"
-        ],
+        "negative": [],
         "risk": [
           "风险等级为 medium_high",
-          "存在上游数据质量标记，需结合字段来源与提供方冲突复核"
+          "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 95%）"
         ]
       },
       "peer_comparison": {
@@ -392,7 +397,7 @@
             "relative_position": "insufficient_peer_data"
           },
           "investment_score": {
-            "target": 55.25,
+            "target": 56.32,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -410,12 +415,12 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "中国国航 当前评分 55.25，研究工作流标签为 需要复核，风险等级 medium_high，估值水平 expensive。",
-          "investment_score": 55.25,
+          "text": "中国国航 当前评分 56.32，研究工作流标签为 需要复核，风险等级 medium_high，估值水平 unknown。",
+          "investment_score": 56.32,
           "suggestion": "needs_review",
           "suggestion_label": "需要复核",
           "risk_level": "medium_high",
-          "valuation_level": "expensive",
+          "valuation_level": "unknown",
           "needs_agent_review": true
         },
         "positive_thesis": [
@@ -427,17 +432,6 @@
           }
         ],
         "negative_thesis": [
-          {
-            "source": "evidence_summary.negative",
-            "text": "估值水平偏贵",
-            "field": "negative"
-          },
-          {
-            "source": "score",
-            "text": "估值水平偏贵",
-            "field": "valuation_level",
-            "value": "expensive"
-          },
           {
             "source": "key_metrics",
             "text": "资产负债率为 88.56%，财务杠杆需要跟踪",
@@ -452,7 +446,7 @@
           }
         ],
         "valuation_view": {
-          "valuation_level": "expensive",
+          "valuation_level": "unknown",
           "metrics": {
             "pe": null,
             "pb": 2.4234,
@@ -460,15 +454,10 @@
           },
           "notes": [
             {
-              "source": "evidence_summary.negative",
-              "text": "估值水平偏贵",
-              "field": "valuation"
-            },
-            {
               "source": "score",
-              "text": "估值水平为 expensive",
+              "text": "估值水平为 unknown",
               "field": "valuation_level",
-              "value": "expensive"
+              "value": "unknown"
             },
             {
               "source": "key_metrics",
@@ -506,6 +495,11 @@
           {
             "source": "evidence_summary.risk",
             "text": "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 95%）",
             "field": "risk"
           },
           {
@@ -591,17 +585,6 @@
         ],
         "bear_case": [
           {
-            "source": "evidence_summary.negative",
-            "text": "估值水平偏贵",
-            "field": "negative"
-          },
-          {
-            "source": "score",
-            "text": "估值水平偏贵",
-            "field": "valuation_level",
-            "value": "expensive"
-          },
-          {
             "source": "key_metrics",
             "text": "资产负债率为 88.56%，财务杠杆需要跟踪",
             "field": "debt_ratio",
@@ -621,6 +604,11 @@
           {
             "source": "evidence_summary.risk",
             "text": "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 95%）",
             "field": "risk"
           },
           {
@@ -657,13 +645,13 @@
           "stance_label": "需复核",
           "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为需复核。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 1,
-          "opposition_count": 10,
+          "opposition_count": 9,
           "review_required": true
         }
       },
-      "investment_score": 55.25,
-      "business_score": 55.25,
-      "research_confidence_score": 76.0,
+      "investment_score": 56.32,
+      "business_score": 56.32,
+      "research_confidence_score": 74.1,
       "research_confidence_label": "中",
       "freshness": {
         "stock": {
@@ -693,7 +681,7 @@
         }
       },
       "risk_level": "medium_high",
-      "valuation_level": "expensive",
+      "valuation_level": "unknown",
       "suggestion": "needs_review",
       "suggestion_label": "需要复核",
       "company_profile": {
@@ -721,36 +709,36 @@
         "financial_data": "2026-10-05T15:22:52.481193Z"
       },
       "factor_scores": {
-        "industry_space": 100.0,
-        "competitive_advantage": 0.0,
-        "revenue_growth": 100.0,
-        "roe_level": 0.0,
+        "growth_proxy": 100.0,
+        "profitability_proxy": 0.0,
         "cash_flow_quality": 85.0,
-        "valuation_level": 35.0
+        "valuation_level": null
       },
-      "factor_coverage": 1.0,
-      "missing_factors": [],
+      "factor_coverage": 0.95,
+      "missing_factors": [
+        "valuation_level"
+      ],
       "key_metrics": {
         "market_cap": 121111035687.3,
+        "latest_price": 5.91,
         "pe": null,
         "pb": 2.4234,
-        "dividend_yield": null,
-        "roe": -0.040374,
-        "debt_ratio": 0.885638,
-        "revenue_growth_3y": 0.480005,
-        "net_profit_growth_3y": null,
-        "max_drawdown_1y": 0.388474,
-        "latest_price": 5.91,
         "ps": 0.6013,
+        "dividend_yield": null,
         "return_1y": -0.257538,
         "volatility_1y": 0.333813,
         "revenue": 171484646000.0,
         "net_profit": -1770393000.0,
         "gross_margin": 0.051534,
         "net_margin": -0.020555,
+        "roe": -0.040374,
         "roe_stability": null,
+        "debt_ratio": 0.885638,
         "operating_cash_flow": 42045213000.0,
-        "free_cash_flow": 24483937000.0
+        "free_cash_flow": 24483937000.0,
+        "revenue_growth_3y": 0.480005,
+        "net_profit_growth_3y": null,
+        "max_drawdown_1y": 0.388474
       },
       "missing_fields": [
         "dividend_yield",

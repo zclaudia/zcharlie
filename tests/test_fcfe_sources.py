@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from investment_agent.valuation.fcfe import AccountingChecks, assess_year
+from investment_agent.valuation.fcfe import FIELDS, AccountingChecks, assess_year
 
 NOW = datetime(2026, 10, 10, tzinfo=UTC)
 ROW = dict(SECURITY_CODE='600519', REPORT_DATE='2025-12-31',
@@ -120,3 +120,120 @@ def test_three_rows_with_wrong_years_are_not_complete():
     report = module.replay(source, datetime(2026, 10, 10, 16, tzinfo=UTC))
     assert not report['stocks'][0]['complete_annual_rows']
     assert 'annual_period_set_mismatch' in report['stocks'][0]['reasons']
+
+
+# --------------------------------------------------------------------------- #
+# P1 review item 11 (2026-11-07): real frozen bank/utility rows and the explicit
+# absence of dilution / one-off mapping. These read the frozen AG11 capture and
+# do not re-run the probe or change its frozen conclusion.
+# --------------------------------------------------------------------------- #
+
+FULL_CHECKS = AccountingChecks(Decimal('3'), True, True, True, True, True, True, True)
+
+
+def _frozen(symbol):
+    source = json.loads(
+        Path('docs/product/probes/ag11-fcfe-capture-2026-10-10.json').read_text()
+    )
+    capture = next(item for item in source['captures'] if item['symbol'] == symbol)
+    rows = json.loads(capture['body'], parse_float=Decimal)['data']
+    return capture, rows
+
+
+@pytest.mark.parametrize('symbol,periods', [
+    ('SH600900', ['2025-12-31', '2024-12-31', '2023-12-31']),  # utilities
+    ('SH601398', ['2025-12-31', '2024-12-31', '2023-12-31']),  # bank, excluded
+])
+def test_frozen_real_bank_and_utility_rows_never_become_fcfe(symbol, periods):
+    """Real captured rows, not synthetic fixtures: both stay unusable.
+
+    The utility missing-bonds gap and the bank's financial-sector exclusion are
+    properties of the frozen source, not of the checks, so passing every
+    accounting check still yields no FCFE candidate.
+    """
+    capture, rows = _frozen(symbol)
+    assert [str(row['REPORT_DATE'])[:10] for row in rows] == periods
+    assessed = [assess_year(row, as_of=NOW, captured_at=datetime.fromisoformat(capture['captured_at']),
+                            expected_code=symbol[2:], financial=symbol == 'SH601398',
+                            checks=FULL_CHECKS) for row in rows]
+    assert all(year['fcfe_candidate'] is None for year in assessed)
+    assert all(not year['accounting_usable'] for year in assessed)
+    if symbol == 'SH600900':
+        assert all('missing_bonds' in year['reasons'] for year in assessed)
+    else:
+        assert all(year['primary_reason'] == 'financial_sector_excluded' for year in assessed)
+        assert all('missing_borrowings' in year['reasons'] for year in assessed)
+
+
+def test_frozen_real_utility_zero_candidate_is_not_zero_dividend_or_interest():
+    """The frozen utility row has real borrowings/repayments but no bond column.
+
+    Absent financing columns must stay gaps; the frozen dividend/interest
+    combined line is never used as cash interest and never turned into 0.
+    """
+    capture, rows = _frozen('SH600900')
+    row = rows[0]
+    assert row['RECEIVE_LOAN_CASH'] is not None and row['PAY_DEBT_CASH'] is not None
+    assert row['ISSUE_BOND'] is None
+    assert row.get('ASSIGN_DIVIDEND_PORFIT') is not None
+    result = assess_year(row, as_of=NOW, captured_at=datetime.fromisoformat(capture['captured_at']),
+                         expected_code='600900', checks=FULL_CHECKS)
+    assert result['fcfe_candidate'] is None and 'missing_bonds' in result['reasons']
+    # Even a checks object claiming cash interest cannot rescue a missing column.
+    assert result['values']['bonds'] is None
+
+
+def test_dilution_and_one_off_columns_have_no_mapping():
+    """Explicit absence: no diluted-share or one-off item enters the bridge.
+
+    Dilution is a per-share concept and one-off gains/losses are excluded from
+    the ordinary-equity FCFE bridge; neither is a mapped FCFE field, so adding
+    them cannot change the candidate or be silently used as a substitute.
+    """
+    assert 'DILUTED_EPS' not in FIELDS.values()
+    assert 'BASIC_EPS' not in FIELDS.values()
+    assert 'EXTRAORDINARY_GAIN' not in FIELDS.values()
+    base = assess()
+    for extra in ({'DILUTED_EPS': '1', 'BASIC_EPS': '9'},
+                  {'EXTRAORDINARY_GAIN': '999', 'NONRECURRING_ITEM': '-999'},
+                  {'DILUTED_NET_PROFIT': '999'}):
+        noisy = assess({**ROW, **extra})
+        assert noisy['fcfe_candidate'] == base['fcfe_candidate'] == '105'
+        assert noisy['reasons'] == base['reasons'] == []
+        assert set(noisy['values']) == set(FIELDS)
+
+
+def test_dilution_requires_verified_ordinary_equity_and_is_not_inferred():
+    """Dilution/ordinary-equity coverage is not inferred from rows or columns.
+
+    The bridge has no share count, so the ordinary-equity check must come from
+    trusted review, and a row that merely carries EPS/dilution columns cannot
+    self-certify it.
+    """
+    result = assess({**ROW, 'DILUTED_EPS': '1', 'BASIC_EPS': '1'},
+                    replace(CHECKS, ordinary_equity=False))
+    assert 'ordinary_equity_unverified' in result['reasons']
+    assert result['fcfe_candidate'] is None
+
+
+@pytest.mark.parametrize('field', ['ASSIGN_DIVIDEND_PORFIT', 'PAY_INTEREST_COMMISSION',
+                                   'INTEREST_EXPENSE'])
+def test_one_off_distribution_and_interest_columns_never_become_cash_interest(field):
+    """No profit-statement or combined distribution row substitutes for cash interest."""
+
+    result = assess({**ROW, field: '3'}, replace(CHECKS, cash_interest=None))
+    assert 'cash_interest_unverified' in result['reasons']
+    assert result['fcfe_candidate'] is None
+
+
+@pytest.mark.parametrize('checks,reason', [
+    (replace(CHECKS, consolidated_scope=False), 'consolidated_scope_unverified'),
+    (replace(CHECKS, material_changes_handled=False), 'material_changes_handled_unverified'),
+    (replace(CHECKS, units_verified=False), 'units_verified_unverified')])
+def test_scope_material_change_and_unit_gates_block_the_bridge(checks, reason):
+    """One-off / restructuring / unit review is a gate, not an automatic adjustment."""
+
+    result = assess(checks=checks)
+    assert reason in result['reasons']
+    assert result['fcfe_candidate'] is None
+    assert result['accounting_usable'] is False

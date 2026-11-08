@@ -75,6 +75,7 @@ from investment_agent.storage.models.simulation import (
     SimulationExperimentRecord,
     SimulationRequestRecord,
 )
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.pit import end_of_business_day_utc
 
 
@@ -684,8 +685,9 @@ async def availability(
             (
                 row
                 for row in financials
-                if row.available_from is not None
-                and end_of_business_day_utc(row.available_from) <= now
+                if (effective := effective_available_from(row.fields, row.available_from))
+                is not None
+                and end_of_business_day_utc(effective) <= now
             ),
             None,
         )

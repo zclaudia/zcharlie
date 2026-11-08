@@ -1,13 +1,13 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "freshness_policy": {
       "as_of": "2026-10-05T15:24:51.946766+00:00",
       "max_market_age_trading_days": 1,
@@ -19,8 +19,8 @@
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "002230",
       "name": "科大讯飞",
       "market": "SZ",
@@ -340,6 +340,7 @@
         }
       },
       "provider_conflicts": {},
+      "quality_signals": [],
       "company_profile": {
         "sector_type": "general",
         "sector_label": "通用",
@@ -354,6 +355,7 @@
       },
       "investment_score": 47.24,
       "business_score": 47.24,
+      "score_suppression_reason": null,
       "research_confidence_score": 87.4,
       "research_confidence_label": "高",
       "freshness": {
@@ -412,30 +414,32 @@
       "missing_factors": [
         "shareholder_return"
       ],
+      "unevaluated_factors": {},
+      "proxy_factors": [],
       "provider_unavailable_fields": [
         "dividend_yield"
       ],
       "key_metrics": {
         "market_cap": 89405411682.02,
+        "latest_price": 37.22,
         "pe": 103.3889,
         "pb": 4.5783,
-        "dividend_yield": null,
-        "roe": 0.045884,
-        "debt_ratio": 0.5572050000000001,
-        "revenue_growth_3y": 0.129302,
-        "net_profit_growth_3y": 0.143612,
-        "max_drawdown_1y": 0.414634,
-        "latest_price": 37.22,
         "ps": 3.1745,
+        "dividend_yield": null,
         "return_1y": -0.374454,
         "volatility_1y": 0.330186,
         "revenue": 27105390547.66,
         "net_profit": 839390861.36,
         "gross_margin": 0.423568,
         "net_margin": 0.031339,
+        "roe": 0.045884,
         "roe_stability": 0.858067,
+        "debt_ratio": 0.5572050000000001,
         "operating_cash_flow": 3208095271.78,
-        "free_cash_flow": 57450859.71000004
+        "free_cash_flow": 57450859.71000004,
+        "revenue_growth_3y": 0.129302,
+        "net_profit_growth_3y": 0.143612,
+        "max_drawdown_1y": 0.414634
       },
       "missing_fields": [
         "dividend_yield"

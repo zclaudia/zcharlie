@@ -11,6 +11,10 @@ from uuid import UUID
 
 from pydantic import Field, JsonValue, ValidationInfo, model_validator
 
+from investment_agent.candidates.portfolio_context import (
+    CandidatePortfolioContext,
+    CandidatePortfolioContextRequest,
+)
 from investment_agent.investor.common import Contract, ObjectRef, Text
 from investment_agent.portfolio.calculation_contracts import Fraction, Nonnegative
 from investment_agent.portfolio.suitability_contracts import (
@@ -445,6 +449,12 @@ class RankingRequest(AccountAssessmentRequest):
     action_policy: Literal["consider_buy"] = "consider_buy"
     source_policy: RankingSourcePolicy
     trade_assumptions: TradeAssumptionPolicy
+    # Additive and default-off: research-only rankings are unchanged when this
+    # stays None. It never becomes part of the account-fit freeze. Omitting a
+    # null keeps existing request hashes and replay comparisons byte-identical.
+    portfolio_context: (
+        CandidatePortfolioContextRequest | None
+    ) = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RankingEntry(Contract):
@@ -464,6 +474,11 @@ class RankingEntry(Contract):
     # P3 supplemental projection: display-only, never a sort key or score.
     rule_application_refs: Annotated[tuple[ObjectRef, ...], Field(max_length=64)] = ()
     research_urgency: Literal["critical_pending", "coverage_pending", "review_due"] | None = None
+    # Optional P1 portfolio context: display-only, never a cross-template
+    # strength comparison. Legacy snapshots omit it entirely.
+    portfolio_context: CandidatePortfolioContext | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def entry_identity(self) -> RankingEntry:
@@ -554,6 +569,10 @@ class RankingCursorClaims(Contract):
     ordinal: Annotated[int, Field(strict=True, ge=0)]
     bucket_filter: Literal["incomplete", "blocked", "ready", "limited"] | None = None
     financial_status_filter: Literal["pass", "warning", "blocked", "unknown"] | None = None
+    # Additive: cursors issued before this filter existed omit the field.
+    portfolio_context_filter: (
+        Literal["eligible", "unverified", "not_assessed", "constrained"] | None
+    ) = None
     filter_hash: Hash
 
     @model_validator(mode="after")
@@ -619,6 +638,7 @@ def canonical_source_manifest_hash(payload: Mapping[str, object]) -> tuple[str, 
 __all__ = [
     "BatchTradeAssumptions",
     "CandidateContextValue",
+    "CandidatePortfolioContextRequest",
     "CandidateSource",
     "CandidatePolicySnapshot",
     "CandidateLifecycleSnapshot",

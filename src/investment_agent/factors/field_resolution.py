@@ -41,7 +41,9 @@ each row gated by its own ``available_from``. Per registered financial field:
 Each resolved field carries a :class:`FieldResolution` (``provider``,
 ``verification``, rejected values, conflicts) that factors copy into
 ``FactorValue.inputs_ref``. ``derived`` registry fields are computed from
-resolved fields (``approx``).
+resolved fields (``approx``). A contributing row stored as a later
+restatement adds ``restated`` / ``restated_basis`` to that diagnostic; the
+boolean is never exposed as a numeric factor field.
 """
 
 from __future__ import annotations
@@ -169,6 +171,10 @@ class FieldResolution:
     approx: bool = False
     rejected: tuple[RejectedValue, ...] = ()
     conflicts: tuple[Mapping[str, Any], ...] = ()
+    restated: bool = False
+    """The chosen provider value is a later restatement (diagnostic, not a factor)."""
+    restated_basis: str | None = None
+    """Why the row is considered restated (collector metadata, see snapshots.eastmoney)."""
 
     def describe(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -178,6 +184,10 @@ class FieldResolution:
         }
         if self.approx:
             result["approx"] = True
+        if self.restated:
+            result["restated"] = True
+            if self.restated_basis:
+                result["restated_basis"] = self.restated_basis
         if self.rejected:
             result["rejected"] = [item.describe() for item in self.rejected]
         if self.conflicts:
@@ -196,6 +206,11 @@ class ProviderFields:
     """iFinD rows: ``{field: "verified" | "conflict"}`` (P1-A13 contract)."""
     recorded_conflicts: Mapping[str, Any] = field(default_factory=dict)
     """``fields.provider_conflicts`` written by a collector cross-check (P1-A11)."""
+    restated: bool = False
+    """A contributing row holds later-restated figures (PIT diagnostic, never a field)."""
+    restated_basis: str | None = None
+    """Collector's ``restated_basis`` of the latest restated row, e.g.
+    ``notice_after_baostock_pub_date`` or ``update_date_after_notice_date``."""
 
     def value(self, name: str) -> float | None:
         value = self.fields.get(name)
@@ -216,6 +231,14 @@ def _ifind_conflict_value(name: str, verifier: ProviderFields | None) -> float |
     return verifier.value(name)
 
 
+def _restated_metadata(candidate: ProviderFields | None) -> dict[str, Any]:
+    """Restatement diagnostic for a resolution; never a numeric factor value."""
+
+    if candidate is None or not candidate.restated:
+        return {}
+    return {"restated": True, "restated_basis": candidate.restated_basis}
+
+
 def _resolve_one(
     source: FieldSource, by_provider: Mapping[str, ProviderFields]
 ) -> tuple[float | None, FieldResolution]:
@@ -224,7 +247,9 @@ def _resolve_one(
     if verifier is not None and verifier.verification.get(name) == "verified":
         verified = verifier.value(name)
         if verified is not None:
-            return verified, FieldResolution(VERIFIER, "verified", verifier.ref)
+            return verified, FieldResolution(
+                VERIFIER, "verified", verifier.ref, **_restated_metadata(verifier)
+            )
 
     rejected: list[RejectedValue] = []
     chosen: tuple[str, float, ProviderFields] | None = None
@@ -248,7 +273,11 @@ def _resolve_one(
     if chosen is None:
         if ifind_conflict is not None:
             return ifind_conflict, FieldResolution(
-                VERIFIER, "conflict", verifier.ref if verifier else None, rejected=tuple(rejected)
+                VERIFIER,
+                "conflict",
+                verifier.ref if verifier else None,
+                rejected=tuple(rejected),
+                **_restated_metadata(verifier),
             )
         return None, FieldResolution(None, "unverified", rejected=tuple(rejected))
 
@@ -266,6 +295,7 @@ def _resolve_one(
             verifier.ref if verifier else None,
             rejected=tuple(rejected),
             conflicts=tuple(free_values),
+            **_restated_metadata(verifier),
         )
     approx = source.is_approx(provider) or candidate.is_derived(name)
     conflicts: list[dict[str, Any]] = []
@@ -296,6 +326,7 @@ def _resolve_one(
         approx=approx,
         rejected=tuple(rejected),
         conflicts=tuple(conflicts),
+        **_restated_metadata(candidate),
     )
 
 
@@ -339,7 +370,22 @@ def resolve_period_fields(
         if derived is None:
             continue
         fields[source.name] = derived
-        resolutions[source.name] = FieldResolution("derived", "unverified", str(formula), True)
+        restated_input = next(
+            (
+                resolution
+                for resolution in (resolutions.get(formula.left), resolutions.get(formula.right))
+                if resolution is not None and resolution.restated
+            ),
+            None,
+        )
+        resolutions[source.name] = FieldResolution(
+            "derived",
+            "unverified",
+            str(formula),
+            True,
+            restated=restated_input is not None,
+            restated_basis=restated_input.restated_basis if restated_input else None,
+        )
     return fields, resolutions
 
 
@@ -349,6 +395,8 @@ def _provider_fields(provider: str, rows: Sequence[FinancialSnapshot]) -> Provid
     fields: dict[str, float | None] = {}
     verification: dict[str, str] = {}
     conflicts: dict[str, Any] = {}
+    restated = False
+    restated_basis: str | None = None
     for row in sorted(rows, key=lambda item: (item.captured_at, item.version)):
         for name, value in factor_fields(provider, row.fields).items():
             if value is not None or name not in fields:
@@ -359,8 +407,17 @@ def _provider_fields(provider: str, rows: Sequence[FinancialSnapshot]) -> Provid
         stored_conflicts = row.fields.get("provider_conflicts")
         if isinstance(stored_conflicts, Mapping):
             conflicts.update({str(k): v for k, v in stored_conflicts.items()})
+        if row.fields.get("restated") is True:
+            # A PIT quality signal, not a factor value: keep it out of ``fields``
+            # (factor_fields already drops it) but carry it to FieldResolution.
+            restated = True
+            stored_basis = row.fields.get("restated_basis")
+            if isinstance(stored_basis, str) and stored_basis:
+                restated_basis = stored_basis
     ref = "+".join(f"financial_snapshot:{row.id}" for row in rows)
-    return ProviderFields(provider, fields, ref, verification, conflicts)
+    return ProviderFields(
+        provider, fields, ref, verification, conflicts, restated, restated_basis
+    )
 
 
 def provider_fields_from_rows(provider: str, rows: Sequence[FinancialSnapshot]) -> ProviderFields:

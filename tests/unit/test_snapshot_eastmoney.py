@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -13,7 +14,7 @@ from typer.testing import CliRunner
 
 from investment_agent.factors.catalog import DEFAULT_REGISTRY
 from investment_agent.factors.view_db import load_snapshot_view
-from investment_agent.providers.akshare_eastmoney import EastmoneyTransientError
+from investment_agent.providers.akshare_eastmoney import EastmoneyTransientError, PeriodSummary
 from investment_agent.research.worker import ResearchWorker
 from investment_agent.snapshots.collect import ArtifactWriter
 from investment_agent.snapshots.eastmoney import (
@@ -21,6 +22,7 @@ from investment_agent.snapshots.eastmoney import (
     akshare_backfill_payloads,
     collect_akshare_financial,
     plan_akshare_backfill,
+    summary_availability,
 )
 from investment_agent.snapshots.jobs import (
     FinancialSnapshotPayload,
@@ -138,9 +140,11 @@ async def test_summary_stores_scope_with_pit_availability_and_restatements(db_se
     assert set(rows) == {*ids.values(), *watch.values()}
 
     moutai = rows[ids["600519.SH"]]
-    assert moutai.availability == "actual"
-    assert moutai.available_from == date(2025, 4, 3)  # baostock pubDate, not 2026-04-17
-    assert moutai.fields["availability_basis"] == "baostock_pub_date"
+    # Restated values are the 2026-04-17 figures: they must not be visible at
+    # the 2025-04-03 original pubDate.
+    assert moutai.availability == "approx"
+    assert moutai.available_from == date(2026, 4, 17)
+    assert moutai.fields["availability_basis"] == "eastmoney_restatement_notice"
     assert moutai.fields["notice_date"] == "2026-04-17"
     assert moutai.fields["restated"] is True
     assert moutai.fields["restated_basis"] == "notice_after_baostock_pub_date"
@@ -250,6 +254,75 @@ async def test_backfill_payload_uses_survivorship_set_and_marks_rows(db_session,
     assert row.is_backfill is True
 
 
+def test_summary_availability_gates_only_restated_rows():
+    def summary(notice: date) -> PeriodSummary:
+        return PeriodSummary(
+            ticker="600519.SH",
+            report_period=FY2024,
+            notice_date=notice,
+            fields={},
+            source_values={},
+            endpoints=(),
+        )
+
+    baostock = SimpleNamespace(available_from=date(2025, 4, 3))
+    # No restatement: the original pubDate behavior is unchanged.
+    unchanged = summary_availability(summary(date(2025, 4, 3)), baostock)
+    assert (unchanged.available_from, unchanged.availability, unchanged.basis) == (
+        date(2025, 4, 3),
+        "actual",
+        "baostock_pub_date",
+    )
+    # No baostock row, timely notice: the old approx notice behavior.
+    timely = summary_availability(summary(date(2025, 4, 15)), None)
+    assert (timely.available_from, timely.availability, timely.basis) == (
+        date(2025, 4, 15),
+        "approx",
+        "eastmoney_notice_date",
+    )
+    # A notice after the original publication is a restatement: its values only
+    # become visible on the notice date.
+    restated = summary_availability(summary(date(2026, 4, 17)), baostock)
+    assert (restated.available_from, restated.availability, restated.basis) == (
+        date(2026, 4, 17),
+        "approx",
+        "eastmoney_restatement_notice",
+    )
+
+
+async def test_restated_summary_backfill_is_invisible_before_the_restatement(db_session, tmp_path):
+    del db_session
+    ids = await seed_universe(["600519.SH"])
+    await _seed_baostock(ids["600519.SH"], FY2024, date(2025, 4, 3), debt_ratio=0.19)
+    report = await _collect(_summary(backfill=True), tmp_path)
+    assert report.status == "success"
+    (row,) = await _akshare_rows("summary")
+    assert row.is_backfill is True
+    assert row.fields["restated"] is True
+    assert row.available_from == date(2026, 4, 17)
+
+    # The original 2025-04-03 publication date must not expose the restated value.
+    async with session_scope() as session:
+        before = await load_snapshot_view(session, "600519.SH", date(2025, 6, 30))
+    before_period = before.annual(FY2024.year)
+    assert before_period is not None
+    assert before_period.value("net_profit_parent") is None
+
+    # From the restatement notice on, the restated value is visible with its
+    # diagnostic metadata (not as a numeric factor field).
+    async with session_scope() as session:
+        after = await load_snapshot_view(session, "600519.SH", date(2026, 4, 17))
+    after_period = after.annual(FY2024.year)
+    assert after_period is not None
+    assert after_period.value("net_profit_parent") == pytest.approx(86_228_146_421.62)
+    resolution = after_period.source("net_profit_parent")
+    assert resolution is not None and resolution.provider == "akshare"
+    assert resolution.restated is True
+    assert resolution.restated_basis == "notice_after_baostock_pub_date"
+    assert resolution.describe()["restated"] is True
+    assert "restated" not in after_period.fields
+
+
 # --------------------------------------------------------------------------- #
 # Cash-flow statements
 # --------------------------------------------------------------------------- #
@@ -274,7 +347,9 @@ async def test_cash_flow_statements_store_requested_periods(db_session, tmp_path
     assert latest.fields["restated"] is False
     restated = rows[(ids["600519.SH"], H1_2025)]
     assert restated.fields["restated"] is True
-    assert restated.availability == "approx" and restated.available_from == date(2025, 8, 13)
+    # The original 2025-08-13 notice is superseded by UPDATE_DATE 2026-08-15.
+    assert restated.availability == "approx" and restated.available_from == date(2026, 8, 15)
+    assert restated.fields["availability_basis"] == "eastmoney_restatement_update_date"
     assert restated.fields["update_date"] == "2026-08-15"
     insurer = rows[(ids["601318.SH"], FY2025)]
     assert insurer.fields["capital_expenditure"] == 8_355_000_000
@@ -290,6 +365,114 @@ async def test_cash_flow_statements_store_requested_periods(db_session, tmp_path
     )
     assert client.calls == 1  # only 000333 (no statement) is retried
     assert again.to_metadata()["rows_stored"] == 0
+
+
+async def test_legacy_pre_fix_restated_row_is_gated_on_read(db_session):
+    """A row captured before the A7 fix: restated=True but available_from=pubDate."""
+
+    del db_session
+    ids = await seed_universe(["600519.SH"])
+    listing_id = ids["600519.SH"]
+    await _seed_baostock(listing_id, FY2024, date(2025, 4, 3), debt_ratio=0.19)
+    await _seed_baostock(listing_id, date(2023, 12, 31), date(2024, 4, 3), debt_ratio=0.2)
+
+    async with session_scope() as session:
+        repository = FinancialSnapshotRepository(session)
+        legacy = await repository.insert(
+            listing_id=listing_id,
+            report_period=FY2024,
+            period_kind="annual",
+            fields={
+                "part": "summary",
+                "net_profit_parent": 86_228_146_421.62,
+                "revenue_total": 174_144_069_958.25,
+                "notice_date": "2026-04-17",
+                "restated": True,
+                "restated_basis": "notice_after_baostock_pub_date",
+            },
+            provider="akshare",
+            captured_at=CAPTURED_AT,
+            availability="actual",
+            available_from=date(2025, 4, 3),  # pre-fix artifact: original pubDate
+            is_backfill=True,
+        )
+        clean = await repository.insert(
+            listing_id=listing_id,
+            report_period=date(2023, 12, 31),
+            period_kind="annual",
+            fields={
+                "part": "summary",
+                "net_profit_parent": 70_000_000_000.0,
+                "revenue_total": 150_000_000_000.0,
+                "notice_date": "2024-04-03",
+                "restated": False,
+            },
+            provider="akshare",
+            captured_at=CAPTURED_AT,
+            availability="actual",
+            available_from=date(2024, 4, 3),
+            is_backfill=True,
+        )
+        legacy_id, clean_id = legacy.id, clean.id
+
+    async with session_scope() as session:
+        repository = FinancialSnapshotRepository(session)
+        # Before the restatement notice the legacy row is skipped; the older
+        # non-restated row remains the latest available one.
+        before = await repository.latest_available(
+            listing_id, date(2025, 6, 30), provider="akshare"
+        )
+        assert before is not None and before.id == clean_id
+        after = await repository.latest_available(
+            listing_id, date(2026, 4, 17), provider="akshare"
+        )
+        assert after is not None and after.id == legacy_id
+        assert after.available_from == date(2025, 4, 3)  # stored row left untouched
+
+    async with session_scope() as session:
+        view = await load_snapshot_view(session, "600519.SH", date(2025, 6, 30))
+    before_period = view.annual(FY2024.year)
+    assert before_period is not None
+    assert before_period.value("net_profit_parent") is None
+
+    async with session_scope() as session:
+        view = await load_snapshot_view(session, "600519.SH", date(2026, 4, 17))
+    fy2024 = view.annual(FY2024.year)
+    assert fy2024 is not None
+    assert fy2024.value("net_profit_parent") == pytest.approx(86_228_146_421.62)
+    assert fy2024.source("net_profit_parent").restated is True
+    # The non-restated row keeps its original pubDate behavior.
+    fy2023 = view.annual(2023)
+    assert fy2023 is not None
+    assert fy2023.value("net_profit_parent") == pytest.approx(70_000_000_000.0)
+    assert fy2023.source("net_profit_parent").restated is False
+
+
+async def test_restated_cash_flow_backfill_is_invisible_before_update_date(db_session, tmp_path):
+    del db_session
+    ids = await seed_universe(["600519.SH"])
+    await _seed_baostock(ids["600519.SH"], H1_2025, date(2025, 8, 13))
+    report = await _collect(_cash_flow(backfill=True), tmp_path)
+    assert report.status == "success"
+    rows = {(row.listing_id, row.report_period): row for row in await _akshare_rows("cash_flow")}
+    restated = rows[(ids["600519.SH"], H1_2025)]
+    assert restated.fields["restated"] is True
+    assert restated.available_from == date(2026, 8, 15)
+
+    async with session_scope() as session:
+        before = await load_snapshot_view(session, "600519.SH", date(2025, 12, 31))
+    before_period = next(p for p in before.periods if p.report_period == H1_2025)
+    assert before_period.value("capital_expenditure") is None
+
+    async with session_scope() as session:
+        after = await load_snapshot_view(session, "600519.SH", date(2026, 8, 15))
+    after_period = next(p for p in after.periods if p.report_period == H1_2025)
+    assert after_period.value("capital_expenditure") == pytest.approx(1_595_995_809.23)
+    resolution = after_period.source("capital_expenditure")
+    assert resolution is not None and resolution.provider == "akshare"
+    assert resolution.restated is True
+    assert resolution.restated_basis == "update_date_after_notice_date"
+    assert resolution.describe()["restated"] is True
 
 
 async def test_three_consecutive_failures_stop_the_job_partial(db_session, tmp_path):

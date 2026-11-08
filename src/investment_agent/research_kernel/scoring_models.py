@@ -23,6 +23,18 @@ def metric(row: dict[str, Any], key: str) -> float | None:
 # ``missing_factors``; it is never imputed as a neutral 50 (scoring v1.3).
 FactorScores = dict[str, float | None]
 
+# Factors that a model exposes for transparency but deliberately does not
+# score: there is no evidence source for them in the current data contract.
+# They carry ``None`` in ``factor_scores`` and must not appear in ``weights``,
+# so they neither dilute score weight nor inflate ``factor_coverage``
+# (scoring v1.4).
+UNEVALUATED_FACTOR_REASONS: dict[str, str] = {
+    "team_quality": "no_evidence_source",
+    "financial_leverage_review": "no_evidence_source",
+    "capital_structure_review": "no_evidence_source",
+    "cycle_position": "no_calibrated_cycle_position_input",
+}
+
 
 def score_ratio(
     value: float | None, low: float, high: float, *, inverse: bool = False
@@ -44,22 +56,23 @@ def _positive_or_none(value: float | None) -> float | None:
 
 
 def valuation_level(pe: float | None, pb: float | None) -> str:
-    """Bucket valuation from PE/PB; non-positive multiples never count as cheap.
+    """Bucket valuation from PE/PB; both multiples must be positive.
 
     A non-positive PE (loss-making) or PB (negative equity) is treated as
-    unavailable, so it falls back to the conservative placeholder instead of
-    passing the ``<= 15`` / ``<= 2`` cheap thresholds.
+    unavailable. If either multiple is unavailable the bucket is ``unknown``:
+    scoring v1.4 never fills the missing leg with a 100/10 placeholder to force
+    a "expensive"/"fair"/"cheap" label. The absolute thresholds themselves are
+    still a known cross-industry limitation until industry percentiles exist
+    (see docs/product/scoring-v1.4-changes.md).
     """
 
     pe = _positive_or_none(pe)
     pb = _positive_or_none(pb)
-    if pe is None and pb is None:
+    if pe is None or pb is None:
         return "unknown"
-    pe_value = pe if pe is not None else 100.0
-    pb_value = pb if pb is not None else 10.0
-    if pe_value <= 15 and pb_value <= 2.0:
+    if pe <= 15 and pb <= 2.0:
         return "cheap"
-    if pe_value <= 30 and pb_value <= 5.0:
+    if pe <= 30 and pb <= 5.0:
         return "fair"
     return "expensive"
 
@@ -102,6 +115,28 @@ def factor_coverage(
         return 0.0, missing
     covered = sum(weight for key, weight in weights.items() if key not in missing)
     return round(covered / total_weight, 4), missing
+
+
+def unevaluated_factors(
+    factor_scores: FactorScores, weights: dict[str, int]
+) -> dict[str, str]:
+    """Factors intentionally left out of ``weights``, with the reason.
+
+    ``None`` values inside ``weights`` are missing data, not unevaluated
+    factors: they stay in ``missing_factors`` and reduce ``factor_coverage``.
+    """
+
+    return {
+        key: UNEVALUATED_FACTOR_REASONS.get(key, "not_weighted")
+        for key in sorted(factor_scores)
+        if key not in weights
+    }
+
+
+def proxy_factors(factor_scores: FactorScores) -> list[str]:
+    """Factors whose name states that a financial ratio stands in for the concept."""
+
+    return sorted(key for key in factor_scores if key.endswith("_proxy"))
 
 
 def ranked_strategies(classification_fit_scores: dict[str, float]) -> list[tuple[str, float]]:
@@ -177,7 +212,6 @@ def _insurance_scores(
         "roe_quality": 20,
         "profit_growth": 15,
         "drawdown_control": 10,
-        "financial_leverage_review": 10,
     }
     factors: FactorScores = {
         "valuation_level": _valuation_score(market),
@@ -187,7 +221,8 @@ def _insurance_scores(
         "drawdown_control": score_ratio(
             metric(market, "max_drawdown_1y"), 0.10, 0.40, inverse=True
         ),
-        "financial_leverage_review": 60.0,
+        # Kept visible as unevaluated; a fixed 60 would be a prior, not data.
+        "financial_leverage_review": None,
     }
     return factors, weights
 
@@ -201,7 +236,6 @@ def _banking_scores(
         "roe_quality": 20,
         "profit_growth": 15,
         "drawdown_control": 10,
-        "capital_structure_review": 10,
     }
     factors: FactorScores = {
         "valuation_level": _valuation_score(market),
@@ -211,7 +245,8 @@ def _banking_scores(
         "drawdown_control": score_ratio(
             metric(market, "max_drawdown_1y"), 0.10, 0.40, inverse=True
         ),
-        "capital_structure_review": 60.0,
+        # Kept visible as unevaluated; a fixed 60 would be a prior, not data.
+        "capital_structure_review": None,
     }
     return factors, weights
 

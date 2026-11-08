@@ -59,6 +59,7 @@ from investment_agent.storage.models.pit_snapshot import (
     MarketSnapshot,
 )
 from investment_agent.storage.repositories.dividend import DividendRepository
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.industry import IndustryRepository
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import (
@@ -167,7 +168,9 @@ async def _available_periods(
     ``as_of`` unless backfilled), but for all periods instead of the latest.
     The latest version is kept per ``(report period, provider, part)``:
     AkShare stores its period summaries and cash-flow statements as separate
-    rows (``fields.part``).
+    rows (``fields.part``). Pre-A7 restated rows whose stored
+    ``available_from`` is still the original ``pubDate`` are moved forward to
+    their restatement evidence in ``fields`` before selection.
     """
 
     known = FinancialSnapshot.captured_at < end_of_business_day_utc(as_of)
@@ -186,6 +189,10 @@ async def _available_periods(
     )
     latest: dict[tuple[date, str, str], FinancialSnapshot] = {}
     for row in (await session.execute(stmt)).scalars():
+        effective = effective_available_from(row.fields, row.available_from)
+        if effective is not None and effective > as_of:
+            # Legacy row: restated values stored under the original pubDate.
+            continue
         part = row.fields.get("part") if isinstance(row.fields, dict) else None
         latest[(row.report_period, row.provider, str(part or ""))] = row
     return [latest[key] for key in sorted(latest)]

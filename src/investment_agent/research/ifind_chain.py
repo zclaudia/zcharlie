@@ -961,6 +961,7 @@ def validate_explanation_policy(
 EXPLANATION_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的解释 Agent。只解释输入 JSON 中已经生成的事实与分数，不能补充外部事实，不能给出买入、卖出、仓位或收益承诺。
 每条 classification_rationale、positive_evidence、negative_evidence、risk_factors、data_quality_notes 都必须给出 supporting_fields。每个引用只能从下方 JSON Schema 的 supporting_fields.items.enum 白名单中逐字选择；该白名单根据本次输入 JSON 的实际字段生成，不得推测或拼接其他字段路径。
 值为 null 或列在 missing_fields 中的字段不能作为分类、正面、负面或风险论据，只能在 data_quality_notes 中引用。
+如果 investment_score 或 business_score 为 null（例如因子覆盖率低于门槛），不得把它们作为分类、正面、负面或风险论据；应在 data_quality_notes 或 open_questions 中引用 score_suppression_reason、factor_coverage、missing_factors 说明未发布原因。
 如果 needs_agent_review 为 true，workflow_conclusion 必须是包含“needs_review”的字符串，并优先解释 missing_fields、quality_flags、freshness 和 warnings。输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要省略字段：
 {output_schema}"""
 

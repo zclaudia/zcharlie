@@ -6,6 +6,7 @@ from investment_agent.cli.commands import admin as admin_cmd
 from investment_agent.cli.commands import api as api_cmd
 from investment_agent.cli.commands import bank_rollover as bank_rollover_cmd
 from investment_agent.cli.commands import config_docs as config_docs_cmd
+from investment_agent.cli.commands import forward_validation as forward_validation_cmd
 from investment_agent.cli.commands import materials as materials_cmd
 from investment_agent.cli.commands import mcp as mcp_cmd
 from investment_agent.cli.commands import methods as methods_cmd
@@ -33,6 +34,11 @@ app.add_typer(worker_cmd.app, name="worker", help="Persistent worker commands")
 app.add_typer(snapshot_cmd.app, name="snapshot", help="PIT snapshot collection commands")
 app.add_typer(rules_cmd.app, name="rules", help="Rule templates and instances")
 app.add_typer(screen_cmd.app, name="screen", help="Weekly template screen")
+app.add_typer(
+    forward_validation_cmd.app,
+    name="forward-validation",
+    help="Offline forward validation of scoring v1.4 and rule templates",
+)
 app.add_typer(verify_cmd.app, name="verify", help="iFinD on-demand verification (P1-A13)")
 app.add_typer(settings_cmd.app, name="settings", help="Runtime settings stored in the database")
 app.add_typer(

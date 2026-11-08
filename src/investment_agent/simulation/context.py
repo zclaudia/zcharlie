@@ -21,6 +21,7 @@ from investment_agent.simulation.contracts import (
 )
 from investment_agent.simulation.data import canonical_json, content_hash, validate_listing_scope
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.pit import end_of_business_day_utc
 
@@ -159,30 +160,29 @@ async def build_common_manifest(
                 .order_by(FinancialSnapshot.report_period.desc(), FinancialSnapshot.version.desc())
             )
         ).all()
-        financial = next(
-            (
-                r
-                for r in rows
-                if r.available_from is not None
-                and end_of_business_day_utc(r.available_from) <= cutoff
-            ),
-            None,
-        )
+        financial = None
+        financial_available_from: date | None = None
+        for row in rows:
+            effective = effective_available_from(row.fields, row.available_from)
+            if effective is not None and end_of_business_day_utc(effective) <= cutoff:
+                financial = row
+                financial_available_from = effective
+                break
         if financial is None:
             if require_financials:
                 missing.append(f"financial_missing:{listing_id}")
         else:
+            assert financial_available_from is not None
             value = {
                 "listing_id": listing_id,
                 "report_period": str(financial.report_period),
-                "available_from": str(financial.available_from),
+                "available_from": str(financial_available_from),
                 "fields": financial.fields,
                 "provider": financial.provider,
                 "version": financial.version,
                 "raw_ref": financial.raw_ref,
             }
-            assert financial.available_from is not None
-            published = end_of_business_day_utc(financial.available_from)
+            published = end_of_business_day_utc(financial_available_from)
             captured = as_utc(financial.captured_at)
             ref = EvidenceRef(
                 id=f"financial_snapshot:{financial.id}",

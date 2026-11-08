@@ -1,8 +1,8 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from investment_agent.api.auth import get_settings
 from investment_agent.api.routes import simulation as api
@@ -491,6 +491,45 @@ async def test_availability_all_required_proofs_ready(simulation_client):
     assert response.status_code == 200, response.text
     assert response.json()["ready"]
     assert response.json()["securities"][0]["missing"] == []
+
+
+async def test_availability_ignores_pre_fix_restated_financial_before_notice(
+    simulation_client,
+):
+    from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
+    from investment_agent.storage.repositories.financial_snapshot import (
+        FinancialSnapshotRepository,
+    )
+
+    client, listing_id = simulation_client
+    identity = create(client, listing_id, start_date="2026-11-06")["id"]
+    imported = client.post(
+        f"/api/simulations/{identity}/execution-evidence", headers=H, json=evidence_body(listing_id)
+    )
+    assert imported.status_code == 201
+    await add_ready_inputs(listing_id)
+    async with session_scope() as session:
+        # Keep only a pre-fix restated row: available_from is the original
+        # pubDate, but the restatement notice is after the readiness cutoff.
+        await session.execute(
+            delete(FinancialSnapshot).where(FinancialSnapshot.listing_id == listing_id)
+        )
+        await FinancialSnapshotRepository(session).insert(
+            listing_id=listing_id,
+            report_period=date(2025, 12, 31),
+            period_kind="annual",
+            fields={"revenue": "2", "restated": True, "notice_date": "2026-11-07"},
+            provider="fixture",
+            captured_at=NOW,
+            availability="actual",
+            available_from=date(2026, 4, 1),
+        )
+    response = client.get(
+        f"/api/simulations/{identity}/availability?trade_date=2026-11-06", headers=H
+    )
+    assert response.status_code == 200, response.text
+    assert not response.json()["ready"]
+    assert "financial_missing" in response.json()["securities"][0]["missing"]
 
 
 async def test_cost_payload_index_scope_mismatch_is_not_exported(simulation_client):

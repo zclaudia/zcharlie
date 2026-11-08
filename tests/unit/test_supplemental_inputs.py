@@ -64,6 +64,15 @@ async def test_freeze_reads_only_rows_captured_before_exact_datetime(db_session)
             provider="baostock", captured_at=datetime(2026, 11, 16, 4, 1, tzinfo=UTC),
             raw_ref="financial:late-backfill", is_backfill=True, version=2,
         ),
+        # Pre-fix artifact: restated figures under the original pubDate, while
+        # the restatement itself is later than the cutoff.
+        FinancialSnapshot(
+            listing_id=listing.id, report_period=date(2024, 12, 31), period_kind="annual",
+            available_from=date(2025, 3, 1), availability="actual",
+            fields={"roe": 0.2, "restated": True, "notice_date": "2026-12-01"},
+            provider="akshare", captured_at=datetime(2026, 11, 16, 3, 58, tzinfo=UTC),
+            raw_ref="financial:legacy-restated", is_backfill=True, version=1,
+        ),
     ])
     await db_session.flush()
 
@@ -77,6 +86,9 @@ async def test_freeze_reads_only_rows_captured_before_exact_datetime(db_session)
     assert market_rows[0]["content"]["close"] == "10.500000"
     assert len(financial_rows) == 1
     assert financial_rows[0]["content"]["fields"] == {"roe": 0.1}
+    assert all(
+        item["content"]["raw_ref"] != "financial:legacy-restated" for item in financial_rows
+    )
     assert subject.input_status == "ready"
 
 

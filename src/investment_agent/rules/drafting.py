@@ -25,10 +25,17 @@
    params exist and lie in ``param_ranges``, rationale cites only non-null
    input factors, no trading-instruction wording, full P1-C1 instance
    validation). On failure the LLM gets **one** retry with every issue fed
-   back; a second failure stores nothing;
+   back; a second failure stores nothing. **Numeric overrides fail closed**
+   (review 2026-11-07 P1-8): without :class:`CalibrationEvidence` accepted by
+   :func:`calibration_allows_overrides`, the validated output is normalized to
+   the template defaults before the instance is built. The proposals are kept
+   in ``draft_rationale.suppressed_overrides`` (audit only) and the stored
+   instance carries ``params={}``. A calibrated template version with accepted
+   evidence keeps its overrides;
 4. store a ``draft`` (scope ``candidate``, ``drafted_by = llm:<model>``,
-   ``draft_rationale`` = JSON of per-param reasons, overall rationale and
-   watch points) through :class:`~investment_agent.rules.store.RuleStore`.
+   ``draft_rationale`` = JSON of per-param reasons, ``override_policy``,
+   suppressed proposals, overall rationale and watch points) through
+   :class:`~investment_agent.rules.store.RuleStore`.
    Idempotent: an existing draft with the same content hash for the same
    listing / scope / template version is returned instead of a new version,
    and a retried run that already stored its draft reuses it without
@@ -76,9 +83,11 @@ from investment_agent.jobs.base import BaseJobHandler, ClaimedJob, JobContext, J
 from investment_agent.llm.openai_compatible import OpenAICompatibleClient
 from investment_agent.rules.draft_policy import (
     DRAFT_SCOPE,
+    CalibrationEvidence,
     DraftIssue,
     RuleDraftOutput,
     feedback_message,
+    override_policy,
     system_prompt,
     validate_draft,
 )
@@ -398,14 +407,23 @@ def build_draft_input(
     template: RuleTemplate,
     stock: StockContext,
     screen: Mapping[str, Any] | None,
+    evidence: CalibrationEvidence | None = None,
 ) -> dict[str, Any]:
-    """The user message (JSON) of a drafting call."""
+    """The user message (JSON) of a drafting call.
+
+    ``override_policy`` tells the model whether numeric overrides are allowed
+    at all (review 2026-11-07 P1-8). It is computed from the template and the
+    caller's calibration evidence, never from anything the model says or from
+    ``preference_notes``.
+    """
 
     notes = [note.strip()[:MAX_NOTE_CHARS] for note in payload.preference_notes if note.strip()]
     group = stock.industry.get("group")
+    policy = override_policy(template, evidence)
     message: dict[str, Any] = {
         "task": "rule_draft",
         "scope": payload.scope,
+        "override_policy": policy,
         "stock": {
             "ticker": payload.ticker,
             "as_of": payload.as_of.isoformat(),
@@ -462,6 +480,10 @@ class DraftResult:
     issues: list[list[str]] = field(default_factory=list)
     """Issues of each failed attempt (strings), in order."""
     stale_reason: str | None = None
+    override_policy: str | None = None
+    """``defaults_only`` / ``calibrated_overrides`` of the stored draft."""
+    suppressed_overrides: list[dict[str, Any]] = field(default_factory=list)
+    """Numeric proposals dropped by the defaults-only policy (audit only)."""
 
     @property
     def ok(self) -> bool:
@@ -486,6 +508,8 @@ class DraftResult:
             "llm_attempts": self.attempts,
             "model": self.model,
             "validation_issues": self.issues,
+            "override_policy": self.override_policy,
+            "suppressed_overrides": self.suppressed_overrides,
         }
 
 
@@ -614,6 +638,20 @@ def _rationale_json(record: RuleInstanceRecord) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+def _rationale_json_from(instance: RuleInstance) -> dict[str, Any]:
+    try:
+        data = json.loads(instance.draft_rationale or "{}")
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+async def _stored_rationale(record_id: int) -> dict[str, Any]:
+    async with session_scope() as session:
+        record = await session.get(RuleInstanceRecord, record_id)
+        return _rationale_json(record) if record is not None else {}
+
+
 async def _drafts_for(
     session: AsyncSession, symbol: str, template: RuleTemplate, scope: str = DRAFT_SCOPE
 ) -> list[RuleInstanceRecord]:
@@ -711,8 +749,14 @@ async def draft_rule(
     client_factory: ClientFactory | None = None,
     stock_loader: StockLoader | None = None,
     now: datetime | None = None,
+    evidence: CalibrationEvidence | None = None,
 ) -> DraftResult:
-    """Draft, validate (one retry with feedback) and store; see module doc."""
+    """Draft, validate (one retry with feedback) and store; see module doc.
+
+    ``evidence`` is the caller's calibration contract. It defaults to ``None``
+    (fail closed: no numeric overrides), because the repository has no
+    out-of-sample study to point at yet.
+    """
 
     if client_factory is None:
         if settings is None:
@@ -758,12 +802,15 @@ async def draft_rule(
         except LookupError as exc:
             raise RuleDraftInputError(str(exc)) from exc
         screen = await screen_context(session, payload)
-    draft_input = build_draft_input(payload=payload, template=template, stock=stock, screen=screen)
+    policy = override_policy(template, evidence)
+    draft_input = build_draft_input(
+        payload=payload, template=template, stock=stock, screen=screen, evidence=evidence
+    )
     base_message = json.dumps(draft_input, ensure_ascii=False, sort_keys=True)
-    system = system_prompt()
+    system = system_prompt(policy)
     stale_notes: list[str] = []
     storer = _storer_for(payload, rule_head, stale_notes=stale_notes)
-    result = DraftResult("unavailable", template.ref)
+    result = DraftResult("unavailable", template.ref, override_policy=policy)
     feedback: list[DraftIssue] = []
     for attempt in range(1, MAX_DRAFT_ATTEMPTS + 1):
         result.attempts = attempt
@@ -780,6 +827,7 @@ async def draft_rule(
                 symbol=payload.ticker,
                 drafted_by=drafted_by,
                 scope=payload.scope,
+                evidence=evidence,
                 extra={
                     "candidate_id": payload.candidate_id or None,
                     "as_of": payload.as_of.isoformat(),
@@ -792,6 +840,7 @@ async def draft_rule(
                 },
             )
         if instance is not None:
+            rationale = _rationale_json_from(instance)
             stored = await storer(instance, template, now=now)
             if stored is None:
                 # The request lost its currency before the store (plan 1.5
@@ -806,6 +855,11 @@ async def draft_rule(
                 )
                 return result
             record_id, reused = stored
+            if reused:
+                # The stored row (not this attempt's proposal) is the draft.
+                rationale = await _stored_rationale(record_id) or rationale
+            result.override_policy = rationale.get("override_policy", policy)
+            result.suppressed_overrides = list(rationale.get("suppressed_overrides") or [])
             result.rule_instance_id = record_id
             result.status = "reused" if reused else "drafted"
             log.info(
@@ -815,6 +869,8 @@ async def draft_rule(
                 rule_instance_id=record_id,
                 reused=reused,
                 attempts=attempt,
+                override_policy=result.override_policy,
+                suppressed_overrides=[item.get("param") for item in result.suppressed_overrides],
             )
             return result
         result.issues.append([str(issue) for issue in issues])
@@ -945,9 +1001,11 @@ class RuleDraftHandler(BaseJobHandler):
         client_factory: ClientFactory | None = None,
         stock_loader: StockLoader | None = None,
         snapshot_runtime: SnapshotRuntime | None = None,
+        evidence: CalibrationEvidence | None = None,
     ) -> None:
         self.settings = settings
         self.client_factory = client_factory
+        self.evidence = evidence
         self.stock_loader = stock_loader
         self.snapshot_runtime = snapshot_runtime
 
@@ -1007,6 +1065,7 @@ class RuleDraftHandler(BaseJobHandler):
                 run_id=job.run_id,
                 client_factory=self.client_factory,
                 stock_loader=self.stock_loader,
+                evidence=self.evidence,
             )
 
         result = await ctx.run_with_heartbeat(job.lease, work)

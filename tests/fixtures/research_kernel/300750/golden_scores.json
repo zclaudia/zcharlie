@@ -1,13 +1,13 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "freshness_policy": {
       "as_of": "2026-10-05T15:24:05.541081+00:00",
       "max_market_age_trading_days": 1,
@@ -19,8 +19,8 @@
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "300750",
       "name": "宁德时代",
       "market": "SZ",
@@ -340,6 +340,7 @@
         }
       },
       "provider_conflicts": {},
+      "quality_signals": [],
       "company_profile": {
         "sector_type": "general",
         "sector_label": "通用",
@@ -354,6 +355,7 @@
       },
       "investment_score": 69.5,
       "business_score": 69.5,
+      "score_suppression_reason": null,
       "research_confidence_score": 87.4,
       "research_confidence_label": "高",
       "freshness": {
@@ -412,30 +414,32 @@
       "missing_factors": [
         "shareholder_return"
       ],
+      "unevaluated_factors": {},
+      "proxy_factors": [],
       "provider_unavailable_fields": [
         "dividend_yield"
       ],
       "key_metrics": {
         "market_cap": 1347038656091.46,
+        "latest_price": 291.11,
         "pe": 18.0366,
         "pb": 3.9411,
-        "dividend_yield": null,
-        "roe": 0.24724900000000002,
-        "debt_ratio": 0.6193930000000001,
-        "revenue_growth_3y": 0.088429,
-        "net_profit_growth_3y": 0.329428,
-        "max_drawdown_1y": 0.37425,
-        "latest_price": 291.11,
         "ps": 3.1356,
+        "dividend_yield": null,
         "return_1y": -0.276026,
         "volatility_1y": 0.359683,
         "revenue": 423701834000.0,
         "net_profit": 72201282000.0,
         "gross_margin": 0.262728,
         "net_margin": 0.18122699999999997,
+        "roe": 0.24724900000000002,
         "roe_stability": 0.967825,
+        "debt_ratio": 0.6193930000000001,
         "operating_cash_flow": 133219982000.0,
-        "free_cash_flow": 90875424000.0
+        "free_cash_flow": 90875424000.0,
+        "revenue_growth_3y": 0.088429,
+        "net_profit_growth_3y": 0.329428,
+        "max_drawdown_1y": 0.37425
       },
       "missing_fields": [
         "dividend_yield"

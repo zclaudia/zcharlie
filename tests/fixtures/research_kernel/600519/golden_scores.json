@@ -1,13 +1,13 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
     "data_sources": [
       "ifind-proxy"
     ],
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "freshness_policy": {
       "as_of": "2026-10-05T15:22:50.891048+00:00",
       "max_market_age_trading_days": 1,
@@ -19,8 +19,8 @@
   "items": [
     {
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "600519",
       "name": "贵州茅台",
       "market": "SH",
@@ -340,6 +340,7 @@
         }
       },
       "provider_conflicts": {},
+      "quality_signals": [],
       "company_profile": {
         "sector_type": "general",
         "sector_label": "通用",
@@ -354,6 +355,7 @@
       },
       "investment_score": 76.88,
       "business_score": 76.88,
+      "score_suppression_reason": null,
       "research_confidence_score": 87.4,
       "research_confidence_label": "高",
       "freshness": {
@@ -412,30 +414,32 @@
       "missing_factors": [
         "shareholder_return"
       ],
+      "unevaluated_factors": {},
+      "proxy_factors": [],
       "provider_unavailable_fields": [
         "dividend_yield"
       ],
       "key_metrics": {
         "market_cap": 1573377704650.6199,
+        "latest_price": 1258.62,
         "pe": 19.1687,
         "pb": 6.4427,
-        "dividend_yield": null,
-        "roe": 0.34462000000000004,
-        "debt_ratio": 0.16415400000000002,
-        "revenue_growth_3y": 0.104902,
-        "net_profit_growth_3y": 0.094901,
-        "max_drawdown_1y": 0.230684,
-        "latest_price": 1258.62,
         "ps": 9.1607,
+        "dividend_yield": null,
         "return_1y": -0.088003,
         "volatility_1y": 0.223896,
         "revenue": 172054171890.91,
         "net_profit": 82320067101.68,
         "gross_margin": 0.9117959999999999,
         "net_margin": 0.505279,
+        "roe": 0.34462000000000004,
         "roe_stability": 0.93741,
+        "debt_ratio": 0.16415400000000002,
         "operating_cash_flow": 61522204989.35,
-        "free_cash_flow": 58394610072.94
+        "free_cash_flow": 58394610072.94,
+        "revenue_growth_3y": 0.104902,
+        "net_profit_growth_3y": 0.094901,
+        "max_drawdown_1y": 0.230684
       },
       "missing_fields": [
         "dividend_yield"

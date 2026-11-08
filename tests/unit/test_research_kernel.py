@@ -61,7 +61,7 @@ def test_in_process_kernel_writes_all_artifacts(tmp_path: Path):
         FinancialDataItem.provenance_fields
     )
     assert context["key_metrics"] == metrics
-    assert score["schema_version"] == context["schema_version"] == "v2.2"
+    assert score["schema_version"] == context["schema_version"] == "v2.3"
     for key in MarketDataItem.provenance_fields:
         assert metrics[key] == (pool["market_cap"] if key == "market_cap" else market[key])
     for key in FinancialDataItem.provenance_fields:

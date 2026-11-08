@@ -21,13 +21,16 @@ watchlist A-shares (the summaries cost nothing extra); ``watchlist`` = the
 watchlist only. Backfill runs (``backfill=True``) use every member of the
 universe between the report period and ``as_of`` (survivorship set).
 
-Point in time (decision D2): ``available_from`` = the baostock ``pubDate``
-of the same listing and period when stored (``availability="actual"``),
-else the Eastmoney notice date (``approx``; for the summaries this is the
-latest notice touching the row, i.e. conservative). Eastmoney serves
-restated figures, so rows carry ``restated``: cash-flow rows when
-``UPDATE_DATE > NOTICE_DATE``; summary rows when the notice is later than the
-baostock pubDate (or, without one, than the statutory deadline).
+Point in time (decision D2): for a non-restated row ``available_from`` = the
+baostock ``pubDate`` of the same listing and period when stored
+(``availability="actual"``), else the Eastmoney notice date (``approx``).
+Eastmoney serves restated figures, so rows carry ``restated``: cash-flow rows
+when ``UPDATE_DATE > NOTICE_DATE``; summary rows when the notice is later than
+the baostock pubDate (or, without one, than the statutory deadline). A
+restated row's ``available_from`` is the restatement's visible date - the
+summary's latest notice, the statement's ``UPDATE_DATE`` - so a historical
+``as_of`` before that date (including a backfill) cannot see the restated
+values at the original disclosure date.
 
 Versioning: every capture whose content differs from the latest stored
 AkShare row of the same period and part is inserted as a new version;
@@ -342,8 +345,27 @@ class Availability:
 
 
 def availability_for(
-    baostock_row: FinancialSnapshot | None, notice_date: date | None
+    baostock_row: FinancialSnapshot | None,
+    notice_date: date | None,
+    *,
+    restated_from: date | None = None,
+    restated_basis: str = "eastmoney_restatement",
 ) -> Availability:
+    """When a row's values became usable.
+
+    A non-restated row is public at the baostock ``pubDate`` when stored, else
+    at the Eastmoney notice date. Eastmoney values are always the latest
+    restated figures, so a restated row must **not** become visible at the
+    original disclosure: its ``available_from`` is the restatement's own
+    visible date (``restated_from``: the summary's latest notice, the
+    statement's ``UPDATE_DATE``) and never earlier than ``pubDate``.
+    """
+
+    if restated_from is not None:
+        visible = restated_from
+        if baostock_row is not None and baostock_row.available_from is not None:
+            visible = max(visible, baostock_row.available_from)
+        return Availability(visible, "approx", restated_basis)
     if baostock_row is not None and baostock_row.available_from is not None:
         return Availability(baostock_row.available_from, "actual", "baostock_pub_date")
     if notice_date is not None:
@@ -362,6 +384,25 @@ def summary_restated(
     if baostock_row is not None and baostock_row.available_from is not None:
         return notice > baostock_row.available_from, "notice_after_baostock_pub_date"
     return notice > statutory_deadline(summary.report_period), "notice_after_statutory_deadline"
+
+
+def summary_availability(
+    summary: PeriodSummary, baostock_row: FinancialSnapshot | None
+) -> Availability:
+    """Summary availability with the restatement gate applied.
+
+    The summaries' 公告日期 is the latest notice touching the row, so for a
+    restated row it is exactly the date on which the restated figures became
+    public. Non-restated rows keep the old baostock-pubDate / notice behavior.
+    """
+
+    restated, _ = summary_restated(summary, baostock_row)
+    return availability_for(
+        baostock_row,
+        summary.notice_date,
+        restated_from=summary.notice_date if restated else None,
+        restated_basis="eastmoney_restatement_notice",
+    )
 
 
 def summary_fields(
@@ -549,7 +590,7 @@ async def _collect_summary(
     for ticker, summary in sorted(in_scope.items()):
         listing_id = listing_by_ticker[ticker]
         baostock_row = baostock_rows.get((listing_id, period, ""))
-        availability = availability_for(baostock_row, summary.notice_date)
+        availability = summary_availability(summary, baostock_row)
         conflicts = cross_check(ticker, summary.fields, baostock_row, check)
         fields = summary_fields(
             summary, baostock_row=baostock_row, availability=availability, conflicts=conflicts
@@ -645,7 +686,8 @@ async def _collect_summary(
         "provider_conflict": check.to_metadata(),
         "availability": (
             "actual: available_from = baostock pubDate when stored; "
-            "approx: Eastmoney 公告日期 (latest notice touching the row)"
+            "approx: Eastmoney 公告日期 (latest notice touching the row); "
+            "restated rows: latest notice (the restatement's visible date)"
         ),
     }
     if check.conflicts:
@@ -733,7 +775,10 @@ async def _collect_cash_flow(
         for period in found:
             item = statement.periods[period]
             availability = availability_for(
-                baostock_rows.get((listing_id, period, "")), item.notice_date
+                baostock_rows.get((listing_id, period, "")),
+                item.notice_date,
+                restated_from=item.update_date if item.restated else None,
+                restated_basis="eastmoney_restatement_update_date",
             )
             fields = cash_flow_fields(item, availability)
             if unchanged(
@@ -781,7 +826,8 @@ async def _collect_cash_flow(
         "aborted": report.stop_error,
         "availability": (
             "actual: available_from = baostock pubDate when stored; "
-            "approx: Eastmoney NOTICE_DATE (original disclosure)"
+            "approx: Eastmoney NOTICE_DATE (original disclosure); "
+            "restated rows: UPDATE_DATE (the restatement's visible date)"
         ),
     }
     return report

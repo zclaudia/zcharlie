@@ -9,6 +9,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from investment_agent.candidates.portfolio_context import (
+    CandidatePortfolioContext,
+    ContextState,
+    context_order,
+)
 from investment_agent.candidates.ranking_contracts import (
     OpenCandidateSource,
     RankingCursorClaims,
@@ -25,9 +30,11 @@ ResearchUrgency = Literal["critical_pending", "coverage_pending", "review_due"]
 # ready/limited are new buckets; existing snapshots only ever hold the two
 # legacy values, so sweeping them first never reorders earlier snapshots.
 BUCKET_ORDER: tuple[Bucket, ...] = ("ready", "limited", "incomplete", "blocked")
+CONTEXT_STATES = ("eligible", "unverified", "not_assessed", "constrained")
 FILTERS: dict[str, set[str]] = {
     "bucket": set(BUCKET_ORDER),
     "financial_status": {"pass", "warning", "blocked", "unknown"},
+    "portfolio_context": set(CONTEXT_STATES),
 }
 
 
@@ -64,15 +71,17 @@ def _ref_key(ref: ObjectRef) -> tuple[str, str, int, str]:
 def _filter_hash(
     bucket_filter: Bucket | None,
     financial_status_filter: FinancialStatus | None,
+    portfolio_context_filter: ContextState | None,
 ) -> str:
-    return hashlib.sha256(
-        _canonical(
-            {
-                "bucket": bucket_filter,
-                "financial_status": financial_status_filter,
-            }
-        )
-    ).hexdigest()
+    payload: dict[str, object] = {
+        "bucket": bucket_filter,
+        "financial_status": financial_status_filter,
+    }
+    # Keep the hash of the pre-existing filters byte-identical so cursors
+    # issued before the optional portfolio filter still validate.
+    if portfolio_context_filter is not None:
+        payload["portfolio_context"] = portfolio_context_filter
+    return hashlib.sha256(_canonical(payload)).hexdigest()
 
 
 def _manual_source(member: object) -> tuple[bool, bool, object | None]:
@@ -124,6 +133,7 @@ def build_ranking_entries(
     action_unknown_reasons: Mapping[int, str] | None = None,
     failed_items: Mapping[int, str] | None = None,
     rule_projections: Mapping[int, tuple[tuple[ObjectRef, ...], ResearchUrgency | None]] | None = None,
+    portfolio_contexts: Mapping[int, CandidatePortfolioContext] | None = None,
 ) -> tuple[RankingEntry, ...]:
     """Create one finite account-ranking entry for each processed member.
 
@@ -132,6 +142,8 @@ def build_ranking_entries(
     not create a fit assessment or execution failure. ``rule_projections``
     carries the optional P3 supplemental projection per listing; with the
     switches off it stays empty and rows keep their legacy shape.
+    ``portfolio_contexts`` is the optional P1 portfolio annotation; ``None``
+    keeps the research-only ordering and payload exactly as before.
     """
 
     if ranking_ref.kind != "candidate_ranking" or ranking_ref.revision != 1:
@@ -167,6 +179,7 @@ def build_ranking_entries(
             bucket = assessment.ranking_bucket
         projection = projections.get(listing_id, ((), None))
         label = labels.get(listing_id)
+        context = portfolio_contexts.get(listing_id) if portfolio_contexts is not None else None
         entries.append(
             RankingEntry(
                 ranking_ref=ranking_ref,
@@ -184,14 +197,23 @@ def build_ranking_entries(
                 execution_error=execution_error,
                 rule_application_refs=projection[0],
                 research_urgency=projection[1],
+                portfolio_context=context,
             )
         )
-    return order_ranking_entries(manifest, tuple(entries))
+    return order_ranking_entries(
+        manifest, tuple(entries), portfolio_contexts=portfolio_contexts
+    )
+
+
+def _context_partition_order(contexts: Mapping[int, CandidatePortfolioContext]) -> dict[int, int]:
+    return {listing_id: context_order(context.state) for listing_id, context in contexts.items()}
 
 
 def order_ranking_entries(
     manifest: SourceManifest,
     entries: Sequence[RankingEntry],
+    *,
+    portfolio_contexts: Mapping[int, CandidatePortfolioContext] | None = None,
 ) -> tuple[RankingEntry, ...]:
     """Apply the frozen v1 bucket and template round-robin policy.
 
@@ -199,6 +221,13 @@ def order_ranking_entries(
     is preserved.  Manual and otherwise-open candidates have explicit stable
     queues after template queues; no strength values are compared across
     templates.
+
+    When an explicit portfolio context is supplied, every queue is partitioned
+    by a stable *constraint visibility* key (eligible / unverified /
+    not-assessed / constrained).  The partition never uses strength, return or
+    any cross-template score; it only moves candidates whose known constraints
+    are already exceeded after those without a known block.  Without a context
+    the ordering is byte-for-byte the research-only policy.
     """
 
     source_by_listing = {int(member.listing_ref.id): member for member in manifest.members}
@@ -210,6 +239,11 @@ def order_ranking_entries(
         for listing_id, entry in entry_by_listing.items()
     ):
         raise RankingOrderError("ranking entry listing identity differs from its source member")
+    if portfolio_contexts is not None and set(portfolio_contexts) != set(source_by_listing):
+        raise RankingOrderError("portfolio context must cover every frozen source member")
+    partition = (
+        _context_partition_order(portfolio_contexts) if portfolio_contexts is not None else None
+    )
 
     selected_run_by_template = {
         (run.template_id, run.template_version): _ref_key(run.run_ref)
@@ -238,7 +272,14 @@ def order_ranking_entries(
                 ]
                 if matches:
                     ranked.append((min(source.rank for source in matches), listing_id))
-            queues[template] = [listing_id for _, listing_id in sorted(ranked)]
+            ordered = sorted(ranked, key=lambda item: (item[0], item[1]))
+            if partition is not None:
+                # Stable within the template: original rank, then the
+                # constraint-visibility partition.  Never a strength compare.
+                ordered = sorted(
+                    ordered, key=lambda item: (partition[item[1]], item[0], item[1])
+                )
+            queues[template] = [listing_id for _, listing_id in ordered]
 
         # Each template gets its next unseen listing on every turn. A shared
         # hit must not consume another template's turn without emitting one.
@@ -269,15 +310,24 @@ def order_ranking_entries(
             has_open, manual, opened_at = _manual_source(source_by_listing[listing_id])
             if has_open and opened_at is not None:
                 (manual_only if manual else open_only).append((opened_at, listing_id))
-        for _, listing_id in sorted(open_only, key=lambda item: (item[0], item[1])):
+
+        def _tail_key(item: tuple[object, int]) -> tuple[int, object, int]:
+            opened_at, listing_id = item
+            rank = partition[listing_id] if partition is not None else 0
+            return (rank, opened_at, listing_id)
+
+        for _, listing_id in sorted(open_only, key=_tail_key):
             emitted.add(listing_id)
             result.append(entry_by_listing[listing_id])
-        for _, listing_id in sorted(manual_only, key=lambda item: (item[0], item[1])):
+        for _, listing_id in sorted(manual_only, key=_tail_key):
             emitted.add(listing_id)
             result.append(entry_by_listing[listing_id])
 
         # Defensive final queue: only unusual source kinds can reach here.
-        for listing_id in sorted(bucket_ids - emitted):
+        final_ids = sorted(bucket_ids - emitted)
+        if partition is not None:
+            final_ids = sorted(final_ids, key=lambda listing_id: (partition[listing_id], listing_id))
+        for listing_id in final_ids:
             result.append(entry_by_listing[listing_id])
 
     return tuple(
@@ -291,6 +341,7 @@ def make_ranking_cursor(
     ordinal: int,
     bucket_filter: Bucket | None = None,
     financial_status_filter: FinancialStatus | None = None,
+    portfolio_context_filter: ContextState | None = None,
 ) -> str:
     if not ordinal >= 0:
         raise ValueError("ordinal must be non-negative")
@@ -299,7 +350,8 @@ def make_ranking_cursor(
         ordinal=ordinal,
         bucket_filter=bucket_filter,
         financial_status_filter=financial_status_filter,
-        filter_hash=_filter_hash(bucket_filter, financial_status_filter),
+        portfolio_context_filter=portfolio_context_filter,
+        filter_hash=_filter_hash(bucket_filter, financial_status_filter, portfolio_context_filter),
     )
     raw = _canonical(claims.model_dump(mode="json"))
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
@@ -311,6 +363,7 @@ def parse_ranking_cursor(
     ranking_ref: ObjectRef,
     bucket_filter: Bucket | None = None,
     financial_status_filter: FinancialStatus | None = None,
+    portfolio_context_filter: ContextState | None = None,
 ) -> RankingCursorClaims:
     try:
         padding = "=" * (-len(cursor) % 4)
@@ -323,10 +376,18 @@ def parse_ranking_cursor(
     if (
         claims.bucket_filter != bucket_filter
         or claims.financial_status_filter != financial_status_filter
-        or claims.filter_hash != _filter_hash(bucket_filter, financial_status_filter)
+        or claims.portfolio_context_filter != portfolio_context_filter
+        or claims.filter_hash
+        != _filter_hash(bucket_filter, financial_status_filter, portfolio_context_filter)
     ):
         raise RankingCursorError("ranking cursor filters changed")
     return claims
+
+
+def _entry_context_state(entry: RankingEntry) -> ContextState:
+    # Rows written before the optional context existed carry no state; treat
+    # them as "not assessed" rather than inventing a pass.
+    return entry.portfolio_context.state if entry.portfolio_context is not None else "not_assessed"
 
 
 def page_ranking_entries(
@@ -336,6 +397,7 @@ def page_ranking_entries(
     limit: int = 50,
     bucket_filter: Bucket | None = None,
     financial_status_filter: FinancialStatus | None = None,
+    portfolio_context_filter: ContextState | None = None,
     cursor: str | None = None,
 ) -> RankingPage:
     if not 1 <= limit <= 100:
@@ -347,6 +409,11 @@ def page_ranking_entries(
         and financial_status_filter not in FILTERS["financial_status"]
     ):
         raise ValueError("unknown financial status filter")
+    if (
+        portfolio_context_filter is not None
+        and portfolio_context_filter not in FILTERS["portfolio_context"]
+    ):
+        raise ValueError("unknown portfolio context filter")
     previous_ordinal = -1
     if cursor is not None:
         previous_ordinal = parse_ranking_cursor(
@@ -354,6 +421,7 @@ def page_ranking_entries(
             ranking_ref=ranking_ref,
             bucket_filter=bucket_filter,
             financial_status_filter=financial_status_filter,
+            portfolio_context_filter=portfolio_context_filter,
         ).ordinal
     snapshot_filtered = [
         entry
@@ -361,6 +429,10 @@ def page_ranking_entries(
         if entry.ranking_ref == ranking_ref
         and (bucket_filter is None or entry.ranking_bucket == bucket_filter)
         and (financial_status_filter is None or entry.financial_status == financial_status_filter)
+        and (
+            portfolio_context_filter is None
+            or _entry_context_state(entry) == portfolio_context_filter
+        )
     ]
     snapshot_filtered.sort(key=lambda entry: entry.ordinal)
     after_cursor = [entry for entry in snapshot_filtered if entry.ordinal > previous_ordinal]
@@ -372,12 +444,14 @@ def page_ranking_entries(
             ordinal=page_entries[-1].ordinal,
             bucket_filter=bucket_filter,
             financial_status_filter=financial_status_filter,
+            portfolio_context_filter=portfolio_context_filter,
         )
     return RankingPage(entries=page_entries, count=len(snapshot_filtered), next_cursor=next_cursor)
 
 
 __all__ = [
     "BUCKET_ORDER",
+    "CONTEXT_STATES",
     "RankingCursorError",
     "RankingOrderError",
     "RankingPage",

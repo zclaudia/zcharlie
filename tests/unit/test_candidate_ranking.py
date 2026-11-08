@@ -418,3 +418,224 @@ def test_screen_row_snapshot_hash_is_verified_when_raw_row_is_present() -> None:
         ScreenCandidateSource.model_validate(
             {**source.model_dump(mode="python"), "row_snapshot": {"id": 301, "ticker": "600519.SH"}}
         )
+
+
+# --- optional P1 portfolio context ----------------------------------------
+
+
+def _portfolio_context(*, state: str):
+    from investment_agent.candidates.portfolio_context import (
+        BudgetCheck,
+        CandidateBudgetContext,
+        CandidatePortfolioContext,
+        LiquidityAssessment,
+    )
+    from investment_agent.investor.common import Quantity
+
+    def quantity(value):
+        return Quantity(value=value, unit="CNY", currency="CNY")
+
+    if state == "constrained":
+        liquidity = LiquidityAssessment(
+            state="insufficient",
+            observed_amount_days=20,
+            average_amount_20d=quantity(__import__("decimal").Decimal("10")),
+            free_float_market_cap=Quantity(
+                value=None, unit="CNY", currency="CNY", unknown_reason="free_float_shares_missing"
+            ),
+            reason_codes=("average_amount_below_threshold",),
+        )
+    elif state == "unverified":
+        liquidity = LiquidityAssessment(
+            state="missing",
+            observed_amount_days=0,
+            average_amount_20d=Quantity(
+                value=None, unit="CNY", currency="CNY", unknown_reason="amount_history_incomplete"
+            ),
+            free_float_market_cap=Quantity(
+                value=None, unit="CNY", currency="CNY", unknown_reason="free_float_shares_missing"
+            ),
+            reason_codes=("amount_history_incomplete",),
+        )
+    else:
+        liquidity = LiquidityAssessment(
+            state="pass",
+            observed_amount_days=20,
+            average_amount_20d=quantity(__import__("decimal").Decimal("1000000")),
+            free_float_market_cap=Quantity(
+                value=None, unit="CNY", currency="CNY", unknown_reason="free_float_shares_missing"
+            ),
+        )
+    budget = CandidateBudgetContext(
+        mandate_ref=ObjectRef(kind="mandate", id=uuid4(), revision=1),
+        constraints_configured=True,
+        single_name=BudgetCheck(dimension="single_name", state="not_configured"),
+        sector=BudgetCheck(dimension="sector", state="not_configured"),
+        cash=BudgetCheck(
+            dimension="cash",
+            state="not_applicable",
+            reason_codes=("candidate_is_not_a_trade", "applies_to_account_scenario"),
+        ),
+    )
+    return CandidatePortfolioContext(budget=budget, liquidity=liquidity, state=state)
+
+
+def test_duplicate_hits_still_emit_once_with_portfolio_context() -> None:
+    manifest = _manifest(include_manual=False)
+    ranking_ref = ObjectRef(kind="candidate_ranking", id=uuid4(), revision=1)
+    contexts = {
+        int(member.listing_ref.id): _portfolio_context(state="eligible")
+        for member in manifest.members
+    }
+    entries = build_ranking_entries(
+        manifest,
+        ranking_ref=ranking_ref,
+        resolved_actions={101: "open", 102: "open", 103: "open"},
+        assessments={},
+        portfolio_contexts=contexts,
+    )
+    ids = [int(entry.listing_ref.id) for entry in entries]
+    assert ids == [101, 102, 103]
+    assert len(ids) == len(set(ids))
+    assert len(entries[1].source_refs) == 2
+    assert all(entry.portfolio_context is not None for entry in entries)
+
+
+def test_context_partition_moves_only_constrained_entries_and_keeps_rank() -> None:
+    manifest = _manifest(include_manual=False)
+    ranking_ref = ObjectRef(kind="candidate_ranking", id=uuid4(), revision=1)
+    contexts = {
+        101: _portfolio_context(state="constrained"),
+        102: _portfolio_context(state="eligible"),
+        103: _portfolio_context(state="eligible"),
+    }
+    entries = build_ranking_entries(
+        manifest,
+        ranking_ref=ranking_ref,
+        resolved_actions={101: "open", 102: "open", 103: "open"},
+        assessments={},
+        portfolio_contexts=contexts,
+    )
+    # 101 is ranked first by template rank but is moved after clear
+    # candidates; the remaining order still follows original template rank.
+    assert [int(entry.listing_ref.id) for entry in entries] == [102, 103, 101]
+
+
+def test_no_context_keeps_the_exact_research_only_order() -> None:
+    manifest = _manifest(include_manual=False)
+    ranking_ref = ObjectRef(kind="candidate_ranking", id=uuid4(), revision=1)
+    entries = build_ranking_entries(
+        manifest,
+        ranking_ref=ranking_ref,
+        resolved_actions={101: "open", 102: "open", 103: "open"},
+        assessments={},
+        portfolio_contexts=None,
+    )
+    assert [int(entry.listing_ref.id) for entry in entries] == [101, 102, 103]
+    assert all(entry.portfolio_context is None for entry in entries)
+    assert all("portfolio_context" not in entry.model_dump(exclude_none=True) for entry in entries)
+
+
+def test_portfolio_context_filter_pages_and_binds_the_cursor() -> None:
+    manifest = _manifest(include_manual=False)
+    ranking_ref = ObjectRef(kind="candidate_ranking", id=uuid4(), revision=1)
+    contexts = {
+        101: _portfolio_context(state="eligible"),
+        102: _portfolio_context(state="constrained"),
+        103: _portfolio_context(state="eligible"),
+    }
+    entries = build_ranking_entries(
+        manifest,
+        ranking_ref=ranking_ref,
+        resolved_actions={101: "open", 102: "open", 103: "open"},
+        assessments={},
+        portfolio_contexts=contexts,
+    )
+    page = page_ranking_entries(
+        entries, ranking_ref=ranking_ref, limit=10, portfolio_context_filter="eligible"
+    )
+    assert page.count == 2
+    assert {int(entry.listing_ref.id) for entry in page.entries} == {101, 103}
+    constrained = page_ranking_entries(
+        entries, ranking_ref=ranking_ref, limit=10, portfolio_context_filter="constrained"
+    )
+    assert constrained.count == 1
+    with pytest.raises(ValueError, match="unknown portfolio context filter"):
+        page_ranking_entries(
+            entries, ranking_ref=ranking_ref, portfolio_context_filter="bogus"
+        )
+
+
+def test_legacy_cursor_without_portfolio_filter_still_validates() -> None:
+    """Cursors issued before the optional filter keep their original hash."""
+
+    import base64
+    from hashlib import sha256
+
+    ranking_ref = ObjectRef(kind="candidate_ranking", id=uuid4(), revision=1)
+    # Reproduce the pre-change payload exactly: no portfolio_context key.
+    legacy_payload = {"bucket": None, "financial_status": None}
+    legacy_hash = sha256(
+        json.dumps(legacy_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    claims = {
+        "ranking_ref": ranking_ref.model_dump(mode="json"),
+        "ordinal": 0,
+        "bucket_filter": None,
+        "financial_status_filter": None,
+        "filter_hash": legacy_hash,
+    }
+    raw = json.dumps(
+        claims, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    legacy_cursor = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    parsed = parse_ranking_cursor(legacy_cursor, ranking_ref=ranking_ref)
+    assert parsed.portfolio_context_filter is None
+    # And a newly issued filtered cursor cannot be reused under another filter.
+    filtered = make_ranking_cursor(
+        ranking_ref=ranking_ref, ordinal=0, portfolio_context_filter="eligible"
+    )
+    with pytest.raises(RankingCursorError, match="filters changed"):
+        parse_ranking_cursor(filtered, ranking_ref=ranking_ref)
+
+
+def test_optional_context_fields_are_omitted_from_default_payloads() -> None:
+    """Research-only requests and entries serialize exactly as before."""
+
+    from investment_agent.candidates.ranking_contracts import RankingSourcePolicy
+
+    request = {
+        "operation_id": str(uuid4()),
+        "account_id": str(uuid4()),
+        "snapshot_ref": {"kind": "portfolio_snapshot", "id": str(uuid4()), "revision": 1},
+        "mandate_ref": {"kind": "mandate", "id": str(uuid4()), "revision": 1},
+        "valuation_binding": {"state": "missing", "reason": "valuation_missing"},
+        "purpose_binding": {"state": "none_recorded"},
+        "source_policy": RankingSourcePolicy(template_ids=("a_template",)).model_dump(mode="json"),
+        "trade_assumptions": {
+            "kind": "batch",
+            "fixed_fee": "10",
+            "fee_rate": "0",
+            "assumption_source": "test",
+            "unknown_fields": [],
+            "price_policy": "valuation_price_as_scenario",
+            "confirmed": True,
+        },
+    }
+    from investment_agent.candidates.ranking_contracts import RankingRequest
+
+    parsed = RankingRequest.model_validate(request)
+    assert "portfolio_context" not in parsed.model_dump(mode="json")
+
+    manifest = _manifest(include_manual=False)
+    ranking_ref = ObjectRef(kind="candidate_ranking", id=uuid4(), revision=1)
+    entry = build_ranking_entries(
+        manifest,
+        ranking_ref=ranking_ref,
+        resolved_actions={101: "open", 102: "open", 103: "open"},
+        assessments={},
+    )[0]
+    assert "portfolio_context" not in entry.model_dump(mode="json")

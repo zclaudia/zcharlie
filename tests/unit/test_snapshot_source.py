@@ -72,7 +72,14 @@ def test_factor_fixtures_build_a_valid_bundle_that_scores(symbol: str, group: st
 
     score = _score(bundle)
     assert score["scoring_version"] == SCORING_VERSION
-    assert score["business_score"] is not None
+    if group == "banking":
+        # v1.4: the bank model no longer carries a fixed capital-structure
+        # review, so the missing dividend factor leaves coverage at 0.7222 and
+        # the score is intentionally not published.
+        assert score["business_score"] is None
+        assert score["score_suppression_reason"] == "factor_coverage_below_minimum"
+    else:
+        assert score["business_score"] is not None
     assert "dividend_yield" in score["provider_unavailable_fields"]
     expected_sector = "banking" if group == "banking" else "general"
     assert score["company_profile"]["sector_type"] == expected_sector

@@ -24,6 +24,7 @@ from investment_agent.snapshots.jobs import (
 )
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
 from investment_agent.storage.models.reference import Company, Market
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.pipeline_run import (
@@ -129,13 +130,19 @@ class SnapshotQueryService:
             ]
             if report_period is not None:
                 conditions.append(FinancialSnapshot.report_period == report_period)
-            rows_fin = list(
-                await self.session.scalars(
+            rows_fin = [
+                row
+                for row in await self.session.scalars(
                     select(FinancialSnapshot)
                     .where(*conditions)
                     .order_by(FinancialSnapshot.report_period, FinancialSnapshot.version)
                 )
-            )
+                if (
+                    (effective := effective_available_from(row.fields, row.available_from))
+                    is not None
+                    and effective <= day
+                )
+            ]
             if rows_fin:
                 period = max(row.report_period for row in rows_fin)
                 latest: dict[tuple[str, str], FinancialSnapshot] = {}

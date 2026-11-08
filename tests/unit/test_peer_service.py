@@ -34,7 +34,7 @@ promoted to verified).
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -912,6 +912,40 @@ def make_mapping(**overrides: Any) -> PeerBatchMapping:
     )
     fields.update(overrides)
     return PeerBatchMapping.create(**fields)
+
+
+async def test_latest_local_annual_ignores_pre_fix_restated_row(db_session) -> None:
+    from investment_agent.industry_peers.service import _latest_local_annual_period
+    from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
+    from investment_agent.storage.repositories.listing import ListingRepository
+
+    listing = await ListingRepository(db_session).ensure_a_share_listing("600519.SH")
+    db_session.add_all([
+        FinancialSnapshot(
+            listing_id=listing.id, report_period=date(2023, 12, 31), period_kind="annual",
+            availability="actual", available_from=date(2024, 4, 3), version=1,
+            captured_at=datetime(2025, 5, 1, tzinfo=UTC), is_backfill=True,
+            fields={"revenue": 1.0}, provider="akshare", raw_ref="fixture:clean",
+        ),
+        FinancialSnapshot(
+            listing_id=listing.id, report_period=date(2024, 12, 31), period_kind="annual",
+            availability="actual", available_from=date(2025, 4, 3), version=1,
+            captured_at=datetime(2025, 5, 1, tzinfo=UTC), is_backfill=True,
+            # Pre-fix artifact: latest (restated) figures under the original pubDate.
+            fields={"revenue": 2.0, "restated": True, "notice_date": "2026-04-17"},
+            provider="akshare", raw_ref="fixture:legacy-restated",
+        ),
+    ])
+    await db_session.flush()
+
+    before = await _latest_local_annual_period(
+        db_session, listing_id=listing.id, as_of=datetime(2025, 6, 30, tzinfo=UTC)
+    )
+    assert before == date(2023, 12, 31)
+    after = await _latest_local_annual_period(
+        db_session, listing_id=listing.id, as_of=datetime(2026, 4, 17, tzinfo=UTC)
+    )
+    assert after == date(2024, 12, 31)
 
 
 def test_generation_selection_ignores_submission_time() -> None:

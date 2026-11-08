@@ -1,18 +1,18 @@
 {
   "metadata": {
     "pool": "ifind-single-stock",
-    "generated_at": "2026-10-06T04:23:24+00:00",
+    "generated_at": "2026-11-07T15:56:07+00:00",
     "skill_version": "0.3.0",
-    "scoring_version": "v1.3",
-    "schema_version": "v2.2",
+    "scoring_version": "v1.4",
+    "schema_version": "v2.3",
     "top": 1
   },
   "items": [
     {
       "rank": 1,
       "skill_version": "0.3.0",
-      "scoring_version": "v1.3",
-      "schema_version": "v2.2",
+      "scoring_version": "v1.4",
+      "schema_version": "v2.3",
       "symbol": "601398",
       "name": "工商银行",
       "strategy_type": "dividend_blue_chip",
@@ -337,7 +337,9 @@
           "风险等级为 medium",
           "存在模型不适用字段，已从数据质量扣分中剔除",
           "存在上游数据质量标记，需结合字段来源与提供方冲突复核",
-          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）"
+          "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 72%）",
+          "部分概念因子没有数据来源，已标记为未评估且不参与加权",
+          "因子覆盖率 72% 低于 75%，不发布投资分"
         ]
       },
       "peer_comparison": {
@@ -411,7 +413,7 @@
             "relative_position": "insufficient_peer_data"
           },
           "investment_score": {
-            "target": 58.0,
+            "target": null,
             "peer_median": null,
             "peer_min": null,
             "peer_max": null,
@@ -429,13 +431,13 @@
       },
       "structured_views": {
         "summary_conclusion": {
-          "text": "工商银行 当前评分 58.0，研究工作流标签为 低优先级，风险等级 medium，估值水平 cheap。",
-          "investment_score": 58.0,
-          "suggestion": "low_priority",
-          "suggestion_label": "低优先级",
+          "text": "工商银行 当前评分 None，研究工作流标签为 需要复核，风险等级 medium，估值水平 cheap。",
+          "investment_score": null,
+          "suggestion": "needs_review",
+          "suggestion_label": "需要复核",
           "risk_level": "medium",
           "valuation_level": "cheap",
-          "needs_agent_review": false
+          "needs_agent_review": true
         },
         "positive_thesis": [
           {
@@ -518,7 +520,17 @@
           },
           {
             "source": "evidence_summary.risk",
-            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 72%）",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "部分概念因子没有数据来源，已标记为未评估且不参与加权",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "因子覆盖率 72% 低于 75%，不发布投资分",
             "field": "risk"
           },
           {
@@ -534,6 +546,12 @@
             "value": [
               "dividend_yield"
             ]
+          },
+          {
+            "source": "data_quality",
+            "text": "当前结果需要 Agent 复核",
+            "field": "needs_agent_review",
+            "value": true
           },
           {
             "source": "peer_comparison",
@@ -623,7 +641,17 @@
           },
           {
             "source": "evidence_summary.risk",
-            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 75%）",
+            "text": "1 个评分因子缺少输入数据，已从加权中剔除（因子覆盖率 72%）",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "部分概念因子没有数据来源，已标记为未评估且不参与加权",
+            "field": "risk"
+          },
+          {
+            "source": "evidence_summary.risk",
+            "text": "因子覆盖率 72% 低于 75%，不发布投资分",
             "field": "risk"
           },
           {
@@ -641,6 +669,12 @@
             ]
           },
           {
+            "source": "data_quality",
+            "text": "当前结果需要 Agent 复核",
+            "field": "needs_agent_review",
+            "value": true
+          },
+          {
             "source": "peer_comparison",
             "text": "同行样本不足或同行数据不足，需要复核",
             "field": "needs_peer_review",
@@ -648,17 +682,17 @@
           }
         ],
         "judge_view": {
-          "stance": "cautious",
-          "stance_label": "偏谨慎",
-          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为偏谨慎。该结论用于研究优先级排序，不构成交易建议。",
+          "stance": "needs_review",
+          "stance_label": "需复核",
+          "text": "综合评分、估值、风险、同行位置和数据质量后，当前结论为需复核。该结论用于研究优先级排序，不构成交易建议。",
           "support_count": 2,
-          "opposition_count": 8,
+          "opposition_count": 11,
           "review_required": true
         }
       },
-      "investment_score": 58.0,
-      "business_score": 58.0,
-      "research_confidence_score": 80.5,
+      "investment_score": null,
+      "business_score": null,
+      "research_confidence_score": 79.22,
       "research_confidence_label": "中",
       "freshness": {
         "stock": {
@@ -689,8 +723,8 @@
       },
       "risk_level": "medium",
       "valuation_level": "cheap",
-      "suggestion": "low_priority",
-      "suggestion_label": "低优先级",
+      "suggestion": "needs_review",
+      "suggestion_label": "需要复核",
       "company_profile": {
         "sector_type": "banking",
         "sector_label": "银行",
@@ -716,7 +750,7 @@
         ]
       },
       "data_quality_score": 0.92,
-      "needs_agent_review": false,
+      "needs_agent_review": true,
       "source": {
         "stock": "ifind-proxy:stock-info+history",
         "market_data": "ifind-proxy:history+financial-index",
@@ -733,33 +767,33 @@
         "roe_quality": 24.78,
         "profit_growth": 28.71,
         "drawdown_control": 82.37,
-        "capital_structure_review": 60.0
+        "capital_structure_review": null
       },
-      "factor_coverage": 0.75,
+      "factor_coverage": 0.7222,
       "missing_factors": [
         "shareholder_return"
       ],
       "key_metrics": {
         "market_cap": 2951043808696.92,
+        "latest_price": 8.28,
         "pe": 8.28,
         "pb": 0.7645,
-        "dividend_yield": null,
-        "roe": 0.089739,
-        "debt_ratio": 0.920116,
-        "revenue_growth_3y": -0.029828,
-        "net_profit_growth_3y": 0.007415,
-        "max_drawdown_1y": 0.152882,
-        "latest_price": 8.28,
         "ps": 3.5204,
+        "dividend_yield": null,
         "return_1y": 0.179487,
         "volatility_1y": 0.187141,
         "revenue": 838270000000.0,
         "net_profit": 368562000000.0,
         "gross_margin": null,
         "net_margin": 0.442299,
+        "roe": 0.089739,
         "roe_stability": 0.935083,
+        "debt_ratio": 0.920116,
         "operating_cash_flow": 1890530000000.0,
-        "free_cash_flow": 1852291000000.0
+        "free_cash_flow": 1852291000000.0,
+        "revenue_growth_3y": -0.029828,
+        "net_profit_growth_3y": 0.007415,
+        "max_drawdown_1y": 0.152882
       },
       "missing_fields": [
         "dividend_yield"

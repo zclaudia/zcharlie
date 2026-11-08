@@ -377,8 +377,12 @@ def test_valid_drafts_for_all_five_templates_pass_validation(draft_db) -> None:
             assert set(sent["factors"]) == set(DEFAULT_REGISTRY.names())
             assert sent["stock"]["industry"]["group"] == stock["industry"]["group"]
             assert sent["preference_notes"] == ["不喜欢高负债的公司"]
+            assert sent["override_policy"] == "defaults_only"
             assert "不是投资建议" in stub.requests[0]["messages"][0]["content"]
             assert stub.requests[0]["response_format"] == {"type": "json_object"}
+            # The override the scripted model proposed is dropped (P1-8).
+            assert result.override_policy == "defaults_only"
+            assert [item["param"] for item in result.suppressed_overrides] == [_buy_param(template)]
 
         async with session_scope() as session:
             records = await RuleStore(session).instances(status="draft")
@@ -388,12 +392,15 @@ def test_valid_drafts_for_all_five_templates_pass_validation(draft_db) -> None:
                 template = templates[record.template_id]
                 assert check_instance(instance, template) == []  # 100% valid
                 assert record.scope == "candidate" and record.drafted_by == "llm:stub-model"
-                for name, value in instance.params.items():
-                    bounds = template.param_ranges[name]
-                    assert bounds.min <= value <= bounds.max
+                # Defaults-only: no numeric override reaches the instance.
+                assert instance.params == {}
                 rationale = json.loads(record.draft_rationale)
-                assert rationale["schema"] == "rule_draft.v1"
+                assert rationale["schema"] == "rule_draft.v2"
+                assert rationale["override_policy"] == "defaults_only"
                 assert rationale["candidate_id"] == 11
+                proposal = rationale["suppressed_overrides"]
+                assert len(proposal) == 1 and proposal[0]["param"] == _buy_param(template)
+                assert proposal[0]["proposed"] != proposal[0]["default"]
                 texts = [rationale["overall_rationale"], *rationale["watch_points"]]
                 texts += [item["reason"] for item in rationale["params"].values()]
                 assert not any(trading_terms(text) for text in texts)
@@ -445,6 +452,123 @@ def test_invalid_drafts_are_retried_once_then_never_stored(draft_db, case) -> No
         calls = await _llm_calls()
         assert [call.purpose for call in calls] == ["rule_draft", "rule_draft"]
         assert all(call.success == (case != "malformed_json") for call in calls)
+
+    _run(scenario)
+
+
+def test_preference_notes_cannot_change_parameters(draft_db) -> None:
+    """Review P1-8: notes are background preference, never calibration.
+
+    Two identical model answers, with opposite preference notes, produce the
+    same defaults-only instance and the same suppressed proposal.
+    """
+
+    templates = draft_db
+    ticker = "600519.SH"
+    template = templates[STOCKS[ticker]["template"]]
+
+    async def scenario() -> None:
+        notes = [
+            [],
+            ["阈值太松，希望更严格", "不喜欢高负债的公司"],
+            ["阈值太紧，希望更宽松"],
+        ]
+        stored: list[tuple[dict[str, float], list[dict[str, Any]]]] = []
+        for index, note_list in enumerate(notes):
+            stub = StubLLM([valid_output(template)])
+            with respx.mock() as router:
+                router.post(f"{BASE_URL}/chat/completions").mock(side_effect=stub)
+                result = await draft_rule(
+                    _payload(ticker, templates, candidate_id=40 + index, preference_notes=note_list),
+                    settings=_settings(),
+                )
+            assert result.ok and result.override_policy == "defaults_only"
+            sent = json.loads(stub.user_messages[0])
+            assert sent["preference_notes"] == note_list
+            async with session_scope() as session:
+                record = await session.get(RuleInstanceRecord, result.rule_instance_id)
+                assert record is not None
+                stored.append(
+                    (
+                        instance_from_record(record).params,
+                        json.loads(record.draft_rationale)["suppressed_overrides"],
+                    )
+                )
+        assert [item[0] for item in stored] == [{}, {}, {}]
+        proposals = [[entry["proposed"] for entry in item[1]] for item in stored]
+        assert proposals[0] == proposals[1] == proposals[2]
+
+    _run(scenario)
+
+
+def test_calibrated_evidence_keeps_the_override(draft_db) -> None:
+    """Only a template version with accepted out-of-sample evidence keeps it."""
+
+    from investment_agent.rules.draft_policy import MIN_CALIBRATION_SAMPLE, CalibrationEvidence
+
+    templates = draft_db
+    ticker = "600519.SH"
+    template = templates["quality_growth"]  # the store still holds the uncalibrated row
+    evidence = CalibrationEvidence(
+        template_ref=template.ref,
+        method="walk_forward",
+        sample_periods=MIN_CALIBRATION_SAMPLE,
+        period_start=date(2018, 1, 1),
+        period_end=date(2025, 12, 31),
+        metrics={"hit_rate": 0.58},
+        report_ref="research/oos/quality_growth@1.md",
+    )
+
+    async def scenario() -> None:
+        # The stored template is uncalibrated, so the evidence cannot apply.
+        assert template.calibration_status == "uncalibrated"
+        stub = StubLLM([valid_output(template)])
+        with respx.mock() as router:
+            router.post(f"{BASE_URL}/chat/completions").mock(side_effect=stub)
+            rejected = await draft_rule(
+                _payload(ticker, templates, candidate_id=50),
+                settings=_settings(),
+                evidence=evidence,
+            )
+        assert rejected.override_policy == "defaults_only"
+        # The real system prompt and schema for this path forbid overrides.
+        system = stub.requests[0]["messages"][0]["content"]
+        assert "params 必须为空" in system
+        assert json.loads(stub.user_messages[0])["override_policy"] == "defaults_only"
+        # Without the store's label change this test would be dishonest: mark
+        # the exact stored version calibrated through the store.
+        async with session_scope() as session:
+            from investment_agent.storage.models.rules import RuleTemplateRecord
+
+            record = await session.get(RuleTemplateRecord, (template.id, template.version))
+            assert record is not None
+            # Both the queryable column and the loaded definition carry it.
+            record.calibration_status = "backtested"
+            record.definition = {
+                **record.definition,
+                "calibration_status": "backtested",
+            }
+        stub = StubLLM([valid_output(template)])
+        with respx.mock() as router:
+            router.post(f"{BASE_URL}/chat/completions").mock(side_effect=stub)
+            result = await draft_rule(
+                _payload(ticker, templates, candidate_id=51), settings=_settings(), evidence=evidence
+            )
+        assert result.ok and result.override_policy == "calibrated_overrides"
+        assert result.suppressed_overrides == []
+        # The prompt/schema the model actually received now allow overrides.
+        system = stub.requests[0]["messages"][0]["content"]
+        assert "params 必须为空" not in system
+        assert "choice=adjusted" in system
+        assert json.loads(stub.user_messages[0])["override_policy"] == "calibrated_overrides"
+        async with session_scope() as session:
+            record = await session.get(RuleInstanceRecord, result.rule_instance_id)
+            assert record is not None
+            instance = instance_from_record(record)
+            assert instance.params  # the calibrated path applies the proposal
+            rationale = json.loads(record.draft_rationale)
+            assert rationale["override_policy"] == "calibrated_overrides"
+            assert "suppressed_overrides" not in rationale
 
     _run(scenario)
 

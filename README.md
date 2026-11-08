@@ -95,6 +95,7 @@ pending 分类，可展开缺失清单）与近 8 次趋势、成分与行业同
 | `ia rules` | `validate <file>`、`sync`、`list`、`show <id[@ver]\|instance-id>`、`draft --ticker --template [--as-of] [--now]` | 规则模板 / 实例校验与版本库、LLM 规则起草（见“规则与筛选”） |
 | `ia methods` | `validate <file>`、`sync [--dir]`、`list`、`show <key[@ver]>`、`status [--channel]`、`activate-global --package <key@ver> --expected-revision <n> --reason <text>` | 方法包：校验 / 导入 / 查看 / 全局启用（不移动 per-listing head，见“方法包”） |
 | `ia screen` | `run [--universe] [--as-of] [--now] [--rerun] [--sync]`、`show <run_id> [--reasons]` | 周频模板筛选（`--sync` 默认关闭：仅空库补种模板） |
+| `ia forward-validation` | `run --database --as-of ... [--output]`、`show <report.json>` | 离线前瞻检验：PIT 成分、T+1 可成交与成本、分桶/IC/单调性/模板命中；只读、不改 `calibration_status`（见[设计](docs/product/forward-validation-v1.md)） |
 | `ia verify` | `status`、`request --ticker [--trigger] [--fields] [--period]`、`run [--now]` | iFinD 按需核对队列与预算（见“iFinD 按需核对”） |
 | `ia research` | `snapshot <ticker> [--as-of] [--industry]`、`ifind <ticker> --industry --report-year` | 单股同步研究：免费源快照（日常，无 iFinD 调用）/ iFinD 深度研究（计入预算）；制品同 API 路径 |
 | `ia admin` | `cost`、`db-migrate` | LLM 成本、旧迁移入口 |

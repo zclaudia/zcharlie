@@ -556,3 +556,95 @@ async def test_ranking_ttl_ignores_not_applicable_rule_but_expires_for_unknown_c
     )
     assert status == "stale"
     assert "assessment_expired" in reasons
+
+
+@pytest.mark.asyncio
+async def test_portfolio_context_is_optional_and_context_filter_pages(
+    known_holding_ranking_world: Path,
+) -> None:
+    """The optional context is attached at worker time and stays display-only."""
+
+    from investment_agent.candidates.portfolio_context import (
+        CandidatePortfolioContextRequest,
+        LiquidityPolicy,
+    )
+
+    await seed_complete_screen_run(include_rows=False)
+    async with session_scope() as session:
+        rows = [(600000, "hit", 1), (600001, "truncated", 2)]
+        run = await PipelineRunRepository(session).create(
+            kind="screen_run", triggered_by="test", status="success", stage="done",
+            request_json={"as_of": "2026-10-15"},
+        )
+        counts = {"hit": 0, "truncated": 0, "miss": 0, "skipped": 0, "excluded": 0}
+        for listing_id, outcome, rank in rows:
+            listing = await session.get(Listing, listing_id)
+            assert listing is not None
+            counts[outcome] += 1
+            session.add(
+                ScreenResultRecord(
+                    screen_run_id=run.id, as_of=datetime(2026, 10, 15).date(),
+                    template_id="rank_a", template_version=1, listing_id=listing_id,
+                    ticker=listing.ticker, outcome=outcome, hit=outcome == "hit",
+                    rank=rank, strength=0.5, reasons=[], context={},
+                )
+            )
+        run.finished_at = datetime.now(UTC) - timedelta(minutes=1)
+        run.metadata_json = {
+            "as_of": "2026-10-15", "templates": {"rank_a@1": {"counts": counts}},
+            "result_rows": len(rows), "load_errors": {},
+        }
+        await session.flush()
+
+    base = settings(known_holding_ranking_world)
+    request = await valid_request()
+    request = request.model_copy(
+        update={
+            "portfolio_context": CandidatePortfolioContextRequest(
+                include_mandate_budget=True,
+                liquidity=LiquidityPolicy(
+                    assumption_source="synthetic_uncalibrated",
+                    min_average_amount_20d=Decimal("1000000"),
+                ),
+            )
+        }
+    )
+    async with session_scope() as session:
+        receipt = await CandidateRankingAdmission(
+            session, settings=base, rules=_AvailableRules()
+        ).accept(request)
+    await run_worker(int(receipt.run_ref.id), base)
+
+    async with session_scope() as session:
+        run = await session.get(PipelineRun, int(receipt.run_ref.id))
+        assert run is not None and run.status == "success"
+        ranking_ref = ObjectRef.model_validate(run.metadata_json["ranking_ref"])
+        stored = await InvestmentAssessmentRepository(session).read_ranking(
+            "local_owner", ranking_ref
+        )
+        assert stored is not None
+        # No market bars were captured in the fixture world: the liquidity
+        # evidence is explicitly missing, never silently passed.
+        for entry in stored.entries:
+            assert entry.portfolio_context is not None
+            assert entry.portfolio_context.liquidity is not None
+            assert entry.portfolio_context.liquidity.state == "missing"
+            assert entry.portfolio_context.budget is not None
+            # This fixture's mandate has no cash reserve configured, so the
+            # cash check reports not_configured (it never invents a limit).
+            assert entry.portfolio_context.budget.cash.state == "not_configured"
+        view = await read_ranking_view(
+            session,
+            make_inputs().account_id,
+            ranking_ref,
+            portfolio_context="unverified",
+            settings=base,
+        )
+        assert view.count == len(stored.entries)
+        # Other context states are empty for this all-missing snapshot but the
+        # filter is still accepted and bound by the cursor contract.
+        empty = await read_ranking_view(
+            session, make_inputs().account_id, ranking_ref, portfolio_context="eligible",
+            settings=base,
+        )
+        assert empty.count == 0

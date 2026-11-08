@@ -121,10 +121,12 @@ def test_unknown_citation_is_rejected_for_every_sample(sample: dict[str, Any]):
 @pytest.mark.parametrize("sample", _sanitized_samples(), ids=lambda sample: sample["ticker"])
 def test_needs_agent_review_forces_needs_review_label(sample: dict[str, Any]):
     score_item = _score_item(sample)
-    compliant = _explanation(["investment_score"], needs_review=True)
+    # strategy_type is always populated; investment_score may be None for
+    # low-coverage samples (e.g. 601398 in scoring v1.4).
+    compliant = _explanation(["strategy_type"], needs_review=True)
     validate_explanation_policy(compliant, score_item)
 
-    non_compliant = _explanation(["investment_score"], needs_review=False)
+    non_compliant = _explanation(["strategy_type"], needs_review=False)
     if score_item.get("needs_agent_review"):
         with pytest.raises(ValueError, match="needs_review workflow label"):
             validate_explanation_policy(non_compliant, score_item)
@@ -157,11 +159,45 @@ def test_missing_field_cannot_back_evidence_but_can_back_data_quality_notes(
     with pytest.raises(ValueError, match="missing or null fields"):
         validate_explanation_policy(evidence, score_item)
 
-    data_quality = _explanation(["investment_score"], needs_review=True)
+    data_quality = _explanation(["strategy_type"], needs_review=True)
     data_quality.data_quality_notes = [
         EvidenceClaim(text="字段缺失需复核", supporting_fields=[null_paths[0], "missing_fields"])
     ]
     validate_explanation_policy(data_quality, score_item)
+
+
+def test_suppressed_score_cannot_back_evidence_but_can_back_data_quality_notes():
+    sample = next(sample for sample in _sanitized_samples() if sample["ticker"] == "601398.SH")
+    score_item = _score_item(sample)
+    assert score_item["investment_score"] is None
+    assert score_item["score_suppression_reason"] == "factor_coverage_below_minimum"
+
+    with pytest.raises(ValueError, match="missing or null fields"):
+        validate_explanation_policy(
+            _explanation(["investment_score"], needs_review=True), score_item
+        )
+
+    explanation = _explanation(["strategy_type"], needs_review=True)
+    explanation.data_quality_notes = [
+        EvidenceClaim(
+            text="因子覆盖率不足，未发布投资分",
+            supporting_fields=[
+                "score_suppression_reason",
+                "factor_coverage",
+                "missing_factors",
+            ],
+        )
+    ]
+    validate_explanation_policy(explanation, score_item)
+
+
+def test_system_prompt_handles_suppressed_score():
+    prompt = EXPLANATION_SYSTEM_PROMPT_TEMPLATE
+
+    assert "investment_score 或 business_score 为 null" in prompt
+    assert "score_suppression_reason" in prompt
+    assert "factor_coverage" in prompt
+    assert "missing_factors" in prompt
 
 
 def test_explanation_schema_has_no_trading_surface():

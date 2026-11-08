@@ -9,7 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from investment_agent.clock import SHANGHAI_TZ
-from investment_agent.evidence.contracts import CalculationAssumption, CalculationRecord
+from investment_agent.evidence.contracts import (
+    CalculationAssumption,
+    CalculationRecord,
+    EvidenceRecord,
+)
 from investment_agent.evidence.snapshots import digest
 from investment_agent.evidence.store import EvidenceService
 from investment_agent.factors.field_resolution import (
@@ -24,6 +28,7 @@ from investment_agent.investor.common import ObjectRef, OwnerId, Quantity
 from investment_agent.investor.enums import CalculationStatus as Status
 from investment_agent.investor.foundations import InvestorError
 from investment_agent.storage.models.pit_snapshot import FinancialSnapshot
+from investment_agent.storage.repositories.financial_snapshot import effective_available_from
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.market_snapshot import MarketSnapshotRepository
 from investment_agent.storage.repositories.report_overdue import ReportOverdueRepository
@@ -174,6 +179,7 @@ class ValuationService:
                                    "equity_valuation": "ordinary_equity; no net debt deduction or cash addition"}
         errors: list[str] = []
         facts, records, quality = [], [], []
+        equity_record: EvidenceRecord | None = None
         status = Status.OK
         for ref in (request.equity_value_ref, *request.annual_fcfe_refs):
             result = await self.store.get_evidence(owner, ref, request.as_of)
@@ -192,6 +198,8 @@ class ValuationService:
                 continue
             facts.append(ref)
             records.append(result.data)
+            if ref == request.equity_value_ref:
+                equity_record = result.data
             quality.append(f"{ref.id}:verified")
         assumptions, assumption_errors = await self._assumptions(owner, request)
         errors.extend(assumption_errors)
@@ -252,14 +260,20 @@ class ValuationService:
         day = request.as_of.astimezone(SHANGHAI_TZ).date()
         if qualified is not None:
             required_year = day.year - (1 if day > date(day.year, 4, 30) else 2)
-            latest_available = await self.session.scalar(select(FinancialSnapshot.report_period)
+            annual_rows = list(await self.session.scalars(select(FinancialSnapshot)
                 .where(FinancialSnapshot.listing_id.in_([int(s.id) for s in subjects]),
                        FinancialSnapshot.captured_at <= request.as_of,
                        FinancialSnapshot.available_from <= day,
                        FinancialSnapshot.availability != "unknown",
                        FinancialSnapshot.period_kind == "annual",
                        FinancialSnapshot.report_period < day)
-                .order_by(FinancialSnapshot.report_period.desc()).limit(1))
+                .order_by(FinancialSnapshot.report_period.desc())))
+            latest_available = next(
+                (row.report_period for row in annual_rows
+                 if (effective := effective_available_from(row.fields, row.available_from))
+                 is not None and effective <= day),
+                None,
+            )
             if latest_available is not None:
                 required_year = max(required_year, latest_available.year)
             if qualified.latest_complete_year < required_year:
@@ -306,7 +320,12 @@ class ValuationService:
                         status = Status.NOT_APPLICABLE
         else:
             annual_amounts = []
-        if len(amounts) == len(records) and amounts and amounts[0] <= 0:
+        # The equity value is its own record, not "the first amount": when it is
+        # missing or unusable the old first-by-request-order guard silently
+        # graded an annual FCFE as the equity value. Only judge a resolved record.
+        if equity_record is not None and equity_record.value is not None \
+                and equity_record.value.value is not None \
+                and equity_record.value.value <= 0:
             errors.append("non_positive_equity_value")
             status = Status.NOT_APPLICABLE
         # Server overdue records cannot be overridden by resolver claims.
@@ -383,7 +402,9 @@ class ValuationService:
         ).order_by(FinancialSnapshot.report_period, FinancialSnapshot.version)))
         latest_fin: dict[date, FinancialSnapshot] = {}
         for row in financial:
-            latest_fin[row.report_period] = row
+            effective = effective_available_from(row.fields, row.available_from)
+            if effective is not None and effective <= day:
+                latest_fin[row.report_period] = row
         overdue = await ReportOverdueRepository(self.session).open_as_of(listing.id, day)
         column = "pe_ttm" if request.metric == "pe" else "pb_mrq"
         # Decimal -> float here is deliberate and rank-only: the v1 percentile
@@ -476,19 +497,27 @@ class ValuationService:
         ).order_by(FinancialSnapshot.report_period, FinancialSnapshot.version)))
         latest_fin: dict[date, FinancialSnapshot] = {}
         for row in rows:
-            latest_fin[row.report_period] = row
+            effective = effective_available_from(row.fields, row.available_from)
+            if effective is not None and effective <= day:
+                latest_fin[row.report_period] = row
         overdue = await ReportOverdueRepository(self.session).open_as_of(listing.id, day)
         periods = []
         for report_period, row in sorted(latest_fin.items()):
             # Resolve as an akshare-anchored row so registry names survive; the
             # resulting per-field sources keep the view from re-anchoring to
             # baostock and renaming the fields away (snapshot_model.build).
+            stored_basis = row.fields.get("restated_basis")
             fields, sources = resolve_period_fields(
-                [ProviderFields("akshare", factor_fields("akshare", row.fields),
-                                f"financial_snapshot:{row.id}@{row.version}")],
+                [ProviderFields(
+                    "akshare", factor_fields("akshare", row.fields),
+                    f"financial_snapshot:{row.id}@{row.version}",
+                    restated=row.fields.get("restated") is True,
+                    restated_basis=stored_basis if isinstance(stored_basis, str) else None)],
                 anchor="akshare")
             periods.append(FinancialPeriod(report_period=report_period, period_kind=row.period_kind,
-                                           available_from=row.available_from, availability=row.availability,
+                                           available_from=effective_available_from(
+                                               row.fields, row.available_from),
+                                           availability=row.availability,
                                            fields=fields, sources=sources,
                                            ref=f"financial_snapshot:{row.id}@{row.version}"))
         view = SnapshotView.build(ticker=request.ticker, as_of=day, raw_bars=(), periods=periods,
