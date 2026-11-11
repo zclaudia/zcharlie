@@ -6,7 +6,12 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import select, update
-from tests.portfolio_stress.sample_builders import ACCOUNT_ID, FACT_AT, RECORDED_AT, build_ag22_goldens
+from tests.portfolio_stress.sample_builders import (
+    ACCOUNT_ID,
+    FACT_AT,
+    RECORDED_AT,
+    build_ag22_goldens,
+)
 
 from investment_agent.investor.common import ObjectRef
 from investment_agent.investor.foundations import InvestorError
