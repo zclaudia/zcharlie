@@ -148,6 +148,9 @@ def test_default_registry_serves_research_and_snapshot_kinds(tmp_path):
         "candidate_rank",
         "zone_detection",
         "industry_peer_collect",
+        "simulation_cycle",
+        "simulation_decide",
+        "simulation_review",
     }
 
 
