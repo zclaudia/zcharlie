@@ -36,7 +36,10 @@ try{
   await page.locator('#sim-title').getByText('合成样本 · 已结算与观察中').waitFor();
   await page.locator('#sim-leaderboard table tbody tr').first().waitFor();
   assert.equal(await page.locator('#sim-leaderboard tbody tr').count(),4);
-  await page.locator('#sim-nav-chart svg path').first().waitFor();
+  // A flat stroke has an empty geometry box, so Playwright treats it as hidden.
+  const chartLine = page.locator('#sim-nav-chart svg path.sim-chart-line').first();
+  await chartLine.waitFor({state: 'attached'});
+  assert.match(await chartLine.getAttribute('d'), /^M/);
   await page.getByRole('tab',{name:'账户与持仓'}).click();
   assert.match(await page.locator('#sim-accounts').innerText(),/1000000|1,000,000/);
   assert.match(await page.locator('#sim-accounts').innerText(),/合成样本 <img src=x onerror=alert\(1\)>/);
