@@ -6,8 +6,9 @@ Runs as the ``financial_snapshot`` job with ``provider="akshare"`` and a
 ``summary``
     One whole-market call per endpoint (``stock_lrb_em`` / ``stock_xjll_em``
     / ``stock_zcfz_em``) for ``report_period``, filtered to the scope:
-    ``net_profit_parent``, ``revenue_total``, ``operating_cash_flow``,
-    ``debt_ratio`` (+ total assets / liabilities / equity).
+    ``net_profit_parent``, ``revenue_total``, ``operating_profit``,
+    ``finance_expense``, ``operating_cash_flow``, ``debt_ratio`` (+ total
+    assets / liabilities / equity).
 ``cash_flow``
     One ``stock_cash_flow_sheet_by_report_em`` call per listing (16-24 s);
     every requested period (``report_period`` + ``extra_periods``) of the
@@ -117,6 +118,8 @@ CROSS_CHECK_FIELDS: tuple[str, ...] = ("debt_ratio", "operating_cash_flow")
 _SUMMARY_VALUE_KEYS = (
     "net_profit_parent",
     "revenue_total",
+    "operating_profit",
+    "finance_expense",
     "operating_cash_flow",
     "debt_ratio",
     "total_assets",

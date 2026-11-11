@@ -99,7 +99,9 @@ async def test_empty_field_is_missing_not_an_error():
     result = await fake_client(backend).fetch_period_summaries(FY2024)
     insurer = result.summaries["601318.SH"]
     assert insurer.fields["net_profit_parent"] is None
-    assert insurer.missing_fields == ["net_profit_parent"]
+    # 601318's FY2024 summary also leaves 财务费用 empty. An empty cell is a
+    # missing field, not a parse error.
+    assert insurer.missing_fields == ["finance_expense", "net_profit_parent"]
 
 
 async def test_undisclosed_period_is_empty():

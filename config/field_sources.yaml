@@ -171,6 +171,19 @@ fields:
     definition: "main-business revenue (baostock MBRevenue), CNY; not comparable with revenue_total"
 
   # -- cash flow ----------------------------------------------------------- #
+  operating_profit:
+    table: financial
+    primary: akshare
+    definition: >-
+      operating profit (营业利润, stock_lrb_em), CNY, period-to-date; already
+      after finance expense
+  finance_expense:
+    table: financial
+    primary: akshare
+    definition: >-
+      finance expense (财务费用, stock_lrb_em 营业总支出-财务费用), CNY,
+      period-to-date; interest, FX and charges net of interest income, not
+      interest expense alone
   operating_cash_flow:
     table: financial
     primary: akshare

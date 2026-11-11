@@ -25,6 +25,11 @@
 # is the falsified-thesis sell signal; leverage only queues a re-review.
 # Trim, sell and re-review require streak_periods consecutive hits
 # (uncalibrated default). Bank PE is not used as an absurdity line.
+#
+# Screen entry: the shared accounting-quality pre-screen
+# (ocf_to_net_income, share_dilution, interest_coverage) runs before these
+# conditions. Banks and insurers are exempt. The three thresholds below are
+# uncalibrated starting defaults.
 id: dividend_blue_chip
 name: 红利蓝筹
 description: >-
@@ -140,6 +145,21 @@ params:
   trim_pb_pct_min: {default: 0.90, range: [0.70, 0.99], label: 持仓 trim 区间 PB 分位}
   trim_weight_min: {default: 0.15, range: [0.08, 0.30], label: 持仓 trim 区间仓位}
   exit_roe_max: {default: 0.05, range: [0.02, 0.08], label: 证伪 ROE 线}
+  ocf_to_net_income_min:
+    default: 0.8
+    range: [0.2, 1.5]
+    label: 经营现金流/净利润下限
+    help: 未校准的起始默认值，不是研究过的 A 股参数。因子 ocf_to_net_income，最近一期年报经营现金流/净利润；低于这条线不进入候选。净利润非正或数据缺失时检查不通过。
+  share_dilution_max:
+    default: 0.05
+    range: [0.0, 0.30]
+    label: 股本稀释上限
+    help: 未校准的起始默认值，不是研究过的 A 股参数。因子 share_dilution，最近两期年报总股本增幅；高于这条线不进入候选。缺股本时检查不通过。
+  interest_coverage_min:
+    default: 3.0
+    range: [1.0, 15.0]
+    label: 利息覆盖下限
+    help: 未校准的起始默认值，不是研究过的 A 股参数。因子 interest_coverage，（营业利润+财务费用）/财务费用，财务费用不是单独的利息支出；低于这条线不进入候选。数据缺失时检查不通过，财务费用非正时该信号不适用。银行和保险公司豁免这三项。
   streak_periods:
     default: 3
     range: [1, 12]

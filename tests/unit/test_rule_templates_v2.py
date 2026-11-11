@@ -81,6 +81,9 @@ def _member(ticker: str, roe: float) -> ScreenMember:
         "market_cap": 5.2e10,
         "is_st": 0.0,
         "report_overdue": 0.0,
+        "ocf_to_net_income": 1.2,
+        "share_dilution": 0.0,
+        "interest_coverage": 8.0,
     }
     return ScreenMember(
         listing_id=len(ticker),

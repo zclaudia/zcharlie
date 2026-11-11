@@ -13,7 +13,14 @@ Evaluation of one template's ``screen`` for one member
    (1) is ``excluded`` from every template.
 2. **Applicability**: a member whose industry group is not in the template's
    ``applicable_groups`` is ``skipped``.
-3. **Conditions** (three-valued, every leaf is evaluated - no short circuit -
+3. **Accounting-quality pre-screen** (:mod:`investment_agent.rules.accounting_quality`):
+   operating cash flow / net profit, share-count dilution, and approximate
+   interest coverage. A miss or an input that cannot be computed is
+   ``excluded`` (recorded, not treated as a pass). Banks and insurers are
+   exempt. Thresholds are uncalibrated starting defaults; a template parameter
+   of the same name overrides the shared default for that template. This gate
+   does not touch holding zones.
+4. **Conditions** (three-valued, every leaf is evaluated - no short circuit -
    so reasons and miss counts are complete):
 
    * ``ok`` / ``approx`` factor -> compare; ``approx`` is allowed but the
@@ -60,6 +67,13 @@ from datetime import date
 from typing import Any, Literal
 
 from investment_agent.factors.registry import FactorValue
+from investment_agent.rules.accounting_quality import (
+    SIGNAL_FACTORS,
+    AccountingQualityPolicy,
+    assess_accounting_quality,
+    pre_screen_report,
+    thresholds_for,
+)
 from investment_agent.rules.schema import Condition, ConditionGroup, RuleTemplate, param_ref
 from investment_agent.rules.streak import StreakBook, StreakSession
 from investment_agent.rules.validation import effective_params, factors_in, resolve_value
@@ -85,13 +99,18 @@ class ScreenDefinitionError(ValueError):
 class ScreenConfig:
     hit_cap: int = DEFAULT_HIT_CAP
     exclude_factors: tuple[str, ...] = DEFAULT_EXCLUDE_FACTORS
+    accounting_quality: AccountingQualityPolicy = field(default_factory=AccountingQualityPolicy)
 
     def __post_init__(self) -> None:
         if self.hit_cap < 1:
             raise ValueError("hit_cap must be >= 1")
 
     def to_dict(self) -> dict[str, Any]:
-        return {"hit_cap": self.hit_cap, "exclude_factors": list(self.exclude_factors)}
+        return {
+            "hit_cap": self.hit_cap,
+            "exclude_factors": list(self.exclude_factors),
+            "accounting_quality": self.accounting_quality.describe(),
+        }
 
 
 @dataclass(frozen=True)
@@ -142,6 +161,8 @@ class TemplateResult:
     """Every member, ordered: hits by rank, then the rest by ticker."""
     misses_by_condition: Mapping[str, Mapping[str, Any]]
     missing_by_factor: Mapping[str, int]
+    pre_screen: Mapping[str, Any] = field(default_factory=dict)
+    """Accounting-quality gate: uncalibrated thresholds, exclusions, exemptions."""
 
     @property
     def template_ref(self) -> str:
@@ -160,6 +181,7 @@ class TemplateResult:
         return {
             "template_ref": self.template_ref,
             "calibration_status": self.calibration_status,
+            "pre_screen": dict(self.pre_screen),
             "counts": self.counts(),
             "truncated": len(self.by_outcome("truncated")),
             "hits": [member.to_dict() for member in self.members if member.hit],
@@ -460,6 +482,7 @@ def _excluded_by(member: ScreenMember, factors: Sequence[str]) -> tuple[str, ...
 
 def required_factors(templates: Sequence[RuleTemplate], config: ScreenConfig) -> set[str]:
     names: set[str] = set(config.exclude_factors)
+    names.update(SIGNAL_FACTORS)
     for template in templates:
         names |= factors_in(template.screen)
     return names
@@ -517,11 +540,14 @@ def _screen_template(
     config: ScreenConfig,
 ) -> TemplateResult:
     params = effective_params(template)
+    quality_thresholds = thresholds_for(template, config.accounting_quality)
     groups = set(template.applicable_groups)
     hits: list[tuple[float, ScreenMember, list[_Leaf]]] = []
     others: list[MemberResult] = []
     misses: dict[str, dict[str, Any]] = {}
     missing_by_factor: dict[str, int] = {}
+    quality_excluded: list[str] = []
+    quality_exempted: list[str] = []
     for member in members:
         if member.ticker in excluded:
             others.append(
@@ -548,6 +574,28 @@ def _screen_template(
                     (),
                     member.industry_group,
                     SKIP_GROUP,
+                )
+            )
+            continue
+        quality = assess_accounting_quality(
+            industry_group=member.industry_group,
+            factors=member.factors,
+            thresholds=quality_thresholds,
+        )
+        if quality.status == "exempt":
+            quality_exempted.append(member.ticker)
+        elif quality.status == "excluded":
+            quality_excluded.append(member.ticker)
+            others.append(
+                MemberResult(
+                    member.ticker,
+                    member.listing_id,
+                    "excluded",
+                    None,
+                    None,
+                    tuple(quality.reasons),
+                    member.industry_group,
+                    quality.detail,
                 )
             )
             continue
@@ -619,4 +667,10 @@ def _screen_template(
         members=ranked + tuple(sorted(others, key=lambda item: item.ticker)),
         misses_by_condition=misses,
         missing_by_factor=missing_by_factor,
+        pre_screen=pre_screen_report(
+            policy=config.accounting_quality,
+            thresholds=quality_thresholds,
+            excluded=quality_excluded,
+            exempted=quality_exempted,
+        ),
     )

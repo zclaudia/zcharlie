@@ -229,7 +229,9 @@ async def test_financial_stock_gap_is_missing_not_an_error(db_session, tmp_path)
     assert report.status == "success"
     (row,) = await _akshare_rows()
     assert row.fields["net_profit_parent"] is None
-    assert row.fields["missing_fields"] == ["net_profit_parent"]
+    # 601318's FY2024 summary also leaves 财务费用 empty. Only key fields
+    # (净利润) are queued for verification.
+    assert row.fields["missing_fields"] == ["finance_expense", "net_profit_parent"]
     assert report.to_metadata()["missing_key_fields"] == {"601318.SH": ["net_profit_parent"]}
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import socket
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -50,8 +51,14 @@ TEMPLATE = {
         "exit_sell": {"any": [{"factor": "roe", "op": "<", "value": 0.04}]},
         "exit_review": {"any": [{"factor": "roe", "op": "<", "value": 0.05}]},
     },
-    "params": {"roe_min": 0.1},
-    "param_ranges": {"roe_min": {"min": 0.05, "max": 0.3}},
+    # The baostock fixture's OCF/NI is about 0.72, under the shared 0.8 floor.
+    # This template override keeps a hit so the job test can still persist one.
+    # The shared default stays 0.8; see test_accounting_quality.
+    "params": {"roe_min": 0.1, "ocf_to_net_income_min": 0.5},
+    "param_ranges": {
+        "roe_min": {"min": 0.05, "max": 0.3},
+        "ocf_to_net_income_min": {"min": 0.2, "max": 1.5},
+    },
 }
 
 
@@ -69,7 +76,20 @@ def screen_db(tmp_path, monkeypatch):
         monkeypatch.setenv(key, value)
 
     def fake_view(session, ticker: str, as_of: date, **_: object) -> SnapshotView:
-        return baostock_view(TICKERS[ticker], as_of)
+        view = baostock_view(TICKERS[ticker], as_of)
+        # Captured baostock rows have no 营业利润 / 财务费用, so interest
+        # coverage cannot be computed and the pre-screen would exclude the
+        # consumer name. Fill those two inputs; the gate is tested separately.
+        periods = []
+        for period in view.periods:
+            if period.period_kind != "annual":
+                periods.append(period)
+                continue
+            fields = dict(period.fields)
+            fields["operating_profit"] = 80.0
+            fields["finance_expense"] = 10.0
+            periods.append(replace(period, fields=fields))
+        return replace(view, periods=tuple(periods))
 
     async def fake_load(session, ticker, as_of, **kwargs):  # noqa: ANN001
         return fake_view(session, ticker, as_of)
