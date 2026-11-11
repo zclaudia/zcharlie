@@ -75,8 +75,8 @@ try {
       await page.goto(base + '/app/settings#llm/catalog');
       await page.getByRole('button', {name: '添加 Provider', exact: true}).click();
       const provider = page.locator('.llm-provider').last();
-      await provider.getByLabel('Provider name', {exact: true}).fill('Fixture');
-      await provider.getByLabel('Base URL', {exact: true}).fill('https://fixture.invalid/v1');
+      await provider.getByLabel('Provider 名称', {exact: true}).fill('Fixture');
+      await provider.getByLabel('接口地址', {exact: true}).fill('https://fixture.invalid/v1');
       await provider.getByLabel('API Key', {exact: true}).fill('ag19-secret-do-not-store');
       let patchBody;
       page.on('request', r => {if (r.method() === 'PATCH' && r.url().endsWith('/settings')) patchBody = r.postDataJSON();});

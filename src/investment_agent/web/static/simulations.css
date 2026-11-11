@@ -62,6 +62,7 @@
 .sim-chart-grid { stroke:var(--line); stroke-width:1; }
 .sim-chart-label { fill:var(--ink-3); font-size:11px; }
 .sim-chart-line { fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.sim-chart-band { fill:currentColor; stroke:none; }
 .sim-color-0 { stroke:#297a77; color:#297a77; }.sim-color-1 { stroke:#c28843; color:#c28843; }.sim-color-2 { stroke:#6b64b7; color:#6b64b7; }.sim-color-3 { stroke:#bd5b78; color:#bd5b78; }.sim-color-4 { stroke:#578aac; color:#578aac; }.sim-color-5 { stroke:#8c8541; color:#8c8541; }.sim-color-6 { stroke:#ad6650; color:#ad6650; }.sim-color-7 { stroke:#638451; color:#638451; }.sim-color-8 { stroke:#8c6794; color:#8c6794; }.sim-color-9 { stroke:#5c779c; color:#5c779c; }
 .sim-legend { display:flex; flex-wrap:wrap; gap:8px 18px; padding:8px 0; font-size:12px; }
 .sim-legend span { max-width:100%; overflow-wrap:anywhere; }

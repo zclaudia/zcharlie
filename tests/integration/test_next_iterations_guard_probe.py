@@ -2,8 +2,9 @@
 
 These checks require the shared offline plugin. The default CI pytest command
 does not load it; skipping here keeps that shard from failing closed on a real
-DNS error. ``scripts/check_next_iterations.py --scope BASE-03`` still runs them
-with the plugin loaded.
+DNS error or a child process that has no ``API_KEY``.
+``scripts/check_next_iterations.py --scope BASE-03`` still runs them with the
+plugin loaded.
 """
 
 import os
