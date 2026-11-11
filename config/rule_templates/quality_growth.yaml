@@ -16,6 +16,11 @@
 # v2 (review Q6): ROE is bounded above like the other templates, with a
 # looser default (60%) because a very high, *stable* ROE is this template's
 # thesis.
+#
+# Exit discipline: floating profit is not a trim reason. trim uses an
+# uncalibrated PE(TTM) absurdity line. exit_sell is the falsified-thesis
+# sell signal; exit_review only queues a re-review. Trim, sell and re-review
+# all require streak_periods consecutive hits (uncalibrated default).
 id: quality_growth
 name: 质量成长
 description: >-
@@ -91,14 +96,17 @@ holding_zones:
       - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   trim:
     any:
-      - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min", label: 估值高位}
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
-      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
+      - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min", label: 估值高位, min_periods: "$streak_periods"}
+      - {factor: pe_ttm, op: ">=", value: "$trim_pe_absurd", label: 估值离谱, why: 现价相对盈利的倍数高到离谱才提示减仓；浮盈只说明买入代价，不是卖出理由。, data_note: 未校准的起始默认值，不是研究过的 A 股参数。pe_ttm 缺失或非正（negative_earnings）时不触发。, min_periods: "$streak_periods"}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）, min_periods: "$streak_periods"}
+  exit_sell:
+    any:
+      - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max", label: 毛利率恶化, why: 证伪即卖：定价能力消失。, min_periods: "$streak_periods"}
+      - {factor: roe, op: "<", value: "$exit_roe_max", label: ROE 恶化, why: 证伪即卖：竞争优势消失。, min_periods: "$streak_periods"}
+      - {factor: net_profit_growth_3y, op: "<", value: 0.0, label: 利润负增长, why: 证伪即卖：成长不再。, min_periods: "$streak_periods"}
   exit_review:
     any:
-      - {factor: gross_margin, op: "<", value: "$exit_gross_margin_max", label: 毛利率恶化, why: 证伪：定价能力消失。}
-      - {factor: roe, op: "<", value: "$exit_roe_max", label: ROE 恶化, why: 证伪：竞争优势消失。}
-      - {factor: net_profit_growth_3y, op: "<", value: 0.0, label: 利润负增长, why: 证伪：成长不再。}
+      - {factor: revenue_growth_3y, op: "<", value: "$review_revenue_growth_max", label: 增长放缓, why: 触发重审：增速放缓，论文尚未被证伪，只进入重审队列，不作为卖出信号。, min_periods: "$streak_periods"}
 
 params:
   roe_min: {default: 0.15, range: [0.10, 0.25], label: ROE 下限}
@@ -119,7 +127,21 @@ params:
   add_pe_pct_max: {default: 0.25, range: [0.05, 0.50], label: 持仓 add 区间 PE 分位上限}
   add_weight_max: {default: 0.08, range: [0.02, 0.20], label: 持仓 add 区间仓位上限}
   trim_pe_pct_min: {default: 0.90, range: [0.70, 0.99], label: 持仓 trim 区间 PE 分位}
-  trim_gain_min: {default: 0.50, range: [0.20, 1.50], label: 持仓 trim 区间浮盈}
+  trim_pe_absurd:
+    default: 60
+    range: [30, 120]
+    label: 持仓 trim 估值离谱线
+    help: 未校准的起始默认值，不是研究过的 A 股参数。PE(TTM) 达到这条倍数才视为估值离谱；与买入成本无关。
   trim_weight_min: {default: 0.15, range: [0.08, 0.30], label: 持仓 trim 区间仓位}
-  exit_gross_margin_max: {default: 0.18, range: [0.10, 0.30], label: 复核毛利率线}
-  exit_roe_max: {default: 0.08, range: [0.03, 0.12], label: 复核 ROE 线}
+  exit_gross_margin_max: {default: 0.18, range: [0.10, 0.30], label: 证伪毛利率线}
+  exit_roe_max: {default: 0.08, range: [0.03, 0.12], label: 证伪 ROE 线}
+  review_revenue_growth_max:
+    default: 0.05
+    range: [0.0, 0.15]
+    label: 重审营收增速线
+    help: 未校准的起始默认值。增速降到这条线以下只进入重审，不作为卖出信号。
+  streak_periods:
+    default: 3
+    range: [1, 12]
+    label: 连续期数
+    help: 未校准的起始默认值，不是研究过的 A 股参数。减仓、证伪卖出和重审都要连续这么多期成立，用来过滤单期噪声。

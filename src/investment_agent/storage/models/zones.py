@@ -70,14 +70,12 @@ class ZoneEventRecord(Base):
     ticker: Mapped[str] = mapped_column(String(16), nullable=False)
     scope: Mapped[str] = mapped_column(String(16), nullable=False)
     zone: Mapped[str] = mapped_column(String(32), nullable=False)
-    """``buy_zone`` / ``drop`` (candidate) or ``add`` / ``trim`` / ``exit_review``."""
+    """``buy_zone`` / ``drop`` (candidate) or ``add`` / ``trim`` / ``exit_sell`` / ``exit_review``."""
     transition: Mapped[str] = mapped_column(String(8), nullable=False)
     """``entered`` (the zone holds) or ``left`` (it stopped holding)."""
     level: Mapped[str] = mapped_column(String(16), nullable=False)
     """Notification level from funnel 9; ``left`` events are recorded, not sent."""
-    rule_instance_id: Mapped[int] = mapped_column(
-        ForeignKey("rule_instance.id"), nullable=False
-    )
+    rule_instance_id: Mapped[int] = mapped_column(ForeignKey("rule_instance.id"), nullable=False)
     rule_version: Mapped[int] = mapped_column(Integer, nullable=False)
     """The version of the rule at trigger time (funnel 5.5, 历史回看)."""
     template_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -127,3 +125,11 @@ class ZoneIntervalStateRecord(Base, TimestampMixin):
     last_evaluated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    condition_streak: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    """Consecutive-period memory for this zone: ``{as_of, before, after}``.
+
+    ``before`` is the count entering ``as_of``; ``after`` is the count leaving
+    it. A re-run of the same date starts from ``before``. ``None`` means the
+    zone's conditions have no multi-period gate, or the interval has not been
+    evaluated under the current rule version.
+    """

@@ -3,8 +3,10 @@
 Rules are declarative data (funnel design 5.4): a condition is
 ``{factor, op, value}``, conditions combine with ``all`` / ``any`` groups
 (at most two levels deep), and zones are fixed enums per scope - candidate
-``buy_zone`` / ``drop``, holding ``add`` / ``trim`` / ``exit_review``.
-There is no ``sell`` zone; a falsification condition triggers a review.
+``buy_zone`` / ``drop``, holding ``add`` / ``trim`` / ``exit_sell`` /
+``exit_review``. ``exit_sell`` is a sell signal when the thesis is falsified.
+``exit_review`` only queues a re-review. Neither writes the portfolio ledger.
+There is no zone named ``sell``.
 
 **Parameters.** A condition value may be ``"$name"``: a reference to a
 template parameter. Templates declare ``params`` (defaults) and
@@ -63,7 +65,7 @@ EQUALITY_OPS = frozenset({"==", "!="})
 
 Scope = Literal["candidate", "holding"]
 CANDIDATE_ZONES: tuple[str, ...] = ("buy_zone", "drop")
-HOLDING_ZONES: tuple[str, ...] = ("add", "trim", "exit_review")
+HOLDING_ZONES: tuple[str, ...] = ("add", "trim", "exit_sell", "exit_review")
 SCOPE_ZONES: dict[str, tuple[str, ...]] = {
     "candidate": CANDIDATE_ZONES,
     "holding": HOLDING_ZONES,
@@ -102,6 +104,25 @@ class Condition(_Model):
     """Why the condition is in the rule."""
     data_note: str | None = None
     """Known data caveat (proxy field, provider-only factor ...)."""
+    min_periods: int | str | None = None
+    """Consecutive evaluated periods the comparison must hold before it counts.
+
+    ``None`` means one period (the comparison itself). An integer ``>= 1`` or a
+    ``$param`` reference is a noise filter for trim / falsified-sell /
+    re-review conditions. Zone detection applies it; the screen does not, and
+    validation rejects it outside holding zones. The default used by the
+    strategy templates is an uncalibrated starting value, not a researched
+    A-share parameter.
+    """
+
+    @field_validator("min_periods")
+    @classmethod
+    def _min_periods(cls, value: object) -> object:
+        if value is None or isinstance(value, str):
+            return value
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError("min_periods must be an integer >= 1 or a $param reference")
+        return value
 
 
 def _node_kind(raw: Any) -> str:

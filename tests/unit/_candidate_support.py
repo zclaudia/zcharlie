@@ -39,6 +39,7 @@ TEMPLATE: dict[str, Any] = {
     "holding_zones": {
         "add": {"all": [{"factor": "position_weight", "op": "<", "value": 0.1}]},
         "trim": {"any": [{"factor": "gain_vs_cost", "op": ">", "value": 0.5}]},
+        "exit_sell": {"any": [{"factor": "roe", "op": "<", "value": 0.04}]},
         "exit_review": {"any": [{"factor": "roe", "op": "<", "value": 0.05}]},
     },
     "params": {"roe_min": 0.1, "pe_pct_max": 0.3},

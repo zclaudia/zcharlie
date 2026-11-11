@@ -8,9 +8,12 @@ rule's fixed zones against the day's inputs and records a
 * **candidate / observation scope** - ``buy_zone`` / ``drop`` against the
   point-in-time factors of the day (the same factors the screen and the
   drafting agent read);
-* **holding scope** - ``add`` / ``trim`` / ``exit_review`` against those same
-  factors plus the position factors (``position_weight``, ``gain_vs_cost``,
-  ``holding_days``) derived from the accounts' current immutable valuations.
+* **holding scope** - ``add`` / ``trim`` / ``exit_sell`` / ``exit_review``
+  against those same factors plus the position factors (``position_weight``,
+  ``gain_vs_cost``, ``holding_days``) derived from the accounts' current
+  immutable valuations. ``exit_sell`` is a sell signal when the thesis is
+  falsified. ``exit_review`` only enters the re-review queue. Neither writes
+  the portfolio ledger.
   The valuation's ``ledger_revision`` / ``knowledge_cutoff`` / price refs are
   frozen into the event (plan 2.10 / 5.4).
 
@@ -35,7 +38,7 @@ Enter / leave and notification (funnel 9)
 ``zone_interval_state`` remembers whether a ``(listing, scope, zone)`` is
 currently inside. A zone that starts holding raises one notice (``info`` for
 ``buy_zone`` / ``add`` / ``trim``, ``action_required`` for ``drop`` /
-``exit_review``); staying inside, including on revised inputs, notifies
+``exit_sell`` / ``exit_review``); staying inside, including on revised inputs, notifies
 nothing; leaving records a ``left`` event and no notice; re-entering raises a
 notice again. The event row is the in-app notice, and when the listing has an
 investor case the same entry is additionally written into the agent's
@@ -72,6 +75,7 @@ from investment_agent.portfolio.valuation import Valuation, ValuationHolding, Va
 from investment_agent.rules.schema import ConditionGroup
 from investment_agent.rules.screen import evaluate_zone_outcomes, jsonable
 from investment_agent.rules.store import RuleStore, instance_from_record
+from investment_agent.rules.streak import StreakMemory, StreakSession
 from investment_agent.rules.validation import effective_params, factors_in
 from investment_agent.storage.models.candidates import CandidateRecord
 from investment_agent.storage.models.rules import RuleInstanceRecord
@@ -92,13 +96,27 @@ ZONE_LEVELS: dict[str, str] = {
     "add": "info",
     "trim": "info",
     "drop": "action_required",
+    "exit_sell": "action_required",
     "exit_review": "action_required",
 }
-"""funnel 9: ``exit_review`` / ``drop`` are action_required, the rest info."""
+"""``exit_sell`` / ``exit_review`` / ``drop`` are action_required, the rest info."""
+
+ZONE_DISPOSITION: dict[str, str] = {
+    "exit_sell": "sell",
+    "exit_review": "rereview",
+}
+"""How a holding exit zone acts. ``sell`` is a signal; ``rereview`` is a queue
+entry. Neither submits an order or writes the ledger."""
 
 
 def zone_level(zone: str) -> str:
     return ZONE_LEVELS.get(zone, "info")
+
+
+def zone_disposition(zone: str) -> str | None:
+    """``sell`` or ``rereview`` for the two exit tiers; ``None`` otherwise."""
+
+    return ZONE_DISPOSITION.get(zone)
 
 
 # --------------------------------------------------------------------------- #
@@ -157,9 +175,7 @@ def _record_zones(
             try:
                 zones[name] = ConditionGroup.model_validate(node)
             except ValueError:
-                log.warning(
-                    "zone_detection.zone_invalid", rule_instance_id=record.id, zone=name
-                )
+                log.warning("zone_detection.zone_invalid", rule_instance_id=record.id, zone=name)
         return zones
     return dict(template.zones_for(scope))
 
@@ -359,9 +375,12 @@ def holding_factor_values(positions: Sequence[HoldingPosition]) -> dict[str, Fac
     if cost is None or cost == 0:
         gain_reason = "cost_unknown" if cost is None else "zero_cost_ratio_undefined"
     elif market_value is None:
-        gain_reason = next(
-            (item.price_unknown_reason for item in positions if item.price_unknown_reason), None
-        ) or "market_value_unknown"
+        gain_reason = (
+            next(
+                (item.price_unknown_reason for item in positions if item.price_unknown_reason), None
+            )
+            or "market_value_unknown"
+        )
     else:
         gain = (market_value - cost) / cost
     days = [item.holding_days for item in positions]
@@ -407,6 +426,7 @@ class ListingEvaluation:
     signals: Mapping[str, ZoneSignal]
     undecided: tuple[str, ...] = ()
     positions: tuple[HoldingPosition, ...] = ()
+    streaks: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
     @property
     def listing_id(self) -> int:
@@ -475,10 +495,21 @@ def evaluate_rule_zones(
     as_of: date,
     factors: Mapping[str, FactorValue],
     positions: Sequence[HoldingPosition] = (),
+    streaks: Mapping[str, StreakMemory] | None = None,
 ) -> ListingEvaluation:
-    """Evaluate one rule over one stock's factors (pure) and freeze its inputs."""
+    """Evaluate one rule over one stock's factors (pure) and freeze its inputs.
 
-    outcomes = evaluate_zone_outcomes(zones=rule.zones, factors=factors, params=rule.params)
+    ``streaks`` is the per-zone memory of consecutive periods. Conditions
+    without ``min_periods`` ignore it. The updated memory is returned on the
+    evaluation so the caller can persist it; it is also part of the input
+    digest, so the same facts on a longer streak are a new event.
+    """
+
+    session = StreakSession(streaks or {}, as_of, rule.params)
+    outcomes = evaluate_zone_outcomes(
+        zones=rule.zones, factors=factors, params=rule.params, streak=session
+    )
+    streak_snapshot = session.snapshots()
     signals: dict[str, ZoneSignal] = {}
     undecided: list[str] = []
     for name, outcome in outcomes.items():
@@ -502,6 +533,8 @@ def evaluate_rule_zones(
         "factors": _factor_payload({name: factors[name] for name in referenced}),
         "valuation": valuation_input(positions),
     }
+    if streak_snapshot:
+        inputs["streak"] = streak_snapshot
     return ListingEvaluation(
         rule=rule,
         as_of=as_of,
@@ -510,6 +543,7 @@ def evaluate_rule_zones(
         signals=signals,
         undecided=tuple(undecided),
         positions=tuple(positions),
+        streaks=streak_snapshot,
     )
 
 
@@ -555,17 +589,13 @@ async def _locked_state(
     )
     state = (await session.execute(stmt)).scalar_one_or_none()
     if state is None:
-        state = ZoneIntervalStateRecord(
-            listing_id=listing_id, scope=scope, zone=zone, inside=False
-        )
+        state = ZoneIntervalStateRecord(listing_id=listing_id, scope=scope, zone=zone, inside=False)
         session.add(state)
         await session.flush()
     return state
 
 
-async def _existing_event(
-    session: AsyncSession, event: ZoneEventRecord
-) -> ZoneEventRecord | None:
+async def _existing_event(session: AsyncSession, event: ZoneEventRecord) -> ZoneEventRecord | None:
     stmt = select(ZoneEventRecord).where(
         ZoneEventRecord.listing_id == event.listing_id,
         ZoneEventRecord.scope == event.scope,
@@ -637,12 +667,17 @@ async def record_evaluations(
             if state.rule_instance_id != evaluation.rule.rule_instance_id:
                 # A new rule version restarts the interval: the user has just
                 # approved a (possibly different) commitment, so its first
-                # firing notices again instead of staying silent.
+                # firing notices again instead of staying silent. The streak
+                # belongs to that commitment too.
                 state.rule_instance_id = evaluation.rule.rule_instance_id
                 state.inside = False
+                state.condition_streak = None
             was_inside = bool(state.inside)
             state.last_evaluated_as_of = evaluation.as_of
             state.last_evaluated_at = at
+            snapshot = evaluation.streaks.get(zone)
+            if snapshot is not None:
+                state.condition_streak = dict(snapshot)
             if not signal.holds and not was_inside:
                 # Outside and staying outside: no event, nothing to report.
                 await session.flush()
@@ -670,6 +705,10 @@ async def record_evaluations(
                     stored.notified_at = at
                     state.last_notified_at = at
                     notified.append(stored.id)
+                    if zone == "exit_review":
+                        # Re-review enters the queue. A falsified-thesis
+                        # ``exit_sell`` is the sell signal and does not.
+                        await _enqueue_rereview(session, stored, at)
                     if zone == "drop" and evaluation.scope == CANDIDATE_SCOPE:
                         dropped.append(stored)
             else:
@@ -765,6 +804,52 @@ async def _close_intervals(
         )
 
 
+async def _load_streaks(
+    session: AsyncSession, *, listing_id: int, scope: str, rule_instance_id: int
+) -> dict[str, StreakMemory]:
+    """Streak memory for the current rule version. A new version starts over."""
+
+    rows = list(
+        (
+            await session.scalars(
+                select(ZoneIntervalStateRecord).where(
+                    ZoneIntervalStateRecord.listing_id == listing_id,
+                    ZoneIntervalStateRecord.scope == scope,
+                )
+            )
+        ).all()
+    )
+    found: dict[str, StreakMemory] = {}
+    for row in rows:
+        if row.rule_instance_id != rule_instance_id:
+            continue
+        memory = StreakMemory.from_json(row.condition_streak)
+        if memory is not None:
+            found[row.zone] = memory
+    return found
+
+
+async def _enqueue_rereview(session: AsyncSession, event: ZoneEventRecord, at: datetime) -> None:
+    """Best-effort re-review queue entry. A failure never loses the zone event."""
+
+    nested = await session.begin_nested()
+    try:
+        from investment_agent.investor.monitoring import enqueue_holding_rereview
+
+        await enqueue_holding_rereview(
+            session,
+            listing_id=event.listing_id,
+            event_id=event.id,
+            as_of=event.as_of,
+            conditions=list(event.conditions_met or []),
+            now=at,
+        )
+        await nested.commit()
+    except Exception:
+        await nested.rollback()
+        log.exception("zone_detection.rereview_failed", event_id=event.id, zone=event.zone)
+
+
 async def notify_zone_entry(
     session: AsyncSession, event: ZoneEventRecord, *, at: datetime, settings: Settings | None
 ) -> None:
@@ -798,11 +883,17 @@ async def notify_zone_entry(
             return
         if not await UserControlService(session).notifications_allowed(UUID(str(case.id))):
             return
+        disposition = zone_disposition(event.zone)
+        category = "major_change" if event.level == "action_required" else "change"
+        if disposition == "sell":
+            category = "sell_signal"
         payload = {
-            "category": "major_change" if event.level == "action_required" else "change",
+            "category": category,
             "stage": "changed",
             "level": event.level,
             "zone": event.zone,
+            "disposition": disposition,
+            "signal": disposition,
             "scope": event.scope,
             "as_of": event.as_of.isoformat(),
             "rule_ref": {
@@ -957,9 +1048,7 @@ async def scan_scope(
         # the knowledge point of the factors: what the rule sees must be what
         # was knowable on that date, not on the later run date.
         event_date = (
-            max(position.valuation_date for position in rule_positions)
-            if rule_positions
-            else as_of
+            max(position.valuation_date for position in rule_positions) if rule_positions else as_of
         )
         try:
             factors: dict[str, FactorValue] = dict(
@@ -980,7 +1069,16 @@ async def scan_scope(
                 }
             )
         evaluation = evaluate_rule_zones(
-            rule, as_of=event_date, factors=factors, positions=rule_positions
+            rule,
+            as_of=event_date,
+            factors=factors,
+            positions=rule_positions,
+            streaks=await _load_streaks(
+                session,
+                listing_id=rule.listing_id,
+                scope=scope,
+                rule_instance_id=rule.rule_instance_id,
+            ),
         )
         evaluations.append(evaluation)
         evaluated.append(rule.listing_id)
@@ -1037,6 +1135,7 @@ def event_block(event: ZoneEventRecord) -> dict[str, Any]:
         "template_version": event.template_version,
         "template_ref": f"{event.template_id}@{event.template_version}",
         "rule_ref": f"{event.ticker}/{event.template_id}@{event.template_version}/v{event.rule_version}",
+        "disposition": zone_disposition(event.zone),
         "calibration_status": event.calibration_status,
         "conditions_met": list(event.conditions_met or []),
         "inputs": dict(event.inputs or {}),
@@ -1057,9 +1156,7 @@ async def zone_events(
 ) -> list[ZoneEventRecord]:
     """The newest events first (the review/history read)."""
 
-    stmt = select(ZoneEventRecord).order_by(
-        ZoneEventRecord.as_of.desc(), ZoneEventRecord.id.desc()
-    )
+    stmt = select(ZoneEventRecord).order_by(ZoneEventRecord.as_of.desc(), ZoneEventRecord.id.desc())
     if listing_id is not None:
         stmt = stmt.where(ZoneEventRecord.listing_id == listing_id)
     if scope is not None:
@@ -1132,8 +1229,7 @@ async def zone_summaries(
         summaries[listing_id] = {
             "interval": _state_block(headline),
             "zones": {
-                row.zone: _state_block(row)
-                for row in sorted(rows, key=lambda item: (item.zone,))
+                row.zone: _state_block(row) for row in sorted(rows, key=lambda item: (item.zone,))
             },
             "latest": event_block(newest) if newest is not None else None,
         }
@@ -1182,6 +1278,7 @@ __all__ = [
     "CANDIDATE_SCOPE",
     "HOLDING_SCOPE",
     "POSITION_FACTORS",
+    "ZONE_DISPOSITION",
     "ZONE_LEVELS",
     "DetectionResult",
     "HoldingPosition",
@@ -1203,6 +1300,7 @@ __all__ = [
     "referenced_factors",
     "run_zone_detection",
     "scan_scope",
+    "zone_disposition",
     "zone_events",
     "zone_level",
     "zone_summaries",

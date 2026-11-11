@@ -1,6 +1,6 @@
 """Holding-scope rule drafting and review (watch-holding-plan 6.2 WP8, funnel 5.4/8).
 
-Holding rules (``add`` / ``trim`` / ``exit_review``) are the same kind of object
+Holding rules (``add`` / ``trim`` / ``exit_sell`` / ``exit_review``) are the same kind of object
 as candidate rules - template reference plus parameter overrides, versioned per
 ``(listing, scope)`` - but a different slot. This module owns their user-facing
 lifecycle on the holding pool page:

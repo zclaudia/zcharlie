@@ -1,6 +1,6 @@
 """/portfolio/rule endpoints: the holding pool's rule review surface (WP8).
 
-Holding rules (``add`` / ``trim`` / ``exit_review``) are approved on the
+Holding rules (``add`` / ``trim`` / ``exit_sell`` / ``exit_review``) are approved on the
 holding pool page exactly like observation rules: draft, review the zones and
 parameters, then approve, edit or reject with a reason. Approving activates the
 draft and retires the previous active version - the shared rule slot semantics

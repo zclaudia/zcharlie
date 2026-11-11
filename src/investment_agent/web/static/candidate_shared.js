@@ -45,7 +45,7 @@ export const LIST_LIMIT = 100;
 export const TOP_REASONS = 6;
 export const SPARK_DAYS = 120;
 export const UNFINISHED_VERIFICATION = new Set(["pending", "deferred", "running"]);
-export const ZONE_ORDER = ["buy_zone", "drop", "add", "trim", "exit_review"];
+export const ZONE_ORDER = ["buy_zone", "drop", "add", "trim", "exit_sell", "exit_review"];
 
 export function redirectOn401(error) {
   if (error instanceof ApiError && error.status === 401) {

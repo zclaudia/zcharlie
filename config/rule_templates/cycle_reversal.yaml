@@ -16,6 +16,14 @@
 # v2 (review Q6): ROE is bounded above (default 40%); v1 hit 600221 海航控股
 # at 52.5% from a collapsed equity base. Q7 moved airports / ports to
 # `utility`, so 600009 上海机场 no longer reaches this template.
+#
+# Exit discipline: floating profit is not a trim reason. trim adds an
+# uncalibrated PE(TTM) absurdity line beside the PB-percentile trim. PE is a
+# poor cyclical measure at the trough (depressed earnings inflate it); the
+# line is only a starting default, and a missing or non-positive PE does not
+# fire. exit_sell is the falsified-thesis sell signal; the holding-time
+# limit only queues a re-review. Trim, sell and re-review require
+# streak_periods consecutive hits (uncalibrated default).
 id: cycle_reversal
 name: 周期反转
 description: >-
@@ -78,14 +86,16 @@ holding_zones:
       - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   trim:
     any:
-      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min", label: 估值回到高位, why: 周期股在强势时减持。}
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
-      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
+      - {factor: pb_percentile_5y, op: ">=", value: "$trim_pb_pct_min", label: 估值回到高位, why: 周期股在强势时减持。, min_periods: "$streak_periods"}
+      - {factor: pe_ttm, op: ">=", value: "$trim_pe_absurd", label: 估值离谱, why: 现价相对盈利的倍数高到离谱才提示减仓；浮盈只说明买入代价，不是卖出理由。, data_note: 未校准的起始默认值，不是研究过的 A 股参数。低谷盈利会抬高 PE；pe_ttm 缺失或非正时不触发。PB 分位仍是周期估值的主条件。, min_periods: "$streak_periods"}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）, min_periods: "$streak_periods"}
+  exit_sell:
+    any:
+      - {factor: roe, op: "<", value: "$exit_roe_max", label: 亏损扩大, why: 证伪即卖：成本优势不在。, min_periods: "$streak_periods"}
+      - {factor: debt_ratio, op: ">", value: 0.85, label: 负债过高, why: 证伪即卖：资产负债表无法支撑等待。, min_periods: "$streak_periods"}
   exit_review:
     any:
-      - {factor: roe, op: "<", value: "$exit_roe_max", label: 亏损扩大, why: 证伪：成本优势不在。}
-      - {factor: debt_ratio, op: ">", value: 0.85, label: 负债过高, why: 证伪：资产负债表无法支撑等待。}
-      - {factor: holding_days, op: ">", value: "$exit_holding_days_min", label: 持有超时, why: 反转逻辑的时间上限。, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
+      - {factor: holding_days, op: ">", value: "$exit_holding_days_min", label: 持有超时, why: 触发重审：反转逻辑的时间到了，只进入重审队列，不作为卖出信号。, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）, min_periods: "$streak_periods"}
 
 params:
   drawdown_min: {default: 0.30, range: [0.20, 0.60], label: 近一年最大回撤下限}
@@ -103,7 +113,16 @@ params:
   add_pb_pct_max: {default: 0.10, range: [0.02, 0.25], label: 持仓 add 区间 PB 分位上限}
   add_weight_max: {default: 0.06, range: [0.02, 0.15], label: 持仓 add 区间仓位上限}
   trim_pb_pct_min: {default: 0.80, range: [0.60, 0.98], label: 持仓 trim 区间 PB 分位}
-  trim_gain_min: {default: 0.60, range: [0.20, 2.00], label: 持仓 trim 区间浮盈}
+  trim_pe_absurd:
+    default: 50
+    range: [20, 120]
+    label: 持仓 trim 估值离谱线
+    help: 未校准的起始默认值，不是研究过的 A 股参数。低谷盈利会抬高 PE，这条倍数只是起始线，与买入成本无关。
   trim_weight_min: {default: 0.10, range: [0.05, 0.25], label: 持仓 trim 区间仓位}
-  exit_roe_max: {default: -0.02, range: [-0.10, 0.05], label: 复核 ROE 线}
-  exit_holding_days_min: {default: 730, range: [180, 1460], label: 复核持有天数}
+  exit_roe_max: {default: -0.02, range: [-0.10, 0.05], label: 证伪 ROE 线}
+  exit_holding_days_min: {default: 730, range: [180, 1460], label: 重审持有天数}
+  streak_periods:
+    default: 3
+    range: [1, 12]
+    label: 连续期数
+    help: 未校准的起始默认值，不是研究过的 A 股参数。减仓、证伪卖出和重审都要连续这么多期成立，用来过滤单期噪声。

@@ -311,7 +311,7 @@ const between = f.formatCondition(
 );
 console.log(JSON.stringify({
   cond, between,
-  zones: ["buy_zone", "drop", "add", "trim", "exit_review"].map((z) => f.label(f.ZONE_LABELS, z)),
+  zones: ["buy_zone", "drop", "add", "trim", "exit_sell", "exit_review"].map((z) => f.label(f.ZONE_LABELS, z)),
   drafts: ["none", "pending", "ready", "failed"].map((s) => f.label(f.DRAFT_STATE_LABELS, s)),
   issues: f.describeIssues({message: "rule validation failed",
     issues: [{code: "param_out_of_range", path: "params.pe_pct_max", message: "0.9 > 0.6"}]}),
@@ -324,7 +324,14 @@ console.log(JSON.stringify({
     )
     assert out["cond"] == {"text": "PE 5 年分位 ≤ 25%", "params": ["pe_pct_max"]}
     assert out["between"]["text"] == "ROE 介于 10%–40%"
-    assert out["zones"] == ["可研究区间", "移出候选", "持仓区间 add", "持仓区间 trim", "持仓区间 复核"]
+    assert out["zones"] == [
+        "可研究区间",
+        "移出候选",
+        "持仓区间 add",
+        "持仓区间 trim",
+        "证伪即卖",
+        "触发重审",
+    ]
     assert out["drafts"] == ["待起草", "起草中", "草稿就绪", "起草失败"]
     assert out["issues"] == ["params.pe_pct_max：0.9 > 0.6"]
     assert out["fastapi"] == ["body.reason field required"]

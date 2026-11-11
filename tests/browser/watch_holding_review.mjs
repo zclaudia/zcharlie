@@ -77,7 +77,7 @@ try {
     const ruleCell = page.locator(`[data-rule-listing="77"]`);
     await ruleCell.getByRole('button',{name:'审阅',exact:true}).click();
     const panel = page.locator('tr.rule-detail-row');
-    await panel.getByRole('heading',{name:'持仓规则（add / trim / exit_review）'}).waitFor();
+    await panel.getByRole('heading',{name:'持仓规则（add / trim / exit_sell / exit_review）'}).waitFor();
     if (await panel.locator('.rule-chooser select').count() === 0) {
       // A later viewport reuses the fixture database: the rule approved by the
       // first pass must still be visible and reviewable.
