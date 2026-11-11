@@ -387,9 +387,11 @@ function ruleCellContent(region, rule) {
   wrap.appendChild(review);
   wrap.appendChild(zoneEventLine(rule.zone_events));
   const zones = (rule.zone_events && rule.zone_events.zones) || {};
+  if (zones.exit_sell && zones.exit_sell.inside) {
+    wrap.appendChild(el("span", { class: "badge warn", title: "投资论文被证伪，卖出信号，不改账本" }, "卖出信号"));
+  }
   if (zones.exit_review && zones.exit_review.inside) {
-    // funnel 9: 持仓复核区间是需要复核的提升级事件，行上常驻标记。
-    wrap.appendChild(el("span", { class: "badge warn", title: "持仓复核区间触发中" }, "需复核"));
+    wrap.appendChild(el("span", { class: "badge warn", title: "进入重审队列，不作为卖出信号" }, "需重审"));
   }
   return wrap;
 }
@@ -432,7 +434,7 @@ function holdingRulePanel(region, rule) {
   const box = el("div", { class: "rule-review" });
   const feedback = ruleFeedback(box);
   const listingId = rule.listing_id;
-  const heading = el("h3", {}, "持仓规则（add / trim / exit_review）");
+  const heading = el("h3", {}, "持仓规则（add / trim / exit_sell / exit_review）");
   if (rule.requested_template_ref) {
     heading.appendChild(el("span", { class: "badge" }, rule.requested_template_ref));
   }

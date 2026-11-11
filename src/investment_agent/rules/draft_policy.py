@@ -34,7 +34,7 @@ code                       meaning
 wording such as 买入、卖出、加仓、减仓、清仓、建仓、止损、目标价、仓位建议, nor
 ``buy`` / ``sell`` / ``stop loss`` / ``target price`` in English. Zone
 names are fixed identifiers (``buy_zone`` / ``drop`` / ``add`` / ``trim`` /
-``exit_review``) and are allowed as identifiers; the English check treats
+``exit_sell`` / ``exit_review``) and are allowed as identifiers; the English check treats
 ``_`` as part of a word, so ``buy_zone`` never matches ``buy``.
 
 **Numeric overrides fail closed** (review 2026-11-07 P1-8). An LLM draft is a
@@ -77,7 +77,7 @@ DRAFT_SCHEMA_VERSION = "rule_draft.v2"
 DRAFT_SCOPE = "candidate"
 """The default drafting scope: candidate rules (``buy_zone`` / ``drop``).
 
-Holding rules (``add`` / ``trim`` / ``exit_review``, WP8) reuse the same
+Holding rules (``add`` / ``trim`` / ``exit_sell`` / ``exit_review``, WP8) reuse the same
 drafting contract with ``scope="holding"``; conditions, factors and zones still
 come from the template, so only the zone set and the stored scope differ.
 """
@@ -154,7 +154,7 @@ def output_json_schema(policy: str = DEFAULTS_ONLY_POLICY) -> str:
 RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的"规则起草" Agent。你的输出只是一份"研究优先级规则"的参数化草稿，供用户审阅、修改或驳回；它不是投资建议，也不构成任何交易指令。
 
 背景：
-- 模板（template）由项目定义：筛选条件 screen、候选区间 candidate_zones（buy_zone / drop）、持仓区间 holding_zones（add / trim / exit_review），以及默认参数 params 和允许范围 param_ranges。条件中的 "$name" 引用参数 name。
+- 模板（template）由项目定义：筛选条件 screen、候选区间 candidate_zones（buy_zone / drop）、持仓区间 holding_zones（add / trim / exit_sell / exit_review），以及默认参数 params 和允许范围 param_ranges。条件中的 "$name" 引用参数 name。exit_sell 是论文被证伪时的卖出信号，不改账本；exit_review 只进入重审队列，不作为卖出信号。
 {policy_background}
 - 条件、因子、区间全部来自模板，不能新增、删除或改写任何条件。
 - 输入中的因子值由确定性系统计算（含 pe_percentile_5y / pb_percentile_5y 等自身 5 年历史分位）。你不计算、不推测任何数值事实，只能按因子名引用输入中已有的值。
@@ -162,7 +162,7 @@ RULE_DRAFT_SYSTEM_PROMPT_TEMPLATE = """你是个人投研系统中的"规则起�
 要求：
 {policy_rules}
 4. overall_rationale 概述参数化思路；watch_points 列出后续需要复核的数据点或证伪信号。
-5. 禁止交易指令语言：不得出现"买入""卖出""加仓""减仓""清仓""建仓""止损""止盈""目标价""仓位建议"等字样，不得给出收益承诺。提到区间时使用中性中文名（可研究区间、移出候选、持仓 add 区间、持仓 trim 区间、持仓复核区间），不要用交易动作描述区间。
+5. 禁止交易指令语言：不得出现"买入""卖出""加仓""减仓""清仓""建仓""止损""止盈""目标价""仓位建议"等字样，不得给出收益承诺。提到区间时使用中性中文名（可研究区间、移出候选、持仓 add 区间、持仓 trim 区间、证伪即卖、触发重审），不要用交易动作描述区间。
 6. 输出中文，只返回满足以下 JSON Schema 的单个 JSON 对象，不要输出其他文字：
 {output_schema}"""
 

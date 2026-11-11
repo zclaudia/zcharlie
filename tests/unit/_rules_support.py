@@ -54,6 +54,7 @@ def template_data(**overrides: Any) -> dict[str, Any]:
                 ]
             },
             "trim": {"any": [{"factor": "gain_vs_cost", "op": ">=", "value": 0.4}]},
+            "exit_sell": {"any": [{"factor": "roe", "op": "<", "value": 0.04}]},
             "exit_review": {"any": [{"factor": "roe", "op": "<", "value": 0.06}]},
         },
         "params": {"roe_min": 0.15, "pe_pct_max": 0.4, "weight_max": 0.08},

@@ -18,7 +18,10 @@ code                        meaning
 ``param_without_range``     a template param without ``param_ranges`` entry
 ``param_range_invalid``     ``min > max``
 ``param_out_of_range``      default or override outside ``[min, max]``
-``zone_not_allowed``        zone name not in the scope's enum (``sell`` never)
+``zone_not_allowed``        zone name not in the scope's enum (``sell`` never;
+                            falsified-thesis signals use ``exit_sell``)
+``min_periods_invalid``     ``min_periods`` is not a positive integer / ``$param``,
+                            or it appears outside a holding zone
 ``zone_missing``            a template lacks one of the scope's zones
 ``empty_group``             ``all`` / ``any`` with no conditions
 ``nesting_too_deep``        condition groups nested deeper than two levels
@@ -81,6 +84,7 @@ IssueCode = Literal[
     "param_range_invalid",
     "param_out_of_range",
     "zone_not_allowed",
+    "min_periods_invalid",
     "zone_missing",
     "empty_group",
     "nesting_too_deep",
@@ -178,7 +182,9 @@ class _Checker:
             if isinstance(child, ConditionGroup):
                 self.group(child, child_path, allow_pending=allow_pending, depth=depth + 1)
             else:
-                self.condition(child, child_path, allow_pending=allow_pending)
+                self.condition(
+                    child, child_path, allow_pending=allow_pending, allow_streak=allow_pending
+                )
 
     def labels(self, group: ConditionGroup, path: str) -> None:
         """Authoring: every condition in a template tree names what it tests."""
@@ -191,7 +197,9 @@ class _Checker:
             elif not (child.label and child.label.strip()):
                 self.add("label_missing", child_path, f"condition on {child.factor!r} has no label")
 
-    def condition(self, condition: Condition, path: str, *, allow_pending: bool) -> None:
+    def condition(
+        self, condition: Condition, path: str, *, allow_pending: bool, allow_streak: bool = False
+    ) -> None:
         factor = condition.factor
         if factor in self.context.pending_factors:
             if not allow_pending:
@@ -202,10 +210,42 @@ class _Checker:
                 )
         elif factor not in self.context.factor_names:
             self.add("unknown_factor", path, f"unknown factor {factor!r}")
+        self._periods(condition, path, allow_streak=allow_streak)
         if condition.op not in OPS:
             self.add("invalid_op", path, f"operator {condition.op!r} is not one of {OPS}")
             return
         self.value(condition, path)
+
+    def _periods(self, condition: Condition, path: str, *, allow_streak: bool) -> None:
+        value = condition.min_periods
+        if value is None:
+            return
+        period_path = f"{path}.min_periods"
+        if not allow_streak:
+            self.add(
+                "min_periods_invalid",
+                period_path,
+                "min_periods is only allowed on holding zones (trim, exit_sell, exit_review)",
+            )
+            return
+        if isinstance(value, str):
+            name = param_ref(value)
+            if name is None:
+                self.add(
+                    "min_periods_invalid",
+                    period_path,
+                    f"{value!r} is not a $param reference",
+                )
+                return
+            if name not in self.params:
+                self.add("param_undefined", period_path, f"parameter {name!r} is not defined")
+            return
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            self.add(
+                "min_periods_invalid",
+                period_path,
+                "min_periods must be an integer >= 1 or a $param reference",
+            )
 
     def _scalar(self, value: object, path: str, op: str, *, allow_bool: bool) -> bool:
         """Check one scalar operand; True when it is usable as a number."""
@@ -287,7 +327,12 @@ def _zones(
     allowed = SCOPE_ZONES[scope]
     for name in sorted(zones):
         if name not in allowed:
-            hint = " (there is no sell zone; use exit_review)" if name == "sell" else ""
+            hint = (
+                " (there is no sell zone; a falsified thesis uses exit_sell, "
+                "a re-review uses exit_review)"
+                if name == "sell"
+                else ""
+            )
             checker.add(
                 "zone_not_allowed",
                 f"{path}.{name}",
@@ -355,7 +400,9 @@ def check_template(
     for index, example in enumerate(template.examples or []):
         if parse_a_share_ticker(example.ticker) is None:
             checker.add(
-                "invalid_symbol", f"examples[{index}].ticker", f"{example.ticker!r} is not like 600519.SH"
+                "invalid_symbol",
+                f"examples[{index}].ticker",
+                f"{example.ticker!r} is not like 600519.SH",
             )
     if require_docs:
         _check_docs(checker, template)

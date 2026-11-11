@@ -61,6 +61,7 @@ from typing import Any, Literal
 
 from investment_agent.factors.registry import FactorValue
 from investment_agent.rules.schema import Condition, ConditionGroup, RuleTemplate, param_ref
+from investment_agent.rules.streak import StreakBook, StreakSession
 from investment_agent.rules.validation import effective_params, factors_in, resolve_value
 
 Outcome = Literal["hit", "truncated", "miss", "skipped", "excluded"]
@@ -164,8 +165,10 @@ class TemplateResult:
             "hits": [member.to_dict() for member in self.members if member.hit],
             "misses": {
                 "count": len(self.by_outcome("miss")),
-                "by_condition": {key: dict(self.misses_by_condition[key])
-                                 for key in sorted(self.misses_by_condition)},
+                "by_condition": {
+                    key: dict(self.misses_by_condition[key])
+                    for key in sorted(self.misses_by_condition)
+                },
                 "missing_by_factor": dict(sorted(self.missing_by_factor.items())),
             },
             "skipped": [
@@ -282,10 +285,13 @@ class _Leaf:
     param: str | list[str | None] | None
     factor: FactorValue | None
     outcome: LeafOutcome
+    effective: bool | None = None
+    streak_count: int | None = None
+    min_periods_resolved: int | None = None
 
     def reason(self) -> dict[str, Any]:
         factor = self.factor
-        return {
+        payload = {
             "rule_path": self.path,
             "factor": self.condition.factor,
             "op": self.condition.op,
@@ -297,6 +303,10 @@ class _Leaf:
             "outcome": self.outcome,
             "snapshot_ref": _snapshot_ref(factor),
         }
+        if self.streak_count is not None:
+            payload["streak"] = self.streak_count
+            payload["min_periods"] = self.min_periods_resolved
+        return payload
 
 
 def _param_of(value: Any) -> str | list[str | None] | None:
@@ -312,13 +322,14 @@ def _evaluate(
     member: ScreenMember,
     params: Mapping[str, float],
     leaves: list[_Leaf],
+    book: StreakBook | None = None,
 ) -> bool | None:
     node_path = f"{path}.{group.mode}"
     results: list[bool | None] = []
     for index, child in enumerate(group.children):
         child_path = f"{node_path}[{index}]"
         if isinstance(child, ConditionGroup):
-            results.append(_evaluate(child, child_path, member, params, leaves))
+            results.append(_evaluate(child, child_path, member, params, leaves, book))
             continue
         threshold = resolve_value(child.value, params)
         factor = member.factors.get(child.factor)
@@ -332,7 +343,23 @@ def _evaluate(
         else:
             result = _compare(factor.value, child.op, threshold)
             outcome = "met" if result else "not_met"
-        leaves.append(_Leaf(child_path, child, threshold, _param_of(child.value), factor, outcome))
+        streak_count: int | None = None
+        required: int | None = None
+        if book is not None:
+            result, streak_count, required = book.gate(child_path, child, result)
+        leaves.append(
+            _Leaf(
+                child_path,
+                child,
+                threshold,
+                _param_of(child.value),
+                factor,
+                outcome,
+                effective=result,
+                streak_count=streak_count,
+                min_periods_resolved=required,
+            )
+        )
         results.append(result)
     decided = [result for result in results if result is not None]
     if not decided:
@@ -398,19 +425,26 @@ def evaluate_zone_outcomes(
     zones: Mapping[str, ConditionGroup],
     factors: Mapping[str, FactorValue],
     params: Mapping[str, float],
+    streak: StreakSession | None = None,
 ) -> dict[str, ZoneOutcome]:
-    """Per-zone group result plus every leaf reason (pure, no short circuit)."""
+    """Per-zone group result plus every leaf reason (pure, no short circuit).
+
+    ``streak`` gates conditions that declare ``min_periods``. Without it, one
+    period is enough, which is what the screen and any caller that does not
+    carry history still do.
+    """
 
     member = ScreenMember(listing_id=0, ticker="", industry_group="", factors=factors)
     outcomes: dict[str, ZoneOutcome] = {}
     for name, group in zones.items():
         leaves: list[_Leaf] = []
-        holds = _evaluate(group, name, member, params, leaves)
+        book = streak.book_for(name) if streak is not None else None
+        holds = _evaluate(group, name, member, params, leaves, book)
         outcomes[name] = ZoneOutcome(
             zone=name,
             holds=holds,
             reasons=tuple(leaf.reason() for leaf in leaves),
-            met=tuple(leaf.reason() for leaf in leaves if leaf.outcome == "met"),
+            met=tuple(leaf.reason() for leaf in leaves if leaf.effective is True),
         )
     return outcomes
 
@@ -573,9 +607,7 @@ def _screen_template(
             "hit" if rank <= config.hit_cap else "truncated",
             rank,
             strength,
-            tuple(
-                leaf.reason() for leaf in leaves if leaf.outcome in {"met", "not_applicable"}
-            ),
+            tuple(leaf.reason() for leaf in leaves if leaf.outcome in {"met", "not_applicable"}),
             member.industry_group,
         )
         for rank, (strength, member, leaves) in enumerate(hits, start=1)

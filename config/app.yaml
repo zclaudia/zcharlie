@@ -13,7 +13,7 @@ scheduler:
   portfolio_valuation_cron: "5 0 * * *"
   portfolio_valuation_timezone: Asia/Shanghai
   # Daily zone detection (WP8), after the valuations: candidate buy_zone/drop
-  # on reviewed trading days, holding add/trim/exit_review from the day's
+  # on reviewed trading days, holding add/trim/exit_sell/exit_review from the day's
   # valuation. Idempotent per (scope, date, trigger); no LLM.
   zone_detection_cron: "20 0 * * *"
   zone_detection_timezone: Asia/Shanghai

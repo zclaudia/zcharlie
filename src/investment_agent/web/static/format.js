@@ -40,7 +40,8 @@ export const ZONE_LABELS = Object.freeze({
   drop: "移出候选",
   add: "持仓区间 add",
   trim: "持仓区间 trim",
-  exit_review: "持仓区间 复核",
+  exit_sell: "证伪即卖",
+  exit_review: "触发重审",
 });
 
 export const CANDIDATE_STATUS_LABELS = Object.freeze({

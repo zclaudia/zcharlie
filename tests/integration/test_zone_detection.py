@@ -130,9 +130,13 @@ async def env(tmp_path):
             )
         )
         await RuleStore(session).sync_templates(load_templates())
-    yield SimpleNamespace(listing_id=listing_id, tmp_path=tmp_path, settings=Settings(
-        _env_file=None, api_key="test", llm_tier3_api_key="test", data_dir=tmp_path
-    ))
+    yield SimpleNamespace(
+        listing_id=listing_id,
+        tmp_path=tmp_path,
+        settings=Settings(
+            _env_file=None, api_key="test", llm_tier3_api_key="test", data_dir=tmp_path
+        ),
+    )
     await engine.dispose()
 
 
@@ -344,7 +348,9 @@ async def test_zone_summaries_expose_the_interval_and_latest_event(env, factors)
 # --------------------------------------------------------------------------- #
 
 
-async def _ledger(env, *, quantity: str = "100", average_cost: str = "10", cash: str = "50000") -> ObjectRef:
+async def _ledger(
+    env, *, quantity: str = "100", average_cost: str = "10", cash: str = "50000"
+) -> ObjectRef:
     ref = ObjectRef(kind="listing", id=env.listing_id, revision=1)
     async with session_scope() as session:
         account = await PortfolioService(session).create_account(
@@ -377,9 +383,7 @@ async def _ledger(env, *, quantity: str = "100", average_cost: str = "10", cash:
             )
         )
     async with session_scope() as session:
-        valuation = await ValuationService(session).ensure(
-            account.id, valuation_date=DAY, now=T
-        )
+        valuation = await ValuationService(session).ensure(account.id, valuation_date=DAY, now=T)
         assert valuation is not None
     async with session_scope() as session:
         row = await session.get(PortfolioAccount, str(account.id))
@@ -392,7 +396,7 @@ async def _ledger(env, *, quantity: str = "100", average_cost: str = "10", cash:
 async def test_holding_zones_use_the_valuation_position_factors(env, factors) -> None:
     await _ledger(env, quantity="100", average_cost="10")
     rule_id = await _active_rule(scope="holding")
-    # add: pe <= 0.25 and position_weight < 0.08; trim: gain >= 0.50 ...
+    # add: pe percentile <= 0.25 and position_weight < 0.08.
     factors.set(pe_percentile_5y=0.10, gross_margin=0.60, roe=0.20, net_profit_growth_3y=0.10)
 
     outcome = await _run(scope="holding")
@@ -412,7 +416,7 @@ async def test_holding_zones_use_the_valuation_position_factors(env, factors) ->
     # 100 shares at the 10 CNY fixture close with 50000 cash -> 1000/51000.
     assert reasons["position_weight"]["actual"] == pytest.approx(0.0196078, abs=1e-6)
 
-    # A price rise makes gain_vs_cost fire trim (info), exit_review stays quiet.
+    # A large gain with a modest PE does not trim. Cost is not a sell reason.
     async with session_scope() as session:
         session.add(
             MarketSnapshot(
@@ -435,42 +439,152 @@ async def test_holding_zones_use_the_valuation_position_factors(env, factors) ->
             account.id, valuation_date=DAY + timedelta(days=1), now=T + timedelta(days=1)
         )
         assert valuation is not None
-    factors.set(pe_percentile_5y=0.95)
-    trim = await _run(as_of=DAY + timedelta(days=1), scope="holding")
-    assert trim.created and trim.result.notified
-    events = await _events(scope="holding")
-    trims = [event for event in events if event.zone == "trim"]
-    assert [event.transition for event in trims] == ["entered"]
-    assert trims[0].level == "info"
-    trim_reasons = {reason["factor"] for reason in trims[0].conditions_met}
-    assert "gain_vs_cost" in trim_reasons
+    factors.set(pe_percentile_5y=0.40, pe_ttm=20)
+    quiet = await _run(as_of=DAY + timedelta(days=1), scope="holding")
+    assert "trim" not in {
+        event.zone for event in await _events(scope="holding") if event.id in quiet.created
+    }
 
 
 @pytest.mark.asyncio
-async def test_exit_review_is_action_required_and_does_not_touch_the_ledger(env, factors) -> None:
+async def test_falsified_thesis_is_a_sell_signal_and_does_not_touch_the_ledger(
+    env, factors
+) -> None:
     await _ledger(env)
-    await _active_rule(scope="holding")
-    factors.set(pe_percentile_5y=0.10, gross_margin=0.10, roe=0.20, net_profit_growth_3y=0.10)
+    await _active_rule(scope="holding", params={"streak_periods": 1})
+    factors.set(
+        pe_percentile_5y=0.50,
+        pe_ttm=20,
+        gross_margin=0.10,
+        roe=0.20,
+        net_profit_growth_3y=0.10,
+        revenue_growth_3y=0.20,
+    )
 
     outcome = await _run(scope="holding")
     assert outcome.created
     async with session_scope() as session:
-        exits = list(
+        sells = list(
+            (
+                await session.scalars(
+                    select(ZoneEventRecord).where(ZoneEventRecord.zone == "exit_sell")
+                )
+            ).all()
+        )
+        reviews = list(
             (
                 await session.scalars(
                     select(ZoneEventRecord).where(ZoneEventRecord.zone == "exit_review")
                 )
             ).all()
         )
-    assert len(exits) == 1
-    assert exits[0].level == "action_required"
-    assert [reason["factor"] for reason in exits[0].conditions_met] == ["gross_margin"]
+    assert len(sells) == 1
+    assert sells[0].level == "action_required"
+    assert zd.zone_disposition(sells[0].zone) == "sell"
+    assert [reason["factor"] for reason in sells[0].conditions_met] == ["gross_margin"]
+    assert reviews == []
     # A rule event is a prompt and a record: facts are untouched.
     async with session_scope() as session:
         account = await session.scalar(select(PortfolioAccount))
         valuation = await ValuationService(session).current(account.id)
         assert valuation.holdings[0].quantity == D(100)
         assert account.revision == valuation.ledger_revision
+
+
+@pytest.mark.asyncio
+async def test_re_review_enters_the_queue_and_does_not_sell(env, factors) -> None:
+    from investment_agent.storage.models.investor import InvestorCase
+    from investment_agent.storage.models.monitoring import ReviewCycle
+
+    await _ledger(env)
+    await _active_rule(scope="holding", params={"streak_periods": 1})
+    async with session_scope() as session:
+        session.add(
+            InvestorCase(
+                id=str(uuid4()),
+                owner_id=zd.OWNER,
+                listing_id=env.listing_id,
+                revision=1,
+                payload={"status": "active"},
+                source_refs=[],
+            )
+        )
+    factors.set(
+        pe_percentile_5y=0.50,
+        pe_ttm=20,
+        gross_margin=0.60,
+        roe=0.20,
+        net_profit_growth_3y=0.10,
+        revenue_growth_3y=0.0,
+    )
+
+    await _run(scope="holding")
+    entered = [event for event in await _events(scope="holding") if event.transition == "entered"]
+    assert [event.zone for event in entered] == ["exit_review"]
+    assert zd.zone_disposition(entered[0].zone) == "rereview"
+    assert [reason["factor"] for reason in entered[0].conditions_met] == ["revenue_growth_3y"]
+    async with session_scope() as session:
+        cycle = await session.scalar(select(ReviewCycle))
+        assert cycle is not None
+        assert cycle.state == "pending"
+        assert cycle.payload["disposition"] == "rereview"
+        assert cycle.payload["auto_sell"] is False
+        account = await session.scalar(select(PortfolioAccount))
+        valuation = await ValuationService(session).current(account.id)
+        assert valuation.holdings[0].quantity == D(100)
+
+
+@pytest.mark.asyncio
+async def test_absurd_pe_trims_only_after_consecutive_periods(env, factors) -> None:
+    await _ledger(env, quantity="100", average_cost="10")
+    await _active_rule(scope="holding", params={"streak_periods": 2})
+    factors.set(
+        pe_percentile_5y=0.40,
+        pe_ttm=80,
+        gross_margin=0.60,
+        roe=0.20,
+        net_profit_growth_3y=0.10,
+        revenue_growth_3y=0.20,
+    )
+
+    first = await _run(scope="holding")
+    assert "trim" not in {
+        event.zone for event in await _events(scope="holding") if event.id in first.created
+    }
+
+    async with session_scope() as session:
+        session.add(
+            MarketSnapshot(
+                listing_id=env.listing_id,
+                trade_date=DAY + timedelta(days=1),
+                open=D(17),
+                high=D(17),
+                low=D(17),
+                close=D(17),
+                volume=D(1),
+                adjust="none",
+                provider="fixture",
+                captured_at=T + timedelta(days=1),
+                version=1,
+            )
+        )
+    async with session_scope() as session:
+        account = await session.scalar(select(PortfolioAccount))
+        valuation = await ValuationService(session).ensure(
+            account.id, valuation_date=DAY + timedelta(days=1), now=T + timedelta(days=1)
+        )
+        assert valuation is not None
+    await _run(as_of=DAY + timedelta(days=1), scope="holding")
+    trims = [
+        event
+        for event in await _events(scope="holding")
+        if event.zone == "trim" and event.transition == "entered"
+    ]
+    assert len(trims) == 1
+    assert trims[0].level == "info"
+    assert [reason["factor"] for reason in trims[0].conditions_met] == ["pe_ttm"]
+    assert trims[0].conditions_met[0]["streak"] == 2
+    assert "gain_vs_cost" not in {reason["factor"] for reason in trims[0].conditions_met}
 
 
 @pytest.mark.asyncio
@@ -535,9 +649,7 @@ async def test_not_applicable_zone_is_undecided_and_records_nothing(env) -> None
         result = await zd.record_evaluations(session, [evaluation])
     assert result.created == ()
     async with session_scope() as session:
-        assert (
-            await session.scalar(select(ZoneIntervalStateRecord))
-        ) is None
+        assert (await session.scalar(select(ZoneIntervalStateRecord))) is None
         assert await _events() == []
 
 
@@ -578,9 +690,7 @@ async def _run_handler(
     worker = ResearchWorker(
         settings=env.settings,
         worker_id="zone-worker",
-        handlers=[
-            ZoneDetectionHandler(settings=env.settings, calendar_path=calendar_path)
-        ],
+        handlers=[ZoneDetectionHandler(settings=env.settings, calendar_path=calendar_path)],
     )
     assert await worker.run_once(run_id=run_id) == run_id
     return run_id
@@ -614,7 +724,9 @@ async def test_job_is_idempotent_per_scope_date_and_reason(env, factors, tmp_pat
         assert created is False and run.id == run_id
 
     # A different trigger token is a new run: the same inputs still insert nothing.
-    await _run_handler(env, as_of=DAY, scope="candidate", reason="close_quote", calendar_path=str(calendar))
+    await _run_handler(
+        env, as_of=DAY, scope="candidate", reason="close_quote", calendar_path=str(calendar)
+    )
     assert len(await _events()) == 1
 
 
@@ -626,9 +738,7 @@ async def test_candidate_scope_is_gated_to_reviewed_trading_days(env, factors, t
     calendar.write_text(CALENDAR_YAML, encoding="utf-8")
     saturday = DAY + timedelta(days=4)
     assert saturday.weekday() == 5
-    run_id = await _run_handler(
-        env, as_of=saturday, scope="candidate", calendar_path=str(calendar)
-    )
+    run_id = await _run_handler(env, as_of=saturday, scope="candidate", calendar_path=str(calendar))
     async with session_scope() as session:
         stored = await session.get(PipelineRun, run_id)
         assert stored.metadata_json["skipped_reason"] == "non_trading_day"
@@ -639,7 +749,9 @@ async def test_candidate_scope_is_gated_to_reviewed_trading_days(env, factors, t
 
 
 @pytest.mark.asyncio
-async def test_unreviewed_calendar_year_keeps_the_candidate_gate_closed(env, factors, tmp_path) -> None:
+async def test_unreviewed_calendar_year_keeps_the_candidate_gate_closed(
+    env, factors, tmp_path
+) -> None:
     """A calendar without the year cannot vouch for the day: the candidate
     gate stays closed instead of producing weekend noise events."""
 
@@ -847,9 +959,7 @@ async def test_a_failed_notification_does_not_poison_the_run(env, factors, monke
 
     assert len(outcome.created) == 1
     async with session_scope() as session:
-        notifications = await session.scalar(
-            select(func.count()).select_from(InvestorNotification)
-        )
+        notifications = await session.scalar(select(func.count()).select_from(InvestorNotification))
         assert notifications == 0
 
 
@@ -902,9 +1012,9 @@ async def test_reservation_lock_keeps_updated_at(env, factors) -> None:
 
     async with session_scope() as session:
         await session.execute(
-            update(ZoneIntervalStateRecord).where(
-                ZoneIntervalStateRecord.scope == "candidate"
-            ).values(updated_at=pinned)
+            update(ZoneIntervalStateRecord)
+            .where(ZoneIntervalStateRecord.scope == "candidate")
+            .values(updated_at=pinned)
         )
     async with session_scope() as session:
         state = await zd._locked_state(

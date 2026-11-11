@@ -250,9 +250,9 @@ async def test_draft_review_approve_keeps_one_active_version(env) -> None:
     assert listed["draft"]["template_ref"] == f"{TEMPLATE}@1"
     assert listed["draft"]["scope"] == "holding"
     # The holding zones are what a holding rule renders, not the candidate ones.
-    assert set(listed["draft"]["zones"]) == {"add", "trim", "exit_review"}
+    assert set(listed["draft"]["zones"]) == {"add", "trim", "exit_sell", "exit_review"}
     assert listed["draft"]["factor_units"]["position_weight"] == "fraction"
-    assert listed["draft"]["factor_units"]["gain_vs_cost"] == "fraction"
+    assert listed["draft"]["factor_units"]["pe_ttm"] == "times"
     assert listed["draft"]["factor_units"]["pe_percentile_5y"] == "fraction (0,1]"
     rule_id = listed["draft"]["rule_instance_id"]
 
@@ -285,7 +285,7 @@ async def test_draft_review_approve_keeps_one_active_version(env) -> None:
     async with session_scope() as session:
         live = await zone_detection.active_zone_rules(session, "holding")
     assert [rule.rule_instance_id for rule in live] == [records[0].id]
-    assert set(live[0].zones) == {"add", "trim", "exit_review"}
+    assert set(live[0].zones) == {"add", "trim", "exit_sell", "exit_review"}
 
 
 async def test_redraft_edit_and_reject_keep_the_active_version(env) -> None:
@@ -333,7 +333,10 @@ async def test_redraft_edit_and_reject_keep_the_active_version(env) -> None:
     # Rejecting requires a reason and never touches the active version.
     missing = client.post(
         "/portfolio/rule/reject",
-        json={"listing_id": env.listing_id, "rule_instance_id": edited_body["draft"]["rule_instance_id"]},
+        json={
+            "listing_id": env.listing_id,
+            "rule_instance_id": edited_body["draft"]["rule_instance_id"],
+        },
         headers=KEY,
     )
     assert missing.status_code == 422
@@ -421,9 +424,7 @@ async def test_drafting_an_unknown_template_is_rejected(env) -> None:
     assert response.status_code == 422
     async with session_scope() as session:
         count = await session.scalar(
-            select(func.count())
-            .select_from(PipelineRun)
-            .where(PipelineRun.kind == "rule_draft")
+            select(func.count()).select_from(PipelineRun).where(PipelineRun.kind == "rule_draft")
         )
     assert count == 0
 
@@ -433,12 +434,9 @@ async def test_rule_endpoints_require_auth(env) -> None:
         401,
         403,
     }
-    assert (
-        env.client.post(
-            "/portfolio/rule/draft", json={"listing_id": env.listing_id}
-        ).status_code
-        in {401, 403}
-    )
+    assert env.client.post(
+        "/portfolio/rule/draft", json={"listing_id": env.listing_id}
+    ).status_code in {401, 403}
 
 
 def test_holding_rule_keeps_the_same_default_when_none_is_given(env) -> None:

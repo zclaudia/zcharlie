@@ -3,7 +3,7 @@
 No model supplied events or executable conditions. All methods join the caller's
 short transaction; no model/network calls occur while holding the writer lock.
 """
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from hashlib import sha256
 from typing import Any
 from uuid import UUID, uuid5
@@ -43,6 +43,97 @@ from investment_agent.storage.repositories.supplemental_updates import (
 )
 
 ACTIVE = ("pending", "running", "blocked")
+
+
+async def enqueue_holding_rereview(
+    session: AsyncSession,
+    *,
+    listing_id: int,
+    event_id: int,
+    as_of: date,
+    conditions: list[dict[str, Any]],
+    now: datetime,
+) -> str | None:
+    """Queue a holding re-review. Does not sell, restrict, or dispatch.
+
+    A falsified thesis is a sell signal on the zone event and never comes
+    here. This only records that ``exit_review`` asked for another look. No
+    investor case means there is no review cycle to attach; the zone event
+    itself remains the in-app record. An archived case is left alone.
+    """
+
+    case = await session.scalar(
+        select(InvestorCase).where(
+            InvestorCase.owner_id == "local_owner", InvestorCase.listing_id == listing_id
+        )
+    )
+    if case is None:
+        return None
+    payload = case.payload if isinstance(case.payload, dict) else {}
+    if payload.get("status") == "archived":
+        return None
+    key = f"zone-rereview:{event_id}"
+    existing = await session.get(MonitorReceipt, key)
+    if existing is not None:
+        cycle_id = existing.payload.get("cycle_id") if isinstance(existing.payload, dict) else None
+        return str(cycle_id) if cycle_id else None
+    try:
+        case_uuid = UUID(str(case.id))
+    except ValueError:
+        return None
+    cycle = await session.scalar(
+        select(ReviewCycle)
+        .where(ReviewCycle.case_id == str(case.id), ReviewCycle.state.in_(ACTIVE))
+        .order_by(ReviewCycle.id)
+    )
+    detail = {
+        "disposition": "rereview",
+        "auto_sell": False,
+        "source": "holding_exit_review",
+        "zone": "exit_review",
+        "as_of": as_of.isoformat(),
+        "zone_event_id": event_id,
+        "conditions_met": conditions,
+    }
+    if cycle is None:
+        cycle = ReviewCycle(
+            id=str(uuid5(case_uuid, key)),
+            case_id=str(case.id),
+            task_id=None,
+            state="pending",
+            payload={
+                "disposition": "rereview",
+                "auto_sell": False,
+                "source": "holding_exit_review",
+                "created_at": now.isoformat(),
+                "events": [key],
+                "reasons": ["holding_exit_review"],
+                "recommendation_ref": None,
+                "source_refs": [detail],
+                "conditions_met": conditions,
+                "dirty": [],
+                "attempted": False,
+            },
+        )
+        session.add(cycle)
+    else:
+        data = dict(cycle.payload)
+        data["events"] = list(dict.fromkeys([*data.get("events", []), key]))
+        data["reasons"] = list(dict.fromkeys([*data.get("reasons", []), "holding_exit_review"]))
+        data["source_refs"] = [*data.get("source_refs", []), detail]
+        data["conditions_met"] = [*data.get("conditions_met", []), *conditions]
+        data["disposition"] = "rereview"
+        data["auto_sell"] = False
+        cycle.payload = data
+    session.add(
+        MonitorReceipt(
+            key=key,
+            case_id=str(case.id),
+            payload={"cycle_id": cycle.id, "checked_at": now.isoformat(), **detail},
+        )
+    )
+    await session.flush()
+    return cycle.id
 
 
 class MonitoringService:

@@ -83,7 +83,8 @@ FIELD_LABELS: dict[str, str] = {
     "drop": "移出候选",
     "add": "持仓 add 区间",
     "trim": "持仓 trim 区间",
-    "exit_review": "持仓复核区间",
+    "exit_sell": "证伪即卖",
+    "exit_review": "触发重审",
 }
 
 

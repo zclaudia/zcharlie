@@ -138,4 +138,4 @@ export function eventsSummary(event) {
   return `触发条件：${parts.length ? parts.join("；") : "—"} · 校准状态：${calibration}`;
 }
 
-export const HOLDING_ZONE_ORDER = ["add", "trim", "exit_review"];
+export const HOLDING_ZONE_ORDER = ["add", "trim", "exit_sell", "exit_review"];

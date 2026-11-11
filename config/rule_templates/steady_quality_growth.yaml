@@ -18,6 +18,11 @@
 # * Q6: ROE is bounded above (40%).
 # * The archetype's "dividend yield >= 1.5%" is still not a screen condition
 #   (adding it is a calibration question, not part of this review).
+#
+# Exit discipline: floating profit is not a trim reason. trim uses an
+# uncalibrated PE(TTM) absurdity line. exit_sell is the falsified-thesis
+# sell signal; exit_review only queues a re-review. Trim, sell and re-review
+# all require streak_periods consecutive hits (uncalibrated default).
 id: steady_quality_growth
 name: 稳健质量成长
 description: >-
@@ -101,14 +106,17 @@ holding_zones:
       - {factor: position_weight, op: "<", value: "$add_weight_max", label: 仓位未满, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
   trim:
     any:
-      - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min", label: 估值高位}
-      - {factor: gain_vs_cost, op: ">=", value: "$trim_gain_min", label: 浮盈较大, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
-      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）}
+      - {factor: pe_percentile_5y, op: ">=", value: "$trim_pe_pct_min", label: 估值高位, min_periods: "$streak_periods"}
+      - {factor: pe_ttm, op: ">=", value: "$trim_pe_absurd", label: 估值离谱, why: 现价相对盈利的倍数高到离谱才提示减仓；浮盈只说明买入代价，不是卖出理由。, data_note: 未校准的起始默认值，不是研究过的 A 股参数。pe_ttm 缺失或非正（negative_earnings）时不触发。, min_periods: "$streak_periods"}
+      - {factor: position_weight, op: ">", value: "$trim_weight_min", label: 仓位过重, data_note: 仓位因子：由每日区间检测从当日估值计算（无可用估值或成本未知时不触发）, min_periods: "$streak_periods"}
+  exit_sell:
+    any:
+      - {factor: roe, op: "<", value: "$exit_roe_max", label: ROE 走低, why: 证伪即卖：盈利能力下滑。, min_periods: "$streak_periods"}
+      - {factor: roe_stability, op: "<", value: 0.40, label: 稳定性崩坏, why: 证伪即卖：不再稳健。, min_periods: "$streak_periods"}
+      - {factor: debt_ratio, op: ">", value: "$exit_debt_ratio_min", label: 负债过高, why: 证伪即卖：负债率突破稳健论文。数据缺失时不触发。, min_periods: "$streak_periods"}
   exit_review:
     any:
-      - {factor: roe, op: "<", value: "$exit_roe_max", label: ROE 走低, why: 证伪：盈利能力下滑。}
-      - {factor: roe_stability, op: "<", value: 0.40, label: 稳定性崩坏, why: 证伪：不再稳健。}
-      - {factor: debt_ratio, op: ">", value: "$exit_debt_ratio_min", label: 负债过高, why: 原型负债率 ≤ 55%，超过 70% 触发复核；数据缺失时不触发。}
+      - {factor: net_profit_growth_3y, op: "<", value: 0.0, label: 利润转负, why: 触发重审：利润转负，ROE 与稳定性尚未跌破证伪线，只进入重审队列，不作为卖出信号。, min_periods: "$streak_periods"}
 
 params:
   roe_min: {default: 0.12, range: [0.08, 0.20], label: ROE 下限}
@@ -127,7 +135,16 @@ params:
   add_pe_pct_max: {default: 0.25, range: [0.05, 0.50], label: 持仓 add 区间 PE 分位上限}
   add_weight_max: {default: 0.10, range: [0.02, 0.20], label: 持仓 add 区间仓位上限}
   trim_pe_pct_min: {default: 0.90, range: [0.70, 0.99], label: 持仓 trim 区间 PE 分位}
-  trim_gain_min: {default: 0.40, range: [0.20, 1.00], label: 持仓 trim 区间浮盈}
+  trim_pe_absurd:
+    default: 40
+    range: [20, 80]
+    label: 持仓 trim 估值离谱线
+    help: 未校准的起始默认值，不是研究过的 A 股参数。PE(TTM) 达到这条倍数才视为估值离谱；与买入成本无关。
   trim_weight_min: {default: 0.15, range: [0.08, 0.30], label: 持仓 trim 区间仓位}
-  exit_roe_max: {default: 0.08, range: [0.03, 0.12], label: 复核 ROE 线}
-  exit_debt_ratio_min: {default: 0.70, range: [0.55, 0.90], label: 复核负债率线}
+  exit_roe_max: {default: 0.08, range: [0.03, 0.12], label: 证伪 ROE 线}
+  exit_debt_ratio_min: {default: 0.70, range: [0.55, 0.90], label: 证伪负债率线}
+  streak_periods:
+    default: 3
+    range: [1, 12]
+    label: 连续期数
+    help: 未校准的起始默认值，不是研究过的 A 股参数。减仓、证伪卖出和重审都要连续这么多期成立，用来过滤单期噪声。
