@@ -564,7 +564,22 @@ class SyntheticEastmoney:
         revenue = profile.revenue(year) or net_profit / profile.net_margin
         if endpoint == "stock_lrb_em":
             # 归母净利润 slightly below the consolidated baostock netProfit.
-            return {"净利润": round(net_profit * 0.97, 2), "营业总收入": round(revenue * 1.02, 2)}
+            # 营业利润 / 财务费用 are synthetic so the accounting-quality gate
+            # can be computed. A positive profit clears the uncalibrated 3x
+            # coverage floor; a loss does not. These are not researched ratios.
+            parent = round(net_profit * 0.97, 2)
+            if net_profit > 0:
+                finance = round(abs(parent) * 0.08, 2)
+                operating = round(parent * 1.15, 2)
+            else:
+                finance = round(abs(parent) * 0.08, 2) or 1.0
+                operating = round(parent, 2)
+            return {
+                "净利润": parent,
+                "营业总收入": round(revenue * 1.02, 2),
+                "营业利润": operating,
+                "营业总支出-财务费用": finance,
+            }
         if endpoint == "stock_xjll_em":
             return {"经营性现金流-现金流量净额": round(net_profit * 1.2, 2)}
         equity = profile.book_value_per_share(year) * profile.shares

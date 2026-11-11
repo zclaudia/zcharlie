@@ -45,6 +45,9 @@ GOOD: dict[str, Any] = {
     "gross_margin": 0.50,
     "is_st": 0.0,
     "report_overdue": 0.0,
+    "ocf_to_net_income": 1.2,
+    "share_dilution": 0.0,
+    "interest_coverage": 8.0,
 }
 
 
@@ -286,7 +289,15 @@ def test_duplicate_members_rejected_and_required_factors() -> None:
         run_screen(as_of=AS_OF, members=[member("000001.SZ"), member("000001.SZ")],
                    templates=[template()], known_factors=KNOWN)
     assert required_factors([template()], ScreenConfig()) == {
-        "roe", "pe_percentile_5y", "debt_ratio", "gross_margin", "is_st", "report_overdue"
+        "roe",
+        "pe_percentile_5y",
+        "debt_ratio",
+        "gross_margin",
+        "is_st",
+        "report_overdue",
+        "ocf_to_net_income",
+        "share_dilution",
+        "interest_coverage",
     }
     with pytest.raises(ValueError):
         ScreenConfig(hit_cap=0)

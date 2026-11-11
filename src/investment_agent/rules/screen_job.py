@@ -199,6 +199,7 @@ def screen_summary(screen: ScreenRun) -> dict[str, Any]:
                 for path, entry in misses[:SUMMARY_EXAMPLES]
             ],
             "missing_by_factor": dict(sorted(template.missing_by_factor.items())),
+            "pre_screen": dict(template.pre_screen),
         }
     return {
         "as_of": screen.as_of.isoformat(),

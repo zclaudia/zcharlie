@@ -27,6 +27,9 @@ export const FACTOR_LABELS = Object.freeze({
   is_st: "ST 标记",
   trade_status: "交易状态",
   report_overdue: "财报逾期",
+  ocf_to_net_income: "经营现金流/净利润",
+  share_dilution: "股本稀释",
+  interest_coverage: "利息覆盖",
   pe_percentile_5y: "PE 5 年分位",
   pb_percentile_5y: "PB 5 年分位",
   position_weight: "持仓权重",
@@ -385,6 +388,9 @@ export const METRIC_UNITS = Object.freeze({
   holding_days: "days",
   free_cash_flow: "CNY",
   operating_cash_flow: "CNY",
+  ocf_to_net_income: "ratio",
+  share_dilution: "fraction",
+  interest_coverage: "times",
   eps_ttm: "CNY/share",
 });
 

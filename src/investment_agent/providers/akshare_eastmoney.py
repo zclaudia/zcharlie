@@ -36,6 +36,10 @@ canonical field             source                               unit
 ``free_cash_flow``          NETCASH_OPERATE - CONSTRUCT_LONG_ASSET  CNY
 ==========================  ===================================  =====================
 
+``operating_profit`` (营业利润) and ``finance_expense`` (营业总支出-财务费用)
+are also taken from ``stock_lrb_em``, both in CNY. They feed approximate
+interest coverage. 财务费用 is not interest expense alone.
+
 源链与口径 (source chain and units; calibration records live in
 ``config/field_sources.yaml``, p1-plan 2.2 live checks of 2026-10-06):
 
@@ -222,6 +226,8 @@ class SummaryField:
 SUMMARY_FIELDS: tuple[SummaryField, ...] = (
     SummaryField("net_profit_parent", "stock_lrb_em", "净利润"),
     SummaryField("revenue_total", "stock_lrb_em", "营业总收入"),
+    SummaryField("operating_profit", "stock_lrb_em", "营业利润"),
+    SummaryField("finance_expense", "stock_lrb_em", "营业总支出-财务费用"),
     SummaryField("operating_cash_flow", "stock_xjll_em", "经营性现金流-现金流量净额"),
     SummaryField("debt_ratio", "stock_zcfz_em", "资产负债率", percent=True),
     SummaryField("total_assets", "stock_zcfz_em", "资产-总资产"),

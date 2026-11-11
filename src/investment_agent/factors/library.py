@@ -68,8 +68,13 @@ FLAG_SUSPECT_PROVIDER_VALUE = "suspect_provider_value"
 FLAG_PROVIDER_FALLBACK = "provider_fallback"
 FLAG_NO_SHARES = "no_total_shares"
 FLAG_NON_POSITIVE_DENOMINATOR = "non_positive_denominator"
+FLAG_NON_POSITIVE_NET_INCOME = "non_positive_net_income"
+FLAG_NON_POSITIVE_FINANCE_EXPENSE = "non_positive_finance_expense"
 
 NOT_FINANCIAL = Applicability(excluded=FINANCIAL_GROUPS)
+# Banks and insurers: cash-profit and interest-burden ratios are not the same
+# reading. Brokers stay in (they are not deposit- or float-funded in the same way).
+NOT_BANK_OR_INSURER = Applicability(excluded=frozenset({"banking", "insurance"}))
 # A latest bar older than this (calendar days) before as_of is flagged stale;
 # long enough to span the Spring Festival / National Day closures.
 STALE_PRICE_DAYS = 14
@@ -270,6 +275,116 @@ def _free_cash_flow(view: SnapshotView) -> Partial:
     if value is not None and approx:
         return Partial(value, quality="approx", inputs_ref=ref)
     return Partial(value, inputs_ref=ref)
+
+
+def _ocf_to_net_income(view: SnapshotView) -> Partial:
+    """Latest annual operating cash flow / net profit.
+
+    Prefers ``net_profit_parent``. ``net_profit_total`` is an explicit approx
+    fallback (it includes minority interests), not a silent substitute for a
+    missing parent figure when the parent figure is the one we have. A
+    non-positive profit does not produce a ratio.
+    """
+
+    period = view.latest_annual()
+    if period is None:
+        return Partial(None, flags=(FLAG_NO_ANNUAL_REPORT,))
+    operating = period.value("operating_cash_flow")
+    parent = period.value("net_profit_parent")
+    total = period.value("net_profit_total")
+    if parent is not None:
+        profit, basis, approx = parent, "net_profit_parent", False
+    elif total is not None:
+        profit, basis, approx = total, "net_profit_total", True
+    else:
+        profit, basis, approx = None, "net_profit_parent", False
+    ref = _ref(
+        period,
+        formula="operating_cash_flow / net_profit",
+        basis=basis,
+        source_fields=("operating_cash_flow", "net_profit_parent", "net_profit_total"),
+    )
+    if operating is None or profit is None:
+        return Partial(None, flags=(FLAG_INCOMPLETE_HISTORY,), inputs_ref=ref)
+    if profit <= 0:
+        return Partial(
+            None,
+            flags=(FLAG_NON_POSITIVE_NET_INCOME,),
+            inputs_ref={**ref, "net_profit": profit, "operating_cash_flow": operating},
+        )
+    ocf_source = period.source("operating_cash_flow")
+    if ocf_source is not None and ocf_source.approx:
+        approx = True
+    return Partial(
+        operating / profit,
+        quality="approx" if approx else None,
+        inputs_ref=ref,
+    )
+
+
+def _share_dilution(view: SnapshotView) -> Partial:
+    """Total-share change from the prior annual report to the latest one.
+
+    ``shares_t / shares_t-1 - 1``. This is the change in the reported share
+    count, including bonus and capitalisation issues, not a cash-issuance
+    measure. One missing count means the change cannot be computed.
+    """
+
+    latest = view.latest_annual()
+    if latest is None:
+        return Partial(None, flags=(FLAG_NO_ANNUAL_REPORT,))
+    prior = view.annual(latest.report_period.year - 1)
+    latest_shares = latest.value("total_shares")
+    prior_shares = None if prior is None else prior.value("total_shares")
+    ref = _ref(
+        latest,
+        prior,
+        formula="total_shares_t / total_shares_t-1 - 1",
+        field="total_shares",
+    )
+    if prior is None or latest_shares is None or prior_shares is None:
+        return Partial(None, flags=(FLAG_INCOMPLETE_HISTORY,), inputs_ref=ref)
+    if latest_shares <= 0 or prior_shares <= 0:
+        return Partial(None, flags=(FLAG_NON_POSITIVE_BASE,), inputs_ref=ref)
+    return Partial(latest_shares / prior_shares - 1, inputs_ref=ref)
+
+
+def _interest_coverage(view: SnapshotView) -> Partial:
+    """Approximate coverage: (operating profit + finance expense) / finance expense.
+
+    营业利润 is already after 财务费用, so the expense is added back. 财务费用
+    nets interest income, interest expense and FX; it is not interest expense
+    alone, so a computed value is ``approx``. A non-positive finance expense
+    means there is no net finance cost to cover: ``not_applicable``, not a
+    made-up large ratio. A missing input stays missing.
+    """
+
+    period = view.latest_annual()
+    if period is None:
+        return Partial(None, flags=(FLAG_NO_ANNUAL_REPORT,))
+    operating = period.value("operating_profit")
+    finance = period.value("finance_expense")
+    ref = _ref(
+        period,
+        formula="(operating_profit + finance_expense) / finance_expense",
+        source_fields=("operating_profit", "finance_expense"),
+    )
+    ref = {
+        **ref,
+        "definition": (
+            "营业利润加回财务费用，近似息税前利润；分母是财务费用，不是单独的利息支出。"
+        ),
+    }
+    if operating is None or finance is None:
+        return Partial(None, flags=(FLAG_INCOMPLETE_HISTORY,), inputs_ref=ref)
+    if finance <= 0:
+        return Partial(
+            None,
+            quality="not_applicable",
+            flags=(FLAG_NON_POSITIVE_FINANCE_EXPENSE,),
+            inputs_ref={**ref, "finance_expense": finance, "operating_profit": operating},
+        )
+    return Partial((operating + finance) / finance, quality="approx", inputs_ref=ref)
 
 
 def _roe_dupont(view: SnapshotView) -> Partial:
@@ -619,6 +734,64 @@ CORE_FACTORS: tuple[Factor, ...] = (
             FactorInput("ifind", "capital_expenditure", _FIN),
         ),
         _free_cash_flow,
+        carries_overdue_flag=True,
+    ),
+    Factor(
+        "ocf_to_net_income",
+        "1",
+        "ratio",
+        "Latest annual operating cash flow / net profit. Prefers net_profit_parent; "
+        "net_profit_total is an approx fallback (includes minority interests). Missing "
+        "when an input is absent or net profit is not positive (non_positive_net_income). "
+        "Not applicable to banks and insurers. The screen threshold is an uncalibrated "
+        "template parameter, not part of this factor.",
+        (
+            FactorInput("baostock", "operating_cash_flow", _FIN),
+            FactorInput("baostock", "net_profit_parent", _FIN),
+            FactorInput("baostock", "net_profit_total", _FIN),
+            FactorInput("ifind", "operating_cash_flow", _FIN),
+            FactorInput("ifind", "net_profit_parent", _FIN),
+            FactorInput("ifind", "net_profit_total", _FIN),
+        ),
+        _ocf_to_net_income,
+        applicability=NOT_BANK_OR_INSURER,
+        carries_overdue_flag=True,
+    ),
+    Factor(
+        "share_dilution",
+        "1",
+        "fraction",
+        "Total-share change from the prior annual report to the latest: "
+        "shares_t / shares_t-1 - 1, including bonus and capitalisation issues. "
+        "Missing when either share count is absent or not positive. Not applicable "
+        "to banks and insurers.",
+        (
+            FactorInput("baostock", "total_shares", _FIN),
+            FactorInput("ifind", "total_shares", _FIN),
+        ),
+        _share_dilution,
+        applicability=NOT_BANK_OR_INSURER,
+        carries_overdue_flag=True,
+    ),
+    Factor(
+        "interest_coverage",
+        "1",
+        "times",
+        "Approximate coverage of the latest annual report: "
+        "(operating_profit + finance_expense) / finance_expense. Finance expense is "
+        "added back because operating profit is already after it. The denominator is "
+        "财务费用, not interest expense alone, so a value is approx. "
+        "not_applicable when finance expense is not positive "
+        "(non_positive_finance_expense). Missing when an input is absent. "
+        "Not applicable to banks and insurers.",
+        (
+            FactorInput("baostock", "operating_profit", _FIN),
+            FactorInput("baostock", "finance_expense", _FIN),
+            FactorInput("ifind", "operating_profit", _FIN),
+            FactorInput("ifind", "finance_expense", _FIN),
+        ),
+        _interest_coverage,
+        applicability=NOT_BANK_OR_INSURER,
         carries_overdue_flag=True,
     ),
     Factor(
