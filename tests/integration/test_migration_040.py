@@ -24,7 +24,7 @@ def test_method_versions_fresh_roundtrip(tmp_path, monkeypatch):
         with engine.connect() as connection:
             # Exact 040 table names: later migrations add further
             # investor_method* tables that the 040 schema must not compare.
-            assert not [d for d in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(name in repr(d) for name in ("investor_method_artifact", "investor_method_proposal", "investor_method_head", "agent_task_method_binding"))]
+            assert not [d for d in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(name in repr(d) for name in ("investor_method_artifact", "investor_method_proposal", "investor_method_head", "agent_task_method_binding")) and "research_experiment" not in repr(d)]
         engine.dispose()
         with sqlite3.connect(database) as connection:
             connection.execute("INSERT INTO disclosure_blob VALUES ('retained', ?)", (b"original",))

@@ -32,7 +32,7 @@ def test_evidence_upgrade_and_downgrade(tmp_path, monkeypatch):
             for d in compare_metadata(MigrationContext.configure(connection), Base.metadata)
             if "investor_" in repr(d) and not any(
                 later in repr(d)
-                for later in ("investor_method_", "investor_publication_", "investor_user_object", "investor_memory_state", "investor_monitor_receipt", "investor_review_cycle", "investor_notification", "investor_discovery_cursor", "investor_discovery_batch")
+                for later in ("investor_method_", "investor_publication_", "investor_user_object", "investor_memory_state", "investor_monitor_receipt", "investor_review_cycle", "investor_notification", "investor_discovery_cursor", "investor_discovery_batch", "research_inbox_")
             )
         ]
     engine.dispose()

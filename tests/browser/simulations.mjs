@@ -42,8 +42,9 @@ try{
   assert.match(await page.locator('#sim-accounts').innerText(),/合成样本 <img src=x onerror=alert\(1\)>/);
   assert.equal(await page.locator('#simulations-workbench img').count(),0,'provider/company text is never HTML');
   await page.getByRole('tab',{name:'决策与证据'}).click();
-  await page.locator('#sim-decisions details').filter({hasText:'模型 A'}).locator('summary').click();
-  await page.getByText('合成判断：使用冻结资料观察经营改善；价格变化尚不能证伪经营假设。',{exact:true}).waitFor();
+  const modelA = page.locator('#sim-decisions details').filter({hasText:'模型 A'});
+  await modelA.locator('summary').click();
+  await modelA.getByText('合成判断：使用冻结资料观察经营改善；价格变化尚不能证伪经营假设。',{exact:true}).waitFor();
   await page.getByRole('tab',{name:'订单与成交'}).click();
   assert.equal(await page.locator('#sim-fills tbody tr').count(),3);
   assert.match(await page.locator('#sim-fills').innerText(),/系统确认时间/);
