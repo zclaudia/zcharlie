@@ -23,16 +23,19 @@ def tool_summary(output: dict[str, Any]) -> dict[str, Any]:
     """Keep daily input audit trails out of the model context; retain the immutable ref."""
     record = output["calculation"]
     details = record["details"]
-    return {"status": output["status"], "method_version": output["method_version"],
-            "calculation_ref": output["calculation_ref"], "result": output["result"],
-            "as_of": record["as_of"], "applicable": record["applicable"],
-            "input_quality": record["quality"], "errors": record["errors"],
-            "assumptions": record["assumptions"],
-            "scenarios": details.get("scenarios", []), "warnings": details.get("warnings", []),
-            "coverage": details.get("factor", {}),
-            "current_price": details.get("current_price"),
-            "current_price_date": details.get("current_price_date"),
-            "latest_report_period": details.get("latest_report_period")}
+    summary = {"status": output["status"], "method_version": output["method_version"],
+               "calculation_ref": output["calculation_ref"], "result": output["result"],
+               "as_of": record["as_of"], "applicable": record["applicable"],
+               "input_quality": record["quality"], "errors": record["errors"],
+               "assumptions": record["assumptions"],
+               "scenarios": details.get("scenarios", []), "warnings": details.get("warnings", []),
+               "coverage": details.get("factor", {}),
+               "current_price": details.get("current_price"),
+               "current_price_date": details.get("current_price_date"),
+               "latest_report_period": details.get("latest_report_period")}
+    if details.get("guardrails") is not None:
+        summary["guardrails"] = details["guardrails"]
+    return summary
 
 
 def valuation_registrations(qualification: QualificationResolver | None = None

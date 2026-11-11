@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,23 @@ def prepare_source(destination: Path, *, source: Path = ROOT) -> Path:
     return destination
 
 
+def _uv_wheel_caches() -> list[Path]:
+    """uv wheel caches. Recent uv uses ``wheels-v7``; CI may set ``UV_CACHE_DIR``."""
+
+    roots: list[Path] = []
+    override = os.environ.get("UV_CACHE_DIR")
+    if override:
+        roots.append(Path(override))
+    roots.append(Path.home() / ".cache" / "uv")
+    caches: list[Path] = []
+    for root in roots:
+        for name in ("wheels-v7", "wheels-v6"):
+            path = root / name / "pypi"
+            if path.is_dir() and path not in caches:
+                caches.append(path)
+    return caches
+
+
 def cached_backend_paths() -> tuple[Path, ...]:
     """Use installed tools, or already cached pure-Python build tools read-only.
 
@@ -48,21 +66,22 @@ def cached_backend_paths() -> tuple[Path, ...]:
     from packaging.specifiers import SpecifierSet
     from packaging.version import InvalidVersion, Version
 
-    cache = Path.home() / ".cache/uv/wheels-v6/pypi"
+    caches = _uv_wheel_caches()
     found: list[Path] = []
     for package, requirement in (("setuptools", ">=68"), ("wheel", ">=0")):
         if importlib.util.find_spec(package) is not None:
             continue
         candidates: list[tuple[Version, Path]] = []
-        for path in (cache / package).glob("*-py3-none-any"):
-            if not path.is_dir() or not (path / package).is_dir():
-                continue
-            try:
-                version = Version(path.name.removesuffix("-py3-none-any"))
-            except InvalidVersion:
-                continue
-            if version in SpecifierSet(requirement):
-                candidates.append((version, path.resolve()))
+        for cache in caches:
+            for path in (cache / package).glob("*-py3-none-any"):
+                if not path.is_dir() or not (path / package).is_dir():
+                    continue
+                try:
+                    version = Version(path.name.removesuffix("-py3-none-any"))
+                except InvalidVersion:
+                    continue
+                if version in SpecifierSet(requirement):
+                    candidates.append((version, path.resolve()))
         if not candidates:
             raise RuntimeError(f"offline build backend unavailable: {package}{requirement}")
         found.append(max(candidates, key=lambda item: item[0])[1])

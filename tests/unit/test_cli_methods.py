@@ -144,8 +144,12 @@ def test_sync_imports_both_repo_packages_and_never_moves_the_head(cli_db) -> Non
     assert "created" in first.output
 
     stored = _packages(cli_db)
-    assert [payload["package_key"] for payload in stored] == ["company-research"] * 2
-    assert sorted(payload["version"] for payload in stored) == [1, 2]
+    assert [payload["package_key"] for payload in stored] == [
+        "company-research-c1-counter-analysis",
+        "company-research",
+        "company-research",
+    ]
+    assert sorted(payload["version"] for payload in stored) == [1, 1, 2]
     assert {payload["source"] for payload in stored} == {"repo-sync"}
     assert _head_state(cli_db) == ([], [])  # sync never moves any head
 
@@ -153,7 +157,7 @@ def test_sync_imports_both_repo_packages_and_never_moves_the_head(cli_db) -> Non
     again = _invoke("sync", "--dir", str(METHODS_DIR))
     assert again.exit_code == 0, again.output
     assert "unchanged" in again.output
-    assert len(_packages(cli_db)) == 2
+    assert len(_packages(cli_db)) == 3
     assert _head_state(cli_db) == ([], [])
 
 

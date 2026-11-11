@@ -167,7 +167,9 @@ def test_js_imports_are_relative_and_exist() -> None:
         for spec in re.findall(r'from\s+"([^"]+)"', source):
             assert spec.startswith("./") and spec.endswith(".js"), (name, spec)
             assert (STATIC / spec[2:]).is_file(), (name, spec)
-        assert "http://" not in source and "https://" not in source, name
+        # The SVG namespace is an XML name, not a network request.
+        checked = source.replace("http://www.w3.org/2000/svg", "")
+        assert "http://" not in checked and "https://" not in checked, name
 
 
 def test_ui_has_no_trading_language_or_scores() -> None:
@@ -184,7 +186,20 @@ def test_ui_has_no_trading_language_or_scores() -> None:
     # wording labelled 未经发布校验; they are not formal recommendations and
     # never enter the actionable-opinion view or submit orders.
     for name, text in texts.items():
-        if name in {"agent.js", "agent_views.js", "agent_portfolio.js", "agent.html", "portfolio.js", "portfolio.html", "review_panel.js"}:
+        # simulations.* names paper-trading actions and lot/tax inputs. They
+        # record simulated decisions and do not submit an order.
+        if name in {
+            "agent.js",
+            "agent_views.js",
+            "agent_portfolio.js",
+            "agent.html",
+            "portfolio.js",
+            "portfolio.html",
+            "review_panel.js",
+            "simulations.js",
+            "simulations.html",
+            "simulations_detail.html",
+        }:
             continue
         for word in TRADING_WORDS:
             assert word not in text, (name, word)

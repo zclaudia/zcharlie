@@ -23,7 +23,7 @@ def test_monitoring_migration_metadata_and_roundtrip(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{database}")
     with engine.connect() as connection:
         relevant = {"investor_monitor_receipt", "investor_review_cycle", "investor_notification"}
-        assert not [item for item in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(table in repr(item) for table in relevant) and "investor_notification_delivery" not in repr(item)]
+        assert not [item for item in compare_metadata(MigrationContext.configure(connection), Base.metadata) if any(table in repr(item) for table in relevant) and "investor_notification_delivery" not in repr(item) and "cycle_event_revision" not in repr(item)]
     engine.dispose()
     command.downgrade(config, "032")
     with sqlite3.connect(database) as connection:

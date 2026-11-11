@@ -1,5 +1,6 @@
 import {get, post, download} from './api.js';
 import {el} from './dom.js';
+import {svg} from './ui.js';
 import {randomUUID} from './uuid.js';
 
 const API = '/api/simulations';
@@ -206,18 +207,26 @@ export function bootSimulations(root = document.querySelector('#simulations-work
   document.querySelector('#sim-export').addEventListener('click',()=>run(async()=>{await download(`${base}/export`);notify('已导出冻结资料与模拟账本。');}));
   participantFilter.addEventListener('change',()=>render());roundFilter.addEventListener('change',()=>render());
 
+  function ribbon(points) {
+    const draw = (pts, first) => pts.map(([px, py], i) => `${i || !first ? 'L' : 'M'}${px.toFixed(2)},${py.toFixed(2)}`).join(' ');
+    if (points.length < 2) {
+      const [px, py] = points[0];
+      return `M${px.toFixed(2)},${(py - 1).toFixed(2)} L${(px + 2).toFixed(2)},${py.toFixed(2)} L${px.toFixed(2)},${(py + 1).toFixed(2)} Z`;
+    }
+    return `${draw(points, true)} ${draw(points.map(([px, py]) => [px, py + 2]).reverse(), false)} Z`;
+  }
   function chart(navs) {
     const host=document.querySelector('#sim-nav-chart'),legend=document.querySelector('#sim-chart-legend');host.replaceChildren();legend.replaceChildren();
     const participants=state.detail.participants.filter(p=>!participantFilter.value || p.id===participantFilter.value),dates=[...new Set(navs.map(n=>n.valuation_date))].sort();
     const known=navs.filter(n=>n.quality==='complete' && n.equity!=null),numbers=known.map(n=>Number(n.equity)).filter(Number.isFinite);
     if(!numbers.length || !dates.length){host.append(empty('尚无完整净值，等待账户与行情确认。'));return;}
-    const NS='http://www.w3.org/2000/svg',svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 760 250');svg.setAttribute('role','img');svg.setAttribute('aria-label','各独立账户的净值曲线；精确值见每日净值表，资料不完整处不连线');
+    const chartSvg=svg('svg',{viewBox:'0 0 760 250',width:'760',height:'250',role:'img','aria-label':'各独立账户的净值曲线；精确值见每日净值表，资料不完整处不连线'});
     const low=Math.min(...numbers),high=Math.max(...numbers),span=high-low || Math.max(Math.abs(high)*0.02,1),min=low-span*0.1,max=high+span*0.1;
-    function lineNode(tag,attrs,text){const node=document.createElementNS(NS,tag);Object.entries(attrs).forEach(([key,value])=>node.setAttribute(key,String(value)));if(text!==undefined)node.textContent=text;svg.append(node);return node;}
+    function lineNode(tag,attrs,text){const node=svg(tag,attrs,text);chartSvg.append(node);return node;}
     const x=day=>70+(dates.length===1?0.5:dates.indexOf(day)/(dates.length-1))*660,y=value=>210-(value-min)/(max-min)*180;
     [0,0.5,1].forEach(fraction=>{const py=30+fraction*180;lineNode('line',{x1:70,x2:730,y1:py,y2:py,class:'sim-chart-grid'});lineNode('text',{x:62,y:py+4,'text-anchor':'end',class:'sim-chart-label'},new Intl.NumberFormat('zh-CN',{maximumFractionDigits:0}).format(max-fraction*(max-min)));});
     lineNode('text',{x:70,y:238,class:'sim-chart-label'},dates[0]);if(dates.length>1)lineNode('text',{x:730,y:238,'text-anchor':'end',class:'sim-chart-label'},dates.at(-1));
-    participants.forEach(p=>{const color=state.detail.participants.indexOf(p)%10;let segment=[],priorIndex=-2;const segments=[];navs.filter(n=>n.participant_id===p.id).forEach(nav=>{const index=dates.indexOf(nav.valuation_date);if(nav.quality!=='complete' || nav.equity==null || !Number.isFinite(Number(nav.equity)) || index!==priorIndex+1){if(segment.length)segments.push(segment);segment=[];}if(nav.quality==='complete' && nav.equity!=null && Number.isFinite(Number(nav.equity)))segment.push([x(nav.valuation_date),y(Number(nav.equity))]);priorIndex=index;});if(segment.length)segments.push(segment);segments.forEach(points=>{lineNode('path',{d:points.map(([px,py],i)=>`${i?'L':'M'}${px.toFixed(2)},${py.toFixed(2)}`).join(' '),class:`sim-chart-line sim-color-${color}`});points.forEach(([cx,cy])=>lineNode('circle',{cx,cy,r:2,class:`sim-chart-line sim-color-${color}`}));});legend.append(el('span',{class:`sim-color-${color}`},p.config.name));});host.append(svg);
+    participants.forEach(p=>{const color=state.detail.participants.indexOf(p)%10;let segment=[],priorIndex=-2;const segments=[];navs.filter(n=>n.participant_id===p.id).forEach(nav=>{const index=dates.indexOf(nav.valuation_date);if(nav.quality!=='complete' || nav.equity==null || !Number.isFinite(Number(nav.equity)) || index!==priorIndex+1){if(segment.length)segments.push(segment);segment=[];}if(nav.quality==='complete' && nav.equity!=null && Number.isFinite(Number(nav.equity)))segment.push([x(nav.valuation_date),y(Number(nav.equity))]);priorIndex=index;});if(segment.length)segments.push(segment);segments.forEach(points=>{lineNode('path',{d:ribbon(points),class:`sim-chart-band sim-color-${color}`});points.forEach(([cx,cy])=>lineNode('circle',{cx,cy,r:2,class:`sim-chart-line sim-color-${color}`}));});legend.append(el('span',{class:`sim-color-${color}`},p.config.name));});host.append(chartSvg);
   }
   function renderOverview() {
     const board=state.detail.leaderboard,kpis=document.querySelector('#sim-kpis'),latestRound=state.detail.rounds.at(-1);kpis.replaceChildren();

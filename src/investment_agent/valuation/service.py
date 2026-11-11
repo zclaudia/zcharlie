@@ -39,6 +39,11 @@ from investment_agent.valuation.contracts import (
     ReverseDCFRequest,
     UnavailableQualification,
 )
+from investment_agent.valuation.guardrails import (
+    DEFAULT_GUARDRAILS,
+    GuardrailPolicy,
+    assess_reverse_dcf_guardrails,
+)
 from investment_agent.valuation.solver import METHOD_VERSION, solve
 
 # Explicit units, no currency inference or float conversion for cash flows.
@@ -48,12 +53,20 @@ MONEY_UNITS = {"CNY": Decimal(1), "元": Decimal(1),
 WARNING = "Historical FCFE is a scenario annual base; equal annual periods from as_of, no stub period."
 
 
+def _assumption_decimal(item: CalculationAssumption | None) -> Decimal | None:
+    if item is None or item.value.value is None:
+        return None
+    return item.value.value
+
+
 class ValuationService:
     def __init__(self, session: AsyncSession,
-                 qualification: QualificationResolver | None = None) -> None:
+                 qualification: QualificationResolver | None = None,
+                 guardrails: GuardrailPolicy | None = None) -> None:
         self.session = session
         self.store = EvidenceService(session)
         self.qualification = qualification or UnavailableQualification()
+        self.guardrails = guardrails or DEFAULT_GUARDRAILS
 
     async def scope(self, owner: OwnerId, request: ReverseDCFRequest) -> tuple[ObjectRef, ...]:
         """Resolve actual visible subjects; never accept a claimed ticker or subject."""
@@ -337,8 +350,12 @@ class ValuationService:
                 errors.append("report_overdue")
                 status = Status.STALE_INPUTS
         results: dict[str, Quantity] = {}
+        guardrail_market: Decimal | None = None
+        guardrail_base: Decimal | None = None
         if status == Status.OK:
             bases = {"median": sorted(annual_amounts)[1], "latest": annual_amounts[-1]}
+            guardrail_market = amounts[0]
+            guardrail_base = bases["median"]
             assert request.main_rate is not None and request.terminal_growth is not None
             terminal = request.terminal_growth.value.value
             assert terminal is not None
@@ -369,6 +386,23 @@ class ValuationService:
                         "rate": str(fallback_assumption.value.value) if fallback_assumption else None,
                         "status": status.value, "growth": None, "terminal_pv_fraction": None,
                         "reason": errors[0] if errors else "unavailable"})
+        assessment = assess_reverse_dcf_guardrails(
+            main_rate=_assumption_decimal(request.main_rate),
+            terminal_growth=_assumption_decimal(request.terminal_growth),
+            sensitivity_rates=tuple(_assumption_decimal(item) for item in request.sensitivity_rates),
+            scenarios=details["scenarios"],
+            market_value=guardrail_market,
+            median_base=guardrail_base,
+            policy=self.guardrails,
+        )
+        quality.extend(assessment.quality)
+        details["warnings"].extend(assessment.warnings)
+        details["guardrails"] = assessment.details
+        details["policy"] = assessment.policy
+        for cell, mark in zip(details["scenarios"], assessment.scenario_marks, strict=True):
+            cell.update(mark)
+        if status == Status.OK:
+            results.update(assessment.result_fields)
         return await self._save(owner, operation, "reverse_dcf_fcfe", METHOD_VERSION,
                                 request.as_of, request.model_dump(mode="json"), tuple(facts),
                                 assumptions, status, results, tuple(quality), tuple(dict.fromkeys(errors)), details)
