@@ -296,3 +296,7 @@
 .dividend-card table { width: 100%; }
 .dividend-card .dividend-table-wrap { overflow-x: auto; }
 .dividend-card .dividend-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+
+#stock-historical-banner { grid-column: 1 / -1; }
+#stock-historical-banner a, #stock-detail > .notice a { margin-left: 1em; }
+@media (max-width: 56rem) { #stock-historical-banner { order: 1; } }

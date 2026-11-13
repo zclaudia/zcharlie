@@ -28,6 +28,7 @@ import {
   loadStockChanges,
   loadStockDetail,
   loadStockHistory,
+  selectedStockRun,
   loadStockSpark,
   wireStockPage,
   wireStockRunForm,
@@ -50,7 +51,7 @@ function boot() {
     if (PORTFOLIO_REGIONS.has(id)) continue;
     if (id === "dashboard-today") loadRegion(region, { render: loadDashboard });
     else if (id === "runs-list") {
-      const wanted = new URLSearchParams(globalThis.location.search).get("status") || "";
+      const wanted = new URLSearchParams(globalThis.location?.search || "").get("status") || "";
       const known = ["queued", "running", "success", "partial", "failed"].includes(wanted) ? wanted : "";
       setRunsFilter(known, { reload: false });
       loadRunsPage(region, 0, { status: known });
@@ -58,10 +59,14 @@ function boot() {
     else if (id === "stock-history")
       loadRegion(region, { render: (node, data) => loadStockHistory(node, data).then((latest) => {
         const detailRegion = document.querySelector("#stock-detail");
-        if (detailRegion) loadStockDetail(detailRegion, latest);
+        if (detailRegion && selectedStockRun() === null) loadStockDetail(detailRegion, latest);
       }) });
     else loadRegion(region);
   }
+
+  const selectedRun = selectedStockRun();
+  const stockDetail = document.querySelector("#stock-detail");
+  if (stockDetail && selectedRun !== null) loadStockDetail(stockDetail, { run_id: selectedRun }, { historical: true });
 
   const stockRunForm = document.querySelector("#stock-run-form");
   if (stockRunForm) wireStockRunForm(stockRunForm);

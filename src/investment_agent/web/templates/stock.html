@@ -322,14 +322,14 @@
     <section class="card spark-card stock-chart-card" id="stock-chart-card">
       <div class="card-head">
         <h2 id="stock-spark-title">近 240 个交易日收盘价</h2>
-        <span class="faint">不复权，仅展示已入库日线</span>
+        <span class="faint">当前已入库日线（不复权），独立于历史研究日期</span>
       </div>
       <div id="stock-spark" class="spark-host" data-ticker="{{ ticker }}"></div>
     </section>
     <section id="stock-detail" class="data-region"
              data-listing-id="{{ listing_id or '' }}" data-ticker="{{ ticker }}"></section>
     <section class="card dividend-card" id="dividend-card" data-ticker="{{ ticker }}">
-      <div class="card-head"><h2>分红</h2><button type="button" class="btn btn-sm" id="dividend-refresh" disabled>刷新分红</button></div>
+      <div class="card-head"><h2>分红（当前数据）</h2><button type="button" class="btn btn-sm" id="dividend-refresh" disabled>刷新分红</button></div>
       <div id="dividend-refresh-status" aria-live="polite"></div>
       <div id="dividend-content" aria-live="polite"><p class="notice notice-loading">正在读取分红数据…</p></div>
     </section>

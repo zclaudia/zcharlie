@@ -203,7 +203,11 @@ class PeerSection {
     // not_supported 时整体只留一行"尚未覆盖"：并行在途的研究绑定读取不再渲染。
     this.suppressed = false;
     this.loadCurrent();
-    this.loadResearchBinding();
+    document.addEventListener("stock-historical-run", () => this.loadResearchBinding());
+    if (!new URLSearchParams(globalThis.location?.search || "").has("run_id") || "stockHistoricalRun" in globalThis) {
+      this.loadResearchBinding();
+    }
+
   }
 
   contextUrl(batchRunId) {
@@ -234,18 +238,22 @@ class PeerSection {
   // 绑定为 null 显示"该次研究未保存同行参照"，绝不回填最新结果。
   loadResearchBinding() {
     this.boundBody.replaceChildren(loadingNotice());
+    const historical = new URLSearchParams(globalThis.location?.search || "").has("run_id");
     const historyUrl = `/research/stocks/${encodeURIComponent(this.ticker)}/history?limit=1`;
-    return get(historyUrl)
-      .then(async (snapshots) => {
+    const selected = historical
+      ? Promise.resolve(globalThis.stockHistoricalRun || null)
+      : get(historyUrl).then((snapshots) => Array.isArray(snapshots) && snapshots.length
+        ? get(`/research/runs/${encodeURIComponent(snapshots[0].run_id)}`) : null);
+    return selected
+      .then(async (detail) => {
         if (this.suppressed) return null;
-        if (!Array.isArray(snapshots) || !snapshots.length) {
+        if (!detail) {
           this.boundBody.replaceChildren(
-            el("p", { class: "muted" }, "尚无研究快照；该区域显示最近一次研究保存的同行参照绑定。")
+            el("p", { class: "muted" }, historical ? "指定历史研究不可用，无法显示该次同行参照。" : "尚无研究快照；该区域显示最近一次研究保存的同行参照绑定。")
           );
           return null;
         }
-        const runId = snapshots[0].run_id;
-        const detail = await get(`/research/runs/${encodeURIComponent(runId)}`);
+        const runId = detail.run_id;
         if (this.suppressed) return null;
         const binding = detail && detail.industry_peer_context;
         if (!binding || !binding.batch_run_id) {

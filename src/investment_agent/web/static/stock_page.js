@@ -525,7 +525,8 @@ export async function loadStockHistory(region, snapshots) {
   const rows = snapshots.map((snapshot) => {
     const tr = el("tr");
     const runCell = el("td", { class: "hist-run" });
-    runCell.appendChild(el("a", { href: `/app/runs` }, `#${snapshot.run_id}`));
+    const ticker = document.querySelector("#stock-detail")?.dataset.ticker || "";
+    runCell.appendChild(el("a", { href: `/app/stocks/${encodeURIComponent(ticker)}?run_id=${encodeURIComponent(snapshot.run_id)}` }, `#${snapshot.run_id}`));
     tr.appendChild(runCell);
     tr.appendChild(el("td", { class: "hist-date" }, fmt(snapshot.as_of)));
     tr.appendChild(el("td", { class: "hist-strategy" }, fmt(snapshot.strategy_label)));
@@ -583,13 +584,26 @@ function mountStockReview(detailRegion) {
   });
 }
 
-export async function loadStockDetail(detailRegion, latestSnapshot) {
+export function selectedStockRun() {
+  const params = new URLSearchParams(globalThis.location?.search || "");
+  if (!params.has("run_id")) return null;
+  const value = params.get("run_id");
+  return /^[1-9]\d*$/.test(value || "") && Number.isSafeInteger(Number(value)) ? Number(value) : 0;
+}
+
+function publishSelectedStockRun(detail) {
+  globalThis.stockHistoricalRun = detail;
+  document.dispatchEvent(new CustomEvent("stock-historical-run", { detail }));
+}
+
+export async function loadStockDetail(detailRegion, latestSnapshot, { historical = false } = {}) {
   loadStockSpark();
   if (!latestSnapshot) {
     detailRegion.hidden = true;
     return;
   }
   try {
+    if (historical && !latestSnapshot.run_id) throw new Error("历史运行编号无效。");
     const detail = await get(`/research/runs/${latestSnapshot.run_id}`);
     detailRegion.hidden = false;
     detailRegion.replaceChildren();
@@ -600,6 +614,15 @@ export async function loadStockDetail(detailRegion, latestSnapshot) {
         : score && ("investment_score" in score || "strategy_label" in score)
           ? score
           : null;
+    if (historical && (!detail.result || detail.result.ticker !== detailRegion.dataset.ticker || !scoreItem)) {
+      throw new Error("该运行不属于这只股票，或没有保存的评分。");
+    }
+    if (historical) {
+      const banner = el("p", { class: "notice", id: "stock-historical-banner" }, `正在查看历史研究 #${detail.run_id} · 数据日期 ${fmt(detail.result.as_of)}。`);
+      banner.appendChild(el("a", { href: `/app/stocks/${encodeURIComponent(detailRegion.dataset.ticker)}` }, "返回最新研究"));
+      detailRegion.appendChild(banner);
+      publishSelectedStockRun(detail);
+    }
     setStockHead({
       name: detail.company_name || stockHead.name,
       industry: detail.industry || stockHead.industry,
@@ -624,16 +647,20 @@ export async function loadStockDetail(detailRegion, latestSnapshot) {
     });
     detailRegion.appendChild(inspector);
     detailRegion.appendChild(explanationCard(detail, scoreItem, detailRegion));
-    mountStockReview(detailRegion);
+    if (!historical) mountStockReview(detailRegion);
     detailRegion.appendChild(qualityCard(scoreItem));
     const changesRegion = document.querySelector("#stock-changes");
     if (changesRegion) await loadStockChanges(changesRegion, detail.run_id);
   } catch (error) {
     detailRegion.hidden = false;
     detailRegion.replaceChildren();
-    detailRegion.appendChild(
-      el("p", { class: "notice notice-error" }, error instanceof ApiError ? error.message : "详情加载失败。")
-    );
+    if (historical) publishSelectedStockRun(null);
+    const message = historical
+      ? (error instanceof ApiError ? "无法读取指定的历史研究。" : error.message || "无法读取指定的历史研究。")
+      : (error instanceof ApiError ? error.message : "详情加载失败。");
+    const notice = el("p", { class: "notice notice-error" }, message);
+    if (historical) notice.appendChild(el("a", { href: `/app/stocks/${encodeURIComponent(detailRegion.dataset.ticker)}` }, "返回最新研究"));
+    detailRegion.appendChild(notice);
   }
 }
 
