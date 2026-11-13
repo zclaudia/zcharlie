@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from sqlalchemy import select
 
 from investment_agent.config import Settings
+from investment_agent.dividends.service import persist_wmshare_capture
+from investment_agent.providers.wmshare_dividends import WmshareCapture, parse_history
 from investment_agent.research import ifind_chain
 from investment_agent.research.ifind_chain import (
     ResearchExplanation,
@@ -25,12 +29,13 @@ from investment_agent.research.worker import ResearchJobPayload, _notify_meaning
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.models.analysis import PipelineRun, ResearchSnapshot
 from investment_agent.storage.models.verification import IfindCallLedger, VerificationRequest
+from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.listing import ListingRepository
 from investment_agent.storage.repositories.pipeline_run import PipelineRunRepository
 from investment_agent.storage.repositories.research_change import ResearchChangeRepository
 from investment_agent.storage.repositories.research_snapshot import ResearchSnapshotRepository
 from investment_agent.storage.repositories.watchlist import WatchlistRepository
-from tests.support.factor_view import AS_OF, TICKER, _seed
+from tests.support.factor_view import AS_OF, ON_TIME, TICKER, _seed
 
 EXPLANATION = ResearchExplanation(
     summary="fixture",
@@ -109,6 +114,73 @@ async def test_snapshot_run_scores_from_the_snapshot_store(db_session, tmp_path,
         (request,) = (await session.execute(select(VerificationRequest))).scalars().all()
         assert (request.trigger, request.fields) == ("missing", requested)
         assert request.report_period == date(2025, 12, 31)
+
+
+async def test_new_dividend_source_is_persisted_without_rewriting_previous_research(
+    db_session, tmp_path, fake_explanation
+):
+    del db_session
+    async with session_scope() as session:
+        listing_id = await _seed(session)
+        repository = DividendRepository(session)
+        await repository.upsert_event(
+            listing_id=listing_id,
+            ex_date=date(2026, 1, 1),
+            available_from=date(2025, 12, 1),
+            operate_year=2026,
+            provider="baostock",
+            captured_at=ON_TIME,
+            payload={
+                "cash_per_share_pre_tax": Decimal(1),
+                "stock_per_share": Decimal(0),
+                "reserve_per_share": Decimal(0),
+            },
+            details={"dividCashStock": "10派10元"},
+        )
+        for year in (2025, 2026):
+            await repository.record_coverage(
+                listing_id=listing_id,
+                provider="baostock",
+                year=year,
+                checked_at=ON_TIME,
+                event_count=1,
+            )
+
+    previous = await _run(tmp_path)
+    previous_score = deepcopy(previous.score)
+    old_market = (previous.artifact_dir / "market.json").read_bytes()
+    old_scores = (previous.artifact_dir / "scores.json").read_bytes()
+    assert previous_score["field_sources"]["market_data"]["dividend_yield"]["provider"] == "baostock"
+    async with session_scope() as session:
+        old = await ResearchSnapshotRepository(session).by_run(previous.run_id)
+        old_score = deepcopy(old.score_json)
+        capture = WmshareCapture(TICKER, AS_OF, ON_TIME)
+        parse_history(capture, [{"ex_div": "2026-01-01", "announce": "2025-12-01", "dps": 1}])
+        capture.snapshot = {"quote_date": AS_OF.isoformat(), "yield_ttm": 0.99, "payout_ttm": 2}
+        await persist_wmshare_capture(session, listing_id, capture)
+
+    current = await _run(tmp_path)
+    source = current.score["field_sources"]["market_data"]["dividend_yield"]
+    assert source["provider"] == "wmshare"
+    assert source["verification"] == "unverified"
+    for field in (
+        "key_metrics", "investment_score", "business_score", "factor_scores",
+        "research_confidence_score", "primary_strategy", "factor_coverage",
+    ):
+        assert current.score[field] == previous_score[field]
+    market = json.loads((current.artifact_dir / "market.json").read_text())
+    assert market["items"][0]["field_sources"]["dividend_yield"] == source
+    assert market["items"][0]["dividend_yield"] != capture.snapshot["yield_ttm"]
+    async with session_scope() as session:
+        repository = ResearchSnapshotRepository(session)
+        new = await repository.by_run(current.run_id)
+        original = await repository.by_run(previous.run_id)
+        assert new.score_json["field_sources"]["market_data"]["dividend_yield"] == source
+        assert original.id != new.id
+        assert original.score_json == old_score
+    assert previous.score == previous_score
+    assert (previous.artifact_dir / "market.json").read_bytes() == old_market
+    assert (previous.artifact_dir / "scores.json").read_bytes() == old_scores
 
 
 def test_missing_key_fields_skip_fields_not_applicable_to_the_profile():

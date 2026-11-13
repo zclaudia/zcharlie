@@ -201,6 +201,10 @@ def _iso_day(day: date) -> str:
 def _input_sources(value: FactorValue, view: SnapshotView) -> list[dict[str, Any]]:
     """Per-input ``{provider, verification, ...}`` of a factor value."""
 
+    if value.name == "dividend_yield_ttm" and value.value is not None:
+        provider = value.inputs_ref.get("dividend_provider")
+        if isinstance(provider, str) and provider:
+            return [{"provider": provider, "verification": "unverified"}]
     sources: list[dict[str, Any]] = []
     for period in value.inputs_ref.get("financial", []) or []:
         for detail in (period.get("sources") or {}).values():
@@ -319,6 +323,19 @@ class _ItemBuilder:
         note = f"factor {value.name} v{value.version} ({value.quality})"
         if value.flags:
             note += "; flags: " + ", ".join(value.flags)
+        if value.name == "dividend_yield_ttm" and value.value is not None:
+            market = value.inputs_ref.get("market")
+            if isinstance(market, dict):
+                price_provider = market.get("provider") or view.provider
+                note += f"; price: {price_provider}"
+                if market.get("ref"):
+                    note += f" ({market['ref']})"
+            if value.inputs_ref.get("dividend_provider") == "wmshare":
+                actions = value.inputs_ref.get("share_actions") or []
+                refs = [str(action["ref"]) for action in actions if action.get("ref")]
+                note += "; share actions: baostock"
+                if refs:
+                    note += " (" + ", ".join(refs) + ")"
         self.put(
             field,
             value.value,

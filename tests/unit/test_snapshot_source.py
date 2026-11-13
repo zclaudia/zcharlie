@@ -11,6 +11,8 @@ import pytest
 from investment_agent.factors.field_resolution import ProviderFields, resolve_period_fields
 from investment_agent.factors.snapshot_model import (
     TARGET_POOL,
+    Dividend,
+    DividendHistory,
     FinancialPeriod,
     SnapshotView,
 )
@@ -38,14 +40,71 @@ def _item(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _score(bundle) -> dict[str, Any]:
-    scores = score_pool(bundle.pool, bundle.market, bundle.financial, as_of="2026-09-30T15:59:59+00:00")
+    scores = score_pool(
+        bundle.pool, bundle.market, bundle.financial, as_of="2026-09-30T15:59:59+00:00"
+    )
     (item,) = scores["items"]
     return item
 
 
-@pytest.mark.parametrize(
-    ("symbol", "group"), [("600519", "consumer"), ("601398", "banking")]
-)
+@pytest.mark.parametrize("provider", ["wmshare", "baostock"])
+@pytest.mark.parametrize("cash", [0.5, 0.0])
+def test_dividend_provenance_reports_cash_source_without_changing_score(provider, cash):
+    view = baostock_view("601398", AS_OF)
+    history = DividendHistory(
+        events=(
+            Dividend(
+                date(2026, 7, 1),
+                cash,
+                ref="dividend_event:cash",
+                action_ref="dividend_event:action",
+            ),
+            Dividend(
+                date(2026, 8, 1), None, share_multiplier=1.5, action_ref="dividend_event:split"
+            ),
+        ),
+        covered_years={2025: AS_OF, 2026: AS_OF},
+        provider=provider,
+    )
+    other_provider = "baostock" if provider == "wmshare" else "wmshare"
+    bundle = build_snapshot_bundle(
+        replace(view, dividends=history),
+        company_name="工商银行",
+        industry=None,
+        retrieved_at=RETRIEVED,
+    )
+    other = build_snapshot_bundle(
+        replace(view, dividends=replace(history, provider=other_provider)),
+        company_name="工商银行",
+        industry=None,
+        retrieved_at=RETRIEVED,
+    )
+    item = _item(bundle.market)
+    source = item["field_sources"]["dividend_yield"]
+    assert source["provider"] == provider
+    assert source["verification"] == "unverified"
+    assert "price: baostock" in source["note"]
+    if provider == "wmshare":
+        assert "share actions: baostock" in source["note"]
+        assert "dividend_event:split" in source["note"]
+    assert item["dividend_yield"] == _item(other.market)["dividend_yield"]
+    assert _score(bundle)["business_score"] == _score(other)["business_score"]
+    assert _score(bundle)["factor_scores"] == _score(other)["factor_scores"]
+
+
+def test_missing_dividend_provenance_stays_unavailable():
+    history = DividendHistory(covered_years={2026: AS_OF}, provider="wmshare")
+    view = replace(baostock_view("601398", AS_OF), dividends=history)
+    market = _item(
+        build_snapshot_bundle(
+            view, company_name="工商银行", industry=None, retrieved_at=RETRIEVED
+        ).market
+    )
+    assert market["dividend_yield"] is None
+    assert market["field_sources"]["dividend_yield"]["source"] == "unavailable"
+
+
+@pytest.mark.parametrize(("symbol", "group"), [("600519", "consumer"), ("601398", "banking")])
 def test_factor_fixtures_build_a_valid_bundle_that_scores(symbol: str, group: str):
     view = baostock_view(symbol, AS_OF)
     bundle = build_snapshot_bundle(
@@ -116,7 +175,9 @@ def test_watchlist_text_restating_the_classification_keeps_the_data_group(text: 
     # 421002 override makes the stock a utility).
     view = _shenwan_view("421002")
     assert view.industry_group == "utility"
-    bundle = build_snapshot_bundle(view, company_name="上海机场", industry=text, retrieved_at=RETRIEVED)
+    bundle = build_snapshot_bundle(
+        view, company_name="上海机场", industry=text, retrieved_at=RETRIEVED
+    )
     stock = _item(bundle.pool)
     assert stock["industry"] == text and stock["industry_group"] == "utility"
     source = stock["field_sources"]["industry"]
@@ -125,7 +186,9 @@ def test_watchlist_text_restating_the_classification_keeps_the_data_group(text: 
     assert _score(bundle)["company_profile"]["sector_type"] == "public_utility"
 
     # Any other text is still the user's override.
-    other = build_snapshot_bundle(view, company_name="上海机场", industry="物流", retrieved_at=RETRIEVED)
+    other = build_snapshot_bundle(
+        view, company_name="上海机场", industry="物流", retrieved_at=RETRIEVED
+    )
     assert _item(other.pool)["field_sources"]["industry"]["provider"] == "manual"
     assert _score(other)["company_profile"]["sector_type"] == "general"
 
