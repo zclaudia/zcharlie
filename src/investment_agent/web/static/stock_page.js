@@ -25,6 +25,7 @@ import { aiStamp, ring, thinBar } from "./ui.js";
 import { loadBars } from "./market.js";
 import { PRICE_RANGES, mountPriceChart } from "./pricechart.js";
 import { icon, isCompactViewport } from "./page_widgets.js";
+import { mountDividends } from "./dividends.js";
 import { mountReviewCard } from "./review_panel.js";
 
 // ---- 单股详情 ---------------------------------------------------------
@@ -733,6 +734,7 @@ export function wireStockRunForm(form) {
 
 // 分区标签：锚点链接 + 滚动时高亮当前分区；⋯ 菜单点外部收起。
 export function wireStockPage() {
+  mountDividends();
   const tabs = [...document.querySelectorAll(".stock-tabs a[href^='#']")];
   if (tabs.length) {
     let frame = 0;

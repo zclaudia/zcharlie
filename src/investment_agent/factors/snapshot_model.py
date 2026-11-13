@@ -140,6 +140,7 @@ class Dividend:
     """Shares after / before the event (1 + bonus + capitalisation shares per share)."""
     available_from: date | None = None
     ref: str | None = None
+    action_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -151,6 +152,7 @@ class DividendHistory:
     covered_years: Mapping[int, date] = field(default_factory=dict)
     """Ex-date year -> date (Asia/Shanghai) of the latest collection of that year."""
     provider: str = "baostock"
+    selection_reason: str | None = None
 
     def describe_coverage(self) -> dict[str, str]:
         return {str(year): day.isoformat() for year, day in sorted(self.covered_years.items())}

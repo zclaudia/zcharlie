@@ -612,6 +612,8 @@ def _dividend_yield_ttm(view: SnapshotView) -> Partial:
         result_flags.append(FLAG_DIVIDENDS_STALE)
     ref = {
         **market,
+        "dividend_provider": history.provider,
+        "dividend_selection_reason": history.selection_reason,
         "window": f"({window_start.isoformat()}, {view.as_of.isoformat()}]",
         "cash_per_share_ttm": round(total, 8),
         "dividends": [
@@ -620,10 +622,20 @@ def _dividend_yield_ttm(view: SnapshotView) -> Partial:
                 "cash_per_share": event.cash_per_share,
                 "adjusted_cash": round(cash, 8),
                 "ref": event.ref,
+                "action_ref": event.action_ref,
             }
             for event, cash in paid
         ],
         "covered_years": coverage,
+        "share_actions": [
+            {
+                "ex_date": item.ex_date.isoformat(),
+                "multiplier": item.share_multiplier,
+                "ref": item.action_ref or item.ref,
+            }
+            for item in later
+            if item.share_multiplier != 1.0
+        ],
     }
     quality: Quality | None = "approx" if result_flags else None
     return Partial(

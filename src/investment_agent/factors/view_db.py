@@ -15,6 +15,7 @@ repositories, so a repository signature change is a one-file change.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -275,10 +276,59 @@ async def load_dividend_history(
     checks = await repository.last_checks_as_of(
         listing_id, list(range(start.year, as_of.year + 1)), as_of, provider=provider
     )
-    return DividendHistory(
+    history = DividendHistory(
         events=tuple(_dividend_from_row(row) for row in rows),
         covered_years={year: _shanghai_date(at) for year, at in checks.items()},
         provider=provider,
+    )
+    if provider != "baostock":
+        return history
+    # A single cash source per calculation. baostock remains the action
+    # source; missing numeric action fields cannot be assumed to mean zero.
+    needed = set(range((as_of - timedelta(days=365) + timedelta(days=1)).year, as_of.year + 1))
+    wm_checks = await repository.last_checks_as_of(
+        listing_id, sorted(needed), as_of, provider="wmshare"
+    )
+    if not needed <= checks.keys() or not needed <= wm_checks.keys():
+        return replace(
+            history, selection_reason="wmshare cash or baostock action coverage incomplete"
+        )
+
+    def action_unknown(row: DividendEventSnapshot) -> bool:
+        if row.stock_per_share is not None and row.reserve_per_share is not None:
+            return False
+        details = row.details if isinstance(row.details, dict) else {}
+        description = str(details.get("dividCashStock") or "")
+        # The existing baostock parser uses blank fields for cash-only plans.
+        # Trust that established convention only with a descriptive plan;
+        # an indicated action whose numeric component is missing is unknown.
+        if not description:
+            return True
+        return (row.stock_per_share is None and "送" in description) or (
+            row.reserve_per_share is None and "转" in description
+        )
+
+    if any(action_unknown(row) for row in rows):
+        return replace(history, selection_reason="baostock share-action amounts unknown")
+    wm_rows = await repository.events_as_of(listing_id, start, as_of, provider="wmshare")
+    combined = {row.ex_date: _dividend_from_row(row) for row in wm_rows}
+    for row in rows:
+        action = _dividend_from_row(row)
+        cash = combined.get(row.ex_date)
+        if cash:
+            combined[row.ex_date] = replace(
+                cash, share_multiplier=action.share_multiplier, action_ref=action.ref
+            )
+        elif action.share_multiplier != 1.0:
+            combined[row.ex_date] = replace(action, cash_per_share=None, action_ref=action.ref)
+    return DividendHistory(
+        events=tuple(combined[day] for day in sorted(combined)),
+        covered_years={
+            year: min(_shanghai_date(at), _shanghai_date(checks[year]))
+            for year, at in wm_checks.items()
+        },
+        provider="wmshare",
+        selection_reason="wmshare cash with baostock share actions",
     )
 
 

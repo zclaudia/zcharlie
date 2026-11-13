@@ -361,6 +361,10 @@ fields:
     definition: "flag: periodic report past its statutory deadline without a baostock pubDate"
 
   # -- dividends (dividend_event, F2 / Q2) ------------------------------------ #
+  # The point-in-time dividend view may select complete wmshare cash history
+  # for collected watchlist listings, with baostock share actions. This is a
+  # dividend-history selection, not a global change to field precedence; the
+  # platform TTM snapshot remains a separately labelled reference value.
   cash_dividend_per_share:
     table: dividend
     primary: baostock

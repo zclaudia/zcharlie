@@ -76,9 +76,15 @@ SNAPSHOT_KINDS: tuple[str, ...] = (
     STOCK_BOOTSTRAP,
 )
 
-SnapshotProvider = Literal["baostock", "ifind", "akshare", "tencent"]
+SnapshotProvider = Literal["baostock", "ifind", "akshare", "tencent", "wmshare"]
 SnapshotScope = Literal["universe", "watchlist"]
-SNAPSHOT_PROVIDERS: tuple[SnapshotProvider, ...] = ("baostock", "ifind", "akshare", "tencent")
+SNAPSHOT_PROVIDERS: tuple[SnapshotProvider, ...] = (
+    "baostock",
+    "ifind",
+    "akshare",
+    "tencent",
+    "wmshare",
+)
 CloseQuoteSlot = Literal["close", "retry"]
 CLOSE_QUOTE_SLOTS: tuple[CloseQuoteSlot, ...] = ("close", "retry")
 AkshareFinancialPart = Literal["summary", "cash_flow"]
@@ -169,6 +175,8 @@ class MarketSnapshotPayload(_CollectionPayload):
 
     @model_validator(mode="after")
     def _market_provider(self) -> Self:
+        if self.provider == "wmshare":
+            raise ValueError("wmshare serves dividend snapshots only")
         if self.provider == "akshare":
             raise ValueError("AkShare (Eastmoney) collects financials only, not daily bars")
         if self.provider == "tencent":
@@ -202,6 +210,8 @@ class FinancialSnapshotPayload(_CollectionPayload):
 
     @model_validator(mode="after")
     def _akshare_options(self) -> Self:
+        if self.provider == "wmshare":
+            raise ValueError("wmshare serves dividend snapshots only")
         if self.provider == "tencent":
             raise ValueError("Tencent serves the close_quote job only, not financials")
         if self.provider != "akshare":
@@ -232,14 +242,27 @@ class DividendSnapshotPayload(_CollectionPayload):
 
     as_of: date
     """Membership date; also the day the job was scheduled for."""
+    tickers: tuple[str, ...] = ()
+    """Optional canonical tickers; each must be an enabled watchlist item."""
+    exclude_watchlist: bool = False
+    """Avoid duplicate baostock collection when a separate watchlist job is scheduled."""
     years: tuple[int, ...] = ()
     """Ex-date years to (re)collect; default: ``as_of`` year and the year before
     (the trailing-365-day dividend window spans both)."""
 
     @model_validator(mode="after")
     def _dividend_options(self) -> Self:
-        if self.provider != "baostock":
-            raise ValueError("dividend events are collected from baostock only")
+        if self.provider not in {"baostock", "wmshare"}:
+            raise ValueError("dividend events require baostock or wmshare")
+        if self.provider == "wmshare" and self.scope != "watchlist":
+            raise ValueError("wmshare dividends only serve the watchlist")
+        if self.exclude_watchlist and (self.provider != "baostock" or self.scope != "universe"):
+            raise ValueError("exclude_watchlist requires baostock universe scope")
+        if self.tickers and (self.provider != "wmshare" or self.scope != "watchlist"):
+            raise ValueError("ticker restriction is supported for wmshare watchlist only")
+        if any(not re.fullmatch(r"\d{6}\.(SH|SZ|BJ)", t) for t in self.tickers):
+            raise ValueError("tickers must be canonical A-share tickers")
+        object.__setattr__(self, "tickers", tuple(sorted(set(self.tickers))))
         years = self.years or (self.as_of.year - 1, self.as_of.year)
         if any(year < 1990 or year > self.as_of.year + 1 for year in years):
             raise ValueError(f"dividend years out of range: {sorted(years)}")
@@ -447,13 +470,17 @@ def idempotency_key(payload: SnapshotPayload) -> str:
         return key if payload.chunk is None else f"{key}:c{payload.chunk:03d}"
     if isinstance(payload, DividendSnapshotPayload):
         years = "+".join(str(year) for year in payload.years)
-        return (
-            f"{kind}:{payload.provider}:{payload.scope_label}:{payload.as_of.isoformat()}:{years}"
-        )
+        key = f"{kind}:{payload.provider}:{payload.scope_label}:{payload.as_of.isoformat()}:{years}"
+        if payload.exclude_watchlist:
+            key += ":without-watchlist"
+        if payload.tickers:
+            digest = hashlib.sha1(
+                ",".join(payload.tickers).encode(), usedforsecurity=False
+            ).hexdigest()[:12]
+            key += f":tickers-{digest}"
+        return key
     if isinstance(payload, MarketSnapshotPayload):
-        return (
-            f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
-        )
+        return f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
     if isinstance(payload, CloseQuotePayload):
         key = f"{kind}:{payload.provider}:{payload.scope_label}:{payload.trade_date.isoformat()}"
         return key if payload.slot == "close" else f"{key}:{payload.slot}"

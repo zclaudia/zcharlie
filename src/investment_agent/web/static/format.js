@@ -464,6 +464,10 @@ export const RUN_STAGE_LABELS = Object.freeze({
 });
 
 export const QUALITY_FLAG_LABELS = Object.freeze({
+  dividends_not_collected: "分红资料未采集或覆盖不足",
+  dividends_stale: "分红资料过期",
+  no_price: "缺少价格",
+  stale_price: "价格过期",
   derived_field: "派生字段",
   factor_missing: "因子缺失",
   missing_field: "字段缺失",
@@ -477,6 +481,7 @@ export const QUALITY_FLAG_LABELS = Object.freeze({
 // 数据源标识 -> 显示名：全站唯一的基础表（含全部 provider 键）。
 // health.js 只在本页需要更具体的渠道说明时覆盖个别条目（如 akshare），不另建新表。
 export const PROVIDER_LABELS = Object.freeze({
+  wmshare: "wmshare",
   baostock: "baostock",
   akshare: "AkShare",
   eastmoney: "东方财富",

@@ -31,6 +31,7 @@ from typing import Protocol
 import structlog
 
 from investment_agent.providers.baostock_market import DividendEvent, DividendYear
+from investment_agent.providers.wmshare_dividends import WmshareDividendClient
 from investment_agent.snapshots.breadth import BAOSTOCK_PROVIDER, TransientBreaker
 from investment_agent.snapshots.collect import (
     ArtifactWriter,
@@ -40,7 +41,7 @@ from investment_agent.snapshots.collect import (
     fence_writes,
 )
 from investment_agent.snapshots.jobs import DividendSnapshotPayload
-from investment_agent.snapshots.scope import collection_members
+from investment_agent.snapshots.scope import collection_members, user_pools
 from investment_agent.storage.database import session_scope
 from investment_agent.storage.repositories.dividend import DividendRepository
 from investment_agent.storage.repositories.pipeline_run import LeaseLostError, RunLease
@@ -248,6 +249,9 @@ async def collect_baostock_dividends(
     del now  # captured_at comes from the provider client (its clock)
     async with session_scope() as session:
         listing_by_ticker = await collection_members(session, payload, payload.as_of)
+        if payload.exclude_watchlist:
+            watchlist = (await user_pools(session)).watchlist
+            listing_by_ticker = {t: v for t, v in listing_by_ticker.items() if t not in watchlist}
     completeness = Completeness(expected=sorted(listing_by_ticker))
     report = CollectionReport(completeness, provider=BAOSTOCK_PROVIDER)
     plan = {
@@ -272,5 +276,86 @@ async def collect_baostock_dividends(
         "years": list(payload.years),
         "year_type": "operate (ex-date year)",
         **batch.to_metadata(),
+    }
+    return report
+
+
+async def collect_wmshare_dividends(
+    payload: DividendSnapshotPayload,
+    *,
+    client: WmshareDividendClient,
+    artifacts: ArtifactWriter,
+    lease: RunLease | None,
+) -> CollectionReport:
+    """Capture the enabled watchlist, saving each stock in its own transaction."""
+    from dataclasses import asdict
+
+    from investment_agent.dividends.service import persist_wmshare_capture
+    from investment_agent.snapshots.collect import SnapshotPreconditionError
+
+    async with session_scope() as session:
+        members = await collection_members(session, payload, payload.as_of)
+    if payload.tickers:
+        missing = set(payload.tickers) - set(members)
+        if missing:
+            raise SnapshotPreconditionError(
+                f"tickers are not enabled watchlist members: {', '.join(sorted(missing))}"
+            )
+        members = {ticker: members[ticker] for ticker in payload.tickers}
+    completeness = Completeness(expected=sorted(members))
+    report = CollectionReport(completeness, provider="wmshare")
+    costs: dict[str, dict[str, int | None]] = {}
+    parts: dict[str, dict[str, str | None]] = {}
+    stored: dict[str, object] = {}
+    stopped = False
+    partial_parts = False
+    for ticker, listing_id in sorted(members.items()):
+        if stopped:
+            completeness.mark_missing(ticker, "stopped", "wmshare authentication or quota stop")
+            continue
+        try:
+            capture = await client.fetch(ticker, payload.as_of)
+            costs[ticker] = capture.ec
+            raw_ref = artifacts.write(f"wmshare-dividends-{ticker}", asdict(capture))
+            async with session_scope() as session:
+                await fence_writes(session, lease)
+                stored[ticker] = await persist_wmshare_capture(
+                    session, listing_id, capture, raw_ref=raw_ref
+                )
+            parts[ticker] = {"history": capture.history_error, "snapshot": capture.snapshot_error}
+            errors = [e for e in (capture.history_error, capture.snapshot_error) if e]
+            if capture.history_error is None and not set(payload.years).issubset(
+                capture.covered_years
+            ):
+                errors.append("dividend history coverage is incomplete")
+            if errors and (capture.history_error is None or capture.snapshot is not None):
+                partial_parts = True
+            if capture.terminal:
+                stopped = True
+                completeness.mark_missing(ticker, "stopped", "; ".join(errors))
+            elif errors:
+                completeness.mark_missing(ticker, "failed", "; ".join(errors))
+                report.all_failures_transient = False
+            else:
+                completeness.mark_collected(ticker)
+        except LeaseLostError:
+            raise
+        except Exception as exc:
+            report.record_failure(exc)
+            completeness.mark_missing(ticker, "failed", error_reason(exc))
+    known = [cost for by_part in costs.values() for cost in by_part.values() if cost is not None]
+    report.metadata = {
+        "provider": "wmshare",
+        "scope": payload.scope,
+        "as_of": payload.as_of.isoformat(),
+        "ec_by_ticker": costs,
+        "ec_known_total": sum(known),
+        "ec_unknown_calls": sum(
+            cost is None for by_part in costs.values() for cost in by_part.values()
+        ),
+        "parts": parts,
+        "stored": stored,
+        "aborted": stopped,
+        "partial_parts": partial_parts,
     }
     return report

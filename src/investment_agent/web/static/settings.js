@@ -679,6 +679,7 @@ export const SETTINGS_SECTIONS = Object.freeze([
     blurb: "连接、采集速度、核验预算、同行参照。各管一件事。",
     topics: [
       { id: "ifind", title: "iFinD 连接", note: "地址和密钥改完，用这一屏的测试。", keys: ["ifind_proxy_url", "ifind_proxy_api_key"] },
+      { id: "wmshare", title: "wmshare 分红", note: "启用后每周采集观察池；凭证加密保存。", keys: ["wmshare_dividends_enabled", "wmshare_client_id", "wmshare_client_secret"] },
       {
         id: "collection",
         title: "采集",
@@ -880,6 +881,8 @@ export function topicSummary(topic, read) {
       return `${value("candidate_expiry_days")} 天过期`;
     case "ifind":
       return String(value("ifind_proxy_url") || "").replace(/^https?:\/\//, "") || "未填写";
+    case "wmshare":
+      return value("wmshare_dividends_enabled") ? "已开启" : "关闭";
     case "collection":
       return `${value("ifind_collect_rate_per_minute")} 次/分钟`;
     case "verification":

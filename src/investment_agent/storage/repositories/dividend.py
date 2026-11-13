@@ -53,11 +53,14 @@ class DividendRepository(Repository[DividendEventSnapshot]):
     model = DividendEventSnapshot
 
     async def latest_events(
-        self, listing_id: int, ex_dates: Sequence[date] | None = None
+        self, listing_id: int, ex_dates: Sequence[date] | None = None, *, provider: str = "baostock"
     ) -> dict[date, DividendEventSnapshot]:
-        """Latest stored version per ex-date (all providers)."""
+        """Latest stored version per ex-date for one provider."""
 
-        conditions = [DividendEventSnapshot.listing_id == listing_id]
+        conditions = [
+            DividendEventSnapshot.listing_id == listing_id,
+            DividendEventSnapshot.provider == provider,
+        ]
         if ex_dates is not None:
             if not ex_dates:
                 return {}
@@ -98,7 +101,11 @@ class DividendRepository(Repository[DividendEventSnapshot]):
         if unknown:
             raise ValueError(f"unknown dividend payload columns {sorted(unknown)}")
         if latest is None:
-            latest = (await self.latest_events(listing_id, [ex_date])).get(ex_date)
+            latest = (await self.latest_events(listing_id, [ex_date], provider=provider)).get(
+                ex_date
+            )
+        if latest is not None and latest.provider != provider:
+            raise ValueError("latest dividend event belongs to another provider")
         if latest is not None and all(
             _same(getattr(latest, name), values.get(name)) for name in EVENT_PAYLOAD_COLUMNS
         ):

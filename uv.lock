@@ -1139,6 +1139,7 @@ dependencies = [
     { name = "structlog" },
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
+    { name = "wmshare" },
     { name = "zclaudia-gateway" },
 ]
 
@@ -1193,6 +1194,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12" },
     { name = "types-pyyaml", marker = "extra == 'dev'" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
+    { name = "wmshare", specifier = "==1.19.0" },
     { name = "zclaudia-gateway", specifier = "==0.4.0" },
 ]
 provides-extras = ["dev", "original-parsing"]
@@ -3347,6 +3349,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/49/b2/b6987faf330f5af5c787a2610124c2e8403d51724f9001ec4fff6311fe7a/websockets-16.1.1-cp314-cp314t-win32.whl", hash = "sha256:8483c2096363120eea8b07c06ae7304d520f686665fffd4811fad423930a65d7", size = 179729, upload-time = "2026-07-17T22:50:53.269Z" },
     { url = "https://files.pythonhosted.org/packages/a2/6e/fbac6ed878dd362fbad7d415fa4f84d38e3e33fed8cde45c64e783acf826/websockets-16.1.1-cp314-cp314t-win_amd64.whl", hash = "sha256:bcce07e23e5769375158f5efdcdafa8d5cd014b93c6683865b840ed65b96f231", size = 180072, upload-time = "2026-07-17T22:50:54.969Z" },
     { url = "https://files.pythonhosted.org/packages/be/4d/2d0d67834092e354d2b0498f014a41249a89556bc406cf86f3e1557bb463/websockets-16.1.1-py3-none-any.whl", hash = "sha256:6abbd3e82c731c8e531714466acd5d87b5e88ac3243465337ba71d68e23ae7e3", size = 173814, upload-time = "2026-07-17T22:51:04.184Z" },
+]
+
+[[package]]
+name = "wmshare"
+version = "1.19.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f7/8d/5e0f2f45334467443568f8f82cece0a2c8148234b9f8d9d05074f156acab/wmshare-1.19.0.tar.gz", hash = "sha256:c63e1255b7c486c294fdc4dbf938639261a78083e3c68d26f2303cd1acae29f9", size = 754363, upload-time = "2026-11-12T10:02:27.448Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/d6/1c905897e9904f53778c742706085669bd25511ebeb0eda4713195eeb29f/wmshare-1.19.0-py3-none-any.whl", hash = "sha256:c56576246989d4eaaf5dfc5de371edc0c579e2c26a20d78d87c3d90ab9fe0fae", size = 639745, upload-time = "2026-11-12T10:02:25.288Z" },
 ]
 
 [[package]]

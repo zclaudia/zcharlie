@@ -141,6 +141,10 @@ class Settings(BaseSettings):
     ifind_proxy_url: str = "http://127.0.0.1:7100"
     ifind_proxy_api_key: str = ""
 
+    wmshare_client_id: str = ""
+    wmshare_client_secret: str = ""
+    wmshare_dividends_enabled: bool = False
+
     # Snapshot collection (P1-A3). The worker process throttles every proxy
     # call of its snapshot collectors through one shared token bucket.
     ifind_collect_rate_per_minute: float = Field(default=40.0, gt=0, le=600)

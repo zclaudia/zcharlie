@@ -235,8 +235,17 @@ async def run_snapshot_schedule_job(
         if job not in CALENDAR_FREE_JOBS:
             calendar = load_trading_calendar(resolved_calendar_path(calendar_path))
             log_calendar_coverage(calendar, local_today)
+        wmshare_enabled = (
+            (await load_settings()).wmshare_dividends_enabled
+            if job == "financial_weekly"
+            else False
+        )
         payloads = snapshot_payloads(
-            job, today=local_today, calendar=calendar, universes=snapshot_cfg.universes
+            job,
+            today=local_today,
+            calendar=calendar,
+            universes=snapshot_cfg.universes,
+            wmshare_dividends_enabled=wmshare_enabled,
         )
     except UnknownTradingCalendarYearError:
         log.exception(

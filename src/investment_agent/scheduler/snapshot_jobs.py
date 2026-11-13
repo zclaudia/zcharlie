@@ -209,6 +209,7 @@ def snapshot_payloads(
     today: date,
     calendar: TradingCalendar | None,
     universes: Sequence[str],
+    wmshare_dividends_enabled: bool = False,
 ) -> list[SnapshotPayload]:
     """What one fire of ``job`` on ``today`` should enqueue (pure).
 
@@ -222,7 +223,15 @@ def snapshot_payloads(
         # Dividends (minutes) before the per-stock cash-flow statements (hours).
         return [
             *_financial(codes, today),
-            *_dividends(codes, today),
+            *_dividends(codes, today, exclude_watchlist=wmshare_dividends_enabled),
+            *(
+                [
+                    DividendSnapshotPayload(provider="baostock", scope="watchlist", as_of=today),
+                    DividendSnapshotPayload(provider="wmshare", scope="watchlist", as_of=today),
+                ]
+                if wmshare_dividends_enabled
+                else []
+            ),
             *_akshare_cash_flow(codes, today),
         ]
     if calendar is None:
@@ -294,9 +303,17 @@ def _financial(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]
     return [*baostock, *summaries]
 
 
-def _dividends(codes: Sequence[IndexCode], today: date) -> list[SnapshotPayload]:
+def _dividends(
+    codes: Sequence[IndexCode], today: date, *, exclude_watchlist: bool = False
+) -> list[SnapshotPayload]:
     return [
-        DividendSnapshotPayload(provider="baostock", scope="universe", universe_code=code, as_of=today)
+        DividendSnapshotPayload(
+            provider="baostock",
+            scope="universe",
+            universe_code=code,
+            as_of=today,
+            exclude_watchlist=exclude_watchlist,
+        )
         for code in codes
     ]
 
@@ -385,12 +402,8 @@ async def enqueue_snapshot_payloads(
                 run, created = await enqueue_snapshot_job(
                     session, payload, triggered_by=triggered_by
                 )
-                outcomes.append(
-                    EnqueueOutcome(run.kind, run.idempotency_key, run.id, created)
-                )
+                outcomes.append(EnqueueOutcome(run.kind, run.idempotency_key, run.id, created))
         except Exception as exc:
             log.exception("scheduler.snapshot.enqueue_failed", payload=payload.model_dump())
-            outcomes.append(
-                EnqueueOutcome(type(payload).__name__, None, None, False, f"{exc}")
-            )
+            outcomes.append(EnqueueOutcome(type(payload).__name__, None, None, False, f"{exc}"))
     return outcomes

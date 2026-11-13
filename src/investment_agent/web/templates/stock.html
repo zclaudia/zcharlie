@@ -310,6 +310,7 @@
       <a class="on" href="#stock-chart-card">概要</a>
       <a href="#stock-scores">评分</a>
       <a href="#stock-metrics">关键指标</a>
+      <a href="#dividend-card">分红</a>
       <a href="#stock-ai">AI 解释</a>
       <a href="#stock-review">多视角评审</a>
       <a href="#peer-context-section">同行参照</a>
@@ -327,6 +328,11 @@
     </section>
     <section id="stock-detail" class="data-region"
              data-listing-id="{{ listing_id or '' }}" data-ticker="{{ ticker }}"></section>
+    <section class="card dividend-card" id="dividend-card" data-ticker="{{ ticker }}">
+      <div class="card-head"><h2>分红</h2><button type="button" class="btn btn-sm" id="dividend-refresh" disabled>刷新分红</button></div>
+      <div id="dividend-refresh-status" aria-live="polite"></div>
+      <div id="dividend-content" aria-live="polite"><p class="notice notice-loading">正在读取分红数据…</p></div>
+    </section>
     <section class="card card--flush stock-history-card" id="stock-history-card">
       <div class="card-head card-head--rule"><h2>历史快照</h2></div>
       <div id="stock-history" class="data-region"

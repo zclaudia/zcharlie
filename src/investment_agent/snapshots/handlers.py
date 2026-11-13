@@ -37,6 +37,7 @@ from investment_agent.providers.ledger import (
     provider_ledger_hook,
 )
 from investment_agent.providers.tencent_quote import TencentQuoteClient
+from investment_agent.providers.wmshare_dividends import WmshareDividendClient
 from investment_agent.research.ifind_chain import IfindProxyClient
 from investment_agent.scheduler.trading_calendar import TradingCalendar, load_trading_calendar
 from investment_agent.snapshots.backfill import BackfillClient, run_backfill_part
@@ -53,7 +54,11 @@ from investment_agent.snapshots.collect import (
     ProxyBatchCaller,
     ProxyClient,
 )
-from investment_agent.snapshots.dividends import DividendClient, collect_baostock_dividends
+from investment_agent.snapshots.dividends import (
+    DividendClient,
+    collect_baostock_dividends,
+    collect_wmshare_dividends,
+)
 from investment_agent.snapshots.earnings_events import (
     EarningsEventClient,
     collect_earnings_events,
@@ -155,6 +160,7 @@ class SnapshotRuntime:
     shenwan_factory: ShenwanFactory = AkshareShenwanClient
     eastmoney_factory: EastmoneyFactory = AkshareEastmoneyClient
     dividend_factory: DividendFactory = BaostockMarketClient
+    wmshare_factory: Callable[[], WmshareDividendClient] | None = None
     close_quote_factory: CloseQuoteFactory = TencentQuoteClient
     earnings_factory: EarningsEventFactory | None = None
     """Eastmoney earnings events; ``None`` = the ``eastmoney_factory`` client."""
@@ -270,7 +276,9 @@ class SnapshotJobHandler(BaseJobHandler):
 
             metadata = await collect_stock_bootstrap(
                 StockBootstrapPayload.model_validate(request),
-                runtime=self.runtime, artifacts=artifacts, lease=lease,
+                runtime=self.runtime,
+                artifacts=artifacts,
+                lease=lease,
             )
             return _Result("success", {"data_preparation": metadata})
         if self.kind == UNIVERSE_SYNC:
@@ -290,9 +298,7 @@ class SnapshotJobHandler(BaseJobHandler):
                 artifacts=artifacts,
                 lease=lease,
                 shenwan=(
-                    self.runtime.shenwan_factory()
-                    if "sw2021" in industry_payload.systems
-                    else None
+                    self.runtime.shenwan_factory() if "sw2021" in industry_payload.systems else None
                 ),
             )
             failed = metadata.get("failed_systems")
@@ -332,13 +338,45 @@ class SnapshotJobHandler(BaseJobHandler):
                 return await self._settle(outcome, job.run_id, lease)
             return _Result("success", outcome)
         if self.kind == DIVIDEND_SNAPSHOT:
-            report = await collect_baostock_dividends(
-                DividendSnapshotPayload.model_validate(request),
-                client=self.runtime.dividend_factory(),
-                artifacts=artifacts,
-                lease=lease,
-                now=self.runtime.clock,
-            )
+            payload = DividendSnapshotPayload.model_validate(request)
+            if payload.provider == "wmshare":
+                from investment_agent.snapshots.collect import SnapshotPreconditionError
+
+                settings = self.runtime.settings
+                if not settings.wmshare_dividends_enabled:
+                    raise SnapshotPreconditionError("wmshare dividend collection is disabled")
+                if self.runtime.wmshare_factory is not None:
+                    wmshare_client = self.runtime.wmshare_factory()
+                else:
+                    if not settings.wmshare_client_id or not settings.wmshare_client_secret:
+                        raise SnapshotPreconditionError("wmshare credentials are not configured")
+                    from wmshare import Client
+
+                    wmshare_client = WmshareDividendClient(
+                        Client(
+                            client_id=settings.wmshare_client_id,
+                            client_secret=settings.wmshare_client_secret,
+                        )
+                    )
+                try:
+                    report = await collect_wmshare_dividends(
+                        payload,
+                        client=wmshare_client,
+                        artifacts=artifacts,
+                        lease=lease,
+                    )
+                finally:
+                    sdk = getattr(wmshare_client, "client", None)
+                    if sdk is not None and hasattr(sdk, "close"):
+                        await asyncio.to_thread(sdk.close)
+            else:
+                report = await collect_baostock_dividends(
+                    payload,
+                    client=self.runtime.dividend_factory(),
+                    artifacts=artifacts,
+                    lease=lease,
+                    now=self.runtime.clock,
+                )
             return await self._settle(report, job.run_id, lease)
         if self.kind == EARNINGS_EVENT:
             report = await collect_earnings_events(
@@ -438,17 +476,15 @@ class SnapshotJobHandler(BaseJobHandler):
             sleep=self.runtime.sleep,
         )
 
-    async def _settle(
-        self, report: CollectionReport, run_id: int, lease: RunLease
-    ) -> _Result:
+    async def _settle(self, report: CollectionReport, run_id: int, lease: RunLease) -> _Result:
         metadata = report.to_metadata()
         status = report.status
+        if report.provider == "wmshare" and report.metadata.get("partial_parts"):
+            return _Result("partial", metadata, report.summary())
         if status == "failed":
             # Keep the evidence on the run before the worker retries / fails it.
             async with session_scope() as session:
-                await PipelineRunRepository(session).record_metadata(
-                    run_id, metadata, lease=lease
-                )
+                await PipelineRunRepository(session).record_metadata(run_id, metadata, lease=lease)
             raise report.failure()
         return _Result(status, metadata, report.summary())
 

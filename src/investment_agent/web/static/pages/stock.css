@@ -30,7 +30,7 @@
 .stock-menu a:hover { background: var(--hover); color: var(--ink); text-decoration: none; }
 .stock-tabs { margin: 0; }
 
-.stock-chart-card, #stock-scores, #stock-metrics, #stock-ai, #stock-history-card, #peer-context-section { scroll-margin-top: 11.5rem; }
+.stock-chart-card, #stock-scores, #stock-metrics, #dividend-card, #stock-ai, #stock-history-card, #peer-context-section { scroll-margin-top: 11.5rem; }
 @media (prefers-reduced-motion: no-preference) { html:has(.stock-page) { scroll-behavior: smooth; } }
 
 /* ---- 网格（桌面 12 列；手机见底部） ---- */
@@ -242,12 +242,13 @@
   #stock-scores { order: 50; }
   #stock-metrics { order: 60; }
   #evidence-inspector { order: 65; }
+  #dividend-card { order: 66; }
   #stock-ai { order: 70; }
   #stock-quality { order: 80; }
   #peer-context-section { order: 90; }
   .stock-history-card { order: 100; }
   #stock-detail > .notice { order: 20; }
-  .stock-chart-card, #stock-scores, #stock-metrics, #stock-ai, #stock-history-card, #peer-context-section { scroll-margin-top: 7rem; }
+  .stock-chart-card, #stock-scores, #stock-metrics, #dividend-card, #stock-ai, #stock-history-card, #peer-context-section { scroll-margin-top: 7rem; }
   .stock-page:not(.stock-page--plain) { padding-bottom: 4px; }
 
   #stock-spark .pc-stage { height: 150px; }
@@ -288,3 +289,10 @@
   .stock-abar { display: none; }
   .app-main:has(.stock-abar.action-bar:not([hidden])) { padding-bottom: 40px; }
 }
+
+.dividend-card { grid-column: 1 / -1; }
+.dividend-card h3 { margin: 16px 0 8px; }
+.dividend-card details { margin: 8px 0; }
+.dividend-card table { width: 100%; }
+.dividend-card .dividend-table-wrap { overflow-x: auto; }
+.dividend-card .dividend-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; }

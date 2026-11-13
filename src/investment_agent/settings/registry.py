@@ -285,6 +285,9 @@ class RuntimeSettings(BaseModel):
 
     ifind_proxy_url: str = "http://127.0.0.1:7100"
     ifind_proxy_api_key: str = ""
+    wmshare_client_id: str = ""
+    wmshare_client_secret: str = ""
+    wmshare_dividends_enabled: bool = False
 
     ifind_collect_rate_per_minute: float = Field(default=40.0, gt=0, le=600)
     ifind_collect_batch_retries: int = Field(default=2, ge=0, le=10)
@@ -403,6 +406,9 @@ SPECS: tuple[SettingSpec, ...] = (
         "ifind_proxy_api_key", "ifind", "代理 API Key", "加密保存，只写不读。", "next_job",
         secret=True,
     ),
+    _env("wmshare_dividends_enabled", "collection", "启用 wmshare 分红采集", "默认关闭；仅采集启用的观察池。", "next_job"),
+    _env("wmshare_client_id", "collection", "wmshare Client ID", "加密保存，只写不读。", "next_job", secret=True),
+    _env("wmshare_client_secret", "collection", "wmshare Client Secret", "加密保存，只写不读。", "next_job", secret=True),
     _env(
         "ifind_collect_rate_per_minute", "collection", "iFinD 采集速率（次/分钟）",
         "worker 内所有快照采集共享的令牌桶速率，范围 (0, 600]。", "next_job",

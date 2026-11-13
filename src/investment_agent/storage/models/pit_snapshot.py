@@ -170,7 +170,9 @@ class DividendEventSnapshot(Base, TimestampMixin):
 
     __tablename__ = "dividend_event"
     __table_args__ = (
-        UniqueConstraint("listing_id", "ex_date", "version", name="uq_dividend_event_version"),
+        UniqueConstraint(
+            "listing_id", "provider", "ex_date", "version", name="uq_dividend_event_version"
+        ),
         Index("ix_dividend_event_listing_ex_date", "listing_id", "ex_date"),
     )
 
@@ -236,9 +238,7 @@ class DividendCoverageCheck(Base, TimestampMixin):
 
     __tablename__ = "dividend_coverage_check"
     __table_args__ = (
-        Index(
-            "ix_dividend_coverage_check_lookup", "listing_id", "provider", "year", "checked_at"
-        ),
+        Index("ix_dividend_coverage_check_lookup", "listing_id", "provider", "year", "checked_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -248,3 +248,21 @@ class DividendCoverageCheck(Base, TimestampMixin):
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     event_count: Mapped[int] = mapped_column(Integer, nullable=False)
     is_backfill: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+
+class WmshareDividendSnapshot(Base, TimestampMixin):
+    """Captured platform dividend metrics, distinct from the local yield factor."""
+
+    __tablename__ = "wmshare_dividend_snapshot"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("listing.id"), nullable=False, index=True)
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    snapshot_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    history_available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    quote_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    yield_ttm: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), nullable=True)
+    payout_ttm: Mapped[Decimal | None] = mapped_column(Numeric(20, 10), nullable=True)
+    payload: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    pending: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
+    raw_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)

@@ -1,0 +1,1118 @@
+{
+  "provenance": {
+    "sdk": "wmshare==1.19.0",
+    "source": "paid-dividends-20261113",
+    "captured_on": "2026-11-13",
+    "quote_date": "2026-11-12",
+    "note": "Recorded SDK responses for offline acceptance. history_recent originally default20; history_range originally SDKlimit500 filtered locally. Not asserted to be full historical response."
+  },
+  "stocks": {
+    "600036.SH": {
+      "metrics": {
+        "params": {
+          "symbol": "600036.SH",
+          "codes": [
+            "$ROE_TTM_LAST",
+            "$NCFO_NP",
+            "$PE_TTM_LAST",
+            "$PCT_PE_TTM_10Y_LAST",
+            "$IS_ST",
+            "$IS_SUSPEND",
+            "$INDUSTRY_CUR",
+            "$MV_LAST",
+            "$BONUS_RATE_3Y_AVG_LAST"
+          ]
+        },
+        "result": {
+          "$BONUS_RATE_3Y_AVG_LAST": 0.05163505004673497,
+          "$INDUSTRY_CUR": "industry.S480301",
+          "$IS_ST": false,
+          "$IS_SUSPEND": false,
+          "$MV_LAST": 1075122017970.63,
+          "$NCFO_NP": 1.247848948374761,
+          "$PCT_PE_TTM_10Y_LAST": 0.3250306247447938,
+          "$PE_TTM_LAST": 7.032226954708637,
+          "$ROE_TTM_LAST": 0.13459223311654728
+        },
+        "fetched_at": "2026-11-13T00:18:47.258035+08:00"
+      },
+      "snapshot": {
+        "params": {
+          "sym": "600036.SH"
+        },
+        "result": {
+          "bonus_3y_trend": "peak",
+          "bonus_npts_rate": 0.28706904742757683,
+          "bonus_total": 449935979500.647,
+          "bonus_ttm": 20690831262.287,
+          "dps_ttm": 1.003,
+          "industry": "industry.S48",
+          "is_suspend": false,
+          "mv": 1075122017970.63,
+          "name": "招商银行",
+          "payout_ttm": 0.13533591432963993,
+          "pct_yield_3y": 0.31100478468899523,
+          "pe_ttm": 7.032226954708637,
+          "quote_date": "2026-11-12",
+          "symbol": "600036",
+          "yield_3y_avg": 0.05163505004673497,
+          "yield_3y_min": 0.024309258361609305,
+          "yield_3y_trend": "peak",
+          "yield_lyr": 0.047290640394088666,
+          "yield_ttm": 0.023528031902416136
+        },
+        "fetched_at": "2026-11-13T00:18:47.466934+08:00"
+      },
+      "history_range": {
+        "params": {
+          "symbol": "600036.SH",
+          "begin": "2021-11-14",
+          "end": "2026-11-13"
+        },
+        "result": [
+          {
+            "announce": "2026-07-04",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.003,
+            "ex_date": "2026-07-10",
+            "ex_div": "2026-07-10",
+            "net_profit": 0,
+            "pay": "2026-07-10",
+            "payout_ratio": 0,
+            "sas": "2025:Q4",
+            "total": 20690831262.287
+          },
+          {
+            "announce": "2025-12-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.013,
+            "ex_date": "2026-01-16",
+            "ex_div": "2026-01-16",
+            "net_profit": 0,
+            "pay": "2026-01-16",
+            "payout_ratio": 0,
+            "sas": "2025:Q2",
+            "total": 25548000000
+          },
+          {
+            "announce": "2025-03-26",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 2,
+            "ex_date": "2025-07-11",
+            "ex_div": "2025-07-11",
+            "net_profit": 148391000000,
+            "pay": "2025-07-11",
+            "payout_ratio": 0.3399,
+            "sas": "2024:Q4",
+            "total": 50440000000
+          },
+          {
+            "announce": "2024-03-26",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.972,
+            "ex_date": "2024-07-11",
+            "ex_div": "2024-07-11",
+            "net_profit": 146602000000,
+            "pay": "2024-07-11",
+            "payout_ratio": 0.3392,
+            "sas": "2023:Q4",
+            "total": 49734000000
+          },
+          {
+            "announce": "2023-03-25",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.738,
+            "ex_date": "2023-07-13",
+            "ex_div": "2023-07-13",
+            "net_profit": 138012000000,
+            "pay": "2023-07-13",
+            "payout_ratio": 0.3176,
+            "sas": "2022:Q4",
+            "total": 43832091655
+          },
+          {
+            "announce": "2022-03-19",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.522,
+            "ex_date": "2022-07-15",
+            "ex_div": "2022-07-15",
+            "net_profit": 119922000000,
+            "pay": "2022-07-15",
+            "payout_ratio": 0.3201,
+            "sas": "2021:Q4",
+            "total": 38385000000
+          }
+        ],
+        "fetched_at": "2026-11-13T00:18:47.530584+08:00"
+      },
+      "history_recent": {
+        "params": {
+          "symbol": "600036.SH"
+        },
+        "result": [
+          {
+            "announce": "2026-08-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0,
+            "ex_date": "2026-08-29",
+            "ex_div": null,
+            "net_profit": 0,
+            "pay": null,
+            "payout_ratio": 0,
+            "sas": "2026:Q2",
+            "total": 0
+          },
+          {
+            "announce": "2026-07-04",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.003,
+            "ex_date": "2026-07-10",
+            "ex_div": "2026-07-10",
+            "net_profit": 0,
+            "pay": "2026-07-10",
+            "payout_ratio": 0,
+            "sas": "2025:Q4",
+            "total": 20690831262.287
+          },
+          {
+            "announce": "2025-12-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.013,
+            "ex_date": "2026-01-16",
+            "ex_div": "2026-01-16",
+            "net_profit": 0,
+            "pay": "2026-01-16",
+            "payout_ratio": 0,
+            "sas": "2025:Q2",
+            "total": 25548000000
+          },
+          {
+            "announce": "2025-03-26",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 2,
+            "ex_date": "2025-07-11",
+            "ex_div": "2025-07-11",
+            "net_profit": 148391000000,
+            "pay": "2025-07-11",
+            "payout_ratio": 0.3399,
+            "sas": "2024:Q4",
+            "total": 50440000000
+          },
+          {
+            "announce": "2024-03-26",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.972,
+            "ex_date": "2024-07-11",
+            "ex_div": "2024-07-11",
+            "net_profit": 146602000000,
+            "pay": "2024-07-11",
+            "payout_ratio": 0.3392,
+            "sas": "2023:Q4",
+            "total": 49734000000
+          },
+          {
+            "announce": "2023-03-25",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.738,
+            "ex_date": "2023-07-13",
+            "ex_div": "2023-07-13",
+            "net_profit": 138012000000,
+            "pay": "2023-07-13",
+            "payout_ratio": 0.3176,
+            "sas": "2022:Q4",
+            "total": 43832091655
+          },
+          {
+            "announce": "2022-03-19",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.522,
+            "ex_date": "2022-07-15",
+            "ex_div": "2022-07-15",
+            "net_profit": 119922000000,
+            "pay": "2022-07-15",
+            "payout_ratio": 0.3201,
+            "sas": "2021:Q4",
+            "total": 38385000000
+          },
+          {
+            "announce": "2021-03-20",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.253,
+            "ex_date": "2021-07-13",
+            "ex_div": "2021-07-13",
+            "net_profit": 97342000000,
+            "pay": "2021-07-13",
+            "payout_ratio": 0.3246,
+            "sas": "2020:Q4",
+            "total": 31600000000
+          },
+          {
+            "announce": "2020-03-21",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 1.2,
+            "ex_date": "2020-07-10",
+            "ex_div": "2020-07-10",
+            "net_profit": 92867000000,
+            "pay": "2020-07-10",
+            "payout_ratio": 0.3259,
+            "sas": "2019:Q4",
+            "total": 30264000000
+          },
+          {
+            "announce": "2019-03-23",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.94,
+            "ex_date": "2019-07-12",
+            "ex_div": "2019-07-12",
+            "net_profit": 80560000000,
+            "pay": "2019-07-12",
+            "payout_ratio": 0.2943,
+            "sas": "2018:Q4",
+            "total": 23706654865
+          },
+          {
+            "announce": "2018-03-24",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.84,
+            "ex_date": "2018-07-12",
+            "ex_div": "2018-07-12",
+            "net_profit": 70150000000,
+            "pay": "2018-07-12",
+            "payout_ratio": 0.302,
+            "sas": "2017:Q4",
+            "total": 21184670305
+          },
+          {
+            "announce": "2017-03-25",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.74,
+            "ex_date": "2017-06-14",
+            "ex_div": "2017-06-14",
+            "net_profit": 62081000000,
+            "pay": "2017-06-14",
+            "payout_ratio": 0.3006,
+            "sas": "2016:Q4",
+            "total": 18662685744.74
+          },
+          {
+            "announce": "2016-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.69,
+            "ex_date": "2016-07-13",
+            "ex_div": "2016-07-13",
+            "net_profit": 57696000000,
+            "pay": "2016-07-13",
+            "payout_ratio": 0.3016,
+            "sas": "2015:Q4",
+            "total": 17401693465
+          },
+          {
+            "announce": "2015-03-19",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.67,
+            "ex_date": "2015-07-03",
+            "ex_div": "2015-07-03",
+            "net_profit": 55911000000,
+            "pay": "2015-07-03",
+            "payout_ratio": 0.3022,
+            "sas": "2014:Q4",
+            "total": 16897296552
+          },
+          {
+            "announce": "2014-03-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.62,
+            "ex_date": "2014-07-11",
+            "ex_div": "2014-07-11",
+            "net_profit": 51743000000,
+            "pay": "2014-07-11",
+            "payout_ratio": 0.3022,
+            "sas": "2013:Q4",
+            "total": 15636304272.62
+          },
+          {
+            "announce": "2013-03-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.63,
+            "ex_date": "2013-06-13",
+            "ex_div": "2013-06-13",
+            "net_profit": 45273000000,
+            "pay": "2013-06-19",
+            "payout_ratio": 0.3003,
+            "sas": "2012:Q4",
+            "total": 13593263598
+          },
+          {
+            "announce": "2012-03-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.42,
+            "ex_date": "2012-06-07",
+            "ex_div": "2012-06-07",
+            "net_profit": 36129000000,
+            "pay": "2012-06-13",
+            "payout_ratio": 0.2508,
+            "sas": "2011:Q4",
+            "total": 9062175732
+          },
+          {
+            "announce": "2011-04-01",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.29,
+            "ex_date": "2011-06-10",
+            "ex_div": "2011-06-10",
+            "net_profit": 25769000000,
+            "pay": "2011-06-16",
+            "payout_ratio": 0.2428,
+            "sas": "2010:Q4",
+            "total": 6257216577
+          },
+          {
+            "announce": "2010-04-14",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.21,
+            "ex_date": "2010-07-01",
+            "ex_div": "2010-07-01",
+            "net_profit": 18235000000,
+            "pay": "2010-07-08",
+            "payout_ratio": 0.2485,
+            "sas": "2009:Q4",
+            "total": 4531087866
+          },
+          {
+            "announce": "2009-04-25",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1,
+            "ex_date": "2009-07-03",
+            "ex_div": "2009-07-03",
+            "net_profit": 21077000000,
+            "pay": "2009-07-09",
+            "payout_ratio": 0.0698,
+            "sas": "2008:Q4",
+            "total": 1470720383
+          }
+        ],
+        "fetched_at": "2026-11-13T00:18:47.648621+08:00"
+      },
+      "last": {
+        "params": {
+          "symbol": "600036.SH"
+        },
+        "result": {
+          "amount": 2381853908,
+          "close": 42.63,
+          "date": "2026-11-12",
+          "high": 42.74,
+          "low": 42.15,
+          "open": 42.45,
+          "percent": 0.001645,
+          "sas": "2026:D316",
+          "volume": 56140600.0
+        },
+        "fetched_at": "2026-11-13T00:18:47.768532+08:00"
+      }
+    },
+    "601988.SH": {
+      "metrics": {
+        "params": {
+          "symbol": "601988.SH",
+          "codes": [
+            "$ROE_TTM_LAST",
+            "$NCFO_NP",
+            "$PE_TTM_LAST",
+            "$PCT_PE_TTM_10Y_LAST",
+            "$IS_ST",
+            "$IS_SUSPEND",
+            "$INDUSTRY_CUR",
+            "$MV_LAST",
+            "$BONUS_RATE_3Y_AVG_LAST"
+          ]
+        },
+        "result": {
+          "$BONUS_RATE_3Y_AVG_LAST": 0.04890175052365333,
+          "$INDUSTRY_CUR": "industry.S480201",
+          "$IS_ST": false,
+          "$IS_SUSPEND": false,
+          "$MV_LAST": 2268375379170.56,
+          "$NCFO_NP": 2.7497490362993897,
+          "$PCT_PE_TTM_10Y_LAST": 0.9942833809718252,
+          "$PE_TTM_LAST": 8.971477870340726,
+          "$ROE_TTM_LAST": 0.09253907949156813
+        },
+        "fetched_at": "2026-11-13T00:18:51.531926+08:00"
+      },
+      "snapshot": {
+        "params": {
+          "sym": "601988.SH"
+        },
+        "result": {
+          "bonus_3y_trend": "down",
+          "bonus_npts_rate": 0.3108911006278408,
+          "bonus_total": 1041356789078.7074,
+          "bonus_ttm": 62981765691.3634,
+          "dps_ttm": 0.2359,
+          "industry": "industry.S48",
+          "is_suspend": false,
+          "mv": 2268375379170.56,
+          "name": "中国银行",
+          "payout_ttm": 0.24909436168437885,
+          "pct_yield_3y": 0.0106951871657754,
+          "pe_ttm": 8.971477870340726,
+          "quote_date": "2026-11-12",
+          "symbol": "601988",
+          "yield_3y_avg": 0.04890175052365333,
+          "yield_3y_min": 0.0350520059435364,
+          "yield_3y_trend": "down",
+          "yield_lyr": 0.03214488636363636,
+          "yield_ttm": 0.03350852272727273
+        },
+        "fetched_at": "2026-11-13T00:18:51.601147+08:00"
+      },
+      "history_range": {
+        "params": {
+          "symbol": "601988.SH",
+          "begin": "2021-11-14",
+          "end": "2026-11-13"
+        },
+        "result": [
+          {
+            "announce": "2026-07-06",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1169,
+            "ex_date": "2026-07-10",
+            "ex_div": "2026-07-10",
+            "net_profit": 0,
+            "pay": "2026-07-10",
+            "payout_ratio": 0,
+            "sas": "2025:Q4",
+            "total": 24638488685.497402
+          },
+          {
+            "announce": "2025-08-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1094,
+            "ex_date": "2025-12-11",
+            "ex_div": "2025-12-11",
+            "net_profit": 0,
+            "pay": "2025-12-11",
+            "payout_ratio": 0,
+            "sas": "2025:Q2",
+            "total": 35250037852
+          },
+          {
+            "announce": "2025-03-27",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1216,
+            "ex_date": "2025-04-25",
+            "ex_div": "2025-04-25",
+            "net_profit": 237841000000,
+            "pay": "2025-04-25",
+            "payout_ratio": 0.1505,
+            "sas": "2024:Q4",
+            "total": 35797555415
+          },
+          {
+            "announce": "2024-08-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1208,
+            "ex_date": "2025-01-23",
+            "ex_div": "2025-01-23",
+            "net_profit": 0,
+            "pay": "2025-01-23",
+            "payout_ratio": 0,
+            "sas": "2024:Q2",
+            "total": 35562045182
+          },
+          {
+            "announce": "2024-03-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.2364,
+            "ex_date": "2024-07-17",
+            "ex_div": "2024-07-17",
+            "net_profit": 231904000000,
+            "pay": "2024-07-17",
+            "payout_ratio": 0.3001,
+            "sas": "2023:Q4",
+            "total": 69593273849
+          },
+          {
+            "announce": "2023-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.232,
+            "ex_date": "2023-07-17",
+            "ex_div": "2023-07-17",
+            "net_profit": 227439000000,
+            "pay": "2023-07-17",
+            "payout_ratio": 0.3003,
+            "sas": "2022:Q4",
+            "total": 68297967568
+          },
+          {
+            "announce": "2022-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.221,
+            "ex_date": "2022-07-15",
+            "ex_div": "2022-07-15",
+            "net_profit": 216559000000,
+            "pay": "2022-07-15",
+            "payout_ratio": 0.3004,
+            "sas": "2021:Q4",
+            "total": 65059701864
+          }
+        ],
+        "fetched_at": "2026-11-13T00:18:51.663439+08:00"
+      },
+      "history_recent": {
+        "params": {
+          "symbol": "601988.SH"
+        },
+        "result": [
+          {
+            "announce": "2026-08-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.119,
+            "ex_date": "2026-08-29",
+            "ex_div": null,
+            "net_profit": 0,
+            "pay": null,
+            "payout_ratio": 0,
+            "sas": "2026:Q2",
+            "total": 38343277005.866
+          },
+          {
+            "announce": "2026-07-06",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1169,
+            "ex_date": "2026-07-10",
+            "ex_div": "2026-07-10",
+            "net_profit": 0,
+            "pay": "2026-07-10",
+            "payout_ratio": 0,
+            "sas": "2025:Q4",
+            "total": 24638488685.497402
+          },
+          {
+            "announce": "2025-08-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1094,
+            "ex_date": "2025-12-11",
+            "ex_div": "2025-12-11",
+            "net_profit": 0,
+            "pay": "2025-12-11",
+            "payout_ratio": 0,
+            "sas": "2025:Q2",
+            "total": 35250037852
+          },
+          {
+            "announce": "2025-03-27",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1216,
+            "ex_date": "2025-04-25",
+            "ex_div": "2025-04-25",
+            "net_profit": 237841000000,
+            "pay": "2025-04-25",
+            "payout_ratio": 0.1505,
+            "sas": "2024:Q4",
+            "total": 35797555415
+          },
+          {
+            "announce": "2024-08-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1208,
+            "ex_date": "2025-01-23",
+            "ex_div": "2025-01-23",
+            "net_profit": 0,
+            "pay": "2025-01-23",
+            "payout_ratio": 0,
+            "sas": "2024:Q2",
+            "total": 35562045182
+          },
+          {
+            "announce": "2024-03-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.2364,
+            "ex_date": "2024-07-17",
+            "ex_div": "2024-07-17",
+            "net_profit": 231904000000,
+            "pay": "2024-07-17",
+            "payout_ratio": 0.3001,
+            "sas": "2023:Q4",
+            "total": 69593273849
+          },
+          {
+            "announce": "2023-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.232,
+            "ex_date": "2023-07-17",
+            "ex_div": "2023-07-17",
+            "net_profit": 227439000000,
+            "pay": "2023-07-17",
+            "payout_ratio": 0.3003,
+            "sas": "2022:Q4",
+            "total": 68297967568
+          },
+          {
+            "announce": "2022-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.221,
+            "ex_date": "2022-07-15",
+            "ex_div": "2022-07-15",
+            "net_profit": 216559000000,
+            "pay": "2022-07-15",
+            "payout_ratio": 0.3004,
+            "sas": "2021:Q4",
+            "total": 65059701864
+          },
+          {
+            "announce": "2021-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.197,
+            "ex_date": "2021-06-04",
+            "ex_div": "2021-06-04",
+            "net_profit": 192870000000,
+            "pay": "2021-06-04",
+            "payout_ratio": 0.3007,
+            "sas": "2020:Q4",
+            "total": 57994394874
+          },
+          {
+            "announce": "2020-03-28",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.191,
+            "ex_date": "2020-07-15",
+            "ex_div": "2020-07-15",
+            "net_profit": 187405000000,
+            "pay": "2020-07-15",
+            "payout_ratio": 0.3,
+            "sas": "2019:Q4",
+            "total": 56228068127
+          },
+          {
+            "announce": "2019-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.184,
+            "ex_date": "2019-06-03",
+            "ex_div": "2019-06-03",
+            "net_profit": 180086000000,
+            "pay": "2019-06-03",
+            "payout_ratio": 0.3008,
+            "sas": "2018:Q4",
+            "total": 54167353588.344
+          },
+          {
+            "announce": "2018-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.176,
+            "ex_date": "2018-07-13",
+            "ex_div": "2018-07-13",
+            "net_profit": 172407000000,
+            "pay": "2018-07-13",
+            "payout_ratio": 0.3005,
+            "sas": "2017:Q4",
+            "total": 51812251257.99999
+          },
+          {
+            "announce": "2017-04-01",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.168,
+            "ex_date": "2017-07-14",
+            "ex_div": "2017-07-14",
+            "net_profit": 164578000000,
+            "pay": "2017-07-14",
+            "payout_ratio": 0.3005,
+            "sas": "2016:Q4",
+            "total": 49457148927.99999
+          },
+          {
+            "announce": "2016-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.175,
+            "ex_date": "2016-06-24",
+            "ex_div": "2016-06-24",
+            "net_profit": 170845000000,
+            "pay": "2016-06-24",
+            "payout_ratio": 0.3015,
+            "sas": "2015:Q4",
+            "total": 51517863467
+          },
+          {
+            "announce": "2015-03-26",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.19,
+            "ex_date": "2015-07-03",
+            "ex_div": "2015-07-03",
+            "net_profit": 169595000000,
+            "pay": "2015-07-03",
+            "payout_ratio": 0.3298,
+            "sas": "2014:Q4",
+            "total": 55933680336
+          },
+          {
+            "announce": "2014-03-27",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.196,
+            "ex_date": "2014-06-27",
+            "ex_div": "2014-06-27",
+            "net_profit": 156911000000,
+            "pay": "2014-06-27",
+            "payout_ratio": 0.349,
+            "sas": "2013:Q4",
+            "total": 54755462841
+          },
+          {
+            "announce": "2013-03-27",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.175,
+            "ex_date": "2013-06-18",
+            "ex_div": "2013-06-18",
+            "net_profit": 139432000000,
+            "pay": "2013-07-12",
+            "payout_ratio": 0.3504,
+            "sas": "2012:Q4",
+            "total": 48850815547
+          },
+          {
+            "announce": "2012-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.155,
+            "ex_date": "2012-06-13",
+            "ex_div": "2012-06-13",
+            "net_profit": 124182000000,
+            "pay": "2012-07-06",
+            "payout_ratio": 0.3484,
+            "sas": "2011:Q4",
+            "total": 43267837395
+          },
+          {
+            "announce": "2011-03-25",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.146,
+            "ex_date": "2011-06-10",
+            "ex_div": "2011-06-10",
+            "net_profit": 104418000000,
+            "pay": "2011-06-30",
+            "payout_ratio": 0.3903,
+            "sas": "2010:Q4",
+            "total": 40755508873
+          },
+          {
+            "announce": "2010-03-24",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.14,
+            "ex_date": "2010-06-04",
+            "ex_div": "2010-06-04",
+            "net_profit": 80819000000,
+            "pay": "2010-06-22",
+            "payout_ratio": 0.4397,
+            "sas": "2009:Q4",
+            "total": 35537482681
+          }
+        ],
+        "fetched_at": "2026-11-13T00:18:51.741039+08:00"
+      },
+      "last": {
+        "params": {
+          "symbol": "601988.SH"
+        },
+        "result": {
+          "amount": 1965809450,
+          "close": 7.04,
+          "date": "2026-11-12",
+          "high": 7.06,
+          "low": 6.88,
+          "open": 6.91,
+          "percent": 0.014409,
+          "sas": "2026:D316",
+          "volume": 281104700.0
+        },
+        "fetched_at": "2026-11-13T00:18:51.833460+08:00"
+      }
+    },
+    "600029.SH": {
+      "metrics": {
+        "params": {
+          "symbol": "600029.SH",
+          "codes": [
+            "$ROE_TTM_LAST",
+            "$NCFO_NP",
+            "$PE_TTM_LAST",
+            "$PCT_PE_TTM_10Y_LAST",
+            "$IS_ST",
+            "$IS_SUSPEND",
+            "$INDUSTRY_CUR",
+            "$MV_LAST",
+            "$BONUS_RATE_3Y_AVG_LAST"
+          ]
+        },
+        "result": {
+          "$BONUS_RATE_3Y_AVG_LAST": 0,
+          "$INDUSTRY_CUR": "industry.S421001",
+          "$IS_ST": false,
+          "$IS_SUSPEND": false,
+          "$MV_LAST": 92598159214.12001,
+          "$NCFO_NP": -7.465892165624069,
+          "$PCT_PE_TTM_10Y_LAST": 0.7660455486542443,
+          "$PE_TTM_LAST": -16.090036353452653,
+          "$ROE_TTM_LAST": -0.1729708609470568
+        },
+        "fetched_at": "2026-11-13T00:18:51.196763+08:00"
+      },
+      "snapshot": {
+        "params": {
+          "sym": "600029.SH"
+        },
+        "result": {
+          "bonus_3y_trend": "flat",
+          "bonus_npts_rate": -0.21082353107111054,
+          "bonus_total": 6629135111,
+          "bonus_ttm": 0,
+          "dps_ttm": 0,
+          "industry": "industry.S42",
+          "is_suspend": false,
+          "mv": 92598159214.12001,
+          "name": "南方航空",
+          "payout_ttm": 0,
+          "pct_yield_3y": 0.8890374331550802,
+          "pe_ttm": -16.090036353452653,
+          "quote_date": "2026-11-12",
+          "symbol": "600029",
+          "yield_3y_avg": 0,
+          "yield_3y_min": 0,
+          "yield_3y_trend": "flat",
+          "yield_lyr": 0,
+          "yield_ttm": 0
+        },
+        "fetched_at": "2026-11-13T00:18:51.269188+08:00"
+      },
+      "history_range": {
+        "params": {
+          "symbol": "600029.SH",
+          "begin": "2021-11-14",
+          "end": "2026-11-13"
+        },
+        "result": [],
+        "fetched_at": "2026-11-13T00:18:51.346102+08:00"
+      },
+      "history_recent": {
+        "params": {
+          "symbol": "600029.SH"
+        },
+        "result": [
+          {
+            "announce": "2020-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0,
+            "ex_date": "2020-03-31",
+            "ex_div": null,
+            "net_profit": 0,
+            "pay": null,
+            "payout_ratio": 0,
+            "sas": "2019:Q4",
+            "total": 0
+          },
+          {
+            "announce": "2019-08-28",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0,
+            "ex_date": "2019-08-28",
+            "ex_div": null,
+            "net_profit": 0,
+            "pay": null,
+            "payout_ratio": 0,
+            "sas": "2019:Q2",
+            "total": 0
+          },
+          {
+            "announce": "2019-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.05,
+            "ex_date": "2019-07-24",
+            "ex_div": "2019-07-24",
+            "net_profit": 2983000000,
+            "pay": "2019-07-24",
+            "payout_ratio": 0.2056,
+            "sas": "2018:Q4",
+            "total": 613358614
+          },
+          {
+            "announce": "2018-03-27",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1,
+            "ex_date": "2018-07-12",
+            "ex_div": "2018-07-12",
+            "net_profit": 5914000000,
+            "pay": "2018-07-12",
+            "payout_ratio": 0.1706,
+            "sas": "2017:Q4",
+            "total": 1008817327
+          },
+          {
+            "announce": "2017-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.1,
+            "ex_date": "2017-07-26",
+            "ex_div": "2017-07-26",
+            "net_profit": 5055000000,
+            "pay": "2017-07-26",
+            "payout_ratio": 0.1942,
+            "sas": "2016:Q4",
+            "total": 981756700
+          },
+          {
+            "announce": "2016-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.08,
+            "ex_date": "2016-07-01",
+            "ex_div": "2016-07-01",
+            "net_profit": 3851000000,
+            "pay": "2016-07-01",
+            "payout_ratio": 0.2039,
+            "sas": "2015:Q4",
+            "total": 785405360
+          },
+          {
+            "announce": "2015-03-31",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.04,
+            "ex_date": "2015-08-06",
+            "ex_div": "2015-08-06",
+            "net_profit": 1773000000,
+            "pay": "2015-08-06",
+            "payout_ratio": 0.2215,
+            "sas": "2014:Q4",
+            "total": 392702680
+          },
+          {
+            "announce": "2014-03-29",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.04,
+            "ex_date": "2014-07-31",
+            "ex_div": "2014-07-31",
+            "net_profit": 1895000000,
+            "pay": "2014-07-31",
+            "payout_ratio": 0.2072,
+            "sas": "2013:Q4",
+            "total": 392702680
+          },
+          {
+            "announce": "2013-03-27",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.05,
+            "ex_date": "2013-07-19",
+            "ex_div": "2013-07-19",
+            "net_profit": 2628000000,
+            "pay": "2013-07-25",
+            "payout_ratio": 0.1868,
+            "sas": "2012:Q4",
+            "total": 490878350
+          },
+          {
+            "announce": "2012-03-30",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0.2,
+            "ex_date": "2012-07-09",
+            "ex_div": "2012-07-09",
+            "net_profit": 5075000000,
+            "pay": "2012-07-13",
+            "payout_ratio": 0.3869,
+            "sas": "2011:Q4",
+            "total": 1963513400
+          },
+          {
+            "announce": "2008-04-21",
+            "ccy": "CNY",
+            "content": "",
+            "dps": 0,
+            "ex_date": "2008-08-29",
+            "ex_div": "2008-08-29",
+            "net_profit": 0,
+            "pay": null,
+            "payout_ratio": 0,
+            "sas": "2007:Q4",
+            "total": 0
+          }
+        ],
+        "fetched_at": "2026-11-13T00:18:51.408663+08:00"
+      },
+      "last": {
+        "params": {
+          "symbol": "600029.SH"
+        },
+        "result": {
+          "amount": 274514676,
+          "close": 5.11,
+          "date": "2026-11-12",
+          "high": 5.17,
+          "low": 5.09,
+          "open": 5.17,
+          "percent": -0.009689999999999999,
+          "sas": "2026:D316",
+          "volume": 53633400.0
+        },
+        "fetched_at": "2026-11-13T00:18:51.468229+08:00"
+      }
+    }
+  }
+}
