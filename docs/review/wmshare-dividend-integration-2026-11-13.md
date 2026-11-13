@@ -2,6 +2,9 @@
 
 日期：2026-11-13。对应 [接入方案](../product/wmshare-dividend-integration.md)。
 
+后续已完成日常实例迁移、服务重启与采集启用，任务 #805 实采 9 股成功，消耗 22,769 EC。
+见 [生产采集验收](wmshare-dividend-live-2026-11-13.md)；本文保留此前隔离验收的状态和记录。
+
 ## 交付
 
 - 复用 `dividend_snapshot`、现有 worker、任务制品和周频调度；wmshare 每股只取历史与平台快照两项。
