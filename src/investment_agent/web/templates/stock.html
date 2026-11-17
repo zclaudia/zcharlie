@@ -29,9 +29,11 @@
   <div class="stock-body" id="stock-financials">
     <section class="card">
       <div class="card-head">
-        <h2>财务资料</h2>
+        <h2>资料可用性</h2>
         <span class="faint">{{ financial.company_name }}</span>
       </div>
+      <details class="financial-proof-details">
+      <summary>证券身份与币种口径</summary>
       <dl class="kv-list financial-identity">
         <div class="fin-item">
           <dt>交易所</dt>
@@ -51,6 +53,7 @@
         </div>
       </dl>
       <p class="faint">报价币种与报表币种分别标注，互不顶替；金额一律为原件的原币数值，不做展示换算。</p>
+      </details>
 
       <div class="fin-coverage">
         <p id="financial-material-coverage" class="financial-coverage"
@@ -65,24 +68,36 @@
         </p>
       </div>
       <p class="faint">资料覆盖与核对覆盖分别计数，不合成一个完整度。</p>
+      {% if financial.coverage.facts_candidate %}<p class="notice notice-warn"><strong>待复核：</strong>{{ financial.coverage.facts_candidate }} 项候选事实尚未确认，不能视为已核实结论。</p>{% endif %}
+      <dl class="kv-list financial-key-dates">
+        <div class="fin-item"><dt>最近核对原件日期</dt><dd id="financial-last-verified-on">{{ financial.freshness.last_verified_on | financial_timestamp }}</dd></div>
+        <div class="fin-item"><dt>最新披露核对至</dt><dd id="financial-latestness-checked-on">{{ financial.freshness.latestness_checked_on | financial_timestamp }}</dd></div>
+        <div class="fin-item"><dt>资料覆盖至</dt><dd id="financial-latest-period-end">{{ financial.freshness.latest_period_end or "未知" }}</dd></div>
+      </dl>
     </section>
 
-    <section class="card" id="financial-freshness">
-      <div class="card-head">
-        <h2>核对与资料时间</h2>
+    <section class="card" id="financial-statuses">
+      <div class="card-head"><h2>资料状态与下一步</h2></div>
+      <ul class="financial-status-list">
+        {% for status in financial.statuses %}
+        <li class="financial-status" data-status-code="{{ status.code }}">
+          <span class="badge">{{ labels.status.get(status.code, status.code) }}</span>
+          {% if status.affected %}<span class="financial-status-affect">影响：{{ status.affected | join("、") }}</span>{% endif %}
+          <span class="financial-status-next">{{ status.next_step }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <a class="btn btn-primary" href="/app/agent?ticker={{ ticker }}">基于现有资料继续研究</a>
+    </section>
+
+    <details class="card financial-audit" id="financial-freshness">
+      <summary>
+        <span>采集记录、核对口径与来源</span>
         <span class="badge" data-latestness="{{ financial.freshness.latestness }}">
           {{ labels.latestness.get(financial.freshness.latestness, "未知") }}
         </span>
-      </div>
+      </summary>
       <dl class="kv-list financial-freshness-list">
-        <div class="fin-item">
-          <dt>最近核对原件日期</dt>
-          <dd id="financial-last-verified-on">{{ financial.freshness.last_verified_on | financial_timestamp }}</dd>
-        </div>
-        <div class="fin-item">
-          <dt>最新披露核对至</dt>
-          <dd id="financial-latestness-checked-on">{{ financial.freshness.latestness_checked_on | financial_timestamp }}</dd>
-        </div>
         <div class="fin-item">
           <dt>资料实际更新</dt>
           <dd id="financial-last-imported-at">{{ financial.freshness.last_imported_at | financial_timestamp }}</dd>
@@ -99,10 +114,7 @@
           <dt>最近采集成功</dt>
           <dd id="financial-last-success-at">{{ financial.freshness.last_success_at | financial_timestamp }}</dd>
         </div>
-        <div class="fin-item">
-          <dt>资料覆盖至</dt>
-          <dd id="financial-latest-period-end">{{ financial.freshness.latest_period_end or "未知" }}</dd>
-        </div>
+
       </dl>
       <p class="faint">核对日期表示原件核对到何时；资料更新时间表示导入时间，两者不会互相替代。未保存日期时显示“未知”。</p>
       {% if financial.freshness.sources %}
@@ -134,20 +146,7 @@
       {% else %}
       <p class="faint" id="financial-no-refresh-run">尚无资料刷新任务记录。</p>
       {% endif %}
-    </section>
-
-    <section class="card" id="financial-statuses">
-      <div class="card-head"><h2>资料状态与下一步</h2></div>
-      <ul class="financial-status-list">
-        {% for status in financial.statuses %}
-        <li class="financial-status" data-status-code="{{ status.code }}">
-          <span class="badge">{{ labels.status.get(status.code, status.code) }}</span>
-          {% if status.affected %}<span class="financial-status-affect">影响：{{ status.affected | join("、") }}</span>{% endif %}
-          <span class="financial-status-next">{{ status.next_step }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </section>
+    </details>
 
     {% if financial.fiscal_years %}
     <section class="card card--flush">

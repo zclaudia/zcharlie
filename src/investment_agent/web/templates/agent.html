@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% from "_icons.html" import icon %}
+{% block title %}AI 研究{% endblock %}
 {% block page_css %}<link rel="stylesheet" href="{{ static_url('pages/agent.css') }}"><link rel="stylesheet" href="{{ static_url('pages/research_entry.css') }}">{% endblock %}
 {% block content %}
 <div id="agent-workbench" class="agent-workbench" data-tab="chat" data-pane="chat" data-drawer="open">
-  <h1 class="sr-only">AI</h1>
+  <h1 class="sr-only">AI 研究</h1>
   <div class="ai-tabs tabs" role="tablist" aria-label="AI 功能">
     <button type="button" role="tab" id="agent-tab-chat" data-agent-tab="chat" aria-selected="true" aria-controls="agent-panel-chat">对话</button>
     <button type="button" role="tab" id="agent-tab-portfolio" data-agent-tab="portfolio" aria-selected="false" aria-controls="agent-panel-portfolio" tabindex="-1">组合</button>
@@ -54,12 +55,11 @@
               <button id="agent-add-object" type="button" class="ai-chip ai-chip-btn" aria-expanded="false" aria-controls="agent-picker" aria-label="指定对象">{{ icon("plus", "ico", 14) }}<span class="ai-add-k">对象</span></button>
             </div>
             <label for="agent-input" class="sr-only">问题</label>
-            <textarea id="agent-input" rows="2" maxlength="32000" placeholder="问点什么…（点“＋ 对象”可指定证券）"></textarea>
+            <textarea id="agent-input" rows="2" maxlength="32000" placeholder="你想研究什么问题？" aria-describedby="agent-research-boundary"></textarea>
             <div class="ai-cbox-row ai-cbox-bottom">
               <button id="agent-mode-btn" type="button" class="ai-mode btn-ghost" aria-haspopup="listbox" aria-expanded="false" aria-controls="agent-mode-pop"><span class="ai-mode-k">处理方式 · </span><strong id="agent-mode-label">自动</strong>{{ icon("chevd", "ico", 14) }}</button>
               <span id="agent-draft-state" class="ai-faint" aria-live="off"></span>
               <span class="ai-grow"></span>
-              <span class="ai-faint ai-keys">Enter 发送 · Shift+Enter 换行</span>
               <button id="agent-send" type="submit" class="primary ai-send" aria-label="发送"><svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>
             </div>
           </div>
@@ -69,7 +69,12 @@
             <option value="local_check">局部核查</option><option value="company_research">完整公司研究</option>
             <option value="portfolio_action">组合建议（明确账户快照）</option><option value="comparison">比较明确对象</option><option value="review">复盘</option>
           </select>
-          <p class="ai-faint ai-hint"><span id="agent-mode-hint">对象与版本在发送时固定，切换只影响下一条消息。普通提问不会自动启动完整公司研究。</span><br>回答只基于已保存的材料和所列来源，包含假设与不确定性；交易决定由你作出。</p>
+          <p id="agent-research-boundary" class="ai-faint ai-hint">基于已有材料与来源分析，包含假设与不确定性；不代替交易决策。</p>
+          <details class="ai-compose-help">
+            <summary>处理方式与快捷键</summary>
+            <p id="agent-mode-hint">对象与版本在发送时固定，切换只影响下一条消息。普通提问不会自动启动完整公司研究。</p>
+            <p>Enter 发送 · Shift+Enter 换行</p>
+          </details>
         </form>
         <div id="agent-plus" class="ai-plus">
         <div class="ai-plus-head"><h3>这条消息关于</h3><button type="button" class="ai-link" data-agent-plus-close>完成</button></div>

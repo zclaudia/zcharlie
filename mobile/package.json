@@ -21,6 +21,7 @@
     "@tauri-apps/plugin-store": "2.5.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "swr": "^2.5.1",
     "tauri-plugin-secure-keystore": "0.0.2"
   },
   "devDependencies": {

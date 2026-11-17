@@ -57,79 +57,7 @@
 
 /* ---- Design tokens -------------------------------------------------------- */
 
-:root {
-  color-scheme: light;
-
-  --bg: #f5f6f8; --surface: #ffffff; --surface-2: #fafbfc; --sunken: #f1f3f6; --hover: #f4f6f9;
-  --ink: #0f1726; --ink-2: #4a5466; --ink-3: #6c7587; --line: #e6e8ee; --line-2: #d5d9e1;
-  --accent: #2f5be7; --accent-hover: #2449cc; --accent-soft: #edf1fe; --accent-ink: #1f43b4; --on-accent: #ffffff;
-  --warn: #c25f09; --warn-soft: #fff3e3; --warn-line: #f6d3a8; --warn-ink: #a24b04;
-  --ai: #7440dc; --ai-soft: #f4effd; --ai-line: #ddd0f8;
-  --up: #d0352a; --down: #0e8f55; --flat: #8790a0;
-  --amber: #d08a2c;
-  --sh-1: 0 1px 2px rgba(15, 23, 38, 0.05);
-  --sh-2: 0 1px 2px rgba(15, 23, 38, 0.04), 0 4px 12px -4px rgba(15, 23, 38, 0.08);
-  --sh-pop: 0 16px 40px -12px rgba(15, 23, 38, 0.28), 0 2px 8px rgba(15, 23, 38, 0.06);
-  --scrim: rgba(10, 14, 22, 0.4);
-
-  --r-xs: 6px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-pill: 999px;
-  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
-  --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-num: 24px;
-  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
-  --top-h: 52px;
-
-  /* 旧名（别名，随主题自动切换） */
-  --c-bg: var(--bg); --c-surface: var(--surface); --c-surface-2: var(--surface-2);
-  --c-ink: var(--ink); --c-ink-2: var(--ink-2); --c-ink-3: var(--ink-3);
-  --c-line: var(--line); --c-line-strong: var(--line-2);
-  --c-accent: var(--accent); --c-accent-soft: var(--accent-soft); --c-accent-strong: var(--accent-ink);
-  --c-neutral: var(--ink-3); --c-neutral-soft: var(--sunken);
-  --c-warn: var(--warn); --c-warn-soft: var(--warn-soft);
-  --c-ai: var(--ai); --c-ai-soft: var(--ai-soft);
-  --c-fresh: var(--accent); --c-aging: var(--amber); --c-stale: var(--ink-3);
-  --c-track: var(--line);
-  --c-zone: color-mix(in srgb, var(--accent) 22%, var(--surface));
-  --c-bar: var(--accent);
-  --c-bar-weak: color-mix(in srgb, var(--accent) 45%, var(--surface));
-  /* 日线迷你图：只表达价格方向（A 股红涨绿跌），不表达好坏 */
-  --c-spark-up: var(--up); --c-spark-down: var(--down); --c-spark-flat: var(--flat); --c-spark-band: var(--accent);
-  --shadow-card: var(--sh-1);
-  --ink-muted: var(--ink-2);
-  --ok: var(--accent);
-  --error: var(--warn);
-  --partial: var(--ai);
-  --border: var(--line);
-  --card-bg: var(--surface);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg: #0d1016; --surface: #151921; --surface-2: #181d26; --sunken: #1c222c; --hover: #1d2430;
-    --ink: #e6e9ef; --ink-2: #aab2c0; --ink-3: #80899a; --line: #262d39; --line-2: #333b49;
-    --accent: #7b9dff; --accent-hover: #97b2ff; --accent-soft: #1c2747; --accent-ink: #a9c0ff; --on-accent: #0d1016;
-    --warn: #f2a54d; --warn-soft: #33240f; --warn-line: #5a3d17; --warn-ink: #f2a54d;
-    --ai: #b294ff; --ai-soft: #261d3d; --ai-line: #3d2f63;
-    --up: #ff6b5e; --down: #3ccf8e; --flat: #737d8d;
-    --amber: #e0a050;
-    --sh-1: none; --sh-2: 0 0 0 1px rgba(255, 255, 255, 0.02); --sh-pop: 0 20px 48px -12px rgba(0, 0, 0, 0.6);
-    --scrim: rgba(0, 0, 0, 0.55);
-  }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #0d1016; --surface: #151921; --surface-2: #181d26; --sunken: #1c222c; --hover: #1d2430;
-  --ink: #e6e9ef; --ink-2: #aab2c0; --ink-3: #80899a; --line: #262d39; --line-2: #333b49;
-  --accent: #7b9dff; --accent-hover: #97b2ff; --accent-soft: #1c2747; --accent-ink: #a9c0ff; --on-accent: #0d1016;
-  --warn: #f2a54d; --warn-soft: #33240f; --warn-line: #5a3d17; --warn-ink: #f2a54d;
-  --ai: #b294ff; --ai-soft: #261d3d; --ai-line: #3d2f63;
-  --up: #ff6b5e; --down: #3ccf8e; --flat: #737d8d;
-  --amber: #e0a050;
-  --sh-1: none; --sh-2: 0 0 0 1px rgba(255, 255, 255, 0.02); --sh-pop: 0 20px 48px -12px rgba(0, 0, 0, 0.6);
-  --scrim: rgba(0, 0, 0, 0.55);
-}
+@import url("./tokens.css");
 
 /* ---- Base ----------------------------------------------------------------- */
 
@@ -142,7 +70,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.55 var(--font-ui);
+  font: var(--fs-md)/1.6 var(--font-ui);
   font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   /* 手机底部 4 栏高度（含安全区）；详情页 / 键盘弹起 / 桌面为 0 */
@@ -298,7 +226,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   height: 48px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none;
-  color: var(--ink-3); font-size: 10.5px; font-weight: 500; line-height: 1.2; cursor: pointer;
+  color: var(--ink-3); font-size: 13px; font-weight: 500; line-height: 1.2; cursor: pointer;
 }
 .tabbar > a:hover, .tabbar > button:hover { color: var(--ink-2); background: none; }
 .tabbar > .on, .tabbar > .on:hover { color: var(--accent); }
@@ -434,6 +362,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   .sb-collapse { margin-left: auto; }
   .nav { flex: 1; overflow-y: auto; overflow-x: hidden; }
   .nav-group + .nav-group { margin-top: 16px; }
+  .nav-fold > summary.nav-label { display: list-item; list-style-position: inside; cursor: pointer; padding: 8px 10px; font-size: var(--fs-xs); border-radius: var(--r-sm); }
+  .nav-fold > summary:hover { background: var(--hover); color: var(--ink); }
+  html[data-sidebar="collapsed"] .nav-fold > summary.nav-label { display: list-item; padding: 8px 4px; overflow: hidden; font-size: 0; text-align: center; }
+  html[data-sidebar="collapsed"] .nav-fold > summary.nav-label::marker { font-size: 14px; }
   .nav-label { display: block; padding: 0 10px 6px; font-size: 11.5px; font-weight: 500; color: var(--ink-3); white-space: nowrap; }
   .nav a {
     position: relative; display: flex; align-items: center; gap: 10px;

@@ -6,7 +6,7 @@
 {% from "_icons.html" import icon %}
 {%- set NAV = {
   "overview": {"group": "工作台", "label": "今日概览"},
-  "agent": {"group": "工作台", "label": "AI"},
+  "agent": {"group": "工作台", "label": "AI 研究"},
   "simulations": {"group": "工作台", "label": "模拟实验"},
   "candidates": {"group": "研究漏斗", "label": "候选池"},
   "watchlist": {"group": "研究漏斗", "label": "观察池"},
@@ -22,7 +22,7 @@
   "settings": {"group": "系统", "label": "设置"},
 } -%}
 {%- macro nav_link(key, href, text) -%}
-<a href="{{ href }}"{% if active_nav == key %} class="active" aria-current="page"{% endif %}>{{ icon(key, "nav-ico") }}<span>{{ text }}</span>{% if key == "candidates" %}<em class="nav-count" data-nav-count="candidates" hidden></em>{% elif key == "health" %}<em class="nav-dot" data-nav-dot="health" hidden></em>{% endif %}</a>
+<a href="{{ href }}"{% if active_nav == key %} class="active" aria-current="page"{% endif %} aria-label="{{ text }}" title="{{ text }}">{{ icon(key, "nav-ico") }}<span>{{ text }}</span>{% if key == "candidates" %}<em class="nav-count" data-nav-count="candidates" hidden></em>{% elif key == "health" %}<em class="nav-dot" data-nav-dot="health" hidden></em>{% endif %}</a>
 {%- endmacro -%}
 {%- macro more_link(key, href, text) -%}
 <a href="{{ href }}" class="more-item{% if active_nav == key %} on{% endif %}"{% if active_nav == key %} aria-current="page"{% endif %}>{{ icon(key, "ico", 22) }}<span>{{ text }}</span>{% if key == "health" %}<em class="more-dot" data-nav-dot="health" hidden></em>{% endif %}</a>
@@ -64,7 +64,7 @@
         <div class="nav-group">
           <span class="nav-label">工作台</span>
           {{ nav_link("overview", "/app", "今日概览") }}
-          {{ nav_link("agent", "/app/agent", "AI") }}
+          {{ nav_link("agent", "/app/agent", "AI 研究") }}
           {{ nav_link("simulations", "/app/simulations", "模拟实验") }}
         </div>
         <div class="nav-group">
@@ -79,20 +79,24 @@
           <span class="nav-label">研究</span>
           {{ nav_link("industries", "/app/industries", "行业年度研究") }}
         </div>
-        <div class="nav-group">
-          <span class="nav-label">规则与方法</span>
-          {{ nav_link("templates", "/app/templates", "模板") }}
-          {{ nav_link("supplemental_rules", "/app/supplemental-rules", "补充事项") }}
-          {{ nav_link("methods", "/app/methods", "研究方法") }}
-        </div>
-        <div class="nav-group">
-          <span class="nav-label">系统</span>
-          {{ nav_link("runs", "/app/runs", "运行中心") }}
-          {{ nav_link("health", "/app/health", "数据健康") }}
-          {{ nav_link("data_sources", "/app/data-sources", "数据源") }}
-          {{ nav_link("industry_groups", "/app/industry-groups", "行业分组") }}
-          {{ nav_link("settings", "/app/settings", "设置") }}
-        </div>
+        <details class="nav-group nav-fold"{% if active_nav in ["templates", "supplemental_rules", "methods"] %} open{% endif %}>
+          <summary class="nav-label">规则与方法</summary>
+          <div class="nav-fold-links">
+            {{ nav_link("templates", "/app/templates", "模板") }}
+            {{ nav_link("supplemental_rules", "/app/supplemental-rules", "补充事项") }}
+            {{ nav_link("methods", "/app/methods", "研究方法") }}
+          </div>
+        </details>
+        <details class="nav-group nav-fold"{% if active_nav in ["runs", "health", "data_sources", "industry_groups", "settings"] %} open{% endif %}>
+          <summary class="nav-label">系统</summary>
+          <div class="nav-fold-links">
+            {{ nav_link("runs", "/app/runs", "运行中心") }}
+            {{ nav_link("health", "/app/health", "数据健康") }}
+            {{ nav_link("data_sources", "/app/data-sources", "数据源") }}
+            {{ nav_link("industry_groups", "/app/industry-groups", "行业分组") }}
+            {{ nav_link("settings", "/app/settings", "设置") }}
+          </div>
+        </details>
       </nav>
       <div class="sb-foot">
         <a class="sb-status" href="/app/health" data-shell-status hidden>{{ icon("alert") }}<span class="sb-status-text"><b data-shell-status-title></b><span data-shell-status-sub></span></span></a>
@@ -153,7 +157,7 @@
   <nav class="tabbar" aria-label="底部导航">
     <a href="/app"{% if active_nav == "overview" %} class="on" aria-current="page"{% endif %}>{{ icon("overview", "ico", 24) }}<span>今日</span></a>
     <a href="/app/candidates"{% if active_nav in ["candidates", "watchlist", "portfolio"] %} class="on" aria-current="page"{% endif %}>{{ icon("candidates", "ico", 24) }}<span>漏斗</span><em class="tab-badge" data-tab-badge="funnel" hidden></em></a>
-    <a href="/app/agent"{% if active_nav == "agent" %} class="on" aria-current="page"{% endif %}>{{ icon("agent", "ico", 24) }}<span>AI</span></a>
+    <a href="/app/agent"{% if active_nav == "agent" %} class="on" aria-current="page"{% endif %}>{{ icon("agent", "ico", 24) }}<span>AI 研究</span></a>
     <button type="button" class="nav-toggle{% if active_nav not in ["overview", "candidates", "watchlist", "portfolio", "agent"] %} on{% endif %}" aria-haspopup="dialog" aria-expanded="false" aria-controls="more-sheet" data-overlay-open="more-sheet">{{ icon("more", "ico", 24) }}<span>更多</span><em class="tab-dot" data-nav-dot="health" hidden></em></button>
   </nav>
   {%- endif %}
@@ -203,7 +207,7 @@
       <div id="palette-pages">
       <div class="palette-grp">页面</div>
       <a class="palette-item" role="option" href="/app" data-palette-page data-k="今日概览 jrgl gzt overview home">{{ icon("overview", "ico", 16) }}<span>今日概览</span></a>
-      <a class="palette-item" role="option" href="/app/agent" data-palette-page data-k="ai 对话 duihua agent">{{ icon("agent", "ico", 16) }}<span>AI</span></a>
+      <a class="palette-item" role="option" href="/app/agent" data-palette-page data-k="ai 对话 duihua agent">{{ icon("agent", "ico", 16) }}<span>AI 研究</span></a>
       <a class="palette-item" role="option" href="/app/simulations" data-palette-page data-k="模拟交易 实验 赛马 monijiaoyi simulations">{{ icon("simulations", "ico", 16) }}<span>模拟实验</span></a>
       <a class="palette-item" role="option" href="/app/candidates" data-palette-page data-k="候选池 hxc candidates">{{ icon("candidates", "ico", 16) }}<span>候选池</span></a>
       <a class="palette-item" role="option" href="/app/watchlist" data-palette-page data-k="观察池 gcc watchlist 自选">{{ icon("watchlist", "ico", 16) }}<span>观察池</span></a>

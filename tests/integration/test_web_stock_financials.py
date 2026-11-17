@@ -143,6 +143,12 @@ async def test_hk_page_renders_material_currency_years_and_states(api_client, tm
     assert '<dd id="financial-quote-currency">HKD</dd>' in html
     assert '<dd id="financial-report-currency">USD</dd>' in html
     assert "报表币种" in html and "报价币种" in html
+    assert "资料可用性" in html
+    assert html.index('id="financial-statuses"') < html.index('id="financial-freshness"')
+    assert '<details class="card financial-audit" id="financial-freshness">' in html
+    assert html.index('id="financial-last-verified-on"') < html.index('id="financial-freshness"')
+    assert html.count('id="financial-last-verified-on"') == 1
+    assert "基于现有资料继续研究" in html
 
     # Real fiscal years: the material's own ends, labels and spans.
     for fragment in ("2022-12-31", "2023-12-31", "2024-12-31", "FY2024", "365 天"):

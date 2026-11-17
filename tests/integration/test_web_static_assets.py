@@ -33,6 +33,15 @@ def test_relative_module_imports_stay_inside_the_version(api_client):
     assert response.headers["cache-control"] == IMMUTABLE_CACHE_CONTROL
 
 
+def test_shared_tokens_resolve_under_the_versioned_stylesheet(api_client):
+    css = api_client.get(static_url("app.css"))
+    assert '@import url("./tokens.css")' in css.text
+    response = api_client.get(static_url("tokens.css"))
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == IMMUTABLE_CACHE_CONTROL
+    assert "--on-accent: #0d1016" in response.text
+
+
 def test_stale_version_serves_current_file_without_long_cache(api_client):
     # A page rendered before a deploy must not pin today's file under its old key.
     response = api_client.get("/app/static/v/000000000000/app.js")

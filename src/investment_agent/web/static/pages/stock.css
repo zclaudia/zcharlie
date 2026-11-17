@@ -1,6 +1,13 @@
 /* pages/stock.css — 单股研究（A 股 + 港美财务区块）
    Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
 
+.financial-audit > summary { min-height: 44px; cursor: pointer; font-weight: 600; line-height: 1.8; }
+.financial-audit > summary .badge { margin-left: 8px; font-weight: 400; }
+.financial-audit[open] > summary { margin-bottom: 16px; }
+.financial-key-dates { border-top: 1px solid var(--line); padding-top: 12px; }
+#financial-statuses .financial-status-next { color: var(--ink); font-size: var(--fs-md); line-height: 1.6; }
+#financial-statuses > .btn { margin-top: 16px; }
+
 /* ---- 页头（吸顶）：身份 / 价格 / 操作 + 分区标签 ---- */
 .stock-head { position: sticky; top: var(--top-h); z-index: 15; margin: 0 -32px; padding: 0 32px; background: var(--bg); }
 .stock-page--plain .stock-head { position: static; margin: 0 0 16px; padding: 0; }
