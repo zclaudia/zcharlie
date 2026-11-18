@@ -147,7 +147,9 @@ jobs:
           LLM_TIER3_API_KEY: ci-inert-tier3
 
   browser:
-    runs-on: ubuntu-latest
+    # Playwright 1.55.1 has no Chromium build for ubuntu-26.04, and
+    # ubuntu-latest moved there in November 2026.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -160,9 +162,17 @@ jobs:
           cache-dependency-glob: uv.lock
       - name: Install locked Python dependencies
         run: uv sync --frozen --extra dev --python "$(command -v python)"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
+      - name: Install mobile jsdom for DOM scripts
+        working-directory: mobile
+        run: pnpm install --frozen-lockfile
       - name: Install Playwright Chromium
         run: |
           mkdir -p "$RUNNER_TEMP/playwright"

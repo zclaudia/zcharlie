@@ -68,6 +68,10 @@ dev = [
     "mypy>=1.10",
     "types-PyYAML",
     "pypdf==6.20.0",
+    # The disposable-wheel check imports the declared build backend. uv sync
+    # does not install build-system.requires into the venv.
+    "setuptools>=68",
+    "wheel",
 ]
 original-parsing = [
     "pypdf==6.20.0",
