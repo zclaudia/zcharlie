@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import useSWR from "swr";
 import type { Pairing } from "../storage";
 import { readPairing } from "../storage";
 import { GatewayError, request } from "../transport";
@@ -43,80 +44,86 @@ function applyName(value: string) {
 }
 
 export function SettingsScreen({ onPaired, onUnpair }: Props) {
-  const [pairing, setPairing] = useState<Pairing | null>(null);
+  const options = { revalidateOnFocus: false, revalidateOnReconnect: false, shouldRetryOnError: false };
+  const { data: pairing, error: pairingError, isLoading: pairingLoading, mutate: updatePairing } = useSWR("native-pairing", readPairing, options);
+  const scope = pairing ? [pairing.gatewayUrl, pairing.backendId] : null;
+  const { data, error: loadError, isLoading, mutate: updateSettings } = useSWR(scope ? ["settings", ...scope] : null, () => request<SettingsData>("/settings"), options);
+  const { data: history, error: historyError, isLoading: historyLoading, mutate: updateHistory } = useSWR(scope ? ["settings-history", ...scope] : null, () => request<HistoryData>("/settings/history?limit=30"), options);
   const [editingPairing, setEditingPairing] = useState(false);
-  const [data, setData] = useState<SettingsData | null>(null);
-  const [history, setHistory] = useState<HistoryData["items"]>([]);
+  const [confirmUnpair, setConfirmUnpair] = useState(false);
+  const [unpairing, setUnpairing] = useState(false);
+  const [unpairError, setUnpairError] = useState("");
   const [edits, setEdits] = useState<Record<string, unknown>>({});
   const [cleared, setCleared] = useState<Set<string>>(new Set());
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
-  async function reload() {
-    try {
-      const [settings, changes] = await Promise.all([
-        request<SettingsData>("/settings"),
-        request<HistoryData>("/settings/history?limit=30"),
-      ]);
-      setData(settings);
-      setHistory(changes.items);
-      setEdits({});
-      setCleared(new Set());
-    } catch (error) {
-      setMessage(error instanceof GatewayError ? error.message : "设置读取失败，请重试。");
+  const pendingValues = useMemo(() => {
+    const values: Record<string, unknown> = {};
+    for (const item of data?.groups.flatMap((group) => group.items) ?? []) {
+      if (cleared.has(item.key)) values[item.key] = null;
+      else if (Object.hasOwn(edits, item.key) && (item.secret ? edits[item.key] !== "" : JSON.stringify(edits[item.key]) !== JSON.stringify(item.value))) values[item.key] = edits[item.key];
     }
-  }
-
-  useEffect(() => {
-    let alive = true;
-    readPairing().then((value) => { if (alive) setPairing(value); }).catch(() => undefined);
-    void reload();
-    return () => { alive = false; };
-  }, []);
-
-  const dirtyCount = useMemo(() => Object.keys(edits).length + cleared.size, [edits, cleared]);
-  const change = (key: string, value: unknown) => setEdits((current) => ({ ...current, [key]: value }));
+    return values;
+  }, [data, edits, cleared]);
+  const dirtyCount = Object.keys(pendingValues).length;
+  const change = (key: string, value: unknown) => {
+    setEdits((current) => ({ ...current, [key]: value }));
+    setCleared((current) => { const next = new Set(current); next.delete(key); return next; });
+    setMessage(null);
+  };
+  const discard = () => { setEdits({}); setCleared(new Set()); setNote(""); setMessage(null); };
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    const secretKeys = new Set(data?.groups.flatMap((group) => group.items.filter((item) => item.secret).map((item) => item.key)) ?? []);
-    const values: Record<string, unknown> = Object.fromEntries(
-      Object.entries(edits).filter(([key, value]) => !(secretKeys.has(key) && value === "")),
-    );
-    cleared.forEach((key) => { values[key] = null; });
-    if (!Object.keys(values).length) return;
+    if (!dirtyCount || busy) return;
     setBusy(true);
-    setMessage("");
+    setMessage(null);
     try {
       const result = await request<{ changed: string[]; settings: SettingsData }>("/settings", {
         method: "PATCH",
-        body: { values, note: note.trim() || null },
+        body: { values: pendingValues, note: note.trim() || null },
       });
-      setData(result.settings);
+      await updateSettings(result.settings, { revalidate: false });
       setEdits({});
       setCleared(new Set());
       setNote("");
-      setMessage(`已保存 ${result.changed.length} 项设置。`);
-      const changes = await request<HistoryData>("/settings/history?limit=30");
-      setHistory(changes.items);
+      setMessage({ tone: "success", text: `已保存 ${result.changed.length} 项设置。` });
+      void updateHistory().catch(() => undefined);
     } catch (error) {
-      setMessage(error instanceof GatewayError ? error.message : "设置保存失败，请重试。");
+      setMessage({ tone: "error", text: error instanceof GatewayError ? error.message : "设置保存失败，修改已保留，请重试。" });
     } finally {
       setBusy(false);
     }
   }
 
   async function unpair() {
-    await onUnpair();
-    setPairing(null);
+    if (unpairing) return;
+    setUnpairing(true);
+    setUnpairError("");
+    try {
+      await onUnpair();
+      await updatePairing(null, { revalidate: false });
+      await updateSettings(undefined, { revalidate: false });
+      await updateHistory(undefined, { revalidate: false });
+      discard();
+      setConfirmUnpair(false);
+    } catch {
+      setUnpairError("解除配对失败，当前连接未切换，请重试。");
+    } finally {
+      setUnpairing(false);
+    }
   }
+
+  if (pairingLoading) return <div className="loading-card" role="status">正在读取连接信息…</div>;
+  if (pairingError) return <div className="error-card" role="alert"><p>无法读取本机连接信息，请重试。</p><button className="secondary-button" onClick={() => void updatePairing().catch(() => undefined)}>重试读取连接</button></div>;
 
   if (editingPairing || !pairing) {
     return (
       <section className="settings-page">
         <div className="section-heading"><h1>连接设置</h1><p>修改网关或设备凭证后会验证新连接，再替换本机保存的信息。</p></div>
-        <PairForm onPaired={(value) => { setPairing(value); setEditingPairing(false); onPaired(value); }} />
+        <PairForm onPaired={(value) => { discard(); void updatePairing(value, { revalidate: false }); setEditingPairing(false); onPaired(value); }} />
         {pairing && <button className="text-button" onClick={() => setEditingPairing(false)}>返回设置</button>}
       </section>
     );
@@ -130,15 +137,27 @@ export function SettingsScreen({ onPaired, onUnpair }: Props) {
         <div><span className="field-label">服务 ID</span><strong className="mono">{pairing.backendId}</strong></div>
         <div><span className="field-label">设备凭证</span><strong>已保存到应用私有存储</strong></div>
         <div className="button-row">
-          <button className="secondary-button" onClick={() => setEditingPairing(true)}>重新配对</button>
-          <button className="text-button" onClick={() => void unpair()}>解除配对</button>
+          <button className="secondary-button" disabled={busy || unpairing || dirtyCount > 0} onClick={() => setEditingPairing(true)}>重新配对</button>
+          <button className="text-button danger-button" disabled={busy || unpairing} aria-expanded={confirmUnpair} aria-controls="unpair-confirmation" onClick={() => { setConfirmUnpair(true); setUnpairError(""); }}>解除配对</button>
         </div>
+        {dirtyCount > 0 && <p className="field-help">重新配对前，请先保存或撤销修改。</p>}
+        {confirmUnpair && <section id="unpair-confirmation" className="unpair-confirmation" aria-labelledby="unpair-title">
+          <h2 id="unpair-title">确定解除此设备的配对？</h2>
+          <p>将清除本机连接信息和未保存的修改，不会删除研究台数据。再次连接需要重新输入设备凭证。</p>
+          <div className="button-row">
+            <button autoFocus className="secondary-button" disabled={unpairing} onClick={() => setConfirmUnpair(false)}>取消</button>
+            <button className="secondary-button danger-button" disabled={unpairing} onClick={() => void unpair()}>{unpairing ? "正在解除…" : "确认解除配对"}</button>
+          </div>
+          {unpairError && <p role="alert">{unpairError}</p>}
+        </section>}
       </div>
 
-      <div className="section-heading settings-heading"><h1>运行参数</h1><p>修改后由服务端校验并保存。密钥值不会从服务端返回。</p></div>
-      {message && <p className="inline-status" role="status">{message}</p>}
-      {!data ? <div className="loading-card">正在读取设置…</div> : (
-        <form onSubmit={save}>
+      <div className="section-heading settings-heading"><h2>运行参数</h2><p>修改后由服务端校验并保存。密钥值不会从服务端返回。</p></div>
+      {loadError && <div className="error-card" role="alert"><strong>设置读取失败</strong><p>{loadError instanceof GatewayError ? loadError.message : "请检查连接后重试。"}</p><button type="button" className="secondary-button" onClick={() => void updateSettings().catch(() => undefined)}>重试读取设置</button></div>}
+      {isLoading && !loadError && <div className="loading-card" role="status">正在读取设置…</div>}
+      {data && (
+        <form id="runtime-settings" onSubmit={save} aria-busy={busy}>
+          <fieldset className="settings-fields" disabled={busy || unpairing || confirmUnpair}>
           {data.groups.map((group) => (
             <fieldset className="settings-group" key={group.key}>
               <legend>{group.title}</legend>
@@ -151,11 +170,11 @@ export function SettingsScreen({ onPaired, onUnpair }: Props) {
                     {item.secret ? (
                       <div className="secret-row">
                         <input id={`setting-${item.key}`} type="password" autoComplete="new-password" placeholder={item.configured || item.env_fallback ? `已设置${item.hint ? ` · ${item.hint}` : ""}；留空保持不变` : "请输入密钥"} value={String(edits[item.key] ?? "")} onChange={(e) => change(item.key, e.target.value)} disabled={!data.encryption_key_configured} />
-                        {(item.configured || item.env_fallback) && <button type="button" className="text-button compact" onClick={() => setCleared((current) => new Set(current).add(item.key))}>清除</button>}
+                        {(item.configured || item.env_fallback) && !cleared.has(item.key) && <button type="button" className="text-button compact danger-button" disabled={!data.encryption_key_configured} onClick={() => { setCleared((current) => new Set(current).add(item.key)); setMessage(null); }}>清除</button>}
                         {cleared.has(item.key) && <button type="button" className="text-button compact" onClick={() => setCleared((current) => { const next = new Set(current); next.delete(item.key); return next; })}>撤销清除</button>}
                       </div>
                     ) : typeof item.default === "boolean" ? (
-                      <label className="switch-row"><input type="checkbox" checked={Boolean(value)} onChange={(e) => change(item.key, e.target.checked)} /><span>{value ? "开启" : "关闭"}</span></label>
+                      <label className="switch-row"><input id={`setting-${item.key}`} type="checkbox" checked={Boolean(value)} onChange={(e) => change(item.key, e.target.checked)} /><span>{value ? "开启" : "关闭"}</span></label>
                     ) : item.input.type === "select" ? (
                       <select id={`setting-${item.key}`} value={String(value ?? "")} onChange={(e) => change(item.key, e.target.value)}>{(item.input.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}</select>
                     ) : item.input.type === "multi" ? (
@@ -169,6 +188,7 @@ export function SettingsScreen({ onPaired, onUnpair }: Props) {
                     ) : (
                       <input id={`setting-${item.key}`} type={item.input.type === "int" || item.input.type === "float" ? "number" : item.input.type === "url" ? "url" : "text"} inputMode={item.input.type === "int" ? "numeric" : item.input.type === "float" ? "decimal" : undefined} min={item.input.min} max={item.input.max} step={item.input.type === "int" ? 1 : item.input.type === "float" ? "any" : undefined} value={String(value ?? "")} onChange={(e) => change(item.key, item.input.type === "int" ? (e.target.value === "" ? null : Number.parseInt(e.target.value, 10)) : item.input.type === "float" ? (e.target.value === "" ? null : Number.parseFloat(e.target.value)) : e.target.value)} />
                     )}
+                    {cleared.has(item.key) && <p className="field-help danger-button">此密钥将在保存后清除，可在保存前撤销。</p>}
                     {item.help && <p className="field-help">{item.help}</p>}
                     <p className="field-value">当前：{item.secret ? item.configured || item.env_fallback ? `已设置${item.hint ? ` · ${item.hint}` : ""}` : "未设置" : shownValue(item.value)}</p>
                   </div>
@@ -177,13 +197,22 @@ export function SettingsScreen({ onPaired, onUnpair }: Props) {
             </fieldset>
           ))}
           <label className="note-field">变更说明（可选）<input maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="例如：调整研究任务频率" /></label>
-          <button className="primary-button save-settings" type="submit" disabled={busy || dirtyCount === 0}>{busy ? "正在保存…" : dirtyCount ? `保存 ${dirtyCount} 项` : "没有待保存的修改"}</button>
+          </fieldset>
         </form>
       )}
 
-      <div className="section-heading settings-heading"><h1>最近变更</h1></div>
-      <div className="history-list">{history.map((item) => <article key={item.id}><strong>{item.label ?? item.key}</strong><span>{new Date(item.changed_at).toLocaleString("zh-CN")}</span>{item.note && <p>{item.note}</p>}</article>)}</div>
+      <div className="section-heading settings-heading"><h2>最近变更</h2></div>
+      {historyError ? <div className="error-card" role="alert"><p>变更记录暂时无法读取，不影响已保存的设置。</p><button className="secondary-button" onClick={() => void updateHistory().catch(() => undefined)}>重试读取记录</button></div> : historyLoading ? <p className="field-help" role="status">正在读取变更记录…</p> : !history?.items.length ? <p className="empty-history">暂无变更记录，保存设置后会在这里显示。</p> : null}
+      <div className="history-list">{history?.items.map((item) => <article key={item.id}><strong>{item.label ?? item.key}</strong><span>{new Date(item.changed_at).toLocaleString("zh-CN")}</span>{item.note && <p>{item.note}</p>}</article>)}</div>
       {data?.bootstrap?.length ? <details className="bootstrap-panel"><summary>启动配置（只读）</summary>{data.bootstrap.map((item) => <div key={item.key}><span>{item.label}</span><span>{item.configured ? `已设置${item.hint ? ` · ${item.hint}` : ""}` : shownValue(item.value)}</span></div>)}</details> : null}
+      {data && <div className="settings-savebar">
+        {message && <p className={`inline-status is-${message.tone}`} role={message.tone === "error" ? "alert" : "status"}><strong>{message.tone === "error" ? "保存失败：" : "保存成功："}</strong>{message.text}</p>}
+        <div className="settings-savebar-actions">
+          <span aria-live="polite">{dirtyCount ? `${dirtyCount} 项待保存` : "所有修改已保存"}</span>
+          {dirtyCount > 0 && <button type="button" className="text-button" disabled={busy || unpairing || confirmUnpair} onClick={discard}>撤销修改</button>}
+          <button className="primary-button" form="runtime-settings" type="submit" disabled={busy || unpairing || confirmUnpair || dirtyCount === 0}>{busy ? "正在保存…" : "保存设置"}</button>
+        </div>
+      </div>}
     </section>
   );
 }

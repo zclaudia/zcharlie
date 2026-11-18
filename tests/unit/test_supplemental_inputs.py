@@ -16,18 +16,31 @@ from investment_agent.storage.models.pit_snapshot import (
 from investment_agent.storage.models.reference import Company, Listing, Market
 from investment_agent.supplemental_rules.inputs import freeze_subject
 
+# Historical cutoff. created_at and updated_at otherwise use the database clock,
+# and the PIT reader drops a row persisted after the cutoff.
+CUTOFF = datetime(2026, 11, 16, 4, 0, tzinfo=UTC)
+PERSISTED_AT = datetime(2026, 11, 16, 3, 0, tzinfo=UTC)
+
+
+async def _flush_visible(session, when: datetime = PERSISTED_AT):
+    for obj in session.new:
+        if getattr(obj, "created_at", None) is None:
+            obj.created_at = when
+            obj.updated_at = when
+    await session.flush()
+
 
 @pytest.mark.asyncio
 async def test_freeze_reads_only_rows_captured_before_exact_datetime(db_session) -> None:
     db_session.add(Market(code="SSE", name="Shanghai", timezone="Asia/Shanghai", currency="CNY"))
     company = Company(canonical_name="Example Co")
     db_session.add(company)
-    await db_session.flush()
+    await _flush_visible(db_session)
     listing = Listing(company_id=company.id, market_code="SSE", ticker="600001", is_primary=True)
     db_session.add(listing)
-    await db_session.flush()
+    await _flush_visible(db_session)
 
-    cutoff = datetime(2026, 11, 16, 4, 0, tzinfo=UTC)
+    cutoff = CUTOFF
     db_session.add(IndustryClassification(
         listing_id=listing.id, system="csrc", code="A01", name="Industry",
         valid_from=date(2020, 1, 1), valid_to=None, source="fixture",
@@ -74,7 +87,7 @@ async def test_freeze_reads_only_rows_captured_before_exact_datetime(db_session)
             raw_ref="financial:legacy-restated", is_backfill=True, version=1,
         ),
     ])
-    await db_session.flush()
+    await _flush_visible(db_session)
 
     subject = await freeze_subject(
         db_session, ObjectRef(kind="listing", id=listing.id, revision=1), cutoff,
@@ -101,12 +114,12 @@ async def test_truncated_financial_scan_cannot_make_older_factor_known(db_sessio
     db_session.add(Market(code="SSE", name="Shanghai", timezone="Asia/Shanghai", currency="CNY"))
     company = Company(canonical_name="Capped issuer")
     db_session.add(company)
-    await db_session.flush()
+    await _flush_visible(db_session)
     listing = Listing(company_id=company.id, market_code="SSE", ticker="600004", is_primary=True)
     db_session.add(listing)
-    await db_session.flush()
+    await _flush_visible(db_session)
 
-    cutoff = datetime(2026, 11, 16, 4, 0, tzinfo=UTC)
+    cutoff = CUTOFF
     db_session.add(IndustryClassification(
         listing_id=listing.id, system="csrc", code="A01", name="Industry",
         valid_from=date(2020, 1, 1), valid_to=None, source="fixture",
@@ -136,7 +149,7 @@ async def test_truncated_financial_scan_cannot_make_older_factor_known(db_sessio
             raw_ref="financial:newer", is_backfill=False, version=1,
         ),
     ])
-    await db_session.flush()
+    await _flush_visible(db_session)
 
     subject = await freeze_subject(
         db_session, ObjectRef(kind="listing", id=listing.id, revision=1), cutoff,
@@ -167,11 +180,11 @@ async def test_service_freeze_marks_capped_source_coverage_incomplete(db_session
     db_session.add(Market(code="SSE", name="Shanghai", timezone="Asia/Shanghai", currency="CNY"))
     company = Company(canonical_name="Service cap issuer")
     db_session.add(company)
-    await db_session.flush()
+    await _flush_visible(db_session)
     listing = Listing(company_id=company.id, market_code="SSE", ticker="600005", is_primary=True)
     db_session.add(listing)
-    await db_session.flush()
-    cutoff = datetime(2026, 11, 16, 4, 0, tzinfo=UTC)
+    await _flush_visible(db_session)
+    cutoff = CUTOFF
     db_session.add_all([
         FinancialSnapshot(
             listing_id=listing.id, report_period=date(2024, 12, 31), period_kind="annual",
@@ -186,7 +199,7 @@ async def test_service_freeze_marks_capped_source_coverage_incomplete(db_session
             raw_ref="service:newer", is_backfill=False, version=1,
         ),
     ])
-    await db_session.flush()
+    await _flush_visible(db_session)
 
     real_freeze_subject = inputs.freeze_subject
 
@@ -213,13 +226,13 @@ async def test_rule_source_refs_are_validated_by_their_real_storage_kind(db_sess
     db_session.add(Market(code="SSE", name="Shanghai", timezone="Asia/Shanghai", currency="CNY"))
     company = Company(canonical_name="Source reference issuer")
     db_session.add(company)
-    await db_session.flush()
+    await _flush_visible(db_session)
     listing = Listing(company_id=company.id, market_code="SSE", ticker="600003")
     db_session.add(listing)
-    await db_session.flush()
+    await _flush_visible(db_session)
     subject = await freeze_subject(
         db_session, ObjectRef(kind="listing", id=listing.id, revision=1),
-        datetime(2026, 11, 16, 4, tzinfo=UTC), owner_id="local_owner",
+        CUTOFF, owner_id="local_owner",
         evidence_refs=(
             ObjectRef(kind="financial_snapshot", id=987654, revision=1),
             ObjectRef(kind="research_event", id="00000000-0000-4000-8000-000000000001", revision=1),
@@ -235,21 +248,21 @@ async def test_public_invalid_and_unsupported_listing_refs_are_typed_errors(db_s
     with pytest.raises(InvestorError) as missing:
         await freeze_subject(
             db_session, ObjectRef(kind="listing", id=999999, revision=1),
-            datetime(2026, 11, 16, 4, tzinfo=UTC), owner_id="local_owner",
+            CUTOFF, owner_id="local_owner",
         )
     assert missing.value.detail.code == "invalid_reference"
 
     db_session.add(Market(code="NASDAQ", name="NASDAQ", timezone="America/New_York", currency="USD"))
     company = Company(canonical_name="Unsupported issuer")
     db_session.add(company)
-    await db_session.flush()
+    await _flush_visible(db_session)
     listing = Listing(company_id=company.id, market_code="NASDAQ", ticker="MSFT")
     db_session.add(listing)
-    await db_session.flush()
+    await _flush_visible(db_session)
     with pytest.raises(InvestorError) as unsupported:
         await freeze_subject(
             db_session, ObjectRef(kind="listing", id=listing.id, revision=1),
-            datetime(2026, 11, 16, 4, tzinfo=UTC), owner_id="local_owner",
+            CUTOFF, owner_id="local_owner",
         )
     assert unsupported.value.detail.code == "unsupported_subject"
 

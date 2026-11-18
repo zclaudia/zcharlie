@@ -185,6 +185,12 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
 .ai-send { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: var(--r-sm); }
 .ai-send svg { width: 18px; height: 18px; }
 .ai-hint { margin: 0; text-align: center; font-size: var(--fs-xs); line-height: 1.5; }
+.ai-compose-help { color: var(--ink-2); font-size: var(--fs-xs); }
+.ai-compose-help summary { cursor: pointer; min-height: 32px; padding: 6px 0; }
+.ai-compose-help p { margin: 4px 0; line-height: 1.6; }
+.ai-compose-help[open] { max-height: 120px; overflow: auto; }
+.ai-body, .ai-answer { font-size: var(--fs-md); }
+.ai-cbox textarea { font-size: 16px; }
 .ai-pop { position: absolute; z-index: 20; bottom: 100%; max-height: min(32rem, 70dvh); overflow: auto; padding: 6px; border: 1px solid var(--line-2); border-radius: var(--r-md); background: var(--surface); box-shadow: var(--sh-pop); }
 .ai-picker { left: max(var(--sp-5), calc((100% - 760px) / 2)); display: flex; flex-direction: column; gap: var(--sp-2); width: min(34rem, calc(100% - 3rem)); padding: var(--sp-3); }
 .ai-picker-form { display: flex; gap: var(--sp-2); }
@@ -324,14 +330,15 @@ button.ai-chip { padding: 0 var(--sp-2); cursor: pointer; box-shadow: none; }
   .ai-starters { grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
   .ai-sug { min-height: 0; padding: 10px var(--sp-3); border-radius: 14px; background: var(--surface-2); box-shadow: none; font-size: 14px; }
   .ai-sug-extra { display: none; }
-  .ai-disc { display: block; text-align: center; font-size: var(--fs-xs); }
+  .ai-compose-help summary { min-height: 44px; }
+  .ai-hint { text-align: left; }
 
   /* 输入框：浮在底部 4 栏之上；对象 chip 在上，文字居中，工具行在下（＋ · 处理方式 · 发送） */
   .ai-compose-wrap { padding: var(--sp-1) var(--sp-3) max(10px, calc(env(safe-area-inset-bottom, 0px) - var(--tabbar-h))); background: transparent; }
   .ai-compose { gap: var(--sp-1); }
   .ai-cbox { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "chips chips chips chips" "input input input input" "plus mode . send"; align-items: center; gap: 6px; padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-3); border-radius: 22px; box-shadow: 0 4px 16px -6px rgba(15, 23, 38, .18); }
   .ai-cbox-row { display: contents; }
-  .ai-bind-label, .ai-mode-k, .ai-add-k, .ai-chip-empty, .ai-keys, #agent-draft-state, .ai-hint, .ai-cbox .ai-grow { display: none; }
+  .ai-bind-label, .ai-mode-k, .ai-add-k, .ai-chip-empty, .ai-keys, #agent-draft-state, .ai-cbox .ai-grow { display: none; }
   .ai-binding { grid-area: chips; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
   .ai-binding:not(:has(.ai-chip-accent)) { display: none; }
   .ai-binding > .ai-chip { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; max-width: 14rem; }

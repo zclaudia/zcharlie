@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { Pairing } from "../storage";
+import brandIcon from "../../../src/investment_agent/web/static/brand/icon-180.png";
 import { discoverBackends, GatewayError, pairDevice, type ReachableBackend } from "../transport";
 
 type Props = { onPaired: (pairing: Pairing) => void };
@@ -62,22 +63,28 @@ export function PairForm({ onPaired }: Props) {
 
   return (
     <main className="pair-screen">
-      <div className="pair-mark">Z</div>
+      <img className="pair-mark" src={brandIcon} width={56} height={56} alt="zcharlie" />
       <p className="eyebrow">ZCHARLIE · ANDROID</p>
       <h1>连接你的研究台</h1>
-      <p className="muted">输入网关地址和设备凭证即可；服务 ID 留空时自动发现凭证可达的后端。凭证只保存在本机应用数据中。</p>
-      <form className="form-card" onSubmit={submit}>
+      <p className="muted">连接后即可访问你的研究台。</p>
+      <form className="form-card" onSubmit={submit} aria-busy={busy}>
+        <fieldset className="pair-fields" disabled={busy}>
         <label>网关地址
-          <input autoCapitalize="none" autoCorrect="off" inputMode="url" placeholder="https://gateway.example.com" value={gatewayUrl} onChange={(e) => setGatewayUrl(e.target.value)} required />
-        </label>
-        <label>服务 ID（可选，留空自动发现）
-          <input autoCapitalize="none" autoCorrect="off" placeholder="留空自动发现可达的后端" value={backendId} onChange={(e) => setBackendId(e.target.value)} />
+          <input autoCapitalize="none" autoCorrect="off" inputMode="url" placeholder="https://gateway.example.com" value={gatewayUrl} onChange={(e) => { setGatewayUrl(e.target.value); setCandidates(null); setError(""); }} required />
         </label>
         <label>设备凭证
-          <input autoCapitalize="none" autoCorrect="off" autoComplete="off" type="password" placeholder="zgd_…" value={deviceToken} onChange={(e) => setDeviceToken(e.target.value)} required />
+          <input autoCapitalize="none" autoCorrect="off" autoComplete="off" type="password" placeholder="zgd_…" value={deviceToken} onChange={(e) => { setDeviceToken(e.target.value); setCandidates(null); setError(""); }} required />
         </label>
-        {candidates && !backendId && (
-          <div className="backend-picker" role="listbox" aria-label="选择后端">
+        <details className="pair-advanced">
+          <summary>高级设置{backendId.trim() ? " · 已指定服务" : ""}</summary>
+          <label>服务 ID（可选）
+            <input autoCapitalize="none" autoCorrect="off" placeholder="留空自动发现" value={backendId} onChange={(e) => { setBackendId(e.target.value); setCandidates(null); setError(""); }} aria-describedby="backend-help" />
+          </label>
+          <p id="backend-help" className="field-help">默认自动发现可连接的研究台；仅在管理员要求时指定服务 ID。</p>
+        </details>
+        {candidates && !backendId.trim() && (
+          <div className="backend-picker" role="group" aria-label="选择研究台">
+            <p className="field-help" role="status">发现多个研究台，请选择要连接的一项。</p>
             {candidates.map((backend) => (
               <button
                 key={backend.backendId}
@@ -96,8 +103,9 @@ export function PairForm({ onPaired }: Props) {
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
         <button className="primary-button" type="submit" disabled={busy}>{busy ? "正在验证…" : "验证并连接"}</button>
+        </fieldset>
       </form>
-      <p className="fine-print">设备凭证由网关管理员签发。zcharlie 不会读取或保存后端 API 密钥。</p>
+      <p className="fine-print">设备凭证由网关管理员提供，仅保存在本机应用私有存储。后端 API 密钥不会保存到此设备。</p>
     </main>
   );
 }

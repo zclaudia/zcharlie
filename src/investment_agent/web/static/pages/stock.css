@@ -1,6 +1,13 @@
 /* pages/stock.css — 单股研究（A 股 + 港美财务区块）
    Loaded after app.css through {% block page_css %}. Shared tokens/components live in app.css. */
 
+.financial-audit > summary { min-height: 44px; cursor: pointer; font-weight: 600; line-height: 1.8; }
+.financial-audit > summary .badge { margin-left: 8px; font-weight: 400; }
+.financial-audit[open] > summary { margin-bottom: 16px; }
+.financial-key-dates { border-top: 1px solid var(--line); padding-top: 12px; }
+#financial-statuses .financial-status-next { color: var(--ink); font-size: var(--fs-md); line-height: 1.6; }
+#financial-statuses > .btn { margin-top: 16px; }
+
 /* ---- 页头（吸顶）：身份 / 价格 / 操作 + 分区标签 ---- */
 .stock-head { position: sticky; top: var(--top-h); z-index: 15; margin: 0 -32px; padding: 0 32px; background: var(--bg); }
 .stock-page--plain .stock-head { position: static; margin: 0 0 16px; padding: 0; }
@@ -31,7 +38,8 @@
 .stock-tabs { margin: 0; }
 
 .stock-chart-card, #stock-scores, #stock-metrics, #dividend-card, #stock-ai, #stock-history-card, #peer-context-section { scroll-margin-top: 11.5rem; }
-@media (prefers-reduced-motion: no-preference) { html:has(.stock-page) { scroll-behavior: smooth; } }
+/* 不在文档上开 scroll-behavior: smooth。分区标签的平滑滚动在 stock_page.js，
+   否则每次程序化 scrollIntoView 都会重启动画，控件会停在吸顶栏或底部操作条下面。 */
 
 /* ---- 网格（桌面 12 列；手机见底部） ---- */
 .stock-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 16px; margin-top: 16px; min-width: 0; }

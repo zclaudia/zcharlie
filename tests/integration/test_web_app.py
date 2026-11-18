@@ -77,6 +77,19 @@ def test_authenticated_shell_renders_nav_and_disclaimer(api_client):
         assert fragment in html
 
 
+def test_secondary_navigation_collapses_but_opens_for_active_page(api_client):
+    _login(api_client)
+    overview = api_client.get("/app").text
+    assert overview.count('<details class="nav-group nav-fold">') == 2
+    assert 'aria-label="AI 研究"' in overview
+    settings = api_client.get("/app/settings").text
+    assert '<details class="nav-group nav-fold" open>\n          <summary class="nav-label">系统</summary>' in settings
+    agent = api_client.get("/app/agent").text
+    assert '<details class="ai-compose-help">' in agent
+    assert 'id="agent-research-boundary"' in agent
+    assert 'id="agent-mode-hint"' in agent
+
+
 def test_static_assets_served_from_app(api_client):
     assert api_client.get("/app/static/app.css").status_code == 200
     assert api_client.get("/app/static/api.js").status_code == 200
