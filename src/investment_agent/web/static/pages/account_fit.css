@@ -40,3 +40,14 @@
   .ranking-form { gap: .7rem; }
   .ranking-pager { align-items: flex-start; flex-direction: column; }
 }
+
+/* Phone stock pages pin an app bar and a bottom action bar over the document.
+   Scroll-into-view must stop short of both, or the submit control lands
+   underneath them and cannot be tapped. */
+@media (max-width: 56rem) {
+  #account-fit-root :is(button, input, select, textarea, summary),
+  #candidate-ranking-root :is(button, input, select, textarea, summary) {
+    scroll-margin-top: 7.5rem;
+    scroll-margin-bottom: calc(var(--tabbar-h) + 6.5rem);
+  }
+}

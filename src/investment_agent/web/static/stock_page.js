@@ -784,6 +784,17 @@ export function wireStockPage() {
     window.addEventListener("scroll", () => {
       if (!frame) frame = window.requestAnimationFrame(update);
     }, { passive: true });
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const tab of tabs) {
+      tab.addEventListener("click", (event) => {
+        const id = tab.getAttribute("href")?.slice(1);
+        const section = id ? document.getElementById(id) : null;
+        if (!section) return;
+        event.preventDefault();
+        section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+        if (location.hash !== `#${id}`) history.pushState(null, "", `#${id}`);
+      });
+    }
     update();
   }
   const menu = document.querySelector(".stock-more");

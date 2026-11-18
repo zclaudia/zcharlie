@@ -38,7 +38,8 @@
 .stock-tabs { margin: 0; }
 
 .stock-chart-card, #stock-scores, #stock-metrics, #dividend-card, #stock-ai, #stock-history-card, #peer-context-section { scroll-margin-top: 11.5rem; }
-@media (prefers-reduced-motion: no-preference) { html:has(.stock-page) { scroll-behavior: smooth; } }
+/* 不在文档上开 scroll-behavior: smooth。分区标签的平滑滚动在 stock_page.js，
+   否则每次程序化 scrollIntoView 都会重启动画，控件会停在吸顶栏或底部操作条下面。 */
 
 /* ---- 网格（桌面 12 列；手机见底部） ---- */
 .stock-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-flow: row dense; gap: 16px; margin-top: 16px; min-width: 0; }
